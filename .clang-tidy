@@ -1,0 +1,25 @@
+Checks: >
+  -*,
+  bugprone-*,
+  clang-analyzer-*,
+  cppcoreguidelines-*,
+  hicpp-*,
+  modernize-*,
+  performance-*,
+  portability-*,
+  readability-*,
+
+  -cppcoreguidelines-pro-type-reinterpret-cast
+  -hicpp-no-array-decay
+
+WarningsAsErrors: '*'
+
+CheckOptions:
+  # Disallow raw owning pointers
+  - { key: cppcoreguidelines-owning-memory.AllowedSmartPointerTypeNames, value: 'std::unique_ptr,std::shared_ptr' }
+
+  # Force nullptr
+  - { key: modernize-use-nullptr.NullMacros, value: 'NULL' }
+
+  # Require override
+  - { key: modernize-use-override.EnableOverride, value: 1 }

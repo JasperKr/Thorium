@@ -1,0 +1,391 @@
+#include "filesystem.hpp"
+#include "../external/physfs/src/physfs.h"
+#include "error.hpp"
+#include "tl/expected.hpp"
+#include <span>
+#include <string>
+#include <string_view>
+#include <vector>
+
+namespace Filesystem {
+constexpr int PHYSFS_ERR_ERROR = 0;
+
+auto GetConfig() -> Config & {
+  static Config config = {};
+  return config;
+}
+
+auto Init(const std::string &orgDir) -> Error::Error {
+  if (PHYSFS_isInit() != 0) {
+    return Error::Create("Filesystem already initialized");
+  }
+
+  if (PHYSFS_init(orgDir.c_str()) == 0) {
+    return Error::Create("Failed to initialize PhysFS");
+  }
+
+  PHYSFS_permitSymbolicLinks(0);
+  PHYSFS_setWriteDir(GetSaveDirectory().c_str());
+
+  return Error::Success();
+}
+
+auto Deinit() -> Error::Error {
+  if (PHYSFS_isInit() == 0) {
+    return Error::Create("Filesystem not initialized");
+  }
+
+  PHYSFS_deinit();
+  return Error::Success();
+}
+
+auto ReadFile(const std::string &path)
+    -> tl::expected<std::vector<unsigned char>, Error::Error> {
+  PHYSFS_File *file = PHYSFS_openRead(path.c_str());
+  if (file == nullptr) {
+    return tl::unexpected(Error::Create("Failed to open file: " + path));
+  }
+
+  const PHYSFS_sint64 len = PHYSFS_fileLength(file);
+  if (len <= 0) {
+    PHYSFS_close(file);
+    return tl::unexpected(Error::Create("Invalid file length"));
+  }
+
+  std::vector<unsigned char> data((size_t)len);
+
+  const auto read = PHYSFS_readBytes(file, data.data(), len);
+  int error = PHYSFS_close(file);
+
+  if (error == PHYSFS_ERR_ERROR) {
+    return tl::unexpected(Error::Create("Failed to close file"));
+  }
+
+  if (read != len) {
+    return tl::unexpected(Error::Create("Failed to read entire file"));
+  }
+
+  return data;
+}
+
+auto ReadTextFile(const std::string &path)
+    -> tl::expected<std::string, Error::Error> {
+  PHYSFS_File *file = PHYSFS_openRead(path.c_str());
+  if (file == nullptr) {
+    return tl::unexpected(Error::Create("Failed to open file: " + path));
+  }
+
+  const PHYSFS_sint64 len = PHYSFS_fileLength(file);
+  if (len <= 0) {
+    PHYSFS_close(file);
+    return tl::unexpected(Error::Create("Invalid file length"));
+  }
+
+  std::string data((size_t)len, '\0');
+
+  const auto read = PHYSFS_readBytes(file, data.data(), len);
+  int error = PHYSFS_close(file);
+
+  if (error == PHYSFS_ERR_ERROR) {
+    return tl::unexpected(Error::Create("Failed to close file"));
+  }
+
+  if (read != len) {
+    return tl::unexpected(Error::Create("Failed to read entire file"));
+  }
+
+  return data;
+}
+
+auto AppendFile(const std::string &path, std::span<const uint8_t> data)
+    -> Error::Error {
+  PHYSFS_File *file = PHYSFS_openAppend(path.c_str());
+  if (file == nullptr) {
+    return Error::Create("Failed to open file for appending");
+  }
+
+  PHYSFS_sint64 written = PHYSFS_writeBytes(file, data.data(), data.size());
+  int error = PHYSFS_close(file);
+
+  if (error == PHYSFS_ERR_ERROR) {
+    return Error::Create("Failed to close file");
+  }
+
+  if (written < 0 || written != data.size()) {
+    return Error::Create("Failed to write all data to file");
+  }
+
+  return Error::Success();
+}
+
+auto AppendFile(const std::string &path, std::string_view data)
+    -> Error::Error {
+  PHYSFS_File *file = PHYSFS_openAppend(path.c_str());
+  if (file == nullptr) {
+    return Error::Create("Failed to open file for appending");
+  }
+
+  PHYSFS_sint64 written = PHYSFS_writeBytes(file, data.data(), data.size());
+  int error = PHYSFS_close(file);
+
+  if (error == PHYSFS_ERR_ERROR) {
+    return Error::Create("Failed to close file");
+  }
+
+  if (written < 0 || written != data.size()) {
+    return Error::Create("Failed to write all data to file");
+  }
+
+  return Error::Success();
+}
+
+auto WriteFile(const std::string &path, std::span<const uint8_t> data)
+    -> Error::Error {
+  PHYSFS_File *file = PHYSFS_openWrite(path.c_str());
+  if (file == nullptr) {
+    return Error::Create("Failed to open file for writing");
+  }
+
+  PHYSFS_sint64 written = PHYSFS_writeBytes(file, data.data(), data.size());
+  int error = PHYSFS_close(file);
+
+  if (error == PHYSFS_ERR_ERROR) {
+    return Error::Create("Failed to close file");
+  }
+
+  if (written < 0 || written != data.size()) {
+    return Error::Create("Failed to write all data to file");
+  }
+
+  return Error::Success();
+}
+
+auto WriteFile(const std::string &path, std::string_view data) -> Error::Error {
+
+  PHYSFS_File *file = PHYSFS_openWrite(path.c_str());
+  if (file == nullptr) {
+    return Error::Create("Failed to open file for writing");
+  }
+
+  PHYSFS_sint64 written = PHYSFS_writeBytes(file, data.data(), data.size());
+  int error = PHYSFS_close(file);
+
+  if (error == PHYSFS_ERR_ERROR) {
+    return Error::Create("Failed to close file");
+  }
+
+  if (written < 0 || written != data.size()) {
+    return Error::Create("Failed to write all data to file");
+  }
+
+  return Error::Success();
+}
+
+auto FileExists(const std::string &path) -> bool {
+  return PHYSFS_exists(path.c_str()) != 0;
+}
+auto IsDirectory(const std::string &path) -> bool {
+  return PHYSFS_isDirectory(path.c_str()) != 0;
+}
+
+auto AddToSearchPath(const std::string &path, bool appendToPath)
+    -> Error::Error {
+  if (PHYSFS_mount(path.c_str(), nullptr, appendToPath ? 1 : 0) == 0) {
+    std::cout << "Failed to add path to search path: " << path << "\n";
+    return GetError();
+  }
+  return Error::Success();
+}
+
+auto RemoveFromSearchPath(const std::string &path) -> Error::Error {
+  if (PHYSFS_unmount(path.c_str()) == 0) {
+    return Error::Create("Failed to remove path from search path");
+  }
+  return Error::Success();
+}
+
+auto GetRealPath(const std::string &path)
+    -> tl::expected<std::string, Error::Error> {
+  const char *realPath = PHYSFS_getRealDir(path.c_str());
+  if (realPath == nullptr) {
+    return tl::unexpected(Error::Create("Failed to get real path"));
+  }
+
+  return std::string(realPath);
+}
+
+auto ListFiles(const std::string &path)
+    -> tl::expected<std::vector<std::string>, Error::Error> {
+  auto *fileList = PHYSFS_enumerateFiles(path.c_str());
+  if (fileList == nullptr) {
+    return tl::unexpected(Error::Create("Failed to list files"));
+  }
+
+  std::vector<std::string> files;
+  // NOLINTNEXTLINE (clang-diagnostic-pointer-arith)
+  for (char **i = fileList; *i != nullptr; i++) {
+    files.emplace_back(*i);
+  }
+
+  PHYSFS_freeList(static_cast<void *>(fileList));
+
+  return files;
+}
+
+/*
+Error::Error Mount(std::string path, const char *mountPoint, bool appendToPath);
+Error::Error Unmount(std::string path);
+*/
+
+auto Mount(const std::string &path, const std::string &mountPoint,
+           bool appendToPath) -> Error::Error {
+  if (PHYSFS_mount(path.c_str(), mountPoint.c_str(), appendToPath ? 1 : 0) ==
+      0) {
+    return Error::Create("Failed to mount path");
+  }
+  return Error::Success();
+}
+
+auto Unmount(const std::string &path) -> Error::Error {
+  if (PHYSFS_unmount(path.c_str()) == 0) {
+    return Error::Create("Failed to unmount path");
+  }
+  return Error::Success();
+}
+
+auto GetFileModTime(const std::string &path) -> uint64_t {
+  PHYSFS_Stat stat;
+  if (PHYSFS_stat(path.c_str(), &stat) == 0) {
+    return 0;
+  }
+  return (uint64_t)stat.modtime;
+}
+
+auto GetErrorString() -> const char * {
+  return PHYSFS_getErrorByCode(PHYSFS_getLastErrorCode());
+}
+auto GetErrorCode() -> uint32_t { return PHYSFS_getLastErrorCode(); }
+
+auto GetError() -> Error::Error {
+  return Error::Create("Filesystem error occurred: " +
+                           std::string(GetErrorString()),
+                       static_cast<int32_t>(GetErrorCode()));
+}
+
+auto GetSaveDirectory() -> std::string {
+  static const auto *identity =
+      PHYSFS_getPrefDir("Thorium", GetConfig().identity.c_str());
+
+  return identity != nullptr ? std::string(identity) : std::string();
+}
+
+#ifdef CreateDirectory
+#undef CreateDirectory
+#endif
+
+auto CreateDirectory(const std::string &path) -> Error::Error {
+  if (PHYSFS_mkdir(path.c_str()) == 0) {
+    return Error::Create("Failed to create directory: " + path);
+  }
+  return Error::Success();
+}
+} // namespace Filesystem
+
+namespace Path {
+
+// Returns the extension of the file
+// file.txt -> txt
+auto Extension(const std::string &path) -> std::string {
+  size_t dotPos = path.find_last_of('.');
+  if (dotPos == std::string::npos) {
+    return "";
+  }
+  return path.substr(dotPos + 1);
+}
+
+// Returns the filename from a path
+// /path/to/file.txt -> file.txt
+auto Filename(const std::string &path) -> std::string {
+  size_t slashPos = path.find_last_of("/\\");
+  if (slashPos == std::string::npos) {
+    return path;
+  }
+  return path.substr(slashPos + 1);
+}
+
+// Returns the directory from a path
+// /path/to/file.txt -> /path/to/
+auto Directory(const std::string &path) -> std::string {
+  size_t slashPos = path.find_last_of("/\\");
+  if (slashPos == std::string::npos) {
+    return "";
+  }
+  return path.substr(0, slashPos + 1);
+}
+
+// Sanitizes a path by replacing backslashes with forward slashes
+// and removing redundant slashes
+// C:\path\to\\file.txt -> C:/path/to/file.txt
+auto Sanitize(const std::string &path) -> std::string {
+  std::string sanitized;
+  sanitized.reserve(path.size());
+
+  bool lastWasSlash = false;
+  for (char character : path) {
+    if (character == '\\' || character == '/') {
+      if (!lastWasSlash) {
+        sanitized += '/';
+        lastWasSlash = true;
+      }
+    } else {
+      sanitized += character;
+      lastWasSlash = false;
+    }
+  }
+
+  return sanitized;
+}
+
+// Base case: single string
+inline auto Join(std::string_view str) -> std::string {
+  return Sanitize(std::string(str));
+}
+
+// Recursive variadic template
+template <typename... Strings>
+auto Join(std::string_view first, const Strings &...rest) -> std::string {
+  if constexpr (sizeof...(rest) == 0) {
+    return Sanitize(std::string(first));
+  } else {
+    auto combined = Join(rest...);             // join the rest first
+    return Join(std::string(first), combined); // call your original 2-arg logic
+  }
+}
+
+// Overload for two args using your original logic
+auto Join(const std::string &base, const std::string &append) -> std::string {
+  if (base.empty()) {
+    return append;
+  }
+  if (append.empty()) {
+    return base;
+  }
+
+  auto sanitizedBase = Sanitize(base);
+  auto sanitizedAppend = Sanitize(append);
+
+  if (sanitizedBase.back() == '/') {
+    if (sanitizedAppend.front() == '/') {
+      return sanitizedBase + sanitizedAppend.substr(1);
+    }
+    return sanitizedBase + sanitizedAppend;
+  }
+
+  if (sanitizedAppend.front() == '/') {
+    return sanitizedBase + sanitizedAppend;
+  }
+
+  return sanitizedBase + '/' + sanitizedAppend;
+}
+
+} // namespace Path
