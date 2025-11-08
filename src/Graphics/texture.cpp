@@ -6,7 +6,7 @@
 #include "vulkan/vulkan_core.h"
 #include <vma/vk_mem_alloc.h>
 
-namespace Graphics {
+namespace Graphics::Texture {
 
 auto StartSingleUseCommandBuffer(GraphicsContext &context)
     -> tl::expected<VkCommandBuffer, Error::Error> {
@@ -76,7 +76,7 @@ auto GetAspectFlagsForFormat(VkFormat format) -> VkImageAspectFlagBits {
   }
 }
 
-auto Texture_Create2D(GraphicsContext &context, TextureCreationInfo info)
+auto Create2D(GraphicsContext &context, TextureCreationInfo info)
     -> tl::expected<Texture, Error::Error> {
 
   Texture texture = {};
@@ -125,6 +125,13 @@ auto Texture_Create2D(GraphicsContext &context, TextureCreationInfo info)
   error = Error::FromVkResult(
       vkCreateImageView(context.device, &viewInfo, nullptr, &texture.view));
 
+  texture.sizeInBytes = static_cast<uint64_t>(info.width) *
+                        static_cast<uint64_t>(info.height) *
+                        static_cast<uint64_t>(GetFormatSize(info.format));
+  texture.sizeInBytes =
+      static_cast<uint64_t>(static_cast<double>(texture.sizeInBytes) *
+                            GetMipChainCostMultiplier(info.mipmapCount));
+
   if (Error::IsError(error)) {
     return tl::unexpected(error);
   }
@@ -132,7 +139,7 @@ auto Texture_Create2D(GraphicsContext &context, TextureCreationInfo info)
   return texture;
 }
 
-auto Texture_CreateCubeMap(GraphicsContext &context, TextureCreationInfo info)
+auto CreateCubeMap(GraphicsContext &context, TextureCreationInfo info)
     -> tl::expected<Texture, Error::Error> {
 
   if (info.width != info.height) {
@@ -192,10 +199,17 @@ auto Texture_CreateCubeMap(GraphicsContext &context, TextureCreationInfo info)
     return tl::unexpected(error);
   }
 
+  texture.sizeInBytes = static_cast<uint64_t>(info.width) *
+                        static_cast<uint64_t>(info.height) * CubeFaceCount *
+                        static_cast<uint64_t>(GetFormatSize(info.format));
+  texture.sizeInBytes =
+      static_cast<uint64_t>(static_cast<double>(texture.sizeInBytes) *
+                            GetMipChainCostMultiplier(info.mipmapCount));
+
   return texture;
 }
 
-auto Texture_CreateVolume(GraphicsContext &context, TextureCreationInfo info)
+auto CreateVolume(GraphicsContext &context, TextureCreationInfo info)
     -> tl::expected<Texture, Error::Error> {
 
   Texture texture = {};
@@ -248,10 +262,18 @@ auto Texture_CreateVolume(GraphicsContext &context, TextureCreationInfo info)
     return tl::unexpected(error);
   }
 
+  texture.sizeInBytes = static_cast<uint64_t>(info.width) *
+                        static_cast<uint64_t>(info.height) *
+                        static_cast<uint64_t>(info.depth) *
+                        static_cast<uint64_t>(GetFormatSize(info.format));
+  texture.sizeInBytes =
+      static_cast<uint64_t>(static_cast<double>(texture.sizeInBytes) *
+                            GetMipChainCostMultiplier(info.mipmapCount, true));
+
   return texture;
 }
 
-auto Texture_CreateArray(GraphicsContext &context, TextureCreationInfo info)
+auto CreateArray(GraphicsContext &context, TextureCreationInfo info)
     -> tl::expected<Texture, Error::Error> {
 
   Texture texture = {};
@@ -308,10 +330,18 @@ auto Texture_CreateArray(GraphicsContext &context, TextureCreationInfo info)
     return tl::unexpected(error);
   }
 
+  texture.sizeInBytes = static_cast<uint64_t>(info.width) *
+                        static_cast<uint64_t>(info.height) *
+                        static_cast<uint64_t>(info.depth) *
+                        static_cast<uint64_t>(GetFormatSize(info.format));
+  texture.sizeInBytes =
+      static_cast<uint64_t>(static_cast<double>(texture.sizeInBytes) *
+                            GetMipChainCostMultiplier(info.mipmapCount));
+
   return texture;
 }
 
-void Texture_Destroy(GraphicsContext &context, Texture *texture) {
+void Destroy(GraphicsContext &context, Texture *texture) {
   if (texture->view != VK_NULL_HANDLE) {
     vkDestroyImageView(context.device, texture->view, nullptr);
     texture->view = VK_NULL_HANDLE;
@@ -326,7 +356,7 @@ void Texture_Destroy(GraphicsContext &context, Texture *texture) {
   context.runtimeInfo.textureCount--;
 }
 
-auto Texture_LoadFromFile(GraphicsContext &context, const char *path)
+auto LoadFromFile(GraphicsContext &context, const char *path)
     -> tl::expected<Texture, Error::Error> {
   int texWidth = 0;
   int texHeight = 0;
@@ -374,7 +404,7 @@ auto Texture_LoadFromFile(GraphicsContext &context, const char *path)
                   static_cast<uint32_t>(VK_IMAGE_USAGE_SAMPLED_BIT);
 
   // Create texture image
-  auto result = Texture_Create2D(context, texInfo);
+  auto result = Create2D(context, texInfo);
 
   if (Error::IsError(error)) {
     return result;
@@ -383,23 +413,22 @@ auto Texture_LoadFromFile(GraphicsContext &context, const char *path)
   Texture texture = result.value();
 
   // Transition image layout and copy data from staging buffer
+  error = (TransitionLayout(context, &texture, VK_IMAGE_LAYOUT_UNDEFINED,
+                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL));
+
+  if (Error::IsError(error)) {
+    return tl::unexpected(error);
+  }
+
+  error = (CopyBufferToImage(context, stagingBuffer, &texture));
+
+  if (Error::IsError(error)) {
+    return tl::unexpected(error);
+  }
+
   error =
-      (Texture_TransitionLayout(context, &texture, VK_IMAGE_LAYOUT_UNDEFINED,
-                                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL));
-
-  if (Error::IsError(error)) {
-    return tl::unexpected(error);
-  }
-
-  error = (Texture_CopyBufferToImage(context, stagingBuffer, &texture));
-
-  if (Error::IsError(error)) {
-    return tl::unexpected(error);
-  }
-
-  error = (Texture_TransitionLayout(context, &texture,
-                                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                                    VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL));
+      (TransitionLayout(context, &texture, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL));
 
   if (Error::IsError(error)) {
     return tl::unexpected(error);
@@ -411,8 +440,8 @@ auto Texture_LoadFromFile(GraphicsContext &context, const char *path)
   return texture;
 }
 
-auto Texture_TransitionLayout(GraphicsContext &context, Texture *texture,
-                              VkImageLayout oldLayout, VkImageLayout newLayout)
+auto TransitionLayout(GraphicsContext &context, Texture *texture,
+                      VkImageLayout oldLayout, VkImageLayout newLayout)
     -> Error::Error {
   VkCommandBufferAllocateInfo allocInfo = {};
   allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -478,8 +507,8 @@ auto Texture_TransitionLayout(GraphicsContext &context, Texture *texture,
   return Error::Create("Texture layout transitioned successfully.");
 }
 
-auto Texture_CopyBufferToImage(GraphicsContext &context, VkBuffer buffer,
-                               Texture *texture) -> Error::Error {
+auto CopyBufferToImage(GraphicsContext &context, VkBuffer buffer,
+                       Texture *texture) -> Error::Error {
   VkCommandBufferAllocateInfo allocInfo = {};
   allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
   allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
@@ -519,4 +548,4 @@ auto Texture_CopyBufferToImage(GraphicsContext &context, VkBuffer buffer,
   return Error::Create("Buffer copied to texture image successfully.");
 }
 
-} // namespace Graphics
+} // namespace Graphics::Texture

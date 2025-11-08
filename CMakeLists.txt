@@ -107,7 +107,6 @@ add_executable(Thorium
     src/Graphics/render.cpp
     src/Graphics/canvas.cpp
     src/Graphics/shader.cpp
-    src/Graphics/mesh.cpp
 
     src/Modules/filesystem.cpp
     src/Modules/timer.cpp
