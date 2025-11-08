@@ -12,6 +12,7 @@ namespace Graphics::Shader {
 
 struct ShaderSource {
   std::string source;
+  std::string code;
   std::vector<ShaderSource> includeSources;
   uint64_t modTime;
 

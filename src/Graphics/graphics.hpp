@@ -113,13 +113,9 @@ auto GetRenderData(GraphicsContext &context, uint32_t threadIndex)
     -> RenderData;
 auto GetCommandBuffer(GraphicsContext &context, uint32_t threadIndex)
     -> VkCommandBuffer;
+void Deinitialize(GraphicsContext &context);
 
-inline void SetCurrentThreadIndex(int8_t index) {
-  thread_local static int8_t current = -1;
-  current = index;
-}
-
-inline auto GetCurrentThreadIndex() -> int8_t {
+inline auto GetCurrentThreadIndex() -> int8_t & {
   thread_local static int8_t current = -1; // Default to invalid
   return current;
 }

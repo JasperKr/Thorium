@@ -7,7 +7,6 @@
 namespace Graphics {
 
 struct VertexFormat {
-  uint32_t AttributeCount;
   std::vector<VkVertexInputAttributeDescription> Attributes;
   std::vector<VkVertexInputBindingDescription> Bindings;
 };
@@ -17,7 +16,7 @@ struct MeshDrawRange {
 };
 
 template <typename Vertex = void> struct Mesh {
-  VertexFormat Format = {.AttributeCount = 0, .Attributes = {}, .Bindings = {}};
+  VertexFormat Format = {.Attributes = {}, .Bindings = {}};
 
   std::vector<Vertex> VertexData;
   std::vector<uint32_t> IndexData;
@@ -137,8 +136,8 @@ template <typename Vertex = void> struct Mesh {
 
   auto VertexFormatSize(VertexFormat &format) -> uint32_t {
     uint32_t size = 0;
-    for (uint32_t i = 0; i < format.AttributeCount; i++) {
-      size += VkFormatSize(format.Attributes.at(i).format);
+    for (auto &Attribute : format.Attributes) {
+      size += VkFormatSize(Attribute.format);
     }
     return size;
   }

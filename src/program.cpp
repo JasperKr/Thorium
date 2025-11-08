@@ -3,6 +3,7 @@
 #include "Graphics/graphics.hpp"
 #include "Graphics/mesh.hpp"
 #include "Graphics/shader.hpp"
+#include "Modules/error.hpp"
 #include "Modules/timer.hpp"
 #include <iostream>
 
@@ -28,18 +29,18 @@ static inline auto GetPipeline() -> VkPipeline & {
   return pipeline;
 }
 
-void Configuration(ApplicationConfig &config) {
+auto Configuration(ApplicationConfig &config) -> Error::Error {
   config.Title = "Thorium Engine - Program Example";
+
+  return Error::Success();
 }
 
-void Load(Graphics::GraphicsContext &context) {
+auto Load(Graphics::GraphicsContext &context) -> Error::Error {
   auto fsResult = Graphics::Shader::ShaderModule::Create(
       context, "src/Graphics/Shaders/default.fs", VK_SHADER_STAGE_FRAGMENT_BIT,
       "Default fragment shader");
   if (Error::IsError(fsResult)) {
-    std::cerr << "Failed to create fragment shader: "
-              << fsResult.error().message << "\n";
-    return;
+    return fsResult.error();
   }
 
   auto vsResult = Graphics::Shader::ShaderModule::Create(
@@ -47,9 +48,7 @@ void Load(Graphics::GraphicsContext &context) {
       "Default vertex shader");
 
   if (Error::IsError(vsResult)) {
-    std::cerr << "Failed to create vertex shader: " << vsResult.error().message
-              << "\n";
-    return;
+    return vsResult.error();
   }
 
   auto fragmentShader = fsResult.value();
@@ -59,7 +58,6 @@ void Load(Graphics::GraphicsContext &context) {
   GetShaders().push_back(fragmentShader);
 
   Graphics::VertexFormat format = {};
-  format.AttributeCount = 2;
   format.Attributes = {
       {.location = 0,
        .binding = 0,
@@ -88,18 +86,22 @@ void Load(Graphics::GraphicsContext &context) {
 
   std::vector<uint32_t> indexData = {0, 1, 2, 2, 3, 0};
 
+  std::cout << "Creating mesh..." << "\n";
+
   auto meshResult =
       Graphics::Mesh<Vertex>::Create(context, format, vertexData, &indexData);
 
   if (Error::IsError(meshResult)) {
     std::cerr << "Failed to create mesh: " << meshResult.error().message
               << "\n";
-    return;
+    return meshResult.error();
   }
 
   auto mesh = meshResult.value();
 
   GetMeshes().push_back(mesh);
+
+  std::cout << "Mesh created successfully." << "\n";
 
   VkAttachmentDescription colorAttachment = {};
   colorAttachment.format = context.swapchainInfo.format;
@@ -196,12 +198,15 @@ void Load(Graphics::GraphicsContext &context) {
   dynamicState.dynamicStateCount = 0;
   dynamicState.pDynamicStates = nullptr;
 
+  std::cout << "Creating pipeline layout..." << "\n";
+
   VkPipelineVertexInputStateCreateInfo vertexInputInfo = {};
   vertexInputInfo.sType =
       VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-  vertexInputInfo.vertexBindingDescriptionCount = 1;
+  vertexInputInfo.vertexBindingDescriptionCount = mesh.Format.Bindings.size();
   vertexInputInfo.pVertexBindingDescriptions = mesh.Format.Bindings.data();
-  vertexInputInfo.vertexAttributeDescriptionCount = mesh.Format.AttributeCount;
+  vertexInputInfo.vertexAttributeDescriptionCount =
+      mesh.Format.Attributes.size();
   vertexInputInfo.pVertexAttributeDescriptions = mesh.Format.Attributes.data();
 
   VkPipelineInputAssemblyStateCreateInfo inputAssembly = {};
@@ -210,16 +215,22 @@ void Load(Graphics::GraphicsContext &context) {
   inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
   inputAssembly.primitiveRestartEnable = VK_FALSE;
 
-  std::vector<VkPipelineShaderStageCreateInfo> shaderStages = {};
-  shaderStages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-  shaderStages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
-  shaderStages[0].module = vertexShader.module;
-  shaderStages[0].pName = "main";
+  std::cout << "Creating shader stages..." << "\n";
 
-  shaderStages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-  shaderStages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-  shaderStages[1].module = fragmentShader.module;
-  shaderStages[1].pName = "main";
+  std::vector<VkPipelineShaderStageCreateInfo> shaderStages = {};
+  shaderStages.push_back({
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+      .stage = VK_SHADER_STAGE_VERTEX_BIT,
+      .module = vertexShader.module,
+      .pName = "main",
+  });
+
+  shaderStages.push_back({
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+      .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+      .module = fragmentShader.module,
+      .pName = "main",
+  });
 
   VkPipelineRenderingCreateInfo renderingCreateInfo = {};
   renderingCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
@@ -245,25 +256,32 @@ void Load(Graphics::GraphicsContext &context) {
   pipelineCreateInfo.pStages = shaderStages.data();
   pipelineCreateInfo.pNext = &renderingCreateInfo;
 
-  vkCreateGraphicsPipelines(context.device, VK_NULL_HANDLE, 1,
-                            &pipelineCreateInfo, nullptr, &GetPipeline());
+  std::cout << "Creating graphics pipeline..." << "\n";
+
+  return Error::FromVkResult(
+      vkCreateGraphicsPipelines(context.device, VK_NULL_HANDLE, 1,
+                                &pipelineCreateInfo, nullptr, &GetPipeline()));
 }
 
-void Update(double deltaTime) {
+auto Update(double deltaTime) -> Error::Error {
   std::cout << "Delta time: " << deltaTime << "s; " << Timer::GetFPS()
             << " FPS\n";
+
+  return Error::Success();
 }
 
-void Draw(Graphics::GraphicsContext &context) {
+auto Draw(Graphics::GraphicsContext &context) -> Error::Error {
   Graphics::SetCanvas(context, {}, nullptr);
   vkCmdBindPipeline(Graphics::GetCommandBuffer(context, 0),
                     VK_PIPELINE_BIND_POINT_GRAPHICS, GetPipeline());
   for (auto &mesh : GetMeshes()) {
     mesh.Draw(context);
   }
+
+  return Error::Success();
 }
 
-void Exit(Graphics::GraphicsContext &context) {
+auto Exit(Graphics::GraphicsContext &context) -> Error::Error {
   vkDestroyPipeline(context.device, GetPipeline(), nullptr);
   for (auto &shader : GetShaders()) {
     vkDestroyShaderModule(context.device, shader.module, nullptr);
@@ -271,5 +289,7 @@ void Exit(Graphics::GraphicsContext &context) {
   for (auto &mesh : GetMeshes()) {
     mesh.Destroy(context);
   }
+
+  return Error::Success();
 }
 } // namespace Program

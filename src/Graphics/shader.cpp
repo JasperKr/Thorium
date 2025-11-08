@@ -3,9 +3,11 @@
 #include "graphics.hpp"
 #include "shaderc/shaderc.h"
 #include "shaderc/shaderc.hpp"
+#include "shaderc/status.h"
 #include "tl/expected.hpp"
 #include <cstddef>
 #include <cstdint>
+#include <iostream>
 #include <sstream>
 #include <string>
 
@@ -114,6 +116,164 @@ static inline auto LoadSpirV(Graphics::GraphicsContext &context,
   return error;
 }
 
+template <typename F>
+static inline auto TraverseShaderIncludes(const ShaderSource &source,
+                                          F &&action) -> void {
+  action(source);
+
+  // NOLINTNEXTLINE
+  for (const auto &includeSource : source.includeSources) {
+    TraverseShaderIncludes(includeSource, std::forward<F>(action));
+  }
+}
+
+static inline auto
+SpvCompilationStatusToString(const shaderc_compilation_status result)
+    -> std::string {
+  switch (result) {
+  case shaderc_compilation_status_success:
+    return "Compilation succeeded.";
+  case shaderc_compilation_status_invalid_stage:
+    return "Invalid shader stage.";
+  case shaderc_compilation_status_compilation_error:
+    return "Compilation error: ";
+  case shaderc_compilation_status_internal_error:
+    return "Internal compiler error: ";
+  case shaderc_compilation_status_null_result_object:
+    return "Null result object.";
+  case shaderc_compilation_status_invalid_assembly:
+    return "Invalid SPIR-V assembly.";
+  case shaderc_compilation_status_validation_error:
+    return "SPIR-V validation error.";
+  case shaderc_compilation_status_transformation_error:
+    return "SPIR-V transformation error.";
+  case shaderc_compilation_status_configuration_error:
+    return "Configuration error.";
+  default:
+    return "Unknown compilation status.";
+  }
+}
+
+enum class ConsoleColor : uint8_t {
+  Red,
+  Green,
+  Blue,
+  Yellow,
+  Cyan,
+  Magenta,
+  White,
+  Reset
+};
+
+auto GetColorCode(ConsoleColor color) -> std::string {
+  switch (color) {
+  case ConsoleColor::Red:
+    return "\033[31m";
+  case ConsoleColor::Green:
+    return "\033[32m";
+  case ConsoleColor::Blue:
+    return "\033[34m";
+  case ConsoleColor::Yellow:
+    return "\033[33m";
+  case ConsoleColor::Cyan:
+    return "\033[36m";
+  case ConsoleColor::Magenta:
+    return "\033[35m";
+  case ConsoleColor::White:
+    return "\033[37m";
+  default:
+    return "\033[0m";
+  }
+}
+
+static inline auto
+HandleCompilationError(const shaderc::SpvCompilationResult &result,
+                       const ShaderModule &shader) -> std::string {
+  shaderc_compilation_status status = result.GetCompilationStatus();
+
+  // We should only handle compilation errors here
+  if (status != shaderc_compilation_status_compilation_error) {
+    return SpvCompilationStatusToString(status);
+  }
+
+  // Find first : to get the line number
+  // Example error message:
+  // Error: src/Graphics/Shaders/default.vs:14: error: '#error' :
+
+  auto errorMessage = result.GetErrorMessage();
+  size_t firstColon = errorMessage.find(':');
+  if (firstColon == std::string::npos) {
+    return "Unknown compilation error.";
+  }
+
+  size_t secondColon = errorMessage.find(':', firstColon + 1);
+  if (secondColon == std::string::npos) {
+    return "Unknown compilation error.";
+  }
+
+  std::string lineNumberStr =
+      errorMessage.substr(firstColon + 1, secondColon - firstColon - 1);
+  uint64_t lineNumber = std::stoull(lineNumberStr);
+
+  /* Traverse includes to find the original source and line number
+  Current line number is 1-based
+  We can get the shader source object we included from by traversing the
+  includes And checking the includedLineOffset and code line count and if the
+  error line number falls within that range then we can adjust the line number
+  accordingly, choosing the deepest include that matches the line number
+  */
+
+  ShaderSource originalSource = shader.source;
+  std::string includeTree;
+
+  bool rootFile = true;
+
+  // Export to file for easier debugging
+
+  Filesystem::WriteFile("shader_source_with_error.txt", shader.code);
+
+  TraverseShaderIncludes(
+      shader.source, [&](const ShaderSource &source) -> void {
+        uint32_t startLine = source.includedLineOffset;  // inclusive
+        uint32_t endLine = startLine + source.lineCount; // inclusive
+
+        if (lineNumber >= startLine && lineNumber <= endLine) {
+          if (!rootFile) {
+            includeTree += "Included by: " + originalSource.source + ": ";
+            includeTree += std::to_string(source.includedLineOffset -
+                                          originalSource.includedLineOffset) +
+                           "\n";
+          }
+
+          originalSource = source;
+          rootFile = false;
+        }
+
+        if (rootFile) {
+          std::cout << "Error handling shader error message: Error outside of "
+                       "root file range.\n";
+          rootFile = false;
+        }
+      });
+
+  lineNumber -= originalSource.includedLineOffset;
+
+  std::string error =
+      GetColorCode(ConsoleColor::Red) + "Shader Compilation Error\n";
+
+  error += GetColorCode(ConsoleColor::Cyan) + includeTree;
+  error += GetColorCode(ConsoleColor::Green) + originalSource.source + ": " +
+           std::to_string(lineNumber) + "\n";
+  error += GetColorCode(ConsoleColor::Reset);
+
+  std::string errmsgWithoutFileInfo =
+      errorMessage.substr(secondColon + 1); // skip past line number info
+
+  error += errmsgWithoutFileInfo;
+
+  return error;
+}
+
 static inline auto LoadGLSL(GraphicsContext &context, ShaderModule &shader) {
   if (shader.code.empty()) {
     return Error::Create("Shader source is empty: " +
@@ -140,9 +300,7 @@ static inline auto LoadGLSL(GraphicsContext &context, ShaderModule &shader) {
                                 shader.source.source.c_str(), "main", options);
 
   if (result.GetCompilationStatus() != shaderc_compilation_status_success) {
-    std::string errorMessage =
-        "Failed to compile shader: " + shader.source.source + "\n" +
-        result.GetErrorMessage();
+    std::string errorMessage = HandleCompilationError(result, shader);
     return Error::Create(errorMessage);
   }
 
@@ -155,9 +313,6 @@ static inline auto LoadGLSL(GraphicsContext &context, ShaderModule &shader) {
   if (Error::IsError(err)) {
     return err;
   }
-
-  std::cout << "Writing SPIR-V to "
-            << Path::Join(SpirvDirectory, shader.spirvPath) << "\n";
 
   err = Filesystem::WriteFile(Path::Join(SpirvDirectory, shader.spirvPath),
                               spirvCode);
@@ -176,21 +331,6 @@ static inline auto LoadGLSL(GraphicsContext &context, ShaderModule &shader) {
   Error::Error error = Error::FromVkResult(vkCreateShaderModule(
       context.device, &moduleCreateInfo, nullptr, &shader.module));
   return error;
-}
-
-template <typename F>
-static inline auto TraverseShaderIncludes(const ShaderSource &source,
-                                          F &&action) {
-  for (const auto &includeSource : source.includeSources) {
-    if (action(includeSource)) {
-      return true;
-    }
-
-    if (TraverseShaderIncludes(includeSource, std::forward<F>(action))) {
-      return true;
-    }
-  }
-  return false;
 }
 
 // Current line number is 1-based
@@ -226,7 +366,8 @@ HandleShaderIncludes(ShaderModule &shader, ShaderSource &currentSource,
     }
 
     ShaderSource newSource = {
-        .source = fileResult.value(),
+        .source = includeFilename,
+        .code = fileResult.value(),
         .includeSources = {},
         .modTime = Filesystem::GetFileModTime(includeFilename),
         .lineCount = 0,
@@ -234,12 +375,24 @@ HandleShaderIncludes(ShaderModule &shader, ShaderSource &currentSource,
     };
 
     currentSource.includeSources.push_back(newSource);
+    auto &pushedSource = currentSource.includeSources.back();
 
-    return PreprocessShaderCode(shader, newSource, currentLineNumber);
+    uint64_t previousLineNumber = currentLineNumber;
+
+    auto code = PreprocessShaderCode(shader, pushedSource, currentLineNumber);
+
+    uint32_t includedLineCount = currentLineNumber - previousLineNumber;
+    pushedSource.lineCount = includedLineCount;
+
+    if (Error::IsError(code)) {
+      return tl::unexpected(code.error());
+    }
+
+    return "//// Include: " + includeFilename + " ////\n" + code.value();
   }
 
   // Empty string to indicate no include found
-  return "";
+  return "No Include";
 }
 
 // Preprocesses a line of shader code, handling includes and externs
@@ -257,7 +410,7 @@ PreprocessShaderCodeLine(ShaderModule &shader, ShaderSource &currentSource,
     return tl::unexpected(includeResult.error());
   }
 
-  if (!includeResult->empty()) {
+  if (includeResult.value() != "No Include") {
     return includeResult.value();
   }
 
@@ -326,22 +479,23 @@ PreprocessShaderCodeLine(ShaderModule &shader, ShaderSource &currentSource,
           "Shader extern not found for #defineExtern: " + externValueName));
     }
 
-    return "#define " + externName + " " + externValue;
+    return "#define " + externName + " " + externValue + "\n";
   }
 
-  return line;
+  return line + "\n";
 }
 
 static inline auto PreprocessShaderCode(ShaderModule &shader,
                                         ShaderSource &source,
                                         uint64_t &currentLineNumber)
     -> tl::expected<std::string, Error::Error> {
-  std::istringstream sourceStream(shader.code);
+  std::istringstream sourceStream(source.code);
   std::string preprocessedSource;
   std::string line;
 
   while (std::getline(sourceStream, line)) {
     currentLineNumber++;
+
     auto result =
         PreprocessShaderCodeLine(shader, source, line, currentLineNumber);
 
@@ -351,7 +505,7 @@ static inline auto PreprocessShaderCode(ShaderModule &shader,
 
     auto processedLine = result.value();
 
-    preprocessedSource += processedLine + "\n";
+    preprocessedSource += processedLine;
   }
 
   return preprocessedSource;
@@ -364,7 +518,7 @@ static inline auto LoadCode(ShaderModule &shader) -> Error::Error {
     return fileResult.error();
   }
 
-  shader.code = fileResult.value();
+  shader.source.code = fileResult.value();
 
   uint64_t currentLineNumber = 0;
 
@@ -376,6 +530,7 @@ static inline auto LoadCode(ShaderModule &shader) -> Error::Error {
   }
 
   shader.code = preprocessResult.value();
+  shader.source.lineCount = static_cast<uint32_t>(currentLineNumber);
 
   return Error::Success();
 }

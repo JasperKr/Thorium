@@ -384,6 +384,7 @@ static auto CreateRenderData(GraphicsContext &context) -> Error::Error {
     }
 
     renderData.commandBuffers = std::vector<VkCommandBuffer>(FRAMES_IN_FLIGHT);
+    renderData.frameReady = std::vector<bool>(FRAMES_IN_FLIGHT, false);
 
     VkCommandBufferAllocateInfo allocInfo = {};
     allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -609,6 +610,42 @@ auto Initialize(GraphicsContext &context, VkExtent2D dimensions)
   std::cout << "CreateFences." << "\n";
 
   return Error::Success();
+}
+
+void Deinitialize(GraphicsContext &context) {
+  vkDeviceWaitIdle(context.device);
+
+  vmaDestroyAllocator(context.vmaAllocator);
+
+  for (VkFence fence : context.inFlightFences) {
+    vkDestroyFence(context.device, fence, nullptr);
+  }
+
+  for (VkSemaphore semaphore : context.renderingFinished) {
+    vkDestroySemaphore(context.device, semaphore, nullptr);
+  }
+
+  for (VkSemaphore semaphore : context.swapchainImageReady) {
+    vkDestroySemaphore(context.device, semaphore, nullptr);
+  }
+
+  for (RenderData &renderData : context.renderData) {
+    vkDestroyCommandPool(context.device, renderData.pool, nullptr);
+  }
+
+  for (VkImageView imageView : context.swapchainInfo.imageViews) {
+    vkDestroyImageView(context.device, imageView, nullptr);
+  }
+
+  vkDestroySwapchainKHR(context.device, context.swapchainInfo.swapchain,
+                        nullptr);
+
+  vkDestroyDevice(context.device, nullptr);
+  vkDestroySurfaceKHR(context.instance, context.surface, nullptr);
+  vkDestroyInstance(context.instance, nullptr);
+
+  SDL_DestroyWindow(context.sdlWindow);
+  SDL_Quit();
 }
 
 } // namespace Graphics

@@ -13,6 +13,7 @@
 #include "program.hpp"
 
 auto main() -> int {
+  Graphics::GetCurrentThreadIndex() = 0;
   Error::SetupTraceback();
 
   ApplicationConfig config = {};
@@ -55,10 +56,21 @@ auto main() -> int {
 
   Graphics::Shader::LoadModule();
 
-  Program::Load(context);
+  std::cout << "Loading program..." << "\n";
+
+  Error::Error loadErr = Program::Load(context);
+
+  if (Error::IsError(loadErr)) {
+    std::cerr << "Failed to load program: " << loadErr.message << "\n";
+    return -1;
+  }
+
+  std::cout << "Program loaded successfully." << "\n";
 
   Graphics::InitializeGraphics(context);
   Error::Error err = Graphics::SetCanvas(context, {}, nullptr);
+
+  std::cout << "Entering main loop..." << "\n";
 
   while (running) {
     // Events
@@ -74,9 +86,23 @@ auto main() -> int {
       }
     }
 
+    if (!running) {
+      break;
+    }
+
     Timer::Step();
-    Program::Update(Timer::GetDelta());
-    Program::Draw(context);
+    Error::Error updateErr = Program::Update(Timer::GetDelta());
+    if (Error::IsError(updateErr)) {
+      std::cerr << "Error::Error during update: " << updateErr.message << "\n";
+      running = false;
+      break;
+    }
+    Error::Error drawErr = Program::Draw(context);
+    if (Error::IsError(drawErr)) {
+      std::cerr << "Error::Error during draw: " << drawErr.message << "\n";
+      running = false;
+      break;
+    }
 
     Error::Error err = Graphics::Present(context);
 
@@ -85,6 +111,18 @@ auto main() -> int {
       running = false;
     }
   }
+
+  std::cout << "Exiting program..." << "\n";
+
+  Error::Error exitErr = Program::Exit(context);
+  if (Error::IsError(exitErr)) {
+    std::cerr << "Error::Error during program exit: " << exitErr.message
+              << "\n";
+  }
+
+  std::cout << "Program exited successfully." << "\n";
+
+  Graphics::Deinitialize(context);
 
   return 0;
 }

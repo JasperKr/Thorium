@@ -14,7 +14,7 @@ auto ValidateAttachments(
 
   if (colorAttachments.size() == 0) {
     // Rendering to swapchain, no need to validate
-    return Error::Create("Rendering to swapchain, no attachment validation.");
+    return Error::Success();
   }
 
   Graphics::RenderingAttachmentInfo firstColorAttachment =

@@ -235,7 +235,11 @@ auto Present_PostDraw(Graphics::GraphicsContext &context) -> Error::Error {
 
   SubmitCommandBuffers(context);
 
-  PresentFrame(context);
+  auto error = PresentFrame(context);
+
+  if (Error::IsError(error)) {
+    return error;
+  }
 
   context.currentFrame = context.currentFrame + 1;
   context.frameIndex = context.currentFrame % Graphics::FRAMES_IN_FLIGHT;

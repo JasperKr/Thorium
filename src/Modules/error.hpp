@@ -109,6 +109,8 @@ inline auto IsError(const tl::expected<T, Error> &expected) -> bool {
   return !expected.has_value();
 }
 
+inline auto IsSuccess(const Error &error) -> bool { return error.code == 0; }
+
 inline auto VkResultToString(int32_t result) -> std::string {
   switch (result) {
   case VK_SUCCESS:

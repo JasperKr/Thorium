@@ -5,10 +5,10 @@
 
 namespace Program {
 
-void Update(double deltaTime);
-void Draw(Graphics::GraphicsContext &context);
-void Load(Graphics::GraphicsContext &context);
-void Exit(Graphics::GraphicsContext &context);
-void Configuration(ApplicationConfig &config);
+auto Update(double deltaTime) -> Error::Error;
+auto Draw(Graphics::GraphicsContext &context) -> Error::Error;
+auto Load(Graphics::GraphicsContext &context) -> Error::Error;
+auto Exit(Graphics::GraphicsContext &context) -> Error::Error;
+auto Configuration(ApplicationConfig &config) -> Error::Error;
 
 } // namespace Program
