@@ -125,12 +125,9 @@ auto Create2D(GraphicsContext &context, TextureCreationInfo info)
   error = Error::FromVkResult(
       vkCreateImageView(context.device, &viewInfo, nullptr, &texture.view));
 
-  texture.sizeInBytes = static_cast<uint64_t>(info.width) *
-                        static_cast<uint64_t>(info.height) *
-                        static_cast<uint64_t>(GetFormatSize(info.format));
-  texture.sizeInBytes =
-      static_cast<uint64_t>(static_cast<double>(texture.sizeInBytes) *
-                            GetMipChainCostMultiplier(info.mipmapCount));
+  VmaAllocationInfo memRequirements;
+  vmaGetAllocationInfo(context.vmaAllocator, texture.memory, &memRequirements);
+  texture.sizeInBytes = memRequirements.size;
 
   if (Error::IsError(error)) {
     return tl::unexpected(error);
@@ -199,12 +196,9 @@ auto CreateCubeMap(GraphicsContext &context, TextureCreationInfo info)
     return tl::unexpected(error);
   }
 
-  texture.sizeInBytes = static_cast<uint64_t>(info.width) *
-                        static_cast<uint64_t>(info.height) * CubeFaceCount *
-                        static_cast<uint64_t>(GetFormatSize(info.format));
-  texture.sizeInBytes =
-      static_cast<uint64_t>(static_cast<double>(texture.sizeInBytes) *
-                            GetMipChainCostMultiplier(info.mipmapCount));
+  VmaAllocationInfo memRequirements;
+  vmaGetAllocationInfo(context.vmaAllocator, texture.memory, &memRequirements);
+  texture.sizeInBytes = memRequirements.size;
 
   return texture;
 }
@@ -262,13 +256,9 @@ auto CreateVolume(GraphicsContext &context, TextureCreationInfo info)
     return tl::unexpected(error);
   }
 
-  texture.sizeInBytes = static_cast<uint64_t>(info.width) *
-                        static_cast<uint64_t>(info.height) *
-                        static_cast<uint64_t>(info.depth) *
-                        static_cast<uint64_t>(GetFormatSize(info.format));
-  texture.sizeInBytes =
-      static_cast<uint64_t>(static_cast<double>(texture.sizeInBytes) *
-                            GetMipChainCostMultiplier(info.mipmapCount, true));
+  VmaAllocationInfo memRequirements;
+  vmaGetAllocationInfo(context.vmaAllocator, texture.memory, &memRequirements);
+  texture.sizeInBytes = memRequirements.size;
 
   return texture;
 }
@@ -330,13 +320,9 @@ auto CreateArray(GraphicsContext &context, TextureCreationInfo info)
     return tl::unexpected(error);
   }
 
-  texture.sizeInBytes = static_cast<uint64_t>(info.width) *
-                        static_cast<uint64_t>(info.height) *
-                        static_cast<uint64_t>(info.depth) *
-                        static_cast<uint64_t>(GetFormatSize(info.format));
-  texture.sizeInBytes =
-      static_cast<uint64_t>(static_cast<double>(texture.sizeInBytes) *
-                            GetMipChainCostMultiplier(info.mipmapCount));
+  VmaAllocationInfo memRequirements;
+  vmaGetAllocationInfo(context.vmaAllocator, texture.memory, &memRequirements);
+  texture.sizeInBytes = memRequirements.size;
 
   return texture;
 }

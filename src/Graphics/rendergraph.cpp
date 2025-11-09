@@ -1,6 +1,10 @@
 #include "rendergraph.hpp"
+#include "Modules/error.hpp"
+#include "graphics.hpp"
+#include "texture.hpp"
 #include <algorithm>
 #include <cassert>
+#include <cstddef>
 #include <cstdint>
 #include <iostream>
 #include <minwindef.h>
@@ -8,12 +12,12 @@
 #include <unordered_set>
 
 namespace Graphics::Rendergraph {
+using std::sort;
+
 auto AddRenderPass(RenderGraph &graph,
                    const std::vector<ResourceAccess> &resourceAccesses)
     -> ResourceHandle {
   RenderPass pass = {};
-
-  std::cout << "Adding render pass..." << "\n";
 
   pass.handle = static_cast<ResourceHandle>(graph.passes.size());
 
@@ -22,10 +26,8 @@ auto AddRenderPass(RenderGraph &graph,
 
     if (access.accessType == AccessType::Read) {
       pass.readResources.push_back(access.resource);
-      std::cout << "  Read resource " << access.resource << "\n";
     } else if (access.accessType == AccessType::Write) {
       pass.writeResources.push_back(access.resource);
-      std::cout << "  Write resource " << access.resource << "\n";
     }
   }
 
@@ -325,8 +327,6 @@ auto BuildGraph(RenderGraph &graph) -> void {
             // Found a dependency, add as child
             graph.passes[j].children.push_back(static_cast<ResourceHandle>(i));
             graph.passes[i].parents.push_back(static_cast<ResourceHandle>(j));
-
-            std::cout << "Pass " << j << " is a parent of pass " << i << "\n";
           }
         }
       }
@@ -408,14 +408,337 @@ auto inline CalculateResourceLifetimes(RenderGraph &graph) -> void {
         resource.usageLifetime.lastUseIndex == 0) {
       continue; // never used
     }
-
-    std::cout << "Resource " << resource.handle
-              << " first use: " << resource.usageLifetime.firstUseIndex
-              << ", last use: " << resource.usageLifetime.lastUseIndex << "\n";
   }
 }
 
-auto Compile(RenderGraph &graph) -> void {
+auto inline ReserveBlock(GraphicsContext &context, RenderGraph &graph,
+                         uint32_t size = 0) -> Error::Error {
+  MemoryBlock block = {};
+  block.size = size == 0 ? graph.memoryBlockSize : size;
+  block.offset = 0;
+
+  VmaVirtualBlockCreateInfo blockCreateInfo = {};
+  blockCreateInfo.size = block.size;
+
+  Error::Error error = Error::FromVkResult(
+      vmaCreateVirtualBlock(&blockCreateInfo, &block.virtualBlock));
+
+  if (Error::IsError(error)) {
+    return error;
+  }
+
+  graph.memoryBlocks.push_back(block);
+
+  return Error::Success();
+}
+
+struct AllocationInfo {
+  ResourceHandle handle{};
+  VkDeviceSize size{};
+  VkDeviceSize alignment{};
+};
+
+// Try to allocate resource in existing blocks, or create new block if needed
+// If a resource is bigger than the default block size, a larger block will be
+// created to fit it
+auto inline AllocateResourceInBlocks(GraphicsContext &context,
+                                     RenderGraph &graph, AllocationInfo info)
+    -> Error::Error {
+
+  VmaVirtualAllocationCreateInfo allocInfo{};
+  allocInfo.size = info.size;
+  allocInfo.alignment = info.alignment;
+
+  VmaVirtualAllocation alloc = nullptr;
+  VkDeviceSize offset = 0;
+
+  // Try to place in existing blocks
+  for (uint32_t blockIndex = 0; blockIndex < graph.memoryBlocks.size();
+       blockIndex++) {
+    auto &block = graph.memoryBlocks[blockIndex];
+
+    if (vmaVirtualAllocate(block.virtualBlock, &allocInfo, &alloc, &offset) ==
+        VK_SUCCESS) {
+
+      graph.virtualAllocations[info.handle] = {.blockIndex = blockIndex,
+                                               .resource = info.handle,
+                                               .allocation = alloc,
+                                               .offset = offset,
+                                               .size = info.size};
+      return Error::Success(); // success
+    }
+  }
+
+  // Create larger block if needed
+  uint32_t allocationSize = (std::max)(info.size, graph.memoryBlockSize);
+
+  auto error = ReserveBlock(context, graph, allocationSize);
+  if (Error::IsError(error)) {
+    return error;
+  }
+
+  auto &block = graph.memoryBlocks.back();
+
+  if (vmaVirtualAllocate(block.virtualBlock, &allocInfo, &alloc, &offset) ==
+      VK_SUCCESS) {
+    graph.virtualAllocations[info.handle] = {
+        .blockIndex = static_cast<uint32_t>(graph.memoryBlocks.size() - 1),
+        .resource = info.handle,
+        .allocation = alloc,
+        .offset = offset,
+        .size = info.size};
+
+    return Error::Success(); // success
+  }
+
+  return Error::Create("Failed to allocate virtual memory"); // shits fucked
+}
+
+auto inline DeallocateResourceInBlocks(RenderGraph &graph,
+                                       const ResourceHandle handle) -> void {
+  bool found = false;
+  VirtualAllocation *allocation = nullptr;
+  for (auto &alloc : graph.virtualAllocations) {
+    if (alloc.resource == handle) {
+      allocation = &alloc;
+      found = true;
+      break;
+    }
+  }
+
+  if (!found) {
+    return; // not found
+  }
+
+  auto &block = graph.memoryBlocks[allocation->blockIndex];
+
+  vmaVirtualFree(block.virtualBlock, allocation->allocation);
+
+  // Remove from allocations list
+  for (auto it = graph.virtualAllocations.begin();
+       it != graph.virtualAllocations.end(); ++it) {
+    if (it->resource == handle) {
+      graph.virtualAllocations.erase(it);
+      break;
+    }
+  }
+}
+
+auto inline QueryMemoryAlignmentOfTexture(GraphicsContext &context,
+                                          const TextureResource &texRes)
+    -> VkDeviceSize {
+  VkImageCreateInfo imageInfo = {};
+  imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+  imageInfo.imageType = VK_IMAGE_TYPE_2D;
+  imageInfo.format = texRes.format;
+  imageInfo.extent = texRes.extent;
+  imageInfo.mipLevels = texRes.mipLevels;
+  imageInfo.arrayLayers = texRes.arrayLayers;
+  imageInfo.samples = texRes.samples;
+  imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+  imageInfo.usage = texRes.usage;
+  imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+  imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+  VkImage tempImage = nullptr;
+  VkResult result =
+      vkCreateImage(context.device, &imageInfo, nullptr, &tempImage);
+  if (result != VK_SUCCESS) {
+    return 0; // failed to create image
+  }
+
+  VkMemoryRequirements memRequirements;
+  vkGetImageMemoryRequirements(context.device, tempImage, &memRequirements);
+
+  vkDestroyImage(context.device, tempImage, nullptr);
+
+  return memRequirements.alignment;
+}
+
+auto inline QueryMemoryAlignmentOfBuffer(GraphicsContext &context,
+                                         const BufferResource &bufRes)
+    -> VkDeviceSize {
+  VkBufferCreateInfo bufferInfo = {};
+  bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+  bufferInfo.size = bufRes.size;
+  bufferInfo.usage = bufRes.usage;
+  bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+  VkBuffer tempBuffer = nullptr;
+  VkResult result =
+      vkCreateBuffer(context.device, &bufferInfo, nullptr, &tempBuffer);
+  if (result != VK_SUCCESS) {
+    return 0; // failed to create buffer
+  }
+
+  VkMemoryRequirements memRequirements;
+  vkGetBufferMemoryRequirements(context.device, tempBuffer, &memRequirements);
+
+  vkDestroyBuffer(context.device, tempBuffer, nullptr);
+
+  return memRequirements.alignment;
+}
+
+auto inline ResourceIsValid(const RenderGraph &graph,
+                            const ResourceHandle handle) -> bool {
+  bool handleInRange =
+      handle < static_cast<ResourceHandle>(graph.resources.size());
+  if (!handleInRange) {
+    return false;
+  }
+
+  auto resource = graph.resources[handle];
+
+  if (resource.usageLifetime.firstUseIndex == 0 ||
+      resource.usageLifetime.firstUseIndex == UINT16_MAX) {
+    return false; // Invalid first use
+  }
+
+  if (resource.usageLifetime.lastUseIndex == 0 ||
+      resource.usageLifetime.lastUseIndex == UINT16_MAX) {
+    return false; // Invalid last use
+  }
+
+  return true;
+}
+
+auto inline CompileResourceTimeline(RenderGraph &graph) -> void {
+  // Fill in the resource timeline entries, each storing allocation/deallocation
+  // events, in order of execution
+  graph.compiledResources.clear();
+
+  std::vector<std::vector<ResourceTimelineEntry>> eventsPerPass(
+      graph.compiledPasses.size());
+
+  // First, gather allocation events and sort by size descending
+  // So that per-pass allocations are ordered by size
+
+  for (const auto &resource : graph.resources) {
+    if (resource.lifetime == ResourceLifetime::Persistent) {
+      continue; // skip persistent resources
+    }
+
+    if (!ResourceIsValid(graph, resource.handle)) {
+      continue; // skip invalid resources, e.g. never used
+    }
+
+    eventsPerPass[resource.usageLifetime.firstUseIndex].push_back(
+        ResourceTimelineEntry{
+            .resourceHandle = resource.handle,
+            .passHandle = resource.usageLifetime.firstUseIndex,
+            .type = ResourceTimelineEntryType::Allocate,
+        });
+    eventsPerPass[resource.usageLifetime.lastUseIndex].push_back(
+        ResourceTimelineEntry{
+            .resourceHandle = resource.handle,
+            .passHandle = resource.usageLifetime.lastUseIndex,
+            .type = ResourceTimelineEntryType::Deallocate,
+        });
+  }
+
+  for (size_t passIndex = 0;
+       passIndex < static_cast<size_t>(graph.compiledPasses.size());
+       passIndex++) {
+    auto &resources = eventsPerPass[passIndex];
+
+    // Sort by size descending
+    std::ranges::sort(
+        resources,
+        [&graph](const ResourceTimelineEntry &first,
+                 const ResourceTimelineEntry &second) -> bool {
+          // Always allocate before deallocate,
+          // Since we need a new resource for a pass output
+          // And deallocation happens right after the pass, since
+          // it's needed during the pass, we must allocate first
+          if (first.type != second.type) {
+            return first.type == ResourceTimelineEntryType::Allocate;
+          }
+
+          const auto &firstRes = graph.resources[first.resourceHandle];
+          const auto &secondRes = graph.resources[second.resourceHandle];
+
+          return firstRes.cost > secondRes.cost;
+        });
+
+    // Add allocation entries
+    for (const auto &resource : resources) {
+      graph.compiledResources.push_back(resource);
+      graph.compiledPasses[passIndex].operations.push_back(resource);
+    }
+  }
+}
+
+auto inline BuildVirtualMemory(GraphicsContext &context, RenderGraph &graph)
+    -> Error::Error {
+  // Loop over compiled resource timeline and allocate/deallocate as needed
+
+  graph.virtualAllocations.clear();
+  graph.virtualAllocations.resize(graph.resources.size());
+  for (const auto &entry : graph.compiledResources) {
+    const auto &resource = graph.resources[entry.resourceHandle];
+
+    if (entry.type == ResourceTimelineEntryType::Allocate) {
+      VkDeviceSize alignment = 1;
+      VkDeviceSize size = 0;
+
+      AllocationInfo allocationInfo = {};
+      allocationInfo.handle = resource.handle;
+
+      if (resource.type == Type::Texture) {
+        const auto &tex = std::get<TextureInfo>(resource.info).transient;
+
+        // Heuristic size (not actual alloc size)
+        auto texels = Texture::GetTexelCount(tex.extent, tex.mipLevels);
+        texels *= tex.arrayLayers;
+        allocationInfo.size = texels * Texture::GetFormatSize(tex.format);
+
+        allocationInfo.alignment = QueryMemoryAlignmentOfTexture(context, tex);
+      } else {
+        const auto &buf = std::get<BufferInfo>(resource.info).transient;
+        allocationInfo.size = buf.size;
+        allocationInfo.alignment = QueryMemoryAlignmentOfBuffer(context, buf);
+      }
+
+      auto error = AllocateResourceInBlocks(context, graph, allocationInfo);
+      if (Error::IsError(error)) {
+        return error;
+      }
+    } else if (entry.type == ResourceTimelineEntryType::Deallocate) {
+      DeallocateResourceInBlocks(graph, resource.handle);
+    }
+  }
+
+  return Error::Success();
+}
+
+auto inline AllocateMemory(GraphicsContext &context, RenderGraph &graph)
+    -> Error::Error {
+  // For each memory block, allocate a VkDeviceMemory
+
+  for (auto &block : graph.memoryBlocks) {
+
+    VkMemoryAllocateInfo allocInfo = {};
+    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocInfo.allocationSize = block.size;
+
+    // For simplicity, use a generic memory type index
+    // In a real implementation, this should be based on resource requirements
+    allocInfo.memoryTypeIndex = 0;
+
+    VkDeviceMemory memory = nullptr;
+    VkResult result =
+        vkAllocateMemory(context.device, &allocInfo, nullptr, &memory);
+    if (result != VK_SUCCESS) {
+      return Error::Create("Failed to allocate device memory for render graph");
+    }
+
+    block.memory = memory;
+  }
+
+  return Error::Success();
+}
+
+auto Compile(GraphicsContext &context, RenderGraph &graph) -> void {
   // For each resource, calculate cost
 
   std::cout << "Compiling render graph..." << "\n";
@@ -463,8 +786,12 @@ auto Compile(RenderGraph &graph) -> void {
     return;
   }
 
-  std::cout << "Graph cost: " << CalculateGraphCost(graph) << " bytes"
-            << "\n";
+  std::cout << "Compiling resource timeline..." << "\n";
+  CompileResourceTimeline(graph);
+  std::cout << "Building virtual memory..." << "\n";
+  BuildVirtualMemory(context, graph);
+  std::cout << "Allocating memory..." << "\n";
+  AllocateMemory(context, graph);
 }
 
 auto AddTexture(RenderGraph &graph, TextureDescriptor descriptor)

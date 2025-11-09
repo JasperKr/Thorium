@@ -1,6 +1,7 @@
 #pragma once
 
 #include "buffer.hpp"
+#include "graphics.hpp"
 #include "texture.hpp"
 #include "vulkan/vulkan_core.h"
 #include <variant>
@@ -90,6 +91,14 @@ struct RenderPass {
   std::vector<ResourceHandle> children;
 };
 
+enum class ResourceTimelineEntryType : uint8_t { Allocate, Deallocate };
+
+struct ResourceTimelineEntry {
+  ResourceHandle resourceHandle;  // Associated resource handle
+  ResourceHandle passHandle;      // Associated pass handle
+  ResourceTimelineEntryType type; // Type of event (Allocate or Deallocate)
+};
+
 struct CompiledPass {
   RenderPass pass;
 
@@ -97,6 +106,7 @@ struct CompiledPass {
   std::vector<ResourceHandle> barriersAfter;
 
   std::vector<ResourceHandle> children;
+  std::vector<ResourceTimelineEntry> operations;
 };
 
 enum class RenderGraphHeuristic : uint8_t {
@@ -104,6 +114,25 @@ enum class RenderGraphHeuristic : uint8_t {
   LargestResourceFirst,  // Increase aliasing opportunities
   MostChildrenFirst,     // Increase parallelism
   LeastChildrenFirst     // Reduce synchronization overhead
+};
+
+const VkDeviceSize KiB = 1024;
+const VkDeviceSize MiB = 1024 * KiB;
+const VkDeviceSize DefaultMemoryBlockSize = 16 * MiB;
+
+struct MemoryBlock {
+  VkDeviceSize size = 0;
+  VkDeviceSize offset = 0;
+  VmaVirtualBlock virtualBlock = nullptr;
+  VkDeviceMemory memory = VK_NULL_HANDLE;
+};
+
+struct VirtualAllocation {
+  uint32_t blockIndex;     // index of the memory block
+  ResourceHandle resource; // associated resource handle
+  VmaVirtualAllocation allocation;
+  VkDeviceSize offset; // offset within the memory block
+  VkDeviceSize size;   // size of the allocation
 };
 
 struct RenderGraph {
@@ -115,8 +144,13 @@ struct RenderGraph {
 
   // Should store [index == handle] -> CompiledPass mapping
   std::vector<CompiledPass> compiledPasses;
+  std::vector<ResourceTimelineEntry> compiledResources;
 
   RenderGraphHeuristic heuristic = RenderGraphHeuristic::LargestResourceFirst;
+  VkDeviceSize memoryBlockSize = DefaultMemoryBlockSize;
+
+  std::vector<MemoryBlock> memoryBlocks;
+  std::vector<VirtualAllocation> virtualAllocations;
 };
 
 struct TextureDescriptor {
@@ -173,6 +207,6 @@ auto AddRenderPass(RenderGraph &graph,
                    const std::vector<ResourceAccess> &resourceAccesses)
     -> ResourceHandle;
 
-auto Compile(RenderGraph &graph) -> void;
+auto Compile(GraphicsContext &context, RenderGraph &graph) -> void;
 
 } // namespace Graphics::Rendergraph

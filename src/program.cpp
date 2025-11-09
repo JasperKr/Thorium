@@ -95,7 +95,7 @@ auto Load(Graphics::GraphicsContext &context) -> Error::Error {
                   .accessType = Graphics::Rendergraph::AccessType::Read},
              });
 
-  Graphics::Rendergraph::Compile(graph);
+  Graphics::Rendergraph::Compile(context, graph);
 
   auto fsResult = Graphics::Shader::ShaderModule::Create(
       context, "src/Graphics/Shaders/default.fs", VK_SHADER_STAGE_FRAGMENT_BIT,

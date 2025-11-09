@@ -1,6 +1,7 @@
 #pragma once
 
 #include "graphics.hpp"
+#include <cstdint>
 namespace Graphics::Texture {
 
 enum TextureType : uint8_t {
@@ -225,4 +226,36 @@ static inline auto GetMipChainCostMultiplier(uint32_t mipLevels,
           std::pow(costReductionPerMip, static_cast<double>(mipLevels))) /
          (1.0F - costReductionPerMip);
 }
+
+// Returns total texel count for ALL mip levels, for ONE layer only.
+// Caller must multiply by arrayLayers or 6 for cubemaps if needed.
+static inline auto GetTexelCount(const VkExtent2D &extent,
+                                 const uint32_t mipmapCount) -> uint64_t {
+  uint64_t totalTexels = 0;
+  for (uint64_t mip = 0; mip < mipmapCount; mip++) {
+    uint64_t mipWidth = (std::max)(1U, extent.width >> mip);
+    uint64_t mipHeight = (std::max)(1U, extent.height >> mip);
+
+    totalTexels += mipWidth * mipHeight;
+  }
+
+  return totalTexels;
+}
+
+// Returns total texel count for ALL mip levels, for ONE layer only.
+// Caller must multiply by arrayLayers or 6 for cubemaps if needed.
+static inline auto GetTexelCount(const VkExtent3D &extent,
+                                 const uint32_t mipmapCount) -> uint64_t {
+  uint64_t totalTexels = 0;
+  for (uint64_t mip = 0; mip < mipmapCount; mip++) {
+    uint64_t mipWidth = (std::max)(1U, extent.width >> mip);
+    uint64_t mipHeight = (std::max)(1U, extent.height >> mip);
+    uint64_t mipDepth = (std::max)(1U, extent.depth >> mip);
+
+    totalTexels += mipWidth * mipHeight * mipDepth;
+  }
+
+  return totalTexels;
+}
+
 } // namespace Graphics::Texture
