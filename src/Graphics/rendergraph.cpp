@@ -2,14 +2,19 @@
 #include <algorithm>
 #include <cassert>
 #include <cstdint>
+#include <iostream>
+#include <minwindef.h>
 #include <queue>
 #include <unordered_set>
 
 namespace Graphics::Rendergraph {
 auto AddRenderPass(RenderGraph &graph,
                    const std::vector<ResourceAccess> &resourceAccesses)
-    -> void {
+    -> ResourceHandle {
   RenderPass pass = {};
+
+  std::cout << "Adding render pass..." << "\n";
+
   pass.handle = static_cast<ResourceHandle>(graph.passes.size());
 
   for (const auto &access : resourceAccesses) {
@@ -17,12 +22,16 @@ auto AddRenderPass(RenderGraph &graph,
 
     if (access.accessType == AccessType::Read) {
       pass.readResources.push_back(access.resource);
+      std::cout << "  Read resource " << access.resource << "\n";
     } else if (access.accessType == AccessType::Write) {
       pass.writeResources.push_back(access.resource);
+      std::cout << "  Write resource " << access.resource << "\n";
     }
   }
 
   graph.passes.push_back(pass);
+
+  return pass.handle;
 }
 
 template <typename F>
@@ -65,28 +74,26 @@ void TraversePassesLevelOrder(const RenderGraph &graph, F action) {
 }
 
 auto inline CalculateGraphCost(const RenderGraph &graph) -> uint32_t {
-  std::vector<uint32_t> resourceCosts(graph.passes.size(), 0);
+  // +1 to account for virtual root node
+  std::vector<uint32_t> resourceCosts(graph.passes.size() + 1, 0);
 
-  // Traverse passes and sum resource costs per-layer
-  size_t levelCount = 0;
-
-  TraversePassesLevelOrder(
-      graph, [&](const CompiledPass &source, size_t level) -> void {
-        for (const auto &resHandle : source.pass.readResources) {
-          resourceCosts[level] += graph.resources[resHandle].cost;
-        }
-        for (const auto &resHandle : source.pass.writeResources) {
-          resourceCosts[level] += graph.resources[resHandle].cost;
-        }
-
-        levelCount = (std::max)(level + 1, levelCount);
-      });
-
-  // Find max cost layer
   uint32_t maxCost = 0;
 
-  for (size_t i = 0; i < levelCount; i++) {
-    maxCost = (std::max)(resourceCosts[i], maxCost);
+  // Use resource lifetimes to calculate cost at each point in time
+  // Where each point is a pass in the compiled pass list
+
+  for (const auto &resource : graph.resources) {
+    // Do not ignore persistent resources, they do not make a difference based
+    // on how the graph is built, but they do contribute to overall cost, and
+    // it's nice to know
+    for (size_t i = resource.usageLifetime.firstUseIndex;
+         i <= resource.usageLifetime.lastUseIndex; i++) {
+      resourceCosts[i] += resource.cost;
+    }
+  }
+
+  for (const auto &cost : resourceCosts) {
+    maxCost = (std::max)(cost, maxCost);
   }
 
   return maxCost;
@@ -144,27 +151,13 @@ auto inline SelectNextPass(RenderGraph &graph,
 }
 
 auto inline ReadyToBeScheduled(
-    const RenderGraph &graph, const CompiledPass &pass,
+    const RenderGraph &graph, const RenderPass &pass,
     const std::unordered_set<ResourceHandle> &scheduledPasses) -> bool {
-  // Loop over all passes and their write resources
-  // And check if they have been scheduled already
-  // If any of them have not been scheduled yet, return false
-  for (const auto &resHandle : pass.pass.readResources) {
-    for (const auto &otherPass : graph.compiledPasses) {
-      if (otherPass.pass.handle == pass.pass.handle) {
-        continue;
-      }
-
-      // If any of the other passes write to this resource and are not yet
-      // scheduled, we cannot schedule this pass yet
-      for (const auto &writtenResHandle : otherPass.pass.writeResources) {
-        if (writtenResHandle == resHandle) {
-          // This pass writes to a resource we read
-          if (!scheduledPasses.contains(otherPass.pass.handle)) {
-            return false;
-          }
-        }
-      }
+  // Loop over parents and check if all have been scheduled
+  // NOLINTNEXTLINE
+  for (const auto &parentHandle : pass.parents) {
+    if (!scheduledPasses.contains(parentHandle)) {
+      return false; // parent not yet scheduled
     }
   }
 
@@ -177,31 +170,36 @@ auto inline ScheduleNodes(RenderGraph &graph) -> void {
   std::vector<NodeCost> availablePasses;
   std::unordered_set<ResourceHandle> scheduledPasses;
 
-  for (const auto &pass : graph.virtualRoot.children) {
-    const auto &compiledPass = graph.compiledPasses[pass];
+  // Schedule root nodes to start off the chain
+
+  std::cout << "Scheduling nodes..." << "\n";
+
+  for (const auto &passHandle : graph.virtualRoot.children) {
+    const auto &childRenderpass = graph.passes[passHandle];
 
     uint32_t cost = 0;
-    for (const auto &resHandle : compiledPass.pass.readResources) {
+    for (const auto &resHandle : childRenderpass.readResources) {
       cost += graph.resources[resHandle].cost;
     }
 
-    for (const auto &resHandle : compiledPass.pass.writeResources) {
+    for (const auto &resHandle : childRenderpass.writeResources) {
       cost += graph.resources[resHandle].cost;
     }
 
-    // Root nodes are always ready to be scheduled
-    assert(ReadyToBeScheduled(graph, compiledPass, scheduledPasses));
-
-    availablePasses.push_back(NodeCost{
-        .handle = pass,
-        .cost = cost,
-        .childrenCount = static_cast<uint32_t>(compiledPass.children.size())});
+    availablePasses.push_back(NodeCost{.handle = passHandle,
+                                       .cost = cost,
+                                       .childrenCount = static_cast<uint32_t>(
+                                           childRenderpass.children.size())});
   }
 
-  graph.compiledPasses.clear();
+  std::cout << "Total root nodes: " << availablePasses.size() << "\n";
+  std::cout << "Schedule order:\n";
+  std::cout << "----------------\n";
 
   while (!availablePasses.empty()) {
     ResourceHandle nextPassHandle = SelectNextPass(graph, availablePasses);
+
+    std::cout << "Pass " << nextPassHandle << "\n";
 
     // Remove from available passes
     for (auto it = availablePasses.begin(); it != availablePasses.end(); ++it) {
@@ -211,15 +209,30 @@ auto inline ScheduleNodes(RenderGraph &graph) -> void {
       }
     }
 
+    CompiledPass thisPass = {};
+    thisPass.pass = graph.passes[nextPassHandle];
+    thisPass.children = {};
+    thisPass.barriersBefore = {};
+    thisPass.barriersAfter = {};
+
+    uint32_t thisIndex = graph.compiledPasses.size();
+
+    // Loop over parents and add this pass as child
+    // We cannot do this in the previous loop since compiledPasses is being
+    // built And we do not know the indices beforehand
+    for (const auto &parentHandle : thisPass.pass.parents) {
+      graph.compiledPasses[parentHandle].children.push_back(
+          static_cast<ResourceHandle>(thisIndex));
+    }
+
     // Add to compiled passes
-    graph.compiledPasses.push_back(graph.compiledPasses[nextPassHandle]);
+    graph.compiledPasses.push_back(thisPass);
+
     scheduledPasses.insert(nextPassHandle);
 
     // Enqueue children
-    const auto &nextCompiledPass = graph.compiledPasses[nextPassHandle];
-
-    for (const auto &childHandle : nextCompiledPass.children) {
-      const auto &childPass = graph.compiledPasses[childHandle];
+    for (const auto &childHandle : thisPass.pass.children) {
+      const auto &childPass = graph.passes[childHandle];
 
       if (!ReadyToBeScheduled(graph, childPass, scheduledPasses)) {
         continue; // Not ready yet, other dependencies will schedule it later
@@ -228,11 +241,11 @@ auto inline ScheduleNodes(RenderGraph &graph) -> void {
       assert(!scheduledPasses.contains(childHandle));
 
       uint32_t cost = 0;
-      for (const auto &resHandle : childPass.pass.readResources) {
+      for (const auto &resHandle : childPass.readResources) {
         cost += graph.resources[resHandle].cost;
       }
 
-      for (const auto &resHandle : childPass.pass.writeResources) {
+      for (const auto &resHandle : childPass.writeResources) {
         cost += graph.resources[resHandle].cost;
       }
 
@@ -244,8 +257,168 @@ auto inline ScheduleNodes(RenderGraph &graph) -> void {
   }
 }
 
+static inline auto HasReadDependency(const RenderGraph &graph, size_t passIndex)
+    -> bool {
+  const auto &pass = graph.passes[passIndex];
+
+  // For each resource read by this pass
+  for (auto read : pass.readResources) {
+
+    // Look for a pass that writes this resource
+    for (size_t i = 0; i < graph.passes.size(); i++) {
+      if (i == passIndex) {
+        continue;
+      }
+
+      const auto &other = graph.passes[i];
+      for (auto written : other.writeResources) {
+        if (written == read) {
+          return true; // dependency found
+        }
+      }
+    }
+  }
+
+  return false; // no dependencies on any written resources
+}
+
+auto BuildVirtualRoot(RenderGraph &graph) -> void {
+  // Loop over all passes and find nodes with no dependencies (root nodes)
+  // So we can attach them to the virtual root
+
+  std::cout << "Building virtual root..." << "\n";
+
+  graph.virtualRoot = CompiledPass{};
+  graph.virtualRoot.pass.handle = static_cast<ResourceHandle>(-1);
+  graph.virtualRoot.children.clear();
+
+  for (size_t i = 0; i < graph.passes.size(); i++) {
+    if (!HasReadDependency(graph, i)) {
+      graph.virtualRoot.children.push_back(static_cast<ResourceHandle>(i));
+    }
+  }
+
+  graph.compiledPasses.clear();
+  graph.compiledPasses.push_back(graph.virtualRoot);
+}
+
+auto BuildGraph(RenderGraph &graph) -> void {
+  // For each pass, find dependencies and build child relationships
+
+  std::cout << "Building render graph..." << "\n";
+
+  for (size_t i = 0; i < graph.passes.size(); i++) {
+    const auto &pass = graph.passes[i];
+
+    // For each resource read by this pass
+    for (auto read : pass.readResources) {
+
+      // Look for a pass that writes this resource
+      for (size_t j = 0; j < graph.passes.size(); j++) {
+        if (j == i) {
+          continue;
+        }
+
+        const auto &other = graph.passes[j];
+        for (auto written : other.writeResources) {
+          if (written == read) {
+            // Found a dependency, add as child
+            graph.passes[j].children.push_back(static_cast<ResourceHandle>(i));
+            graph.passes[i].parents.push_back(static_cast<ResourceHandle>(j));
+
+            std::cout << "Pass " << j << " is a parent of pass " << i << "\n";
+          }
+        }
+      }
+    }
+  }
+}
+
+auto inline ValidateCompiledGraph(const RenderGraph &graph)
+    -> tl::expected<bool, Error::Error> {
+  // For now just check if the last pass does not write any transient resources
+  // It can write persistent resources since they live beyond the graph
+  // execution (e.g. swapchain images, or other long-lived targets)
+
+  const auto &lastPass = graph.compiledPasses.back().pass;
+
+  for (const auto &resHandle : lastPass.writeResources) {
+    const auto &resource = graph.resources[resHandle];
+
+    if (resource.lifetime == ResourceLifetime::Transient) {
+      return tl::make_unexpected(Error::Error{
+          .message =
+              "Render graph validation failed: last pass writes transient "
+              "resource " +
+              std::to_string(resHandle),
+      });
+    }
+  }
+
+  return true;
+}
+
+auto inline CalculateResourceLifetimes(RenderGraph &graph) -> void {
+  // For each resource, determine first and last usage
+  // This is post-graph build, so we know all passes and their dependencies
+  // And when resources are used, first/last use is the index in compiled passes
+  // vector, which is sorted in order of execution
+
+  for (auto &resource : graph.resources) {
+    resource.usageLifetime.firstUseIndex = UINT16_MAX;
+    resource.usageLifetime.lastUseIndex = 0;
+  }
+
+  for (uint16_t passIndex = 0;
+       passIndex < static_cast<uint16_t>(graph.compiledPasses.size());
+       passIndex++) {
+    const auto &pass = graph.compiledPasses[passIndex];
+
+    for (const auto &resHandle : pass.pass.readResources) {
+      auto &resource = graph.resources[resHandle];
+      if (resource.lifetime == ResourceLifetime::Persistent) {
+        continue;
+      }
+
+      resource.usageLifetime.firstUseIndex =
+          (std::min)(resource.usageLifetime.firstUseIndex, passIndex);
+
+      resource.usageLifetime.lastUseIndex =
+          (std::max)(resource.usageLifetime.lastUseIndex, passIndex);
+    }
+
+    for (const auto &resHandle : pass.pass.writeResources) {
+      auto &resource = graph.resources[resHandle];
+
+      if (resource.lifetime == ResourceLifetime::Persistent) {
+        continue;
+      }
+
+      resource.usageLifetime.firstUseIndex =
+          (std::min)(resource.usageLifetime.firstUseIndex, passIndex);
+
+      resource.usageLifetime.lastUseIndex =
+          (std::max)(resource.usageLifetime.lastUseIndex, passIndex);
+    }
+  }
+
+  // Log resource lifetimes, excluding resources that were never used
+  for (const auto &resource : graph.resources) {
+    if (resource.usageLifetime.firstUseIndex == UINT16_MAX &&
+        resource.usageLifetime.lastUseIndex == 0) {
+      continue; // never used
+    }
+
+    std::cout << "Resource " << resource.handle
+              << " first use: " << resource.usageLifetime.firstUseIndex
+              << ", last use: " << resource.usageLifetime.lastUseIndex << "\n";
+  }
+}
+
 auto Compile(RenderGraph &graph) -> void {
   // For each resource, calculate cost
+
+  std::cout << "Compiling render graph..." << "\n";
 
   for (auto &resource : graph.resources) {
     if (resource.type == Type::Texture) {
@@ -274,8 +447,121 @@ auto Compile(RenderGraph &graph) -> void {
     }
   }
 
+  BuildGraph(graph);
+
+  BuildVirtualRoot(graph);
+
   // Schedule nodes based on heuristic
   ScheduleNodes(graph);
+
+  CalculateResourceLifetimes(graph);
+
+  auto validationResult = ValidateCompiledGraph(graph);
+  if (Error::IsError(validationResult)) {
+    std::cerr << "Render graph validation error: "
+              << validationResult.error().message << "\n";
+    return;
+  }
+
+  std::cout << "Graph cost: " << CalculateGraphCost(graph) << " bytes"
+            << "\n";
+}
+
+auto AddTexture(RenderGraph &graph, TextureDescriptor descriptor)
+    -> ResourceHandle {
+  Resource resource = {};
+  resource.handle = static_cast<ResourceHandle>(graph.resources.size());
+  resource.lifetime = descriptor.lifetime;
+  resource.type = Type::Texture;
+  resource.imported = false;
+
+  TextureInfo texInfo = {};
+
+  bool volumeTexture =
+      descriptor.type == Texture::TextureType::TEXTURE_TYPE_VOLUME;
+  uint32_t depth = volumeTexture ? descriptor.depthOrLayers : 1U;
+  uint32_t layers = volumeTexture ? 1U : descriptor.depthOrLayers;
+
+  TextureResource texResource = {};
+  texResource.format = descriptor.format;
+  texResource.extent = {
+      .width = descriptor.width, .height = descriptor.height, .depth = depth};
+  texResource.mipLevels = descriptor.mipLevels;
+  texResource.arrayLayers = layers;
+  texResource.usage = descriptor.usage;
+  texResource.samples = VK_SAMPLE_COUNT_1_BIT;
+
+  texInfo.transient = texResource;
+
+  resource.info = texInfo;
+  graph.resources.push_back(resource);
+
+  return resource.handle;
+}
+
+auto AddBuffer(RenderGraph &graph, BufferDescriptor descriptor)
+    -> ResourceHandle {
+  Resource resource = {};
+  resource.handle = static_cast<ResourceHandle>(graph.resources.size());
+  resource.lifetime = descriptor.lifetime;
+  resource.type = Type::Buffer;
+  resource.imported = false;
+
+  BufferInfo bufInfo = {};
+
+  BufferResource bufResource = {};
+  bufResource.size = descriptor.size;
+  bufResource.usage = descriptor.usage;
+
+  bufInfo.transient = bufResource;
+
+  resource.info = bufInfo;
+  graph.resources.push_back(resource);
+
+  return resource.handle;
+}
+
+auto ImportTexture(RenderGraph &graph,
+                   const Graphics::Texture::Texture &texture)
+    -> ResourceHandle {
+  Resource resource = {};
+  resource.handle = static_cast<ResourceHandle>(graph.resources.size());
+  resource.lifetime = ResourceLifetime::Persistent;
+  resource.type = Type::Texture;
+  resource.imported = true;
+
+  TextureInfo texInfo = {};
+
+  ImportedTexture importedTex = {};
+  importedTex.texture = texture;
+  importedTex.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+  importedTex.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+  texInfo.external = importedTex;
+  resource.info = texInfo;
+  graph.resources.push_back(resource);
+
+  return resource.handle;
+}
+
+auto ImportBuffer(RenderGraph &graph, const Graphics::Buffer &buffer)
+    -> ResourceHandle {
+  Resource resource = {};
+  resource.handle = static_cast<ResourceHandle>(graph.resources.size());
+  resource.lifetime = ResourceLifetime::Persistent;
+  resource.type = Type::Buffer;
+  resource.imported = true;
+
+  BufferInfo bufInfo = {};
+
+  ImportedBuffer importedBuf = {};
+  importedBuf.buffer = buffer;
+
+  bufInfo.external = importedBuf;
+  resource.info = bufInfo;
+  graph.resources.push_back(resource);
+
+  return resource.handle;
 }
 
 } // namespace Graphics::Rendergraph

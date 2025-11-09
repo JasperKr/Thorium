@@ -85,6 +85,9 @@ struct RenderPass {
 
   std::vector<ResourceHandle> readResources;
   std::vector<ResourceHandle> writeResources;
+
+  std::vector<ResourceHandle> parents;
+  std::vector<ResourceHandle> children;
 };
 
 struct CompiledPass {
@@ -113,16 +116,48 @@ struct RenderGraph {
   // Should store [index == handle] -> CompiledPass mapping
   std::vector<CompiledPass> compiledPasses;
 
-  RenderGraphHeuristic heuristic = RenderGraphHeuristic::SmallestResourceFirst;
+  RenderGraphHeuristic heuristic = RenderGraphHeuristic::LargestResourceFirst;
 };
 
-auto AddTexture(RenderGraph &graph, VkFormat format, VkExtent3D extent,
-                VkImageUsageFlags usage,
-                ResourceLifetime lifetime = ResourceLifetime::Transient)
+struct TextureDescriptor {
+  Texture::TextureType type = Texture::TextureType::TEXTURE_TYPE_2D;
+  VkFormat format = VK_FORMAT_R8G8B8A8_UNORM;
+
+  uint32_t width{};
+  uint32_t height{};
+  uint32_t depthOrLayers = 1; // depth for 3D, layers for array/cube
+  uint32_t mipLevels = 1;
+
+  // Sampling / filtering
+  VkFilter minFilter = VK_FILTER_LINEAR;
+  VkFilter magFilter = VK_FILTER_LINEAR;
+  VkSamplerMipmapMode mipFilter = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+  float anisotropy = 1.0F;
+
+  ResourceLifetime lifetime = ResourceLifetime::Transient;
+
+  // Vulkan usage flags (required)
+  VkImageUsageFlags usage = 0;
+
+  // Optional: views/layouts if you want custom behavior
+  VkImageLayout initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+  VkImageLayout finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+};
+
+struct BufferDescriptor {
+  VkDeviceSize size = 0;            // total buffer size in bytes
+  VkBufferUsageFlags usage = 0;     // Vulkan usage flags
+  VkMemoryPropertyFlags memory = 0; // device-local, host-visible, etc.
+
+  ResourceLifetime lifetime = ResourceLifetime::Transient;
+
+  bool allowAliasing = true;
+};
+
+auto AddTexture(RenderGraph &graph, TextureDescriptor descriptor)
     -> ResourceHandle;
 
-auto AddBuffer(RenderGraph &graph, VkDeviceSize size, VkBufferUsageFlags usage,
-               ResourceLifetime lifetime = ResourceLifetime::Transient)
+auto AddBuffer(RenderGraph &graph, BufferDescriptor descriptor)
     -> ResourceHandle;
 
 auto ImportTexture(
@@ -135,7 +170,8 @@ auto ImportBuffer(RenderGraph &graph, const Graphics::Buffer &buffer)
     -> ResourceHandle;
 
 auto AddRenderPass(RenderGraph &graph,
-                   const std::vector<ResourceAccess> &resourceAccesses) -> void;
+                   const std::vector<ResourceAccess> &resourceAccesses)
+    -> ResourceHandle;
 
 auto Compile(RenderGraph &graph) -> void;
 

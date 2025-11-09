@@ -2,9 +2,11 @@
 #include "Graphics/canvas.hpp"
 #include "Graphics/graphics.hpp"
 #include "Graphics/mesh.hpp"
+#include "Graphics/rendergraph.hpp"
 #include "Graphics/shader.hpp"
 #include "Modules/error.hpp"
 #include "Modules/timer.hpp"
+#include <cstddef>
 #include <iostream>
 
 namespace Program {
@@ -36,6 +38,65 @@ auto Configuration(ApplicationConfig &config) -> Error::Error {
 }
 
 auto Load(Graphics::GraphicsContext &context) -> Error::Error {
+  // Setup render graph to debug it
+
+  Graphics::Rendergraph::RenderGraph graph = {};
+  std::vector<Graphics::Rendergraph::ResourceHandle> textureHandles;
+  textureHandles.reserve(static_cast<size_t>(4 * 4));
+  for (int i = 0; i < 4 * 4; i++) {
+    textureHandles.push_back(Graphics::Rendergraph::AddTexture(
+        graph,
+        {
+            .format = VK_FORMAT_R8G8B8A8_UNORM,
+            .width = 1024,  // NOLINT
+            .height = 1024, // NOLINT
+            .mipLevels = 1,
+            .lifetime = Graphics::Rendergraph::ResourceLifetime::Transient,
+            .usage =
+                static_cast<uint32_t>(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT) |
+                static_cast<uint32_t>(VK_IMAGE_USAGE_SAMPLED_BIT),
+
+        }));
+  }
+
+  auto rootHandle = Graphics::Rendergraph::AddRenderPass(
+      graph, {
+                 {.resource = textureHandles.at(0),
+                  .accessType = Graphics::Rendergraph::AccessType::Write},
+             });
+  auto childHandle1 = Graphics::Rendergraph::AddRenderPass(
+      graph, {
+                 {.resource = textureHandles.at(0),
+                  .accessType = Graphics::Rendergraph::AccessType::Read},
+                 {.resource = textureHandles.at(1),
+                  .accessType = Graphics::Rendergraph::AccessType::Write},
+             });
+  auto childHandle2 = Graphics::Rendergraph::AddRenderPass(
+      graph, {
+                 {.resource = textureHandles.at(1),
+                  .accessType = Graphics::Rendergraph::AccessType::Read},
+                 {.resource = textureHandles.at(2),
+                  .accessType = Graphics::Rendergraph::AccessType::Write},
+             });
+  auto childHandle3 = Graphics::Rendergraph::AddRenderPass(
+      graph, {
+                 {.resource = textureHandles.at(0),
+                  .accessType = Graphics::Rendergraph::AccessType::Read},
+                 {.resource = textureHandles.at(1),
+                  .accessType = Graphics::Rendergraph::AccessType::Read},
+                 {.resource = textureHandles.at(3),
+                  .accessType = Graphics::Rendergraph::AccessType::Write},
+             });
+  auto childHandle4 = Graphics::Rendergraph::AddRenderPass(
+      graph, {
+                 {.resource = textureHandles.at(2),
+                  .accessType = Graphics::Rendergraph::AccessType::Read},
+                 {.resource = textureHandles.at(3),
+                  .accessType = Graphics::Rendergraph::AccessType::Read},
+             });
+
+  Graphics::Rendergraph::Compile(graph);
+
   auto fsResult = Graphics::Shader::ShaderModule::Create(
       context, "src/Graphics/Shaders/default.fs", VK_SHADER_STAGE_FRAGMENT_BIT,
       "Default fragment shader");

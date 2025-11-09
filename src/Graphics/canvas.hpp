@@ -8,7 +8,7 @@ namespace Graphics {
 
 struct RenderingAttachmentInfo {
   VkStructureType sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-  Texture *texture{};
+  Texture::Texture *texture{};
   VkImageLayout imageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
   VkResolveModeFlagBits resolveMode = VK_RESOLVE_MODE_NONE;
   VkAttachmentLoadOp loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
