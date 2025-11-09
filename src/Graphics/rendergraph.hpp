@@ -135,6 +135,17 @@ struct VirtualAllocation {
   VkDeviceSize size;   // size of the allocation
 };
 
+struct PassState {
+  VkPipeline pipeline = VK_NULL_HANDLE;
+  VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
+  std::vector<VkDescriptorSet> descriptorSets;
+
+  VkViewport viewport = {};
+  VkRect2D scissor = {};
+
+  std::vector<VkClearValue> clearValues;
+};
+
 struct RenderGraph {
   std::vector<Resource> resources;
   std::vector<RenderPass> passes;
