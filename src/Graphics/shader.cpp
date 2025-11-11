@@ -103,7 +103,7 @@ static inline auto LoadSpirV(Graphics::GraphicsContext &context,
   }
 
   std::vector<uint32_t> spirvInstructions(spirvCode.size() / 4);
-  std::memcpy(spirvInstructions.data(), spirvCode.data(), spirvCode.size());
+  memcpy(spirvInstructions.data(), spirvCode.data(), spirvCode.size());
 
   VkShaderModuleCreateInfo moduleCreateInfo = {};
   moduleCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
@@ -306,7 +306,7 @@ static inline auto LoadGLSL(GraphicsContext &context, ShaderModule &shader) {
 
   std::vector<uint8_t> spirvCode((result.cend() - result.cbegin()) *
                                  sizeof(uint32_t));
-  std::memcpy(spirvCode.data(), result.cbegin(), spirvCode.size());
+  memcpy(spirvCode.data(), result.cbegin(), spirvCode.size());
 
   auto err = Filesystem::CreateDirectory(SpirvDirectory);
 
@@ -322,7 +322,7 @@ static inline auto LoadGLSL(GraphicsContext &context, ShaderModule &shader) {
   }
 
   std::vector<uint32_t> spirvInstructions(spirvCode.size() / 4);
-  std::memcpy(spirvInstructions.data(), spirvCode.data(), spirvCode.size());
+  memcpy(spirvInstructions.data(), spirvCode.data(), spirvCode.size());
 
   VkShaderModuleCreateInfo moduleCreateInfo = {};
   moduleCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;

@@ -133,10 +133,13 @@ target_link_libraries(Thorium
         SDL3::SDL3
         Vulkan::Vulkan
         physfs
-        dbghelp
         ${SHADERC_LIB}
         ${Vulkan_LIBRARIES}       # usually optional
 )
+
+if (WIN32)
+    target_link_libraries(Thorium PRIVATE dbghelp)
+endif()
 
 # -------------------------------
 # Windows: copy SDL3.dll after build

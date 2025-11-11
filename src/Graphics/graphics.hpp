@@ -7,6 +7,7 @@
 #include <cstdint>
 
 #include "volk/volk.h"
+#include "vulkan/vulkan_core.h"
 #define VK_NO_PROTOTYPES
 #include <vulkan/vulkan.h>
 
@@ -75,36 +76,36 @@ struct GraphicsContext {
 };
 
 struct BlendMode {
-  bool enabled;
-  VkBlendFactor srcColorBlendFactor;
-  VkBlendFactor dstColorBlendFactor;
-  VkBlendOp colorBlendOp;
-  VkBlendFactor srcAlphaBlendFactor;
-  VkBlendFactor dstAlphaBlendFactor;
-  VkBlendOp alphaBlendOp;
+  bool enabled = false;
+  VkBlendFactor srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+  VkBlendFactor dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+  VkBlendOp colorBlendOp = VK_BLEND_OP_ADD;
+  VkBlendFactor srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+  VkBlendFactor dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+  VkBlendOp alphaBlendOp = VK_BLEND_OP_ADD;
 };
 
 struct GraphicsState {
-  VkViewport viewport;
-  VkRect2D scissor;
-  BlendMode blendMode;
-  VkCompareOp depthCompareOp;
+  VkViewport viewport = {};
+  VkRect2D scissor = {};
+  BlendMode blendMode = {};
+  VkCompareOp depthCompareOp = VK_COMPARE_OP_LESS;
 
-  bool depthWriteEnable;
-  bool depthTestEnable;
+  bool depthWriteEnable{};
+  bool depthTestEnable{};
 
-  VkCullModeFlags cullMode;
-  VkFrontFace frontFace;
+  VkCullModeFlags cullMode{};
+  VkFrontFace frontFace = VK_FRONT_FACE_CLOCKWISE;
 
-  VkCompareOp stencilCompareOp;
-  uint32_t stencilReference;
+  VkCompareOp stencilCompareOp = VK_COMPARE_OP_ALWAYS;
+  uint32_t stencilReference{};
 
-  bool backfaceCulling;
-  bool frontfaceClockwise;
+  bool backfaceCulling{};
+  bool frontfaceClockwise{};
 
-  struct ShaderModule *vertexShader;
-  struct ShaderModule *fragmentShader;
-  struct ShaderModule *computeShader;
+  struct ShaderModule *vertexShader{};
+  struct ShaderModule *fragmentShader{};
+  struct ShaderModule *computeShader{};
 };
 
 auto Initialize(GraphicsContext &context, VkExtent2D dimensions)

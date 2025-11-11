@@ -60,40 +60,57 @@ auto Load(Graphics::GraphicsContext &context) -> Error::Error {
   }
 
   auto rootHandle = Graphics::Rendergraph::AddRenderPass(
-      graph, {
-                 {.resource = textureHandles.at(0),
-                  .accessType = Graphics::Rendergraph::AccessType::Write},
-             });
+      graph,
+      {
+          .resources =
+              {
+                  {.resource = textureHandles.at(0),
+                   .accessType = Graphics::Rendergraph::AccessType::Write},
+              },
+          .viewport = {.x = 0.0F,
+                       .y = 0.0F,
+                       .width = static_cast<float>(
+                           context.swapchainInfo.extent.width),
+                       .height = static_cast<float>(
+                           context.swapchainInfo.extent.height),
+                       .minDepth = 0.0F,
+                       .maxDepth = 1.0F},
+          .scissor = {.offset = {0, 0}, .extent = context.swapchainInfo.extent},
+          .clearValues =
+              {
+                  {.color = {{0.0F, 0.0F, 0.0F, 1.0F}}},
+              },
+      });
   auto childHandle1 = Graphics::Rendergraph::AddRenderPass(
-      graph, {
-                 {.resource = textureHandles.at(0),
-                  .accessType = Graphics::Rendergraph::AccessType::Read},
-                 {.resource = textureHandles.at(1),
-                  .accessType = Graphics::Rendergraph::AccessType::Write},
-             });
+      graph, {.resources = {
+                  {.resource = textureHandles.at(0),
+                   .accessType = Graphics::Rendergraph::AccessType::Read},
+                  {.resource = textureHandles.at(1),
+                   .accessType = Graphics::Rendergraph::AccessType::Write},
+              }});
   auto childHandle2 = Graphics::Rendergraph::AddRenderPass(
-      graph, {
-                 {.resource = textureHandles.at(1),
-                  .accessType = Graphics::Rendergraph::AccessType::Read},
-                 {.resource = textureHandles.at(2),
-                  .accessType = Graphics::Rendergraph::AccessType::Write},
-             });
+      graph, {.resources = {
+                  {.resource = textureHandles.at(1),
+                   .accessType = Graphics::Rendergraph::AccessType::Read},
+                  {.resource = textureHandles.at(2),
+                   .accessType = Graphics::Rendergraph::AccessType::Write},
+              }});
   auto childHandle3 = Graphics::Rendergraph::AddRenderPass(
-      graph, {
-                 {.resource = textureHandles.at(0),
-                  .accessType = Graphics::Rendergraph::AccessType::Read},
-                 {.resource = textureHandles.at(1),
-                  .accessType = Graphics::Rendergraph::AccessType::Read},
-                 {.resource = textureHandles.at(3),
-                  .accessType = Graphics::Rendergraph::AccessType::Write},
-             });
+      graph, {.resources = {
+                  {.resource = textureHandles.at(0),
+                   .accessType = Graphics::Rendergraph::AccessType::Read},
+                  {.resource = textureHandles.at(1),
+                   .accessType = Graphics::Rendergraph::AccessType::Read},
+                  {.resource = textureHandles.at(3),
+                   .accessType = Graphics::Rendergraph::AccessType::Write},
+              }});
   auto childHandle4 = Graphics::Rendergraph::AddRenderPass(
-      graph, {
-                 {.resource = textureHandles.at(2),
-                  .accessType = Graphics::Rendergraph::AccessType::Read},
-                 {.resource = textureHandles.at(3),
-                  .accessType = Graphics::Rendergraph::AccessType::Read},
-             });
+      graph, {.resources = {
+                  {.resource = textureHandles.at(2),
+                   .accessType = Graphics::Rendergraph::AccessType::Read},
+                  {.resource = textureHandles.at(3),
+                   .accessType = Graphics::Rendergraph::AccessType::Read},
+              }});
 
   Graphics::Rendergraph::Compile(context, graph);
 

@@ -2,34 +2,46 @@
 #include "Modules/error.hpp"
 #include "graphics.hpp"
 #include "texture.hpp"
+#include "vulkan/vulkan_core.h"
 #include <algorithm>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
+#ifdef WIN32
 #include <minwindef.h>
+#endif
 #include <queue>
 #include <unordered_set>
 
 namespace Graphics::Rendergraph {
+using std::max;
 using std::sort;
 
-auto AddRenderPass(RenderGraph &graph,
-                   const std::vector<ResourceAccess> &resourceAccesses)
+auto AddRenderPass(RenderGraph &graph, const RenderPassDescriptor &descriptor)
     -> ResourceHandle {
   RenderPass pass = {};
 
   pass.handle = static_cast<ResourceHandle>(graph.passes.size());
 
-  for (const auto &access : resourceAccesses) {
+  for (const auto &access : descriptor.resources) {
     auto &resource = graph.resources[access.resource];
 
     if (access.accessType == AccessType::Read) {
       pass.readResources.push_back(access.resource);
     } else if (access.accessType == AccessType::Write) {
       pass.writeResources.push_back(access.resource);
+    } else if (access.accessType == (AccessType::Read | AccessType::Write)) {
+      pass.readwriteResources.push_back(access.resource);
     }
   }
+
+  pass.state.viewport = descriptor.viewport;
+  pass.state.scissor = descriptor.scissor;
+  pass.state.clearValues = descriptor.clearValues;
+  pass.state.bindPoint = descriptor.bindPoint;
+  pass.state.blendModes = descriptor.blendModes;
+  pass.resourceBindings = descriptor.resourceBindings;
 
   graph.passes.push_back(pass);
 
@@ -166,16 +178,9 @@ auto inline ReadyToBeScheduled(
   return true;
 }
 
-auto inline ScheduleNodes(RenderGraph &graph) -> void {
-  // Simple topological sort with heuristic-based selection
-
-  std::vector<NodeCost> availablePasses;
-  std::unordered_set<ResourceHandle> scheduledPasses;
-
-  // Schedule root nodes to start off the chain
-
-  std::cout << "Scheduling nodes..." << "\n";
-
+auto inline StartNodeScheduling(RenderGraph &graph,
+                                std::vector<NodeCost> &availablePasses)
+    -> void {
   for (const auto &passHandle : graph.virtualRoot.children) {
     const auto &childRenderpass = graph.passes[passHandle];
 
@@ -188,20 +193,29 @@ auto inline ScheduleNodes(RenderGraph &graph) -> void {
       cost += graph.resources[resHandle].cost;
     }
 
+    for (const auto &resHandle : childRenderpass.readwriteResources) {
+      cost += graph.resources[resHandle].cost;
+    }
+
     availablePasses.push_back(NodeCost{.handle = passHandle,
                                        .cost = cost,
                                        .childrenCount = static_cast<uint32_t>(
                                            childRenderpass.children.size())});
   }
+}
 
-  std::cout << "Total root nodes: " << availablePasses.size() << "\n";
-  std::cout << "Schedule order:\n";
-  std::cout << "----------------\n";
+auto inline ScheduleNodes(RenderGraph &graph) -> void {
+  // Simple topological sort with heuristic-based selection
+
+  std::vector<NodeCost> availablePasses;
+  std::unordered_set<ResourceHandle> scheduledPasses;
+
+  StartNodeScheduling(graph, availablePasses);
+
+  // Schedule root nodes to start off the chain
 
   while (!availablePasses.empty()) {
     ResourceHandle nextPassHandle = SelectNextPass(graph, availablePasses);
-
-    std::cout << "Pass " << nextPassHandle << "\n";
 
     // Remove from available passes
     for (auto it = availablePasses.begin(); it != availablePasses.end(); ++it) {
@@ -229,7 +243,6 @@ auto inline ScheduleNodes(RenderGraph &graph) -> void {
 
     // Add to compiled passes
     graph.compiledPasses.push_back(thisPass);
-
     scheduledPasses.insert(nextPassHandle);
 
     // Enqueue children
@@ -243,13 +256,18 @@ auto inline ScheduleNodes(RenderGraph &graph) -> void {
       assert(!scheduledPasses.contains(childHandle));
 
       uint32_t cost = 0;
-      for (const auto &resHandle : childPass.readResources) {
+      for (const auto &resHandle :
+           childPass.GetResources(static_cast<AccessType>(
+               static_cast<uint32_t>(AccessType::Read) |
+               static_cast<uint32_t>(AccessType::Write)))) {
         cost += graph.resources[resHandle].cost;
       }
 
-      for (const auto &resHandle : childPass.writeResources) {
-        cost += graph.resources[resHandle].cost;
-      }
+      // Todo, improve cost calculation by considering resource lifetimes up
+      // until this point, meaning, if we would free resources after this,
+      // remove their cost from this pass's cost calculation, don't forget to
+      // also make the cost an int32_t then to allow negative costs, if we
+      // deallocate more than we allocate
 
       availablePasses.push_back(NodeCost{
           .handle = childHandle,
@@ -257,6 +275,18 @@ auto inline ScheduleNodes(RenderGraph &graph) -> void {
           .childrenCount = static_cast<uint32_t>(childPass.children.size())});
     }
   }
+
+  std::cout << "Scheduled " << graph.compiledPasses.size() << " passes."
+            << "\n";
+  std::cout << "----------------------------" << "\n";
+  // Skip virtual root
+  for (int i = 1; i < graph.compiledPasses.size(); i++) {
+    std::cout << i << " (" << graph.compiledPasses[i].pass.handle << ")";
+    if (i != graph.compiledPasses.size() - 1) {
+      std::cout << " -> ";
+    }
+  }
+  std::cout << "\n" << "----------------------------" << "\n";
 }
 
 static inline auto HasReadDependency(const RenderGraph &graph, size_t passIndex)
@@ -264,7 +294,7 @@ static inline auto HasReadDependency(const RenderGraph &graph, size_t passIndex)
   const auto &pass = graph.passes[passIndex];
 
   // For each resource read by this pass
-  for (auto read : pass.readResources) {
+  for (auto read : pass.GetResources(AccessType::Read)) {
 
     // Look for a pass that writes this resource
     for (size_t i = 0; i < graph.passes.size(); i++) {
@@ -273,7 +303,7 @@ static inline auto HasReadDependency(const RenderGraph &graph, size_t passIndex)
       }
 
       const auto &other = graph.passes[i];
-      for (auto written : other.writeResources) {
+      for (auto written : other.GetResources(AccessType::Write)) {
         if (written == read) {
           return true; // dependency found
         }
@@ -287,8 +317,6 @@ static inline auto HasReadDependency(const RenderGraph &graph, size_t passIndex)
 auto BuildVirtualRoot(RenderGraph &graph) -> void {
   // Loop over all passes and find nodes with no dependencies (root nodes)
   // So we can attach them to the virtual root
-
-  std::cout << "Building virtual root..." << "\n";
 
   graph.virtualRoot = CompiledPass{};
   graph.virtualRoot.pass.handle = static_cast<ResourceHandle>(-1);
@@ -307,13 +335,11 @@ auto BuildVirtualRoot(RenderGraph &graph) -> void {
 auto BuildGraph(RenderGraph &graph) -> void {
   // For each pass, find dependencies and build child relationships
 
-  std::cout << "Building render graph..." << "\n";
-
   for (size_t i = 0; i < graph.passes.size(); i++) {
     const auto &pass = graph.passes[i];
 
     // For each resource read by this pass
-    for (auto read : pass.readResources) {
+    for (auto read : pass.GetResources(AccessType::Read)) {
 
       // Look for a pass that writes this resource
       for (size_t j = 0; j < graph.passes.size(); j++) {
@@ -322,7 +348,7 @@ auto BuildGraph(RenderGraph &graph) -> void {
         }
 
         const auto &other = graph.passes[j];
-        for (auto written : other.writeResources) {
+        for (auto written : other.GetResources(AccessType::Write)) {
           if (written == read) {
             // Found a dependency, add as child
             graph.passes[j].children.push_back(static_cast<ResourceHandle>(i));
@@ -342,7 +368,7 @@ auto inline ValidateCompiledGraph(const RenderGraph &graph)
 
   const auto &lastPass = graph.compiledPasses.back().pass;
 
-  for (const auto &resHandle : lastPass.writeResources) {
+  for (const auto &resHandle : lastPass.GetResources(AccessType::Write)) {
     const auto &resource = graph.resources[resHandle];
 
     if (resource.lifetime == ResourceLifetime::Transient) {
@@ -387,7 +413,7 @@ auto inline CalculateResourceLifetimes(RenderGraph &graph) -> void {
           (std::max)(resource.usageLifetime.lastUseIndex, passIndex);
     }
 
-    for (const auto &resHandle : pass.pass.writeResources) {
+    for (const auto &resHandle : pass.pass.GetResources(AccessType::Write)) {
       auto &resource = graph.resources[resHandle];
 
       if (resource.lifetime == ResourceLifetime::Persistent) {
@@ -663,8 +689,219 @@ auto inline CompileResourceTimeline(RenderGraph &graph) -> void {
     // Add allocation entries
     for (const auto &resource : resources) {
       graph.compiledResources.push_back(resource);
-      graph.compiledPasses[passIndex].operations.push_back(resource);
+      if (resource.type == ResourceTimelineEntryType::Allocate) {
+        graph.compiledPasses[passIndex].allocations.push_back(resource);
+      } else {
+        graph.compiledPasses[passIndex].deallocations.push_back(resource);
+      }
     }
+  }
+
+  std::cout << "Compiled resource timeline with "
+            << graph.compiledResources.size() << " entries." << "\n";
+  std::cout << "----------------------------" << "\n";
+
+  auto lastPassHandle = static_cast<ResourceHandle>(-2);
+
+  for (const auto &entry : graph.compiledResources) {
+    if (entry.passHandle != lastPassHandle) {
+      std::cout << "Pass " << entry.passHandle << ":\n";
+      lastPassHandle = entry.passHandle;
+    }
+    std::cout << (entry.type == ResourceTimelineEntryType::Allocate
+                      ? "  Allocate: "
+                      : "  Deallocate: ")
+              << entry.resourceHandle << "\n";
+  }
+  std::cout << "----------------------------" << "\n";
+}
+
+auto inline ConfigurePassAttachments(const TextureInfo &info, RenderPass &pass,
+                                     const ResourceBinding &binding) -> void {
+  size_t blendmodeCount = pass.state.blendModes.size();
+  size_t clearColorCount = pass.state.clearValues.size();
+
+  BlendMode blendMode = {}; // Default blend mode: No blending, disabled.
+
+  if (binding.location < blendmodeCount) {
+    blendMode = pass.state.blendModes[binding.location];
+  } else if (blendmodeCount == 1) {
+    blendMode = pass.state.blendModes[0];
+  }
+
+  VkClearValue clearValue;
+  bool hasClearValue = clearColorCount > 0;
+  if (binding.location < clearColorCount) {
+    clearValue = pass.state.clearValues[binding.location];
+  } else if (clearColorCount == 1) {
+    clearValue = pass.state.clearValues[0];
+  }
+
+  VkAttachmentLoadOp loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+  if (hasClearValue) {
+    loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+  } else if (blendMode.enabled) {
+    loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+  }
+
+  VkAttachmentDescription attachmentDesc = {};
+  if (info.imported) {
+    attachmentDesc.format = info.external.texture.format;
+    attachmentDesc.samples = VK_SAMPLE_COUNT_1_BIT;
+  } else {
+    // We do not support multisampled attachments for now
+    // Make sure the sample count is 1 to not confuse the user when it doesn't
+    // work
+    assert(info.transient.samples == VK_SAMPLE_COUNT_1_BIT);
+
+    attachmentDesc.format = info.transient.format;
+    attachmentDesc.samples = VK_SAMPLE_COUNT_1_BIT;
+  }
+  attachmentDesc.loadOp = loadOp;
+  attachmentDesc.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+  attachmentDesc.stencilLoadOp = loadOp;
+  attachmentDesc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_STORE;
+  attachmentDesc.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+  attachmentDesc.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+  size_t descriptionIndex = pass.state.attachmentDescriptions.size();
+  pass.state.attachmentDescriptions.push_back(attachmentDesc);
+
+  VkAttachmentReference attachmentRef = {};
+  attachmentRef.attachment = descriptionIndex;
+  attachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+  pass.state.attachmentReferences[binding.location] = attachmentRef;
+}
+
+auto inline GetDescriptorType(const Resource &resource,
+                              const ResourceBinding &binding)
+    -> VkDescriptorType {
+
+  VkDescriptorType descriptorType = VK_DESCRIPTOR_TYPE_MAX_ENUM;
+
+  if (resource.type == Type::Texture) {
+    if (binding.type == BindingType::Sampler) {
+      descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    } else if (binding.type == BindingType::Storage) {
+      descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    }
+  } else if (resource.type == Type::Buffer) {
+    if (binding.type == BindingType::Uniform) {
+      descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    } else if (binding.type == BindingType::Storage) {
+      descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    }
+  }
+
+  assert(descriptorType != VK_DESCRIPTOR_TYPE_MAX_ENUM &&
+         "Invalid resource binding configuration");
+
+  return descriptorType;
+}
+
+auto inline ConfigurePassDescriptors(RenderGraph &graph, CompiledPass &pass,
+                                     const ResourceBinding &binding) -> void {
+  // For each pass, configure descriptors for read/write resources
+
+  for (const auto &resHandle : pass.pass.GetResources(
+           static_cast<AccessType>(static_cast<uint32_t>(AccessType::Read) |
+                                   static_cast<uint32_t>(AccessType::Write)))) {
+    const auto &resource = graph.resources[resHandle];
+
+    VkDescriptorImageInfo imageInfo = {};
+    VkDescriptorBufferInfo bufferInfo = {};
+
+    if (resource.type == Type::Texture) {
+      const auto &texInfo = std::get<TextureInfo>(resource.info);
+
+      // Binding type allows:
+      // Sampled: read-only sampler2D
+      // Storage: read-write image2D
+      auto layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+      if (binding.type == BindingType::Storage) {
+        layout = VK_IMAGE_LAYOUT_GENERAL;
+      }
+
+      imageInfo.imageLayout = layout;
+      // ImageView and Sampler would be set during actual execution
+      imageInfo.imageView = VK_NULL_HANDLE;
+      imageInfo.sampler = VK_NULL_HANDLE;
+    } else if (resource.type == Type::Buffer) {
+      const auto &bufInfo = std::get<BufferInfo>(resource.info);
+
+      bufferInfo.offset = 0;
+      bufferInfo.range = bufInfo.transient.size;
+      // Buffer would be set during actual execution
+      bufferInfo.buffer = VK_NULL_HANDLE;
+    }
+
+    VkWriteDescriptorSet writeDesc = {};
+    writeDesc.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    writeDesc.dstBinding = binding.binding;
+    writeDesc.dstArrayElement = 0;
+    writeDesc.descriptorCount = 1;
+    writeDesc.descriptorType = GetDescriptorType(resource, binding);
+    writeDesc.pImageInfo =
+        resource.type == Type::Texture ? &imageInfo : nullptr;
+    writeDesc.pBufferInfo =
+        resource.type == Type::Buffer ? &bufferInfo : nullptr;
+
+    pass.state.descriptorWrites.push_back(writeDesc);
+  }
+}
+
+auto inline ConfigureGraphAttachments(RenderGraph &graph) -> void {
+  // For each pass, configure attachment descriptions and references
+
+  for (auto &compiledPass : graph.compiledPasses) {
+    // For each write resource, if it's a texture, add as attachment
+
+    size_t blendmodeCount = compiledPass.state.blendModes.size();
+    size_t clearColorCount = compiledPass.state.clearValues.size();
+
+    // Allow default blend mode if none are provided
+    // Also allow per-attachment blend modes
+    // Or, one blend mode applied to all attachments
+    assert(blendmodeCount == 0 ||
+           blendmodeCount == compiledPass.pass.writeResources.size() ||
+           blendmodeCount == 1);
+    // Same logic for clear colors
+    assert(clearColorCount == 0 ||
+           clearColorCount == compiledPass.pass.writeResources.size() ||
+           clearColorCount == 1);
+
+    // Calculate Max location index used in resource bindings
+    uint32_t maxLocation = 0;
+    for (const auto &binding : compiledPass.resourceBindings) {
+      if (binding.type == BindingType::Attachment) {
+        maxLocation = (max<uint32_t>)(binding.location, maxLocation);
+      }
+    }
+
+    compiledPass.state.attachmentReferences.resize(maxLocation + 1);
+
+    for (int i = 0; i < compiledPass.resourceBindings.size(); i++) {
+      const auto &binding = compiledPass.resourceBindings[i];
+      const auto &resource = graph.resources[binding.resource];
+
+      if (binding.type == BindingType::Attachment) {
+        assert(resource.type == Type::Texture &&
+               "Only texture resources can be used as attachments");
+        const auto &texInfo = std::get<TextureInfo>(resource.info);
+        ConfigurePassAttachments(texInfo, compiledPass.pass, binding);
+      } else {
+        ConfigurePassDescriptors(graph, compiledPass, binding);
+      }
+    }
+
+    compiledPass.state.subpassDescription.colorAttachmentCount =
+        static_cast<uint32_t>(compiledPass.state.attachmentDescriptions.size());
+    compiledPass.state.subpassDescription.pColorAttachments =
+        compiledPass.state.attachmentReferences.data();
+
+    compiledPass.state.subpassDescription.pipelineBindPoint =
+        compiledPass.state.bindPoint;
   }
 }
 
@@ -786,11 +1023,8 @@ auto Compile(GraphicsContext &context, RenderGraph &graph) -> void {
     return;
   }
 
-  std::cout << "Compiling resource timeline..." << "\n";
   CompileResourceTimeline(graph);
-  std::cout << "Building virtual memory..." << "\n";
   BuildVirtualMemory(context, graph);
-  std::cout << "Allocating memory..." << "\n";
   AllocateMemory(context, graph);
 }
 

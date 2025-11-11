@@ -4,6 +4,7 @@
 #include "graphics.hpp"
 #include "texture.hpp"
 #include "vulkan/vulkan_core.h"
+#include <cstdint>
 #include <variant>
 #include <vector>
 
@@ -16,7 +17,10 @@ enum class ResourceLifetime : uint8_t {
   Persistent // Created once and reused across frames
 };
 
-enum class AccessType : uint8_t { Read, Write };
+// Access type for a resource within a render pass
+// Bit-Op combinable, for read-write resources
+// NOLINTNEXTLINE, because of 32-bit enum usage for values < 256
+enum AccessType : uint32_t { Read = 1U << 0U, Write = 1U << 1U };
 
 struct ResourceAccess {
   ResourceHandle resource;
@@ -67,6 +71,28 @@ struct BufferInfo {
 };
 
 enum class Type : uint8_t { Texture, Buffer, Unknown };
+enum class BindingType : uint8_t {
+  Sampler,   // Sampler
+  Storage,   // SSBO / image
+  Uniform,   // UBO
+  Attachment // Color / depth attachment
+};
+
+struct ResourceBinding {
+  ResourceHandle resource = UINT16_MAX;
+  uint32_t binding = 0;
+  uint32_t set = 0;
+
+  // Must be set to UINT32_MAX if not used
+  // Is only used for framebuffer attachments
+  uint32_t location = UINT32_MAX;
+
+  // Vertex / Fragment / Compute. Vertex and Fragment can be combined.
+  VkShaderStageFlags stageFlags =
+      VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT;
+
+  BindingType type = BindingType::Uniform;
+};
 
 struct Resource {
   ResourceHandle handle = 0;
@@ -79,6 +105,26 @@ struct Resource {
   bool imported = false;
 
   std::variant<TextureInfo, BufferInfo> info;
+  std::vector<VkDescriptorSet> descriptorSets;
+};
+
+struct PassState {
+  VkPipeline pipeline = VK_NULL_HANDLE;
+  VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
+  std::vector<VkDescriptorSet> descriptorSets;
+
+  VkViewport viewport = {};
+  VkRect2D scissor = {};
+
+  std::vector<VkClearValue> clearValues;
+  VkPipelineBindPoint bindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+
+  std::vector<BlendMode> blendModes;
+  std::vector<VkAttachmentDescription> attachmentDescriptions;
+  std::vector<VkAttachmentReference> attachmentReferences;
+  VkSubpassDescription subpassDescription = {};
+
+  std::vector<VkWriteDescriptorSet> descriptorWrites;
 };
 
 struct RenderPass {
@@ -86,9 +132,47 @@ struct RenderPass {
 
   std::vector<ResourceHandle> readResources;
   std::vector<ResourceHandle> writeResources;
+  std::vector<ResourceHandle> readwriteResources;
 
   std::vector<ResourceHandle> parents;
   std::vector<ResourceHandle> children;
+
+  PassState state = {};
+  std::vector<ResourceBinding> resourceBindings;
+
+  [[nodiscard]] auto GetResources(AccessType accessType) const
+      -> std::vector<ResourceHandle> {
+    std::vector<ResourceHandle> resources;
+
+    auto read = static_cast<uint32_t>(AccessType::Read);
+    auto write = static_cast<uint32_t>(AccessType::Write);
+    uint32_t readwrite = read | write;
+
+    if (accessType == read) {
+      resources.insert(resources.end(), readResources.begin(),
+                       readResources.end());
+      resources.insert(resources.end(), readwriteResources.begin(),
+                       readwriteResources.end());
+    }
+
+    if (accessType == write) {
+      resources.insert(resources.end(), writeResources.begin(),
+                       writeResources.end());
+      resources.insert(resources.end(), readwriteResources.begin(),
+                       readwriteResources.end());
+    }
+
+    if (accessType == readwrite) {
+      resources.insert(resources.end(), readwriteResources.begin(),
+                       readwriteResources.end());
+      resources.insert(resources.end(), readResources.begin(),
+                       readResources.end());
+      resources.insert(resources.end(), writeResources.begin(),
+                       writeResources.end());
+    }
+
+    return resources;
+  }
 };
 
 enum class ResourceTimelineEntryType : uint8_t { Allocate, Deallocate };
@@ -106,7 +190,13 @@ struct CompiledPass {
   std::vector<ResourceHandle> barriersAfter;
 
   std::vector<ResourceHandle> children;
-  std::vector<ResourceTimelineEntry> operations;
+
+  // Separated allocation/deallocation entries, for easier processing in runtime
+  std::vector<ResourceTimelineEntry> allocations;
+  std::vector<ResourceTimelineEntry> deallocations;
+  std::vector<ResourceBinding> resourceBindings;
+
+  PassState state = {};
 };
 
 enum class RenderGraphHeuristic : uint8_t {
@@ -133,17 +223,6 @@ struct VirtualAllocation {
   VmaVirtualAllocation allocation;
   VkDeviceSize offset; // offset within the memory block
   VkDeviceSize size;   // size of the allocation
-};
-
-struct PassState {
-  VkPipeline pipeline = VK_NULL_HANDLE;
-  VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
-  std::vector<VkDescriptorSet> descriptorSets;
-
-  VkViewport viewport = {};
-  VkRect2D scissor = {};
-
-  std::vector<VkClearValue> clearValues;
 };
 
 struct RenderGraph {
@@ -199,10 +278,10 @@ struct BufferDescriptor {
   bool allowAliasing = true;
 };
 
-auto AddTexture(RenderGraph &graph, TextureDescriptor descriptor)
+auto AddTexture(RenderGraph &graph, const TextureDescriptor &descriptor)
     -> ResourceHandle;
 
-auto AddBuffer(RenderGraph &graph, BufferDescriptor descriptor)
+auto AddBuffer(RenderGraph &graph, const BufferDescriptor &descriptor)
     -> ResourceHandle;
 
 auto ImportTexture(
@@ -214,8 +293,21 @@ auto ImportTexture(
 auto ImportBuffer(RenderGraph &graph, const Graphics::Buffer &buffer)
     -> ResourceHandle;
 
-auto AddRenderPass(RenderGraph &graph,
-                   const std::vector<ResourceAccess> &resourceAccesses)
+struct RenderPassDescriptor {
+  std::vector<ResourceAccess> resources;
+
+  VkViewport viewport = {};
+  VkRect2D scissor = {};
+
+  // Clear values for attachments, optional.
+  std::vector<VkClearValue> clearValues;
+  VkPipelineBindPoint bindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+  // Optional, defaults to overwrite
+  std::vector<BlendMode> blendModes;
+  std::vector<ResourceBinding> resourceBindings;
+};
+
+auto AddRenderPass(RenderGraph &graph, const RenderPassDescriptor &descriptor)
     -> ResourceHandle;
 
 auto Compile(GraphicsContext &context, RenderGraph &graph) -> void;
