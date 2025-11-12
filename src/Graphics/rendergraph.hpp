@@ -2,6 +2,7 @@
 
 #include "buffer.hpp"
 #include "graphics.hpp"
+#include "shader.hpp"
 #include "texture.hpp"
 #include "vulkan/vulkan_core.h"
 #include <cstdint>
@@ -89,7 +90,8 @@ struct ResourceBinding {
 
   // Vertex / Fragment / Compute. Vertex and Fragment can be combined.
   VkShaderStageFlags stageFlags =
-      VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT;
+      static_cast<uint32_t>(VK_SHADER_STAGE_FRAGMENT_BIT) |
+      static_cast<uint32_t>(VK_SHADER_STAGE_VERTEX_BIT);
 
   BindingType type = BindingType::Uniform;
 };
@@ -173,6 +175,10 @@ struct RenderPass {
 
     return resources;
   }
+
+  Shader::ShaderModule *fragmentShader;
+  Shader::ShaderModule *vertexShader;
+  Shader::ShaderModule *computeShader;
 };
 
 enum class ResourceTimelineEntryType : uint8_t { Allocate, Deallocate };

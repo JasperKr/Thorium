@@ -102,10 +102,6 @@ struct GraphicsState {
 
   bool backfaceCulling{};
   bool frontfaceClockwise{};
-
-  struct ShaderModule *vertexShader{};
-  struct ShaderModule *fragmentShader{};
-  struct ShaderModule *computeShader{};
 };
 
 auto Initialize(GraphicsContext &context, VkExtent2D dimensions)

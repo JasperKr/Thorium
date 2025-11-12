@@ -2,6 +2,7 @@
 #include "Modules/error.hpp"
 #include "graphics.hpp"
 #include "texture.hpp"
+#include "tl/expected.hpp"
 #include "vulkan/vulkan_core.h"
 #include <algorithm>
 #include <cassert>
@@ -800,10 +801,10 @@ auto inline GetDescriptorType(const Resource &resource,
   return descriptorType;
 }
 
-auto inline ConfigurePassDescriptors(RenderGraph &graph, CompiledPass &pass,
+auto inline ConfigurePassDescriptors(GraphicsContext &context,
+                                     RenderGraph &graph, CompiledPass &pass,
                                      const ResourceBinding &binding) -> void {
   // For each pass, configure descriptors for read/write resources
-
   for (const auto &resHandle : pass.pass.GetResources(
            static_cast<AccessType>(static_cast<uint32_t>(AccessType::Read) |
                                    static_cast<uint32_t>(AccessType::Write)))) {
@@ -847,11 +848,195 @@ auto inline ConfigurePassDescriptors(RenderGraph &graph, CompiledPass &pass,
     writeDesc.pBufferInfo =
         resource.type == Type::Buffer ? &bufferInfo : nullptr;
 
+    vkUpdateDescriptorSets(context.device, 1, &writeDesc, 0, nullptr);
+
     pass.state.descriptorWrites.push_back(writeDesc);
   }
 }
 
-auto inline ConfigureGraphAttachments(RenderGraph &graph) -> void {
+auto inline CreateGraphicsPipeline(GraphicsContext &context, RenderGraph &graph,
+                                   CompiledPass &compiledPass) -> Error::Error {
+  // Create graphics pipeline for the pass
+  // For now, we will create a very basic pipeline with no shaders
+  // In a real implementation, shaders would be provided per pass
+
+  if (compiledPass.state.bindPoint != VK_PIPELINE_BIND_POINT_GRAPHICS) {
+    return Error::Create(
+        "Cannot create graphics pipeline for non-graphics pass");
+  }
+
+  if (compiledPass.pass.vertexShader == nullptr) {
+    return Error::Create(
+        "Cannot create graphics pipeline without a vertex shader");
+  }
+
+  if (compiledPass.pass.fragmentShader == nullptr) {
+    return Error::Create(
+        "Cannot create graphics pipeline without a fragment shader");
+  }
+
+  std::array<VkPipelineShaderStageCreateInfo, 2> shaderStages = {};
+
+  shaderStages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+  shaderStages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
+  shaderStages[0].module = compiledPass.pass.vertexShader->module;
+  shaderStages[0].pName = "main";
+
+  shaderStages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+  shaderStages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+  shaderStages[1].module = compiledPass.pass.fragmentShader->module;
+  shaderStages[1].pName = "main";
+
+  VkPipelineVertexInputStateCreateInfo vertexInputInfo = {};
+  vertexInputInfo.sType =
+      VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+  vertexInputInfo.vertexBindingDescriptionCount = 0;
+  vertexInputInfo.pVertexBindingDescriptions = nullptr;
+  vertexInputInfo.vertexAttributeDescriptionCount = 0;
+  vertexInputInfo.pVertexAttributeDescriptions = nullptr;
+  VkPipelineInputAssemblyStateCreateInfo inputAssembly = {};
+
+  inputAssembly.sType =
+      VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+  inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+  inputAssembly.primitiveRestartEnable = VK_FALSE;
+
+  VkPipelineViewportStateCreateInfo viewportState = {};
+  viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+  viewportState.viewportCount = 1;
+  viewportState.pViewports = &compiledPass.state.viewport;
+  viewportState.scissorCount = 1;
+  viewportState.pScissors = &compiledPass.state.scissor;
+
+  VkPipelineRasterizationStateCreateInfo rasterizer = {};
+  rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+  rasterizer.depthClampEnable = VK_FALSE;
+  rasterizer.rasterizerDiscardEnable = VK_FALSE;
+  rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+  rasterizer.lineWidth = 1.0F;
+  rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+  rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
+  rasterizer.depthBiasEnable = VK_FALSE;
+  VkPipelineMultisampleStateCreateInfo multisampling = {};
+  multisampling.sType =
+      VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+  multisampling.sampleShadingEnable = VK_FALSE;
+  multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+
+  VkPipelineColorBlendAttachmentState colorBlendAttachment = {};
+  colorBlendAttachment.colorWriteMask =
+      static_cast<uint32_t>(VK_COLOR_COMPONENT_R_BIT) |
+      static_cast<uint32_t>(VK_COLOR_COMPONENT_G_BIT) |
+      static_cast<uint32_t>(VK_COLOR_COMPONENT_B_BIT) |
+      static_cast<uint32_t>(VK_COLOR_COMPONENT_A_BIT);
+
+  VkPipelineColorBlendStateCreateInfo colorBlending = {};
+  colorBlending.sType =
+      VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+  colorBlending.logicOpEnable = VK_FALSE;
+  colorBlending.attachmentCount = 1;
+  colorBlending.pAttachments = &colorBlendAttachment;
+  VkGraphicsPipelineCreateInfo pipelineInfo = {};
+  pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+  pipelineInfo.stageCount = static_cast<uint32_t>(shaderStages.size());
+  pipelineInfo.pStages = shaderStages.data();
+  pipelineInfo.pVertexInputState = &vertexInputInfo;
+  pipelineInfo.pInputAssemblyState = &inputAssembly;
+  pipelineInfo.pViewportState = &viewportState;
+  pipelineInfo.pRasterizationState = &rasterizer;
+  pipelineInfo.pMultisampleState = &multisampling;
+  pipelineInfo.pColorBlendState = &colorBlending;
+  pipelineInfo.layout = compiledPass.state.pipelineLayout;
+  pipelineInfo.renderPass = VK_NULL_HANDLE; // To be set during actual execution
+  pipelineInfo.subpass = 0;
+
+  auto error = Error::FromVkResult(vkCreateGraphicsPipelines(
+      context.device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr,
+      &compiledPass.state.pipeline));
+
+  if (Error::IsError(error)) {
+    return error;
+  }
+
+  return Error::Success();
+}
+
+auto inline CreateComputePipeline(GraphicsContext &context, RenderGraph &graph,
+                                  CompiledPass &compiledPass) -> Error::Error {
+  if (compiledPass.state.bindPoint != VK_PIPELINE_BIND_POINT_COMPUTE) {
+    return Error::Create("Cannot create compute pipeline for non-compute pass");
+  }
+
+  if (compiledPass.pass.computeShader == nullptr) {
+    return Error::Create(
+        "Cannot create compute pipeline without a compute shader");
+  }
+
+  VkPipelineShaderStageCreateInfo shaderStage = {};
+  shaderStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+  shaderStage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+  shaderStage.module = compiledPass.pass.computeShader->module;
+  shaderStage.pName = "main";
+
+  VkComputePipelineCreateInfo pipelineInfo = {};
+  pipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+  pipelineInfo.stage = shaderStage;
+  pipelineInfo.layout = compiledPass.state.pipelineLayout;
+  auto error = Error::FromVkResult(
+      vkCreateComputePipelines(context.device, VK_NULL_HANDLE, 1, &pipelineInfo,
+                               nullptr, &compiledPass.state.pipeline));
+
+  if (Error::IsError(error)) {
+    return error;
+  }
+
+  return Error::Success();
+}
+
+auto inline CreatePassPipelines(GraphicsContext &context, RenderGraph &graph)
+    -> Error::Error {
+  for (auto &compiledPass : graph.compiledPasses) {
+    VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
+    pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    pipelineLayoutInfo.setLayoutCount = 0;
+    pipelineLayoutInfo.pSetLayouts = nullptr;
+    pipelineLayoutInfo.pushConstantRangeCount = 0;
+    pipelineLayoutInfo.pPushConstantRanges = nullptr;
+    VkPipelineLayout pipelineLayout = nullptr;
+    auto error = Error::FromVkResult(vkCreatePipelineLayout(
+        context.device, &pipelineLayoutInfo, nullptr, &pipelineLayout));
+
+    if (Error::IsError(error)) {
+      return error;
+    }
+
+    compiledPass.state.pipelineLayout = pipelineLayout;
+    if (compiledPass.state.bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS) {
+      auto error = CreateGraphicsPipeline(context, graph, compiledPass);
+
+      if (Error::IsError(error)) {
+        return error;
+      }
+
+      // vkCreateGraphicsPipelines(context.device, VK_NULL_HANDLE, 1,
+      //                           error.value().data(), nullptr,
+      //                           &compiledPass.state.pipeline);
+    } else if (compiledPass.state.bindPoint == VK_PIPELINE_BIND_POINT_COMPUTE) {
+      auto error = CreateComputePipeline(context, graph, compiledPass);
+
+      if (Error::IsError(error)) {
+        return error;
+      }
+    } else {
+      return Error::Create("Unsupported pipeline bind point");
+    }
+  }
+
+  return Error::Success();
+}
+
+auto inline ConfigureGraphAttachments(GraphicsContext &context,
+                                      RenderGraph &graph) -> void {
   // For each pass, configure attachment descriptions and references
 
   for (auto &compiledPass : graph.compiledPasses) {
@@ -891,7 +1076,7 @@ auto inline ConfigureGraphAttachments(RenderGraph &graph) -> void {
         const auto &texInfo = std::get<TextureInfo>(resource.info);
         ConfigurePassAttachments(texInfo, compiledPass.pass, binding);
       } else {
-        ConfigurePassDescriptors(graph, compiledPass, binding);
+        ConfigurePassDescriptors(context, graph, compiledPass, binding);
       }
     }
 
@@ -902,6 +1087,20 @@ auto inline ConfigureGraphAttachments(RenderGraph &graph) -> void {
 
     compiledPass.state.subpassDescription.pipelineBindPoint =
         compiledPass.state.bindPoint;
+  }
+}
+
+auto inline ApplyDescriptorSets(RenderGraph &graph, CompiledPass &pass)
+    -> void {
+  std::vector<VkDescriptorSetLayoutBinding> bindings;
+  bindings.reserve(pass.state.descriptorWrites.size());
+
+  for (auto &descriptorWrite : pass.state.descriptorWrites) {
+    VkDescriptorSetLayoutBinding binding{};
+    binding.binding = descriptorWrite.dstBinding;
+    binding.descriptorType = descriptorWrite.descriptorType;
+    binding.descriptorCount = descriptorWrite.descriptorCount;
+    // binding.stageFlags = descriptorWrite.
   }
 }
 
@@ -1028,7 +1227,7 @@ auto Compile(GraphicsContext &context, RenderGraph &graph) -> void {
   AllocateMemory(context, graph);
 }
 
-auto AddTexture(RenderGraph &graph, TextureDescriptor descriptor)
+auto AddTexture(RenderGraph &graph, const TextureDescriptor &descriptor)
     -> ResourceHandle {
   Resource resource = {};
   resource.handle = static_cast<ResourceHandle>(graph.resources.size());
