@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Modules/error.hpp"
 #include "buffer.hpp"
 #include "graphics.hpp"
 #include "shader.hpp"
@@ -41,6 +42,9 @@ struct TextureResource {
   uint32_t arrayLayers;
   VkImageUsageFlags usage;
   VkSampleCountFlagBits samples;
+
+  VkImage image;
+  VkImageView view;
 };
 
 struct BufferResource {
@@ -104,7 +108,6 @@ struct Resource {
                      // optimize for least cost
 
   Type type = Type::Unknown;
-  bool imported = false;
 
   std::variant<TextureInfo, BufferInfo> info;
   std::vector<VkDescriptorSet> descriptorSets;
@@ -122,8 +125,6 @@ struct PassState {
   VkPipelineBindPoint bindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
 
   std::vector<BlendMode> blendModes;
-  std::vector<VkAttachmentDescription> attachmentDescriptions;
-  std::vector<VkAttachmentReference> attachmentReferences;
   VkSubpassDescription subpassDescription = {};
 
   std::vector<VkWriteDescriptorSet> descriptorWrites;
@@ -176,9 +177,13 @@ struct RenderPass {
     return resources;
   }
 
-  Shader::ShaderModule *fragmentShader;
-  Shader::ShaderModule *vertexShader;
-  Shader::ShaderModule *computeShader;
+  Shader::ShaderModule fragmentShader;
+  Shader::ShaderModule vertexShader;
+  Shader::ShaderModule computeShader;
+
+  std::function<void(VkCommandBuffer cmd, GraphicsContext &context,
+                     struct RenderGraph &graph)>
+      executeFunction;
 };
 
 enum class ResourceTimelineEntryType : uint8_t { Allocate, Deallocate };
@@ -201,8 +206,6 @@ struct CompiledPass {
   std::vector<ResourceTimelineEntry> allocations;
   std::vector<ResourceTimelineEntry> deallocations;
   std::vector<ResourceBinding> resourceBindings;
-
-  PassState state = {};
 };
 
 enum class RenderGraphHeuristic : uint8_t {
@@ -291,7 +294,7 @@ auto AddBuffer(RenderGraph &graph, const BufferDescriptor &descriptor)
     -> ResourceHandle;
 
 auto ImportTexture(
-    RenderGraph &graph, const Graphics::Texture::Texture &texture,
+    RenderGraph &graph, Graphics::Texture::Texture texture,
     VkImageLayout initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
     VkImageLayout finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
     -> ResourceHandle;
@@ -311,11 +314,23 @@ struct RenderPassDescriptor {
   // Optional, defaults to overwrite
   std::vector<BlendMode> blendModes;
   std::vector<ResourceBinding> resourceBindings;
+
+  Graphics::Shader::ShaderModule vertexShader;
+  Graphics::Shader::ShaderModule fragmentShader;
+  Graphics::Shader::ShaderModule computeShader;
+
+  std::function<void(VkCommandBuffer cmd, GraphicsContext &context,
+                     struct RenderGraph &graph)>
+      executeFunction;
 };
 
 auto AddRenderPass(RenderGraph &graph, const RenderPassDescriptor &descriptor)
     -> ResourceHandle;
 
-auto Compile(GraphicsContext &context, RenderGraph &graph) -> void;
+[[nodiscard]] auto Compile(GraphicsContext &context, RenderGraph &graph)
+    -> Error::Error;
+
+auto Execute(GraphicsContext &context, RenderGraph &graph,
+             VkCommandBuffer commandBuffer) -> void;
 
 } // namespace Graphics::Rendergraph

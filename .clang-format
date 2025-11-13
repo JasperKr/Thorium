@@ -1,0 +1,8 @@
+BasedOnStyle: LLVM
+BraceWrapping:
+  AfterFunction: true
+  AfterControlStatement: false
+  AfterClass: true
+  AfterNamespace: true
+  AfterStruct: true
+  AfterEnum: true

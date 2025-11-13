@@ -16,6 +16,10 @@
 #include <vma/vk_mem_alloc.h>
 
 namespace Graphics {
+namespace Texture {
+struct Texture;
+}
+
 constexpr uint32_t FRAMES_IN_FLIGHT = 2;
 
 struct RenderData {
@@ -37,6 +41,7 @@ struct SwapchainInfo {
   uint32_t imageCount;
   std::vector<VkImage> images;
   std::vector<VkImageView> imageViews;
+  std::vector<struct Texture::Texture> textures;
 };
 
 struct RuntimeInfo {
@@ -85,25 +90,6 @@ struct BlendMode {
   VkBlendOp alphaBlendOp = VK_BLEND_OP_ADD;
 };
 
-struct GraphicsState {
-  VkViewport viewport = {};
-  VkRect2D scissor = {};
-  BlendMode blendMode = {};
-  VkCompareOp depthCompareOp = VK_COMPARE_OP_LESS;
-
-  bool depthWriteEnable{};
-  bool depthTestEnable{};
-
-  VkCullModeFlags cullMode{};
-  VkFrontFace frontFace = VK_FRONT_FACE_CLOCKWISE;
-
-  VkCompareOp stencilCompareOp = VK_COMPARE_OP_ALWAYS;
-  uint32_t stencilReference{};
-
-  bool backfaceCulling{};
-  bool frontfaceClockwise{};
-};
-
 auto Initialize(GraphicsContext &context, VkExtent2D dimensions)
     -> Error::Error;
 auto GetRenderData(GraphicsContext &context, uint32_t threadIndex)
@@ -115,13 +101,6 @@ void Deinitialize(GraphicsContext &context);
 inline auto GetCurrentThreadIndex() -> int8_t & {
   thread_local static int8_t current = -1; // Default to invalid
   return current;
-}
-
-// static GraphicsState CurrentGraphicsState = {};
-
-inline auto GetGraphicsState() -> GraphicsState & {
-  static thread_local GraphicsState state = {};
-  return state;
 }
 
 } // namespace Graphics

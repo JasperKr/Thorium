@@ -32,7 +32,7 @@ static inline auto GetGlobalShaderExterns() -> std::vector<ShaderExtern> & {
 static auto AddGlobalShaderExtern(const ShaderExtern &externVar) -> void {
   static std::vector<ShaderExtern> &GlobalShaderExterns =
       GetGlobalShaderExterns();
-  GlobalShaderExterns.push_back(externVar);
+  GlobalShaderExterns.emplace_back(externVar);
 }
 
 inline auto VkShaderStageToShaderCStage(VkShaderStageFlagBits stage)
@@ -374,7 +374,7 @@ HandleShaderIncludes(ShaderModule &shader, ShaderSource &currentSource,
         .includedLineOffset = static_cast<uint32_t>(currentLineNumber),
     };
 
-    currentSource.includeSources.push_back(newSource);
+    currentSource.includeSources.emplace_back(newSource);
     auto &pushedSource = currentSource.includeSources.back();
 
     uint64_t previousLineNumber = currentLineNumber;

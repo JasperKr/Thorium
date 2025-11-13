@@ -1,11 +1,11 @@
 #include "program.hpp"
-#include "Graphics/canvas.hpp"
 #include "Graphics/graphics.hpp"
 #include "Graphics/mesh.hpp"
 #include "Graphics/rendergraph.hpp"
 #include "Graphics/shader.hpp"
 #include "Modules/error.hpp"
 #include "Modules/timer.hpp"
+#include "vulkan/vulkan_core.h"
 #include <cstddef>
 #include <iostream>
 
@@ -31,6 +31,16 @@ static inline auto GetPipeline() -> VkPipeline & {
   return pipeline;
 }
 
+static inline auto GetRenderGraph() -> Graphics::Rendergraph::RenderGraph & {
+  static Graphics::Rendergraph::RenderGraph graph = {};
+  return graph;
+}
+
+static inline auto GetSwapchainHandleIndex() -> size_t & {
+  static size_t index = 0;
+  return index;
+}
+
 auto Configuration(ApplicationConfig &config) -> Error::Error {
   config.Title = "Thorium Engine - Program Example";
 
@@ -38,13 +48,15 @@ auto Configuration(ApplicationConfig &config) -> Error::Error {
 }
 
 auto Load(Graphics::GraphicsContext &context) -> Error::Error {
+  std::cout.setf(std::ios::unitbuf); // Disable buffering for stdout
+
   // Setup render graph to debug it
 
-  Graphics::Rendergraph::RenderGraph graph = {};
+  auto &graph = GetRenderGraph();
   std::vector<Graphics::Rendergraph::ResourceHandle> textureHandles;
   textureHandles.reserve(static_cast<size_t>(4 * 4));
   for (int i = 0; i < 4 * 4; i++) {
-    textureHandles.push_back(Graphics::Rendergraph::AddTexture(
+    textureHandles.emplace_back(Graphics::Rendergraph::AddTexture(
         graph,
         {
             .format = VK_FORMAT_R8G8B8A8_UNORM,
@@ -58,61 +70,6 @@ auto Load(Graphics::GraphicsContext &context) -> Error::Error {
 
         }));
   }
-
-  auto rootHandle = Graphics::Rendergraph::AddRenderPass(
-      graph,
-      {
-          .resources =
-              {
-                  {.resource = textureHandles.at(0),
-                   .accessType = Graphics::Rendergraph::AccessType::Write},
-              },
-          .viewport = {.x = 0.0F,
-                       .y = 0.0F,
-                       .width = static_cast<float>(
-                           context.swapchainInfo.extent.width),
-                       .height = static_cast<float>(
-                           context.swapchainInfo.extent.height),
-                       .minDepth = 0.0F,
-                       .maxDepth = 1.0F},
-          .scissor = {.offset = {0, 0}, .extent = context.swapchainInfo.extent},
-          .clearValues =
-              {
-                  {.color = {{0.0F, 0.0F, 0.0F, 1.0F}}},
-              },
-      });
-  auto childHandle1 = Graphics::Rendergraph::AddRenderPass(
-      graph, {.resources = {
-                  {.resource = textureHandles.at(0),
-                   .accessType = Graphics::Rendergraph::AccessType::Read},
-                  {.resource = textureHandles.at(1),
-                   .accessType = Graphics::Rendergraph::AccessType::Write},
-              }});
-  auto childHandle2 = Graphics::Rendergraph::AddRenderPass(
-      graph, {.resources = {
-                  {.resource = textureHandles.at(1),
-                   .accessType = Graphics::Rendergraph::AccessType::Read},
-                  {.resource = textureHandles.at(2),
-                   .accessType = Graphics::Rendergraph::AccessType::Write},
-              }});
-  auto childHandle3 = Graphics::Rendergraph::AddRenderPass(
-      graph, {.resources = {
-                  {.resource = textureHandles.at(0),
-                   .accessType = Graphics::Rendergraph::AccessType::Read},
-                  {.resource = textureHandles.at(1),
-                   .accessType = Graphics::Rendergraph::AccessType::Read},
-                  {.resource = textureHandles.at(3),
-                   .accessType = Graphics::Rendergraph::AccessType::Write},
-              }});
-  auto childHandle4 = Graphics::Rendergraph::AddRenderPass(
-      graph, {.resources = {
-                  {.resource = textureHandles.at(2),
-                   .accessType = Graphics::Rendergraph::AccessType::Read},
-                  {.resource = textureHandles.at(3),
-                   .accessType = Graphics::Rendergraph::AccessType::Read},
-              }});
-
-  Graphics::Rendergraph::Compile(context, graph);
 
   auto fsResult = Graphics::Shader::ShaderModule::Create(
       context, "src/Graphics/Shaders/default.fs", VK_SHADER_STAGE_FRAGMENT_BIT,
@@ -132,8 +89,83 @@ auto Load(Graphics::GraphicsContext &context) -> Error::Error {
   auto fragmentShader = fsResult.value();
   auto vertexShader = vsResult.value();
 
-  GetShaders().push_back(vertexShader);
-  GetShaders().push_back(fragmentShader);
+  GetShaders().emplace_back(vertexShader);
+  GetShaders().emplace_back(fragmentShader);
+
+  // Import swapchain texture
+  // We will swap the texture pointer during rendering
+  auto swapchainHandle = Graphics::Rendergraph::ImportTexture(
+      graph, context.swapchainInfo.textures[0],
+      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+
+  GetSwapchainHandleIndex() = swapchainHandle;
+
+  std::cout << "Swapchain extent: " << context.swapchainInfo.extent.width << "x"
+            << context.swapchainInfo.extent.height << "\n";
+
+  auto rootHandle = Graphics::Rendergraph::AddRenderPass(
+      graph,
+      {.resources =
+           {
+               {
+                   .resource = swapchainHandle,
+                   .accessType = Graphics::Rendergraph::AccessType::Write,
+               },
+           },
+
+       .viewport = {.x = 0.0F,
+                    .y = 0.0F,
+                    .width =
+                        static_cast<float>(context.swapchainInfo.extent.width),
+                    .height =
+                        static_cast<float>(context.swapchainInfo.extent.height),
+                    .minDepth = 0.0F,
+                    .maxDepth = 1.0F},
+       .scissor = {.offset = {0, 0}, .extent = context.swapchainInfo.extent},
+       .clearValues =
+           {
+               {.color = {{0.0F, 0.0F, 0.0F, 1.0F}}},
+           },
+       .bindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+       .blendModes = {{Graphics::BlendMode{
+           .enabled = false,
+           .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
+           .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+           .colorBlendOp = VK_BLEND_OP_ADD,
+           .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+           .dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+           .alphaBlendOp = VK_BLEND_OP_ADD,
+       }}},
+       .resourceBindings =
+           {
+               {
+                   .resource = swapchainHandle,
+                   .location = 0,
+                   .type = Graphics::Rendergraph::BindingType::Attachment,
+               },
+           },
+       .vertexShader = vertexShader,
+       .fragmentShader = fragmentShader,
+       .executeFunction =
+           [](VkCommandBuffer cmd, Graphics::GraphicsContext &context,
+              Graphics::Rendergraph::RenderGraph &graph) -> void {
+         auto &meshes = Program::GetMeshes();
+         if (meshes.empty()) {
+           return;
+         }
+
+         auto &mesh = meshes[0];
+
+         mesh.Draw(context);
+       }});
+
+  auto graphErr = Graphics::Rendergraph::Compile(context, graph);
+
+  if (Error::IsError(graphErr)) {
+    std::cerr << "Failed to compile render graph: " << graphErr.message << "\n";
+    return graphErr;
+  }
 
   Graphics::VertexFormat format = {};
   format.Attributes = {
@@ -177,28 +209,9 @@ auto Load(Graphics::GraphicsContext &context) -> Error::Error {
 
   auto mesh = meshResult.value();
 
-  GetMeshes().push_back(mesh);
+  GetMeshes().emplace_back(mesh);
 
   std::cout << "Mesh created successfully." << "\n";
-
-  VkAttachmentDescription colorAttachment = {};
-  colorAttachment.format = context.swapchainInfo.format;
-  colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
-  colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-  colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-  colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-  colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-  colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-  colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-
-  VkAttachmentReference colorAttachmentRef = {};
-  colorAttachmentRef.attachment = 0;
-  colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-  VkSubpassDescription subpass = {};
-  subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-  subpass.colorAttachmentCount = 1;
-  subpass.pColorAttachments = &colorAttachmentRef;
 
   // Create pipeline
   VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
@@ -296,19 +309,24 @@ auto Load(Graphics::GraphicsContext &context) -> Error::Error {
   std::cout << "Creating shader stages..." << "\n";
 
   std::vector<VkPipelineShaderStageCreateInfo> shaderStages = {};
-  shaderStages.push_back({
+
+  VkPipelineShaderStageCreateInfo vertCreateInfo = {
       .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
       .stage = VK_SHADER_STAGE_VERTEX_BIT,
       .module = vertexShader.module,
       .pName = "main",
-  });
+  };
 
-  shaderStages.push_back({
+  shaderStages.emplace_back(vertCreateInfo);
+
+  VkPipelineShaderStageCreateInfo fragCreateInfo = {
       .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
       .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
       .module = fragmentShader.module,
       .pName = "main",
-  });
+  };
+
+  shaderStages.emplace_back(fragCreateInfo);
 
   VkPipelineRenderingCreateInfo renderingCreateInfo = {};
   renderingCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
@@ -349,12 +367,28 @@ auto Update(double deltaTime) -> Error::Error {
 }
 
 auto Draw(Graphics::GraphicsContext &context) -> Error::Error {
-  Graphics::SetCanvas(context, {}, nullptr);
-  vkCmdBindPipeline(Graphics::GetCommandBuffer(context, 0),
-                    VK_PIPELINE_BIND_POINT_GRAPHICS, GetPipeline());
-  for (auto &mesh : GetMeshes()) {
-    mesh.Draw(context);
-  }
+  // Graphics::SetCanvas(context, {}, nullptr);
+  // vkCmdBindPipeline(Graphics::GetCommandBuffer(context, 0),
+  //                   VK_PIPELINE_BIND_POINT_GRAPHICS, GetPipeline());
+  // for (auto &mesh : GetMeshes()) {
+  //   mesh.Draw(context);
+  // }
+
+  auto handle = GetSwapchainHandleIndex();
+  auto swapchainIndex = context.swapchainImageIndex;
+  auto texture = context.swapchainInfo.textures[swapchainIndex];
+  auto &graph = GetRenderGraph();
+
+  graph.resources[handle].info = Graphics::Rendergraph::TextureInfo{
+      .imported = true,
+      .external =
+          Graphics::Rendergraph::ImportedTexture{
+              .texture = texture,
+          },
+  };
+
+  Graphics::Rendergraph::Execute(context, graph,
+                                 Graphics::GetCommandBuffer(context, 0));
 
   return Error::Success();
 }

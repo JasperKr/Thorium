@@ -136,6 +136,38 @@ auto Create2D(GraphicsContext &context, TextureCreationInfo info)
   return texture;
 }
 
+auto FromSwapchainTexture(GraphicsContext &context, VkImage swapchainImage,
+                          VkFormat format, uint32_t width, uint32_t height)
+    -> tl::expected<Texture, Error::Error> {
+
+  Texture texture = {};
+
+  texture.image = swapchainImage;
+  texture.format = format;
+  texture.size = VkExtent3D{width, height, 1};
+  texture.type = TEXTURE_TYPE_2D;
+
+  VkImageViewCreateInfo viewInfo = {};
+  viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+  viewInfo.image = texture.image;
+  viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+  viewInfo.format = format;
+  viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  viewInfo.subresourceRange.baseMipLevel = 0;
+  viewInfo.subresourceRange.levelCount = 1;
+  viewInfo.subresourceRange.baseArrayLayer = 0;
+  viewInfo.subresourceRange.layerCount = 1;
+
+  Error::Error error = Error::FromVkResult(
+      vkCreateImageView(context.device, &viewInfo, nullptr, &texture.view));
+
+  if (Error::IsError(error)) {
+    return tl::unexpected(error);
+  }
+
+  return texture;
+}
+
 auto CreateCubeMap(GraphicsContext &context, TextureCreationInfo info)
     -> tl::expected<Texture, Error::Error> {
 

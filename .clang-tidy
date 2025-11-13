@@ -8,6 +8,7 @@ Checks: >
   performance-*,
   portability-*,
   readability-*,
+  concurrency-*,
 
   -cppcoreguidelines-pro-type-reinterpret-cast
   -hicpp-no-array-decay

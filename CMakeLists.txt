@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 project(Thorium LANGUAGES C CXX)
 
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_C_STANDARD 11)
 
@@ -101,7 +101,6 @@ add_executable(Thorium
     src/program.cpp
 
     src/Graphics/graphics.cpp
-    src/Graphics/pipeline.cpp
     src/Graphics/texture.cpp
     src/Graphics/buffer.cpp
     src/Graphics/render.cpp
@@ -122,6 +121,7 @@ target_include_directories(Thorium
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
         ${CMAKE_CURRENT_SOURCE_DIR}/include
+    SYSTEM PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/external/physfs/src
         ${Vulkan_INCLUDE_DIRS}   # now valid
 )

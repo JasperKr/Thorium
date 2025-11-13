@@ -1,4 +1,5 @@
 #include "rendergraph.hpp"
+#include "Graphics/mesh.hpp"
 #include "Modules/error.hpp"
 #include "graphics.hpp"
 #include "texture.hpp"
@@ -29,11 +30,11 @@ auto AddRenderPass(RenderGraph &graph, const RenderPassDescriptor &descriptor)
     auto &resource = graph.resources[access.resource];
 
     if (access.accessType == AccessType::Read) {
-      pass.readResources.push_back(access.resource);
+      pass.readResources.emplace_back(access.resource);
     } else if (access.accessType == AccessType::Write) {
-      pass.writeResources.push_back(access.resource);
+      pass.writeResources.emplace_back(access.resource);
     } else if (access.accessType == (AccessType::Read | AccessType::Write)) {
-      pass.readwriteResources.push_back(access.resource);
+      pass.readwriteResources.emplace_back(access.resource);
     }
   }
 
@@ -44,7 +45,12 @@ auto AddRenderPass(RenderGraph &graph, const RenderPassDescriptor &descriptor)
   pass.state.blendModes = descriptor.blendModes;
   pass.resourceBindings = descriptor.resourceBindings;
 
-  graph.passes.push_back(pass);
+  pass.vertexShader = descriptor.vertexShader;
+  pass.fragmentShader = descriptor.fragmentShader;
+  pass.computeShader = descriptor.computeShader;
+  pass.executeFunction = descriptor.executeFunction;
+
+  graph.passes.emplace_back(pass);
 
   return pass.handle;
 }
@@ -198,10 +204,11 @@ auto inline StartNodeScheduling(RenderGraph &graph,
       cost += graph.resources[resHandle].cost;
     }
 
-    availablePasses.push_back(NodeCost{.handle = passHandle,
-                                       .cost = cost,
-                                       .childrenCount = static_cast<uint32_t>(
-                                           childRenderpass.children.size())});
+    availablePasses.emplace_back(
+        NodeCost{.handle = passHandle,
+                 .cost = cost,
+                 .childrenCount =
+                     static_cast<uint32_t>(childRenderpass.children.size())});
   }
 }
 
@@ -238,12 +245,12 @@ auto inline ScheduleNodes(RenderGraph &graph) -> void {
     // We cannot do this in the previous loop since compiledPasses is being
     // built And we do not know the indices beforehand
     for (const auto &parentHandle : thisPass.pass.parents) {
-      graph.compiledPasses[parentHandle].children.push_back(
+      graph.compiledPasses[parentHandle].children.emplace_back(
           static_cast<ResourceHandle>(thisIndex));
     }
 
     // Add to compiled passes
-    graph.compiledPasses.push_back(thisPass);
+    graph.compiledPasses.emplace_back(thisPass);
     scheduledPasses.insert(nextPassHandle);
 
     // Enqueue children
@@ -270,7 +277,7 @@ auto inline ScheduleNodes(RenderGraph &graph) -> void {
       // also make the cost an int32_t then to allow negative costs, if we
       // deallocate more than we allocate
 
-      availablePasses.push_back(NodeCost{
+      availablePasses.emplace_back(NodeCost{
           .handle = childHandle,
           .cost = cost,
           .childrenCount = static_cast<uint32_t>(childPass.children.size())});
@@ -325,12 +332,12 @@ auto BuildVirtualRoot(RenderGraph &graph) -> void {
 
   for (size_t i = 0; i < graph.passes.size(); i++) {
     if (!HasReadDependency(graph, i)) {
-      graph.virtualRoot.children.push_back(static_cast<ResourceHandle>(i));
+      graph.virtualRoot.children.emplace_back(static_cast<ResourceHandle>(i));
     }
   }
 
   graph.compiledPasses.clear();
-  graph.compiledPasses.push_back(graph.virtualRoot);
+  graph.compiledPasses.emplace_back(graph.virtualRoot);
 }
 
 auto BuildGraph(RenderGraph &graph) -> void {
@@ -352,8 +359,10 @@ auto BuildGraph(RenderGraph &graph) -> void {
         for (auto written : other.GetResources(AccessType::Write)) {
           if (written == read) {
             // Found a dependency, add as child
-            graph.passes[j].children.push_back(static_cast<ResourceHandle>(i));
-            graph.passes[i].parents.push_back(static_cast<ResourceHandle>(j));
+            graph.passes[j].children.emplace_back(
+                static_cast<ResourceHandle>(i));
+            graph.passes[i].parents.emplace_back(
+                static_cast<ResourceHandle>(j));
           }
         }
       }
@@ -361,7 +370,7 @@ auto BuildGraph(RenderGraph &graph) -> void {
   }
 }
 
-auto inline ValidateCompiledGraph(const RenderGraph &graph)
+[[nodiscard]] auto inline ValidateCompiledGraph(const RenderGraph &graph)
     -> tl::expected<bool, Error::Error> {
   // For now just check if the last pass does not write any transient resources
   // It can write persistent resources since they live beyond the graph
@@ -438,8 +447,9 @@ auto inline CalculateResourceLifetimes(RenderGraph &graph) -> void {
   }
 }
 
-auto inline ReserveBlock(GraphicsContext &context, RenderGraph &graph,
-                         uint32_t size = 0) -> Error::Error {
+[[nodiscard]] auto inline ReserveBlock(GraphicsContext &context,
+                                       RenderGraph &graph, uint32_t size = 0)
+    -> Error::Error {
   MemoryBlock block = {};
   block.size = size == 0 ? graph.memoryBlockSize : size;
   block.offset = 0;
@@ -454,7 +464,7 @@ auto inline ReserveBlock(GraphicsContext &context, RenderGraph &graph,
     return error;
   }
 
-  graph.memoryBlocks.push_back(block);
+  graph.memoryBlocks.emplace_back(block);
 
   return Error::Success();
 }
@@ -468,8 +478,9 @@ struct AllocationInfo {
 // Try to allocate resource in existing blocks, or create new block if needed
 // If a resource is bigger than the default block size, a larger block will be
 // created to fit it
-auto inline AllocateResourceInBlocks(GraphicsContext &context,
-                                     RenderGraph &graph, AllocationInfo info)
+[[nodiscard]] auto inline AllocateResourceInBlocks(GraphicsContext &context,
+                                                   RenderGraph &graph,
+                                                   AllocationInfo info)
     -> Error::Error {
 
   VmaVirtualAllocationCreateInfo allocInfo{};
@@ -649,13 +660,13 @@ auto inline CompileResourceTimeline(RenderGraph &graph) -> void {
       continue; // skip invalid resources, e.g. never used
     }
 
-    eventsPerPass[resource.usageLifetime.firstUseIndex].push_back(
+    eventsPerPass[resource.usageLifetime.firstUseIndex].emplace_back(
         ResourceTimelineEntry{
             .resourceHandle = resource.handle,
             .passHandle = resource.usageLifetime.firstUseIndex,
             .type = ResourceTimelineEntryType::Allocate,
         });
-    eventsPerPass[resource.usageLifetime.lastUseIndex].push_back(
+    eventsPerPass[resource.usageLifetime.lastUseIndex].emplace_back(
         ResourceTimelineEntry{
             .resourceHandle = resource.handle,
             .passHandle = resource.usageLifetime.lastUseIndex,
@@ -689,11 +700,11 @@ auto inline CompileResourceTimeline(RenderGraph &graph) -> void {
 
     // Add allocation entries
     for (const auto &resource : resources) {
-      graph.compiledResources.push_back(resource);
+      graph.compiledResources.emplace_back(resource);
       if (resource.type == ResourceTimelineEntryType::Allocate) {
-        graph.compiledPasses[passIndex].allocations.push_back(resource);
+        graph.compiledPasses[passIndex].allocations.emplace_back(resource);
       } else {
-        graph.compiledPasses[passIndex].deallocations.push_back(resource);
+        graph.compiledPasses[passIndex].deallocations.emplace_back(resource);
       }
     }
   }
@@ -717,8 +728,16 @@ auto inline CompileResourceTimeline(RenderGraph &graph) -> void {
   std::cout << "----------------------------" << "\n";
 }
 
-auto inline ConfigurePassAttachments(const TextureInfo &info, RenderPass &pass,
-                                     const ResourceBinding &binding) -> void {
+struct AttachmentInfo {
+  VkAttachmentLoadOp loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+  VkAttachmentStoreOp storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+  VkClearValue clearValue{};
+  BlendMode blendMode;
+};
+
+auto inline GetPassAttachmentInfo(const RenderPass &pass,
+                                  const ResourceBinding &binding)
+    -> AttachmentInfo {
   size_t blendmodeCount = pass.state.blendModes.size();
   size_t clearColorCount = pass.state.clearValues.size();
 
@@ -745,34 +764,12 @@ auto inline ConfigurePassAttachments(const TextureInfo &info, RenderPass &pass,
     loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
   }
 
-  VkAttachmentDescription attachmentDesc = {};
-  if (info.imported) {
-    attachmentDesc.format = info.external.texture.format;
-    attachmentDesc.samples = VK_SAMPLE_COUNT_1_BIT;
-  } else {
-    // We do not support multisampled attachments for now
-    // Make sure the sample count is 1 to not confuse the user when it doesn't
-    // work
-    assert(info.transient.samples == VK_SAMPLE_COUNT_1_BIT);
+  VkAttachmentStoreOp storeOp = VK_ATTACHMENT_STORE_OP_STORE;
 
-    attachmentDesc.format = info.transient.format;
-    attachmentDesc.samples = VK_SAMPLE_COUNT_1_BIT;
-  }
-  attachmentDesc.loadOp = loadOp;
-  attachmentDesc.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-  attachmentDesc.stencilLoadOp = loadOp;
-  attachmentDesc.stencilStoreOp = VK_ATTACHMENT_STORE_OP_STORE;
-  attachmentDesc.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-  attachmentDesc.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-  size_t descriptionIndex = pass.state.attachmentDescriptions.size();
-  pass.state.attachmentDescriptions.push_back(attachmentDesc);
-
-  VkAttachmentReference attachmentRef = {};
-  attachmentRef.attachment = descriptionIndex;
-  attachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-  pass.state.attachmentReferences[binding.location] = attachmentRef;
+  return AttachmentInfo{.loadOp = loadOp,
+                        .storeOp = storeOp,
+                        .clearValue = clearValue,
+                        .blendMode = blendMode};
 }
 
 auto inline GetDescriptorType(const Resource &resource,
@@ -815,6 +812,9 @@ auto inline ConfigurePassDescriptors(GraphicsContext &context,
 
     if (resource.type == Type::Texture) {
       const auto &texInfo = std::get<TextureInfo>(resource.info);
+      if (binding.type == BindingType::Attachment) {
+        continue; // Skip raster attachments
+      }
 
       // Binding type allows:
       // Sampled: read-only sampler2D
@@ -850,50 +850,55 @@ auto inline ConfigurePassDescriptors(GraphicsContext &context,
 
     vkUpdateDescriptorSets(context.device, 1, &writeDesc, 0, nullptr);
 
-    pass.state.descriptorWrites.push_back(writeDesc);
+    pass.pass.state.descriptorWrites.emplace_back(writeDesc);
   }
 }
 
-auto inline CreateGraphicsPipeline(GraphicsContext &context, RenderGraph &graph,
-                                   CompiledPass &compiledPass) -> Error::Error {
+auto inline ConfigureGraphDescriptors(GraphicsContext &context,
+                                      RenderGraph &graph) -> void {
+  // For each compiled pass, configure descriptors
+  for (auto &compiledPass : graph.compiledPasses) {
+    for (const auto &binding : compiledPass.pass.resourceBindings) {
+      ConfigurePassDescriptors(context, graph, compiledPass, binding);
+    }
+  }
+}
+
+[[nodiscard]] auto inline CreateGraphicsPipeline(GraphicsContext &context,
+                                                 RenderGraph &graph,
+                                                 CompiledPass &compiledPass)
+    -> Error::Error {
   // Create graphics pipeline for the pass
   // For now, we will create a very basic pipeline with no shaders
   // In a real implementation, shaders would be provided per pass
 
-  if (compiledPass.state.bindPoint != VK_PIPELINE_BIND_POINT_GRAPHICS) {
+  if (compiledPass.pass.state.bindPoint != VK_PIPELINE_BIND_POINT_GRAPHICS) {
     return Error::Create(
         "Cannot create graphics pipeline for non-graphics pass");
-  }
-
-  if (compiledPass.pass.vertexShader == nullptr) {
-    return Error::Create(
-        "Cannot create graphics pipeline without a vertex shader");
-  }
-
-  if (compiledPass.pass.fragmentShader == nullptr) {
-    return Error::Create(
-        "Cannot create graphics pipeline without a fragment shader");
   }
 
   std::array<VkPipelineShaderStageCreateInfo, 2> shaderStages = {};
 
   shaderStages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
   shaderStages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
-  shaderStages[0].module = compiledPass.pass.vertexShader->module;
+  shaderStages[0].module = compiledPass.pass.vertexShader.module;
   shaderStages[0].pName = "main";
 
   shaderStages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
   shaderStages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-  shaderStages[1].module = compiledPass.pass.fragmentShader->module;
+  shaderStages[1].module = compiledPass.pass.fragmentShader.module;
   shaderStages[1].pName = "main";
+
+  auto vertexformat = Graphics::PredefinedVertexFormats.at(VertexFormats::TEST);
 
   VkPipelineVertexInputStateCreateInfo vertexInputInfo = {};
   vertexInputInfo.sType =
       VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-  vertexInputInfo.vertexBindingDescriptionCount = 0;
-  vertexInputInfo.pVertexBindingDescriptions = nullptr;
-  vertexInputInfo.vertexAttributeDescriptionCount = 0;
-  vertexInputInfo.pVertexAttributeDescriptions = nullptr;
+  vertexInputInfo.vertexBindingDescriptionCount = vertexformat.Bindings.size();
+  vertexInputInfo.pVertexBindingDescriptions = vertexformat.Bindings.data();
+  vertexInputInfo.vertexAttributeDescriptionCount =
+      vertexformat.Attributes.size();
+  vertexInputInfo.pVertexAttributeDescriptions = vertexformat.Attributes.data();
   VkPipelineInputAssemblyStateCreateInfo inputAssembly = {};
 
   inputAssembly.sType =
@@ -904,9 +909,9 @@ auto inline CreateGraphicsPipeline(GraphicsContext &context, RenderGraph &graph,
   VkPipelineViewportStateCreateInfo viewportState = {};
   viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
   viewportState.viewportCount = 1;
-  viewportState.pViewports = &compiledPass.state.viewport;
+  viewportState.pViewports = &compiledPass.pass.state.viewport;
   viewportState.scissorCount = 1;
-  viewportState.pScissors = &compiledPass.state.scissor;
+  viewportState.pScissors = &compiledPass.pass.state.scissor;
 
   VkPipelineRasterizationStateCreateInfo rasterizer = {};
   rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
@@ -917,25 +922,125 @@ auto inline CreateGraphicsPipeline(GraphicsContext &context, RenderGraph &graph,
   rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
   rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
   rasterizer.depthBiasEnable = VK_FALSE;
+
   VkPipelineMultisampleStateCreateInfo multisampling = {};
   multisampling.sType =
       VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
   multisampling.sampleShadingEnable = VK_FALSE;
   multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 
-  VkPipelineColorBlendAttachmentState colorBlendAttachment = {};
-  colorBlendAttachment.colorWriteMask =
-      static_cast<uint32_t>(VK_COLOR_COMPONENT_R_BIT) |
-      static_cast<uint32_t>(VK_COLOR_COMPONENT_G_BIT) |
-      static_cast<uint32_t>(VK_COLOR_COMPONENT_B_BIT) |
-      static_cast<uint32_t>(VK_COLOR_COMPONENT_A_BIT);
+  std::vector<VkPipelineColorBlendAttachmentState> blendAttachments{};
+  uint32_t blendModeCount = 0;
+
+  // Loop over attachments and use GetPassAttachmentInfo to fetch blend modes
+  for (const auto &binding : compiledPass.pass.resourceBindings) {
+    if (binding.type == BindingType::Attachment) {
+      // Allocate blend attachment
+      AttachmentInfo attachInfo =
+          GetPassAttachmentInfo(compiledPass.pass, binding);
+
+      VkPipelineColorBlendAttachmentState blendAttachment = {};
+      blendAttachment.blendEnable =
+          attachInfo.blendMode.enabled ? VK_TRUE : VK_FALSE;
+      blendAttachment.srcColorBlendFactor =
+          attachInfo.blendMode.srcColorBlendFactor;
+      ;
+      blendAttachment.dstColorBlendFactor =
+          attachInfo.blendMode.dstColorBlendFactor;
+      blendAttachment.colorBlendOp = attachInfo.blendMode.colorBlendOp;
+      blendAttachment.srcAlphaBlendFactor =
+          attachInfo.blendMode.srcAlphaBlendFactor;
+      blendAttachment.dstAlphaBlendFactor =
+          attachInfo.blendMode.dstAlphaBlendFactor;
+      blendAttachment.alphaBlendOp = attachInfo.blendMode.alphaBlendOp;
+      blendAttachment.colorWriteMask =
+          static_cast<uint32_t>(VK_COLOR_COMPONENT_R_BIT) |
+          static_cast<uint32_t>(VK_COLOR_COMPONENT_G_BIT) |
+          static_cast<uint32_t>(VK_COLOR_COMPONENT_B_BIT) |
+          static_cast<uint32_t>(VK_COLOR_COMPONENT_A_BIT);
+
+      blendAttachments.resize(binding.location + 1);
+      blendModeCount++;
+      blendAttachments[binding.location] = blendAttachment;
+    }
+  }
 
   VkPipelineColorBlendStateCreateInfo colorBlending = {};
   colorBlending.sType =
       VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
   colorBlending.logicOpEnable = VK_FALSE;
-  colorBlending.attachmentCount = 1;
-  colorBlending.pAttachments = &colorBlendAttachment;
+  colorBlending.attachmentCount = blendModeCount;
+  colorBlending.pAttachments = blendAttachments.data();
+
+  VkPipelineRenderingCreateInfo renderingCreateInfo = {};
+  renderingCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
+
+  // Count color attachments
+  uint32_t colorAttachmentCount = 0;
+  bool hasDepthAttachment = false;
+  bool hasStencilAttachment = false;
+  uint32_t maxLocation = 0;
+
+  for (const auto &binding : compiledPass.pass.resourceBindings) {
+    if (binding.type == BindingType::Attachment) {
+      auto &resource = graph.resources[binding.resource];
+      if (resource.type == Type::Texture) {
+        const auto &texInfo = std::get<TextureInfo>(resource.info);
+        if (Texture::IsDepthTexture(texInfo.transient.format)) {
+          hasDepthAttachment = true;
+        } else if (Texture::IsStencilTexture(texInfo.transient.format)) {
+          hasStencilAttachment = true;
+        } else {
+          colorAttachmentCount++;
+          maxLocation =
+              (std::max)(maxLocation, static_cast<uint32_t>(binding.location));
+        }
+      }
+    }
+  }
+
+  renderingCreateInfo.colorAttachmentCount = colorAttachmentCount;
+  std::cout << "Creating graphics pipeline with " << colorAttachmentCount
+            << " color attachments."
+            << "\n";
+
+  auto formats = std::vector<VkFormat>(maxLocation + 1, VK_FORMAT_UNDEFINED);
+
+  for (const auto &binding : compiledPass.pass.resourceBindings) {
+    if (binding.type == BindingType::Attachment) {
+      auto &resource = graph.resources[binding.resource];
+      const auto &texInfo = std::get<TextureInfo>(resource.info);
+
+      if (texInfo.imported) {
+        formats[binding.location] = texInfo.external.texture.format;
+        std::cout << "  Using imported format for attachment at location "
+                  << binding.location << ": "
+                  << static_cast<uint32_t>(formats[binding.location]) << "\n";
+      } else {
+        formats[binding.location] = texInfo.transient.format;
+        std::cout << "  Using transient format for attachment at location "
+                  << binding.location << ": "
+                  << static_cast<uint32_t>(formats[binding.location]) << "\n";
+      }
+    }
+  }
+
+  renderingCreateInfo.pColorAttachmentFormats = formats.data();
+
+  VkPipelineDynamicStateCreateInfo dynamicState = {};
+  dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+  dynamicState.dynamicStateCount = 0;
+  dynamicState.pDynamicStates = nullptr;
+
+  VkPipelineDepthStencilStateCreateInfo depthStencil = {};
+  depthStencil.sType =
+      VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+  depthStencil.depthTestEnable = VK_TRUE;
+  depthStencil.depthWriteEnable = VK_TRUE;
+  depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
+  depthStencil.depthBoundsTestEnable = VK_FALSE;
+  depthStencil.stencilTestEnable = VK_FALSE;
+
   VkGraphicsPipelineCreateInfo pipelineInfo = {};
   pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
   pipelineInfo.stageCount = static_cast<uint32_t>(shaderStages.size());
@@ -946,13 +1051,16 @@ auto inline CreateGraphicsPipeline(GraphicsContext &context, RenderGraph &graph,
   pipelineInfo.pRasterizationState = &rasterizer;
   pipelineInfo.pMultisampleState = &multisampling;
   pipelineInfo.pColorBlendState = &colorBlending;
-  pipelineInfo.layout = compiledPass.state.pipelineLayout;
-  pipelineInfo.renderPass = VK_NULL_HANDLE; // To be set during actual execution
+  pipelineInfo.pDepthStencilState = &depthStencil;
+  pipelineInfo.pDynamicState = &dynamicState;
+  pipelineInfo.layout = compiledPass.pass.state.pipelineLayout;
+  pipelineInfo.renderPass = VK_NULL_HANDLE; // Not needed
   pipelineInfo.subpass = 0;
+  pipelineInfo.pNext = &renderingCreateInfo;
 
   auto error = Error::FromVkResult(vkCreateGraphicsPipelines(
       context.device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr,
-      &compiledPass.state.pipeline));
+      &compiledPass.pass.state.pipeline));
 
   if (Error::IsError(error)) {
     return error;
@@ -961,30 +1069,27 @@ auto inline CreateGraphicsPipeline(GraphicsContext &context, RenderGraph &graph,
   return Error::Success();
 }
 
-auto inline CreateComputePipeline(GraphicsContext &context, RenderGraph &graph,
-                                  CompiledPass &compiledPass) -> Error::Error {
-  if (compiledPass.state.bindPoint != VK_PIPELINE_BIND_POINT_COMPUTE) {
+[[nodiscard]] auto inline CreateComputePipeline(GraphicsContext &context,
+                                                RenderGraph &graph,
+                                                CompiledPass &compiledPass)
+    -> Error::Error {
+  if (compiledPass.pass.state.bindPoint != VK_PIPELINE_BIND_POINT_COMPUTE) {
     return Error::Create("Cannot create compute pipeline for non-compute pass");
-  }
-
-  if (compiledPass.pass.computeShader == nullptr) {
-    return Error::Create(
-        "Cannot create compute pipeline without a compute shader");
   }
 
   VkPipelineShaderStageCreateInfo shaderStage = {};
   shaderStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
   shaderStage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-  shaderStage.module = compiledPass.pass.computeShader->module;
+  shaderStage.module = compiledPass.pass.computeShader.module;
   shaderStage.pName = "main";
 
   VkComputePipelineCreateInfo pipelineInfo = {};
   pipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
   pipelineInfo.stage = shaderStage;
-  pipelineInfo.layout = compiledPass.state.pipelineLayout;
+  pipelineInfo.layout = compiledPass.pass.state.pipelineLayout;
   auto error = Error::FromVkResult(
       vkCreateComputePipelines(context.device, VK_NULL_HANDLE, 1, &pipelineInfo,
-                               nullptr, &compiledPass.state.pipeline));
+                               nullptr, &compiledPass.pass.state.pipeline));
 
   if (Error::IsError(error)) {
     return error;
@@ -993,9 +1098,13 @@ auto inline CreateComputePipeline(GraphicsContext &context, RenderGraph &graph,
   return Error::Success();
 }
 
-auto inline CreatePassPipelines(GraphicsContext &context, RenderGraph &graph)
+[[nodiscard]] auto inline CreatePassPipelines(GraphicsContext &context,
+                                              RenderGraph &graph)
     -> Error::Error {
-  for (auto &compiledPass : graph.compiledPasses) {
+  for (size_t passIndex = 1; passIndex < graph.compiledPasses.size();
+       passIndex++) {
+    auto &compiledPass = graph.compiledPasses[passIndex];
+
     VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     pipelineLayoutInfo.setLayoutCount = 0;
@@ -1010,18 +1119,16 @@ auto inline CreatePassPipelines(GraphicsContext &context, RenderGraph &graph)
       return error;
     }
 
-    compiledPass.state.pipelineLayout = pipelineLayout;
-    if (compiledPass.state.bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS) {
+    compiledPass.pass.state.pipelineLayout = pipelineLayout;
+    if (compiledPass.pass.state.bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS) {
       auto error = CreateGraphicsPipeline(context, graph, compiledPass);
 
       if (Error::IsError(error)) {
         return error;
       }
 
-      // vkCreateGraphicsPipelines(context.device, VK_NULL_HANDLE, 1,
-      //                           error.value().data(), nullptr,
-      //                           &compiledPass.state.pipeline);
-    } else if (compiledPass.state.bindPoint == VK_PIPELINE_BIND_POINT_COMPUTE) {
+    } else if (compiledPass.pass.state.bindPoint ==
+               VK_PIPELINE_BIND_POINT_COMPUTE) {
       auto error = CreateComputePipeline(context, graph, compiledPass);
 
       if (Error::IsError(error)) {
@@ -1035,67 +1142,12 @@ auto inline CreatePassPipelines(GraphicsContext &context, RenderGraph &graph)
   return Error::Success();
 }
 
-auto inline ConfigureGraphAttachments(GraphicsContext &context,
-                                      RenderGraph &graph) -> void {
-  // For each pass, configure attachment descriptions and references
-
-  for (auto &compiledPass : graph.compiledPasses) {
-    // For each write resource, if it's a texture, add as attachment
-
-    size_t blendmodeCount = compiledPass.state.blendModes.size();
-    size_t clearColorCount = compiledPass.state.clearValues.size();
-
-    // Allow default blend mode if none are provided
-    // Also allow per-attachment blend modes
-    // Or, one blend mode applied to all attachments
-    assert(blendmodeCount == 0 ||
-           blendmodeCount == compiledPass.pass.writeResources.size() ||
-           blendmodeCount == 1);
-    // Same logic for clear colors
-    assert(clearColorCount == 0 ||
-           clearColorCount == compiledPass.pass.writeResources.size() ||
-           clearColorCount == 1);
-
-    // Calculate Max location index used in resource bindings
-    uint32_t maxLocation = 0;
-    for (const auto &binding : compiledPass.resourceBindings) {
-      if (binding.type == BindingType::Attachment) {
-        maxLocation = (max<uint32_t>)(binding.location, maxLocation);
-      }
-    }
-
-    compiledPass.state.attachmentReferences.resize(maxLocation + 1);
-
-    for (int i = 0; i < compiledPass.resourceBindings.size(); i++) {
-      const auto &binding = compiledPass.resourceBindings[i];
-      const auto &resource = graph.resources[binding.resource];
-
-      if (binding.type == BindingType::Attachment) {
-        assert(resource.type == Type::Texture &&
-               "Only texture resources can be used as attachments");
-        const auto &texInfo = std::get<TextureInfo>(resource.info);
-        ConfigurePassAttachments(texInfo, compiledPass.pass, binding);
-      } else {
-        ConfigurePassDescriptors(context, graph, compiledPass, binding);
-      }
-    }
-
-    compiledPass.state.subpassDescription.colorAttachmentCount =
-        static_cast<uint32_t>(compiledPass.state.attachmentDescriptions.size());
-    compiledPass.state.subpassDescription.pColorAttachments =
-        compiledPass.state.attachmentReferences.data();
-
-    compiledPass.state.subpassDescription.pipelineBindPoint =
-        compiledPass.state.bindPoint;
-  }
-}
-
 auto inline ApplyDescriptorSets(RenderGraph &graph, CompiledPass &pass)
     -> void {
   std::vector<VkDescriptorSetLayoutBinding> bindings;
-  bindings.reserve(pass.state.descriptorWrites.size());
+  bindings.reserve(pass.pass.state.descriptorWrites.size());
 
-  for (auto &descriptorWrite : pass.state.descriptorWrites) {
+  for (auto &descriptorWrite : pass.pass.state.descriptorWrites) {
     VkDescriptorSetLayoutBinding binding{};
     binding.binding = descriptorWrite.dstBinding;
     binding.descriptorType = descriptorWrite.descriptorType;
@@ -1104,7 +1156,8 @@ auto inline ApplyDescriptorSets(RenderGraph &graph, CompiledPass &pass)
   }
 }
 
-auto inline BuildVirtualMemory(GraphicsContext &context, RenderGraph &graph)
+[[nodiscard]] auto inline BuildVirtualMemory(GraphicsContext &context,
+                                             RenderGraph &graph)
     -> Error::Error {
   // Loop over compiled resource timeline and allocate/deallocate as needed
 
@@ -1147,7 +1200,8 @@ auto inline BuildVirtualMemory(GraphicsContext &context, RenderGraph &graph)
   return Error::Success();
 }
 
-auto inline AllocateMemory(GraphicsContext &context, RenderGraph &graph)
+[[nodiscard]] auto inline AllocateBlockMemory(GraphicsContext &context,
+                                              RenderGraph &graph)
     -> Error::Error {
   // For each memory block, allocate a VkDeviceMemory
 
@@ -1174,7 +1228,102 @@ auto inline AllocateMemory(GraphicsContext &context, RenderGraph &graph)
   return Error::Success();
 }
 
-auto Compile(GraphicsContext &context, RenderGraph &graph) -> void {
+[[nodiscard]] auto inline AllocateResourceMemory(GraphicsContext &context,
+                                                 RenderGraph &graph,
+                                                 const ResourceHandle handle)
+    -> Error::Error {
+  // Find the virtual allocation for the resource
+  bool found = false;
+  VirtualAllocation *allocation = nullptr;
+  for (auto &alloc : graph.virtualAllocations) {
+    if (alloc.resource == handle) {
+      allocation = &alloc;
+      found = true;
+      break;
+    }
+  }
+
+  if (!found) {
+    return Error::Create("Resource allocation not found in render graph");
+  }
+
+  auto &block = graph.memoryBlocks[allocation->blockIndex];
+  auto &resource = graph.resources[handle];
+
+  if (resource.type == Type::Texture) {
+    auto &texInfo = std::get<TextureInfo>(resource.info);
+
+    VkImageCreateInfo imageInfo = {};
+    imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    imageInfo.imageType = VK_IMAGE_TYPE_2D;
+    imageInfo.format = texInfo.transient.format;
+    imageInfo.extent = texInfo.transient.extent;
+    imageInfo.mipLevels = texInfo.transient.mipLevels;
+    imageInfo.arrayLayers = texInfo.transient.arrayLayers;
+    imageInfo.samples = texInfo.transient.samples;
+    imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    imageInfo.usage = texInfo.transient.usage;
+    imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+    VkImage image = nullptr;
+    auto result = Error::FromVkResult(
+        vkCreateImage(context.device, &imageInfo, nullptr, &image));
+
+    if (Error::IsError(result)) {
+      return result;
+    }
+
+    result = Error::FromVkResult(vkBindImageMemory(
+        context.device, image, block.memory, allocation->offset));
+    if (Error::IsError(result)) {
+      return result;
+    }
+
+    texInfo.transient.image = image;
+
+    VkImageViewCreateInfo viewInfo = {};
+    viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    viewInfo.image = image;
+    viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    viewInfo.format = texInfo.transient.format;
+    viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    viewInfo.subresourceRange.baseMipLevel = 0;
+    viewInfo.subresourceRange.levelCount = texInfo.transient.mipLevels;
+    viewInfo.subresourceRange.baseArrayLayer = 0;
+    viewInfo.subresourceRange.layerCount = texInfo.transient.arrayLayers;
+
+    result = Error::FromVkResult(vkCreateImageView(
+        context.device, &viewInfo, nullptr, &texInfo.transient.view));
+  } else if (resource.type == Type::Buffer) {
+    auto &bufInfo = std::get<BufferInfo>(resource.info);
+
+    VkBufferCreateInfo bufferInfo = {};
+    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bufferInfo.size = bufInfo.transient.size;
+    bufferInfo.usage = bufInfo.transient.usage;
+    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    VkBuffer buffer = nullptr;
+    auto result = Error::FromVkResult(
+        vkCreateBuffer(context.device, &bufferInfo, nullptr, &buffer));
+
+    if (Error::IsError(result)) {
+      return result;
+    }
+
+    result = Error::FromVkResult(vkBindBufferMemory(
+        context.device, buffer, block.memory, allocation->offset));
+    if (Error::IsError(result)) {
+      return result;
+    }
+  }
+
+  return Error::Success();
+}
+
+[[nodiscard]] auto Compile(GraphicsContext &context, RenderGraph &graph)
+    -> Error::Error {
   // For each resource, calculate cost
 
   std::cout << "Compiling render graph..." << "\n";
@@ -1217,14 +1366,149 @@ auto Compile(GraphicsContext &context, RenderGraph &graph) -> void {
 
   auto validationResult = ValidateCompiledGraph(graph);
   if (Error::IsError(validationResult)) {
-    std::cerr << "Render graph validation error: "
-              << validationResult.error().message << "\n";
-    return;
+    return validationResult.error();
   }
 
   CompileResourceTimeline(graph);
-  BuildVirtualMemory(context, graph);
-  AllocateMemory(context, graph);
+  auto error = BuildVirtualMemory(context, graph);
+  if (Error::IsError(error)) {
+    return error;
+  }
+  error = AllocateBlockMemory(context, graph);
+  if (Error::IsError(error)) {
+    return error;
+  }
+
+  std::cout << "Allocated " << graph.memoryBlocks.size()
+            << " memory blocks for render graph." << "\n";
+
+  error = CreatePassPipelines(context, graph);
+  if (Error::IsError(error)) {
+    return error;
+  }
+
+  std::cout << "Created pipelines for render graph passes." << "\n";
+
+  ConfigureGraphDescriptors(context, graph);
+
+  std::cout << "Configured descriptors for render graph passes." << "\n";
+
+  return Error::Success();
+}
+
+auto BeginPassRendering(GraphicsContext &context, RenderGraph &graph,
+                        VkCommandBuffer commandBuffer,
+                        const CompiledPass &compiledPass) -> void {
+  // Calculate max binding index for color attachments
+  uint32_t maxColorAttachmentIndex = 0;
+  for (const auto &binding : compiledPass.pass.resourceBindings) {
+    if (binding.type == BindingType::Attachment) {
+      maxColorAttachmentIndex =
+          std::max(binding.location, maxColorAttachmentIndex);
+    }
+  }
+
+  std::vector<VkRenderingAttachmentInfo> colorAttachments;
+  colorAttachments.resize(maxColorAttachmentIndex + 1);
+
+  std::cout << "Max color attachment index: " << maxColorAttachmentIndex
+            << "\n";
+
+  bool hasDepthAttachment = false;
+  bool hasStencilAttachment = false;
+
+  for (const auto &binding : compiledPass.pass.resourceBindings) {
+    if (binding.type == BindingType::Attachment) {
+      const auto &resource = graph.resources[binding.resource];
+      AttachmentInfo attachInfo =
+          GetPassAttachmentInfo(compiledPass.pass, binding);
+
+      TextureInfo texInfo = std::get<TextureInfo>(resource.info);
+
+      if (Texture::IsDepthTexture(texInfo.transient.format)) {
+        hasDepthAttachment = true;
+        continue;
+      }
+
+      if (Texture::IsStencilTexture(texInfo.transient.format)) {
+        hasStencilAttachment = true;
+        continue;
+      }
+
+      VkRenderingAttachmentInfo colorAttach = {};
+      colorAttach.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+      colorAttach.loadOp = attachInfo.loadOp;
+      colorAttach.storeOp = attachInfo.storeOp;
+      colorAttach.clearValue = attachInfo.clearValue;
+
+      if (texInfo.imported) {
+        colorAttach.imageView = texInfo.external.texture.view;
+      } else {
+        colorAttach.imageView = texInfo.transient.view;
+      }
+
+      colorAttach.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+      colorAttach.resolveMode = VK_RESOLVE_MODE_NONE; // For multi-sampling
+      colorAttach.resolveImageView = VK_NULL_HANDLE;
+      colorAttach.resolveImageLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+      colorAttachments[binding.location] = colorAttach;
+    }
+  }
+
+  VkRenderingInfo renderingInfo = {};
+  renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+  renderingInfo.renderArea.offset = {
+      .x = static_cast<int32_t>(compiledPass.pass.state.viewport.x),
+      .y = static_cast<int32_t>(compiledPass.pass.state.viewport.y)};
+  renderingInfo.renderArea.extent = {
+      .width = static_cast<uint32_t>(compiledPass.pass.state.viewport.width),
+      .height = static_cast<uint32_t>(compiledPass.pass.state.viewport.height)};
+  renderingInfo.layerCount = 1;
+  renderingInfo.viewMask = 0;
+  renderingInfo.flags = 0;
+
+  renderingInfo.colorAttachmentCount =
+      static_cast<uint32_t>(colorAttachments.size());
+  renderingInfo.pColorAttachments = colorAttachments.data();
+  renderingInfo.pDepthAttachment = nullptr;
+  renderingInfo.pStencilAttachment = nullptr;
+
+  std::cout << "Beginning rendering, color attachments: "
+            << renderingInfo.colorAttachmentCount << "\n";
+
+  vkCmdBeginRendering(commandBuffer, &renderingInfo);
+}
+
+auto Execute(GraphicsContext &context, RenderGraph &graph,
+             VkCommandBuffer commandBuffer) -> void {
+  // For each compiled pass, record commands
+  for (size_t passIndex = 1; passIndex < graph.compiledPasses.size();
+       passIndex++) {
+    auto &compiledPass = graph.compiledPasses[passIndex];
+
+    if (compiledPass.pass.state.bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS) {
+      BeginPassRendering(context, graph, commandBuffer, compiledPass);
+    } else {
+      assert(compiledPass.pass.state.bindPoint ==
+             VK_PIPELINE_BIND_POINT_COMPUTE);
+    }
+
+    // Bind pipeline
+    vkCmdBindPipeline(commandBuffer, compiledPass.pass.state.bindPoint,
+                      compiledPass.pass.state.pipeline);
+
+    // vkCmdBindDescriptorSets(commandBuffer, compiledPass.pass.state.bindPoint,
+    //                         compiledPass.pass.state.pipelineLayout, 0, 0,
+    //                         nullptr, 0, nullptr);
+
+    compiledPass.pass.executeFunction(commandBuffer, context, graph);
+
+    if (compiledPass.pass.state.bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS) {
+      vkCmdEndRendering(commandBuffer);
+    }
+  }
 }
 
 auto AddTexture(RenderGraph &graph, const TextureDescriptor &descriptor)
@@ -1233,7 +1517,6 @@ auto AddTexture(RenderGraph &graph, const TextureDescriptor &descriptor)
   resource.handle = static_cast<ResourceHandle>(graph.resources.size());
   resource.lifetime = descriptor.lifetime;
   resource.type = Type::Texture;
-  resource.imported = false;
 
   TextureInfo texInfo = {};
 
@@ -1252,9 +1535,10 @@ auto AddTexture(RenderGraph &graph, const TextureDescriptor &descriptor)
   texResource.samples = VK_SAMPLE_COUNT_1_BIT;
 
   texInfo.transient = texResource;
+  texInfo.imported = false;
 
   resource.info = texInfo;
-  graph.resources.push_back(resource);
+  graph.resources.emplace_back(resource);
 
   return resource.handle;
 }
@@ -1265,7 +1549,6 @@ auto AddBuffer(RenderGraph &graph, BufferDescriptor descriptor)
   resource.handle = static_cast<ResourceHandle>(graph.resources.size());
   resource.lifetime = descriptor.lifetime;
   resource.type = Type::Buffer;
-  resource.imported = false;
 
   BufferInfo bufInfo = {};
 
@@ -1274,32 +1557,33 @@ auto AddBuffer(RenderGraph &graph, BufferDescriptor descriptor)
   bufResource.usage = descriptor.usage;
 
   bufInfo.transient = bufResource;
+  bufInfo.imported = false;
 
   resource.info = bufInfo;
-  graph.resources.push_back(resource);
+  graph.resources.emplace_back(resource);
 
   return resource.handle;
 }
 
-auto ImportTexture(RenderGraph &graph,
-                   const Graphics::Texture::Texture &texture)
-    -> ResourceHandle {
+auto ImportTexture(RenderGraph &graph, const Graphics::Texture::Texture texture,
+                   VkImageLayout initialLayout, // NOLINT
+                   VkImageLayout finalLayout) -> ResourceHandle {
   Resource resource = {};
   resource.handle = static_cast<ResourceHandle>(graph.resources.size());
   resource.lifetime = ResourceLifetime::Persistent;
   resource.type = Type::Texture;
-  resource.imported = true;
 
   TextureInfo texInfo = {};
 
   ImportedTexture importedTex = {};
   importedTex.texture = texture;
-  importedTex.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-  importedTex.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+  importedTex.initialLayout = initialLayout;
+  importedTex.finalLayout = finalLayout;
 
   texInfo.external = importedTex;
+  texInfo.imported = true;
   resource.info = texInfo;
-  graph.resources.push_back(resource);
+  graph.resources.emplace_back(resource);
 
   return resource.handle;
 }
@@ -1310,16 +1594,16 @@ auto ImportBuffer(RenderGraph &graph, const Graphics::Buffer &buffer)
   resource.handle = static_cast<ResourceHandle>(graph.resources.size());
   resource.lifetime = ResourceLifetime::Persistent;
   resource.type = Type::Buffer;
-  resource.imported = true;
 
   BufferInfo bufInfo = {};
+  bufInfo.imported = true;
 
   ImportedBuffer importedBuf = {};
   importedBuf.buffer = buffer;
 
   bufInfo.external = importedBuf;
   resource.info = bufInfo;
-  graph.resources.push_back(resource);
+  graph.resources.emplace_back(resource);
 
   return resource.handle;
 }

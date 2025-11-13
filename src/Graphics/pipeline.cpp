@@ -56,16 +56,6 @@ auto ComparePipelineStates(GraphicsState *stateA, GraphicsState *stateB)
     return 1;
   }
 
-  if (stateA->vertexShader != stateB->vertexShader) {
-    return 2;
-  }
-  if (stateA->fragmentShader != stateB->fragmentShader) {
-    return 2;
-  }
-  if (stateA->computeShader != stateB->computeShader) {
-    return 2;
-  }
-
   return 0;
 }
 

@@ -34,6 +34,9 @@ struct TextureCreationInfo {
 
 auto Create2D(GraphicsContext &context, TextureCreationInfo info)
     -> tl::expected<Texture, Error::Error>;
+auto FromSwapchainTexture(GraphicsContext &context, VkImage swapchainImage,
+                          VkFormat format, uint32_t width, uint32_t height)
+    -> tl::expected<Texture, Error::Error>;
 auto CreateCubeMap(GraphicsContext &context, TextureCreationInfo info)
     -> tl::expected<Texture, Error::Error>;
 auto CreateVolume(GraphicsContext &context, TextureCreationInfo info)

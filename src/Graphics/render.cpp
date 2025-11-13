@@ -216,7 +216,7 @@ auto Present_PostDraw(Graphics::GraphicsContext &context) -> Error::Error {
   */
 
   // End rendering
-  vkCmdEndRendering(GetCommandBuffer(context, 0));
+  // vkCmdEndRendering(GetCommandBuffer(context, 0));
 
   // Convert from COLOR_ATTACHMENT_OPTIMAL state to PRESENT_SRC_KHR
   TransitionColorToPresent(
