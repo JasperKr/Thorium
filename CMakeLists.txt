@@ -104,7 +104,6 @@ add_executable(Thorium
     src/Graphics/texture.cpp
     src/Graphics/buffer.cpp
     src/Graphics/render.cpp
-    src/Graphics/canvas.cpp
     src/Graphics/shader.cpp
     src/Graphics/rendergraph.cpp
 

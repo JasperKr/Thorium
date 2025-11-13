@@ -365,21 +365,6 @@ static auto CreateSwapchain(GraphicsContext &context) -> Error::Error {
   std::cout << "Created swapchain with " << context.swapchainInfo.imageCount
             << " images.\n";
 
-  // Create "Texture" wrappers for swapchain images
-  for (uint32_t i = 0; i < context.swapchainInfo.imageCount; i++) {
-    std::cout << "Format: " << context.swapchainInfo.format << "\n";
-    auto textureResult = Texture::FromSwapchainTexture(
-        context, context.swapchainInfo.images[i], context.swapchainInfo.format,
-        context.swapchainInfo.extent.width,
-        context.swapchainInfo.extent.height);
-
-    if (Error::IsError(textureResult)) {
-      return textureResult.error();
-    }
-
-    context.swapchainInfo.textures.emplace_back(textureResult.value());
-  }
-
   return Error::Success();
 }
 

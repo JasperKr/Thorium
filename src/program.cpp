@@ -41,6 +41,12 @@ static inline auto GetSwapchainHandleIndex() -> size_t & {
   return index;
 }
 
+static inline auto GetSwapchainTextures()
+    -> std::vector<Graphics::Texture::Texture> & {
+  static std::vector<Graphics::Texture::Texture> textures = {};
+  return textures;
+}
+
 auto Configuration(ApplicationConfig &config) -> Error::Error {
   config.Title = "Thorium Engine - Program Example";
 
@@ -92,11 +98,28 @@ auto Load(Graphics::GraphicsContext &context) -> Error::Error {
   GetShaders().emplace_back(vertexShader);
   GetShaders().emplace_back(fragmentShader);
 
+  // Create swapchain textures
+
+  auto &swapchainTextures = GetSwapchainTextures();
+  swapchainTextures.reserve(context.swapchainInfo.imageCount);
+
+  for (uint32_t i = 0; i < context.swapchainInfo.imageCount; i++) {
+    auto textureResult = Graphics::Texture::FromSwapchainTexture(
+        context, context.swapchainInfo.images[i], context.swapchainInfo.format,
+        context.swapchainInfo.extent.width,
+        context.swapchainInfo.extent.height);
+
+    if (Error::IsError(textureResult)) {
+      return textureResult.error();
+    }
+
+    swapchainTextures.emplace_back(textureResult.value());
+  }
+
   // Import swapchain texture
   // We will swap the texture pointer during rendering
   auto swapchainHandle = Graphics::Rendergraph::ImportTexture(
-      graph, context.swapchainInfo.textures[0],
-      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+      graph, swapchainTextures[0], VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
       VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
   GetSwapchainHandleIndex() = swapchainHandle;
@@ -376,7 +399,9 @@ auto Draw(Graphics::GraphicsContext &context) -> Error::Error {
 
   auto handle = GetSwapchainHandleIndex();
   auto swapchainIndex = context.swapchainImageIndex;
-  auto texture = context.swapchainInfo.textures[swapchainIndex];
+  auto &swapchainTextures = GetSwapchainTextures();
+
+  auto texture = swapchainTextures[swapchainIndex];
   auto &graph = GetRenderGraph();
 
   graph.resources[handle].info = Graphics::Rendergraph::TextureInfo{

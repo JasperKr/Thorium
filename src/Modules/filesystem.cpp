@@ -184,9 +184,6 @@ auto WriteFile(const std::string &path, std::string_view data) -> Error::Error {
 auto FileExists(const std::string &path) -> bool {
   return PHYSFS_exists(path.c_str()) != 0;
 }
-auto IsDirectory(const std::string &path) -> bool {
-  return PHYSFS_isDirectory(path.c_str()) != 0;
-}
 
 auto AddToSearchPath(const std::string &path, bool appendToPath)
     -> Error::Error {

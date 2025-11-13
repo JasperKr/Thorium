@@ -17,9 +17,8 @@
 
 #include <dbghelp.h>
 #elif defined(__linux__) || defined(__APPLE__) && defined(__MACH__)
+#include <cstdlib>
 #include <execinfo.h>
-#include <stdio.h>
-#include <stdlib.h>
 #endif
 
 namespace Error {
@@ -76,7 +75,7 @@ inline auto GetStackTrace() -> std::string {
     trace += std::string(symbols[i]) + "\n";
   }
 
-  free(symbols);
+  free(symbols); // NOLINT
   return trace;
 #endif
   return "Unable to get stack trace on this platform.";

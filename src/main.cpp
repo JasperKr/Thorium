@@ -1,4 +1,3 @@
-#include "Graphics/canvas.hpp"
 #include "Graphics/graphics.hpp"
 #include "Graphics/render.hpp"
 #include "Graphics/shader.hpp"
@@ -68,7 +67,6 @@ auto main() -> int {
   std::cout << "Program loaded successfully." << "\n";
 
   Graphics::InitializeGraphics(context);
-  Error::Error err = Graphics::SetCanvas(context, {}, nullptr);
 
   std::cout << "Entering main loop..." << "\n";
 

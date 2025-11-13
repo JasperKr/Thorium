@@ -16,9 +16,6 @@
 #include <vma/vk_mem_alloc.h>
 
 namespace Graphics {
-namespace Texture {
-struct Texture;
-}
 
 constexpr uint32_t FRAMES_IN_FLIGHT = 2;
 
@@ -41,7 +38,6 @@ struct SwapchainInfo {
   uint32_t imageCount;
   std::vector<VkImage> images;
   std::vector<VkImageView> imageViews;
-  std::vector<struct Texture::Texture> textures;
 };
 
 struct RuntimeInfo {
