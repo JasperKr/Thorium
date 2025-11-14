@@ -3,6 +3,7 @@
 #include "Graphics/mesh.hpp"
 #include "Graphics/rendergraph.hpp"
 #include "Graphics/shader.hpp"
+#include "Modules/Editor/imgui.hpp"
 #include "Modules/error.hpp"
 #include "Modules/timer.hpp"
 #include "vulkan/vulkan_core.h"
@@ -66,8 +67,8 @@ auto Load(Graphics::GraphicsContext &context) -> Error::Error {
         graph,
         {
             .format = VK_FORMAT_R8G8B8A8_UNORM,
-            .width = 1024,  // NOLINT
-            .height = 1024, // NOLINT
+            .width = context.swapchainInfo.extent.width,
+            .height = context.swapchainInfo.extent.height,
             .mipLevels = 1,
             .lifetime = Graphics::Rendergraph::ResourceLifetime::Transient,
             .usage =
@@ -132,7 +133,7 @@ auto Load(Graphics::GraphicsContext &context) -> Error::Error {
       {.resources =
            {
                {
-                   .resource = swapchainHandle,
+                   .resource = textureHandles.at(0),
                    .accessType = Graphics::Rendergraph::AccessType::Write,
                },
            },
@@ -163,7 +164,7 @@ auto Load(Graphics::GraphicsContext &context) -> Error::Error {
        .resourceBindings =
            {
                {
-                   .resource = swapchainHandle,
+                   .resource = textureHandles.at(0),
                    .location = 0,
                    .type = Graphics::Rendergraph::BindingType::Attachment,
                },
@@ -182,6 +183,16 @@ auto Load(Graphics::GraphicsContext &context) -> Error::Error {
 
          mesh.Draw(context);
        }});
+
+  Editor::Context imguiContext = {};
+
+  auto imguiErr = Editor::InitializeImGui(context, graph, rootHandle,
+                                          swapchainHandle, imguiContext);
+
+  if (Error::IsError(imguiErr)) {
+    std::cerr << "Failed to initialize ImGui: " << imguiErr.message << "\n";
+    return imguiErr;
+  }
 
   auto graphErr = Graphics::Rendergraph::Compile(context, graph);
 
@@ -234,152 +245,7 @@ auto Load(Graphics::GraphicsContext &context) -> Error::Error {
 
   GetMeshes().emplace_back(mesh);
 
-  std::cout << "Mesh created successfully." << "\n";
-
-  // Create pipeline
-  VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
-  pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-  pipelineLayoutInfo.setLayoutCount = 0;
-  pipelineLayoutInfo.pushConstantRangeCount = 0;
-
-  VkPipelineLayout pipelineLayout = nullptr;
-  vkCreatePipelineLayout(context.device, &pipelineLayoutInfo, nullptr,
-                         &pipelineLayout);
-
-  VkPipelineViewportStateCreateInfo viewportState = {};
-  viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-  viewportState.viewportCount = 1;
-  viewportState.scissorCount = 1;
-
-  VkViewport viewport = {};
-  viewport.x = 0.0F;
-  viewport.y = 0.0F;
-  viewport.width = (float)context.swapchainInfo.extent.width;
-  viewport.height = (float)context.swapchainInfo.extent.height;
-  viewport.minDepth = 0.0F;
-  viewport.maxDepth = 1.0F;
-
-  VkRect2D scissor = {};
-  scissor.offset = VkOffset2D{0, 0};
-  scissor.extent = context.swapchainInfo.extent;
-
-  viewportState.pViewports = &viewport;
-  viewportState.pScissors = &scissor;
-
-  VkPipelineRasterizationStateCreateInfo rasterizer = {};
-  rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-  rasterizer.depthClampEnable = VK_FALSE;
-  rasterizer.rasterizerDiscardEnable = VK_FALSE;
-  rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
-  rasterizer.lineWidth = 1.0F;
-  rasterizer.cullMode = VK_CULL_MODE_NONE;
-  rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
-  rasterizer.depthBiasEnable = VK_FALSE;
-
-  VkPipelineMultisampleStateCreateInfo multisampling = {};
-  multisampling.sType =
-      VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-  multisampling.sampleShadingEnable = VK_FALSE;
-  multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-
-  VkPipelineColorBlendStateCreateInfo colorBlending = {};
-  colorBlending.sType =
-      VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-  colorBlending.logicOpEnable = VK_FALSE;
-  colorBlending.attachmentCount = 1;
-
-  VkPipelineColorBlendAttachmentState colorBlendAttachment = {};
-  colorBlendAttachment.colorWriteMask =
-      static_cast<uint32_t>(VK_COLOR_COMPONENT_R_BIT) |
-      static_cast<uint32_t>(VK_COLOR_COMPONENT_G_BIT) |
-      static_cast<uint32_t>(VK_COLOR_COMPONENT_B_BIT) |
-      static_cast<uint32_t>(VK_COLOR_COMPONENT_A_BIT);
-
-  colorBlendAttachment.blendEnable = VK_FALSE;
-  colorBlending.pAttachments = &colorBlendAttachment;
-
-  VkPipelineDepthStencilStateCreateInfo depthStencil = {};
-  depthStencil.sType =
-      VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-  depthStencil.depthTestEnable = VK_TRUE;
-  depthStencil.depthWriteEnable = VK_TRUE;
-  depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
-  depthStencil.depthBoundsTestEnable = VK_FALSE;
-  depthStencil.stencilTestEnable = VK_FALSE;
-
-  VkPipelineDynamicStateCreateInfo dynamicState = {};
-  dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-  dynamicState.dynamicStateCount = 0;
-  dynamicState.pDynamicStates = nullptr;
-
-  std::cout << "Creating pipeline layout..." << "\n";
-
-  VkPipelineVertexInputStateCreateInfo vertexInputInfo = {};
-  vertexInputInfo.sType =
-      VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-  vertexInputInfo.vertexBindingDescriptionCount = mesh.Format.Bindings.size();
-  vertexInputInfo.pVertexBindingDescriptions = mesh.Format.Bindings.data();
-  vertexInputInfo.vertexAttributeDescriptionCount =
-      mesh.Format.Attributes.size();
-  vertexInputInfo.pVertexAttributeDescriptions = mesh.Format.Attributes.data();
-
-  VkPipelineInputAssemblyStateCreateInfo inputAssembly = {};
-  inputAssembly.sType =
-      VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-  inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-  inputAssembly.primitiveRestartEnable = VK_FALSE;
-
-  std::cout << "Creating shader stages..." << "\n";
-
-  std::vector<VkPipelineShaderStageCreateInfo> shaderStages = {};
-
-  VkPipelineShaderStageCreateInfo vertCreateInfo = {
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-      .stage = VK_SHADER_STAGE_VERTEX_BIT,
-      .module = vertexShader.module,
-      .pName = "main",
-  };
-
-  shaderStages.emplace_back(vertCreateInfo);
-
-  VkPipelineShaderStageCreateInfo fragCreateInfo = {
-      .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-      .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
-      .module = fragmentShader.module,
-      .pName = "main",
-  };
-
-  shaderStages.emplace_back(fragCreateInfo);
-
-  VkPipelineRenderingCreateInfo renderingCreateInfo = {};
-  renderingCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
-  renderingCreateInfo.colorAttachmentCount = 1;
-  std::vector<VkFormat> colorFormats = {context.swapchainInfo.format};
-  renderingCreateInfo.pColorAttachmentFormats = colorFormats.data();
-
-  // Create graphics pipeline
-  VkGraphicsPipelineCreateInfo pipelineCreateInfo = {};
-  pipelineCreateInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-  pipelineCreateInfo.stageCount = 2;
-  pipelineCreateInfo.pVertexInputState = &vertexInputInfo;
-  pipelineCreateInfo.pInputAssemblyState = &inputAssembly;
-  pipelineCreateInfo.pViewportState = &viewportState;
-  pipelineCreateInfo.pRasterizationState = &rasterizer;
-  pipelineCreateInfo.pMultisampleState = &multisampling;
-  pipelineCreateInfo.pColorBlendState = &colorBlending;
-  pipelineCreateInfo.pDepthStencilState = &depthStencil;
-  pipelineCreateInfo.pDynamicState = &dynamicState;
-  pipelineCreateInfo.layout = pipelineLayout;
-  pipelineCreateInfo.renderPass = VK_NULL_HANDLE; // to be set later
-  pipelineCreateInfo.subpass = 0;
-  pipelineCreateInfo.pStages = shaderStages.data();
-  pipelineCreateInfo.pNext = &renderingCreateInfo;
-
-  std::cout << "Creating graphics pipeline..." << "\n";
-
-  return Error::FromVkResult(
-      vkCreateGraphicsPipelines(context.device, VK_NULL_HANDLE, 1,
-                                &pipelineCreateInfo, nullptr, &GetPipeline()));
+  return Error::Success();
 }
 
 auto Update(double deltaTime) -> Error::Error {
@@ -390,13 +256,6 @@ auto Update(double deltaTime) -> Error::Error {
 }
 
 auto Draw(Graphics::GraphicsContext &context) -> Error::Error {
-  // Graphics::SetCanvas(context, {}, nullptr);
-  // vkCmdBindPipeline(Graphics::GetCommandBuffer(context, 0),
-  //                   VK_PIPELINE_BIND_POINT_GRAPHICS, GetPipeline());
-  // for (auto &mesh : GetMeshes()) {
-  //   mesh.Draw(context);
-  // }
-
   auto handle = GetSwapchainHandleIndex();
   auto swapchainIndex = context.swapchainImageIndex;
   auto &swapchainTextures = GetSwapchainTextures();

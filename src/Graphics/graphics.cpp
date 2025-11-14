@@ -4,8 +4,10 @@
 #include "SDL3/SDL_init.h"
 #include "SDL3/SDL_vulkan.h"
 #include "tl/expected.hpp"
+#include "vulkan/vulkan_core.h"
 #include <cstdint>
 #include <iostream>
+#include <print>
 #include <vector>
 
 namespace Graphics {
@@ -216,6 +218,8 @@ static auto CreateDevice(GraphicsContext &context) -> Error::Error {
   if (Error::IsError(error)) {
     return error;
   }
+
+  volkLoadDevice(context.device);
 
   vkGetDeviceQueue(context.device, context.graphicsQueueFamily, 0,
                    &context.graphicsQueue);
@@ -498,6 +502,34 @@ static auto CreateVmaAllocator(GraphicsContext &context) -> Error::Error {
   return Error::Success();
 }
 
+static auto CreateDescriptorPool(GraphicsContext &context) -> Error::Error {
+  constexpr uint32_t poolSize = 1024;
+
+  std::vector<VkDescriptorPoolSize> poolSizes = {
+      {VK_DESCRIPTOR_TYPE_SAMPLER, poolSize},
+      {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, poolSize},
+      {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, poolSize},
+      {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, poolSize},
+      {VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, poolSize},
+      {VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, poolSize},
+      {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, poolSize},
+      {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, poolSize},
+      {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, poolSize},
+      {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, poolSize},
+      {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, poolSize},
+  };
+
+  VkDescriptorPoolCreateInfo poolInfo = {};
+  poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+  poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+  poolInfo.maxSets = poolSize * static_cast<uint32_t>(poolSizes.size());
+  poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
+  poolInfo.pPoolSizes = poolSizes.data();
+
+  return Error::FromVkResult(vkCreateDescriptorPool(
+      context.device, &poolInfo, nullptr, &context.descriptorPool));
+}
+
 auto Initialize(GraphicsContext &context, VkExtent2D dimensions)
     -> Error::Error {
   Error::Error error = Error::FromVkResult(volkInitialize());
@@ -612,6 +644,11 @@ auto Initialize(GraphicsContext &context, VkExtent2D dimensions)
     return error;
   }
   std::cout << "CreateFences." << "\n";
+  error = CreateDescriptorPool(context);
+  if (Error::IsError(error)) {
+    return error;
+  }
+  std::cout << "CreateDescriptorPool." << "\n";
 
   return Error::Success();
 }
@@ -641,6 +678,8 @@ void Deinitialize(GraphicsContext &context) {
     vkDestroyImageView(context.device, imageView, nullptr);
   }
 
+  vkDestroyDescriptorPool(context.device, context.descriptorPool, nullptr);
+
   vkDestroySwapchainKHR(context.device, context.swapchainInfo.swapchain,
                         nullptr);
 
@@ -650,6 +689,41 @@ void Deinitialize(GraphicsContext &context) {
 
   SDL_DestroyWindow(context.sdlWindow);
   SDL_Quit();
+}
+
+auto BeginSingleTimeCommands(GraphicsContext &context) -> VkCommandBuffer {
+  VkCommandBufferAllocateInfo allocInfo = {};
+  allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+  allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+  allocInfo.commandPool = GetRenderData(context, 0).pool;
+  allocInfo.commandBufferCount = 1;
+
+  VkCommandBuffer commandBuffer = nullptr;
+  vkAllocateCommandBuffers(context.device, &allocInfo, &commandBuffer);
+
+  VkCommandBufferBeginInfo beginInfo = {};
+  beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+  beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+  vkBeginCommandBuffer(commandBuffer, &beginInfo);
+
+  return commandBuffer;
+}
+
+auto EndSingleTimeCommands(GraphicsContext &context,
+                           VkCommandBuffer commandBuffer) -> void {
+  vkEndCommandBuffer(commandBuffer);
+
+  VkSubmitInfo submitInfo = {};
+  submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+  submitInfo.commandBufferCount = 1;
+  submitInfo.pCommandBuffers = &commandBuffer;
+
+  vkQueueSubmit(context.graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
+  vkQueueWaitIdle(context.graphicsQueue);
+
+  vkFreeCommandBuffers(context.device, GetRenderData(context, 0).pool, 1,
+                       &commandBuffer);
 }
 
 } // namespace Graphics

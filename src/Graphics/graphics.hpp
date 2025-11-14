@@ -57,8 +57,8 @@ struct GraphicsContext {
 
   SwapchainInfo swapchainInfo;
   SurfaceInfo surfaceInfo;
-
   VkPhysicalDeviceProperties deviceProperties;
+  VkDescriptorPool descriptorPool;
 
   std::vector<VkSemaphore> swapchainImageReady;
   std::vector<VkSemaphore> renderingFinished;
@@ -70,9 +70,7 @@ struct GraphicsContext {
   uint32_t swapchainImageIndex;
 
   int32_t renderThreadCount;
-
   std::vector<RenderData> renderData;
-
   RuntimeInfo runtimeInfo;
 };
 
@@ -98,5 +96,10 @@ inline auto GetCurrentThreadIndex() -> int8_t & {
   thread_local static int8_t current = -1; // Default to invalid
   return current;
 }
+
+auto BeginSingleTimeCommands(GraphicsContext &context) -> VkCommandBuffer;
+
+auto EndSingleTimeCommands(GraphicsContext &context,
+                           VkCommandBuffer commandBuffer) -> void;
 
 } // namespace Graphics

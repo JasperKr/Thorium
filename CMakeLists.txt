@@ -110,6 +110,8 @@ add_executable(Thorium
     src/Modules/filesystem.cpp
     src/Modules/timer.cpp
 
+    src/Modules/Editor/imgui.cpp
+
     src/Libraries/vma.cpp
     src/Libraries/load_stb.cpp
     src/Libraries/load_volk.cpp
