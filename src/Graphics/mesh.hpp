@@ -4,6 +4,7 @@
 #include "buffer.hpp"
 #include "graphics.hpp"
 #include "tl/expected.hpp"
+#include <iostream>
 #define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
 #include <unordered_map>
@@ -186,7 +187,7 @@ template <typename Vertex> struct Mesh {
     vboCreationInfo.usage =
         static_cast<uint32_t>(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT) |
         static_cast<uint32_t>(VK_BUFFER_USAGE_TRANSFER_DST_BIT);
-    ;
+
     vboCreationInfo.properties = properties;
     vboCreationInfo.size = verticesSize;
 
@@ -303,7 +304,7 @@ enum class VertexFormats : uint8_t {
   ANIMATED,
   DEFAULT_INSTANCED,
   ANIMATED_INSTANCED,
-  TEST,
+  GUI,
 };
 
 struct VertexFormatsHash {
@@ -513,17 +514,22 @@ const static std::unordered_map<const VertexFormats, const VertexFormat,
                            .stride = 64,
                            .inputRate = VK_VERTEX_INPUT_RATE_INSTANCE}},
          }},
-        {VertexFormats::TEST,
-         {.Attributes = {{// Vec3 Position
+        {VertexFormats::GUI,
+         {.Attributes = {{// Vec2 Position
                           .location = 0,
                           .binding = 0,
-                          .format = VK_FORMAT_R32G32B32_SFLOAT,
+                          .format = VK_FORMAT_R32G32_SFLOAT,
                           .offset = 0},
-                         {// Vec3 Color
+                         {// Vec2 UV
                           .location = 1,
                           .binding = 0,
-                          .format = VK_FORMAT_R32G32B32_SFLOAT,
-                          .offset = 12}},
+                          .format = VK_FORMAT_R32G32_SFLOAT,
+                          .offset = 8},
+                         {// unorm8 Color
+                          .location = 2,
+                          .binding = 0,
+                          .format = VK_FORMAT_R8G8B8A8_UNORM,
+                          .offset = 16}},
           .Bindings = {{.binding = 0,
                         .stride = 24,
                         .inputRate = VK_VERTEX_INPUT_RATE_VERTEX}}}}};

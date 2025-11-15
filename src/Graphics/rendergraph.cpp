@@ -891,6 +891,11 @@ auto inline CreatePassDescriptorSetLayouts(GraphicsContext &context,
       continue; // skip attachments
     }
 
+    std::cout << "Pass " << pass.pass.handle
+              << ": Processing resource binding for resource "
+              << binding.resource << " at set " << binding.set << ", binding "
+              << binding.binding << "\n";
+
     const auto &resource = graph.resources[binding.resource];
 
     VkDescriptorSetLayoutBinding layoutBinding{};
@@ -967,10 +972,19 @@ auto inline CreatePassDescriptorSets(GraphicsContext &context,
   allocInfo.descriptorSetCount = static_cast<uint32_t>(layouts.size());
   allocInfo.pSetLayouts = layouts.data();
 
+  std::vector<VkDescriptorSet> descriptorSets(layouts.size());
+
   VkResult result = vkAllocateDescriptorSets(context.device, &allocInfo,
-                                             &pass.pass.state.descriptorSet);
+                                             descriptorSets.data());
   if (result != VK_SUCCESS) {
     return Error::FromVkResult(result);
+  }
+
+  // Map allocated sets back to their set numbers
+  size_t idx = 0;
+  for (const auto &setBindingPair : pass.pass.state.descriptorSetLayouts) {
+    uint32_t setNumber = setBindingPair.first;
+    pass.pass.state.descriptorSets[setNumber] = descriptorSets[idx++];
   }
 
   return Error::Success();
@@ -1056,7 +1070,7 @@ auto inline ConfigurePassDescriptors(GraphicsContext &context,
   writeDesc.descriptorType = GetDescriptorType(resource, binding);
   writeDesc.pImageInfo = resource.type == Type::Texture ? &imageInfo : nullptr;
   writeDesc.pBufferInfo = resource.type == Type::Buffer ? &bufferInfo : nullptr;
-  writeDesc.dstSet = pass.pass.state.descriptorSet;
+  writeDesc.dstSet = pass.pass.state.descriptorSets.at(binding.set);
 
   vkUpdateDescriptorSets(context.device, 1, &writeDesc, 0, nullptr);
 
@@ -1095,7 +1109,7 @@ auto inline ConfigureGraphDescriptors(GraphicsContext &context,
   shaderStages[1].module = compiledPass.pass.fragmentShader.module;
   shaderStages[1].pName = "main";
 
-  auto vertexformat = Graphics::PredefinedVertexFormats.at(VertexFormats::TEST);
+  auto vertexformat = Graphics::PredefinedVertexFormats.at(VertexFormats::GUI);
 
   VkPipelineVertexInputStateCreateInfo vertexInputInfo = {};
   vertexInputInfo.sType =
@@ -1297,17 +1311,26 @@ auto inline ConfigureGraphDescriptors(GraphicsContext &context,
   return Error::Success();
 }
 
-[[nodiscard]] auto inline CreatePassPipelines(GraphicsContext &context,
-                                              RenderGraph &graph)
+[[nodiscard]] auto inline CreateGraphPipelines(GraphicsContext &context,
+                                               RenderGraph &graph)
     -> Error::Error {
   for (size_t passIndex = 1; passIndex < graph.compiledPasses.size();
        passIndex++) {
+
+    auto descriptorSetLayouts = std::vector<VkDescriptorSetLayout>{};
+
+    for (const auto &setLayoutPair :
+         graph.compiledPasses[passIndex].pass.state.descriptorSetLayouts) {
+      descriptorSetLayouts.push_back(setLayoutPair.second);
+    }
+
     auto &compiledPass = graph.compiledPasses[passIndex];
 
     VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pipelineLayoutInfo.setLayoutCount = 0;
-    pipelineLayoutInfo.pSetLayouts = nullptr;
+    pipelineLayoutInfo.setLayoutCount =
+        static_cast<uint32_t>(descriptorSetLayouts.size());
+    pipelineLayoutInfo.pSetLayouts = descriptorSetLayouts.data();
     pipelineLayoutInfo.pushConstantRangeCount = 0;
     pipelineLayoutInfo.pPushConstantRanges = nullptr;
     VkPipelineLayout pipelineLayout = nullptr;
@@ -1670,7 +1693,7 @@ auto inline AllocateGraphResourceMemory(GraphicsContext &context,
   ConfigureGraphDescriptors(context, graph);
 
   std::cout << "Configured descriptors for render graph passes." << "\n";
-  error = CreatePassPipelines(context, graph);
+  error = CreateGraphPipelines(context, graph);
   if (Error::IsError(error)) {
     return error;
   }
@@ -1784,8 +1807,8 @@ auto Execute(GraphicsContext &context, RenderGraph &graph,
              VK_PIPELINE_BIND_POINT_COMPUTE);
     }
 
-    // Todo, loop over all samplers, and check against the sampler cache to see
-    // if we have created a new sampler and need to bind the new one
+    // Todo, loop over all samplers, and check against the sampler cache to
+    // see if we have created a new sampler and need to bind the new one
 
     /*
     auto cache = GetSamplerCache();
@@ -1800,16 +1823,33 @@ auto Execute(GraphicsContext &context, RenderGraph &graph,
     vkCmdBindPipeline(commandBuffer, compiledPass.pass.state.bindPoint,
                       compiledPass.pass.state.pipeline);
 
-    vkCmdBindDescriptorSets(commandBuffer, compiledPass.pass.state.bindPoint,
-                            compiledPass.pass.state.pipelineLayout, 0, 1,
-                            &compiledPass.pass.state.descriptorSet, 0, nullptr);
+    if (compiledPass.pass.state.descriptorSets.size() > 0) {
+      std::vector<VkDescriptorSet> descriptorSets;
+      descriptorSets.reserve(compiledPass.pass.state.descriptorSets.size());
 
-    compiledPass.pass.executeFunction(commandBuffer, context, graph);
+      for (const auto &setPair : compiledPass.pass.state.descriptorSets) {
+        descriptorSets.emplace_back(setPair.second);
+      }
+
+      vkCmdBindDescriptorSets(commandBuffer, compiledPass.pass.state.bindPoint,
+                              compiledPass.pass.state.pipelineLayout, 0,
+                              descriptorSets.size(), descriptorSets.data(), 0,
+                              nullptr);
+    }
+
+    std::cout << "Executing pass " << compiledPass.pass.handle << "\n";
+
+    compiledPass.pass.executeFunction(commandBuffer, context, graph,
+                                      compiledPass);
+
+    std::cout << "Executed pass " << compiledPass.pass.handle << "\n";
 
     if (compiledPass.pass.state.bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS) {
       vkCmdEndRendering(commandBuffer);
     }
   }
+
+  std::cout << "Finished executing render graph." << "\n";
 }
 
 auto AddTexture(RenderGraph &graph, const TextureDescriptor &descriptor)

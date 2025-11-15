@@ -175,7 +175,8 @@ auto Load(Graphics::GraphicsContext &context) -> Error::Error {
        .fragmentShader = fragmentShader,
        .executeFunction =
            [](VkCommandBuffer cmd, Graphics::GraphicsContext &context,
-              Graphics::Rendergraph::RenderGraph &graph) -> void {
+              Graphics::Rendergraph::RenderGraph &graph,
+              Graphics::Rendergraph::CompiledPass &compiledPass) -> void {
          auto &meshes = Program::GetMeshes();
          if (meshes.empty()) {
            return;

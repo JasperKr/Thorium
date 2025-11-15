@@ -1,6 +1,7 @@
 #include "buffer.hpp"
 #include "Modules/error.hpp"
 #include "graphics.hpp"
+#include <iostream>
 #define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
 
@@ -19,6 +20,9 @@ auto Graphics::Buffer::Create(Graphics::GraphicsContext &context,
   VmaAllocationCreateInfo allocInfo = {};
   allocInfo.usage = VMA_MEMORY_USAGE_AUTO; // Let VMA decide
   allocInfo.requiredFlags = info.properties;
+  allocInfo.flags = static_cast<uint32_t>(VMA_ALLOCATION_CREATE_MAPPED_BIT) |
+                    static_cast<uint32_t>(
+                        VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
 
   VkResult result =
       vmaCreateBuffer(context.vmaAllocator, &bufferInfo, &allocInfo,
@@ -43,6 +47,8 @@ auto Graphics::Buffer::SetData(Graphics::GraphicsContext &context,
                                const void *srcData,
                                VkDeviceSize size = 0, // NOLINT
                                VkDeviceSize offset = 0) const -> Error::Error {
+  std::cout << "Setting buffer data of size " << size << " bytes at offset "
+            << offset << "\n";
   void *mapped = nullptr;
   auto result =
       Error::FromVkResult(vmaMapMemory(context.vmaAllocator, memory, &mapped));

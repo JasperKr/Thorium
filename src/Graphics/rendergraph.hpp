@@ -121,7 +121,6 @@ struct PassState {
   VkSubpassDescription subpassDescription = {};
 
   std::vector<VkWriteDescriptorSet> descriptorWrites;
-  VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
 };
 
 struct RenderPass {
@@ -176,7 +175,8 @@ struct RenderPass {
   Shader::ShaderModule computeShader;
 
   std::function<void(VkCommandBuffer cmd, GraphicsContext &context,
-                     struct RenderGraph &graph)>
+                     struct RenderGraph &graph,
+                     struct CompiledPass &currentPass)>
       executeFunction;
 };
 
@@ -316,7 +316,7 @@ struct RenderPassDescriptor {
   Graphics::Shader::ShaderModule computeShader;
 
   std::function<void(VkCommandBuffer cmd, GraphicsContext &context,
-                     struct RenderGraph &graph)>
+                     struct RenderGraph &graph, CompiledPass &currentPass)>
       executeFunction;
 };
 

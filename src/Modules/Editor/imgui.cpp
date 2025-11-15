@@ -1,5 +1,6 @@
 #include "imgui.hpp"
 #include "Graphics/graphics.hpp"
+#include "Graphics/rendergraph.hpp"
 #include "Graphics/shader.hpp"
 #include "Modules/error.hpp"
 #include "backends/imgui_impl_sdl3.h"
@@ -161,8 +162,9 @@ auto InitializeImGui(
           .fragmentShader = fragmentShader.value(),
           .executeFunction =
               [](VkCommandBuffer cmd, Graphics::GraphicsContext &context,
-                 Graphics::Rendergraph::RenderGraph &graph) -> void {
-            ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
+                 Graphics::Rendergraph::RenderGraph &graph,
+                 Graphics::Rendergraph::CompiledPass &currentPass) -> void {
+            // ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
           },
       });
 
