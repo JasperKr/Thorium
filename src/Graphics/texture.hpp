@@ -1,15 +1,25 @@
 #pragma once
 
+#include "Graphics/sampler.hpp"
 #include "graphics.hpp"
 #include <cmath>
 #include <cstdint>
-namespace Graphics::Texture {
+namespace Graphics {
+namespace Texture {
 
-enum TextureType : uint8_t {
-  TEXTURE_TYPE_2D,
-  TEXTURE_TYPE_VOLUME,
-  TEXTURE_TYPE_CUBE_MAP,
-  TEXTURE_TYPE_ARRAY,
+enum class TextureType : uint8_t {
+  DEFAULT, // 2D texture, but we cannot start a variable with a number
+  VOLUME,
+  CUBEMAP,
+  ARRAY,
+};
+
+enum class WrapMode : uint8_t {
+  REPEAT,
+  MIRRORED_REPEAT,
+  CLAMP,
+  CLAMPONE,
+  CLAMPZERO
 };
 
 struct Texture {
@@ -20,16 +30,50 @@ struct Texture {
   VmaAllocation memory;
   uint64_t sizeInBytes;
 
+  VkSampler sampler;
+  SamplerDescription samplerDescription;
+  bool samplerDirty;
+
+  size_t mipmapcount;
+  size_t arrayLayers;
+  VkImageUsageFlags usage;
+
   enum TextureType type;
+
+  auto inline SetFilter(VkFilter minFilter, VkFilter magFilter,
+                        VkSamplerMipmapMode mipFilter) -> void;
+  auto inline GetFilter() const
+      -> std::tuple<VkFilter, VkFilter, VkSamplerMipmapMode>;
+  auto inline SetAnisotropy(float anisotropy) -> void;
+  auto inline GetAnisotropy() const -> float;
+  auto inline SetWrapmode(VkSamplerAddressMode addressModeU,
+                          VkSamplerAddressMode addressModeV,
+                          VkSamplerAddressMode addressModeW) -> void;
+  auto inline GetWrapmode() const
+      -> std::tuple<VkSamplerAddressMode, VkSamplerAddressMode,
+                    VkSamplerAddressMode>;
+  auto inline SetLodBias(float mipLodBias) -> void;
+  auto inline GetLodBias() const -> float;
+  auto inline SetLodRange(float minLod, float maxLod) -> void;
+  auto inline GetLodRange() const -> std::tuple<float, float>;
+  auto inline SetDepthCompare(bool enable, VkCompareOp compareOp) -> void;
+  auto inline GetDepthCompare() const -> std::tuple<bool, VkCompareOp>;
+  auto GetWidth() const -> uint32_t { return size.width; };
+  auto GetHeight() const -> uint32_t { return size.height; };
+  auto GetDimensions() const -> VkExtent2D {
+    return {size.width, size.height};
+  };
+  auto GetDepth() const -> uint32_t { return size.depth; };
+  auto GetSampler(GraphicsContext &context) -> VkSampler;
 };
 
 struct TextureCreationInfo {
-  uint32_t width;
-  uint32_t height;
-  uint32_t depth;
-  VkFormat format;
-  VkImageUsageFlags usage;
-  int mipmapCount;
+  uint32_t width = 0;  // Width in pixels
+  uint32_t height = 0; // Height in pixels
+  uint32_t depth{};    // Depth in pixels (for 3D textures, or Array layers)
+  VkFormat format = VK_FORMAT_UNDEFINED; // Texture format
+  VkImageUsageFlags usage{};             // Vulkan usage flags
+  int mipmapCount{};                     // Number of mipmap levels
 };
 
 auto Create2D(GraphicsContext &context, TextureCreationInfo info)
@@ -285,4 +329,5 @@ static inline auto IsStencilTexture(VkFormat format) -> bool {
   }
 }
 
-} // namespace Graphics::Texture
+} // namespace Texture
+} // namespace Graphics

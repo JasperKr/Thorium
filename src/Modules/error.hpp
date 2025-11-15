@@ -1,6 +1,6 @@
 #pragma once
 
-#define LOG_ERRORS 1
+// #define LOG_ERRORS 1
 
 #include <array>
 #include <cstdint>
@@ -22,9 +22,9 @@
 #endif
 
 namespace Error {
-struct Error {
+struct [[nodiscard]] Error {
   std::string message;
-  int32_t code;
+  int32_t code = 1;
   std::string backtrace;
 };
 

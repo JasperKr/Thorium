@@ -13,9 +13,12 @@ struct BufferCreationInfo {
 };
 
 struct Buffer {
-  VkBuffer Handle;
-  VkDeviceMemory Memory;
-  VkDeviceSize Size;
+  VkBuffer handle;
+  VmaAllocation memory;
+  VkDeviceSize size;
+  uint64_t sizeInBytes;
+  VkBufferUsageFlags usage;
+  VkMemoryPropertyFlags properties;
 
   static auto Create(Graphics::GraphicsContext &context,
                      Graphics::BufferCreationInfo info)

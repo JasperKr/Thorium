@@ -258,12 +258,12 @@ template <typename Vertex> struct Mesh {
   auto GetDrawRange() -> MeshDrawRange { return DrawRange; }
 
   void Bind(VkCommandBuffer cmdBuffer) {
-    std::vector<VkBuffer> vertexBuffers = {VertexBuffer.Handle};
+    std::vector<VkBuffer> vertexBuffers = {VertexBuffer.handle};
     std::vector<VkDeviceSize> offsets = {0};
     vkCmdBindVertexBuffers(cmdBuffer, 0, 1, vertexBuffers.data(),
                            offsets.data());
     if (IndexData.size() > 0) {
-      vkCmdBindIndexBuffer(cmdBuffer, IndexBuffer.Handle, 0,
+      vkCmdBindIndexBuffer(cmdBuffer, IndexBuffer.handle, 0,
                            VK_INDEX_TYPE_UINT32);
     }
   }

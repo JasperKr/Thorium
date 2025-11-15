@@ -1,6 +1,8 @@
 #include "texture.hpp"
+#include "Graphics/graphics.hpp"
 #include "Modules/error.hpp"
 #include "stb/stb_image.h"
+#include <iostream>
 
 #define VMA_VULKAN_VERSION 1004000
 #define VK_NO_PROTOTYPES
@@ -84,7 +86,11 @@ auto Create2D(GraphicsContext &context, TextureCreationInfo info)
 
   texture.size = VkExtent3D{info.width, info.height, 1};
   texture.format = info.format;
-  texture.type = TEXTURE_TYPE_2D;
+  texture.type = TextureType::DEFAULT;
+  texture.mipmapcount = info.mipmapCount;
+  texture.usage = info.usage;
+  texture.arrayLayers = 1;
+  texture.samplerDirty = true;
 
   VkImageCreateInfo imageInfo = {};
   imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -106,9 +112,13 @@ auto Create2D(GraphicsContext &context, TextureCreationInfo info)
   allocInfo.requiredFlags = 0;
   allocInfo.preferredFlags = 0;
 
-  Error::Error error = Error::FromVkResult(
+  auto error = Error::FromVkResult(
       vmaCreateImage(context.vmaAllocator, &imageInfo, &allocInfo,
                      &texture.image, &texture.memory, nullptr));
+
+  if (Error::IsError(error)) {
+    return tl::unexpected(error);
+  }
 
   context.runtimeInfo.textureCount++;
 
@@ -126,13 +136,13 @@ auto Create2D(GraphicsContext &context, TextureCreationInfo info)
   error = Error::FromVkResult(
       vkCreateImageView(context.device, &viewInfo, nullptr, &texture.view));
 
-  VmaAllocationInfo memRequirements;
-  vmaGetAllocationInfo(context.vmaAllocator, texture.memory, &memRequirements);
-  texture.sizeInBytes = memRequirements.size;
-
   if (Error::IsError(error)) {
     return tl::unexpected(error);
   }
+
+  VmaAllocationInfo memRequirements;
+  vmaGetAllocationInfo(context.vmaAllocator, texture.memory, &memRequirements);
+  texture.sizeInBytes = memRequirements.size;
 
   return texture;
 }
@@ -146,7 +156,20 @@ auto FromSwapchainTexture(GraphicsContext &context, VkImage swapchainImage,
   texture.image = swapchainImage;
   texture.format = format;
   texture.size = VkExtent3D{width, height, 1};
-  texture.type = TEXTURE_TYPE_2D;
+  texture.type = TextureType::DEFAULT;
+  texture.mipmapcount = 1;
+  texture.samplerDirty = true;
+
+  VkSurfaceCapabilitiesKHR surfaceCapabilities;
+
+  auto error = Error::FromVkResult(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
+      context.physicalDevice, context.surface, &surfaceCapabilities));
+
+  if (Error::IsError(error)) {
+    return tl::unexpected(error);
+  }
+
+  texture.usage = surfaceCapabilities.supportedUsageFlags;
 
   VkImageViewCreateInfo viewInfo = {};
   viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -159,7 +182,7 @@ auto FromSwapchainTexture(GraphicsContext &context, VkImage swapchainImage,
   viewInfo.subresourceRange.baseArrayLayer = 0;
   viewInfo.subresourceRange.layerCount = 1;
 
-  Error::Error error = Error::FromVkResult(
+  error = Error::FromVkResult(
       vkCreateImageView(context.device, &viewInfo, nullptr, &texture.view));
 
   if (Error::IsError(error)) {
@@ -176,14 +199,17 @@ auto CreateCubeMap(GraphicsContext &context, TextureCreationInfo info)
     return tl::unexpected(
         Error::Create("Cube map textures must have equal width and height."));
   }
+  const int CubeFaceCount = 6;
 
   Texture texture = {};
 
   texture.size = VkExtent3D{info.width, info.width, 1};
   texture.format = info.format;
-  texture.type = TEXTURE_TYPE_CUBE_MAP;
-
-  const int CubeFaceCount = 6;
+  texture.type = TextureType::CUBEMAP;
+  texture.mipmapcount = info.mipmapCount;
+  texture.usage = info.usage;
+  texture.arrayLayers = CubeFaceCount;
+  texture.samplerDirty = true;
 
   VkImageCreateInfo imageInfo = {};
   imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -208,6 +234,10 @@ auto CreateCubeMap(GraphicsContext &context, TextureCreationInfo info)
   Error::Error error = Error::FromVkResult(
       vmaCreateImage(context.vmaAllocator, &imageInfo, &allocInfo,
                      &texture.image, &texture.memory, nullptr));
+
+  if (Error::IsError(error)) {
+    return tl::unexpected(error);
+  }
 
   context.runtimeInfo.textureCount++;
 
@@ -243,7 +273,11 @@ auto CreateVolume(GraphicsContext &context, TextureCreationInfo info)
 
   texture.size = VkExtent3D{info.width, info.height, info.depth};
   texture.format = info.format;
-  texture.type = TEXTURE_TYPE_VOLUME;
+  texture.type = TextureType::VOLUME;
+  texture.mipmapcount = info.mipmapCount;
+  texture.usage = info.usage;
+  texture.arrayLayers = 1;
+  texture.samplerDirty = true;
 
   VkImageCreateInfo imageInfo = {};
   imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -268,6 +302,10 @@ auto CreateVolume(GraphicsContext &context, TextureCreationInfo info)
   Error::Error error = Error::FromVkResult(
       vmaCreateImage(context.vmaAllocator, &imageInfo, &allocInfo,
                      &texture.image, &texture.memory, nullptr));
+
+  if (Error::IsError(error)) {
+    return tl::unexpected(error);
+  }
 
   context.runtimeInfo.textureCount++;
 
@@ -303,7 +341,11 @@ auto CreateArray(GraphicsContext &context, TextureCreationInfo info)
 
   texture.size = VkExtent3D{info.width, info.height, info.depth};
   texture.format = info.format;
-  texture.type = TEXTURE_TYPE_VOLUME;
+  texture.type = TextureType::ARRAY;
+  texture.mipmapcount = info.mipmapCount;
+  texture.usage = info.usage;
+  texture.arrayLayers = info.depth;
+  texture.samplerDirty = true;
 
   VkImageCreateInfo imageInfo = {};
   imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -565,6 +607,97 @@ auto CopyBufferToImage(GraphicsContext &context, VkBuffer buffer,
                        &commandBuffer);
 
   return Error::Create("Buffer copied to texture image successfully.");
+}
+
+auto Texture::SetFilter(VkFilter minFilter, VkFilter magFilter, // NOLINT
+                        VkSamplerMipmapMode mipFilter) -> void {
+  samplerDescription.minFilter = minFilter;
+  samplerDescription.magFilter = magFilter;
+  samplerDescription.mipmapMode = mipFilter;
+
+  samplerDirty = true;
+}
+
+auto Texture::GetFilter() const
+    -> std::tuple<VkFilter, VkFilter, VkSamplerMipmapMode> {
+  return {samplerDescription.minFilter, samplerDescription.magFilter,
+          samplerDescription.mipmapMode};
+}
+
+auto Texture::SetAnisotropy(float anisotropy) -> void {
+  samplerDescription.anisotropyEnable = (anisotropy > 1.0F);
+  samplerDescription.maxAnisotropy = anisotropy;
+
+  samplerDirty = true;
+}
+
+auto Texture::GetAnisotropy() const -> float {
+  return samplerDescription.maxAnisotropy;
+}
+
+auto Texture::SetWrapmode(VkSamplerAddressMode addressModeU,
+                          VkSamplerAddressMode addressModeV,
+                          VkSamplerAddressMode addressModeW) -> void {
+  samplerDescription.addressModeU = addressModeU;
+  samplerDescription.addressModeV = addressModeV;
+  samplerDescription.addressModeW = addressModeW;
+
+  samplerDirty = true;
+}
+
+auto Texture::GetWrapmode() const
+    -> std::tuple<VkSamplerAddressMode, VkSamplerAddressMode,
+                  VkSamplerAddressMode> {
+  return {samplerDescription.addressModeU, samplerDescription.addressModeV,
+          samplerDescription.addressModeW};
+}
+
+auto Texture::SetLodBias(float mipLodBias) -> void {
+  samplerDescription.mipLodBias = mipLodBias;
+
+  samplerDirty = true;
+}
+
+auto Texture::GetLodBias() const -> float {
+  return samplerDescription.mipLodBias;
+}
+
+// NOLINTNEXTLINE
+auto Texture::SetLodRange(float minLod, float maxLod) -> void {
+  samplerDescription.minLod = minLod;
+  samplerDescription.maxLod = maxLod;
+
+  samplerDirty = true;
+}
+
+auto Texture::GetLodRange() const -> std::tuple<float, float> {
+  return {samplerDescription.minLod, samplerDescription.maxLod};
+}
+
+auto Texture::SetDepthCompare(bool enable, VkCompareOp compareOp) -> void {
+  samplerDescription.compareEnable = enable;
+  samplerDescription.compareOp = compareOp;
+
+  samplerDirty = true;
+}
+
+auto Texture::GetDepthCompare() const -> std::tuple<bool, VkCompareOp> {
+  return {samplerDescription.compareEnable, samplerDescription.compareOp};
+}
+
+auto Texture::GetSampler(GraphicsContext &context) -> VkSampler {
+  if (samplerDirty) {
+    sampler = GetOrCreateSampler(context, samplerDescription);
+    samplerDirty = false;
+
+    std::cout << "Created new sampler for texture.\n";
+
+    return sampler;
+  }
+
+  std::cout << "Reusing existing sampler for texture.\n";
+
+  return sampler;
 }
 
 } // namespace Graphics::Texture

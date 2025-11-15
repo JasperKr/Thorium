@@ -5,15 +5,23 @@
 #include "graphics.hpp"
 #include "shader.hpp"
 #include "texture.hpp"
+#include <unordered_map>
+#include <variant>
 #define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
 #include <cstdint>
-#include <variant>
 #include <vector>
 
-namespace Graphics::Rendergraph {
+namespace Graphics {
+namespace Rendergraph {
 
 using ResourceHandle = uint16_t;
+
+auto inline GetSamplerCache()
+    -> std::unordered_map<ResourceHandle, VkSampler> & {
+  static std::unordered_map<ResourceHandle, VkSampler> samplerCache = {};
+  return samplerCache;
+}
 
 enum class ResourceLifetime : uint8_t {
   Transient, // Created and destroyed within a single frame, preffered
@@ -36,23 +44,6 @@ struct ResourceUsageLifetime {
   uint16_t lastUseIndex = 0; // Last use in the compiled render pass sequence
 };
 
-struct TextureResource {
-  VkFormat format;
-  VkExtent3D extent;
-  uint32_t mipLevels;
-  uint32_t arrayLayers;
-  VkImageUsageFlags usage;
-  VkSampleCountFlagBits samples;
-
-  VkImage image;
-  VkImageView view;
-};
-
-struct BufferResource {
-  VkDeviceSize size;
-  VkBufferUsageFlags usage;
-};
-
 struct ImportedTexture {
   Graphics::Texture::Texture texture;
 
@@ -64,19 +55,10 @@ struct ImportedBuffer {
   Graphics::Buffer buffer;
 };
 
-struct TextureInfo {
-  bool imported;
-  TextureResource transient;
-  ImportedTexture external;
-};
-
-struct BufferInfo {
-  bool imported;
-  BufferResource transient;
-  ImportedBuffer external;
-};
-
 enum class Type : uint8_t { Texture, Buffer, Unknown };
+
+enum class ResourceUsage : uint8_t { ReadOnly, WriteOnly, ReadWrite };
+
 enum class BindingType : uint8_t {
   Sampler,   // Sampler
   Storage,   // SSBO / image
@@ -98,7 +80,11 @@ struct ResourceBinding {
       static_cast<uint32_t>(VK_SHADER_STAGE_FRAGMENT_BIT) |
       static_cast<uint32_t>(VK_SHADER_STAGE_VERTEX_BIT);
 
-  BindingType type = BindingType::Uniform;
+  BindingType type = BindingType::Sampler;
+  ResourceUsage usage = ResourceUsage::ReadOnly;
+
+  // User-friendly key for changing Persistent resource handles
+  std::string name;
 };
 
 struct Resource {
@@ -110,14 +96,20 @@ struct Resource {
 
   Type type = Type::Unknown;
 
-  std::variant<TextureInfo, BufferInfo> info;
-  std::vector<VkDescriptorSet> descriptorSets;
+  std::variant<Texture::Texture, Buffer> info{};
 };
+
+// struct DescriptorSetUpdate {
+//   std::string name;
+//   ResourceHandle newResource;
+// };
 
 struct PassState {
   VkPipeline pipeline = VK_NULL_HANDLE;
   VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
-  std::vector<VkDescriptorSet> descriptorSets;
+
+  std::unordered_map<uint32_t, VkDescriptorSetLayout> descriptorSetLayouts;
+  std::unordered_map<uint32_t, VkDescriptorSet> descriptorSets;
 
   VkViewport viewport = {};
   VkRect2D scissor = {};
@@ -129,6 +121,7 @@ struct PassState {
   VkSubpassDescription subpassDescription = {};
 
   std::vector<VkWriteDescriptorSet> descriptorWrites;
+  VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
 };
 
 struct RenderPass {
@@ -250,11 +243,13 @@ struct RenderGraph {
   VkDeviceSize memoryBlockSize = DefaultMemoryBlockSize;
 
   std::vector<MemoryBlock> memoryBlocks;
-  std::vector<VirtualAllocation> virtualAllocations;
+  std::unordered_map<ResourceHandle, VirtualAllocation> virtualAllocations;
+
+  VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
 };
 
 struct TextureDescriptor {
-  Texture::TextureType type = Texture::TextureType::TEXTURE_TYPE_2D;
+  Texture::TextureType type = Texture::TextureType::DEFAULT;
   VkFormat format = VK_FORMAT_R8G8B8A8_UNORM;
 
   uint32_t width{};
@@ -334,4 +329,5 @@ auto AddRenderPass(RenderGraph &graph, const RenderPassDescriptor &descriptor)
 auto Execute(GraphicsContext &context, RenderGraph &graph,
              VkCommandBuffer commandBuffer) -> void;
 
-} // namespace Graphics::Rendergraph
+} // namespace Rendergraph
+} // namespace Graphics

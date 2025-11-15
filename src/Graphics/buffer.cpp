@@ -3,93 +3,69 @@
 #include "graphics.hpp"
 #define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
-#include <cstddef>
-#include <span>
 
 auto Graphics::Buffer::Create(Graphics::GraphicsContext &context,
                               Graphics::BufferCreationInfo info)
     -> tl::expected<Graphics::Buffer, Error::Error> {
+
+  Graphics::Buffer buffer = {};
+
   VkBufferCreateInfo bufferInfo = {};
   bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
   bufferInfo.size = info.size;
   bufferInfo.usage = info.usage;
   bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-  Graphics::Buffer outBuffer = {};
+  VmaAllocationCreateInfo allocInfo = {};
+  allocInfo.usage = VMA_MEMORY_USAGE_AUTO; // Let VMA decide
+  allocInfo.requiredFlags = info.properties;
 
-  Error::Error error = Error::FromVkResult(
-      vkCreateBuffer(context.device, &bufferInfo, nullptr, &outBuffer.Handle));
+  VkResult result =
+      vmaCreateBuffer(context.vmaAllocator, &bufferInfo, &allocInfo,
+                      &buffer.handle, &buffer.memory, nullptr);
 
-  if (Error::IsError(error)) {
-    return tl::unexpected(error);
+  if (result != VK_SUCCESS) {
+    return tl::unexpected(Error::FromVkResult(result));
   }
 
-  VkMemoryRequirements memRequirements;
-  vkGetBufferMemoryRequirements(context.device, outBuffer.Handle,
-                                &memRequirements);
+  buffer.size = info.size;
+  buffer.usage = info.usage;
+  buffer.properties = info.properties;
 
-  VkMemoryAllocateInfo allocInfo = {};
-  allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-  allocInfo.allocationSize = memRequirements.size;
+  VmaAllocationInfo memRequirements;
+  vmaGetAllocationInfo(context.vmaAllocator, buffer.memory, &memRequirements);
+  buffer.sizeInBytes = memRequirements.size;
 
-  // Pick memory type that satisfies properties
-  VkPhysicalDeviceMemoryProperties memProps;
-  vkGetPhysicalDeviceMemoryProperties(context.physicalDevice, &memProps);
-
-  uint32_t memoryTypeIndex = 0;
-  bool found = false;
-  auto memoryTypes =
-      std::span(&memProps.memoryTypes[0], memProps.memoryTypeCount);
-
-  for (uint32_t i = 0; i < memProps.memoryTypeCount; i++) {
-    if (((memRequirements.memoryTypeBits & (1U << i)) != 0U) &&
-        (memoryTypes[i].propertyFlags & info.properties) == info.properties) {
-      memoryTypeIndex = i;
-      found = true;
-      break;
-    }
-  }
-
-  if (!found) {
-    return tl::unexpected(
-        Error::Create("Failed to find suitable memory type for buffer."));
-  }
-
-  allocInfo.memoryTypeIndex = memoryTypeIndex;
-
-  error = Error::FromVkResult(
-      vkAllocateMemory(context.device, &allocInfo, nullptr, &outBuffer.Memory));
-
-  if (Error::IsError(error)) {
-    return tl::unexpected(error);
-  }
-
-  error = Error::FromVkResult(vkBindBufferMemory(
-      context.device, outBuffer.Handle, outBuffer.Memory, 0));
-
-  if (Error::IsError(error)) {
-    return tl::unexpected(error);
-  }
-  outBuffer.Size = info.size;
-
-  return outBuffer;
+  return buffer;
 }
 
 auto Graphics::Buffer::SetData(Graphics::GraphicsContext &context,
-                               const void *data, VkDeviceSize size,
-                               VkDeviceSize offset) const -> Error::Error {
-  void *mappedData = nullptr;
-  Error::Error error = Error::FromVkResult(
-      vkMapMemory(context.device, Memory, offset, size, 0, &mappedData));
+                               const void *srcData,
+                               VkDeviceSize size = 0, // NOLINT
+                               VkDeviceSize offset = 0) const -> Error::Error {
+  void *mapped = nullptr;
+  auto result =
+      Error::FromVkResult(vmaMapMemory(context.vmaAllocator, memory, &mapped));
+  if (Error::IsError(result)) {
+    return result;
+  }
 
-  memcpy(mappedData, data, (size_t)size);
+  if (size == 0) {
+    size = size;
+  }
 
-  vkUnmapMemory(context.device, Memory);
+  if (offset + size > size) {
+    vmaUnmapMemory(context.vmaAllocator, memory);
+    return Error::Create("Data out of bounds for buffer set data.");
+  }
+
+  // NOLINTNEXTLINE, because of pointer arithmetic
+  std::memcpy(static_cast<uint8_t *>(mapped) + offset, srcData, size - offset);
+  vmaUnmapMemory(context.vmaAllocator, memory);
 
   return Error::Success();
 }
 
 void Graphics::Buffer::Destroy(Graphics::GraphicsContext &context) const {
-  vkDestroyBuffer(context.device, Handle, nullptr);
-  vkFreeMemory(context.device, Memory, nullptr);
+  vmaDestroyBuffer(context.vmaAllocator, handle, memory);
 }

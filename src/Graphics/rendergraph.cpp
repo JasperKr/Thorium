@@ -46,10 +46,39 @@ auto AddRenderPass(RenderGraph &graph, const RenderPassDescriptor &descriptor)
   pass.state.blendModes = descriptor.blendModes;
   pass.resourceBindings = descriptor.resourceBindings;
 
+  if (pass.state.scissor.extent.width == 0 ||
+      pass.state.scissor.extent.height == 0) {
+    pass.state.scissor.extent.width =
+        static_cast<uint32_t>(pass.state.viewport.width);
+    pass.state.scissor.extent.height =
+        static_cast<uint32_t>(pass.state.viewport.height);
+  }
+
   pass.vertexShader = descriptor.vertexShader;
   pass.fragmentShader = descriptor.fragmentShader;
   pass.computeShader = descriptor.computeShader;
   pass.executeFunction = descriptor.executeFunction;
+
+  assert(pass.state.viewport.width > 0.0F &&
+         pass.state.viewport.height > 0.0F &&
+         "Viewport width and height must be greater than 0");
+  assert(pass.state.scissor.extent.width > 0 &&
+         pass.state.scissor.extent.height > 0 &&
+         "Scissor extent width and height must be greater than 0");
+  assert(pass.state.scissor.offset.x >= 0 && pass.state.scissor.offset.y >= 0 &&
+         "Scissor offset x and y must be non-negative");
+  assert(pass.state.bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS ||
+         pass.state.bindPoint == VK_PIPELINE_BIND_POINT_COMPUTE);
+  assert(descriptor.resourceBindings.size() == descriptor.resources.size() &&
+         "Resource bindings size must match resources size");
+  if (pass.state.bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS) {
+    assert((pass.vertexShader.module != VK_NULL_HANDLE &&
+            pass.fragmentShader.module != VK_NULL_HANDLE) &&
+           "Vertex and fragment shaders must be set for graphics pipeline");
+  } else if (pass.state.bindPoint == VK_PIPELINE_BIND_POINT_COMPUTE) {
+    assert(pass.computeShader.module != VK_NULL_HANDLE &&
+           "Compute shader must be set for compute pipeline");
+  }
 
   graph.passes.emplace_back(pass);
 
@@ -373,7 +402,7 @@ auto BuildGraph(RenderGraph &graph) -> void {
 
 [[nodiscard]] auto inline ValidateCompiledGraph(const RenderGraph &graph)
     -> tl::expected<bool, Error::Error> {
-  // For now just check if the last pass does not write any transient resources
+  // For now just check if the last pass does not write any resources
   // It can write persistent resources since they live beyond the graph
   // execution (e.g. swapchain images, or other long-lived targets)
 
@@ -383,12 +412,10 @@ auto BuildGraph(RenderGraph &graph) -> void {
     const auto &resource = graph.resources[resHandle];
 
     if (resource.lifetime == ResourceLifetime::Transient) {
-      return tl::make_unexpected(Error::Error{
-          .message =
-              "Render graph validation failed: last pass writes transient "
-              "resource " +
-              std::to_string(resHandle),
-      });
+      return tl::make_unexpected(
+          Error::Create("Render graph validation failed: last pass writes "
+                        "resource " +
+                        std::to_string(resHandle)));
     }
   }
 
@@ -499,11 +526,18 @@ struct AllocationInfo {
     if (vmaVirtualAllocate(block.virtualBlock, &allocInfo, &alloc, &offset) ==
         VK_SUCCESS) {
 
-      graph.virtualAllocations[info.handle] = {.blockIndex = blockIndex,
-                                               .resource = info.handle,
-                                               .allocation = alloc,
-                                               .offset = offset,
-                                               .size = info.size};
+      VirtualAllocation allocation = {.blockIndex = blockIndex,
+                                      .resource = info.handle,
+                                      .allocation = alloc,
+                                      .offset = offset,
+                                      .size = info.size};
+
+      graph.virtualAllocations.try_emplace(info.handle, allocation);
+
+      std::cout << "Allocated resource " << info.handle
+                << " in new memory block of size " << info.size << " at "
+                << offset << "\n";
+
       return Error::Success(); // success
     }
   }
@@ -520,12 +554,18 @@ struct AllocationInfo {
 
   if (vmaVirtualAllocate(block.virtualBlock, &allocInfo, &alloc, &offset) ==
       VK_SUCCESS) {
-    graph.virtualAllocations[info.handle] = {
+
+    VirtualAllocation allocation = {
         .blockIndex = static_cast<uint32_t>(graph.memoryBlocks.size() - 1),
         .resource = info.handle,
         .allocation = alloc,
         .offset = offset,
         .size = info.size};
+
+    graph.virtualAllocations.try_emplace(info.handle, allocation);
+    std::cout << "Allocated resource " << info.handle
+              << " in new memory block of size " << allocationSize << " at "
+              << offset << "\n";
 
     return Error::Success(); // success
   }
@@ -535,47 +575,31 @@ struct AllocationInfo {
 
 auto inline DeallocateResourceInBlocks(RenderGraph &graph,
                                        const ResourceHandle handle) -> void {
-  bool found = false;
-  VirtualAllocation *allocation = nullptr;
-  for (auto &alloc : graph.virtualAllocations) {
-    if (alloc.resource == handle) {
-      allocation = &alloc;
-      found = true;
-      break;
-    }
-  }
-
-  if (!found) {
+  auto allocationIterator = graph.virtualAllocations.find(handle);
+  if (allocationIterator == graph.virtualAllocations.end()) {
     return; // not found
   }
 
-  auto &block = graph.memoryBlocks[allocation->blockIndex];
+  auto &allocation = allocationIterator->second;
 
-  vmaVirtualFree(block.virtualBlock, allocation->allocation);
+  auto &block = graph.memoryBlocks[allocation.blockIndex];
 
-  // Remove from allocations list
-  for (auto it = graph.virtualAllocations.begin();
-       it != graph.virtualAllocations.end(); ++it) {
-    if (it->resource == handle) {
-      graph.virtualAllocations.erase(it);
-      break;
-    }
-  }
+  vmaVirtualFree(block.virtualBlock, allocation.allocation);
 }
 
 auto inline QueryMemoryAlignmentOfTexture(GraphicsContext &context,
-                                          const TextureResource &texRes)
+                                          const Texture::Texture &texture)
     -> VkDeviceSize {
   VkImageCreateInfo imageInfo = {};
   imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
   imageInfo.imageType = VK_IMAGE_TYPE_2D;
-  imageInfo.format = texRes.format;
-  imageInfo.extent = texRes.extent;
-  imageInfo.mipLevels = texRes.mipLevels;
-  imageInfo.arrayLayers = texRes.arrayLayers;
-  imageInfo.samples = texRes.samples;
+  imageInfo.format = texture.format;
+  imageInfo.extent = texture.size;
+  imageInfo.mipLevels = texture.mipmapcount;
+  imageInfo.arrayLayers = texture.arrayLayers;
+  imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
   imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-  imageInfo.usage = texRes.usage;
+  imageInfo.usage = texture.usage;
   imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
   imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 
@@ -595,12 +619,11 @@ auto inline QueryMemoryAlignmentOfTexture(GraphicsContext &context,
 }
 
 auto inline QueryMemoryAlignmentOfBuffer(GraphicsContext &context,
-                                         const BufferResource &bufRes)
-    -> VkDeviceSize {
+                                         const Buffer &buffer) -> VkDeviceSize {
   VkBufferCreateInfo bufferInfo = {};
   bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-  bufferInfo.size = bufRes.size;
-  bufferInfo.usage = bufRes.usage;
+  bufferInfo.size = buffer.size;
+  bufferInfo.usage = buffer.usage;
   bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
   VkBuffer tempBuffer = nullptr;
@@ -799,60 +822,245 @@ auto inline GetDescriptorType(const Resource &resource,
   return descriptorType;
 }
 
+[[nodiscard]] auto inline CreateGraphDescriptorPool(GraphicsContext &context,
+                                                    RenderGraph &graph)
+    -> Error::Error {
+  std::unordered_map<VkDescriptorType, uint32_t> descriptorTypeCounts;
+
+  uint32_t totalSets = 0;
+
+  for (const auto &pass : graph.passes) {
+    // Count unique sets
+
+    std::unordered_set<uint32_t> uniqueSets;
+
+    for (const auto &binding : pass.resourceBindings) {
+      if (binding.type == BindingType::Attachment) {
+        continue; // skip attachments
+      }
+
+      const auto &resource = graph.resources[binding.resource];
+
+      VkDescriptorType descriptorType = GetDescriptorType(resource, binding);
+      descriptorTypeCounts[descriptorType]++;
+
+      uniqueSets.insert(binding.set);
+    }
+
+    totalSets += static_cast<uint32_t>(uniqueSets.size());
+  }
+
+  constexpr double AllocationMuliplier = 0.1; // 10% extra
+
+  std::vector<VkDescriptorPoolSize> poolSizes;
+  for (const auto &typeCount : descriptorTypeCounts) {
+    auto type = typeCount.first;
+    auto count = typeCount.second;
+
+    count += (std::max)(1U, static_cast<uint32_t>(static_cast<double>(count) *
+                                                  AllocationMuliplier));
+
+    poolSizes.push_back(
+        VkDescriptorPoolSize{.type = type, .descriptorCount = count});
+  }
+
+  VkDescriptorPoolCreateInfo poolInfo{};
+  poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+  poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
+  poolInfo.pPoolSizes = poolSizes.data();
+  poolInfo.maxSets = totalSets;
+
+  VkResult result = vkCreateDescriptorPool(context.device, &poolInfo, nullptr,
+                                           &graph.descriptorPool);
+  if (result != VK_SUCCESS) {
+    return Error::FromVkResult(result);
+  }
+
+  return Error::Success();
+}
+
+auto inline CreatePassDescriptorSetLayouts(GraphicsContext &context,
+                                           RenderGraph &graph,
+                                           CompiledPass &pass) -> Error::Error {
+
+  std::unordered_map<uint32_t, std::vector<VkDescriptorSetLayoutBinding>>
+      setBindings;
+
+  for (auto &binding : pass.pass.resourceBindings) {
+    if (binding.type == BindingType::Attachment) {
+      continue; // skip attachments
+    }
+
+    const auto &resource = graph.resources[binding.resource];
+
+    VkDescriptorSetLayoutBinding layoutBinding{};
+    layoutBinding.binding = binding.binding; // binding in the set
+    layoutBinding.descriptorType = GetDescriptorType(resource, binding);
+    layoutBinding.descriptorCount = 1;              // not an array
+    layoutBinding.stageFlags = VK_SHADER_STAGE_ALL; // adjust as needed
+    layoutBinding.pImmutableSamplers = nullptr;
+
+    setBindings[binding.set].push_back(layoutBinding); // add to the correct set
+  }
+
+  // Create descriptor set layouts
+  for (const auto &setBindingPair : setBindings) {
+    VkDescriptorSetLayoutCreateInfo layoutInfo{};
+    layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    layoutInfo.bindingCount =
+        static_cast<uint32_t>(setBindingPair.second.size());
+    layoutInfo.pBindings = setBindingPair.second.data();
+
+    VkDescriptorSetLayout descriptorSetLayout = nullptr;
+    VkResult result = vkCreateDescriptorSetLayout(
+        context.device, &layoutInfo, nullptr, &descriptorSetLayout);
+    if (result != VK_SUCCESS) {
+      return Error::FromVkResult(result);
+    }
+
+    pass.pass.state.descriptorSetLayouts[setBindingPair.first] =
+        descriptorSetLayout;
+  }
+
+  return Error::Success();
+}
+
+auto inline CreateGraphDescriptorSetLayouts(GraphicsContext &context,
+                                            RenderGraph &graph)
+    -> Error::Error {
+  for (auto &compiledPass : graph.compiledPasses) {
+    auto error = CreatePassDescriptorSetLayouts(context, graph, compiledPass);
+    if (Error::IsError(error)) {
+      return error;
+    }
+  }
+
+  return Error::Success();
+}
+
+auto inline CreatePassDescriptorSets(GraphicsContext &context,
+                                     RenderGraph &graph, CompiledPass &pass)
+    -> Error::Error {
+  std::vector<VkDescriptorSetLayout> layouts;
+  layouts.reserve(pass.pass.state.descriptorSetLayouts.size());
+
+  std::cout << "Creating descriptor sets for pass " << pass.pass.handle << "\n";
+  std::cout << "Descriptor set layout count: "
+            << pass.pass.state.descriptorSetLayouts.size() << "\n";
+
+  if (pass.pass.state.descriptorSetLayouts.empty()) {
+    std::cout << "Pass " << pass.pass.handle
+              << ": No descriptor set layouts, skipping allocation." << "\n";
+    return Error::Success(); // No descriptor sets needed
+  }
+
+  for (const auto &setBindingPair : pass.pass.state.descriptorSetLayouts) {
+    std::cout << "Pass " << pass.pass.handle
+              << ": Using descriptor set layout for set "
+              << setBindingPair.first << "\n";
+    layouts.emplace_back(setBindingPair.second); // Add all set layouts
+  }
+
+  VkDescriptorSetAllocateInfo allocInfo{};
+  allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+  allocInfo.descriptorPool = graph.descriptorPool;
+  allocInfo.descriptorSetCount = static_cast<uint32_t>(layouts.size());
+  allocInfo.pSetLayouts = layouts.data();
+
+  VkResult result = vkAllocateDescriptorSets(context.device, &allocInfo,
+                                             &pass.pass.state.descriptorSet);
+  if (result != VK_SUCCESS) {
+    return Error::FromVkResult(result);
+  }
+
+  return Error::Success();
+}
+
+auto inline CreateGraphDescriptorSets(GraphicsContext &context,
+                                      RenderGraph &graph) -> Error::Error {
+  for (auto &compiledPass : graph.compiledPasses) {
+    auto error = CreatePassDescriptorSets(context, graph, compiledPass);
+    if (Error::IsError(error)) {
+      return error;
+    }
+  }
+
+  return Error::Success();
+}
+
 auto inline ConfigurePassDescriptors(GraphicsContext &context,
                                      RenderGraph &graph, CompiledPass &pass,
                                      const ResourceBinding &binding) -> void {
   // For each pass, configure descriptors for read/write resources
-  for (const auto &resHandle : pass.pass.GetResources(
-           static_cast<AccessType>(static_cast<uint32_t>(AccessType::Read) |
-                                   static_cast<uint32_t>(AccessType::Write)))) {
-    const auto &resource = graph.resources[resHandle];
+  const auto &resHandle = binding.resource;
+  auto &resource = graph.resources[resHandle];
 
-    VkDescriptorImageInfo imageInfo = {};
-    VkDescriptorBufferInfo bufferInfo = {};
+  VkDescriptorImageInfo imageInfo = {};
+  VkDescriptorBufferInfo bufferInfo = {};
 
-    if (resource.type == Type::Texture) {
-      const auto &texInfo = std::get<TextureInfo>(resource.info);
-      if (binding.type == BindingType::Attachment) {
-        continue; // Skip raster attachments
-      }
-
-      // Binding type allows:
-      // Sampled: read-only sampler2D
-      // Storage: read-write image2D
-      auto layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-      if (binding.type == BindingType::Storage) {
-        layout = VK_IMAGE_LAYOUT_GENERAL;
-      }
-
-      imageInfo.imageLayout = layout;
-      // ImageView and Sampler would be set during actual execution
-      imageInfo.imageView = VK_NULL_HANDLE;
-      imageInfo.sampler = VK_NULL_HANDLE;
-    } else if (resource.type == Type::Buffer) {
-      const auto &bufInfo = std::get<BufferInfo>(resource.info);
-
-      bufferInfo.offset = 0;
-      bufferInfo.range = bufInfo.transient.size;
-      // Buffer would be set during actual execution
-      bufferInfo.buffer = VK_NULL_HANDLE;
+  if (resource.type == Type::Texture) {
+    auto &texture = std::get<Texture::Texture>(resource.info);
+    if (binding.type == BindingType::Attachment) {
+      return; // Skip raster attachments
     }
 
-    VkWriteDescriptorSet writeDesc = {};
-    writeDesc.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    writeDesc.dstBinding = binding.binding;
-    writeDesc.dstArrayElement = 0;
-    writeDesc.descriptorCount = 1;
-    writeDesc.descriptorType = GetDescriptorType(resource, binding);
-    writeDesc.pImageInfo =
-        resource.type == Type::Texture ? &imageInfo : nullptr;
-    writeDesc.pBufferInfo =
-        resource.type == Type::Buffer ? &bufferInfo : nullptr;
+    // Binding type allows:
+    // Sampled: read-only sampler2D
+    // Storage: read-write image2D
+    auto layout = VK_IMAGE_LAYOUT_UNDEFINED;
+    if (binding.type == BindingType::Storage) {
+      if (binding.usage == ResourceUsage::ReadOnly) {
+        layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+      } else if (binding.usage == ResourceUsage::ReadWrite ||
+                 binding.usage == ResourceUsage::WriteOnly) {
+        layout = VK_IMAGE_LAYOUT_GENERAL;
+      }
+    } else if (binding.type == BindingType::Sampler) {
+      layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    }
 
-    vkUpdateDescriptorSets(context.device, 1, &writeDesc, 0, nullptr);
+    std::cout << "Setting up color attachment at location " << binding.location
+              << "\n";
+    std::cout << "  Resource lifetime type: "
+              << (resource.lifetime == ResourceLifetime::Transient
+                      ? "Transient"
+                      : "Persistent")
+              << "\n";
 
-    pass.pass.state.descriptorWrites.emplace_back(writeDesc);
+    imageInfo.imageLayout = layout;
+    imageInfo.imageView = texture.view;
+    assert(imageInfo.imageView != VK_NULL_HANDLE &&
+           "Texture image view is null in descriptor setup");
+    imageInfo.sampler = texture.GetSampler(context);
+    std::cout << "Configured descriptor for texture resource "
+              << resource.handle << " with sampler "
+              << (imageInfo.sampler != VK_NULL_HANDLE ? "set" : "null") << "\n";
+    auto cache = GetSamplerCache();
+
+    cache[resource.handle] = imageInfo.sampler;
+
+  } else if (resource.type == Type::Buffer) {
+    const auto &buffer = std::get<Buffer>(resource.info);
+
+    bufferInfo.offset = 0;
+    bufferInfo.range = buffer.sizeInBytes;
+    // Buffer would be set during actual execution
+    bufferInfo.buffer = VK_NULL_HANDLE;
   }
+
+  VkWriteDescriptorSet writeDesc = {};
+  writeDesc.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+  writeDesc.dstBinding = binding.binding;
+  writeDesc.dstArrayElement = 0;
+  writeDesc.descriptorCount = 1;
+  writeDesc.descriptorType = GetDescriptorType(resource, binding);
+  writeDesc.pImageInfo = resource.type == Type::Texture ? &imageInfo : nullptr;
+  writeDesc.pBufferInfo = resource.type == Type::Buffer ? &bufferInfo : nullptr;
+  writeDesc.dstSet = pass.pass.state.descriptorSet;
+
+  vkUpdateDescriptorSets(context.device, 1, &writeDesc, 0, nullptr);
+
+  pass.pass.state.descriptorWrites.emplace_back(writeDesc);
 }
 
 auto inline ConfigureGraphDescriptors(GraphicsContext &context,
@@ -869,9 +1077,6 @@ auto inline ConfigureGraphDescriptors(GraphicsContext &context,
                                                  RenderGraph &graph,
                                                  CompiledPass &compiledPass)
     -> Error::Error {
-  // Create graphics pipeline for the pass
-  // For now, we will create a very basic pipeline with no shaders
-  // In a real implementation, shaders would be provided per pass
 
   if (compiledPass.pass.state.bindPoint != VK_PIPELINE_BIND_POINT_GRAPHICS) {
     return Error::Create(
@@ -986,10 +1191,10 @@ auto inline ConfigureGraphDescriptors(GraphicsContext &context,
     if (binding.type == BindingType::Attachment) {
       auto &resource = graph.resources[binding.resource];
       if (resource.type == Type::Texture) {
-        const auto &texInfo = std::get<TextureInfo>(resource.info);
-        if (Texture::IsDepthTexture(texInfo.transient.format)) {
+        const auto &texture = std::get<Texture::Texture>(resource.info);
+        if (Texture::IsDepthTexture(texture.format)) {
           hasDepthAttachment = true;
-        } else if (Texture::IsStencilTexture(texInfo.transient.format)) {
+        } else if (Texture::IsStencilTexture(texture.format)) {
           hasStencilAttachment = true;
         } else {
           colorAttachmentCount++;
@@ -1010,19 +1215,12 @@ auto inline ConfigureGraphDescriptors(GraphicsContext &context,
   for (const auto &binding : compiledPass.pass.resourceBindings) {
     if (binding.type == BindingType::Attachment) {
       auto &resource = graph.resources[binding.resource];
-      const auto &texInfo = std::get<TextureInfo>(resource.info);
+      const auto &texture = std::get<Texture::Texture>(resource.info);
 
-      if (texInfo.imported) {
-        formats[binding.location] = texInfo.external.texture.format;
-        std::cout << "  Using imported format for attachment at location "
-                  << binding.location << ": "
-                  << static_cast<uint32_t>(formats[binding.location]) << "\n";
-      } else {
-        formats[binding.location] = texInfo.transient.format;
-        std::cout << "  Using transient format for attachment at location "
-                  << binding.location << ": "
-                  << static_cast<uint32_t>(formats[binding.location]) << "\n";
-      }
+      formats[binding.location] = texture.format;
+      std::cout << "  Using format for attachment at location "
+                << binding.location << ": "
+                << static_cast<uint32_t>(formats[binding.location]) << "\n";
     }
   }
 
@@ -1143,27 +1341,12 @@ auto inline ConfigureGraphDescriptors(GraphicsContext &context,
   return Error::Success();
 }
 
-auto inline ApplyDescriptorSets(RenderGraph &graph, CompiledPass &pass)
-    -> void {
-  std::vector<VkDescriptorSetLayoutBinding> bindings;
-  bindings.reserve(pass.pass.state.descriptorWrites.size());
-
-  for (auto &descriptorWrite : pass.pass.state.descriptorWrites) {
-    VkDescriptorSetLayoutBinding binding{};
-    binding.binding = descriptorWrite.dstBinding;
-    binding.descriptorType = descriptorWrite.descriptorType;
-    binding.descriptorCount = descriptorWrite.descriptorCount;
-    // binding.stageFlags = descriptorWrite.
-  }
-}
-
 [[nodiscard]] auto inline BuildVirtualMemory(GraphicsContext &context,
                                              RenderGraph &graph)
     -> Error::Error {
   // Loop over compiled resource timeline and allocate/deallocate as needed
 
   graph.virtualAllocations.clear();
-  graph.virtualAllocations.resize(graph.resources.size());
   for (const auto &entry : graph.compiledResources) {
     const auto &resource = graph.resources[entry.resourceHandle];
 
@@ -1175,16 +1358,16 @@ auto inline ApplyDescriptorSets(RenderGraph &graph, CompiledPass &pass)
       allocationInfo.handle = resource.handle;
 
       if (resource.type == Type::Texture) {
-        const auto &tex = std::get<TextureInfo>(resource.info).transient;
+        const auto &tex = std::get<Texture::Texture>(resource.info);
 
         // Heuristic size (not actual alloc size)
-        auto texels = Texture::GetTexelCount(tex.extent, tex.mipLevels);
+        auto texels = Texture::GetTexelCount(tex.size, tex.mipmapcount);
         texels *= tex.arrayLayers;
         allocationInfo.size = texels * Texture::GetFormatSize(tex.format);
 
         allocationInfo.alignment = QueryMemoryAlignmentOfTexture(context, tex);
       } else {
-        const auto &buf = std::get<BufferInfo>(resource.info).transient;
+        const auto &buf = std::get<Buffer>(resource.info);
         allocationInfo.size = buf.size;
         allocationInfo.alignment = QueryMemoryAlignmentOfBuffer(context, buf);
       }
@@ -1229,94 +1412,171 @@ auto inline ApplyDescriptorSets(RenderGraph &graph, CompiledPass &pass)
   return Error::Success();
 }
 
-[[nodiscard]] auto inline AllocateResourceMemory(GraphicsContext &context,
-                                                 RenderGraph &graph,
-                                                 const ResourceHandle handle)
+auto inline AllocateResourceMemory(GraphicsContext &context, RenderGraph &graph,
+                                   const ResourceHandle handle)
     -> Error::Error {
-  // Find the virtual allocation for the resource
-  bool found = false;
-  VirtualAllocation *allocation = nullptr;
-  for (auto &alloc : graph.virtualAllocations) {
-    if (alloc.resource == handle) {
-      allocation = &alloc;
-      found = true;
-      break;
-    }
-  }
+  auto allocationIterator = graph.virtualAllocations.find(handle);
+  bool found = allocationIterator != graph.virtualAllocations.end();
 
   if (!found) {
-    return Error::Create("Resource allocation not found in render graph");
+    return Error::Create("Resource allocation for resource: [" +
+                         std::to_string(handle) +
+                         "] not found in render graph.");
   }
 
-  auto &block = graph.memoryBlocks[allocation->blockIndex];
+  auto allocation = allocationIterator->second;
+
+  auto &block = graph.memoryBlocks[allocation.blockIndex];
   auto &resource = graph.resources[handle];
 
+  if (resource.lifetime == ResourceLifetime::Persistent) {
+    return Error::Create(
+        "Cannot allocate memory for persistent resource in render graph.");
+  }
+
   if (resource.type == Type::Texture) {
-    auto &texInfo = std::get<TextureInfo>(resource.info);
+    auto &texture = std::get<Texture::Texture>(resource.info);
 
     VkImageCreateInfo imageInfo = {};
     imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     imageInfo.imageType = VK_IMAGE_TYPE_2D;
-    imageInfo.format = texInfo.transient.format;
-    imageInfo.extent = texInfo.transient.extent;
-    imageInfo.mipLevels = texInfo.transient.mipLevels;
-    imageInfo.arrayLayers = texInfo.transient.arrayLayers;
-    imageInfo.samples = texInfo.transient.samples;
+    imageInfo.format = texture.format;
+    imageInfo.extent = texture.size;
+    imageInfo.mipLevels = texture.mipmapcount;
+    imageInfo.arrayLayers = texture.arrayLayers;
+    imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
     imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-    imageInfo.usage = texInfo.transient.usage;
+    imageInfo.usage = texture.usage;
     imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 
-    VkImage image = nullptr;
     auto result = Error::FromVkResult(
-        vkCreateImage(context.device, &imageInfo, nullptr, &image));
+        vkCreateImage(context.device, &imageInfo, nullptr, &texture.image));
 
     if (Error::IsError(result)) {
       return result;
     }
 
     result = Error::FromVkResult(vkBindImageMemory(
-        context.device, image, block.memory, allocation->offset));
+        context.device, texture.image, block.memory, allocation.offset));
     if (Error::IsError(result)) {
       return result;
     }
-
-    texInfo.transient.image = image;
 
     VkImageViewCreateInfo viewInfo = {};
     viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-    viewInfo.image = image;
+    viewInfo.image = texture.image;
     viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    viewInfo.format = texInfo.transient.format;
+    viewInfo.format = texture.format;
     viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     viewInfo.subresourceRange.baseMipLevel = 0;
-    viewInfo.subresourceRange.levelCount = texInfo.transient.mipLevels;
+    viewInfo.subresourceRange.levelCount = texture.mipmapcount;
     viewInfo.subresourceRange.baseArrayLayer = 0;
-    viewInfo.subresourceRange.layerCount = texInfo.transient.arrayLayers;
+    viewInfo.subresourceRange.layerCount = texture.arrayLayers;
 
-    result = Error::FromVkResult(vkCreateImageView(
-        context.device, &viewInfo, nullptr, &texInfo.transient.view));
-  } else if (resource.type == Type::Buffer) {
-    auto &bufInfo = std::get<BufferInfo>(resource.info);
-
-    VkBufferCreateInfo bufferInfo = {};
-    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    bufferInfo.size = bufInfo.transient.size;
-    bufferInfo.usage = bufInfo.transient.usage;
-    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-    VkBuffer buffer = nullptr;
-    auto result = Error::FromVkResult(
-        vkCreateBuffer(context.device, &bufferInfo, nullptr, &buffer));
+    result = Error::FromVkResult(
+        vkCreateImageView(context.device, &viewInfo, nullptr, &texture.view));
 
     if (Error::IsError(result)) {
       return result;
     }
+  } else if (resource.type == Type::Buffer) {
+    auto &buffer = std::get<Buffer>(resource.info);
 
-    result = Error::FromVkResult(vkBindBufferMemory(
-        context.device, buffer, block.memory, allocation->offset));
-    if (Error::IsError(result)) {
-      return result;
+    VkBufferCreateInfo bufferInfo = {};
+    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bufferInfo.size = buffer.size;
+    bufferInfo.usage = buffer.usage;
+    bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    VmaAllocationCreateInfo allocInfo = {};
+    allocInfo.usage = VMA_MEMORY_USAGE_AUTO; // Let VMA decide
+    allocInfo.requiredFlags = buffer.properties;
+
+    VkResult result =
+        vmaCreateBuffer(context.vmaAllocator, &bufferInfo, &allocInfo,
+                        &buffer.handle, &buffer.memory, nullptr);
+  }
+
+  return Error::Success();
+}
+
+auto inline ValidateResources(const RenderGraph &graph) -> Error::Error {
+  for (const auto &resource : graph.resources) {
+    if (resource.type == Type::Texture) {
+      const auto &texture = std::get<Texture::Texture>(resource.info);
+      if (texture.image == VK_NULL_HANDLE || texture.view == VK_NULL_HANDLE) {
+        return Error::Create("Texture resource not properly allocated");
+      }
+    } else if (resource.type == Type::Buffer) {
+      const auto &buffer = std::get<Buffer>(resource.info);
+      if (buffer.handle == VK_NULL_HANDLE) {
+        return Error::Create("Buffer resource not properly allocated");
+      }
+    }
+  }
+
+  // check if transient resource is written to but never read: warning
+  // check if transient resource is read from but never written: warning
+
+  std::unordered_set<ResourceHandle> writtenResources;
+  std::unordered_set<ResourceHandle> readResources;
+
+  for (const auto &compiledPass : graph.compiledPasses) {
+    for (const auto &resHandle :
+         compiledPass.pass.GetResources(AccessType::Write)) {
+      writtenResources.insert(resHandle);
+    }
+    for (const auto &resHandle :
+         compiledPass.pass.GetResources(AccessType::Read)) {
+      readResources.insert(resHandle);
+    }
+  }
+
+  for (const auto &resource : graph.resources) {
+    if (resource.lifetime == ResourceLifetime::Transient) {
+      bool isWritten = writtenResources.contains(resource.handle);
+      bool isRead = readResources.contains(resource.handle);
+
+      if (isWritten && !isRead) {
+        std::cout << "Warning: Transient resource " << resource.handle
+                  << " is written to but never read." << "\n";
+      } else if (!isWritten && isRead) {
+        std::cout << "Warning: Transient resource " << resource.handle
+                  << " is read from but never written." << "\n";
+      }
+    }
+  }
+
+  return Error::Success();
+}
+
+[[nodiscard]]
+
+auto inline AllocateGraphResourceMemory(GraphicsContext &context,
+                                        RenderGraph &graph) -> Error::Error {
+  std::unordered_set<ResourceHandle> usedResources;
+
+  for (const auto &compiledPass : graph.compiledPasses) {
+    for (const auto &resHandle :
+         compiledPass.pass.GetResources(static_cast<AccessType>(
+             static_cast<uint32_t>(AccessType::Read) |
+             static_cast<uint32_t>(AccessType::Write)))) {
+      auto &resource = graph.resources[resHandle];
+      if (resource.lifetime == ResourceLifetime::Persistent) {
+        continue; // Skip persistent resources
+      }
+
+      usedResources.insert(resHandle);
+      std::cout << "Resource " << resHandle << " is used in pass "
+                << compiledPass.pass.handle << "\n";
+    }
+  }
+
+  for (const auto &resHandle : usedResources) {
+    auto error = AllocateResourceMemory(context, graph, resHandle);
+    if (Error::IsError(error)) {
+      return error;
     }
   }
 
@@ -1331,28 +1591,15 @@ auto inline ApplyDescriptorSets(RenderGraph &graph, CompiledPass &pass)
 
   for (auto &resource : graph.resources) {
     if (resource.type == Type::Texture) {
-      auto &texInfo = std::get<TextureInfo>(resource.info);
-      if (texInfo.imported) {
-        resource.cost = texInfo.external.texture.sizeInBytes;
-      } else {
-        resource.cost =
-            texInfo.transient.extent.width * texInfo.transient.extent.height *
-            texInfo.transient.extent.depth *
-            Graphics::Texture::GetFormatSize(texInfo.transient.format);
+      auto &texture = std::get<Texture::Texture>(resource.info);
+      resource.cost =
+          Texture::GetTexelCount(texture.size, texture.mipmapcount) *
+          Texture::GetFormatSize(texture.format);
 
-        bool isVolumeTexture = texInfo.transient.extent.depth > 1 &&
-                               texInfo.transient.arrayLayers == 1;
-
-        resource.cost = static_cast<uint32_t>(
-            static_cast<float>(resource.cost) *
-            Graphics::Texture::GetMipChainCostMultiplier(
-                texInfo.transient.mipLevels, isVolumeTexture));
-
-        resource.cost *= texInfo.transient.arrayLayers;
-      }
+      resource.cost *= texture.arrayLayers;
     } else if (resource.type == Type::Buffer) {
-      auto &bufInfo = std::get<BufferInfo>(resource.info);
-      resource.cost = static_cast<uint32_t>(bufInfo.transient.size);
+      auto &buffer = std::get<Buffer>(resource.info);
+      resource.cost = static_cast<uint32_t>(buffer.size);
     }
   }
 
@@ -1383,16 +1630,52 @@ auto inline ApplyDescriptorSets(RenderGraph &graph, CompiledPass &pass)
   std::cout << "Allocated " << graph.memoryBlocks.size()
             << " memory blocks for render graph." << "\n";
 
+  error = AllocateGraphResourceMemory(context, graph);
+  if (Error::IsError(error)) {
+    return error;
+  }
+
+  std::cout << "Allocated memory for render graph resources." << "\n";
+
+  error = ValidateResources(graph);
+  if (Error::IsError(validationResult)) {
+    return validationResult.error();
+  }
+
+  error = CreateGraphDescriptorPool(context, graph);
+
+  if (Error::IsError(error)) {
+    return error;
+  }
+
+  std::cout << "Created descriptor pool for render graph." << "\n";
+
+  error = CreateGraphDescriptorSetLayouts(context, graph);
+
+  if (Error::IsError(error)) {
+    return error;
+  }
+
+  std::cout << "Created descriptor set layouts for render graph passes."
+            << "\n";
+
+  error = CreateGraphDescriptorSets(context, graph);
+
+  if (Error::IsError(error)) {
+    return error;
+  }
+
+  std::cout << "Allocated descriptor sets for render graph passes." << "\n";
+
+  ConfigureGraphDescriptors(context, graph);
+
+  std::cout << "Configured descriptors for render graph passes." << "\n";
   error = CreatePassPipelines(context, graph);
   if (Error::IsError(error)) {
     return error;
   }
 
   std::cout << "Created pipelines for render graph passes." << "\n";
-
-  ConfigureGraphDescriptors(context, graph);
-
-  std::cout << "Configured descriptors for render graph passes." << "\n";
 
   return Error::Success();
 }
@@ -1424,17 +1707,25 @@ auto BeginPassRendering(GraphicsContext &context, RenderGraph &graph,
       AttachmentInfo attachInfo =
           GetPassAttachmentInfo(compiledPass.pass, binding);
 
-      TextureInfo texInfo = std::get<TextureInfo>(resource.info);
+      Texture::Texture texture = std::get<Texture::Texture>(resource.info);
 
-      if (Texture::IsDepthTexture(texInfo.transient.format)) {
+      if (Texture::IsDepthTexture(texture.format)) {
         hasDepthAttachment = true;
         continue;
       }
 
-      if (Texture::IsStencilTexture(texInfo.transient.format)) {
+      if (Texture::IsStencilTexture(texture.format)) {
         hasStencilAttachment = true;
         continue;
       }
+
+      std::cout << "Setting up color attachment at location "
+                << binding.location << "\n";
+      std::cout << "  Resource lifetime type: "
+                << (resource.lifetime == ResourceLifetime::Transient
+                        ? "Transient"
+                        : "Persistent")
+                << "\n";
 
       VkRenderingAttachmentInfo colorAttach = {};
       colorAttach.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
@@ -1442,12 +1733,9 @@ auto BeginPassRendering(GraphicsContext &context, RenderGraph &graph,
       colorAttach.storeOp = attachInfo.storeOp;
       colorAttach.clearValue = attachInfo.clearValue;
 
-      if (texInfo.imported) {
-        colorAttach.imageView = texInfo.external.texture.view;
-      } else {
-        colorAttach.imageView = texInfo.transient.view;
-      }
-
+      colorAttach.imageView = texture.view;
+      assert(colorAttach.imageView != VK_NULL_HANDLE &&
+             "Invalid image view for color attachment");
       colorAttach.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
       colorAttach.resolveMode = VK_RESOLVE_MODE_NONE; // For multi-sampling
@@ -1496,13 +1784,25 @@ auto Execute(GraphicsContext &context, RenderGraph &graph,
              VK_PIPELINE_BIND_POINT_COMPUTE);
     }
 
+    // Todo, loop over all samplers, and check against the sampler cache to see
+    // if we have created a new sampler and need to bind the new one
+
+    /*
+    auto cache = GetSamplerCache();
+    auto samplerIterator = cache.find(resource.handle);
+    if (imageInfo.sampler != samplerIterator->second ||
+        samplerIterator == cache.end()) {
+      cache[resource.handle] = imageInfo.sampler;
+    }
+    */
+
     // Bind pipeline
     vkCmdBindPipeline(commandBuffer, compiledPass.pass.state.bindPoint,
                       compiledPass.pass.state.pipeline);
 
-    // vkCmdBindDescriptorSets(commandBuffer, compiledPass.pass.state.bindPoint,
-    //                         compiledPass.pass.state.pipelineLayout, 0, 0,
-    //                         nullptr, 0, nullptr);
+    vkCmdBindDescriptorSets(commandBuffer, compiledPass.pass.state.bindPoint,
+                            compiledPass.pass.state.pipelineLayout, 0, 1,
+                            &compiledPass.pass.state.descriptorSet, 0, nullptr);
 
     compiledPass.pass.executeFunction(commandBuffer, context, graph);
 
@@ -1519,27 +1819,26 @@ auto AddTexture(RenderGraph &graph, const TextureDescriptor &descriptor)
   resource.lifetime = descriptor.lifetime;
   resource.type = Type::Texture;
 
-  TextureInfo texInfo = {};
+  Texture::Texture texture = {};
 
-  bool volumeTexture =
-      descriptor.type == Texture::TextureType::TEXTURE_TYPE_VOLUME;
+  bool volumeTexture = descriptor.type == Texture::TextureType::VOLUME;
   uint32_t depth = volumeTexture ? descriptor.depthOrLayers : 1U;
   uint32_t layers = volumeTexture ? 1U : descriptor.depthOrLayers;
 
-  TextureResource texResource = {};
-  texResource.format = descriptor.format;
-  texResource.extent = {
+  texture.format = descriptor.format;
+  texture.size = {
       .width = descriptor.width, .height = descriptor.height, .depth = depth};
-  texResource.mipLevels = descriptor.mipLevels;
-  texResource.arrayLayers = layers;
-  texResource.usage = descriptor.usage;
-  texResource.samples = VK_SAMPLE_COUNT_1_BIT;
+  texture.mipmapcount = descriptor.mipLevels;
+  texture.arrayLayers = layers;
+  texture.usage = descriptor.usage;
+  texture.type = descriptor.type;
+  texture.samplerDirty = true;
 
-  texInfo.transient = texResource;
-  texInfo.imported = false;
-
-  resource.info = texInfo;
+  resource.info = texture;
   graph.resources.emplace_back(resource);
+
+  std::cout << "Added texture resource with handle " << resource.handle << "\n";
+  std::cout << "  Usage flags: " << descriptor.usage << "\n";
 
   return resource.handle;
 }
@@ -1551,16 +1850,13 @@ auto AddBuffer(RenderGraph &graph, BufferDescriptor descriptor)
   resource.lifetime = descriptor.lifetime;
   resource.type = Type::Buffer;
 
-  BufferInfo bufInfo = {};
+  Buffer buffer = {};
 
-  BufferResource bufResource = {};
-  bufResource.size = descriptor.size;
-  bufResource.usage = descriptor.usage;
+  buffer.size = descriptor.size;
+  buffer.usage = descriptor.usage;
+  buffer.properties = descriptor.memory;
 
-  bufInfo.transient = bufResource;
-  bufInfo.imported = false;
-
-  resource.info = bufInfo;
+  resource.info = buffer;
   graph.resources.emplace_back(resource);
 
   return resource.handle;
@@ -1573,18 +1869,16 @@ auto ImportTexture(RenderGraph &graph, const Graphics::Texture::Texture texture,
   resource.handle = static_cast<ResourceHandle>(graph.resources.size());
   resource.lifetime = ResourceLifetime::Persistent;
   resource.type = Type::Texture;
+  resource.info = texture;
 
-  TextureInfo texInfo = {};
+  assert(texture.view != VK_NULL_HANDLE &&
+         "Imported texture must have a valid image view");
 
-  ImportedTexture importedTex = {};
-  importedTex.texture = texture;
-  importedTex.initialLayout = initialLayout;
-  importedTex.finalLayout = finalLayout;
-
-  texInfo.external = importedTex;
-  texInfo.imported = true;
-  resource.info = texInfo;
   graph.resources.emplace_back(resource);
+
+  std::cout << "Imported texture resource with handle " << resource.handle
+            << "\n";
+  std::cout << "  Usage flags: " << texture.usage << "\n";
 
   return resource.handle;
 }
@@ -1596,14 +1890,7 @@ auto ImportBuffer(RenderGraph &graph, const Graphics::Buffer &buffer)
   resource.lifetime = ResourceLifetime::Persistent;
   resource.type = Type::Buffer;
 
-  BufferInfo bufInfo = {};
-  bufInfo.imported = true;
-
-  ImportedBuffer importedBuf = {};
-  importedBuf.buffer = buffer;
-
-  bufInfo.external = importedBuf;
-  resource.info = bufInfo;
+  resource.info = buffer;
   graph.resources.emplace_back(resource);
 
   return resource.handle;

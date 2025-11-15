@@ -2,6 +2,7 @@
 #include "../external/physfs/src/physfs.h"
 #include "error.hpp"
 #include "tl/expected.hpp"
+#include <iostream>
 #include <span>
 #include <string>
 #include <string_view>

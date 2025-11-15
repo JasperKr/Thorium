@@ -1,7 +1,7 @@
-#define IMGUI_IMPL_VULKAN_NO_PROTOTYPES
-
 #include "imgui.hpp"
 #include "Graphics/graphics.hpp"
+#include "Graphics/shader.hpp"
+#include "Modules/error.hpp"
 #include "backends/imgui_impl_sdl3.h"
 #include "backends/imgui_impl_vulkan.h"
 #include "imgui.h"
@@ -26,10 +26,28 @@ namespace Editor {
 auto InitializeImGui(
     Graphics::GraphicsContext &context,
     Graphics::Rendergraph::RenderGraph &graph,
-    Graphics::Rendergraph::ResourceHandle lastPassHandle, // NOLINT
+    Graphics::Rendergraph::ResourceHandle lastResourceHandle, // NOLINT
     Graphics::Rendergraph::ResourceHandle writeResourceHandle,
     Context &editorContext) -> Error::Error {
   // Initialize ImGui context
+
+  std::cout << "Creating shaders for ImGui..." << "\n";
+
+  auto vertexShader = Graphics::Shader::ShaderModule::Create(
+      context, "src/Graphics/Shaders/imgui.vs", VK_SHADER_STAGE_VERTEX_BIT,
+      "ImGui vertex shader");
+
+  if (Error::IsError(vertexShader)) {
+    return vertexShader.error();
+  }
+
+  auto fragmentShader = Graphics::Shader::ShaderModule::Create(
+      context, "src/Graphics/Shaders/imgui.fs", VK_SHADER_STAGE_FRAGMENT_BIT,
+      "ImGui fragment shader");
+
+  if (Error::IsError(fragmentShader)) {
+    return fragmentShader.error();
+  }
 
   std::cout << "Initializing ImGui..." << "\n";
 
@@ -67,16 +85,6 @@ auto InitializeImGui(
   init_info.MinImageCount = context.swapchainInfo.imageCount;
   init_info.ImageCount = context.swapchainInfo.imageCount;
 
-  std::cout << "Setting ImGui Vulkan init info..." << "\n";
-  std::cout << "Instance: " << init_info.Instance << "\n";
-  std::cout << "PhysicalDevice: " << init_info.PhysicalDevice << "\n";
-  std::cout << "Device: " << init_info.Device << "\n";
-  std::cout << "QueueFamily: " << init_info.QueueFamily << "\n";
-  std::cout << "Queue: " << init_info.Queue << "\n";
-  std::cout << "DescriptorPool: " << init_info.DescriptorPool << "\n";
-  std::cout << "MinImageCount: " << init_info.MinImageCount << "\n";
-  std::cout << "ImageCount: " << init_info.ImageCount << "\n";
-
   init_info.Allocator = nullptr;
   init_info.UseDynamicRendering = VK_TRUE;
   init_info.PipelineInfoMain = {
@@ -89,15 +97,19 @@ auto InitializeImGui(
   PFN_vkGetDeviceProcAddr func = vkGetDeviceProcAddr;
   std::cout << "vkGetDeviceProcAddr = " << (void *)func << "\n";
 
-  success = ImGui_ImplVulkan_LoadFunctions(
+  auto load_vk_func = [&](const char *func) -> auto {
+    if (auto proc = vkGetDeviceProcAddr(context.device, func)) {
+      return proc;
+    }
+    return vkGetInstanceProcAddr(context.instance, func);
+  };
+  ImGui_ImplVulkan_LoadFunctions(
       VK_API_VERSION_1_4,
-      [](const char *function_name,
-         void *vulkan_instance) -> PFN_vkVoidFunction {
-        return vkGetInstanceProcAddr(
-            // NOLINTNEXTLINE
-            *(reinterpret_cast<VkInstance *>(vulkan_instance)), function_name);
+      [](const char *func, void *data) -> PFN_vkVoidFunction {
+        // NOLINTNEXTLINE
+        return (*(decltype(load_vk_func) *)data)(func);
       },
-      context.instance);
+      &load_vk_func);
 
   if (!success) {
     return Error::Create("Failed to load ImGui Vulkan functions.");
@@ -113,27 +125,46 @@ auto InitializeImGui(
   // Create render pass for ImGui
   Graphics::Rendergraph::AddRenderPass(
       graph,
-      {.resources =
-           {
-               {
-                   .resource = lastPassHandle,
-                   .accessType = Graphics::Rendergraph::AccessType::Write,
+      {
+          .resources = {{
+                            .resource = lastResourceHandle,
+                            .accessType =
+                                Graphics::Rendergraph::AccessType::Read,
+                        },
+                        {
+                            .resource = writeResourceHandle,
+                            .accessType =
+                                Graphics::Rendergraph::AccessType::Write,
+                        }},
+          .viewport = {.x = 0.0F,
+                       .y = 0.0F,
+                       .width = static_cast<float>(
+                           context.swapchainInfo.extent.width),
+                       .height = static_cast<float>(
+                           context.swapchainInfo.extent.height),
+                       .minDepth = 0.0F,
+                       .maxDepth = 1.0F},
+          .resourceBindings =
+              {{
+                   .resource = writeResourceHandle,
+                   .location = 0,
+                   .type = Graphics::Rendergraph::BindingType::Attachment,
                },
-           },
-
-       .viewport = {.x = 0.0F,
-                    .y = 0.0F,
-                    .width =
-                        static_cast<float>(context.swapchainInfo.extent.width),
-                    .height =
-                        static_cast<float>(context.swapchainInfo.extent.height),
-                    .minDepth = 0.0F,
-                    .maxDepth = 1.0F},
-       .executeFunction =
-           [](VkCommandBuffer cmd, Graphics::GraphicsContext &context,
-              Graphics::Rendergraph::RenderGraph &graph) -> void {
-         ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
-       }});
+               {
+                   .resource = lastResourceHandle,
+                   .binding = 0,
+                   .set = 0,
+                   .location = 1,
+                   .type = Graphics::Rendergraph::BindingType::Sampler,
+               }},
+          .vertexShader = vertexShader.value(),
+          .fragmentShader = fragmentShader.value(),
+          .executeFunction =
+              [](VkCommandBuffer cmd, Graphics::GraphicsContext &context,
+                 Graphics::Rendergraph::RenderGraph &graph) -> void {
+            ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
+          },
+      });
 
   return Error::Success();
 }

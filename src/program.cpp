@@ -188,7 +188,7 @@ auto Load(Graphics::GraphicsContext &context) -> Error::Error {
 
   Editor::Context imguiContext = {};
 
-  auto imguiErr = Editor::InitializeImGui(context, graph, rootHandle,
+  auto imguiErr = Editor::InitializeImGui(context, graph, textureHandles.at(0),
                                           swapchainHandle, imguiContext);
 
   if (Error::IsError(imguiErr)) {
@@ -199,7 +199,7 @@ auto Load(Graphics::GraphicsContext &context) -> Error::Error {
   auto graphErr = Graphics::Rendergraph::Compile(context, graph);
 
   if (Error::IsError(graphErr)) {
-    std::cerr << "Failed to compile render graph: " << graphErr.message << "\n";
+    std::cout << "Failed to compile render graph: " << graphErr.message << "\n";
     return graphErr;
   }
 
@@ -265,13 +265,7 @@ auto Draw(Graphics::GraphicsContext &context) -> Error::Error {
   auto texture = swapchainTextures[swapchainIndex];
   auto &graph = GetRenderGraph();
 
-  graph.resources[handle].info = Graphics::Rendergraph::TextureInfo{
-      .imported = true,
-      .external =
-          Graphics::Rendergraph::ImportedTexture{
-              .texture = texture,
-          },
-  };
+  graph.resources[handle].info = texture;
 
   Graphics::Rendergraph::Execute(context, graph,
                                  Graphics::GetCommandBuffer(context, 0));

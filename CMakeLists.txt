@@ -1,9 +1,13 @@
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.25)
 project(Thorium LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_C_STANDARD 11)
+
+if(MSVC)
+    add_compile_options(/Zc:__cplusplus)
+endif()
 
 # -------------------------------
 # Find Vulkan first
@@ -30,6 +34,12 @@ add_library(imgui
     external/imgui/backends/imgui_impl_sdl3.cpp
     external/imgui/backends/imgui_impl_vulkan.cpp
 )
+
+target_compile_definitions(imgui PRIVATE
+    IMGUI_IMPL_VULKAN_NO_PROTOTYPES
+    IMGUI_IMPL_VULKAN_USE_LOADER
+)
+
 target_include_directories(imgui PUBLIC external/imgui)
 target_link_libraries(imgui PUBLIC SDL3::SDL3 Vulkan::Vulkan)
 
@@ -106,6 +116,7 @@ add_executable(Thorium
     src/Graphics/render.cpp
     src/Graphics/shader.cpp
     src/Graphics/rendergraph.cpp
+    src/Graphics/sampler.cpp
 
     src/Modules/filesystem.cpp
     src/Modules/timer.cpp
@@ -116,6 +127,14 @@ add_executable(Thorium
     src/Libraries/load_stb.cpp
     src/Libraries/load_volk.cpp
 )
+
+# ImGui definitions
+target_compile_definitions(Thorium PRIVATE
+    IMGUI_IMPL_VULKAN_NO_PROTOTYPES
+    IMGUI_IMPL_VULKAN_USE_LOADER
+)
+
+
 
 # Include paths
 target_include_directories(Thorium

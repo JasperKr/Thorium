@@ -8,7 +8,8 @@
 #include "tl/expected.hpp"
 #include "vulkan/vulkan_core.h"
 
-namespace Graphics::Shader {
+namespace Graphics {
+namespace Shader {
 
 struct ShaderSource {
   std::string source;
@@ -39,7 +40,7 @@ struct ShaderModule {
   std::vector<ShaderExtern> externs;
 
   static auto Create(Graphics::GraphicsContext &context,
-                     const std::string &spirvPath, VkShaderStageFlagBits stage,
+                     const std::string &path, VkShaderStageFlagBits stage,
                      const std::string &name)
       -> tl::expected<ShaderModule, Error::Error>;
 
@@ -61,4 +62,5 @@ static inline auto PreprocessShaderCode(ShaderModule &shader,
 
 static auto AddGlobalShaderExtern(const ShaderExtern &externVar) -> void;
 
-} // namespace Graphics::Shader
+} // namespace Shader
+} // namespace Graphics
