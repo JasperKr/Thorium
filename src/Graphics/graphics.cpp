@@ -205,6 +205,9 @@ static auto CreateDevice(GraphicsContext &context) -> Error::Error {
       .dynamicRendering = VK_TRUE,
   };
 
+  std::cout << "Enabled Vulkan 1.3 features: synchronization2, dynamicRendering"
+            << "\n";
+
   // --- Vulkan 1.2 features ---
   VkPhysicalDeviceVulkan12Features features12{
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
@@ -215,6 +218,13 @@ static auto CreateDevice(GraphicsContext &context) -> Error::Error {
       .runtimeDescriptorArray = VK_TRUE,
       .bufferDeviceAddress = VK_TRUE,
   };
+
+  std::cout
+      << "Enabled Vulkan 1.2 features: descriptorIndexing, "
+         "shaderSampledImageArrayNonUniformIndexing, "
+         "shaderStorageBufferArrayNonUniformIndexing, runtimeDescriptorArray, "
+         "bufferDeviceAddress"
+      << "\n";
 
   // --- Vulkan 1.1 features ---
   VkPhysicalDeviceVulkan11Features features11{
@@ -256,6 +266,7 @@ static auto CreateDevice(GraphicsContext &context) -> Error::Error {
 
   std::cout << "volk loading vulkan device." << "\n";
   volkLoadDevice(context.device);
+  std::cout << "Device ptr: " << context.device << "\n";
 
   vkGetDeviceQueue(context.device, context.graphicsQueueFamily, 0,
                    &context.graphicsQueue);
@@ -621,6 +632,10 @@ auto Initialize(GraphicsContext &context, VkExtent2D dimensions)
 
   error = Error::FromVkResult(
       vkCreateInstance(&createInfo, nullptr, &context.instance));
+
+  if (Error::IsError(error)) {
+    return error;
+  }
 
   std::cout << "volk loading vulkan instance." << "\n";
   // Load instance-level Vulkan functions using Volk

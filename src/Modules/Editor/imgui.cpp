@@ -86,6 +86,9 @@ auto InitializeImGui(
 
   std::cout << "Initializing ImGui Vulkan backend..." << "\n";
 
+  PFN_vkGetDeviceProcAddr func = vkGetDeviceProcAddr;
+  std::cout << "vkGetDeviceProcAddr = " << (void *)func << "\n";
+
   success = ImGui_ImplVulkan_Init(&init_info);
   if (!success) {
     return Error::Create("Failed to initialize ImGui Vulkan backend.");
