@@ -5,6 +5,7 @@
 #include "graphics.hpp"
 #include "shader.hpp"
 #include "texture.hpp"
+#define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
 #include <cstdint>
 #include <variant>

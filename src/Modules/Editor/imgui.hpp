@@ -1,3 +1,5 @@
+#define IMGUI_IMPL_VULKAN_NO_PROTOTYPES
+
 #include "Graphics/rendergraph.hpp"
 #include "imgui_internal.h"
 namespace Editor {

@@ -4,6 +4,7 @@
 #include "graphics.hpp"
 #include "texture.hpp"
 #include "tl/expected.hpp"
+#define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
 #include <algorithm>
 #include <cassert>
@@ -1404,7 +1405,7 @@ auto BeginPassRendering(GraphicsContext &context, RenderGraph &graph,
   for (const auto &binding : compiledPass.pass.resourceBindings) {
     if (binding.type == BindingType::Attachment) {
       maxColorAttachmentIndex =
-          std::max(binding.location, maxColorAttachmentIndex);
+          (std::max)(binding.location, maxColorAttachmentIndex);
     }
   }
 

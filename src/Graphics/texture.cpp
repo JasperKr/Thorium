@@ -3,6 +3,7 @@
 #include "stb/stb_image.h"
 
 #define VMA_VULKAN_VERSION 1004000
+#define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
 #include <vma/vk_mem_alloc.h>
 

@@ -3,6 +3,8 @@
 #include "Modules/error.hpp"
 #include "buffer.hpp"
 #include "graphics.hpp"
+#include "tl/expected.hpp"
+#define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
 #include <unordered_map>
 
@@ -191,7 +193,7 @@ template <typename Vertex> struct Mesh {
     auto bufferResult = Buffer::Create(context, vboCreationInfo);
 
     if (Error::IsError(bufferResult)) {
-      return tl::unexpected(bufferResult.error());
+      return tl::unexpected<Error::Error>(bufferResult.error());
     }
 
     mesh.VertexBuffer = bufferResult.value();
@@ -206,7 +208,7 @@ template <typename Vertex> struct Mesh {
     bufferResult = Buffer::Create(context, iboCreationInfo);
 
     if (Error::IsError(bufferResult)) {
-      return tl::unexpected(bufferResult.error());
+      return tl::unexpected<Error::Error>(bufferResult.error());
     }
 
     mesh.IndexBuffer = bufferResult.value();
@@ -217,12 +219,12 @@ template <typename Vertex> struct Mesh {
     Error::Error error = mesh.UploadVertices(context);
 
     if (Error::IsError(error)) {
-      return tl::unexpected(error);
+      return tl::unexpected<Error::Error>(error);
     }
     error = mesh.UploadIndices(context);
 
     if (Error::IsError(error)) {
-      return tl::unexpected(error);
+      return tl::unexpected<Error::Error>(error);
     }
 
     return mesh;
@@ -304,7 +306,14 @@ enum class VertexFormats : uint8_t {
   TEST,
 };
 
-const static std::unordered_map<const VertexFormats, const VertexFormat>
+struct VertexFormatsHash {
+  auto operator()(VertexFormats format) const noexcept -> size_t {
+    return static_cast<size_t>(format);
+  }
+};
+
+const static std::unordered_map<const VertexFormats, const VertexFormat,
+                                VertexFormatsHash>
     PredefinedVertexFormats = {
         {VertexFormats::DEFAULT,
          {

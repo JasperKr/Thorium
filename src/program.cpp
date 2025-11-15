@@ -3,12 +3,14 @@
 #include "Graphics/mesh.hpp"
 #include "Graphics/rendergraph.hpp"
 #include "Graphics/shader.hpp"
-#include "Modules/Editor/imgui.hpp"
 #include "Modules/error.hpp"
 #include "Modules/timer.hpp"
+#define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
 #include <cstddef>
 #include <iostream>
+
+#include "Modules/Editor/imgui.hpp"
 
 namespace Program {
 struct Vertex {

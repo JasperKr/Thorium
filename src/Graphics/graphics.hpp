@@ -5,10 +5,11 @@
 
 #include "Modules/error.hpp"
 #include <cstdint>
+#include <vector>
 
 #include "volk/volk.h"
-#include "vulkan/vulkan_core.h"
 #define VK_NO_PROTOTYPES
+#include "vulkan/vulkan_core.h"
 #include <vulkan/vulkan.h>
 
 #define VMA_IMPORT_FUNCTIONS_FROM_VOLK 1

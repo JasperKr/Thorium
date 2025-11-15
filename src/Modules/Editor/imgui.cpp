@@ -1,3 +1,5 @@
+#define IMGUI_IMPL_VULKAN_NO_PROTOTYPES
+
 #include "imgui.hpp"
 #include "Graphics/graphics.hpp"
 #include "backends/imgui_impl_sdl3.h"

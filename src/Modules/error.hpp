@@ -160,4 +160,9 @@ inline auto FromVkResult(VkResult result) -> Error {
 
   return Create(VkResultToString(result), result);
 }
+
+inline auto Unexpected(const std::string &message, int32_t code = 1) {
+  return tl::unexpected<Error>(Create(message, code));
+}
+
 } // namespace Error

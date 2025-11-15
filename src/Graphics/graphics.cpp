@@ -198,11 +198,46 @@ static auto CreateDevice(GraphicsContext &context) -> Error::Error {
   createInfo.queueCreateInfoCount = 1;
   createInfo.pEnabledFeatures = &deviceFeatures;
 
-  VkPhysicalDeviceDynamicRenderingFeatures dynamicRenderingFeature{};
-  dynamicRenderingFeature.sType =
-      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES;
-  dynamicRenderingFeature.dynamicRendering = VK_TRUE;
-  createInfo.pNext = &dynamicRenderingFeature;
+  // --- Vulkan 1.3 features ---
+  VkPhysicalDeviceVulkan13Features features13{
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+      .synchronization2 = VK_TRUE,
+      .dynamicRendering = VK_TRUE,
+  };
+
+  // --- Vulkan 1.2 features ---
+  VkPhysicalDeviceVulkan12Features features12{
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
+      .pNext = &features13,
+      .descriptorIndexing = VK_TRUE,
+      .shaderSampledImageArrayNonUniformIndexing = VK_TRUE,
+      .shaderStorageBufferArrayNonUniformIndexing = VK_TRUE,
+      .runtimeDescriptorArray = VK_TRUE,
+      .bufferDeviceAddress = VK_TRUE,
+  };
+
+  // --- Vulkan 1.1 features ---
+  VkPhysicalDeviceVulkan11Features features11{
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,
+      .pNext = &features12,
+  };
+
+  // --- Dynamic Rendering ---
+  // VkPhysicalDeviceDynamicRenderingFeatures dynRender{
+  //     .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES,
+  //     .pNext = &features11,
+  //     .dynamicRendering = VK_TRUE,
+  // };
+
+  // --- Features2 root ---
+  VkPhysicalDeviceFeatures2 features2{
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+      .pNext = &features11,
+  };
+
+  // Device create info
+  createInfo.pNext = &features2;
+  createInfo.pEnabledFeatures = nullptr;
 
   const std::vector<const char *> deviceExtensions = {
       VK_KHR_SWAPCHAIN_EXTENSION_NAME,
@@ -219,6 +254,7 @@ static auto CreateDevice(GraphicsContext &context) -> Error::Error {
     return error;
   }
 
+  std::cout << "volk loading vulkan device." << "\n";
   volkLoadDevice(context.device);
 
   vkGetDeviceQueue(context.device, context.graphicsQueueFamily, 0,
@@ -506,17 +542,23 @@ static auto CreateDescriptorPool(GraphicsContext &context) -> Error::Error {
   constexpr uint32_t poolSize = 1024;
 
   std::vector<VkDescriptorPoolSize> poolSizes = {
-      {VK_DESCRIPTOR_TYPE_SAMPLER, poolSize},
-      {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, poolSize},
-      {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, poolSize},
-      {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, poolSize},
-      {VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, poolSize},
-      {VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, poolSize},
-      {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, poolSize},
-      {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, poolSize},
-      {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, poolSize},
-      {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, poolSize},
-      {VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, poolSize},
+      {.type = VK_DESCRIPTOR_TYPE_SAMPLER, .descriptorCount = poolSize},
+      {.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+       .descriptorCount = poolSize},
+      {.type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, .descriptorCount = poolSize},
+      {.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .descriptorCount = poolSize},
+      {.type = VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER,
+       .descriptorCount = poolSize},
+      {.type = VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
+       .descriptorCount = poolSize},
+      {.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, .descriptorCount = poolSize},
+      {.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .descriptorCount = poolSize},
+      {.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
+       .descriptorCount = poolSize},
+      {.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC,
+       .descriptorCount = poolSize},
+      {.type = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
+       .descriptorCount = poolSize},
   };
 
   VkDescriptorPoolCreateInfo poolInfo = {};
@@ -532,6 +574,7 @@ static auto CreateDescriptorPool(GraphicsContext &context) -> Error::Error {
 
 auto Initialize(GraphicsContext &context, VkExtent2D dimensions)
     -> Error::Error {
+  std::cout << "Initializing Volk..." << "\n";
   Error::Error error = Error::FromVkResult(volkInitialize());
 
   // Initialize SDL for Vulkan
@@ -579,6 +622,7 @@ auto Initialize(GraphicsContext &context, VkExtent2D dimensions)
   error = Error::FromVkResult(
       vkCreateInstance(&createInfo, nullptr, &context.instance));
 
+  std::cout << "volk loading vulkan instance." << "\n";
   // Load instance-level Vulkan functions using Volk
   volkLoadInstance(context.instance);
 
