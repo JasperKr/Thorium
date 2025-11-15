@@ -89,6 +89,20 @@ auto InitializeImGui(
   PFN_vkGetDeviceProcAddr func = vkGetDeviceProcAddr;
   std::cout << "vkGetDeviceProcAddr = " << (void *)func << "\n";
 
+  success = ImGui_ImplVulkan_LoadFunctions(
+      VK_API_VERSION_1_4,
+      [](const char *function_name,
+         void *vulkan_instance) -> PFN_vkVoidFunction {
+        return vkGetInstanceProcAddr(
+            // NOLINTNEXTLINE
+            *(reinterpret_cast<VkInstance *>(vulkan_instance)), function_name);
+      },
+      context.instance);
+
+  if (!success) {
+    return Error::Create("Failed to load ImGui Vulkan functions.");
+  }
+
   success = ImGui_ImplVulkan_Init(&init_info);
   if (!success) {
     return Error::Create("Failed to initialize ImGui Vulkan backend.");

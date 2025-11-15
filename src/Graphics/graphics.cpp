@@ -550,7 +550,7 @@ static auto CreateVmaAllocator(GraphicsContext &context) -> Error::Error {
 }
 
 static auto CreateDescriptorPool(GraphicsContext &context) -> Error::Error {
-  constexpr uint32_t poolSize = 1024;
+  constexpr uint32_t poolSize = 4096;
 
   std::vector<VkDescriptorPoolSize> poolSizes = {
       {.type = VK_DESCRIPTOR_TYPE_SAMPLER, .descriptorCount = poolSize},
