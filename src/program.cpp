@@ -5,6 +5,7 @@
 #include "Graphics/shader.hpp"
 #include "Modules/error.hpp"
 #include "Modules/timer.hpp"
+#include <cassert>
 #define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
 #include <cstddef>
@@ -24,8 +25,8 @@ static inline auto GetMeshes() -> std::vector<Graphics::Mesh<Vertex>> & {
 }
 
 static inline auto GetShaders()
-    -> std::vector<Graphics::Shader::ShaderModule> & {
-  static std::vector<Graphics::Shader::ShaderModule> shaders = {};
+    -> std::vector<Graphics::Shader::ShaderHandle> & {
+  static std::vector<Graphics::Shader::ShaderHandle> shaders = {};
   return shaders;
 }
 
@@ -52,12 +53,12 @@ static inline auto GetSwapchainTextures()
 
 auto Configuration(ApplicationConfig &config) -> Error::Error {
   config.Title = "Thorium Engine - Program Example";
+  config.Size = {.width = 2000, .height = 1200};
 
   return Error::Success();
 }
 
 auto Load(Graphics::GraphicsContext &context) -> Error::Error {
-  std::cout.setf(std::ios::unitbuf); // Disable buffering for stdout
 
   // Setup render graph to debug it
 
@@ -122,70 +123,77 @@ auto Load(Graphics::GraphicsContext &context) -> Error::Error {
   // Import swapchain texture
   // We will swap the texture pointer during rendering
   auto swapchainHandle = Graphics::Rendergraph::ImportTexture(
-      graph, swapchainTextures[0], VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+      graph, swapchainTextures[0],
+      {
+          .oldState =
+              {
+                  .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+              },
+          .newState =
+              {
+                  .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+              },
+      });
 
   GetSwapchainHandleIndex() = swapchainHandle;
 
   std::cout << "Swapchain extent: " << context.swapchainInfo.extent.width << "x"
             << context.swapchainInfo.extent.height << "\n";
 
-  auto rootHandle = Graphics::Rendergraph::AddRenderPass(
-      graph,
-      {.resources =
-           {
-               {
-                   .resource = textureHandles.at(0),
-                   .accessType = Graphics::Rendergraph::AccessType::Write,
-               },
-           },
+  // auto rootHandle = Graphics::Rendergraph::AddRenderPass(
+  //     graph,
+  //     {.resources =
+  //          {
+  //              textureHandles.at(0),
+  //          },
 
-       .viewport = {.x = 0.0F,
-                    .y = 0.0F,
-                    .width =
-                        static_cast<float>(context.swapchainInfo.extent.width),
-                    .height =
-                        static_cast<float>(context.swapchainInfo.extent.height),
-                    .minDepth = 0.0F,
-                    .maxDepth = 1.0F},
-       .scissor = {.offset = {0, 0}, .extent = context.swapchainInfo.extent},
-       .clearValues =
-           {
-               {.color = {{0.0F, 0.0F, 0.0F, 1.0F}}},
-           },
-       .bindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-       .blendModes = {{Graphics::BlendMode{
-           .enabled = false,
-           .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
-           .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
-           .colorBlendOp = VK_BLEND_OP_ADD,
-           .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
-           .dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
-           .alphaBlendOp = VK_BLEND_OP_ADD,
-       }}},
-       .resourceBindings =
-           {
-               {
-                   .resource = textureHandles.at(0),
-                   .location = 0,
-                   .type = Graphics::Rendergraph::BindingType::Attachment,
-               },
-           },
-       .vertexShader = vertexShader,
-       .fragmentShader = fragmentShader,
-       .executeFunction =
-           [](VkCommandBuffer cmd, Graphics::GraphicsContext &context,
-              Graphics::Rendergraph::RenderGraph &graph,
-              Graphics::Rendergraph::CompiledPass &compiledPass) -> void {
-         auto &meshes = Program::GetMeshes();
-         if (meshes.empty()) {
-           return;
-         }
+  //      .viewport = {.x = 0.0F,
+  //                   .y = 0.0F,
+  //                   .width =
+  //                       static_cast<float>(context.swapchainInfo.extent.width),
+  //                   .height =
+  //                       static_cast<float>(context.swapchainInfo.extent.height),
+  //                   .minDepth = 0.0F,
+  //                   .maxDepth = 1.0F},
+  //      .scissor = {.offset = {0, 0}, .extent = context.swapchainInfo.extent},
+  //      .clearValues =
+  //          {
+  //              {.color = {{0.0F, 0.0F, 0.0F, 1.0F}}},
+  //          },
+  //      .bindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+  //      .blendModes = {{Graphics::BlendMode{
+  //          .enabled = false,
+  //          .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
+  //          .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+  //          .colorBlendOp = VK_BLEND_OP_ADD,
+  //          .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+  //          .dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+  //          .alphaBlendOp = VK_BLEND_OP_ADD,
+  //      }}},
+  //      .resourceBindings =
+  //          {
+  //              {
+  //                  .resource = textureHandles.at(0),
+  //                  .location = 0,
+  //                  .type = Graphics::Rendergraph::BindingType::Attachment,
+  //                  .usage = Graphics::Rendergraph::ResourceUsage::WriteOnly,
+  //              },
+  //          },
+  //      .vertexShader = vertexShader,
+  //      .fragmentShader = fragmentShader,
+  //      .executeFunction =
+  //          [](VkCommandBuffer cmd, Graphics::GraphicsContext &context,
+  //             Graphics::Rendergraph::RenderGraph &graph,
+  //             Graphics::Rendergraph::CompiledPass &compiledPass) -> void {
+  //        auto &meshes = Program::GetMeshes();
+  //        if (meshes.empty()) {
+  //          return;
+  //        }
 
-         auto &mesh = meshes[0];
+  //        auto &mesh = meshes[0];
 
-         mesh.Draw(context);
-       }});
+  //        mesh.Draw(context);
+  //      }});
 
   Editor::Context imguiContext = {};
 
@@ -266,6 +274,9 @@ auto Draw(Graphics::GraphicsContext &context) -> Error::Error {
   auto texture = swapchainTextures[swapchainIndex];
   auto &graph = GetRenderGraph();
 
+  std::cout << "Updating swapchain texture handle to image index "
+            << swapchainIndex << "\n";
+
   graph.resources[handle].info = texture;
 
   Graphics::Rendergraph::Execute(context, graph,
@@ -277,7 +288,8 @@ auto Draw(Graphics::GraphicsContext &context) -> Error::Error {
 auto Exit(Graphics::GraphicsContext &context) -> Error::Error {
   vkDestroyPipeline(context.device, GetPipeline(), nullptr);
   for (auto &shader : GetShaders()) {
-    vkDestroyShaderModule(context.device, shader.module, nullptr);
+    auto &module = Graphics::Shader::GetShaderModule(shader);
+    vkDestroyShaderModule(context.device, module.module, nullptr);
   }
   for (auto &mesh : GetMeshes()) {
     mesh.Destroy(context);

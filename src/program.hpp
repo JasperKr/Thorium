@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Graphics/graphics.hpp"
-#include "main.hpp"
+#include "loop.hpp"
 
 namespace Program {
 

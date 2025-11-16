@@ -11,6 +11,8 @@
 namespace Graphics {
 namespace Shader {
 
+using ShaderHandle = size_t;
+
 struct ShaderSource {
   std::string source;
   std::string code;
@@ -42,7 +44,7 @@ struct ShaderModule {
   static auto Create(Graphics::GraphicsContext &context,
                      const std::string &path, VkShaderStageFlagBits stage,
                      const std::string &name)
-      -> tl::expected<ShaderModule, Error::Error>;
+      -> tl::expected<ShaderHandle, Error::Error>;
 
   void Destroy(VkDevice device);
   void ReloadMaybe(Graphics::GraphicsContext &context);
@@ -54,13 +56,14 @@ void UnloadModule();
 static inline auto
 PreprocessShaderCodeLine(ShaderModule &shader, ShaderSource &currentSource,
                          std::string &line, uint64_t &currentLineNumber)
-    -> tl::expected<std::string, Error::Error>;
+    -> Error::Error;
 static inline auto PreprocessShaderCode(ShaderModule &shader,
                                         ShaderSource &currentSource,
                                         uint64_t &currentLineNumber)
     -> tl::expected<std::string, Error::Error>;
 
-static auto AddGlobalShaderExtern(const ShaderExtern &externVar) -> void;
+auto AddGlobalShaderExtern(const ShaderExtern &externVar) -> void;
+auto GetShaderModule(ShaderHandle handle) -> ShaderModule &;
 
 } // namespace Shader
 } // namespace Graphics

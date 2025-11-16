@@ -2,8 +2,10 @@
 #include "Graphics/mesh.hpp"
 #include "Modules/error.hpp"
 #include "graphics.hpp"
+#include "shader.hpp"
 #include "texture.hpp"
 #include "tl/expected.hpp"
+#include <unordered_map>
 #define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
 #include <algorithm>
@@ -21,23 +23,39 @@ namespace Graphics::Rendergraph {
 using std::max;
 using std::sort;
 
+auto SetupRenderPassResources(RenderGraph &graph, RenderPass &pass,
+                              const RenderPassDescriptor &descriptor) {
+  for (const auto &handle : descriptor.resources) {
+    auto &resource = graph.resources[handle];
+    // Loop through descriptor.resourceBindings, find matching resource handle
+    ResourceBinding const *binding = nullptr;
+    for (const auto &currentBinding : descriptor.resourceBindings) {
+      if (currentBinding.resource == handle) {
+        binding = &currentBinding;
+        break;
+      }
+    }
+
+    assert(binding != nullptr &&
+           "Resource binding not found for resource in render pass descriptor");
+
+    if (binding->usage == ResourceUsage::ReadOnly) {
+      pass.readResources.emplace_back(handle);
+    } else if (binding->usage == ResourceUsage::WriteOnly) {
+      pass.writeResources.emplace_back(handle);
+    } else if (binding->usage == ResourceUsage::ReadWrite) {
+      pass.readwriteResources.emplace_back(handle);
+    }
+  }
+}
+
 auto AddRenderPass(RenderGraph &graph, const RenderPassDescriptor &descriptor)
     -> ResourceHandle {
   RenderPass pass = {};
 
   pass.handle = static_cast<ResourceHandle>(graph.passes.size());
 
-  for (const auto &access : descriptor.resources) {
-    auto &resource = graph.resources[access.resource];
-
-    if (access.accessType == AccessType::Read) {
-      pass.readResources.emplace_back(access.resource);
-    } else if (access.accessType == AccessType::Write) {
-      pass.writeResources.emplace_back(access.resource);
-    } else if (access.accessType == (AccessType::Read | AccessType::Write)) {
-      pass.readwriteResources.emplace_back(access.resource);
-    }
-  }
+  SetupRenderPassResources(graph, pass, descriptor);
 
   pass.state.viewport = descriptor.viewport;
   pass.state.scissor = descriptor.scissor;
@@ -72,11 +90,10 @@ auto AddRenderPass(RenderGraph &graph, const RenderPassDescriptor &descriptor)
   assert(descriptor.resourceBindings.size() == descriptor.resources.size() &&
          "Resource bindings size must match resources size");
   if (pass.state.bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS) {
-    assert((pass.vertexShader.module != VK_NULL_HANDLE &&
-            pass.fragmentShader.module != VK_NULL_HANDLE) &&
+    assert((pass.vertexShader != 0 && pass.fragmentShader != 0) &&
            "Vertex and fragment shaders must be set for graphics pipeline");
   } else if (pass.state.bindPoint == VK_PIPELINE_BIND_POINT_COMPUTE) {
-    assert(pass.computeShader.module != VK_NULL_HANDLE &&
+    assert(pass.computeShader != 0 &&
            "Compute shader must be set for compute pipeline");
   }
 
@@ -1002,6 +1019,131 @@ auto inline CreateGraphDescriptorSets(GraphicsContext &context,
   return Error::Success();
 }
 
+// Determine the appropriate image layout for a resource binding; NOLINTNEXTLINE
+auto inline GetImageBindingLayout(const RenderGraph &graph,
+                                  const ResourceBinding &binding)
+    -> VkImageLayout {
+  const auto &resource = graph.resources[binding.resource];
+  const auto &texture = std::get<Texture::Texture>(resource.info);
+
+  bool isDepthTexture = Texture::IsDepthTexture(texture.format);
+  bool isStencilTexture = Texture::IsStencilTexture(texture.format);
+  bool isDepthStencilTexture = isDepthTexture && isStencilTexture;
+
+  // === STORAGES === //
+  if (binding.type == BindingType::Storage) {
+    if (binding.usage == ResourceUsage::ReadOnly) {
+      return VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    }
+    return VK_IMAGE_LAYOUT_GENERAL;
+  }
+
+  // === SAMPLERS === //
+  if (binding.type == BindingType::Sampler) {
+    if (isDepthStencilTexture) {
+      return VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+    }
+    if (isDepthTexture) {
+      return VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL;
+    }
+    if (isStencilTexture) {
+      return VK_IMAGE_LAYOUT_STENCIL_READ_ONLY_OPTIMAL;
+    }
+    return VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+  }
+
+  // === ATTACHMENTS === //
+  if (binding.type == BindingType::Attachment) {
+
+    // == READONLY ATTACHMENTS == //
+    if (binding.usage == ResourceUsage::ReadOnly) {
+      if (isDepthStencilTexture) {
+        return VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+      }
+      if (isDepthTexture) {
+        return VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL;
+      }
+      if (isStencilTexture) {
+        return VK_IMAGE_LAYOUT_STENCIL_READ_ONLY_OPTIMAL;
+      }
+      return VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    }
+
+    // == READ & READWRITE ATTACHMENTS == //
+    if (isDepthStencilTexture) {
+      return VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    }
+    if (isDepthTexture) {
+      return VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+    }
+    if (isStencilTexture) {
+      return VK_IMAGE_LAYOUT_STENCIL_ATTACHMENT_OPTIMAL;
+    }
+    return VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+  }
+
+  return VK_IMAGE_LAYOUT_UNDEFINED; // Fallback
+}
+
+auto inline GetImageAccessFlags(const RenderGraph &graph,
+                                const ResourceBinding &binding)
+    -> VkAccessFlags {
+  const auto &resource = graph.resources[binding.resource];
+
+  // === STORAGES === //
+  if (binding.type == BindingType::Storage) {
+    if (binding.usage == ResourceUsage::ReadOnly) {
+      return VK_ACCESS_SHADER_READ_BIT;
+    }
+    return static_cast<uint32_t>(VK_ACCESS_SHADER_READ_BIT) |
+           static_cast<uint32_t>(VK_ACCESS_SHADER_WRITE_BIT);
+  }
+
+  // === SAMPLERS === //
+  if (binding.type == BindingType::Sampler) {
+    return VK_ACCESS_SHADER_READ_BIT;
+  }
+
+  // === ATTACHMENTS === //
+  if (binding.type == BindingType::Attachment) {
+
+    // == READONLY ATTACHMENTS == //
+    if (binding.usage == ResourceUsage::ReadOnly) {
+      return VK_ACCESS_SHADER_READ_BIT; // TODO:
+                                        // VK_ACCESS_INPUT_ATTACHMENT_READ_BIT
+                                        // for subpasses
+    }
+
+    // == READ & READWRITE ATTACHMENTS == //
+    return static_cast<uint32_t>(VK_ACCESS_COLOR_ATTACHMENT_READ_BIT) |
+           static_cast<uint32_t>(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+  }
+
+  return 0; // Fallback
+}
+
+auto inline GetBufferAccessFlags(const RenderGraph &graph,
+                                 const ResourceBinding &binding)
+    -> VkAccessFlags {
+  const auto &resource = graph.resources[binding.resource];
+
+  // === STORAGES === //
+  if (binding.type == BindingType::Storage) {
+    if (binding.usage == ResourceUsage::ReadOnly) {
+      return VK_ACCESS_SHADER_READ_BIT;
+    }
+    return static_cast<uint32_t>(VK_ACCESS_SHADER_READ_BIT) |
+           static_cast<uint32_t>(VK_ACCESS_SHADER_WRITE_BIT);
+  }
+
+  // === UNIFORM BUFFER OBJECTS === //
+  if (binding.type == BindingType::Uniform) {
+    return VK_ACCESS_UNIFORM_READ_BIT;
+  }
+
+  return 0; // Fallback
+}
+
 auto inline ConfigurePassDescriptors(GraphicsContext &context,
                                      RenderGraph &graph, CompiledPass &pass,
                                      const ResourceBinding &binding) -> void {
@@ -1018,21 +1160,6 @@ auto inline ConfigurePassDescriptors(GraphicsContext &context,
       return; // Skip raster attachments
     }
 
-    // Binding type allows:
-    // Sampled: read-only sampler2D
-    // Storage: read-write image2D
-    auto layout = VK_IMAGE_LAYOUT_UNDEFINED;
-    if (binding.type == BindingType::Storage) {
-      if (binding.usage == ResourceUsage::ReadOnly) {
-        layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-      } else if (binding.usage == ResourceUsage::ReadWrite ||
-                 binding.usage == ResourceUsage::WriteOnly) {
-        layout = VK_IMAGE_LAYOUT_GENERAL;
-      }
-    } else if (binding.type == BindingType::Sampler) {
-      layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    }
-
     std::cout << "Setting up color attachment at location " << binding.location
               << "\n";
     std::cout << "  Resource lifetime type: "
@@ -1041,7 +1168,7 @@ auto inline ConfigurePassDescriptors(GraphicsContext &context,
                       : "Persistent")
               << "\n";
 
-    imageInfo.imageLayout = layout;
+    imageInfo.imageLayout = GetImageBindingLayout(graph, binding);
     imageInfo.imageView = texture.view;
     assert(imageInfo.imageView != VK_NULL_HANDLE &&
            "Texture image view is null in descriptor setup");
@@ -1087,6 +1214,217 @@ auto inline ConfigureGraphDescriptors(GraphicsContext &context,
   }
 }
 
+// Configure layouts for all passes in the graph
+// To be used to create the transitions for resources later on
+auto inline CreateGraphLayoutStates(GraphicsContext &context,
+                                    RenderGraph &graph) -> void {
+  for (auto &compiledPass : graph.compiledPasses) {
+    for (const auto &binding : compiledPass.pass.resourceBindings) {
+      const auto &resource = graph.resources[binding.resource];
+
+      if (resource.type == Type::Texture) {
+        const auto &texture = std::get<Texture::Texture>(resource.info);
+
+        auto layout = GetImageBindingLayout(graph, binding);
+
+        auto stages =
+            compiledPass.pass.state.bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS
+                ? VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT
+                : VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+
+        auto access = GetImageAccessFlags(graph, binding);
+
+        LayoutState layoutState = {
+            .layout = layout,
+            .stages = static_cast<VkPipelineStageFlags>(stages),
+            .access = access,
+        };
+
+        compiledPass.resourceLayouts[resource.handle] = layoutState;
+
+        std::cout << "Pass " << compiledPass.pass.handle << ": Resource "
+                  << resource.handle << " layout set to "
+                  << static_cast<uint32_t>(layout) << "\n";
+      } else if (resource.type == Type::Buffer) {
+        auto layout = VK_IMAGE_LAYOUT_UNDEFINED; // Buffers don't have layouts
+
+        auto stages =
+            compiledPass.pass.state.bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS
+                ? VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT
+                : VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+
+        auto access = GetBufferAccessFlags(graph, binding);
+
+        LayoutState layoutState = {
+            .layout = layout,
+            .stages = static_cast<VkPipelineStageFlags>(stages),
+            .access = access,
+        };
+
+        compiledPass.resourceLayouts[resource.handle] = layoutState;
+      }
+    }
+  }
+}
+
+auto inline CreateGraphResourceTransitions(GraphicsContext &context,
+                                           RenderGraph &graph) -> void {
+
+  // We will loop through the timeline and create transitions when layouts
+  // change, currentLayouts will track the last known layout of each resource
+  // Note, not a reference, we want a copy to track changes
+  auto currentLayouts = graph.initialResourceLayouts;
+
+  // For each resource, create transitions based on usage in passes
+  for (auto &compiledPass : graph.compiledPasses) {
+    for (const auto &binding : compiledPass.pass.resourceBindings) {
+      const auto &resource = graph.resources[binding.resource];
+
+      // Create transitions only for textures
+      if (resource.type == Type::Texture) {
+        const auto &texture = std::get<Texture::Texture>(resource.info);
+
+        auto currentLayoutIterator = currentLayouts.find(resource.handle);
+        LayoutState oldLayoutState = {
+            .layout = VK_IMAGE_LAYOUT_UNDEFINED,
+            .stages = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+            .access = 0,
+        };
+
+        if (currentLayoutIterator != currentLayouts.end()) {
+          oldLayoutState = currentLayoutIterator->second;
+        }
+
+        LayoutState newLayoutState =
+            compiledPass.resourceLayouts.at(resource.handle);
+
+        std::cout << "Pass " << compiledPass.pass.handle << ": Resource "
+                  << resource.handle << " old layout: "
+                  << static_cast<uint32_t>(oldLayoutState.layout)
+                  << ", new layout: "
+                  << static_cast<uint32_t>(newLayoutState.layout) << "\n";
+
+        // If layout has changed, create a transition
+        if (oldLayoutState.layout != newLayoutState.layout) {
+          LayoutUpdate transition = {
+              .resource = resource.handle,
+              .oldState = oldLayoutState,
+              .newState = newLayoutState,
+          };
+
+          compiledPass.layoutUpdates.emplace_back(transition);
+
+          // Update current layout
+          currentLayouts[resource.handle] = newLayoutState;
+        } else {
+          std::cout << "Pass " << compiledPass.pass.handle
+                    << ": No layout change for resource " << resource.handle
+                    << ", skipping transition.\n";
+        }
+      }
+    }
+  }
+
+  for (const auto &wantedLayout : graph.finalResourceLayouts) {
+    const auto &resourceHandle = wantedLayout.first;
+    const auto &desiredLayoutState = wantedLayout.second;
+
+    auto currentLayoutIterator = currentLayouts.find(resourceHandle);
+    if (currentLayoutIterator == currentLayouts.end()) {
+      continue; // not found
+    }
+
+    LayoutState currentLayoutState = currentLayoutIterator->second;
+
+    if (currentLayoutState.layout != desiredLayoutState.layout) {
+      std::cout << "Creating final layout transition for resource "
+                << resourceHandle << "\n";
+
+      const auto &resource = graph.resources[resourceHandle];
+      const auto &texture = std::get<Texture::Texture>(resource.info);
+
+      VkImageMemoryBarrier barrier = {};
+      barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+      barrier.oldLayout = currentLayoutState.layout;
+      barrier.newLayout = desiredLayoutState.layout;
+      barrier.srcAccessMask = currentLayoutState.access;
+      barrier.dstAccessMask = desiredLayoutState.access;
+      barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+      barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+      barrier.image = texture.image;
+      barrier.subresourceRange.aspectMask =
+          Texture::GetTextureAspectFlags(texture.format);
+      barrier.subresourceRange.baseMipLevel = 0;
+      barrier.subresourceRange.levelCount = texture.mipmapcount;
+      barrier.subresourceRange.baseArrayLayer = 0;
+      barrier.subresourceRange.layerCount = texture.arrayLayers;
+
+      graph.postGraphUpdates.emplace_back(barrier);
+    }
+  }
+}
+
+auto inline CreateGraphImageBarriers(GraphicsContext &context,
+                                     RenderGraph &graph) -> void {
+  for (auto &compiledPass : graph.compiledPasses) {
+    std::cout << "Creating image barriers for pass " << compiledPass.pass.handle
+              << "\n";
+    if (compiledPass.layoutUpdates.empty()) {
+      std::cout << "Pass " << compiledPass.pass.handle
+                << ": No layout updates, skipping image barrier creation.\n";
+      continue; // No layout updates needed
+    }
+
+    for (const auto &layoutUpdate : compiledPass.layoutUpdates) {
+      const auto &resource = graph.resources[layoutUpdate.resource];
+      const auto &texture = std::get<Texture::Texture>(resource.info);
+
+      std::cout << "Pass " << compiledPass.pass.handle
+                << ": Creating image barrier for resource "
+                << layoutUpdate.resource << "\n";
+      std::cout << "  Old Layout: "
+                << static_cast<uint32_t>(layoutUpdate.oldState.layout) << "\n";
+      std::cout << "  New Layout: "
+                << static_cast<uint32_t>(layoutUpdate.newState.layout) << "\n";
+
+      VkImageMemoryBarrier barrier = {};
+      barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+      barrier.oldLayout = layoutUpdate.oldState.layout;
+      barrier.newLayout = layoutUpdate.newState.layout;
+      barrier.srcAccessMask = layoutUpdate.oldState.access;
+      barrier.dstAccessMask = layoutUpdate.newState.access;
+      barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+      barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+      barrier.image = texture.image;
+      barrier.subresourceRange.aspectMask =
+          Texture::GetTextureAspectFlags(texture.format);
+      barrier.subresourceRange.baseMipLevel = 0;
+      barrier.subresourceRange.levelCount = texture.mipmapcount;
+      barrier.subresourceRange.baseArrayLayer = 0;
+      barrier.subresourceRange.layerCount = texture.arrayLayers;
+
+      compiledPass.imageBarriers.emplace_back(barrier);
+    }
+  }
+}
+
+auto inline ApplyPassBarriers(VkCommandBuffer commandBuffer,
+                              const CompiledPass &compiledPass) -> void {
+  if (compiledPass.imageBarriers.empty()) {
+    return; // No barriers to apply
+  }
+
+  vkCmdPipelineBarrier(commandBuffer,
+                       VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, // src stage
+                       VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, // dst stage
+                       0,                                  // dependency flags
+                       0, nullptr,                         // memory barriers
+                       0, nullptr,                         // buffer barriers
+                       static_cast<uint32_t>(compiledPass.imageBarriers.size()),
+                       compiledPass.imageBarriers.data() // image barriers
+  );
+}
+
 [[nodiscard]] auto inline CreateGraphicsPipeline(GraphicsContext &context,
                                                  RenderGraph &graph,
                                                  CompiledPass &compiledPass)
@@ -1099,14 +1437,17 @@ auto inline ConfigureGraphDescriptors(GraphicsContext &context,
 
   std::array<VkPipelineShaderStageCreateInfo, 2> shaderStages = {};
 
+  auto &vertShader = Shader::GetShaderModule(compiledPass.pass.vertexShader);
+  auto &fragShader = Shader::GetShaderModule(compiledPass.pass.fragmentShader);
+
   shaderStages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
   shaderStages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
-  shaderStages[0].module = compiledPass.pass.vertexShader.module;
+  shaderStages[0].module = vertShader.module;
   shaderStages[0].pName = "main";
 
   shaderStages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
   shaderStages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-  shaderStages[1].module = compiledPass.pass.fragmentShader.module;
+  shaderStages[1].module = fragShader.module;
   shaderStages[1].pName = "main";
 
   auto vertexformat = Graphics::PredefinedVertexFormats.at(VertexFormats::GUI);
@@ -1139,7 +1480,7 @@ auto inline ConfigureGraphDescriptors(GraphicsContext &context,
   rasterizer.rasterizerDiscardEnable = VK_FALSE;
   rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
   rasterizer.lineWidth = 1.0F;
-  rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+  rasterizer.cullMode = VK_CULL_MODE_NONE;
   rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
   rasterizer.depthBiasEnable = VK_FALSE;
 
@@ -1248,8 +1589,8 @@ auto inline ConfigureGraphDescriptors(GraphicsContext &context,
   VkPipelineDepthStencilStateCreateInfo depthStencil = {};
   depthStencil.sType =
       VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-  depthStencil.depthTestEnable = VK_TRUE;
-  depthStencil.depthWriteEnable = VK_TRUE;
+  depthStencil.depthTestEnable = VK_FALSE;
+  depthStencil.depthWriteEnable = VK_FALSE;
   depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
   depthStencil.depthBoundsTestEnable = VK_FALSE;
   depthStencil.stencilTestEnable = VK_FALSE;
@@ -1290,10 +1631,12 @@ auto inline ConfigureGraphDescriptors(GraphicsContext &context,
     return Error::Create("Cannot create compute pipeline for non-compute pass");
   }
 
+  auto &shaderModule = Shader::GetShaderModule(compiledPass.pass.computeShader);
+
   VkPipelineShaderStageCreateInfo shaderStage = {};
   shaderStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
   shaderStage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-  shaderStage.module = compiledPass.pass.computeShader.module;
+  shaderStage.module = shaderModule.module;
   shaderStage.pName = "main";
 
   VkComputePipelineCreateInfo pipelineInfo = {};
@@ -1700,6 +2043,12 @@ auto inline AllocateGraphResourceMemory(GraphicsContext &context,
 
   std::cout << "Created pipelines for render graph passes." << "\n";
 
+  CreateGraphLayoutStates(context, graph);
+
+  CreateGraphResourceTransitions(context, graph);
+
+  CreateGraphImageBarriers(context, graph);
+
   return Error::Success();
 }
 
@@ -1717,9 +2066,6 @@ auto BeginPassRendering(GraphicsContext &context, RenderGraph &graph,
 
   std::vector<VkRenderingAttachmentInfo> colorAttachments;
   colorAttachments.resize(maxColorAttachmentIndex + 1);
-
-  std::cout << "Max color attachment index: " << maxColorAttachmentIndex
-            << "\n";
 
   bool hasDepthAttachment = false;
   bool hasStencilAttachment = false;
@@ -1741,14 +2087,6 @@ auto BeginPassRendering(GraphicsContext &context, RenderGraph &graph,
         hasStencilAttachment = true;
         continue;
       }
-
-      std::cout << "Setting up color attachment at location "
-                << binding.location << "\n";
-      std::cout << "  Resource lifetime type: "
-                << (resource.lifetime == ResourceLifetime::Transient
-                        ? "Transient"
-                        : "Persistent")
-                << "\n";
 
       VkRenderingAttachmentInfo colorAttach = {};
       colorAttach.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
@@ -1787,9 +2125,6 @@ auto BeginPassRendering(GraphicsContext &context, RenderGraph &graph,
   renderingInfo.pDepthAttachment = nullptr;
   renderingInfo.pStencilAttachment = nullptr;
 
-  std::cout << "Beginning rendering, color attachments: "
-            << renderingInfo.colorAttachmentCount << "\n";
-
   vkCmdBeginRendering(commandBuffer, &renderingInfo);
 }
 
@@ -1799,6 +2134,8 @@ auto Execute(GraphicsContext &context, RenderGraph &graph,
   for (size_t passIndex = 1; passIndex < graph.compiledPasses.size();
        passIndex++) {
     auto &compiledPass = graph.compiledPasses[passIndex];
+
+    ApplyPassBarriers(commandBuffer, compiledPass);
 
     if (compiledPass.pass.state.bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS) {
       BeginPassRendering(context, graph, commandBuffer, compiledPass);
@@ -1837,23 +2174,35 @@ auto Execute(GraphicsContext &context, RenderGraph &graph,
                               nullptr);
     }
 
-    std::cout << "Executing pass " << compiledPass.pass.handle << "\n";
-
     compiledPass.pass.executeFunction(commandBuffer, context, graph,
                                       compiledPass);
-
-    std::cout << "Executed pass " << compiledPass.pass.handle << "\n";
 
     if (compiledPass.pass.state.bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS) {
       vkCmdEndRendering(commandBuffer);
     }
   }
 
-  std::cout << "Finished executing render graph." << "\n";
+  for (const auto &barrier : graph.postGraphUpdates) {
+    vkCmdPipelineBarrier(commandBuffer,
+                         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, // src stage
+                         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, // dst stage
+                         0,                                  // dependency flags
+                         0, nullptr,                         // memory barriers
+                         0, nullptr,                         // buffer barriers
+                         1, &barrier                         // image barriers
+    );
+  }
 }
 
 auto AddTexture(RenderGraph &graph, const TextureDescriptor &descriptor)
     -> ResourceHandle {
+  assert(descriptor.width > 0 && descriptor.height > 0 &&
+         "Texture width and height must be greater than zero");
+  assert(descriptor.mipLevels > 0 &&
+         "Texture mipLevels must be greater than zero");
+  assert(descriptor.depthOrLayers > 0 &&
+         "Texture depthOrLayers must be greater than zero");
+
   Resource resource = {};
   resource.handle = static_cast<ResourceHandle>(graph.resources.size());
   resource.lifetime = descriptor.lifetime;
@@ -1903,8 +2252,19 @@ auto AddBuffer(RenderGraph &graph, BufferDescriptor descriptor)
 }
 
 auto ImportTexture(RenderGraph &graph, const Graphics::Texture::Texture texture,
-                   VkImageLayout initialLayout, // NOLINT
-                   VkImageLayout finalLayout) -> ResourceHandle {
+                   const LayoutUpdate layoutUpdate) -> ResourceHandle {
+
+  assert(texture.image != VK_NULL_HANDLE &&
+         "Imported texture must have a valid image handle");
+  assert(texture.mipmapcount > 0 &&
+         "Imported texture must have at least one mipmap level");
+  assert(texture.arrayLayers > 0 &&
+         "Imported texture must have at least one array layer");
+  assert(texture.size.width > 0 && "Imported texture must have a valid width");
+  assert(texture.size.height > 0 &&
+         "Imported texture must have a valid height");
+  assert(texture.size.depth > 0 && "Imported texture must have a valid depth");
+
   Resource resource = {};
   resource.handle = static_cast<ResourceHandle>(graph.resources.size());
   resource.lifetime = ResourceLifetime::Persistent;
@@ -1915,6 +2275,9 @@ auto ImportTexture(RenderGraph &graph, const Graphics::Texture::Texture texture,
          "Imported texture must have a valid image view");
 
   graph.resources.emplace_back(resource);
+
+  graph.initialResourceLayouts[resource.handle] = layoutUpdate.oldState;
+  graph.finalResourceLayouts[resource.handle] = layoutUpdate.newState;
 
   std::cout << "Imported texture resource with handle " << resource.handle
             << "\n";

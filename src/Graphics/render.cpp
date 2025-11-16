@@ -1,5 +1,6 @@
 #include "Modules/error.hpp"
 #include "graphics.hpp"
+#include <iostream>
 #include <vector>
 
 namespace Graphics {
@@ -56,7 +57,7 @@ void TransitionColorToPresent(VkCommandBuffer cmd, VkImage image) {
   VkImageMemoryBarrier barrier = {
       .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
       .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-      .dstAccessMask = VK_ACCESS_MEMORY_READ_BIT, // reading for present
+      .dstAccessMask = 0,
       .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
       .newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
       .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
@@ -80,7 +81,7 @@ void TransitionColorToPresent(VkCommandBuffer cmd, VkImage image) {
 void TransitionPresentToColor(VkCommandBuffer cmd, VkImage image) {
   VkImageMemoryBarrier barrier = {
       .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-      .srcAccessMask = VK_ACCESS_MEMORY_READ_BIT, // reading for present
+      .srcAccessMask = 0,
       .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
       .oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
       .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
@@ -97,12 +98,9 @@ void TransitionPresentToColor(VkCommandBuffer cmd, VkImage image) {
           },
   };
 
-  vkCmdPipelineBarrier(
-      cmd,
-      VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, // wait for prior operations
-                                            // (present)
-      VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0, 0, nullptr, 0, nullptr,
-      1, &barrier);
+  vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                       VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0, 0,
+                       nullptr, 0, nullptr, 1, &barrier);
 }
 
 auto SubmitCommandBuffers(Graphics::GraphicsContext &context) -> Error::Error {
@@ -224,7 +222,6 @@ auto Present_PostDraw(Graphics::GraphicsContext &context) -> Error::Error {
       context.swapchainInfo.images[context.swapchainImageIndex]);
 
   assert(context.frameIndex < FRAMES_IN_FLIGHT);
-  assert(context.swapchainImageIndex < context.swapchainInfo.imageCount);
 
   if (context.swapchainImageIndex >= context.swapchainInfo.imageCount) {
     return Error::Create("Acquired image index is out of bounds.");
@@ -233,9 +230,13 @@ auto Present_PostDraw(Graphics::GraphicsContext &context) -> Error::Error {
   // End current frame recording
   EndFrame(context, context.frameIndex);
 
-  SubmitCommandBuffers(context);
+  auto error = SubmitCommandBuffers(context);
 
-  auto error = PresentFrame(context);
+  if (Error::IsError(error)) {
+    return error;
+  }
+
+  error = PresentFrame(context);
 
   if (Error::IsError(error)) {
     return error;
@@ -248,7 +249,12 @@ auto Present_PostDraw(Graphics::GraphicsContext &context) -> Error::Error {
 }
 
 void InitializeGraphics(Graphics::GraphicsContext &context) {
-  Present_PreDraw(context);
+  auto error = Present_PreDraw(context);
+
+  if (Error::IsError(error)) {
+    std::cout << "Error during graphics initialization (PreDraw): "
+              << error.message << "\n";
+  }
 }
 
 auto Present(Graphics::GraphicsContext &context) -> Error::Error {

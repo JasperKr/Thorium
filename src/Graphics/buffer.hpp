@@ -27,5 +27,9 @@ struct Buffer {
   void Destroy(GraphicsContext &context) const;
   auto SetData(GraphicsContext &context, const void *data, VkDeviceSize size,
                VkDeviceSize offset) const -> Error::Error;
+
+  // Resizes the buffer to the new size. Note: This will destroy the existing
+  // buffer and create a new one. Data will be lost. TODO: Implement data copy.
+  auto Resize(GraphicsContext &context, VkDeviceSize newSize) -> Error::Error;
 };
 } // namespace Graphics

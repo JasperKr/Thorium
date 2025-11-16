@@ -329,5 +329,52 @@ static inline auto IsStencilTexture(VkFormat format) -> bool {
   }
 }
 
+static inline auto GetTextureAspectFlags(VkFormat format)
+    -> VkImageAspectFlags {
+  VkImageAspectFlags aspectFlags = 0;
+
+  if (IsDepthTexture(format)) {
+    aspectFlags |= static_cast<uint32_t>(VK_IMAGE_ASPECT_DEPTH_BIT);
+  }
+
+  if (IsStencilTexture(format)) {
+    aspectFlags |= static_cast<uint32_t>(VK_IMAGE_ASPECT_STENCIL_BIT);
+  }
+
+  if (aspectFlags == 0) {
+    aspectFlags = VK_IMAGE_ASPECT_COLOR_BIT;
+  }
+
+  return aspectFlags;
+}
+
+static inline auto IsCompressedTexture(VkFormat format) -> bool {
+  switch (format) {
+  case VK_FORMAT_BC1_RGB_UNORM_BLOCK:
+  case VK_FORMAT_BC1_RGB_SRGB_BLOCK:
+  case VK_FORMAT_BC1_RGBA_UNORM_BLOCK:
+  case VK_FORMAT_BC1_RGBA_SRGB_BLOCK:
+  case VK_FORMAT_BC2_UNORM_BLOCK:
+  case VK_FORMAT_BC2_SRGB_BLOCK:
+  case VK_FORMAT_BC3_UNORM_BLOCK:
+  case VK_FORMAT_BC3_SRGB_BLOCK:
+  case VK_FORMAT_BC4_UNORM_BLOCK:
+  case VK_FORMAT_BC4_SNORM_BLOCK:
+  case VK_FORMAT_BC5_UNORM_BLOCK:
+  case VK_FORMAT_BC5_SNORM_BLOCK:
+  case VK_FORMAT_BC6H_UFLOAT_BLOCK:
+  case VK_FORMAT_BC6H_SFLOAT_BLOCK:
+  case VK_FORMAT_BC7_UNORM_BLOCK:
+  case VK_FORMAT_BC7_SRGB_BLOCK:
+    return true;
+  default:
+    return false;
+  }
+}
+
+auto GetDefaultTexture(GraphicsContext &context, VkFormat format,
+                       Graphics::Texture::TextureType type)
+    -> tl::expected<Graphics::Texture::Texture, Error::Error>;
+
 } // namespace Texture
 } // namespace Graphics

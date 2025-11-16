@@ -1,4 +1,5 @@
 #include "shader.hpp"
+#include "Modules/error.hpp"
 #include "Modules/filesystem.hpp"
 #include "graphics.hpp"
 #include "shaderc/shaderc.h"
@@ -13,6 +14,7 @@
 
 namespace Graphics::Shader {
 
+static std::vector<ShaderModule> ShaderModules = {}; // NOLINT
 const std::string SpirvDirectory = "shaders/spirv/";
 
 void LoadModule() {
@@ -230,7 +232,12 @@ HandleCompilationError(const shaderc::SpvCompilationResult &result,
 
   // Export to file for easier debugging
 
-  Filesystem::WriteFile("shader_source_with_error.txt", shader.code);
+  auto fsError =
+      Filesystem::WriteFile("shader_source_with_error.txt", shader.code);
+  if (Error::IsError(fsError)) {
+    std::cout << "Failed to write shader source to file for debugging: "
+              << fsError.message << "\n";
+  }
 
   TraverseShaderIncludes(
       shader.source, [&](const ShaderSource &source) -> void {
@@ -337,7 +344,7 @@ static inline auto LoadGLSL(GraphicsContext &context, ShaderModule &shader) {
 static inline auto
 HandleShaderIncludes(ShaderModule &shader, ShaderSource &currentSource,
                      std::string &line, uint64_t &currentLineNumber)
-    -> tl::expected<std::string, Error::Error> {
+    -> Error::Error {
 
   // Find #include directives
   const std::string includeDirective = "#include ";
@@ -350,8 +357,7 @@ HandleShaderIncludes(ShaderModule &shader, ShaderSource &currentSource,
 
     if (start == std::string::npos || end == std::string::npos ||
         end <= start + 1) {
-      return tl::unexpected(
-          Error::Create("Invalid #include directive syntax: " + line));
+      return Error::Create("Invalid #include directive syntax: " + line);
     }
 
     std::string includeFilename = line.substr(start + 1, end - start - 1);
@@ -361,8 +367,7 @@ HandleShaderIncludes(ShaderModule &shader, ShaderSource &currentSource,
     auto fileResult = Filesystem::ReadTextFile(includeFilename);
 
     if (Error::IsError(fileResult)) {
-      return tl::unexpected(
-          Error::Create("Failed to load included file: " + includeFilename));
+      return Error::Create("Failed to load included file: " + includeFilename);
     }
 
     ShaderSource newSource = {
@@ -385,14 +390,13 @@ HandleShaderIncludes(ShaderModule &shader, ShaderSource &currentSource,
     pushedSource.lineCount = includedLineCount;
 
     if (Error::IsError(code)) {
-      return tl::unexpected(code.error());
+      return code.error();
     }
 
-    return "//// Include: " + includeFilename + " ////\n" + code.value();
+    line = "//// Include: " + includeFilename + " ////\n" + code.value();
   }
 
-  // Empty string to indicate no include found
-  return "No Include";
+  return Error::Success();
 }
 
 // Preprocesses a line of shader code, handling includes and externs
@@ -400,18 +404,14 @@ HandleShaderIncludes(ShaderModule &shader, ShaderSource &currentSource,
 static inline auto
 PreprocessShaderCodeLine(ShaderModule &shader, ShaderSource &currentSource,
                          std::string &line, uint64_t &currentLineNumber)
-    -> tl::expected<std::string, Error::Error> {
+    -> Error::Error {
 
   // Handle #include directives
   auto includeResult =
       HandleShaderIncludes(shader, currentSource, line, currentLineNumber);
 
   if (Error::IsError(includeResult)) {
-    return tl::unexpected(includeResult.error());
-  }
-
-  if (includeResult.value() != "No Include") {
-    return includeResult.value();
+    return includeResult;
   }
 
   const std::string externDirective = "#defineExtern ";
@@ -439,8 +439,7 @@ PreprocessShaderCodeLine(ShaderModule &shader, ShaderSource &currentSource,
         endName <= startName + 1 || startValueName == std::string::npos ||
         endValueName == std::string::npos ||
         endValueName <= startValueName + 1) {
-      return tl::unexpected(
-          Error::Create("Invalid #defineExtern directive syntax: " + line));
+      return Error::Create("Invalid #defineExtern directive syntax: " + line);
     }
 
     // For example: MAX_LIGHTS
@@ -475,14 +474,17 @@ PreprocessShaderCodeLine(ShaderModule &shader, ShaderSource &currentSource,
     }
 
     if (!found) {
-      return tl::unexpected(Error::Create(
-          "Shader extern not found for #defineExtern: " + externValueName));
+      return Error::Create("Shader extern not found for #defineExtern: " +
+                           externValueName);
     }
 
-    return "#define " + externName + " " + externValue + "\n";
+    line = "#define " + externName + " " + externValue + "\n";
+    return Error::Success();
   }
 
-  return line + "\n";
+  line += "\n";
+
+  return Error::Success();
 }
 
 static inline auto PreprocessShaderCode(ShaderModule &shader,
@@ -500,12 +502,10 @@ static inline auto PreprocessShaderCode(ShaderModule &shader,
         PreprocessShaderCodeLine(shader, source, line, currentLineNumber);
 
     if (Error::IsError(result)) {
-      return tl::unexpected(result.error());
+      return tl::unexpected(result);
     }
 
-    auto processedLine = result.value();
-
-    preprocessedSource += processedLine;
+    preprocessedSource += line;
   }
 
   return preprocessedSource;
@@ -538,8 +538,8 @@ static inline auto LoadCode(ShaderModule &shader) -> Error::Error {
 auto ShaderModule::Create(Graphics::GraphicsContext &context,
                           const std::string &path, VkShaderStageFlagBits stage,
                           const std::string &name)
-    -> tl::expected<ShaderModule, Error::Error> {
-  ShaderModule shader = {};
+    -> tl::expected<ShaderHandle, Error::Error> {
+  ShaderModule &shader = ShaderModules.emplace_back();
   shader.stage = stage;
   shader.name = name;
   shader.source = {
@@ -573,6 +573,7 @@ auto ShaderModule::Create(Graphics::GraphicsContext &context,
     return shader;
   }
 #endif
+
   // Load GLSL code
   Error::Error error = LoadCode(shader);
   if (Error::IsError(error)) {
@@ -585,7 +586,15 @@ auto ShaderModule::Create(Graphics::GraphicsContext &context,
     return tl::unexpected(error);
   }
 
-  return shader;
+  // Shader handles start at 1, to allow the 0 value to represent an invalid
+  // handle
+  auto shaderHandle = ShaderModules.size();
+
+  return shaderHandle;
+}
+
+auto GetShaderModule(const ShaderHandle handle) -> ShaderModule & {
+  return ShaderModules[handle - 1];
 }
 
 } // namespace Graphics::Shader

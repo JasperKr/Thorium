@@ -31,6 +31,8 @@ add_library(imgui
     external/imgui/imgui_draw.cpp
     external/imgui/imgui_tables.cpp
     external/imgui/imgui_widgets.cpp
+    external/imgui/imgui_demo.cpp
+
     external/imgui/backends/imgui_impl_sdl3.cpp
     external/imgui/backends/imgui_impl_vulkan.cpp
 )
@@ -109,6 +111,7 @@ endif()
 add_executable(Thorium
     src/main.cpp
     src/program.cpp
+    src/loop.cpp
 
     src/Graphics/graphics.cpp
     src/Graphics/texture.cpp
@@ -120,6 +123,7 @@ add_executable(Thorium
 
     src/Modules/filesystem.cpp
     src/Modules/timer.cpp
+    src/Modules/errorhandler.cpp
 
     src/Modules/Editor/imgui.cpp
 

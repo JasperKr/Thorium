@@ -75,3 +75,28 @@ auto Graphics::Buffer::SetData(Graphics::GraphicsContext &context,
 void Graphics::Buffer::Destroy(Graphics::GraphicsContext &context) const {
   vmaDestroyBuffer(context.vmaAllocator, handle, memory);
 }
+
+auto Graphics::Buffer::Resize(Graphics::GraphicsContext &context,
+                              VkDeviceSize newSize) -> Error::Error {
+  // Destroy existing buffer
+  vmaDestroyBuffer(context.vmaAllocator, handle, memory);
+  // Create new buffer with new size
+  VkBufferCreateInfo bufferInfo = {};
+  bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+  bufferInfo.size = newSize;
+  bufferInfo.usage = usage;
+  bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+  VmaAllocationCreateInfo allocInfo = {};
+  allocInfo.usage = VMA_MEMORY_USAGE_AUTO; // Let VMA decide
+  allocInfo.requiredFlags = properties;
+
+  VkResult result = vmaCreateBuffer(context.vmaAllocator, &bufferInfo,
+                                    &allocInfo, &handle, &memory, nullptr);
+  if (result != VK_SUCCESS) {
+    return Error::FromVkResult(result);
+  }
+
+  size = newSize;
+
+  return Error::Success();
+}

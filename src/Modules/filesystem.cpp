@@ -277,6 +277,12 @@ auto GetSaveDirectory() -> std::string {
   return identity != nullptr ? std::string(identity) : std::string();
 }
 
+auto GetSourceDirectory() -> std::string {
+  static const auto *sourceDir = PHYSFS_getBaseDir();
+
+  return sourceDir != nullptr ? std::string(sourceDir) : std::string();
+}
+
 #ifdef CreateDirectory
 #undef CreateDirectory
 #endif

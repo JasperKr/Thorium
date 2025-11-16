@@ -531,7 +531,7 @@ const static std::unordered_map<const VertexFormats, const VertexFormat,
                           .format = VK_FORMAT_R8G8B8A8_UNORM,
                           .offset = 16}},
           .Bindings = {{.binding = 0,
-                        .stride = 24,
+                        .stride = 20,
                         .inputRate = VK_VERTEX_INPUT_RATE_VERTEX}}}}};
 
 } // namespace Graphics

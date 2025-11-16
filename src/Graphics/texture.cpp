@@ -1,7 +1,10 @@
 #include "texture.hpp"
 #include "Graphics/graphics.hpp"
 #include "Modules/error.hpp"
+#include "sampler.hpp"
 #include "stb/stb_image.h"
+#include "tl/expected.hpp"
+#include <cstdint>
 #include <iostream>
 
 #define VMA_VULKAN_VERSION 1004000
@@ -158,6 +161,7 @@ auto FromSwapchainTexture(GraphicsContext &context, VkImage swapchainImage,
   texture.size = VkExtent3D{width, height, 1};
   texture.type = TextureType::DEFAULT;
   texture.mipmapcount = 1;
+  texture.arrayLayers = 1;
   texture.samplerDirty = true;
 
   VkSurfaceCapabilitiesKHR surfaceCapabilities;
@@ -565,7 +569,7 @@ auto TransitionLayout(GraphicsContext &context, Texture *texture,
   vkFreeCommandBuffers(context.device, GetRenderData(context, 0).pool, 1,
                        &commandBuffer);
 
-  return Error::Create("Texture layout transitioned successfully.");
+  return Error::Success();
 }
 
 auto CopyBufferToImage(GraphicsContext &context, VkBuffer buffer,
@@ -606,7 +610,7 @@ auto CopyBufferToImage(GraphicsContext &context, VkBuffer buffer,
   vkFreeCommandBuffers(context.device, GetRenderData(context, 0).pool, 1,
                        &commandBuffer);
 
-  return Error::Create("Buffer copied to texture image successfully.");
+  return Error::Success();
 }
 
 auto Texture::SetFilter(VkFilter minFilter, VkFilter magFilter, // NOLINT
@@ -700,4 +704,108 @@ auto Texture::GetSampler(GraphicsContext &context) -> VkSampler {
   return sampler;
 }
 
+struct VkFormatTextureTypeHash {
+  auto operator()(const std::pair<VkFormat, TextureType> &key) const noexcept
+      -> size_t {
+    return std::hash<uint32_t>()(static_cast<uint32_t>(key.first)) ^
+           (std::hash<uint8_t>()(static_cast<uint8_t>(key.second)) << 1U);
+  }
+};
+
+auto GetDefaultTexture(GraphicsContext &context, VkFormat format,
+                       Graphics::Texture::TextureType type)
+    -> tl::expected<Graphics::Texture::Texture, Error::Error> {
+  static std::unordered_map<std::pair<VkFormat, TextureType>, Texture,
+                            VkFormatTextureTypeHash>
+      textureCache;
+
+  auto key = std::make_pair(format, type);
+  auto textureIterator = textureCache.find(key);
+  if (textureIterator != textureCache.end()) {
+    return textureIterator->second;
+  }
+
+  TextureCreationInfo texInfo = {};
+  texInfo.width = 1;
+  texInfo.height = 1;
+  texInfo.depth = 1;
+  texInfo.format = format;
+  texInfo.usage = static_cast<uint32_t>(VK_IMAGE_USAGE_SAMPLED_BIT) |
+                  static_cast<uint32_t>(VK_IMAGE_USAGE_TRANSFER_DST_BIT);
+  if (type == TextureType::CUBEMAP) {
+    texInfo.depth = 6; // NOLINT
+  }
+  texInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+  texInfo.mipmapCount = 1;
+
+  tl::expected<Texture, Error::Error> result;
+  switch (type) {
+  case TextureType::DEFAULT:
+    result = Graphics::Texture::Create2D(context, texInfo);
+    break;
+  case TextureType::CUBEMAP:
+    result = Graphics::Texture::CreateCubeMap(context, texInfo);
+    break;
+  case TextureType::VOLUME:
+    result = Graphics::Texture::CreateVolume(context, texInfo);
+    break;
+  case TextureType::ARRAY:
+    result = Graphics::Texture::CreateArray(context, texInfo);
+    break;
+  default:
+    return tl::unexpected(
+        Error::Create("Unsupported texture type for default texture."));
+  }
+
+  if (Error::IsError(result)) {
+    return result;
+  }
+
+  Texture &texture = result.value();
+
+  // Fill texture with 1x1 of opaque white pixel data
+  std::array<uint8_t, 4> whitePixel = {UINT8_MAX, UINT8_MAX, UINT8_MAX,
+                                       UINT8_MAX};
+  VkBuffer stagingBuffer = nullptr;
+  VmaAllocation stagingBufferMemory = nullptr;
+  VkBufferCreateInfo bufferInfo = {};
+  bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+  bufferInfo.size = whitePixel.size();
+  bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+  bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+  VmaAllocationCreateInfo allocInfo = {};
+  allocInfo.usage = VMA_MEMORY_USAGE_CPU_ONLY;
+  Error::Error error = Error::FromVkResult(
+      vmaCreateBuffer(context.vmaAllocator, &bufferInfo, &allocInfo,
+                      &stagingBuffer, &stagingBufferMemory, nullptr));
+  if (Error::IsError(error)) {
+    return tl::unexpected(error);
+  }
+  void *data = nullptr;
+  vmaMapMemory(context.vmaAllocator, stagingBufferMemory, &data);
+  memcpy(data, whitePixel.data(), whitePixel.size());
+  vmaUnmapMemory(context.vmaAllocator, stagingBufferMemory);
+  error = Graphics::Texture::TransitionLayout(
+      context, &texture, VK_IMAGE_LAYOUT_UNDEFINED,
+      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+  if (Error::IsError(error)) {
+    return tl::unexpected(error);
+  }
+  error =
+      Graphics::Texture::CopyBufferToImage(context, stagingBuffer, &texture);
+  if (Error::IsError(error)) {
+    return tl::unexpected(error);
+  }
+  error = Graphics::Texture::TransitionLayout(
+      context, &texture, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+  if (Error::IsError(error)) {
+    return tl::unexpected(error);
+  }
+  vmaDestroyBuffer(context.vmaAllocator, stagingBuffer, stagingBufferMemory);
+
+  textureCache[key] = texture;
+
+  return texture;
+}
 } // namespace Graphics::Texture

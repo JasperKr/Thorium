@@ -2,6 +2,8 @@
 
 #include "error.hpp"
 #include <span>
+#include <string_view>
+#include <vector>
 namespace Filesystem {
 struct Config {
   std::string identity; // Application identity for save dirs
@@ -38,6 +40,7 @@ auto GetErrorCode() -> uint32_t;
 auto GetError() -> Error::Error;
 
 auto GetSaveDirectory() -> std::string;
+auto GetSourceDirectory() -> std::string;
 
 #ifdef CreateDirectory
 #undef CreateDirectory

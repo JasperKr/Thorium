@@ -1,12 +1,11 @@
 #pragma once
 
-#include <atomic>
 #include <vector>
 namespace Timer {
 const int DeltaTimeBufferSize = 100;
 
 struct TimerFrameInfo {
-  std::atomic_uint64_t lastTime = 0;
+  std::uint64_t lastTime = 0ULL;
   uint64_t deltaTime = 0;
   std::vector<uint64_t> deltaTimes =
       std::vector<uint64_t>(DeltaTimeBufferSize, 0);

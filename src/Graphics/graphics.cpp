@@ -276,21 +276,7 @@ static auto CreateDevice(GraphicsContext &context) -> Error::Error {
 
 static void InitializeSwapchainTextures(GraphicsContext &context) {
   // Allocate a temporary command buffer
-  VkCommandBufferAllocateInfo allocInfo = {
-      .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-      .commandPool = GetRenderData(context, 0).pool,
-      .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-      .commandBufferCount = 1};
-  VkCommandBuffer cmd = VK_NULL_HANDLE;
-
-  vkAllocateCommandBuffers(context.device, &allocInfo, &cmd);
-
-  // Begin command buffer
-  VkCommandBufferBeginInfo beginInfo = {
-      .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-      .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT};
-
-  vkBeginCommandBuffer(cmd, &beginInfo);
+  auto *commandBuffer = BeginSingleTimeCommands(context);
 
   // Transition each image from UNDEFINED -> COLOR_ATTACHMENT_OPTIMAL
   for (uint32_t i = 0; i < context.swapchainInfo.imageCount; i++) {
@@ -306,21 +292,12 @@ static void InitializeSwapchainTextures(GraphicsContext &context) {
         .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
     };
 
-    vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+    vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
                          VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0, 0,
                          nullptr, 0, nullptr, 1, &barrier);
   }
 
-  // End and submit command buffer
-  vkEndCommandBuffer(cmd);
-
-  VkSubmitInfo submitInfo = {.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-                             .commandBufferCount = 1,
-                             .pCommandBuffers = &cmd};
-  vkQueueSubmit(context.graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
-  vkQueueWaitIdle(context.graphicsQueue);
-
-  vkFreeCommandBuffers(context.device, GetRenderData(context, 0).pool, 1, &cmd);
+  EndSingleTimeCommands(context, commandBuffer);
 }
 
 static auto CreateSwapchain(GraphicsContext &context) -> Error::Error {

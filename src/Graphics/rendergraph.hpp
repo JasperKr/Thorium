@@ -170,9 +170,9 @@ struct RenderPass {
     return resources;
   }
 
-  Shader::ShaderModule fragmentShader;
-  Shader::ShaderModule vertexShader;
-  Shader::ShaderModule computeShader;
+  Shader::ShaderHandle fragmentShader;
+  Shader::ShaderHandle vertexShader;
+  Shader::ShaderHandle computeShader;
 
   std::function<void(VkCommandBuffer cmd, GraphicsContext &context,
                      struct RenderGraph &graph,
@@ -188,6 +188,19 @@ struct ResourceTimelineEntry {
   ResourceTimelineEntryType type; // Type of event (Allocate or Deallocate)
 };
 
+struct LayoutState {
+  VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;
+  VkPipelineStageFlags stages = 0;
+  VkAccessFlags access = 0;
+};
+
+struct LayoutUpdate {
+  ResourceHandle resource{}; // Resource to update
+
+  LayoutState oldState; // Previous layout state
+  LayoutState newState; // New layout state
+};
+
 struct CompiledPass {
   RenderPass pass;
 
@@ -199,7 +212,11 @@ struct CompiledPass {
   // Separated allocation/deallocation entries, for easier processing in runtime
   std::vector<ResourceTimelineEntry> allocations;
   std::vector<ResourceTimelineEntry> deallocations;
-  std::vector<ResourceBinding> resourceBindings;
+
+  std::vector<LayoutUpdate> layoutUpdates;
+  // Used to generate layout transitions
+  std::unordered_map<ResourceHandle, LayoutState> resourceLayouts;
+  std::vector<VkImageMemoryBarrier> imageBarriers;
 };
 
 enum class RenderGraphHeuristic : uint8_t {
@@ -246,6 +263,13 @@ struct RenderGraph {
   std::unordered_map<ResourceHandle, VirtualAllocation> virtualAllocations;
 
   VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
+
+  // Persistent resources only
+  std::vector<VkImageMemoryBarrier> postGraphUpdates;
+  // Persistent resources only
+  std::unordered_map<ResourceHandle, LayoutState> initialResourceLayouts;
+  // Persistent resources only
+  std::unordered_map<ResourceHandle, LayoutState> finalResourceLayouts;
 };
 
 struct TextureDescriptor {
@@ -289,17 +313,14 @@ auto AddTexture(RenderGraph &graph, const TextureDescriptor &descriptor)
 auto AddBuffer(RenderGraph &graph, const BufferDescriptor &descriptor)
     -> ResourceHandle;
 
-auto ImportTexture(
-    RenderGraph &graph, Graphics::Texture::Texture texture,
-    VkImageLayout initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-    VkImageLayout finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
-    -> ResourceHandle;
+auto ImportTexture(RenderGraph &graph, Graphics::Texture::Texture texture,
+                   LayoutUpdate layoutUpdate) -> ResourceHandle;
 
 auto ImportBuffer(RenderGraph &graph, const Graphics::Buffer &buffer)
     -> ResourceHandle;
 
 struct RenderPassDescriptor {
-  std::vector<ResourceAccess> resources;
+  std::vector<ResourceHandle> resources;
 
   VkViewport viewport = {};
   VkRect2D scissor = {};
@@ -311,9 +332,9 @@ struct RenderPassDescriptor {
   std::vector<BlendMode> blendModes;
   std::vector<ResourceBinding> resourceBindings;
 
-  Graphics::Shader::ShaderModule vertexShader;
-  Graphics::Shader::ShaderModule fragmentShader;
-  Graphics::Shader::ShaderModule computeShader;
+  Graphics::Shader::ShaderHandle vertexShader;
+  Graphics::Shader::ShaderHandle fragmentShader;
+  Graphics::Shader::ShaderHandle computeShader;
 
   std::function<void(VkCommandBuffer cmd, GraphicsContext &context,
                      struct RenderGraph &graph, CompiledPass &currentPass)>
