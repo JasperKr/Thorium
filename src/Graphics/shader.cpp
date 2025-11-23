@@ -14,13 +14,14 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <vector>
 
 namespace Graphics::Shader {
 
 static std::vector<ShaderModule> ShaderModules = {};        // NOLINT
 static slang::IGlobalSession *GlobalSlangSession = nullptr; // NOLINT
 
-constexpr std::array<slang::CompilerOptionEntry, 2> CompilerOptions = {
+const std::vector<slang::CompilerOptionEntry> CompilerOptions = {
     slang::CompilerOptionEntry{
         .name = slang::CompilerOptionName::Optimization,
         .value =
@@ -55,8 +56,12 @@ void LoadModule() {
     return;
   }
 
-  slang::createGlobalSession(&GlobalSlangSession);
-  SpvTargetDesc.profile = GlobalSlangSession->findProfile("glsl_450");
+  auto result = slang::createGlobalSession(&GlobalSlangSession);
+  if (Error::IsError(result)) {
+    std::cerr << "Failed to create Slang global session.\n";
+    return;
+  }
+  SpvTargetDesc.profile = GlobalSlangSession->findProfile("spirv_1_5");
 }
 
 static inline auto GetGlobalShaderExterns() -> std::vector<ShaderExtern> & {
@@ -222,7 +227,7 @@ auto SlangStageToVkStage(SlangStage stage) {
   }
 }
 
-constexpr std::array<SlangStage, 13> SlangStages = {
+const std::vector<SlangStage> SlangStages = {
     SLANG_STAGE_VERTEX,   SLANG_STAGE_HULL,          SLANG_STAGE_DOMAIN,
     SLANG_STAGE_GEOMETRY, SLANG_STAGE_FRAGMENT,      SLANG_STAGE_COMPUTE,
     SLANG_STAGE_MESH,     SLANG_STAGE_AMPLIFICATION, SLANG_STAGE_RAY_GENERATION,
@@ -283,6 +288,8 @@ static inline auto LoadSlang(GraphicsContext &context, ShaderModule &shader)
 
   sessionDesc.searchPaths = searchPaths.data();
   sessionDesc.searchPathCount = static_cast<uint32_t>(searchPaths.size());
+  sessionDesc.targets = &SpvTargetDesc;
+  sessionDesc.targetCount = 1;
 
   slang::ISession *session = nullptr;
   auto result = GlobalSlangSession->createSession(sessionDesc, &session);
@@ -291,17 +298,14 @@ static inline auto LoadSlang(GraphicsContext &context, ShaderModule &shader)
     return Error::Create(result);
   }
 
-  slang::ICompileRequest *compilationRequest = nullptr;
-  result = session->createCompileRequest(&compilationRequest);
-
-  if (Error::IsError(result)) {
-    return Error::Create(result);
-  }
-
-  slang::IBlob *diagnosticsBlob = nullptr;
+  Slang::ComPtr<slang::IBlob> diagnosticsBlob;
   std::cout << "Compiling shader: " << shader.moduleName << "\n";
-  auto *module =
-      session->loadModule(shader.moduleName.c_str(), &diagnosticsBlob);
+
+  std::cout << "Loading shader module...\n";
+  Slang::ComPtr<slang::IModule> module;
+
+  module = session->loadModule(shader.moduleName.c_str(),
+                               diagnosticsBlob.writeRef());
 
   if (diagnosticsBlob != nullptr) {
     return Error::Create(diagnosticsBlob);
@@ -311,27 +315,31 @@ static inline auto LoadSlang(GraphicsContext &context, ShaderModule &shader)
   }
 
   auto entryPointCount = module->getDefinedEntryPointCount();
-  std::vector<slang::IEntryPoint *> entryPoints;
+  std::vector<Slang::ComPtr<slang::IEntryPoint>> entryPoints;
   entryPoints.reserve(entryPointCount);
   shader.stages.reserve(entryPointCount);
   std::vector<SlangStage> stages;
   stages.reserve(entryPointCount);
 
+  std::cout << "Finding shader entry points...\n";
+
   std::cout << "Shader entry points:\n";
   std::cout << " - Count: " << entryPointCount << "\n";
 
   auto allowedEntryPointCount = SlangStages.size();
-
   for (SlangInt32 i = 0; i < allowedEntryPointCount; i++) {
     auto stage = SlangStages.at(i);
     auto entryPointName = SlangStageToString(stage) + "Main";
-    slang::IEntryPoint *entryPoint = nullptr;
-    auto result =
-        module->findEntryPointByName(entryPointName.c_str(), &entryPoint);
 
-    if (entryPoint == nullptr || Error::IsError(result)) {
+    Slang::ComPtr<slang::IEntryPoint> entryPoint = nullptr;
+
+    auto result = module->findEntryPointByName(entryPointName.c_str(),
+                                               entryPoint.writeRef());
+
+    if (entryPoint.readRef() == nullptr || Error::IsError(result)) {
       continue;
     }
+
     entryPoints.emplace_back(entryPoint);
 
     shader.stages.emplace_back(SlangStageToVkStage(stage));
@@ -342,103 +350,95 @@ static inline auto LoadSlang(GraphicsContext &context, ShaderModule &shader)
   }
 
   std::vector<slang::IComponentType *> componentTypes;
-  componentTypes.reserve(entryPointCount + 1);
   componentTypes.emplace_back(module);
 
   for (auto &entryPoint : entryPoints) {
     componentTypes.emplace_back(entryPoint);
   }
 
-  slang::IComponentType *composedProgram = nullptr;
+  Slang::ComPtr<slang::IComponentType> composedProgram;
   {
-    slang::IBlob *diagnosticsBlob = nullptr;
+    std::cout << "Composing program...\n";
+    std::cout << " - Component type count: " << componentTypes.size() << "\n";
+    for (const auto &compType : componentTypes) {
+      std::cout << "   - " << compType << "\n";
+    }
+
     SlangResult result = session->createCompositeComponentType(
         componentTypes.data(), static_cast<SlangInt>(componentTypes.size()),
-        &composedProgram, &diagnosticsBlob);
+        composedProgram.writeRef(), diagnosticsBlob.writeRef());
 
-    if (diagnosticsBlob != nullptr) {
-      return Error::Create(diagnosticsBlob);
-    }
-    if (result < 0) {
-      return Error::Create("Failed to compose program", result);
-    }
-    if (composedProgram == nullptr) {
-      return Error::Create("Composed program is null");
-    }
-  }
+    std::cout << "Created composite component type.\n";
 
-  slang::IComponentType *linkedProgram = nullptr;
-  {
-    slang::IBlob *diagnosticsBlob = nullptr;
-    SlangResult result =
-        composedProgram->link(&linkedProgram, &diagnosticsBlob);
-
-    if (diagnosticsBlob != nullptr) {
-      return Error::Create(diagnosticsBlob);
-    }
-    if (result < 0) {
-      return Error::Create("Failed to link program", result);
-    }
-    if (linkedProgram == nullptr) {
-      return Error::Create("Linked program is null");
-    }
-  }
-
-  slang::IBlob *spirvCode = nullptr;
-
-  shader.modules.resize(entryPointCount);
-  shader.stages.resize(entryPointCount);
-  for (SlangInt32 i = 0; i < entryPointCount; i++) {
-
-    slang::IBlob *diagnosticsBlob = nullptr;
-    SlangResult result =
-        linkedProgram->getEntryPointCode(i, // entryPointIndex
-                                         0, // targetIndex
-                                         &spirvCode, &diagnosticsBlob);
-
-    if (diagnosticsBlob != nullptr) {
-      return Error::Create(diagnosticsBlob);
-    }
-    if (result < 0) {
-      return Error::Create("Failed to get entry point " + std::to_string(i),
-                           result);
-    }
-
-    std::vector<uint32_t> data;
-    size_t codeSize = spirvCode->getBufferSize();
-    data.resize(codeSize / 4);
-    memcpy(data.data(), spirvCode->getBufferPointer(), codeSize);
-
-    // NOLINTNEXTLINE
-    std::span<uint8_t> spirvCodeSpan(reinterpret_cast<uint8_t *>(data.data()),
-                                     codeSize);
-
-    auto err = Filesystem::CreateDirectory(SpirvDirectory);
-
+    auto err =
+        Error::Create(result, diagnosticsBlob, composedProgram.readRef());
     if (Error::IsError(err)) {
       return err;
     }
+  }
 
-    // auto spirvPath =
-    //     shader.moduleName + "_" + SlangStageToString(stages[i]) + ".spv";
+  Slang::ComPtr<slang::IComponentType> linkedProgram;
+  {
+    std::cout << "Linking program...\n";
 
-    // err = Filesystem::WriteFile(Path::Join(SpirvDirectory, spirvPath),
-    //                             spirvCodeSpan);
+    SlangResult result = composedProgram->link(linkedProgram.writeRef(),
+                                               diagnosticsBlob.writeRef());
 
-    // if (Error::IsError(err)) {
-    //   return err;
-    // }
-
-    VkShaderModuleCreateInfo moduleCreateInfo = {};
-    moduleCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-    moduleCreateInfo.codeSize = data.size() * sizeof(uint32_t);
-    moduleCreateInfo.pCode = data.data();
-    Error::Error error = Error::Create(vkCreateShaderModule(
-        context.device, &moduleCreateInfo, nullptr, &shader.modules.at(i)));
-
-    if (Error::IsError(error)) {
-      return error;
+    auto err = Error::Create(result, diagnosticsBlob, linkedProgram.readRef());
+    if (Error::IsError(err)) {
+      return err;
     }
+  }
+
+  Slang::ComPtr<slang::IBlob> spirvCode;
+
+  shader.stages.resize(entryPointCount);
+  std::cout << "Getting entry point code"
+            << "\n";
+
+  result = linkedProgram->getTargetCode(0, // targetIndex
+                                        spirvCode.writeRef(),
+                                        diagnosticsBlob.writeRef());
+
+  auto err = Error::Create(result, diagnosticsBlob, spirvCode.readRef());
+  if (Error::IsError(err)) {
+    return err;
+  }
+
+  std::vector<uint32_t> data;
+  size_t codeSize = spirvCode->getBufferSize();
+  data.resize(codeSize / 4);
+  memcpy(data.data(), spirvCode->getBufferPointer(), codeSize);
+
+  // NOLINTNEXTLINE
+  std::span<uint8_t> spirvCodeSpan(reinterpret_cast<uint8_t *>(data.data()),
+                                   codeSize);
+
+  auto fserr = Filesystem::CreateDirectory(SpirvDirectory);
+
+  if (Error::IsError(fserr)) {
+    return fserr;
+  }
+
+  // auto spirvPath =
+  //     shader.moduleName + "_" + SlangStageToString(stages[i]) + ".spv";
+
+  // err = Filesystem::WriteFile(Path::Join(SpirvDirectory, spirvPath),
+  //                             spirvCodeSpan);
+
+  // if (Error::IsError(err)) {
+  //   return err;
+  // }
+
+  VkShaderModuleCreateInfo moduleCreateInfo = {};
+  moduleCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+  moduleCreateInfo.codeSize = data.size() * sizeof(uint32_t);
+  moduleCreateInfo.pCode = data.data();
+  Error::Error error = Error::Create(vkCreateShaderModule(
+      context.device, &moduleCreateInfo, nullptr, &shader.module));
+
+  if (Error::IsError(error)) {
+    return error;
   }
 
   return Error::Success();

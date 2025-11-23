@@ -74,24 +74,15 @@ auto Load(Graphics::GraphicsContext &context) -> Error::Error {
         }));
   }
 
-  auto fsResult = Graphics::Shader::ShaderModule::Create(
-      context, "default", "Default fragment shader");
-  if (Error::IsError(fsResult)) {
-    return fsResult.error();
+  auto shaderResult = Graphics::Shader::ShaderModule::Create(context, "default",
+                                                             "Default shader");
+  if (Error::IsError(shaderResult)) {
+    return shaderResult.error();
   }
 
-  auto vsResult = Graphics::Shader::ShaderModule::Create(
-      context, "src/Graphics/Shaders/default.vs", "Default vertex shader");
+  auto fragmentShader = shaderResult.value();
 
-  if (Error::IsError(vsResult)) {
-    return vsResult.error();
-  }
-
-  auto fragmentShader = fsResult.value();
-  auto vertexShader = vsResult.value();
-
-  GetShaders().emplace_back(vertexShader);
-  GetShaders().emplace_back(fragmentShader);
+  GetShaders().emplace_back(shaderResult.value());
 
   // Create swapchain textures
 
@@ -131,70 +122,15 @@ auto Load(Graphics::GraphicsContext &context) -> Error::Error {
   std::cout << "Swapchain extent: " << context.swapchainInfo.extent.width << "x"
             << context.swapchainInfo.extent.height << "\n";
 
-  // auto rootHandle = Graphics::Rendergraph::AddRenderPass(
-  //     graph,
-  //     {.resources =
-  //          {
-  //              textureHandles.at(0),
-  //          },
-
-  //      .viewport = {.x = 0.0F,
-  //                   .y = 0.0F,
-  //                   .width =
-  //                       static_cast<float>(context.swapchainInfo.extent.width),
-  //                   .height =
-  //                       static_cast<float>(context.swapchainInfo.extent.height),
-  //                   .minDepth = 0.0F,
-  //                   .maxDepth = 1.0F},
-  //      .scissor = {.offset = {0, 0}, .extent = context.swapchainInfo.extent},
-  //      .clearValues =
-  //          {
-  //              {.color = {{0.0F, 0.0F, 0.0F, 1.0F}}},
-  //          },
-  //      .bindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-  //      .blendModes = {{Graphics::BlendMode{
-  //          .enabled = false,
-  //          .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
-  //          .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
-  //          .colorBlendOp = VK_BLEND_OP_ADD,
-  //          .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
-  //          .dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
-  //          .alphaBlendOp = VK_BLEND_OP_ADD,
-  //      }}},
-  //      .resourceBindings =
-  //          {
-  //              {
-  //                  .resource = textureHandles.at(0),
-  //                  .location = 0,
-  //                  .type = Graphics::Rendergraph::BindingType::Attachment,
-  //                  .usage = Graphics::Rendergraph::ResourceUsage::WriteOnly,
-  //              },
-  //          },
-  //      .vertexShader = vertexShader,
-  //      .fragmentShader = fragmentShader,
-  //      .executeFunction =
-  //          [](VkCommandBuffer cmd, Graphics::GraphicsContext &context,
-  //             Graphics::Rendergraph::RenderGraph &graph,
-  //             Graphics::Rendergraph::CompiledPass &compiledPass) -> void {
-  //        auto &meshes = Program::GetMeshes();
-  //        if (meshes.empty()) {
-  //          return;
-  //        }
-
-  //        auto &mesh = meshes[0];
-
-  //        mesh.Draw(context);
-  //      }});
-
   Editor::Context imguiContext = {};
 
-  auto imguiErr = Editor::InitializeImGui(context, graph, textureHandles.at(0),
-                                          swapchainHandle, imguiContext);
+  // auto imguiErr = Editor::InitializeImGui(context, graph,
+  // textureHandles.at(0), swapchainHandle, imguiContext);
 
-  if (Error::IsError(imguiErr)) {
-    std::cerr << "Failed to initialize ImGui: " << imguiErr.message << "\n";
-    return imguiErr;
-  }
+  // if (Error::IsError(imguiErr)) {
+  // std::cerr << "Failed to initialize ImGui: " << imguiErr.message << "\n";
+  // return imguiErr;
+  // }
 
   auto graphErr = Graphics::Rendergraph::Compile(context, graph);
 
@@ -280,9 +216,7 @@ auto Exit(Graphics::GraphicsContext &context) -> Error::Error {
   vkDestroyPipeline(context.device, GetPipeline(), nullptr);
   for (auto &shader : GetShaders()) {
     auto &module = Graphics::Shader::GetShaderModule(shader);
-    for (auto &module : module.modules) {
-      vkDestroyShaderModule(context.device, module, nullptr);
-    }
+    vkDestroyShaderModule(context.device, module.module, nullptr);
   }
   for (auto &mesh : GetMeshes()) {
     mesh.Destroy(context);

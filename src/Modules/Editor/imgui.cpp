@@ -8,8 +8,10 @@
 #include "backends/imgui_impl_vulkan.h"
 #include "imgui.h"
 #include <algorithm>
+#include <array>
 #include <iostream>
 #include <print>
+
 
 #define VK_NO_PROTOTYPES
 #include <vulkan/vulkan.h>

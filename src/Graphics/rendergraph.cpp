@@ -16,6 +16,7 @@
 #ifdef WIN32
 // #include <minwindef.h>
 #endif
+#include <array>
 #include <queue>
 #include <unordered_set>
 
@@ -91,18 +92,13 @@ auto AddRenderPass(RenderGraph &graph, const RenderPassDescriptor &descriptor)
     assert((pass.shader != 0) && "shader must be set for graphics pipeline");
 
     auto &shader = Shader::GetShaderModule(pass.shader);
-    bool hasVertexStage =
-        shader.GetModuleForStage(VK_SHADER_STAGE_VERTEX_BIT) != VK_NULL_HANDLE;
-    bool hasFragmentStage = shader.GetModuleForStage(
-                                VK_SHADER_STAGE_FRAGMENT_BIT) != VK_NULL_HANDLE;
-    assert(hasVertexStage && "Vertex shader stage must be present");
-    assert(hasFragmentStage && "Fragment shader stage must be present");
+    assert(shader.module != VK_NULL_HANDLE &&
+           "Fragment shader stage must be present");
   } else if (pass.state.bindPoint == VK_PIPELINE_BIND_POINT_COMPUTE) {
     assert(pass.shader != 0 && "shader must be set for compute pipeline");
     auto &shader = Shader::GetShaderModule(pass.shader);
-    bool hasComputeStage =
-        shader.GetModuleForStage(VK_SHADER_STAGE_COMPUTE_BIT) != VK_NULL_HANDLE;
-    assert(hasComputeStage && "Compute shader stage must be present");
+    assert(shader.module != VK_NULL_HANDLE &&
+           "Compute shader stage must be present");
   }
 
   graph.passes.emplace_back(pass);
@@ -1449,12 +1445,12 @@ auto inline ApplyPassBarriers(VkCommandBuffer commandBuffer,
 
   shaderStages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
   shaderStages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
-  shaderStages[0].module = shader.GetModuleForStage(shaderStages[0].stage);
+  shaderStages[0].module = shader.module;
   shaderStages[0].pName = "main";
 
   shaderStages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
   shaderStages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-  shaderStages[1].module = shader.GetModuleForStage(shaderStages[1].stage);
+  shaderStages[1].module = shader.module;
   shaderStages[1].pName = "main";
 
   auto vertexformat = Graphics::PredefinedVertexFormats.at(VertexFormats::GUI);
@@ -1643,7 +1639,7 @@ auto inline ApplyPassBarriers(VkCommandBuffer commandBuffer,
   VkPipelineShaderStageCreateInfo shaderStage = {};
   shaderStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
   shaderStage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-  shaderStage.module = shaderModule.GetModuleForStage(shaderStage.stage);
+  shaderStage.module = shaderModule.module;
   shaderStage.pName = "main";
 
   VkComputePipelineCreateInfo pipelineInfo = {};

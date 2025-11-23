@@ -32,7 +32,7 @@ struct ShaderExtern {
 struct ShaderModule {
   std::string moduleName;
 
-  std::vector<VkShaderModule> modules;
+  VkShaderModule module;
   std::vector<VkShaderStageFlagBits> stages;
 
   uint64_t modTime;
@@ -46,15 +46,6 @@ struct ShaderModule {
 
   void Destroy(VkDevice device);
   void ReloadMaybe(Graphics::GraphicsContext &context);
-
-  auto GetModuleForStage(VkShaderStageFlagBits stage) const -> VkShaderModule {
-    for (size_t i = 0; i < stages.size(); i++) {
-      if (stages[i] == stage) {
-        return modules[i];
-      }
-    }
-    return VK_NULL_HANDLE;
-  }
 };
 
 void LoadModule();

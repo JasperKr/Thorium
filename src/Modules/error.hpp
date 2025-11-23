@@ -2,13 +2,13 @@
 
 // #define LOG_ERRORS 1
 
+#include "slang/slang-com-ptr.h"
 #include "slang/slang.h"
-#include <algorithm>
-#include <array>
-#include <charconv>
 #include <cstdint>
+#include <cstring>
 #include <iostream>
 #include <sstream>
+#include <unordered_map>
 #include <vector>
 
 #if defined(LOG_ERRORS)
@@ -110,7 +110,7 @@ inline auto CleanupTracebackLine(const std::string &line) -> std::string {
   return "\t" + sanitizedLine;
 }
 
-inline auto GetStackTrace() -> std::string {
+inline auto GetStackTrace(uint32_t level = 0) -> std::string {
   const int MaxStackDepth = 64;
 
 #ifndef STD_STACKTRACE_SUPPORTED
@@ -119,7 +119,7 @@ inline auto GetStackTrace() -> std::string {
 
 #if defined(_WIN32)
   unsigned short frames =
-      CaptureStackBackTrace(2, MaxStackDepth, stack.data(), nullptr);
+      CaptureStackBackTrace(2 + level, MaxStackDepth, stack.data(), nullptr);
   std::string trace;
   HANDLE process = GetCurrentProcess();
 
@@ -157,7 +157,8 @@ inline auto GetStackTrace() -> std::string {
 #endif
 #else
   std::string trace;
-  std::stacktrace stacktrace = std::stacktrace::current(2, MaxStackDepth);
+  std::stacktrace stacktrace =
+      std::stacktrace::current(2 + level, MaxStackDepth);
   trace = std::to_string(stacktrace);
 
   std::string keyword = "!main";
@@ -190,9 +191,10 @@ inline auto GetStackTrace() -> std::string {
   return "Unable to get stack trace on this platform.";
 }
 
-inline auto Create(const std::string &message, int32_t code = -1) -> Error {
-  Error err =
-      Error{.message = message, .code = code, .backtrace = GetStackTrace()};
+inline auto Create(const std::string &message, int32_t code = -1, // NOLINT
+                   uint32_t level = 0U) -> Error {
+  Error err = Error{
+      .message = message, .code = code, .backtrace = GetStackTrace(level)};
 #if defined(LOG_ERRORS)
   if (code != 0) {
     std::cerr << "Error: " << message << "\n"
@@ -205,7 +207,7 @@ inline auto Create(const std::string &message, int32_t code = -1) -> Error {
 }
 
 inline auto Create(const char *message, int32_t code = -1) -> Error {
-  return Create(std::string(message), code);
+  return Create(std::string(message), code, 1);
 }
 
 inline auto Success() -> Error {
@@ -277,26 +279,99 @@ inline auto Create(VkResult result) -> Error {
   return Create(VkResultToString(result), result);
 }
 
-inline auto Create(SlangResult result) -> Error {
+const std::unordered_map<SlangResult, std::string> SlangResultToStringMap = {
+    {SLANG_OK, "SLANG_OK"},                                 // NOLINT
+    {SLANG_FAIL, "SLANG_FAIL"},                             // NOLINT
+    {SLANG_E_NOT_IMPLEMENTED, "SLANG_E_NOT_IMPLEMENTED"},   // NOLINT
+    {SLANG_E_OUT_OF_MEMORY, "SLANG_E_OUT_OF_MEMORY"},       // NOLINT
+    {SLANG_E_INVALID_ARG, "SLANG_E_INVALID_ARG"},           // NOLINT
+    {SLANG_E_BUFFER_TOO_SMALL, "SLANG_E_BUFFER_TOO_SMALL"}, // NOLINT
+    {SLANG_E_NOT_FOUND, "SLANG_E_NOT_FOUND"},               // NOLINT
+};
+
+// NOLINTNEXTLINE
+inline auto Create(SlangResult result, uint32_t level = 0) -> Error {
   if (SLANG_SUCCEEDED(result)) {
     return Success();
   }
 
-  return Create(slang::getLastInternalErrorMessage(),
-                static_cast<int32_t>(result));
+  auto len = strlen(slang::getLastInternalErrorMessage());
+  if (len > 0) {
+    return Create(slang::getLastInternalErrorMessage(),
+                  static_cast<int32_t>(result), level + 1);
+  }
+
+  /*
+  Severity | Facility | Code
+  ---------|----------|-----
+  31       |    30-16 | 15-0
+
+  Severity - 1 fail, 0 is success - as SlangResult is signed 32 bits, means
+  negative number indicates failure. Facility is where the error originated
+  from. Code is the code specific to the facility.
+
+  Result codes have the following styles,
+  1) SLANG_name
+  2) SLANG_s_f_name
+  3) SLANG_s_name
+
+  where s is S for success, E for error
+  f is the short version of the facility name
+
+  Style 1 is reserved for SLANG_OK and SLANG_FAIL as they are so commonly used.
+
+  It is acceptable to expand 'f' to a longer name to differentiate a name or
+  drop if unique without it. ie for a facility 'DRIVER' it might make sense to
+  have an error of the form SLANG_E_DRIVER_OUT_OF_MEMORY
+  */
+
+  // Check if the result is in the predefined map
+  auto errStrIterator = SlangResultToStringMap.find(result);
+  if (errStrIterator != SlangResultToStringMap.end()) {
+    return Create(errStrIterator->second, static_cast<int32_t>(result),
+                  level + 1);
+  }
+
+  auto errorBit = (static_cast<uint32_t>(result) >> 31U) & 0x1U; // NOLINT
+  auto facilityBits = SLANG_GET_RESULT_FACILITY(result);         // NOLINT
+  auto codeBits = SLANG_GET_RESULT_CODE(result);                 // NOLINT
+
+  std::ostringstream oss;
+  oss << "SlangResult Error - Severity: "
+      << (errorBit == 1U ? "Error" : "Success")
+      << ", Facility: " << facilityBits << ", Code: " << codeBits;
+  return Create(oss.str(), static_cast<int32_t>(result), level + 1);
 }
 
-inline auto Create(slang::IBlob *diagnosticsBlob) -> Error {
-  if (diagnosticsBlob == nullptr) {
+inline auto Create(Slang::ComPtr<slang::IBlob> &diagnosticsBlob,
+                   uint32_t level = 0) -> Error {
+  if (diagnosticsBlob.readRef() == nullptr) {
     return Success();
   }
 
   // NOLINTNEXTLINE
-  return Create((const char *)diagnosticsBlob->getBufferPointer(), -1);
+  return Create((const char *)diagnosticsBlob->getBufferPointer(), -1,
+                level + 1);
 }
 
 inline auto Unexpected(const std::string &message, int32_t code = -1) {
-  return tl::unexpected<Error>(Create(message, code));
+  return tl::unexpected<Error>(Create(message, code, 1));
+}
+
+template <typename T>
+inline auto Create(SlangResult result,
+                   Slang::ComPtr<slang::IBlob> diagnosticsBlob,
+                   T *output = nullptr) -> Error {
+  if (diagnosticsBlob != nullptr && diagnosticsBlob.readRef() != nullptr) {
+    return Create(diagnosticsBlob);
+  }
+  if (IsError(result)) {
+    return Create(result, 1);
+  }
+  if (output == nullptr) {
+    return Create("Output pointer is null", -1, 1);
+  }
+  return Success();
 }
 
 } // namespace Error
