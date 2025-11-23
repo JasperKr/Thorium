@@ -5,6 +5,9 @@
 #include "shaderc/shaderc.h"
 #include "shaderc/shaderc.hpp"
 #include "shaderc/status.h"
+#include "slang/slang-com-helper.h"
+#include "slang/slang-com-ptr.h"
+#include "slang/slang.h"
 #include "tl/expected.hpp"
 #include <cstddef>
 #include <cstdint>
@@ -14,7 +17,34 @@
 
 namespace Graphics::Shader {
 
-static std::vector<ShaderModule> ShaderModules = {}; // NOLINT
+static std::vector<ShaderModule> ShaderModules = {};        // NOLINT
+static slang::IGlobalSession *GlobalSlangSession = nullptr; // NOLINT
+
+constexpr std::array<slang::CompilerOptionEntry, 2> CompilerOptions = {
+    slang::CompilerOptionEntry{
+        .name = slang::CompilerOptionName::Optimization,
+        .value =
+            slang::CompilerOptionValue{
+                .kind = slang::CompilerOptionValueKind::Int,
+                .intValue0 = SLANG_OPTIMIZATION_LEVEL_MAXIMAL,
+            }},
+    slang::CompilerOptionEntry{
+        .name = slang::CompilerOptionName::EmitSpirvMethod,
+        .value =
+            slang::CompilerOptionValue{
+                .kind = slang::CompilerOptionValueKind::Int,
+                .intValue0 = SlangEmitSpirvMethod::SLANG_EMIT_SPIRV_DIRECTLY,
+            }},
+};
+
+// NOLINTNEXTLINE
+static slang::TargetDesc SpvTargetDesc = {
+    .format = SLANG_SPIRV,
+    .profile = SLANG_PROFILE_UNKNOWN,
+    .compilerOptionEntries = CompilerOptions.data(),
+    .compilerOptionEntryCount = static_cast<uint32_t>(CompilerOptions.size()),
+};
+
 const std::string SpirvDirectory = "shaders/spirv/";
 
 void LoadModule() {
@@ -24,6 +54,9 @@ void LoadModule() {
     std::cerr << "Failed to create SPIR-V directory: " << err.message << "\n";
     return;
   }
+
+  slang::createGlobalSession(&GlobalSlangSession);
+  SpvTargetDesc.profile = GlobalSlangSession->findProfile("glsl_450");
 }
 
 static inline auto GetGlobalShaderExterns() -> std::vector<ShaderExtern> & {
@@ -84,39 +117,39 @@ static auto GetShaderCCompiler() -> shaderc::Compiler & {
   return compiler;
 }
 
-static inline auto LoadSpirV(Graphics::GraphicsContext &context,
-                             ShaderModule &shader) -> Error::Error {
-  // Load SPIR - V code from file
-  auto fileResult =
-      Filesystem::ReadFile(Path::Join(SpirvDirectory, shader.spirvPath));
-  if (Error::IsError(fileResult)) {
-    return fileResult.error();
-  }
-  auto spirvCode = fileResult.value();
+// static inline auto LoadSpirV(Graphics::GraphicsContext &context,
+//                              ShaderModule &shader) -> Error::Error {
+//   // Load SPIR - V code from file
+//   auto fileResult =
+//       Filesystem::ReadFile(Path::Join(SpirvDirectory, shader.spirvPath));
+//   if (Error::IsError(fileResult)) {
+//     return fileResult.error();
+//   }
+//   auto spirvCode = fileResult.value();
 
-  if (spirvCode.size() == 0) {
-    return Error::Create("Shader SPIR-V code is empty: " +
-                         Path::Join(SpirvDirectory, shader.spirvPath));
-  }
+//   if (spirvCode.size() == 0) {
+//     return Error::Create("Shader SPIR-V code is empty: " +
+//                          Path::Join(SpirvDirectory, shader.spirvPath));
+//   }
 
-  if (spirvCode.size() % 4 != 0) {
-    return Error::Create("Shader SPIR-V code size is not a multiple of 4: " +
-                         Path::Join(SpirvDirectory, shader.spirvPath));
-  }
+//   if (spirvCode.size() % 4 != 0) {
+//     return Error::Create("Shader SPIR-V code size is not a multiple of 4: " +
+//                          Path::Join(SpirvDirectory, shader.spirvPath));
+//   }
 
-  std::vector<uint32_t> spirvInstructions(spirvCode.size() / 4);
-  memcpy(spirvInstructions.data(), spirvCode.data(), spirvCode.size());
+//   std::vector<uint32_t> spirvInstructions(spirvCode.size() / 4);
+//   memcpy(spirvInstructions.data(), spirvCode.data(), spirvCode.size());
 
-  VkShaderModuleCreateInfo moduleCreateInfo = {};
-  moduleCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-  moduleCreateInfo.codeSize = spirvInstructions.size();
-  moduleCreateInfo.pCode = spirvInstructions.data();
+//   VkShaderModuleCreateInfo moduleCreateInfo = {};
+//   moduleCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+//   moduleCreateInfo.codeSize = spirvInstructions.size();
+//   moduleCreateInfo.pCode = spirvInstructions.data();
 
-  Error::Error error = Error::FromVkResult(vkCreateShaderModule(
-      context.device, &moduleCreateInfo, nullptr, &shader.module));
+//   Error::Error error = Error::Create(vkCreateShaderModule(
+//       context.device, &moduleCreateInfo, nullptr, &shader.module));
 
-  return error;
-}
+//   return error;
+// }
 
 template <typename F>
 static inline auto TraverseShaderIncludes(const ShaderSource &source,
@@ -156,432 +189,270 @@ SpvCompilationStatusToString(const shaderc_compilation_status result)
   }
 }
 
-enum class ConsoleColor : uint8_t {
-  Red,
-  Green,
-  Blue,
-  Yellow,
-  Cyan,
-  Magenta,
-  White,
-  Reset
+auto SlangStageToVkStage(SlangStage stage) {
+  switch (stage) {
+  case SLANG_STAGE_VERTEX:
+    return VK_SHADER_STAGE_VERTEX_BIT;
+  case SLANG_STAGE_HULL:
+    return VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT;
+  case SLANG_STAGE_DOMAIN:
+    return VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT;
+  case SLANG_STAGE_GEOMETRY:
+    return VK_SHADER_STAGE_GEOMETRY_BIT;
+  case SLANG_STAGE_FRAGMENT:
+    return VK_SHADER_STAGE_FRAGMENT_BIT;
+  case SLANG_STAGE_COMPUTE:
+    return VK_SHADER_STAGE_COMPUTE_BIT;
+  case SLANG_STAGE_MESH:
+    return VK_SHADER_STAGE_MESH_BIT_EXT;
+  case SLANG_STAGE_AMPLIFICATION:
+    return VK_SHADER_STAGE_TASK_BIT_EXT;
+  case SLANG_STAGE_RAY_GENERATION:
+    return VK_SHADER_STAGE_RAYGEN_BIT_KHR;
+  case SLANG_STAGE_ANY_HIT:
+    return VK_SHADER_STAGE_ANY_HIT_BIT_KHR;
+  case SLANG_STAGE_CLOSEST_HIT:
+    return VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
+  case SLANG_STAGE_MISS:
+    return VK_SHADER_STAGE_MISS_BIT_KHR;
+  case SLANG_STAGE_CALLABLE:
+    return VK_SHADER_STAGE_CALLABLE_BIT_KHR;
+  default:
+    return VK_SHADER_STAGE_FLAG_BITS_MAX_ENUM;
+  }
+}
+
+constexpr std::array<SlangStage, 13> SlangStages = {
+    SLANG_STAGE_VERTEX,   SLANG_STAGE_HULL,          SLANG_STAGE_DOMAIN,
+    SLANG_STAGE_GEOMETRY, SLANG_STAGE_FRAGMENT,      SLANG_STAGE_COMPUTE,
+    SLANG_STAGE_MESH,     SLANG_STAGE_AMPLIFICATION, SLANG_STAGE_RAY_GENERATION,
+    SLANG_STAGE_ANY_HIT,  SLANG_STAGE_CLOSEST_HIT,   SLANG_STAGE_MISS,
+    SLANG_STAGE_CALLABLE,
 };
 
-auto GetColorCode(ConsoleColor color) -> std::string {
-  switch (color) {
-  case ConsoleColor::Red:
-    return "\033[31m";
-  case ConsoleColor::Green:
-    return "\033[32m";
-  case ConsoleColor::Blue:
-    return "\033[34m";
-  case ConsoleColor::Yellow:
-    return "\033[33m";
-  case ConsoleColor::Cyan:
-    return "\033[36m";
-  case ConsoleColor::Magenta:
-    return "\033[35m";
-  case ConsoleColor::White:
-    return "\033[37m";
+auto SlangStageToString(SlangStage stage) -> std::string {
+  switch (stage) {
+  case SLANG_STAGE_VERTEX:
+    return "vertex";
+  case SLANG_STAGE_HULL:
+    return "tessellationControl";
+  case SLANG_STAGE_DOMAIN:
+    return "tessellationEvaluation";
+  case SLANG_STAGE_GEOMETRY:
+    return "geometry";
+  case SLANG_STAGE_FRAGMENT:
+    return "fragment";
+  case SLANG_STAGE_COMPUTE:
+    return "compute";
+  case SLANG_STAGE_MESH:
+    return "mesh";
+  case SLANG_STAGE_AMPLIFICATION:
+    return "task";
+  case SLANG_STAGE_RAY_GENERATION:
+    return "rayGeneration";
+  case SLANG_STAGE_ANY_HIT:
+    return "anyHit";
+  case SLANG_STAGE_CLOSEST_HIT:
+    return "closestHit";
+  case SLANG_STAGE_MISS:
+    return "miss";
+  case SLANG_STAGE_CALLABLE:
+    return "callable";
   default:
-    return "\033[0m";
+    return "unknown";
   }
 }
 
-static inline auto
-HandleCompilationError(const shaderc::SpvCompilationResult &result,
-                       const ShaderModule &shader) -> std::string {
-  shaderc_compilation_status status = result.GetCompilationStatus();
-
-  // We should only handle compilation errors here
-  if (status != shaderc_compilation_status_compilation_error) {
-    return SpvCompilationStatusToString(status);
-  }
-
-  // Find first : to get the line number
-  // Example error message:
-  // Error: src/Graphics/Shaders/default.vs:14: error: '#error' :
-
-  auto errorMessage = result.GetErrorMessage();
-  size_t firstColon = errorMessage.find(':');
-  if (firstColon == std::string::npos) {
-    return "Unknown compilation error.";
-  }
-
-  size_t secondColon = errorMessage.find(':', firstColon + 1);
-  if (secondColon == std::string::npos) {
-    return "Unknown compilation error.";
-  }
-
-  std::string lineNumberStr =
-      errorMessage.substr(firstColon + 1, secondColon - firstColon - 1);
-  uint64_t lineNumber = std::stoull(lineNumberStr);
-
-  /* Traverse includes to find the original source and line number
-  Current line number is 1-based
-  We can get the shader source object we included from by traversing the
-  includes And checking the includedLineOffset and code line count and if the
-  error line number falls within that range then we can adjust the line number
-  accordingly, choosing the deepest include that matches the line number
-  */
-
-  ShaderSource originalSource = shader.source;
-  std::string includeTree;
-
-  bool rootFile = true;
-
-  // Export to file for easier debugging
-
-  auto fsError =
-      Filesystem::WriteFile("shader_source_with_error.txt", shader.code);
-  if (Error::IsError(fsError)) {
-    std::cout << "Failed to write shader source to file for debugging: "
-              << fsError.message << "\n";
-  }
-
-  TraverseShaderIncludes(
-      shader.source, [&](const ShaderSource &source) -> void {
-        uint32_t startLine = source.includedLineOffset;  // inclusive
-        uint32_t endLine = startLine + source.lineCount; // inclusive
-
-        if (lineNumber >= startLine && lineNumber <= endLine) {
-          if (!rootFile) {
-            includeTree += "Included by: " + originalSource.source + ": ";
-            includeTree += std::to_string(source.includedLineOffset -
-                                          originalSource.includedLineOffset) +
-                           "\n";
-          }
-
-          originalSource = source;
-          rootFile = false;
-        }
-
-        if (rootFile) {
-          std::cout << "Error handling shader error message: Error outside of "
-                       "root file range.\n";
-          rootFile = false;
-        }
-      });
-
-  lineNumber -= originalSource.includedLineOffset;
-
-  std::string error =
-      GetColorCode(ConsoleColor::Red) + "Shader Compilation Error\n";
-
-  error += GetColorCode(ConsoleColor::Cyan) + includeTree;
-  error += GetColorCode(ConsoleColor::Green) + originalSource.source + ": " +
-           std::to_string(lineNumber) + "\n";
-  error += GetColorCode(ConsoleColor::Reset);
-
-  std::string errmsgWithoutFileInfo =
-      errorMessage.substr(secondColon + 1); // skip past line number info
-
-  error += errmsgWithoutFileInfo;
-
-  return error;
-}
-
-static inline auto LoadGLSL(GraphicsContext &context, ShaderModule &shader) {
-  if (shader.code.empty()) {
-    return Error::Create("Shader source is empty: " +
-                         Path::Join(SpirvDirectory, shader.spirvPath));
-  }
-
-  if (shader.spirvPath.empty()) {
-    return Error::Create("Shader SPIR-V path is empty.");
-  }
-
-  shaderc_shader_kind kind = VkShaderStageToShaderCStage(shader.stage);
-
-  if (kind == (shaderc_shader_kind)-1) {
-    return Error::Create("Unsupported shader stage for compilation: " +
-                         shader.source.source);
-  }
-
-  shaderc::CompileOptions options = shaderc::CompileOptions();
-  options.SetTargetEnvironment(shaderc_target_env_vulkan, VK_API_VERSION_1_4);
-
-  shaderc::Compiler &compiler = GetShaderCCompiler();
-  auto result =
-      compiler.CompileGlslToSpv(shader.code.c_str(), shader.code.size(), kind,
-                                shader.source.source.c_str(), "main", options);
-
-  if (result.GetCompilationStatus() != shaderc_compilation_status_success) {
-    std::string errorMessage = HandleCompilationError(result, shader);
-    return Error::Create(errorMessage);
-  }
-
-  std::vector<uint8_t> spirvCode((result.cend() - result.cbegin()) *
-                                 sizeof(uint32_t));
-  memcpy(spirvCode.data(), result.cbegin(), spirvCode.size());
-
-  auto err = Filesystem::CreateDirectory(SpirvDirectory);
-
-  if (Error::IsError(err)) {
-    return err;
-  }
-
-  err = Filesystem::WriteFile(Path::Join(SpirvDirectory, shader.spirvPath),
-                              spirvCode);
-
-  if (Error::IsError(err)) {
-    return err;
-  }
-
-  std::vector<uint32_t> spirvInstructions(spirvCode.size() / 4);
-  memcpy(spirvInstructions.data(), spirvCode.data(), spirvCode.size());
-
-  VkShaderModuleCreateInfo moduleCreateInfo = {};
-  moduleCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-  moduleCreateInfo.codeSize = spirvInstructions.size() * sizeof(uint32_t);
-  moduleCreateInfo.pCode = spirvInstructions.data();
-  Error::Error error = Error::FromVkResult(vkCreateShaderModule(
-      context.device, &moduleCreateInfo, nullptr, &shader.module));
-  return error;
-}
-
-// Current line number is 1-based
-static inline auto
-HandleShaderIncludes(ShaderModule &shader, ShaderSource &currentSource,
-                     std::string &line, uint64_t &currentLineNumber)
+static inline auto LoadSlang(GraphicsContext &context, ShaderModule &shader)
     -> Error::Error {
+  slang::SessionDesc sessionDesc = {};
+  sessionDesc.allowGLSLSyntax = false;
+  sessionDesc.defaultMatrixLayoutMode =
+      SlangMatrixLayoutMode::SLANG_MATRIX_LAYOUT_ROW_MAJOR;
 
-  // Find #include directives
-  const std::string includeDirective = "#include ";
+  auto sourceAndSaveDirectory = std::string(".");
+  auto shaderDirectory = Path::Join({"src", "Graphics", "Shaders"});
 
-  size_t includePos = line.find(includeDirective);
-  if (includePos != std::string::npos) {
-    // [#include "filename"] -> extract filename
-    size_t start = line.find('"', includePos);
-    size_t end = line.find('"', start + 1);
+  std::vector<const char *> searchPaths = {sourceAndSaveDirectory.c_str(),
+                                           shaderDirectory.c_str()};
 
-    if (start == std::string::npos || end == std::string::npos ||
-        end <= start + 1) {
-      return Error::Create("Invalid #include directive syntax: " + line);
-    }
-
-    std::string includeFilename = line.substr(start + 1, end - start - 1);
-
-    // Load included file content
-
-    auto fileResult = Filesystem::ReadTextFile(includeFilename);
-
-    if (Error::IsError(fileResult)) {
-      return Error::Create("Failed to load included file: " + includeFilename);
-    }
-
-    ShaderSource newSource = {
-        .source = includeFilename,
-        .code = fileResult.value(),
-        .includeSources = {},
-        .modTime = Filesystem::GetFileModTime(includeFilename),
-        .lineCount = 0,
-        .includedLineOffset = static_cast<uint32_t>(currentLineNumber),
-    };
-
-    currentSource.includeSources.emplace_back(newSource);
-    auto &pushedSource = currentSource.includeSources.back();
-
-    uint64_t previousLineNumber = currentLineNumber;
-
-    auto code = PreprocessShaderCode(shader, pushedSource, currentLineNumber);
-
-    uint32_t includedLineCount = currentLineNumber - previousLineNumber;
-    pushedSource.lineCount = includedLineCount;
-
-    if (Error::IsError(code)) {
-      return code.error();
-    }
-
-    line = "//// Include: " + includeFilename + " ////\n" + code.value();
+  std::cout << "Shader directories:\n";
+  for (const auto &path : searchPaths) {
+    std::cout << " - " << path << "\n";
   }
 
-  return Error::Success();
-}
+  sessionDesc.searchPaths = searchPaths.data();
+  sessionDesc.searchPathCount = static_cast<uint32_t>(searchPaths.size());
 
-// Preprocesses a line of shader code, handling includes and externs
-// Current line number is 1-based
-static inline auto
-PreprocessShaderCodeLine(ShaderModule &shader, ShaderSource &currentSource,
-                         std::string &line, uint64_t &currentLineNumber)
-    -> Error::Error {
+  slang::ISession *session = nullptr;
+  auto result = GlobalSlangSession->createSession(sessionDesc, &session);
 
-  // Handle #include directives
-  auto includeResult =
-      HandleShaderIncludes(shader, currentSource, line, currentLineNumber);
-
-  if (Error::IsError(includeResult)) {
-    return includeResult;
+  if (Error::IsError(result)) {
+    return Error::Create(result);
   }
 
-  const std::string externDirective = "#defineExtern ";
+  slang::ICompileRequest *compilationRequest = nullptr;
+  result = session->createCompileRequest(&compilationRequest);
 
-  size_t externPos = line.find(externDirective);
-  if (externPos != std::string::npos) {
-    // search through all shader externs for a match
-    // if not found, search through global externs
-    // [#defineExtern NAME "VALUE NAME"] -> extract NAME and VALUE
-    // Becomes #define NAME VALUE
-    // For example:
-    // #defineExtern MAX_LIGHTS "MAX LIGHTS VALUE"
-    // Matches:
-    // extern ShaderExtern { name: "MAX_LIGHTS", value: "8" }
-    // Becomes:
-    // #define MAX_LIGHTS 8
-
-    size_t startName = line.find(' ', externPos + externDirective.size());
-    size_t endName = line.find(' ', startName + 1);
-
-    size_t startValueName = line.find('"', endName);
-    size_t endValueName = line.find('"', startValueName + 1);
-
-    if (startName == std::string::npos || endName == std::string::npos ||
-        endName <= startName + 1 || startValueName == std::string::npos ||
-        endValueName == std::string::npos ||
-        endValueName <= startValueName + 1) {
-      return Error::Create("Invalid #defineExtern directive syntax: " + line);
-    }
-
-    // For example: MAX_LIGHTS
-    std::string externName =
-        line.substr(startName + 1, endName - startName - 1);
-    // For example: MAX LIGHTS VALUE
-    std::string externValueName =
-        line.substr(startValueName + 1, endValueName - startValueName - 1);
-    std::string externValue;
-
-    bool found = false;
-
-    // search local externs
-    for (const auto &externVar : shader.externs) {
-      if (externVar.name == externValueName) {
-        externValue = externVar.value;
-        found = true;
-        break;
-      }
-    }
-
-    if (!found) {
-      // search global externs
-      const auto &globalExterns = GetGlobalShaderExterns();
-      for (const auto &externVar : globalExterns) {
-        if (externVar.name == externValueName) {
-          externValue = externVar.value;
-          found = true;
-          break;
-        }
-      }
-    }
-
-    if (!found) {
-      return Error::Create("Shader extern not found for #defineExtern: " +
-                           externValueName);
-    }
-
-    line = "#define " + externName + " " + externValue + "\n";
-    return Error::Success();
+  if (Error::IsError(result)) {
+    return Error::Create(result);
   }
 
-  line += "\n";
+  slang::IBlob *diagnosticsBlob = nullptr;
+  std::cout << "Compiling shader: " << shader.moduleName << "\n";
+  auto *module =
+      session->loadModule(shader.moduleName.c_str(), &diagnosticsBlob);
 
-  return Error::Success();
-}
+  if (diagnosticsBlob != nullptr) {
+    return Error::Create(diagnosticsBlob);
+  }
+  if (module == nullptr) {
+    return Error::Create("Failed to load shader module: " + shader.moduleName);
+  }
 
-static inline auto PreprocessShaderCode(ShaderModule &shader,
-                                        ShaderSource &source,
-                                        uint64_t &currentLineNumber)
-    -> tl::expected<std::string, Error::Error> {
-  std::istringstream sourceStream(source.code);
-  std::string preprocessedSource;
-  std::string line;
+  auto entryPointCount = module->getDefinedEntryPointCount();
+  std::vector<slang::IEntryPoint *> entryPoints;
+  entryPoints.reserve(entryPointCount);
+  shader.stages.reserve(entryPointCount);
+  std::vector<SlangStage> stages;
+  stages.reserve(entryPointCount);
 
-  while (std::getline(sourceStream, line)) {
-    currentLineNumber++;
+  std::cout << "Shader entry points:\n";
+  std::cout << " - Count: " << entryPointCount << "\n";
 
+  auto allowedEntryPointCount = SlangStages.size();
+
+  for (SlangInt32 i = 0; i < allowedEntryPointCount; i++) {
+    auto stage = SlangStages.at(i);
+    auto entryPointName = SlangStageToString(stage) + "Main";
+    slang::IEntryPoint *entryPoint = nullptr;
     auto result =
-        PreprocessShaderCodeLine(shader, source, line, currentLineNumber);
+        module->findEntryPointByName(entryPointName.c_str(), &entryPoint);
 
-    if (Error::IsError(result)) {
-      return tl::unexpected(result);
+    if (entryPoint == nullptr || Error::IsError(result)) {
+      continue;
+    }
+    entryPoints.emplace_back(entryPoint);
+
+    shader.stages.emplace_back(SlangStageToVkStage(stage));
+    stages.emplace_back(stage);
+
+    std::cout << " - " << entryPointName
+              << " (stage: " << SlangStageToString(stage) << ")\n";
+  }
+
+  std::vector<slang::IComponentType *> componentTypes;
+  componentTypes.reserve(entryPointCount + 1);
+  componentTypes.emplace_back(module);
+
+  for (auto &entryPoint : entryPoints) {
+    componentTypes.emplace_back(entryPoint);
+  }
+
+  slang::IComponentType *composedProgram = nullptr;
+  {
+    slang::IBlob *diagnosticsBlob = nullptr;
+    SlangResult result = session->createCompositeComponentType(
+        componentTypes.data(), static_cast<SlangInt>(componentTypes.size()),
+        &composedProgram, &diagnosticsBlob);
+
+    if (diagnosticsBlob != nullptr) {
+      return Error::Create(diagnosticsBlob);
+    }
+    if (result < 0) {
+      return Error::Create("Failed to compose program", result);
+    }
+    if (composedProgram == nullptr) {
+      return Error::Create("Composed program is null");
+    }
+  }
+
+  slang::IComponentType *linkedProgram = nullptr;
+  {
+    slang::IBlob *diagnosticsBlob = nullptr;
+    SlangResult result =
+        composedProgram->link(&linkedProgram, &diagnosticsBlob);
+
+    if (diagnosticsBlob != nullptr) {
+      return Error::Create(diagnosticsBlob);
+    }
+    if (result < 0) {
+      return Error::Create("Failed to link program", result);
+    }
+    if (linkedProgram == nullptr) {
+      return Error::Create("Linked program is null");
+    }
+  }
+
+  slang::IBlob *spirvCode = nullptr;
+
+  shader.modules.resize(entryPointCount);
+  shader.stages.resize(entryPointCount);
+  for (SlangInt32 i = 0; i < entryPointCount; i++) {
+
+    slang::IBlob *diagnosticsBlob = nullptr;
+    SlangResult result =
+        linkedProgram->getEntryPointCode(i, // entryPointIndex
+                                         0, // targetIndex
+                                         &spirvCode, &diagnosticsBlob);
+
+    if (diagnosticsBlob != nullptr) {
+      return Error::Create(diagnosticsBlob);
+    }
+    if (result < 0) {
+      return Error::Create("Failed to get entry point " + std::to_string(i),
+                           result);
     }
 
-    preprocessedSource += line;
+    std::vector<uint32_t> data;
+    size_t codeSize = spirvCode->getBufferSize();
+    data.resize(codeSize / 4);
+    memcpy(data.data(), spirvCode->getBufferPointer(), codeSize);
+
+    // NOLINTNEXTLINE
+    std::span<uint8_t> spirvCodeSpan(reinterpret_cast<uint8_t *>(data.data()),
+                                     codeSize);
+
+    auto err = Filesystem::CreateDirectory(SpirvDirectory);
+
+    if (Error::IsError(err)) {
+      return err;
+    }
+
+    // auto spirvPath =
+    //     shader.moduleName + "_" + SlangStageToString(stages[i]) + ".spv";
+
+    // err = Filesystem::WriteFile(Path::Join(SpirvDirectory, spirvPath),
+    //                             spirvCodeSpan);
+
+    // if (Error::IsError(err)) {
+    //   return err;
+    // }
+
+    VkShaderModuleCreateInfo moduleCreateInfo = {};
+    moduleCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    moduleCreateInfo.codeSize = data.size() * sizeof(uint32_t);
+    moduleCreateInfo.pCode = data.data();
+    Error::Error error = Error::Create(vkCreateShaderModule(
+        context.device, &moduleCreateInfo, nullptr, &shader.modules.at(i)));
+
+    if (Error::IsError(error)) {
+      return error;
+    }
   }
-
-  return preprocessedSource;
-}
-
-static inline auto LoadCode(ShaderModule &shader) -> Error::Error {
-  auto fileResult = Filesystem::ReadTextFile(shader.source.source);
-
-  if (Error::IsError(fileResult)) {
-    return fileResult.error();
-  }
-
-  shader.source.code = fileResult.value();
-
-  uint64_t currentLineNumber = 0;
-
-  auto preprocessResult =
-      PreprocessShaderCode(shader, shader.source, currentLineNumber);
-
-  if (Error::IsError(preprocessResult)) {
-    return preprocessResult.error();
-  }
-
-  shader.code = preprocessResult.value();
-  shader.source.lineCount = static_cast<uint32_t>(currentLineNumber);
 
   return Error::Success();
 }
 
 auto ShaderModule::Create(Graphics::GraphicsContext &context,
-                          const std::string &path, VkShaderStageFlagBits stage,
-                          const std::string &name)
+                          const std::string &path, const std::string &name)
     -> tl::expected<ShaderHandle, Error::Error> {
   ShaderModule &shader = ShaderModules.emplace_back();
-  shader.stage = stage;
   shader.name = name;
-  shader.source = {
-      .source = path,
-      .includeSources = {},
-      .modTime = 0,
-      .lineCount = 0,
-      .includedLineOffset = 0,
-  };
+  shader.moduleName = path;
 
-  // if spirvPath exists, load SPIR-V code, else load GLSL code and compile to
-  // SPIR-V
-
-  // .fs, .vs, .gs, .cs, etc. -> _fs.spv, _vs.spv, _gs.spv, _cs.spv, etc.
-  std::string filename = Path::Filename(path);
-  std::string baseName = filename.substr(0, filename.find_last_of('.'));
-  std::string extension = Path::Extension(filename);
-  baseName += "_" + extension;
-  std::string spirvFilename = baseName + ".spv";
-
-  shader.spirvPath = spirvFilename;
-
-  // Check if SPIR-V file exists
-#ifdef NDEBUG // Only load SPIR-V in release builds, for faster startup, we
-              // cannot assume the SPIR-V is up to date in debug builds
-  if (Filesystem::FileExists(spirvFilename)) {
-    Error::Error error = LoadSpirV(context, shader);
-    if (Error::IsError(error)) {
-      return tl::unexpected(error);
-    }
-    return shader;
-  }
-#endif
-
-  // Load GLSL code
-  Error::Error error = LoadCode(shader);
-  if (Error::IsError(error)) {
-    return tl::unexpected(error);
-  }
-
-  // Compile GLSL to SPIR-V and create shader module
-  error = LoadGLSL(context, shader);
+  // Compile Slang to SPIR-V and create shader module
+  auto error = LoadSlang(context, shader);
   if (Error::IsError(error)) {
     return tl::unexpected(error);
   }

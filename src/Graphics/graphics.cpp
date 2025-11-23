@@ -1,5 +1,6 @@
 #include "graphics.hpp"
 #include "Graphics/texture.hpp"
+#include "Modules/config.hpp"
 #include "Modules/error.hpp"
 #include "SDL3/SDL_init.h"
 #include "SDL3/SDL_vulkan.h"
@@ -62,7 +63,7 @@ static const std::vector<VkPresentModeKHR> PresentModeScores = {
 
 static auto FindPhysicalDevice(GraphicsContext &context) -> Error::Error {
   uint32_t gpuCount = 0;
-  Error::Error error = Error::FromVkResult(
+  Error::Error error = Error::Create(
       vkEnumeratePhysicalDevices(context.instance, &gpuCount, nullptr));
 
   if (gpuCount == 0) {
@@ -74,7 +75,7 @@ static auto FindPhysicalDevice(GraphicsContext &context) -> Error::Error {
   }
 
   std::vector<VkPhysicalDevice> gpus(gpuCount);
-  error = Error::FromVkResult(
+  error = Error::Create(
       vkEnumeratePhysicalDevices(context.instance, &gpuCount, gpus.data()));
 
   if (Error::IsError(error)) {
@@ -257,7 +258,7 @@ static auto CreateDevice(GraphicsContext &context) -> Error::Error {
       static_cast<uint32_t>(deviceExtensions.size());
   createInfo.ppEnabledExtensionNames = deviceExtensions.data();
 
-  Error::Error error = Error::FromVkResult(vkCreateDevice(
+  Error::Error error = Error::Create(vkCreateDevice(
       context.physicalDevice, &createInfo, nullptr, &context.device));
 
   if (Error::IsError(error)) {
@@ -337,7 +338,7 @@ static auto CreateSwapchain(GraphicsContext &context) -> Error::Error {
 
   VkSwapchainKHR swapchain = VK_NULL_HANDLE;
 
-  Error::Error error = Error::FromVkResult(vkCreateSwapchainKHR(
+  Error::Error error = Error::Create(vkCreateSwapchainKHR(
       context.device, &swapchainInfo, nullptr, &swapchain));
 
   if (Error::IsError(error)) {
@@ -352,7 +353,7 @@ static auto CreateSwapchain(GraphicsContext &context) -> Error::Error {
   context.swapchainInfo.images =
       std::vector<VkImage>(context.swapchainInfo.imageCount);
 
-  error = Error::FromVkResult(vkGetSwapchainImagesKHR(
+  error = Error::Create(vkGetSwapchainImagesKHR(
       context.device, swapchain, &context.swapchainInfo.imageCount,
       context.swapchainInfo.images.data()));
 
@@ -381,7 +382,7 @@ static auto CreateSwapchain(GraphicsContext &context) -> Error::Error {
     imageViewInfo.subresourceRange.layerCount = 1;
 
     VkImageView imageView = VK_NULL_HANDLE;
-    error = Error::FromVkResult(
+    error = Error::Create(
         vkCreateImageView(context.device, &imageViewInfo, nullptr, &imageView));
 
     context.swapchainInfo.imageViews[i] = imageView;
@@ -408,7 +409,7 @@ static auto CreateRenderData(GraphicsContext &context) -> Error::Error {
         static_cast<uint32_t>(VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT) |
         static_cast<uint32_t>(VK_COMMAND_POOL_CREATE_TRANSIENT_BIT);
 
-    Error::Error error = Error::FromVkResult(vkCreateCommandPool(
+    Error::Error error = Error::Create(vkCreateCommandPool(
         context.device, &poolInfo, nullptr, &renderData.pool));
 
     if (Error::IsError(error)) {
@@ -424,7 +425,7 @@ static auto CreateRenderData(GraphicsContext &context) -> Error::Error {
     allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     allocInfo.commandBufferCount = FRAMES_IN_FLIGHT;
 
-    error = Error::FromVkResult(vkAllocateCommandBuffers(
+    error = Error::Create(vkAllocateCommandBuffers(
         context.device, &allocInfo, renderData.commandBuffers.data()));
 
     if (Error::IsError(error)) {
@@ -454,9 +455,9 @@ static auto CreateSemaphores(GraphicsContext &context) -> Error::Error {
   context.renderingFinished = std::vector<VkSemaphore>(FRAMES_IN_FLIGHT);
 
   for (int i = 0; i < FRAMES_IN_FLIGHT; i++) {
-    Error::Error error = Error::FromVkResult(
-        vkCreateSemaphore(context.device, &semaphoreInfo, nullptr,
-                          &context.swapchainImageReady.at(i)));
+    Error::Error error =
+        Error::Create(vkCreateSemaphore(context.device, &semaphoreInfo, nullptr,
+                                        &context.swapchainImageReady.at(i)));
 
     if (Error::IsError(error)) {
       return error;
@@ -464,9 +465,9 @@ static auto CreateSemaphores(GraphicsContext &context) -> Error::Error {
   }
 
   for (int i = 0; i < FRAMES_IN_FLIGHT; i++) {
-    Error::Error error = Error::FromVkResult(
-        vkCreateSemaphore(context.device, &semaphoreInfo, nullptr,
-                          &context.renderingFinished.at(i)));
+    Error::Error error =
+        Error::Create(vkCreateSemaphore(context.device, &semaphoreInfo, nullptr,
+                                        &context.renderingFinished.at(i)));
 
     if (Error::IsError(error)) {
       return error;
@@ -484,7 +485,7 @@ static auto CreateFences(GraphicsContext &context) -> Error::Error {
   context.inFlightFences = std::vector<VkFence>(FRAMES_IN_FLIGHT);
 
   for (int i = 0; i < FRAMES_IN_FLIGHT; i++) {
-    Error::Error error = Error::FromVkResult(vkCreateFence(
+    Error::Error error = Error::Create(vkCreateFence(
         context.device, &fenceInfo, nullptr, &context.inFlightFences.at(i)));
   }
 
@@ -511,13 +512,13 @@ static auto CreateVmaAllocator(GraphicsContext &context) -> Error::Error {
   allocatorInfo.pAllocationCallbacks = nullptr;
 
   VmaVulkanFunctions vulkanFunctions;
-  Error::Error error = Error::FromVkResult(
+  Error::Error error = Error::Create(
       vmaImportVulkanFunctionsFromVolk(&allocatorInfo, &vulkanFunctions));
 
   allocatorInfo.pVulkanFunctions = &vulkanFunctions;
 
-  error = Error::FromVkResult(
-      vmaCreateAllocator(&allocatorInfo, &context.vmaAllocator));
+  error =
+      Error::Create(vmaCreateAllocator(&allocatorInfo, &context.vmaAllocator));
 
   if (Error::IsError(error)) {
     return error;
@@ -556,23 +557,26 @@ static auto CreateDescriptorPool(GraphicsContext &context) -> Error::Error {
   poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
   poolInfo.pPoolSizes = poolSizes.data();
 
-  return Error::FromVkResult(vkCreateDescriptorPool(
+  return Error::Create(vkCreateDescriptorPool(
       context.device, &poolInfo, nullptr, &context.descriptorPool));
 }
 
-auto Initialize(GraphicsContext &context, VkExtent2D dimensions)
+auto Initialize(GraphicsContext &context, Config::ApplicationConfig &config)
     -> Error::Error {
   std::cout << "Initializing Volk..." << "\n";
-  Error::Error error = Error::FromVkResult(volkInitialize());
+  Error::Error error = Error::Create(volkInitialize());
 
   // Initialize SDL for Vulkan
   if (!SDL_Init(SDL_INIT_VIDEO)) {
     return Error::Create(SDL_GetError());
   }
 
-  SDL_Window *window = SDL_CreateWindow(
-      "Vulkan Window", static_cast<int32_t>(dimensions.width),
-      static_cast<int32_t>(dimensions.height), SDL_WINDOW_VULKAN);
+  SDL_Window *window = SDL_CreateWindow(config.Title.c_str(), config.Size.width,
+                                        config.Size.height, SDL_WINDOW_VULKAN);
+
+  std::cout << "Size: " << config.Size.width << "x" << config.Size.height
+            << "\n";
+  std::cout << "Title: " << config.Title << "\n";
 
   if (window == nullptr) {
     return Error::Create("Failed to create SDL window.");
@@ -607,8 +611,8 @@ auto Initialize(GraphicsContext &context, VkExtent2D dimensions)
   createInfo.ppEnabledExtensionNames = extensions;
   createInfo.pApplicationInfo = &appInfo;
 
-  error = Error::FromVkResult(
-      vkCreateInstance(&createInfo, nullptr, &context.instance));
+  error =
+      Error::Create(vkCreateInstance(&createInfo, nullptr, &context.instance));
 
   if (Error::IsError(error)) {
     return error;

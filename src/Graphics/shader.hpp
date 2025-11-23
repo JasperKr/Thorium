@@ -3,6 +3,7 @@
 #include "Modules/error.hpp"
 #include "graphics.hpp"
 #include <string>
+#include <unordered_map>
 #include <vector>
 #define VK_NO_PROTOTYPES
 #include "tl/expected.hpp"
@@ -29,12 +30,10 @@ struct ShaderExtern {
 };
 
 struct ShaderModule {
-  std::string code;
-  std::string spirvPath;
-  ShaderSource source;
+  std::string moduleName;
 
-  VkShaderModule module;
-  VkShaderStageFlagBits stage;
+  std::vector<VkShaderModule> modules;
+  std::vector<VkShaderStageFlagBits> stages;
 
   uint64_t modTime;
 
@@ -42,12 +41,20 @@ struct ShaderModule {
   std::vector<ShaderExtern> externs;
 
   static auto Create(Graphics::GraphicsContext &context,
-                     const std::string &path, VkShaderStageFlagBits stage,
-                     const std::string &name)
+                     const std::string &path, const std::string &name)
       -> tl::expected<ShaderHandle, Error::Error>;
 
   void Destroy(VkDevice device);
   void ReloadMaybe(Graphics::GraphicsContext &context);
+
+  auto GetModuleForStage(VkShaderStageFlagBits stage) const -> VkShaderModule {
+    for (size_t i = 0; i < stages.size(); i++) {
+      if (stages[i] == stage) {
+        return modules[i];
+      }
+    }
+    return VK_NULL_HANDLE;
+  }
 };
 
 void LoadModule();

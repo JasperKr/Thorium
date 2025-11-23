@@ -7,3 +7,6 @@
 [submodule "external/physfs"]
 	path = external/physfs
 	url = https://github.com/icculus/physfs
+[submodule "external/luajit"]
+	path = external/luajit
+	url = https://luajit.org/git/luajit.git

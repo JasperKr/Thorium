@@ -1,6 +1,7 @@
 #include "Graphics/graphics.hpp"
 #include "Graphics/render.hpp"
 #include "Graphics/shader.hpp"
+#include "Modules/config.hpp"
 #include "Modules/error.hpp"
 #include "Modules/filesystem.hpp"
 #include "SDL3/SDL_events.h"
@@ -12,16 +13,29 @@
 #include "Modules/timer.hpp"
 #include "program.hpp"
 
+extern "C" {
+#include <lauxlib.h>
+#include <lua.h>
+#include <lualib.h>
+}
+
 auto MainLoop() -> Error::Error {
   Graphics::GetCurrentThreadIndex() = 0;
   Error::SetupTraceback();
 
-  ApplicationConfig config = {};
+  std::cout << "Initializing Lua state..." << "\n";
+  std::flush(std::cout);
 
-  auto configError = Program::Configuration(config);
-  if (Error::IsError(configError)) {
-    return configError;
+  lua_State *state = luaL_newstate();
+  luaL_openlibs(state);
+
+  auto configResult = Config::Configure(state);
+
+  if (Error::IsError(configResult)) {
+    return configResult.error();
   }
+
+  auto config = configResult.value();
 
   Filesystem::GetConfig().identity = config.Identity;
   Error::Error fsInitErr = Filesystem::Init(".");
@@ -42,13 +56,9 @@ auto MainLoop() -> Error::Error {
   Graphics::GraphicsContext context = {};
   context.renderThreadCount = 1;
 
-  const VkExtent2D dimensions = {
-      .width = static_cast<uint32_t>(config.Size.width),
-      .height = static_cast<uint32_t>(config.Size.height)};
-
   std::cout << "Initializing graphics..." << "\n";
 
-  auto result = Graphics::Initialize(context, dimensions);
+  auto result = Graphics::Initialize(context, config);
   if (Error::IsError(result)) {
     return result;
   }

@@ -14,7 +14,7 @@
 #include <cstdint>
 #include <iostream>
 #ifdef WIN32
-#include <minwindef.h>
+// #include <minwindef.h>
 #endif
 #include <queue>
 #include <unordered_set>
@@ -72,9 +72,7 @@ auto AddRenderPass(RenderGraph &graph, const RenderPassDescriptor &descriptor)
         static_cast<uint32_t>(pass.state.viewport.height);
   }
 
-  pass.vertexShader = descriptor.vertexShader;
-  pass.fragmentShader = descriptor.fragmentShader;
-  pass.computeShader = descriptor.computeShader;
+  pass.shader = descriptor.shader;
   pass.executeFunction = descriptor.executeFunction;
 
   assert(pass.state.viewport.width > 0.0F &&
@@ -90,11 +88,21 @@ auto AddRenderPass(RenderGraph &graph, const RenderPassDescriptor &descriptor)
   assert(descriptor.resourceBindings.size() == descriptor.resources.size() &&
          "Resource bindings size must match resources size");
   if (pass.state.bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS) {
-    assert((pass.vertexShader != 0 && pass.fragmentShader != 0) &&
-           "Vertex and fragment shaders must be set for graphics pipeline");
+    assert((pass.shader != 0) && "shader must be set for graphics pipeline");
+
+    auto &shader = Shader::GetShaderModule(pass.shader);
+    bool hasVertexStage =
+        shader.GetModuleForStage(VK_SHADER_STAGE_VERTEX_BIT) != VK_NULL_HANDLE;
+    bool hasFragmentStage = shader.GetModuleForStage(
+                                VK_SHADER_STAGE_FRAGMENT_BIT) != VK_NULL_HANDLE;
+    assert(hasVertexStage && "Vertex shader stage must be present");
+    assert(hasFragmentStage && "Fragment shader stage must be present");
   } else if (pass.state.bindPoint == VK_PIPELINE_BIND_POINT_COMPUTE) {
-    assert(pass.computeShader != 0 &&
-           "Compute shader must be set for compute pipeline");
+    assert(pass.shader != 0 && "shader must be set for compute pipeline");
+    auto &shader = Shader::GetShaderModule(pass.shader);
+    bool hasComputeStage =
+        shader.GetModuleForStage(VK_SHADER_STAGE_COMPUTE_BIT) != VK_NULL_HANDLE;
+    assert(hasComputeStage && "Compute shader stage must be present");
   }
 
   graph.passes.emplace_back(pass);
@@ -502,7 +510,7 @@ auto inline CalculateResourceLifetimes(RenderGraph &graph) -> void {
   VmaVirtualBlockCreateInfo blockCreateInfo = {};
   blockCreateInfo.size = block.size;
 
-  Error::Error error = Error::FromVkResult(
+  Error::Error error = Error::Create(
       vmaCreateVirtualBlock(&blockCreateInfo, &block.virtualBlock));
 
   if (Error::IsError(error)) {
@@ -890,7 +898,7 @@ auto inline GetDescriptorType(const Resource &resource,
   VkResult result = vkCreateDescriptorPool(context.device, &poolInfo, nullptr,
                                            &graph.descriptorPool);
   if (result != VK_SUCCESS) {
-    return Error::FromVkResult(result);
+    return Error::Create(result);
   }
 
   return Error::Success();
@@ -937,7 +945,7 @@ auto inline CreatePassDescriptorSetLayouts(GraphicsContext &context,
     VkResult result = vkCreateDescriptorSetLayout(
         context.device, &layoutInfo, nullptr, &descriptorSetLayout);
     if (result != VK_SUCCESS) {
-      return Error::FromVkResult(result);
+      return Error::Create(result);
     }
 
     pass.pass.state.descriptorSetLayouts[setBindingPair.first] =
@@ -994,7 +1002,7 @@ auto inline CreatePassDescriptorSets(GraphicsContext &context,
   VkResult result = vkAllocateDescriptorSets(context.device, &allocInfo,
                                              descriptorSets.data());
   if (result != VK_SUCCESS) {
-    return Error::FromVkResult(result);
+    return Error::Create(result);
   }
 
   // Map allocated sets back to their set numbers
@@ -1437,17 +1445,16 @@ auto inline ApplyPassBarriers(VkCommandBuffer commandBuffer,
 
   std::array<VkPipelineShaderStageCreateInfo, 2> shaderStages = {};
 
-  auto &vertShader = Shader::GetShaderModule(compiledPass.pass.vertexShader);
-  auto &fragShader = Shader::GetShaderModule(compiledPass.pass.fragmentShader);
+  auto &shader = Shader::GetShaderModule(compiledPass.pass.shader);
 
   shaderStages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
   shaderStages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
-  shaderStages[0].module = vertShader.module;
+  shaderStages[0].module = shader.GetModuleForStage(shaderStages[0].stage);
   shaderStages[0].pName = "main";
 
   shaderStages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
   shaderStages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-  shaderStages[1].module = fragShader.module;
+  shaderStages[1].module = shader.GetModuleForStage(shaderStages[1].stage);
   shaderStages[1].pName = "main";
 
   auto vertexformat = Graphics::PredefinedVertexFormats.at(VertexFormats::GUI);
@@ -1612,7 +1619,7 @@ auto inline ApplyPassBarriers(VkCommandBuffer commandBuffer,
   pipelineInfo.subpass = 0;
   pipelineInfo.pNext = &renderingCreateInfo;
 
-  auto error = Error::FromVkResult(vkCreateGraphicsPipelines(
+  auto error = Error::Create(vkCreateGraphicsPipelines(
       context.device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr,
       &compiledPass.pass.state.pipeline));
 
@@ -1631,19 +1638,19 @@ auto inline ApplyPassBarriers(VkCommandBuffer commandBuffer,
     return Error::Create("Cannot create compute pipeline for non-compute pass");
   }
 
-  auto &shaderModule = Shader::GetShaderModule(compiledPass.pass.computeShader);
+  auto &shaderModule = Shader::GetShaderModule(compiledPass.pass.shader);
 
   VkPipelineShaderStageCreateInfo shaderStage = {};
   shaderStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
   shaderStage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-  shaderStage.module = shaderModule.module;
+  shaderStage.module = shaderModule.GetModuleForStage(shaderStage.stage);
   shaderStage.pName = "main";
 
   VkComputePipelineCreateInfo pipelineInfo = {};
   pipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
   pipelineInfo.stage = shaderStage;
   pipelineInfo.layout = compiledPass.pass.state.pipelineLayout;
-  auto error = Error::FromVkResult(
+  auto error = Error::Create(
       vkCreateComputePipelines(context.device, VK_NULL_HANDLE, 1, &pipelineInfo,
                                nullptr, &compiledPass.pass.state.pipeline));
 
@@ -1677,7 +1684,7 @@ auto inline ApplyPassBarriers(VkCommandBuffer commandBuffer,
     pipelineLayoutInfo.pushConstantRangeCount = 0;
     pipelineLayoutInfo.pPushConstantRanges = nullptr;
     VkPipelineLayout pipelineLayout = nullptr;
-    auto error = Error::FromVkResult(vkCreatePipelineLayout(
+    auto error = Error::Create(vkCreatePipelineLayout(
         context.device, &pipelineLayoutInfo, nullptr, &pipelineLayout));
 
     if (Error::IsError(error)) {
@@ -1816,15 +1823,15 @@ auto inline AllocateResourceMemory(GraphicsContext &context, RenderGraph &graph,
     imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 
-    auto result = Error::FromVkResult(
+    auto result = Error::Create(
         vkCreateImage(context.device, &imageInfo, nullptr, &texture.image));
 
     if (Error::IsError(result)) {
       return result;
     }
 
-    result = Error::FromVkResult(vkBindImageMemory(
-        context.device, texture.image, block.memory, allocation.offset));
+    result = Error::Create(vkBindImageMemory(context.device, texture.image,
+                                             block.memory, allocation.offset));
     if (Error::IsError(result)) {
       return result;
     }
@@ -1840,7 +1847,7 @@ auto inline AllocateResourceMemory(GraphicsContext &context, RenderGraph &graph,
     viewInfo.subresourceRange.baseArrayLayer = 0;
     viewInfo.subresourceRange.layerCount = texture.arrayLayers;
 
-    result = Error::FromVkResult(
+    result = Error::Create(
         vkCreateImageView(context.device, &viewInfo, nullptr, &texture.view));
 
     if (Error::IsError(result)) {

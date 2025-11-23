@@ -92,17 +92,69 @@ target_include_directories(physfs
     SYSTEM PRIVATE external/physfs/src/
 )
 
+set(BINARIES_DIR "${CMAKE_CURRENT_SOURCE_DIR}/bin/")
+set(LIBRARIES_DIR "${CMAKE_CURRENT_SOURCE_DIR}/lib/")
+set(SHADERC_BIN_DIR "${BINARIES_DIR}/shaderc/")
+set(SHADERC_LIB_DIR "${LIBRARIES_DIR}/shaderc/")
+
 # -------------------------------
 # Shaderc
 # -------------------------------
 
 # Shaderc library
 if(WIN32)
-    set(SHADERC_LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/bin/lib/")
     set(SHADERC_LIB "${SHADERC_LIB_DIR}/shaderc_shared.lib")
 elseif(UNIX)
-    set(SHADERC_LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/bin/lib/")
     set(SHADERC_LIB "${SHADERC_LIB_DIR}/libshaderc_shared.so")
+endif()
+
+# -------------------------------
+# LuaJIT
+# -------------------------------
+
+include(ExternalProject)
+
+set(LUAJIT_SRC "${CMAKE_CURRENT_SOURCE_DIR}/external/luajit/")
+make_directory(${CMAKE_SOURCE_DIR}/thirdparty/luajit)
+file(COPY ${CMAKE_SOURCE_DIR}/thirdparty/luajit DESTINATION ${LUAJIT_SRC})
+
+ExternalProject_Add(luajit
+    SOURCE_DIR ${LUAJIT_SRC}/src
+    CONFIGURE_COMMAND ""
+    BUILD_COMMAND
+        cmd /c "cd ${LUAJIT_SRC}/src && msvcbuild.bat amalg"
+    INSTALL_COMMAND ""
+    BUILD_IN_SOURCE 1
+)
+
+# Define imported target
+add_library(LuaJIT::LuaJIT SHARED IMPORTED)
+
+set_target_properties(LuaJIT::LuaJIT PROPERTIES
+    IMPORTED_LOCATION     "${LUAJIT_SRC}/src/lua51.dll"
+    IMPORTED_IMPLIB       "${LUAJIT_SRC}/src/lua51.lib"
+    INTERFACE_INCLUDE_DIRECTORIES "${LUAJIT_SRC}/src"
+)
+
+# Ensure Thorium depends on LuaJIT build
+add_dependencies(LuaJIT::LuaJIT luajit)
+
+# -------------------------------
+# Slang
+# -------------------------------
+
+set(SLANG_BIN_DIR "${BINARIES_DIR}/slang/")
+set(SLANG_LIB_DIR "${LIBRARIES_DIR}/slang/")
+
+if(WIN32)
+    set(SLANG_LIBS
+        ${SLANG_LIB_DIR}/slang.lib
+        ${SLANG_LIB_DIR}/gfx.lib
+        ${SLANG_LIB_DIR}/slang-compiler.lib
+        ${SLANG_LIB_DIR}/slang-rt.lib
+        )
+elseif(UNIX)
+    set(SLANG_LIBS "${SLANG_LIB_DIR}/libslangc_shared.so")
 endif()
 
 # -------------------------------
@@ -124,6 +176,7 @@ add_executable(Thorium
     src/Modules/filesystem.cpp
     src/Modules/timer.cpp
     src/Modules/errorhandler.cpp
+    src/Modules/config.cpp
 
     src/Modules/Editor/imgui.cpp
 
@@ -138,7 +191,11 @@ target_compile_definitions(Thorium PRIVATE
     IMGUI_IMPL_VULKAN_USE_LOADER
 )
 
-
+# Copy LuaJIT DLL after build
+add_custom_command(TARGET Thorium POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${LUAJIT_SRC}/src/lua51.dll"
+        $<TARGET_FILE_DIR:Thorium>)
 
 # Include paths
 target_include_directories(Thorium
@@ -159,6 +216,8 @@ target_link_libraries(Thorium
         physfs
         ${SHADERC_LIB}
         ${Vulkan_LIBRARIES}       # usually optional
+        LuaJIT::LuaJIT
+        ${SLANG_LIBS}
 )
 
 if (WIN32)

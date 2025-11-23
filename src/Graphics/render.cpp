@@ -125,9 +125,9 @@ auto SubmitCommandBuffers(Graphics::GraphicsContext &context) -> Error::Error {
   submitInfo.pSignalSemaphores = &context.renderingFinished[context.frameIndex];
 
   // Submit to graphics queue
-  Error::Error err = Error::FromVkResult(
-      vkQueueSubmit(context.graphicsQueue, 1, &submitInfo,
-                    context.inFlightFences[context.frameIndex]));
+  Error::Error err =
+      Error::Create(vkQueueSubmit(context.graphicsQueue, 1, &submitInfo,
+                                  context.inFlightFences[context.frameIndex]));
 
   if (Error::IsError(err)) {
     return err;
@@ -146,8 +146,8 @@ auto PresentFrame(Graphics::GraphicsContext &context) -> Error::Error {
   presentInfo.pImageIndices = &context.swapchainImageIndex;
 
   // Present the image
-  Error::Error err = Error::FromVkResult(
-      vkQueuePresentKHR(context.graphicsQueue, &presentInfo));
+  Error::Error err =
+      Error::Create(vkQueuePresentKHR(context.graphicsQueue, &presentInfo));
 
   if (Error::IsError(err)) {
     return err;
@@ -173,7 +173,7 @@ auto Present_PreDraw(Graphics::GraphicsContext &context) -> Error::Error {
   vkResetFences(context.device, 1, &context.inFlightFences[context.frameIndex]);
 
   // Aquire next image
-  Error::Error err = Error::FromVkResult(vkAcquireNextImageKHR(
+  Error::Error err = Error::Create(vkAcquireNextImageKHR(
       context.device, context.swapchainInfo.swapchain, UINT64_MAX,
       context.swapchainImageReady[context.frameIndex], VK_NULL_HANDLE,
       &context.swapchainImageIndex));

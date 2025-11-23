@@ -24,7 +24,7 @@ auto StartSingleUseCommandBuffer(GraphicsContext &context)
 
   VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
 
-  Error::Error error = Error::FromVkResult(
+  Error::Error error = Error::Create(
       vkAllocateCommandBuffers(context.device, &allocInfo, &commandBuffer));
 
   if (Error::IsError(error)) {
@@ -43,7 +43,7 @@ auto EndSingleUseCommandBuffer(GraphicsContext &context,
   submitInfo.commandBufferCount = 1;
   submitInfo.pCommandBuffers = &commandBuffer;
 
-  Error::Error error = Error::FromVkResult(
+  Error::Error error = Error::Create(
       vkQueueSubmit(context.graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE));
 
   if (Error::IsError(error)) {
@@ -115,9 +115,9 @@ auto Create2D(GraphicsContext &context, TextureCreationInfo info)
   allocInfo.requiredFlags = 0;
   allocInfo.preferredFlags = 0;
 
-  auto error = Error::FromVkResult(
-      vmaCreateImage(context.vmaAllocator, &imageInfo, &allocInfo,
-                     &texture.image, &texture.memory, nullptr));
+  auto error =
+      Error::Create(vmaCreateImage(context.vmaAllocator, &imageInfo, &allocInfo,
+                                   &texture.image, &texture.memory, nullptr));
 
   if (Error::IsError(error)) {
     return tl::unexpected(error);
@@ -136,7 +136,7 @@ auto Create2D(GraphicsContext &context, TextureCreationInfo info)
   viewInfo.subresourceRange.baseArrayLayer = 0;
   viewInfo.subresourceRange.layerCount = 1;
 
-  error = Error::FromVkResult(
+  error = Error::Create(
       vkCreateImageView(context.device, &viewInfo, nullptr, &texture.view));
 
   if (Error::IsError(error)) {
@@ -166,7 +166,7 @@ auto FromSwapchainTexture(GraphicsContext &context, VkImage swapchainImage,
 
   VkSurfaceCapabilitiesKHR surfaceCapabilities;
 
-  auto error = Error::FromVkResult(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
+  auto error = Error::Create(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
       context.physicalDevice, context.surface, &surfaceCapabilities));
 
   if (Error::IsError(error)) {
@@ -186,7 +186,7 @@ auto FromSwapchainTexture(GraphicsContext &context, VkImage swapchainImage,
   viewInfo.subresourceRange.baseArrayLayer = 0;
   viewInfo.subresourceRange.layerCount = 1;
 
-  error = Error::FromVkResult(
+  error = Error::Create(
       vkCreateImageView(context.device, &viewInfo, nullptr, &texture.view));
 
   if (Error::IsError(error)) {
@@ -235,9 +235,9 @@ auto CreateCubeMap(GraphicsContext &context, TextureCreationInfo info)
   allocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
   allocInfo.requiredFlags = 0;
   allocInfo.preferredFlags = 0;
-  Error::Error error = Error::FromVkResult(
-      vmaCreateImage(context.vmaAllocator, &imageInfo, &allocInfo,
-                     &texture.image, &texture.memory, nullptr));
+  Error::Error error =
+      Error::Create(vmaCreateImage(context.vmaAllocator, &imageInfo, &allocInfo,
+                                   &texture.image, &texture.memory, nullptr));
 
   if (Error::IsError(error)) {
     return tl::unexpected(error);
@@ -256,7 +256,7 @@ auto CreateCubeMap(GraphicsContext &context, TextureCreationInfo info)
   viewInfo.subresourceRange.baseArrayLayer = 0;
   viewInfo.subresourceRange.layerCount = CubeFaceCount;
 
-  error = Error::FromVkResult(
+  error = Error::Create(
       vkCreateImageView(context.device, &viewInfo, nullptr, &texture.view));
 
   if (Error::IsError(error)) {
@@ -303,9 +303,9 @@ auto CreateVolume(GraphicsContext &context, TextureCreationInfo info)
   allocInfo.requiredFlags = 0;
   allocInfo.preferredFlags = 0;
 
-  Error::Error error = Error::FromVkResult(
-      vmaCreateImage(context.vmaAllocator, &imageInfo, &allocInfo,
-                     &texture.image, &texture.memory, nullptr));
+  Error::Error error =
+      Error::Create(vmaCreateImage(context.vmaAllocator, &imageInfo, &allocInfo,
+                                   &texture.image, &texture.memory, nullptr));
 
   if (Error::IsError(error)) {
     return tl::unexpected(error);
@@ -324,7 +324,7 @@ auto CreateVolume(GraphicsContext &context, TextureCreationInfo info)
   viewInfo.subresourceRange.baseArrayLayer = 0;
   viewInfo.subresourceRange.layerCount = 1;
 
-  error = Error::FromVkResult(
+  error = Error::Create(
       vkCreateImageView(context.device, &viewInfo, nullptr, &texture.view));
 
   if (Error::IsError(error)) {
@@ -371,9 +371,9 @@ auto CreateArray(GraphicsContext &context, TextureCreationInfo info)
   allocInfo.requiredFlags = 0;
   allocInfo.preferredFlags = 0;
 
-  Error::Error error = Error::FromVkResult(
-      vmaCreateImage(context.vmaAllocator, &imageInfo, &allocInfo,
-                     &texture.image, &texture.memory, nullptr));
+  Error::Error error =
+      Error::Create(vmaCreateImage(context.vmaAllocator, &imageInfo, &allocInfo,
+                                   &texture.image, &texture.memory, nullptr));
 
   if (Error::IsError(error)) {
     return tl::unexpected(error);
@@ -392,7 +392,7 @@ auto CreateArray(GraphicsContext &context, TextureCreationInfo info)
   viewInfo.subresourceRange.baseArrayLayer = 0;
   viewInfo.subresourceRange.layerCount = info.depth;
 
-  error = Error::FromVkResult(
+  error = Error::Create(
       vkCreateImageView(context.device, &viewInfo, nullptr, &texture.view));
 
   if (Error::IsError(error)) {
@@ -448,7 +448,7 @@ auto LoadFromFile(GraphicsContext &context, const char *path)
   VmaAllocationCreateInfo allocInfo = {};
   allocInfo.usage = VMA_MEMORY_USAGE_CPU_ONLY;
 
-  Error::Error error = Error::FromVkResult(
+  Error::Error error = Error::Create(
       vmaCreateBuffer(context.vmaAllocator, &bufferInfo, &allocInfo,
                       &stagingBuffer, &stagingBufferMemory, nullptr));
 
@@ -775,7 +775,7 @@ auto GetDefaultTexture(GraphicsContext &context, VkFormat format,
   bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
   VmaAllocationCreateInfo allocInfo = {};
   allocInfo.usage = VMA_MEMORY_USAGE_CPU_ONLY;
-  Error::Error error = Error::FromVkResult(
+  Error::Error error = Error::Create(
       vmaCreateBuffer(context.vmaAllocator, &bufferInfo, &allocInfo,
                       &stagingBuffer, &stagingBufferMemory, nullptr));
   if (Error::IsError(error)) {

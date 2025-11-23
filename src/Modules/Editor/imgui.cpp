@@ -295,20 +295,11 @@ auto InitializeImGui(
 
   std::cout << "Creating shaders for ImGui..." << "\n";
 
-  auto vertexShader = Graphics::Shader::ShaderModule::Create(
-      context, "src/Graphics/Shaders/imgui.vs", VK_SHADER_STAGE_VERTEX_BIT,
-      "ImGui vertex shader");
+  auto shader = Graphics::Shader::ShaderModule::Create(context, "imgui",
+                                                       "ImGui vertex shader");
 
-  if (Error::IsError(vertexShader)) {
-    return vertexShader.error();
-  }
-
-  auto fragmentShader = Graphics::Shader::ShaderModule::Create(
-      context, "src/Graphics/Shaders/imgui.fs", VK_SHADER_STAGE_FRAGMENT_BIT,
-      "ImGui fragment shader");
-
-  if (Error::IsError(fragmentShader)) {
-    return fragmentShader.error();
+  if (Error::IsError(shader)) {
+    return shader.error();
   }
 
   std::cout << "Initializing ImGui..." << "\n";
@@ -440,8 +431,7 @@ auto InitializeImGui(
                    .type = Graphics::Rendergraph::BindingType::Sampler,
                    .usage = Graphics::Rendergraph::ResourceUsage::ReadOnly,
                }},
-          .vertexShader = vertexShader.value(),
-          .fragmentShader = fragmentShader.value(),
+          .shader = shader.value(),
           .executeFunction =
               [&showDemoWindow](
                   VkCommandBuffer cmd, Graphics::GraphicsContext &context,

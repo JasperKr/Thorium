@@ -29,7 +29,7 @@ auto Graphics::Buffer::Create(Graphics::GraphicsContext &context,
                       &buffer.handle, &buffer.memory, nullptr);
 
   if (result != VK_SUCCESS) {
-    return tl::unexpected(Error::FromVkResult(result));
+    return tl::unexpected(Error::Create(result));
   }
 
   buffer.size = info.size;
@@ -51,7 +51,7 @@ auto Graphics::Buffer::SetData(Graphics::GraphicsContext &context,
             << offset << "\n";
   void *mapped = nullptr;
   auto result =
-      Error::FromVkResult(vmaMapMemory(context.vmaAllocator, memory, &mapped));
+      Error::Create(vmaMapMemory(context.vmaAllocator, memory, &mapped));
   if (Error::IsError(result)) {
     return result;
   }
@@ -93,7 +93,7 @@ auto Graphics::Buffer::Resize(Graphics::GraphicsContext &context,
   VkResult result = vmaCreateBuffer(context.vmaAllocator, &bufferInfo,
                                     &allocInfo, &handle, &memory, nullptr);
   if (result != VK_SUCCESS) {
-    return Error::FromVkResult(result);
+    return Error::Create(result);
   }
 
   size = newSize;

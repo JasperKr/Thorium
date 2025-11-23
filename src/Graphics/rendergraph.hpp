@@ -170,9 +170,7 @@ struct RenderPass {
     return resources;
   }
 
-  Shader::ShaderHandle fragmentShader;
-  Shader::ShaderHandle vertexShader;
-  Shader::ShaderHandle computeShader;
+  Shader::ShaderHandle shader;
 
   std::function<void(VkCommandBuffer cmd, GraphicsContext &context,
                      struct RenderGraph &graph,
@@ -332,9 +330,7 @@ struct RenderPassDescriptor {
   std::vector<BlendMode> blendModes;
   std::vector<ResourceBinding> resourceBindings;
 
-  Graphics::Shader::ShaderHandle vertexShader;
-  Graphics::Shader::ShaderHandle fragmentShader;
-  Graphics::Shader::ShaderHandle computeShader;
+  Graphics::Shader::ShaderHandle shader;
 
   std::function<void(VkCommandBuffer cmd, GraphicsContext &context,
                      struct RenderGraph &graph, CompiledPass &currentPass)>

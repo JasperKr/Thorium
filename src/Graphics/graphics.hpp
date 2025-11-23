@@ -1,6 +1,7 @@
 #pragma once
 
 // #include "SDL3/SDL_video.h"
+#include "Modules/config.hpp"
 #include "SDL3/SDL_video.h"
 
 #include "Modules/error.hpp"
@@ -85,7 +86,7 @@ struct BlendMode {
   VkBlendOp alphaBlendOp = VK_BLEND_OP_ADD;
 };
 
-auto Initialize(GraphicsContext &context, VkExtent2D dimensions)
+auto Initialize(GraphicsContext &context, Config::ApplicationConfig &config)
     -> Error::Error;
 auto GetRenderData(GraphicsContext &context, uint32_t threadIndex)
     -> RenderData;

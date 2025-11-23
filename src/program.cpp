@@ -51,13 +51,6 @@ static inline auto GetSwapchainTextures()
   return textures;
 }
 
-auto Configuration(ApplicationConfig &config) -> Error::Error {
-  config.Title = "Thorium Engine - Program Example";
-  config.Size = {.width = 2000, .height = 1200};
-
-  return Error::Success();
-}
-
 auto Load(Graphics::GraphicsContext &context) -> Error::Error {
 
   // Setup render graph to debug it
@@ -82,15 +75,13 @@ auto Load(Graphics::GraphicsContext &context) -> Error::Error {
   }
 
   auto fsResult = Graphics::Shader::ShaderModule::Create(
-      context, "src/Graphics/Shaders/default.fs", VK_SHADER_STAGE_FRAGMENT_BIT,
-      "Default fragment shader");
+      context, "default", "Default fragment shader");
   if (Error::IsError(fsResult)) {
     return fsResult.error();
   }
 
   auto vsResult = Graphics::Shader::ShaderModule::Create(
-      context, "src/Graphics/Shaders/default.vs", VK_SHADER_STAGE_VERTEX_BIT,
-      "Default vertex shader");
+      context, "src/Graphics/Shaders/default.vs", "Default vertex shader");
 
   if (Error::IsError(vsResult)) {
     return vsResult.error();
@@ -289,7 +280,9 @@ auto Exit(Graphics::GraphicsContext &context) -> Error::Error {
   vkDestroyPipeline(context.device, GetPipeline(), nullptr);
   for (auto &shader : GetShaders()) {
     auto &module = Graphics::Shader::GetShaderModule(shader);
-    vkDestroyShaderModule(context.device, module.module, nullptr);
+    for (auto &module : module.modules) {
+      vkDestroyShaderModule(context.device, module, nullptr);
+    }
   }
   for (auto &mesh : GetMeshes()) {
     mesh.Destroy(context);

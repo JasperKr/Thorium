@@ -9,9 +9,11 @@ Checks: >
   portability-*,
   readability-*,
   concurrency-*,
+  -cppcoreguidelines-pro-type-vararg,
+  -hicpp-vararg
 
-  -cppcoreguidelines-pro-type-reinterpret-cast
-  -hicpp-no-array-decay
+# -cppcoreguidelines-pro-type-reinterpret-cast
+# -hicpp-no-array-decay
 
 WarningsAsErrors: '*'
 

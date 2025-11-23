@@ -60,9 +60,13 @@ auto Extension(const std::string &path) -> std::string;
 // Returns the directory from a path
 // /path/to/file.txt -> /path/to/
 auto Directory(const std::string &path) -> std::string;
+
 auto Join(const std::string &base, const std::string &append) -> std::string;
 template <typename... Strings>
 auto Join(std::string_view first, const Strings &...rest) -> std::string;
+auto Join(const std::vector<std::string> &paths) -> std::string;
+auto Join(const char *base, const char *append) -> std::string;
+
 auto Sanitize(const std::string &path) -> std::string;
 
 } // namespace Path

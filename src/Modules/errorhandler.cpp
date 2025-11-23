@@ -1,7 +1,16 @@
 #include "SDL3/SDL_events.h"
+#include "SDL3/SDL_init.h"
+#include <iostream>
 auto ErrorHandlerMainLoop() -> void {
   bool running = true;
   SDL_Event event;
+
+  // Check if SDL is initialized
+
+  if (SDL_WasInit(SDL_INIT_VIDEO) == 0) {
+    std::cout << "SDL is not initialized. Exiting error handler loop." << "\n";
+    return;
+  }
 
   while (running) {
     // Events

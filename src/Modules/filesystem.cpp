@@ -392,4 +392,20 @@ auto Join(const std::string &base, const std::string &append) -> std::string {
   return sanitizedBase + '/' + sanitizedAppend;
 }
 
+auto Join(const std::vector<std::string> &paths) -> std::string {
+  if (paths.empty()) {
+    return "";
+  }
+
+  std::string result = paths[0];
+  for (size_t i = 1; i < paths.size(); ++i) {
+    result = Join(result, paths[i]);
+  }
+  return result;
+}
+
+auto Join(const char *base, const char *append) -> std::string {
+  return Join(std::string(base), std::string(append));
+}
+
 } // namespace Path

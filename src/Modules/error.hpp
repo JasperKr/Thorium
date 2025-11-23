@@ -2,16 +2,28 @@
 
 // #define LOG_ERRORS 1
 
+#include "slang/slang.h"
+#include <algorithm>
 #include <array>
+#include <charconv>
 #include <cstdint>
-#if defined(LOG_ERRORS)
 #include <iostream>
+#include <sstream>
+#include <vector>
+
+#if defined(LOG_ERRORS)
 #endif
 #include <string>
 #define VK_NO_PROTOTYPES
 #include "tl/expected.hpp"
 #include <vulkan/vulkan.h>
 
+#if __has_include(<stacktrace>)
+#define STD_STACKTRACE_SUPPORTED 1
+#include <stacktrace>
+#endif
+
+#ifndef STD_STACKTRACE_SUPPORTED
 #if defined(_WIN32)
 #include <windows.h>
 
@@ -20,29 +32,94 @@
 #include <cstdlib>
 #include <execinfo.h>
 #endif
+#endif
 
 namespace Error {
 struct [[nodiscard]] Error {
   std::string message;
-  int32_t code = 1;
+  int32_t code = -1;
   std::string backtrace;
 };
 
 inline auto SetupTraceback() -> void {
+#ifndef STD_STACKTRACE_SUPPORTED
 #if defined(_WIN32)
   SymSetOptions(SYMOPT_DEFERRED_LOADS | SYMOPT_UNDNAME | SYMOPT_LOAD_LINES);
   SymInitialize(GetCurrentProcess(), nullptr, TRUE);
 #endif
+#endif
+}
+
+inline auto CleanupTracebackLine(const std::string &line) -> std::string {
+  // Cut off each line at +0x
+  size_t plusPos = line.find("+0x");
+  std::string sanitizedLine;
+
+  if (plusPos != std::string::npos) {
+    sanitizedLine = line.substr(0, plusPos) + "\n";
+  } else {
+    sanitizedLine = line + "\n";
+  }
+
+  // Replace backslashes with forward slashes
+  for (char &atIndex : sanitizedLine) {
+    if (atIndex == '\\') {
+      atIndex = '/';
+    }
+  }
+
+  // Split before and after "Thorium!"
+  const std::string splitKeyword = "Thorium!";
+  size_t thoriumPos = sanitizedLine.find(splitKeyword);
+  std::string inFunction = "Unknown";
+
+  if (thoriumPos != std::string::npos) {
+    auto inFunctionPos = thoriumPos + splitKeyword.length();
+    auto inFunctionCount =
+        sanitizedLine.length() - inFunctionPos - 1; // -1 for newline
+    inFunction = sanitizedLine.substr(thoriumPos + splitKeyword.length(),
+                                      inFunctionCount);
+    sanitizedLine = sanitizedLine.substr(0, thoriumPos)
+                        .append("in function \'")
+                        .append(inFunction)
+                        .append("\'\n");
+  }
+
+  // Sanitize paths by removing everything before src/
+  size_t srcPos = sanitizedLine.find("src/");
+  if (srcPos != std::string::npos) {
+    sanitizedLine = sanitizedLine.substr(srcPos);
+  }
+
+  // Remove (line) and change to :line
+  size_t linePos = sanitizedLine.find('(');
+  if (linePos != std::string::npos) {
+    size_t endLinePos = sanitizedLine.find(')', linePos);
+    if (endLinePos != std::string::npos) {
+      std::string lineNumber =
+          sanitizedLine.substr(linePos + 1, endLinePos - linePos - 1);
+
+      auto stringAfterLineNumber = sanitizedLine.substr(endLinePos + 1);
+      sanitizedLine = sanitizedLine.substr(0, linePos)
+                          .append(":")
+                          .append(lineNumber)
+                          .append(stringAfterLineNumber);
+    }
+  }
+
+  return "\t" + sanitizedLine;
 }
 
 inline auto GetStackTrace() -> std::string {
   const int MaxStackDepth = 64;
+
+#ifndef STD_STACKTRACE_SUPPORTED
   const int MaxSymbolLength = 256;
   std::array<void *, MaxStackDepth> stack = {};
 
 #if defined(_WIN32)
   unsigned short frames =
-      CaptureStackBackTrace(0, MaxStackDepth, stack.data(), nullptr);
+      CaptureStackBackTrace(2, MaxStackDepth, stack.data(), nullptr);
   std::string trace;
   HANDLE process = GetCurrentProcess();
 
@@ -78,10 +155,42 @@ inline auto GetStackTrace() -> std::string {
   free(symbols); // NOLINT
   return trace;
 #endif
+#else
+  std::string trace;
+  std::stacktrace stacktrace = std::stacktrace::current(2, MaxStackDepth);
+  trace = std::to_string(stacktrace);
+
+  std::string keyword = "!main";
+  size_t pos = trace.find(keyword);
+  if (pos != std::string::npos) {
+    size_t endOfLine = trace.find('\n', pos);
+    if (endOfLine != std::string::npos) {
+      trace = trace.substr(0, endOfLine);
+    }
+  }
+
+  std::vector<std::string> lines;
+  size_t start = 0;
+  size_t end = trace.find('\n');
+
+  while (end != std::string::npos) {
+    lines.push_back(trace.substr(start, end - start));
+    start = end + 1;
+    end = trace.find('\n', start);
+  }
+
+  std::string sanitizedTrace;
+
+  for (const auto &line : lines) {
+    sanitizedTrace += CleanupTracebackLine(line);
+  }
+
+  return sanitizedTrace;
+#endif
   return "Unable to get stack trace on this platform.";
 }
 
-inline auto Create(const std::string &message, int32_t code = 1) -> Error {
+inline auto Create(const std::string &message, int32_t code = -1) -> Error {
   Error err =
       Error{.message = message, .code = code, .backtrace = GetStackTrace()};
 #if defined(LOG_ERRORS)
@@ -95,11 +204,15 @@ inline auto Create(const std::string &message, int32_t code = 1) -> Error {
   return err;
 }
 
+inline auto Create(const char *message, int32_t code = -1) -> Error {
+  return Create(std::string(message), code);
+}
+
 inline auto Success() -> Error {
   return Error{.message = "", .code = 0, .backtrace = ""};
 }
 
-inline auto IsError(const Error &error) -> bool { return error.code != 0; }
+inline auto IsError(const Error &error) -> bool { return error.code < 0; }
 inline auto IsError(const tl::expected<void, Error> &expected) -> bool {
   return !expected.has_value();
 }
@@ -107,8 +220,11 @@ template <typename T>
 inline auto IsError(const tl::expected<T, Error> &expected) -> bool {
   return !expected.has_value();
 }
+inline auto IsError(const SlangResult result) -> bool {
+  return SLANG_FAILED(result);
+}
 
-inline auto IsSuccess(const Error &error) -> bool { return error.code == 0; }
+inline auto IsSuccess(const Error &error) -> bool { return error.code >= 0; }
 
 inline auto VkResultToString(int32_t result) -> std::string {
   switch (result) {
@@ -153,7 +269,7 @@ inline auto VkResultToString(int32_t result) -> std::string {
   }
 }
 
-inline auto FromVkResult(VkResult result) -> Error {
+inline auto Create(VkResult result) -> Error {
   if (result == VK_SUCCESS) {
     return Success();
   }
@@ -161,7 +277,25 @@ inline auto FromVkResult(VkResult result) -> Error {
   return Create(VkResultToString(result), result);
 }
 
-inline auto Unexpected(const std::string &message, int32_t code = 1) {
+inline auto Create(SlangResult result) -> Error {
+  if (SLANG_SUCCEEDED(result)) {
+    return Success();
+  }
+
+  return Create(slang::getLastInternalErrorMessage(),
+                static_cast<int32_t>(result));
+}
+
+inline auto Create(slang::IBlob *diagnosticsBlob) -> Error {
+  if (diagnosticsBlob == nullptr) {
+    return Success();
+  }
+
+  // NOLINTNEXTLINE
+  return Create((const char *)diagnosticsBlob->getBufferPointer(), -1);
+}
+
+inline auto Unexpected(const std::string &message, int32_t code = -1) {
   return tl::unexpected<Error>(Create(message, code));
 }
 
