@@ -1,4 +1,5 @@
 #include "config.hpp"
+#include "Wrap/wrap.hpp"
 #include <iostream>
 
 extern "C" {
@@ -77,23 +78,29 @@ inline auto SetFunctions(lua_State *state) -> void {
 }
 
 inline auto RemoveFunctions(lua_State *state) -> void {
-  lua_getglobal(state, "Thorium"); // push Thorium table
-  lua_pushnil(state);              // first key for lua_next
+  LuaWrap::SetStackToTable(state, "Thorium"); // [Thorium]
 
-  while (lua_next(state, -2) != 0) {
-    // key at -2, value at -1
+  std::vector<std::string> keysToRemove;
+
+  lua_pushnil(state);                // first key for lua_next
+  while (lua_next(state, -2) != 0) { // [Thorium, key, value]
     if (lua_type(state, -2) == LUA_TSTRING) {
       const char *key = lua_tostring(state, -2);
-      if (key[0] == '_') { // NOLINT, pointer arithmatic is safe here, since lua
-                           // strings are null-terminated
-        lua_pop(state, 1); // pop value
-        lua_pushstring(state, key);
-        lua_pushnil(state);
-        lua_settable(state, -3); // Thorium[key] = nil
-        continue;                // skip lua_pop below
+      // NOLINTNEXTLINE
+      if (key[0] == '_') {
+        keysToRemove.emplace_back(key);
+        std::cout << "Marked for removal: " << key << "\n";
       }
     }
-    lua_pop(state, 1); // pop value, keep key for lua_next
+    lua_pop(state, 1); // pop value, keep key
+  }
+
+  // Remove collected keys
+  for (auto &key : keysToRemove) {
+    lua_pushstring(state, key.c_str()); // [Thorium, key]
+    lua_pushnil(state);                 // [Thorium, key, nil]
+    lua_rawset(state, -3);              // Thorium[key] = nil
+    std::cout << "Removed function: " << key << "\n";
   }
 
   lua_pop(state, 1); // pop Thorium table
@@ -102,12 +109,10 @@ inline auto RemoveFunctions(lua_State *state) -> void {
 auto Configure(lua_State *state)
     -> tl::expected<ApplicationConfig, Error::Error> {
 
-  lua_newtable(state);
-  lua_setglobal(state, "Thorium");
+  LuaWrap::SetStackToTable(state, "Thorium"); // [Thorium]
 
-  lua_getglobal(state, "Thorium");
-  SetFunctions(state);
-  lua_pop(state, 1); // Pop Thorium table
+  SetFunctions(state); // [Thorium with set functions]
+  lua_pop(state, 1);   // Pop Thorium table
 
   auto constexpr luaScript = R"lua(
     -- User configuration script
@@ -171,6 +176,10 @@ auto Configure(lua_State *state)
         .message = std::string("Lua error: ") +
                    ((errorMsg != nullptr) ? errorMsg : "Unknown error")});
   }
+
+  // Stack is clean here
+
+  RemoveFunctions(state);
 
   return globalConfig;
 }

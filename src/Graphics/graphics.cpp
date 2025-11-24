@@ -766,4 +766,7 @@ auto EndSingleTimeCommands(GraphicsContext &context,
                        &commandBuffer);
 }
 
+void SetCurrentGraphicsContext(GraphicsContext *ctx) { g_ctx = ctx; }
+auto GetCurrentGraphicsContext() -> GraphicsContext * { return g_ctx; }
+
 } // namespace Graphics

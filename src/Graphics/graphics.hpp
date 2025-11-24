@@ -104,4 +104,9 @@ auto BeginSingleTimeCommands(GraphicsContext &context) -> VkCommandBuffer;
 auto EndSingleTimeCommands(GraphicsContext &context,
                            VkCommandBuffer commandBuffer) -> void;
 
+// Graphics context for the current thread NOLINTNEXTLINE
+static thread_local GraphicsContext *g_ctx = nullptr;
+void SetCurrentGraphicsContext(GraphicsContext *ctx);
+auto GetCurrentGraphicsContext() -> GraphicsContext *;
+
 } // namespace Graphics

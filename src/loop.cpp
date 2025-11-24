@@ -4,19 +4,120 @@
 #include "Modules/config.hpp"
 #include "Modules/error.hpp"
 #include "Modules/filesystem.hpp"
-#include "SDL3/SDL_events.h"
 #include <cstdint>
 #include <iostream>
 #define VK_NO_PROTOTYPES
 #include <vulkan/vulkan.h>
 
-#include "Modules/timer.hpp"
 #include "program.hpp"
 
 extern "C" {
 #include <lauxlib.h>
 #include <lua.h>
 #include <lualib.h>
+}
+
+#include "Modules/event.hpp"
+#include "Wrap/reference.hpp"
+#include "Wrap/wrap.hpp"
+
+constexpr auto defaultRunFunction = R"lua(
+function Thorium.run()
+
+  if Thorium.load then
+    Thorium.load()
+  end
+
+  return function()
+    Thorium.event.pull()
+
+    local name, a,b,c,d,e,f = Thorium.event.pop()
+    while name do
+      print("Event: "..name, a, b, c, d, e, f)
+      if name == "quit" then
+        if Thorium.quit then
+          return Thorium.quit() or 0
+        end
+        return 0
+      end
+
+      name, a,b,c,d,e,f = Thorium.event.pop()
+    end
+
+    Thorium.timer.step()
+
+    local dt = Thorium.timer.getDelta()
+
+    if Thorium.update then
+      Thorium.update(dt)
+    end
+
+    if Thorium.graphics then
+      if Thorium.draw then
+        Thorium.draw()
+      end
+
+      Thorium.graphics.present()
+    end
+  end
+end
+)lua";
+
+// NOLINTNEXTLINE
+static LuaWrap::LuaRef runCallback;
+
+auto LoadLua(lua_State *state) -> Error::Error {
+  // Load src/Engine/main.lua
+  std::cout << "Loading main Lua script..." << "\n";
+
+  auto luaLoadErr = luaL_dofile(state, "src/Engine/main.lua");
+  if (static_cast<int>(luaLoadErr) != LUA_OK) {
+    std::string luaErrorMessage = lua_tostring(state, -1);
+    lua_pop(state, 1); // Remove error message from stack
+    return Error::Create("Failed to load main Lua script: " + luaErrorMessage);
+  }
+
+  // Get Thorium.run function
+  lua_getglobal(state, "Thorium");
+  lua_getfield(state, -1, "run");
+
+  if (!lua_isfunction(state, -1)) {
+    // If Thorium.run is not defined, load default
+    std::cout << "Thorium.run not found, loading default run function..."
+              << "\n";
+    lua_pop(state, 2); // Remove non-function and Thorium table from stack
+    if (luaL_dostring(state, defaultRunFunction) != LUA_OK) {
+      std::string luaErrorMessage = lua_tostring(state, -1);
+      lua_pop(state, 1); // Remove error message from stack
+      return Error::Create("Failed to load default run function: " +
+                           luaErrorMessage);
+    }
+    lua_getglobal(state, "Thorium");
+    lua_getfield(state, -1, "run");
+  }
+
+  if (!lua_isfunction(state, -1)) {
+    lua_pop(state, 1); // Remove non-function from stack
+    return Error::Create("Thorium.run is not a function.");
+  }
+
+  // Call Thorium.run to get the main loop function
+  if (lua_pcall(state, 0, 1, 0) != LUA_OK) {
+    std::string luaErrorMessage = lua_tostring(state, -1);
+    lua_pop(state, 1); // Remove error message from stack
+    return Error::Create("Failed to call Thorium.run: " + luaErrorMessage);
+  }
+
+  if (!lua_isfunction(state, -1)) {
+    lua_pop(state, 1); // Remove non-function from stack
+    return Error::Create("Thorium.run did not return a function.");
+  }
+
+  std::cout << "Main Lua script loaded successfully." << "\n";
+
+  runCallback = LuaWrap::LuaRef::FromStack(state);
+
+  return Error::Success();
 }
 
 auto MainLoop() -> Error::Error {
@@ -28,6 +129,12 @@ auto MainLoop() -> Error::Error {
 
   lua_State *state = luaL_newstate();
   luaL_openlibs(state);
+
+  std::cout << "Registering Lua modules..." << "\n";
+
+  LuaWrap::RegisterModules(state);
+
+  std::cout << "Lua modules registered." << "\n";
 
   auto configResult = Config::Configure(state);
 
@@ -65,7 +172,6 @@ auto MainLoop() -> Error::Error {
 
   std::cout << "Graphics initialized successfully." << "\n";
 
-  SDL_Event event;
   bool running = true;
 
   Graphics::Shader::LoadModule();
@@ -89,50 +195,45 @@ auto MainLoop() -> Error::Error {
     Error::Error err = Graphics::Present(context);
 
     if (Error::IsError(err)) {
-      std::cerr << "Error::Error during presentation: " << err.message << "\n";
-      running = false;
+      return err;
     }
+  }
+
+  Graphics::SetCurrentGraphicsContext(&context);
+
+  auto luaLoadErr = LoadLua(state);
+
+  if (Error::IsError(luaLoadErr)) {
+    return luaLoadErr;
   }
 
   std::cout << "Entering main loop..." << "\n";
 
-  while (running) {
-    // Events
+  while (Event::MainLoopRunning) {
+    runCallback.push();
 
-    while (SDL_PollEvent(&event)) {
-      switch (event.type) {
-      case SDL_EVENT_QUIT:
-      case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
-        running = false;
-        break;
-      default:
-        break;
-      }
+    // lua_getglobal(state, "debug");
+    // lua_getfield(state, -1, "traceback");
+    // lua_remove(state, -2);
+
+    if (lua_pcall(state, 0, 1, 0) != LUA_OK) {
+      std::string luaErrorMessage = lua_tostring(state, -1);
+      lua_pop(state, 1); // Remove error message from stack
+      Event::MainLoopRunning = false;
+      Event::ExitCode = 1;
+
+      return Error::Create("Error during main loop: " + luaErrorMessage);
     }
 
-    if (!running) {
-      break;
-    }
-
-    Timer::Step();
-    Error::Error updateErr = Program::Update(Timer::GetDelta());
-    if (Error::IsError(updateErr)) {
-      std::cerr << "Error::Error during update: " << updateErr.message << "\n";
-      running = false;
-      break;
-    }
-    Error::Error drawErr = Program::Draw(context);
-    if (Error::IsError(drawErr)) {
-      std::cerr << "Error::Error during draw: " << drawErr.message << "\n";
-      running = false;
-      break;
-    }
-
-    Error::Error err = Graphics::Present(context);
-
-    if (Error::IsError(err)) {
-      std::cerr << "Error::Error during presentation: " << err.message << "\n";
-      running = false;
+    // returned value nil == continue, non-nil == exit with code
+    if (lua_isnil(state, -1)) {
+      lua_pop(state, 1); // pop nil
+    } else {
+      int exitCode = static_cast<int>(lua_tointeger(state, -1));
+      lua_pop(state, 1); // pop exit code
+      std::cout << "Exiting main loop with code " << exitCode << "\n";
+      Event::ExitCode = exitCode;
+      Event::MainLoopRunning = false;
     }
   }
 

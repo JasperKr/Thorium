@@ -177,8 +177,15 @@ add_executable(Thorium
     src/Modules/timer.cpp
     src/Modules/errorhandler.cpp
     src/Modules/config.cpp
+    src/Modules/event.cpp
+    src/Modules/object.cpp
 
     src/Modules/Editor/imgui.cpp
+
+    src/Wrap/Graphics/graphics.cpp
+    src/Wrap/Modules/event.cpp
+    src/Wrap/Modules/timer.cpp
+    src/Wrap/wrap.cpp
 
     src/Libraries/vma.cpp
     src/Libraries/load_stb.cpp

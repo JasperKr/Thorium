@@ -1,3 +1,5 @@
+#pragma once
+
 #include <string>
 
 enum class ConsoleColor : uint8_t {
@@ -11,7 +13,7 @@ enum class ConsoleColor : uint8_t {
   Reset
 };
 
-auto GetColorCode(ConsoleColor color) -> std::string {
+auto inline GetColorCode(ConsoleColor color) -> std::string {
   switch (color) {
   case ConsoleColor::Red:
     return "\033[31m";
@@ -32,6 +34,7 @@ auto GetColorCode(ConsoleColor color) -> std::string {
   }
 }
 
-auto ColorText(const std::string &text, ConsoleColor color) -> std::string {
+auto inline ColorText(const std::string &text, ConsoleColor color)
+    -> std::string {
   return GetColorCode(color) + text + GetColorCode(ConsoleColor::Reset);
 }

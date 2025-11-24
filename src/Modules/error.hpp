@@ -39,6 +39,13 @@ struct [[nodiscard]] Error {
   std::string message;
   int32_t code = -1;
   std::string backtrace;
+
+  auto ToString() const {
+    std::ostringstream oss;
+    oss << "Error: " << message << " (code " << code << ")\n";
+    oss << "Backtrace:\n" << backtrace;
+    return oss.str();
+  }
 };
 
 inline auto SetupTraceback() -> void {

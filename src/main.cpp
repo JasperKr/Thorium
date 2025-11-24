@@ -4,6 +4,8 @@
 #include <iostream>
 #include <string>
 
+#include "Modules/event.hpp"
+
 auto main() -> int {
   std::cout << _MSVC_LANG << "\n";
 
@@ -17,8 +19,8 @@ auto main() -> int {
 
     ErrorHandlerMainLoop();
 
-    return -1;
+    return Event::ExitCode != 0 ? Event::ExitCode : err.code;
   }
 
-  return 0;
+  return Event::ExitCode;
 }
