@@ -7,8 +7,6 @@
 #include "Modules/event.hpp"
 
 auto main() -> int {
-  std::cout << _MSVC_LANG << "\n";
-
   auto err = MainLoop();
   if (Error::IsError(err)) {
     std::cerr << ColorText("Fatal Error.\n", ConsoleColor::Red) << "Code: "

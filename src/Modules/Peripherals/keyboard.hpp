@@ -1,6 +1,7 @@
 #include <cstdint>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 namespace Keyboard {
 enum class Scancode : uint8_t {

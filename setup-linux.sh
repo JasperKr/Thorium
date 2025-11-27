@@ -20,8 +20,44 @@ curl -L https://raw.githubusercontent.com/zeux/volk/master/volk.c -o include/vol
 curl -L https://raw.githubusercontent.com/nothings/stb/master/stb_image.h -o include/stb/stb_image.h
 
 # Shaderc: clone repository and copy necessary include
-git clone --depth 1 https://github.com/google/shaderc.git temp_shaderc
-cp -r temp_shaderc/include/* include/shaderc/
+
+# check if the folder is empty, otherwise skip
+if [ -z "$(ls -A include/shaderc)" ]; then
+  echo "Fetching shaderc..."
+  git clone --depth 1 https://github.com/google/shaderc.git temp_shaderc
+  cp -r temp_shaderc/include/* include/shaderc/
+else
+  echo "shaderc include folder is not empty, skipping fetch."
+fi
 rm -rf temp_shaderc
+
+URL="https://github.com/shader-slang/slang/releases/download/v2025.23.1/slang-2025.23.1-linux-x86_64.zip"
+TEMP_DIR="./slang_download"
+
+if [ ! -d "$TEMP_DIR" ]; then
+    mkdir -p "$TEMP_DIR"
+fi
+
+echo "Fetching slang..."
+curl -L "$URL" -o "$TEMP_DIR/slang.zip"
+echo "Extracting slang..."
+mkdir -p "$TEMP_DIR/contents"
+unzip -q "$TEMP_DIR/slang.zip" -d "$TEMP_DIR/contents"
+if [ ! -d "./include/slang/" ]; then
+    mkdir -p "./include/slang/"
+fi
+cp -r "$TEMP_DIR/contents/include/"* "./include/slang/"
+if [ ! -d "./bin/slang/" ]; then
+    mkdir -p "./bin/slang/"
+fi
+# cp -rL "$TEMP_DIR/contents/bin/"* "./bin/slang/"
+find "$TEMP_DIR/contents/bin" -maxdepth 1 -type f -exec cp {} ./bin/slang/ \;
+if [ ! -d "./lib/slang/" ]; then
+    mkdir -p "./lib/slang/"
+fi
+# cp -rL "$TEMP_DIR/contents/lib/"* "./lib/slang/"
+find "$TEMP_DIR/contents/lib" -maxdepth 1 -type f -exec cp {} ./lib/slang/ \;
+echo "Cleaning up..."
+rm -rf "$TEMP_DIR"
 
 echo "All dependencies fetched into include/"

@@ -69,7 +69,7 @@ static inline auto GetGlobalShaderExterns() -> std::vector<ShaderExtern> & {
   return GlobalShaderExterns;
 }
 
-static auto AddGlobalShaderExtern(const ShaderExtern &externVar) -> void {
+auto AddGlobalShaderExtern(const ShaderExtern &externVar) -> void {
   static std::vector<ShaderExtern> &GlobalShaderExterns =
       GetGlobalShaderExterns();
   GlobalShaderExterns.emplace_back(externVar);
