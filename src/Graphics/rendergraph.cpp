@@ -777,7 +777,7 @@ struct AttachmentInfo {
   VkAttachmentLoadOp loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
   VkAttachmentStoreOp storeOp = VK_ATTACHMENT_STORE_OP_STORE;
   VkClearValue clearValue{};
-  BlendMode blendMode;
+  VkPipelineColorBlendAttachmentState blendMode = DefaultBlendMode;
 };
 
 auto inline GetPassAttachmentInfo(const RenderPass &pass,
@@ -786,7 +786,8 @@ auto inline GetPassAttachmentInfo(const RenderPass &pass,
   size_t blendmodeCount = pass.state.blendModes.size();
   size_t clearColorCount = pass.state.clearValues.size();
 
-  BlendMode blendMode = {}; // Default blend mode: No blending, disabled.
+  VkPipelineColorBlendAttachmentState blendMode =
+      DefaultBlendMode; // Default blend mode: No blending, disabled.
 
   if (binding.location < blendmodeCount) {
     blendMode = pass.state.blendModes[binding.location];
@@ -805,7 +806,7 @@ auto inline GetPassAttachmentInfo(const RenderPass &pass,
   VkAttachmentLoadOp loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
   if (hasClearValue) {
     loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-  } else if (blendMode.enabled) {
+  } else if (blendMode.blendEnable != 0U) {
     loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
   }
 
@@ -869,6 +870,12 @@ auto inline GetDescriptorType(const Resource &resource,
     }
 
     totalSets += static_cast<uint32_t>(uniqueSets.size());
+  }
+
+  if (totalSets == 0) {
+    std::cout << "No descriptor sets needed, skipping descriptor pool creation."
+              << "\n";
+    return Error::Success();
   }
 
   constexpr double AllocationMuliplier = 0.1; // 10% extra
@@ -1453,7 +1460,8 @@ auto inline ApplyPassBarriers(VkCommandBuffer commandBuffer,
   shaderStages[1].module = shader.module;
   shaderStages[1].pName = "main";
 
-  auto vertexformat = Graphics::PredefinedVertexFormats.at(VertexFormats::GUI);
+  auto vertexformat =
+      Graphics::PredefinedVertexFormats.at(VertexFormats::ImGui);
 
   VkPipelineVertexInputStateCreateInfo vertexInputInfo = {};
   vertexInputInfo.sType =
@@ -1503,29 +1511,9 @@ auto inline ApplyPassBarriers(VkCommandBuffer commandBuffer,
       AttachmentInfo attachInfo =
           GetPassAttachmentInfo(compiledPass.pass, binding);
 
-      VkPipelineColorBlendAttachmentState blendAttachment = {};
-      blendAttachment.blendEnable =
-          attachInfo.blendMode.enabled ? VK_TRUE : VK_FALSE;
-      blendAttachment.srcColorBlendFactor =
-          attachInfo.blendMode.srcColorBlendFactor;
-      ;
-      blendAttachment.dstColorBlendFactor =
-          attachInfo.blendMode.dstColorBlendFactor;
-      blendAttachment.colorBlendOp = attachInfo.blendMode.colorBlendOp;
-      blendAttachment.srcAlphaBlendFactor =
-          attachInfo.blendMode.srcAlphaBlendFactor;
-      blendAttachment.dstAlphaBlendFactor =
-          attachInfo.blendMode.dstAlphaBlendFactor;
-      blendAttachment.alphaBlendOp = attachInfo.blendMode.alphaBlendOp;
-      blendAttachment.colorWriteMask =
-          static_cast<uint32_t>(VK_COLOR_COMPONENT_R_BIT) |
-          static_cast<uint32_t>(VK_COLOR_COMPONENT_G_BIT) |
-          static_cast<uint32_t>(VK_COLOR_COMPONENT_B_BIT) |
-          static_cast<uint32_t>(VK_COLOR_COMPONENT_A_BIT);
-
       blendAttachments.resize(binding.location + 1);
       blendModeCount++;
-      blendAttachments[binding.location] = blendAttachment;
+      blendAttachments[binding.location] = attachInfo.blendMode;
     }
   }
 

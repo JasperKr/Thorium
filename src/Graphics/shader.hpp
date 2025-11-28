@@ -1,7 +1,9 @@
 #pragma once
 
+#include "Graphics/mesh.hpp"
 #include "Modules/error.hpp"
 #include "graphics.hpp"
+#include "slang/slang.h"
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -13,6 +15,7 @@ namespace Graphics {
 namespace Shader {
 
 using ShaderHandle = size_t;
+ShaderHandle const InvalidShaderHandle = 0;
 
 struct ShaderSource {
   std::string source;
@@ -39,6 +42,9 @@ struct ShaderModule {
 
   std::string name;
   std::vector<ShaderExtern> externs;
+  slang::ProgramLayout *programLayout = nullptr;
+  VertexFormats expectedVertexFormat = VertexFormats::Unknown;
+  std::unordered_map<SlangStage, size_t> entryPointToStageIndex;
 
   static auto Create(Graphics::GraphicsContext &context,
                      const std::string &path, const std::string &name)
@@ -46,6 +52,8 @@ struct ShaderModule {
 
   void Destroy(VkDevice device);
   void ReloadMaybe(Graphics::GraphicsContext &context);
+
+  [[nodiscard]] auto GetExpectedVertexFormat() const -> VertexFormats;
 };
 
 void LoadModule();

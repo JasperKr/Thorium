@@ -118,23 +118,42 @@ set(LUAJIT_SRC "${CMAKE_CURRENT_SOURCE_DIR}/external/luajit/")
 make_directory(${CMAKE_SOURCE_DIR}/thirdparty/luajit)
 file(COPY ${CMAKE_SOURCE_DIR}/thirdparty/luajit DESTINATION ${LUAJIT_SRC})
 
-ExternalProject_Add(luajit
-    SOURCE_DIR ${LUAJIT_SRC}/src
-    CONFIGURE_COMMAND ""
-    BUILD_COMMAND
-        cmd /c "cd ${LUAJIT_SRC}/src && msvcbuild.bat amalg"
-    INSTALL_COMMAND ""
-    BUILD_IN_SOURCE 1
-)
+if (WIN32)
+    ExternalProject_Add(luajit
+        SOURCE_DIR ${LUAJIT_SRC}/src
+        CONFIGURE_COMMAND ""
+        BUILD_COMMAND
+            cmd /c "cd ${LUAJIT_SRC}/src && msvcbuild.bat amalg"
+        INSTALL_COMMAND ""
+        BUILD_IN_SOURCE 1
+    )
 
-# Define imported target
-add_library(LuaJIT::LuaJIT SHARED IMPORTED)
+    # Define imported target
+    add_library(LuaJIT::LuaJIT SHARED IMPORTED)
 
-set_target_properties(LuaJIT::LuaJIT PROPERTIES
-    IMPORTED_LOCATION     "${LUAJIT_SRC}/src/lua51.dll"
-    IMPORTED_IMPLIB       "${LUAJIT_SRC}/src/lua51.lib"
-    INTERFACE_INCLUDE_DIRECTORIES "${LUAJIT_SRC}/src"
-)
+    set_target_properties(LuaJIT::LuaJIT PROPERTIES
+        IMPORTED_LOCATION     "${LUAJIT_SRC}/src/lua51.dll"
+        IMPORTED_IMPLIB       "${LUAJIT_SRC}/src/lua51.lib"
+        INTERFACE_INCLUDE_DIRECTORIES "${LUAJIT_SRC}/src"
+    )
+elseif(UNIX)
+    ExternalProject_Add(luajit
+        SOURCE_DIR ${LUAJIT_SRC}
+        CONFIGURE_COMMAND ""
+        BUILD_COMMAND
+            make -C ${LUAJIT_SRC}/src
+        INSTALL_COMMAND ""
+        BUILD_IN_SOURCE 1
+    )
+
+    add_library(LuaJIT::LuaJIT SHARED IMPORTED)
+
+    set_target_properties(LuaJIT::LuaJIT PROPERTIES
+        IMPORTED_LOCATION "${LUAJIT_SRC}/src/libluajit.so"
+        INTERFACE_INCLUDE_DIRECTORIES "${LUAJIT_SRC}/src"
+    )
+endif()
+
 
 # Ensure Thorium depends on LuaJIT build
 add_dependencies(LuaJIT::LuaJIT luajit)
@@ -154,7 +173,13 @@ if(WIN32)
         ${SLANG_LIB_DIR}/slang-rt.lib
         )
 elseif(UNIX)
-    set(SLANG_LIBS "${SLANG_LIB_DIR}/libslangc_shared.so")
+    # set(SLANG_LIBS "${SLANG_LIB_DIR}/libgfx.so.0.2025.23.1")
+    # Find all .so files in the directory
+    file(GLOB SO_FILES "${SLANG_LIB_DIR}/*.so*")
+
+    # Add them to the variable
+    set(SLANG_LIBS ${SO_FILES})
+
 endif()
 
 # -------------------------------
@@ -222,7 +247,7 @@ target_link_libraries(Thorium
         Vulkan::Vulkan
         physfs
         ${SHADERC_LIB}
-        ${Vulkan_LIBRARIES}       # usually optional
+        ${Vulkan_LIBRARIES}
         LuaJIT::LuaJIT
         ${SLANG_LIBS}
 )

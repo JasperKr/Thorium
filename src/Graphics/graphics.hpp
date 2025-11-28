@@ -19,6 +19,37 @@
 
 namespace Graphics {
 
+/*
+struct BlendMode {
+bool enabled = false;
+VkBlendFactor srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+VkBlendFactor dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+VkBlendOp colorBlendOp = VK_BLEND_OP_ADD;
+VkBlendFactor srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+VkBlendFactor dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+VkBlendOp alphaBlendOp = VK_BLEND_OP_ADD;
+VkColorComponentFlags colorWriteMask =
+    static_cast<uint32_t>(VK_COLOR_COMPONENT_R_BIT) |
+    static_cast<uint32_t>(VK_COLOR_COMPONENT_G_BIT) |
+    static_cast<uint32_t>(VK_COLOR_COMPONENT_B_BIT) |
+    static_cast<uint32_t>(VK_COLOR_COMPONENT_A_BIT);
+};
+*/
+
+constexpr VkPipelineColorBlendAttachmentState DefaultBlendMode = {
+    .blendEnable = VK_FALSE,
+    .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
+    .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+    .colorBlendOp = VK_BLEND_OP_ADD,
+    .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+    .dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
+    .alphaBlendOp = VK_BLEND_OP_ADD,
+    .colorWriteMask = static_cast<uint32_t>(VK_COLOR_COMPONENT_R_BIT) |
+                      static_cast<uint32_t>(VK_COLOR_COMPONENT_G_BIT) |
+                      static_cast<uint32_t>(VK_COLOR_COMPONENT_B_BIT) |
+                      static_cast<uint32_t>(VK_COLOR_COMPONENT_A_BIT),
+};
+
 constexpr uint32_t FRAMES_IN_FLIGHT = 2;
 
 struct RenderData {
@@ -74,16 +105,6 @@ struct GraphicsContext {
   int32_t renderThreadCount;
   std::vector<RenderData> renderData;
   RuntimeInfo runtimeInfo;
-};
-
-struct BlendMode {
-  bool enabled = false;
-  VkBlendFactor srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-  VkBlendFactor dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-  VkBlendOp colorBlendOp = VK_BLEND_OP_ADD;
-  VkBlendFactor srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-  VkBlendFactor dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-  VkBlendOp alphaBlendOp = VK_BLEND_OP_ADD;
 };
 
 auto Initialize(GraphicsContext &context, Config::ApplicationConfig &config)

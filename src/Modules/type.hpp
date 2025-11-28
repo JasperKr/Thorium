@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
 #include <utility>
 
@@ -9,9 +10,9 @@ class Type {
       : Name(std::move(name)), Parent(&parent) {}
 
 public:
-  auto GetName() const -> const std::string & { return Name; }
-  auto GetParent() const -> const Type * { return Parent; }
-  auto GetID() const -> uint32_t { return ID; }
+  [[nodiscard]] auto GetName() const -> const std::string & { return Name; }
+  [[nodiscard]] auto GetParent() const -> const Type * { return Parent; }
+  [[nodiscard]] auto GetID() const -> uint32_t { return ID; }
 
 private:
   std::string Name;

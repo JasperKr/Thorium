@@ -1,4 +1,4 @@
-function Configuration(config)
+function Thorium.config(config)
   print("Configuring...")
   config.window.width = 900
   config.window.height = 100

@@ -28,8 +28,12 @@ struct FragmentInput
     float3 color : COLOR;
 };
 
+Sampler2D test;
+ConstantBuffer<float[]> BufferA;
+
+
 [shader("fragment")]
 float4 fragmentMain(FragmentInput input)
 {
-    return float4(input.color, 1.0);
+    return float4(input.color, 1.0) * test.Sample(float2(0.5, 0.5)) + BufferA[0];
 }

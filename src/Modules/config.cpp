@@ -158,9 +158,9 @@ auto Configure(lua_State *state)
       print("No configuration.lua found or error in file: " .. err)
     end
 
-    if (type(Configuration) == "function") then
+    if (type(Thorium.config) == "function") then
       -- Call user-defined configuration function, not a pcall, this needs to run without errors
-      Configuration(config)
+      Thorium.config(config)
     end
 
     Thorium._setVsync(config.window.vsync)

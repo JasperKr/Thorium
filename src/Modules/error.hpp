@@ -18,7 +18,7 @@
 #include "tl/expected.hpp"
 #include <vulkan/vulkan.h>
 
-#if __has_include(<stacktrace>)
+#if __has_include(<stacktrace>) && not defined(__unix__)
 #define STD_STACKTRACE_SUPPORTED 1
 #include <stacktrace>
 #endif
@@ -40,7 +40,7 @@ struct [[nodiscard]] Error {
   int32_t code = -1;
   std::string backtrace;
 
-  auto ToString() const {
+  [[nodiscard]] auto ToString() const {
     std::ostringstream oss;
     oss << "Error: " << message << " (code " << code << ")\n";
     oss << "Backtrace:\n" << backtrace;

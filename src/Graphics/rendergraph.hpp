@@ -96,7 +96,7 @@ struct Resource {
 
   Type type = Type::Unknown;
 
-  std::variant<Texture::Texture, Buffer> info{};
+  std::variant<Texture::Texture, Buffer> info;
 };
 
 // struct DescriptorSetUpdate {
@@ -117,7 +117,7 @@ struct PassState {
   std::vector<VkClearValue> clearValues;
   VkPipelineBindPoint bindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
 
-  std::vector<BlendMode> blendModes;
+  std::vector<VkPipelineColorBlendAttachmentState> blendModes;
   VkSubpassDescription subpassDescription = {};
 
   std::vector<VkWriteDescriptorSet> descriptorWrites;
@@ -327,7 +327,7 @@ struct RenderPassDescriptor {
   std::vector<VkClearValue> clearValues;
   VkPipelineBindPoint bindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
   // Optional, defaults to overwrite
-  std::vector<BlendMode> blendModes;
+  std::vector<VkPipelineColorBlendAttachmentState> blendModes;
   std::vector<ResourceBinding> resourceBindings;
 
   Graphics::Shader::ShaderHandle shader;
