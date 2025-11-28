@@ -1,6 +1,7 @@
 #include "shader.hpp"
 #include "Modules/error.hpp"
 #include "Modules/filesystem.hpp"
+#include "Modules/timer.hpp"
 #include "graphics.hpp"
 #include "shaderc/shaderc.h"
 #include "shaderc/shaderc.hpp"
@@ -12,6 +13,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
+#include <print>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -121,40 +123,6 @@ static auto GetShaderCCompiler() -> shaderc::Compiler & {
 
   return compiler;
 }
-
-// static inline auto LoadSpirV(Graphics::GraphicsContext &context,
-//                              ShaderModule &shader) -> Error::Error {
-//   // Load SPIR - V code from file
-//   auto fileResult =
-//       Filesystem::ReadFile(Path::Join(SpirvDirectory, shader.spirvPath));
-//   if (Error::IsError(fileResult)) {
-//     return fileResult.error();
-//   }
-//   auto spirvCode = fileResult.value();
-
-//   if (spirvCode.size() == 0) {
-//     return Error::Create("Shader SPIR-V code is empty: " +
-//                          Path::Join(SpirvDirectory, shader.spirvPath));
-//   }
-
-//   if (spirvCode.size() % 4 != 0) {
-//     return Error::Create("Shader SPIR-V code size is not a multiple of 4: " +
-//                          Path::Join(SpirvDirectory, shader.spirvPath));
-//   }
-
-//   std::vector<uint32_t> spirvInstructions(spirvCode.size() / 4);
-//   memcpy(spirvInstructions.data(), spirvCode.data(), spirvCode.size());
-
-//   VkShaderModuleCreateInfo moduleCreateInfo = {};
-//   moduleCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-//   moduleCreateInfo.codeSize = spirvInstructions.size();
-//   moduleCreateInfo.pCode = spirvInstructions.data();
-
-//   Error::Error error = Error::Create(vkCreateShaderModule(
-//       context.device, &moduleCreateInfo, nullptr, &shader.module));
-
-//   return error;
-// }
 
 template <typename F>
 static inline auto TraverseShaderIncludes(const ShaderSource &source,
@@ -268,6 +236,72 @@ auto SlangStageToString(SlangStage stage) -> std::string {
   }
 }
 
+void printVarLayout(slang::VariableLayoutReflection *varLayout) {
+  if (varLayout->getStage() != SLANG_STAGE_NONE) {
+    std::cout << "semantic: \n";
+    std::cout << "name: ";
+    std::cout << varLayout->getSemanticName() << "\n";
+    std::cout << "index: ";
+    std::cout << varLayout->getSemanticIndex() << "\n";
+  } else {
+    std::cout << "No stage semantic.\n";
+    std::cout << "name: ";
+    std::cout << varLayout->getName() << "\n";
+  }
+}
+
+void printScope(slang::VariableLayoutReflection *scopeVarLayout) {
+  auto *scopeTypeLayout = scopeVarLayout->getTypeLayout();
+  switch (scopeTypeLayout->getKind()) {
+  case slang::TypeReflection::Kind::Struct: {
+    std::print("parameters: \n");
+
+    unsigned int paramCount = scopeTypeLayout->getFieldCount();
+    for (int i = 0; i < paramCount; i++) {
+      std::print("- ");
+
+      auto *param = scopeTypeLayout->getFieldByIndex(i);
+      printVarLayout(param);
+    }
+  } break;
+
+  case slang::TypeReflection::Kind::None:
+  case slang::TypeReflection::Kind::Array:
+  case slang::TypeReflection::Kind::Matrix:
+  case slang::TypeReflection::Kind::Vector:
+  case slang::TypeReflection::Kind::Scalar:
+  case slang::TypeReflection::Kind::ConstantBuffer:
+  case slang::TypeReflection::Kind::Resource:
+  case slang::TypeReflection::Kind::SamplerState:
+  case slang::TypeReflection::Kind::TextureBuffer:
+  case slang::TypeReflection::Kind::ShaderStorageBuffer:
+  case slang::TypeReflection::Kind::ParameterBlock:
+  case slang::TypeReflection::Kind::GenericTypeParameter:
+  case slang::TypeReflection::Kind::Interface:
+  case slang::TypeReflection::Kind::OutputStream:
+  case slang::TypeReflection::Kind::Specialized:
+  case slang::TypeReflection::Kind::Feedback:
+  case slang::TypeReflection::Kind::Pointer:
+  case slang::TypeReflection::Kind::DynamicResource:
+  case slang::TypeReflection::Kind::MeshOutput:
+    std::cout << "Unsupported type layout kind for scope printing.\n";
+    break;
+  }
+}
+
+auto printProgramLayout(slang::ProgramLayout *programLayout) -> void {
+  std::print("global scope: ");
+  printScope(programLayout->getGlobalParamsVarLayout());
+
+  std::print("entry points: ");
+  unsigned int entryPointCount = programLayout->getEntryPointCount();
+  for (int i = 0; i < entryPointCount; ++i) {
+    std::print("- ");
+    const auto *name = programLayout->getEntryPointByIndex(i)->getName();
+    std::cout << (name == nullptr ? "<unnamed>" : name);
+  }
+}
+
 static inline auto LoadSlang(GraphicsContext &context, ShaderModule &shader)
     -> Error::Error {
   slang::SessionDesc sessionDesc = {};
@@ -340,6 +374,7 @@ static inline auto LoadSlang(GraphicsContext &context, ShaderModule &shader)
       continue;
     }
 
+    shader.entryPointToStageIndex[stage] = entryPoints.size();
     entryPoints.emplace_back(entryPoint);
 
     shader.stages.emplace_back(SlangStageToVkStage(stage));
@@ -390,6 +425,7 @@ static inline auto LoadSlang(GraphicsContext &context, ShaderModule &shader)
     }
   }
 
+  shader.programLayout = linkedProgram->getLayout(0);
   Slang::ComPtr<slang::IBlob> spirvCode;
 
   shader.stages.resize(entryPointCount);

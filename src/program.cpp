@@ -80,8 +80,6 @@ auto Load(Graphics::GraphicsContext &context) -> Error::Error {
     return shaderResult.error();
   }
 
-  auto fragmentShader = shaderResult.value();
-
   GetShaders().emplace_back(shaderResult.value());
 
   // Create swapchain textures

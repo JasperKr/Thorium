@@ -300,11 +300,12 @@ template <typename Vertex> struct Mesh {
 };
 
 enum class VertexFormats : uint8_t {
-  DEFAULT,
-  ANIMATED,
-  DEFAULT_INSTANCED,
-  ANIMATED_INSTANCED,
-  GUI,
+  Unknown = 0,
+  Default,
+  Animated,
+  DefaultInstanced,
+  AnimatedInstanced,
+  ImGui,
 };
 
 struct VertexFormatsHash {
@@ -316,7 +317,7 @@ struct VertexFormatsHash {
 const static std::unordered_map<const VertexFormats, const VertexFormat,
                                 VertexFormatsHash>
     PredefinedVertexFormats = {
-        {VertexFormats::DEFAULT,
+        {VertexFormats::Default,
          {
              .Attributes = {{// Vec3 Position
                              .location = 0,
@@ -349,7 +350,7 @@ const static std::unordered_map<const VertexFormats, const VertexFormat,
                            .stride = 36,
                            .inputRate = VK_VERTEX_INPUT_RATE_VERTEX}},
          }},
-        {VertexFormats::ANIMATED,
+        {VertexFormats::Animated,
          {
              .Attributes = {{// Vec3 Position
                              .location = 0,
@@ -392,7 +393,7 @@ const static std::unordered_map<const VertexFormats, const VertexFormat,
                            .stride = 68,
                            .inputRate = VK_VERTEX_INPUT_RATE_VERTEX}},
          }},
-        {VertexFormats::DEFAULT_INSTANCED,
+        {VertexFormats::DefaultInstanced,
          {
              .Attributes =
                  {
@@ -448,7 +449,7 @@ const static std::unordered_map<const VertexFormats, const VertexFormat,
                            .stride = 64,
                            .inputRate = VK_VERTEX_INPUT_RATE_INSTANCE}},
          }},
-        {VertexFormats::ANIMATED_INSTANCED,
+        {VertexFormats::AnimatedInstanced,
          {
              .Attributes =
                  {
@@ -514,7 +515,7 @@ const static std::unordered_map<const VertexFormats, const VertexFormat,
                            .stride = 64,
                            .inputRate = VK_VERTEX_INPUT_RATE_INSTANCE}},
          }},
-        {VertexFormats::GUI,
+        {VertexFormats::ImGui,
          {.Attributes = {{// Vec2 Position
                           .location = 0,
                           .binding = 0,
