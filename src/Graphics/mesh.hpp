@@ -163,9 +163,10 @@ template <typename Vertex> struct Mesh : Object {
                      std::vector<uint32_t> *indexData)
       -> tl::expected<Ref<Mesh<Vertex>>, Error::Error> {
 
-    Mesh mesh = {};
+    auto meshData = Ref<Mesh<Vertex>>(); // Broken here
+    auto *mesh = meshData.get();
 
-    uint64_t verticesSize = vertexData.size() * mesh.VertexFormatSize(format);
+    uint64_t verticesSize = vertexData.size() * mesh->VertexFormatSize(format);
 
     bool hasIndices = indexData != nullptr;
     uint32_t indexCount =
@@ -173,9 +174,9 @@ template <typename Vertex> struct Mesh : Object {
 
     uint64_t indicesSize = indexCount * sizeof(uint32_t);
 
-    mesh.Format = format;
-    mesh.VertexData = vertexData;
-    mesh.IndexData = hasIndices ? *indexData : std::vector<uint32_t>{};
+    mesh->Format = format;
+    mesh->VertexData = vertexData;
+    mesh->IndexData = hasIndices ? *indexData : std::vector<uint32_t>{};
 
     VkMemoryPropertyFlags properties =
         static_cast<uint32_t>(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) |
@@ -196,7 +197,7 @@ template <typename Vertex> struct Mesh : Object {
       return tl::unexpected<Error::Error>(bufferResult.error());
     }
 
-    mesh.VertexBuffer = bufferResult.value();
+    mesh->VertexBuffer = bufferResult.value();
 
     Graphics::BufferCreationInfo iboCreationInfo = {};
     iboCreationInfo.usage =
@@ -211,23 +212,24 @@ template <typename Vertex> struct Mesh : Object {
       return tl::unexpected<Error::Error>(bufferResult.error());
     }
 
-    mesh.IndexBuffer = bufferResult.value();
+    mesh->IndexBuffer = bufferResult.value();
 
-    mesh.DrawRange.Offset = 0;
-    mesh.DrawRange.Count = indexCount > 0 ? indexCount : vertexData.size();
+    mesh->DrawRange.Offset = 0;
+    mesh->DrawRange.Count = indexCount > 0 ? indexCount : vertexData.size();
 
-    Error::Error error = mesh.UploadVertices(context);
-
-    if (Error::IsError(error)) {
-      return tl::unexpected<Error::Error>(error);
-    }
-    error = mesh.UploadIndices(context);
+    Error::Error error = mesh->UploadVertices(context);
 
     if (Error::IsError(error)) {
       return tl::unexpected<Error::Error>(error);
     }
 
-    return Ref<Mesh<Vertex>>(&mesh);
+    error = mesh->UploadIndices(context);
+
+    if (Error::IsError(error)) {
+      return tl::unexpected<Error::Error>(error);
+    }
+
+    return meshData;
   }
 
   void Destroy(GraphicsContext &context) {
