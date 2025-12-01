@@ -1,8 +1,10 @@
 #pragma once
 
-#include "Graphics/mesh.hpp"
 #include "Modules/error.hpp"
+#include "Modules/object.hpp"
+#include "Modules/type.hpp"
 #include "graphics.hpp"
+#include "hash.hpp"
 #include "slang/slang.h"
 #include <string>
 #include <unordered_map>
@@ -11,11 +13,10 @@
 #include "tl/expected.hpp"
 #include "vulkan/vulkan_core.h"
 
+#include "vertexformat.hpp"
+
 namespace Graphics {
 namespace Shader {
-
-using ShaderHandle = size_t;
-ShaderHandle const InvalidShaderHandle = 0;
 
 struct ShaderSource {
   std::string source;
@@ -30,9 +31,15 @@ struct ShaderSource {
 struct ShaderExtern {
   std::string name;
   std::string value;
+
+  auto operator==(const ShaderExtern &other) const -> bool {
+    return name == other.name && value == other.value;
+  }
 };
 
-struct ShaderModule {
+static const Type type = Type("Shader");
+
+struct ShaderModule : Object {
   std::string moduleName;
 
   VkShaderModule module;
@@ -48,12 +55,35 @@ struct ShaderModule {
 
   static auto Create(Graphics::GraphicsContext &context,
                      const std::string &path, const std::string &name)
-      -> tl::expected<ShaderHandle, Error::Error>;
+      -> tl::expected<Ref<ShaderModule>, Error::Error>;
 
   void Destroy(VkDevice device);
   void ReloadMaybe(Graphics::GraphicsContext &context);
 
-  [[nodiscard]] auto GetExpectedVertexFormat() const -> VertexFormats;
+  [[nodiscard]] auto GetExpectedVertexFormat() const -> VertexFormats {
+    return expectedVertexFormat;
+  }
+
+  auto operator==(const ShaderModule &other) const -> bool {
+    return externs == other.externs && moduleName == other.moduleName &&
+           stages == other.stages;
+  }
+
+  auto hash() const -> size_t {
+    Hash::Hasher hasher;
+    hasher.add(std::hash<std::string>()(moduleName));
+    for (const auto &stage : stages) {
+      hasher.add(static_cast<uint32_t>(stage));
+    }
+    for (const auto &externVar : externs) {
+      hasher.add(std::hash<std::string>()(externVar.name));
+      hasher.add(std::hash<std::string>()(externVar.value));
+    }
+
+    return hasher.get();
+  }
+
+  static auto GetType() -> Type const * { return &type; }
 };
 
 void LoadModule();
@@ -69,7 +99,6 @@ static inline auto PreprocessShaderCode(ShaderModule &shader,
     -> tl::expected<std::string, Error::Error>;
 
 auto AddGlobalShaderExtern(const ShaderExtern &externVar) -> void;
-auto GetShaderModule(ShaderHandle handle) -> ShaderModule &;
 
 } // namespace Shader
 } // namespace Graphics

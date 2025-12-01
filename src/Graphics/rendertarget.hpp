@@ -1,18 +1,55 @@
 #pragma once
 
 #include "Graphics/graphics.hpp"
-#include "Graphics/shader.hpp"
 #include "Graphics/texture.hpp"
+#include "Modules/object.hpp"
+#include "Modules/type.hpp"
+#include "shader.hpp"
 #include <cstddef>
 #include <cstdint>
-#include <map>
+#include <unordered_map>
 #include <vulkan/vulkan_core.h>
-namespace Graphics::RenderTarget {
 
-struct RenderTarget {
+namespace Graphics {
+
+namespace Shader {
+struct ShaderModule;
+}
+
+namespace RenderTarget {
+
+const static Type type = Type("RenderTarget");
+
+struct RenderTarget : Object {
   VkPipelineColorBlendAttachmentState blendMode = {};
+  VkClearValue clearValue = {};
   Texture::Texture texture = {};
   int location = -1; // Default to index in the render target array
+
+  auto operator==(const RenderTarget &other) const -> bool {
+    return blendMode.blendEnable == other.blendMode.blendEnable &&
+           blendMode.srcColorBlendFactor ==
+               other.blendMode.srcColorBlendFactor &&
+           blendMode.dstColorBlendFactor ==
+               other.blendMode.dstColorBlendFactor &&
+           blendMode.colorBlendOp == other.blendMode.colorBlendOp &&
+           blendMode.srcAlphaBlendFactor ==
+               other.blendMode.srcAlphaBlendFactor &&
+           blendMode.dstAlphaBlendFactor ==
+               other.blendMode.dstAlphaBlendFactor &&
+           blendMode.alphaBlendOp == other.blendMode.alphaBlendOp &&
+           blendMode.colorWriteMask == other.blendMode.colorWriteMask &&
+           texture.format == other.texture.format &&
+           texture.size.width == other.texture.size.width &&
+           texture.size.height == other.texture.size.height &&
+           texture.size.depth == other.texture.size.depth &&
+           texture.mipmapcount == other.texture.mipmapcount &&
+           texture.arrayLayers == other.texture.arrayLayers &&
+           texture.usage == other.texture.usage &&
+           texture.type == other.texture.type && location == other.location;
+  }
+
+  static auto GetType() -> Type const * { return &type; }
 };
 
 struct State {
@@ -27,10 +64,40 @@ struct State {
   VkViewport viewport = {};
   VkRect2D scissor = {};
 
-  Shader::ShaderHandle shader = {};
+  Ref<Shader::ShaderModule> shader;
 
   VkPipelineBindPoint bindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-  std::vector<RenderTarget> renderTargets;
+  std::vector<Ref<RenderTarget>> renderTargets;
+
+  auto operator==(const State &other) const -> bool {
+    bool renderTargetsEqual = true;
+    if (renderTargets.size() != other.renderTargets.size()) {
+      renderTargetsEqual = false;
+    } else {
+      for (size_t i = 0; i < renderTargets.size(); ++i) {
+        if (renderTargets[i].get() != other.renderTargets[i].get()) {
+          renderTargetsEqual = false;
+          break;
+        }
+      }
+    }
+
+    return cullMode == other.cullMode && frontFace == other.frontFace &&
+           depthTestEnable == other.depthTestEnable &&
+           depthWriteEnable == other.depthWriteEnable &&
+           depthCompareOp == other.depthCompareOp &&
+           stencilTestEnable == other.stencilTestEnable &&
+           polygonMode == other.polygonMode && lineWidth == other.lineWidth &&
+           viewport.x == other.viewport.x && viewport.y == other.viewport.y &&
+           viewport.width == other.viewport.width &&
+           viewport.height == other.viewport.height &&
+           scissor.offset.x == other.scissor.offset.x &&
+           scissor.offset.y == other.scissor.offset.y &&
+           scissor.extent.width == other.scissor.extent.width &&
+           scissor.extent.height == other.scissor.extent.height &&
+           shader.get() == other.shader.get() && bindPoint == other.bindPoint &&
+           renderTargetsEqual;
+  }
 };
 
 inline auto AddToHash(size_t hash, size_t value) -> size_t {
@@ -73,11 +140,11 @@ inline auto HashTexture(const Texture::Texture &texture) -> size_t {
   return hash;
 }
 
-inline auto HashRenderTarget(const RenderTarget &renderTarget) -> size_t {
+inline auto HashRenderTarget(const RenderTarget *renderTarget) -> size_t {
   size_t hash = 0;
 
-  AddToHash(hash, HashBlendmode(renderTarget.blendMode));
-  AddToHash(hash, HashTexture(renderTarget.texture));
+  AddToHash(hash, HashBlendmode(renderTarget->blendMode));
+  AddToHash(hash, HashTexture(renderTarget->texture));
 
   return hash;
 }
@@ -106,11 +173,11 @@ struct StateHash {
     AddToHash(hash, std::hash<int32_t>()(state.scissor.offset.y));
     AddToHash(hash, std::hash<uint32_t>()(state.scissor.extent.width));
     AddToHash(hash, std::hash<uint32_t>()(state.scissor.extent.height));
-    AddToHash(hash, std::hash<Shader::ShaderHandle>()(state.shader));
+    AddToHash(hash, state.shader.get()->hash());
     AddToHash(hash, std::hash<VkPipelineBindPoint>()(state.bindPoint));
 
     for (const auto &renderTarget : state.renderTargets) {
-      AddToHash(hash, HashRenderTarget(renderTarget));
+      AddToHash(hash, HashRenderTarget(renderTarget.get()));
     }
 
     return hash;
@@ -118,6 +185,40 @@ struct StateHash {
 };
 
 // NOLINTNEXTLINE Pipeline cache
-static std::map<State, VkPipeline, StateHash> PipelineCache = {};
+static std::unordered_map<State, VkPipeline, StateHash> PipelineCache = {};
 
-} // namespace Graphics::RenderTarget
+auto SetDirty() -> void;
+auto ValidateEndOfFrame(GraphicsContext &context) -> Error::Error;
+
+auto Push(GraphicsContext &context) -> void;
+auto Pop(GraphicsContext &context) -> Error::Error;
+auto Reset(GraphicsContext &context) -> void;
+auto Flush(GraphicsContext &context) -> tl::expected<bool, Error::Error>;
+auto Load(GraphicsContext &context) -> Error::Error;
+auto Destroy(GraphicsContext &context) -> void;
+auto PrepareDraw(GraphicsContext &context) -> Error::Error;
+
+auto SetDepthMode(bool enable, bool writeEnable, VkCompareOp compareOp) -> void;
+auto SetCullMode(VkCullModeFlags cullMode) -> void;
+auto SetPolygonMode(VkPolygonMode polygonMode) -> void;
+auto SetViewport(const VkViewport &viewport) -> void;
+auto SetScissor(const VkRect2D &scissor) -> void;
+auto ClipScissor(const VkRect2D &scissor) -> void;
+auto SetShader(const Ref<Shader::ShaderModule> &shader) -> void;
+auto SetRenderTargets(const std::vector<Ref<RenderTarget>> &renderTargets)
+    -> void;
+auto SetLineWidth(float lineWidth) -> void;
+auto SetWindingOrder(VkFrontFace frontFace) -> void;
+
+auto GetDepthMode() -> std::tuple<bool, bool, VkCompareOp>;
+auto GetCullMode() -> VkCullModeFlags;
+auto GetPolygonMode() -> VkPolygonMode;
+auto GetViewport() -> VkViewport;
+auto GetScissor() -> VkRect2D;
+auto GetShader() -> Ref<Shader::ShaderModule>;
+auto GetRenderTargets() -> std::vector<Ref<RenderTarget>>;
+auto GetLineWidth() -> float;
+auto GetWindingOrder() -> VkFrontFace;
+
+} // namespace RenderTarget
+} // namespace Graphics

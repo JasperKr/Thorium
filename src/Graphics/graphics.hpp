@@ -18,6 +18,7 @@
 #include <vma/vk_mem_alloc.h>
 
 namespace Graphics {
+namespace Shader {} // namespace Shader
 
 /*
 struct BlendMode {

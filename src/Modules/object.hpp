@@ -1,27 +1,86 @@
+#pragma once
+
 #include "Modules/type.hpp"
 #include <atomic>
 
 class Object {
 public:
-  static Type type;
+  Object() = default;
 
-  Object();
+  Object(const Object &) = delete;
   Object(Object &&) = delete;
+
   auto operator=(const Object &) -> Object & = delete;
   auto operator=(Object &&) -> Object & = delete;
-  Object(const Object &other);
 
   virtual ~Object() = 0;
 
-  auto getReferenceCount() const -> int;
   void retain();
   void release();
 
+  auto getReferenceCount() const -> int;
+
 private:
-  std::atomic<int> count;
+  std::atomic<int> count{1};
+};
+
+template <typename T> class Ref {
+public:
+  Ref() = default;
+  explicit Ref(T *pointer) : ptr(pointer) {
+    if (ptr != nullptr) {
+      ptr->retain();
+    }
+  }
+
+  // copy
+  Ref(const Ref &reference) : ptr(reference.ptr) {
+    if (ptr != nullptr) {
+      ptr->retain();
+    }
+  }
+  auto operator=(const Ref &reference) -> Ref & {
+    if (this != &reference) {
+      if (ptr != nullptr) {
+        ptr->release();
+      }
+      ptr = reference.ptr;
+      if (ptr != nullptr) {
+        ptr->retain();
+      }
+    }
+    return *this;
+  }
+
+  // move
+  Ref(Ref &&reference) noexcept : ptr(reference.ptr) {
+    reference.ptr = nullptr;
+  }
+  auto operator=(Ref &&reference) noexcept -> Ref & {
+    if (this != &reference) {
+      if (ptr != nullptr) {
+        ptr->release();
+      }
+      ptr = reference.ptr;
+      reference.ptr = nullptr;
+    }
+    return *this;
+  }
+
+  ~Ref() {
+    if (ptr != nullptr) {
+      ptr->release();
+    }
+  }
+
+  auto operator->() const -> T * { return ptr; }
+  auto get() const -> T * { return ptr; }
+
+private:
+  T *ptr = nullptr;
 };
 
 struct Proxy {
-  Type *type;
+  const Type *type;
   Object *object;
 };

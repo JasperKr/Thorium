@@ -1,12 +1,11 @@
 #include "shader.hpp"
 #include "Modules/error.hpp"
 #include "Modules/filesystem.hpp"
-#include "Modules/timer.hpp"
+#include "Modules/object.hpp"
 #include "graphics.hpp"
 #include "shaderc/shaderc.h"
 #include "shaderc/shaderc.hpp"
 #include "shaderc/status.h"
-#include "slang/slang-com-helper.h"
 #include "slang/slang-com-ptr.h"
 #include "slang/slang.h"
 #include "tl/expected.hpp"
@@ -14,12 +13,12 @@
 #include <cstdint>
 #include <iostream>
 #include <print>
-#include <sstream>
 #include <string>
 #include <vector>
 
 namespace Graphics::Shader {
 
+// TODO: Use Ref<ShaderModule> instead of shader handles
 static std::vector<ShaderModule> ShaderModules = {};        // NOLINT
 static slang::IGlobalSession *GlobalSlangSession = nullptr; // NOLINT
 
@@ -482,8 +481,8 @@ static inline auto LoadSlang(GraphicsContext &context, ShaderModule &shader)
 
 auto ShaderModule::Create(Graphics::GraphicsContext &context,
                           const std::string &path, const std::string &name)
-    -> tl::expected<ShaderHandle, Error::Error> {
-  ShaderModule &shader = ShaderModules.emplace_back();
+    -> tl::expected<Ref<ShaderModule>, Error::Error> {
+  ShaderModule shader = {};
   shader.name = name;
   shader.moduleName = path;
 
@@ -493,15 +492,7 @@ auto ShaderModule::Create(Graphics::GraphicsContext &context,
     return tl::unexpected(error);
   }
 
-  // Shader handles start at 1, to allow the 0 value to represent an invalid
-  // handle
-  auto shaderHandle = ShaderModules.size();
-
-  return shaderHandle;
-}
-
-auto GetShaderModule(const ShaderHandle handle) -> ShaderModule & {
-  return ShaderModules[handle - 1];
+  return Ref<ShaderModule>(&shader);
 }
 
 } // namespace Graphics::Shader

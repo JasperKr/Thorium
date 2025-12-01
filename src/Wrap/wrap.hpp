@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Modules/type.hpp"
+#include <Modules/object.hpp>
 extern "C" {
 #include <lauxlib.h>
 #include <lua.h>
@@ -39,5 +40,27 @@ inline auto SetStackToRegistry(lua_State *state, const char *key) -> void {
 }
 
 auto SetStackToTable(lua_State *state, const char *key) -> void;
+auto RegisterLuaType(lua_State *state, const LuaModule &module) -> void;
+auto PushLuaType(lua_State *state, Type &type, Object *object) -> void;
+auto PushLuaType(lua_State *state, Proxy &proxy) -> void;
+
+inline auto FromLuaObject(lua_State *state, int index) -> Proxy * {
+  // NOLINTNEXTLINE
+  auto *proxy = static_cast<Proxy *>(lua_touserdata(state, index));
+  return proxy;
+}
+
+template <typename T>
+inline auto FromLuaObject(lua_State *state, int index) -> T * {
+  // NOLINTNEXTLINE
+  auto *proxy = static_cast<Proxy *>(lua_touserdata(state, index));
+  if (proxy == nullptr || proxy->object == nullptr ||
+      proxy->type != T::GetType()) {
+    return nullptr;
+  }
+
+  auto *obj = dynamic_cast<T *>(proxy->object);
+  return obj;
+}
 
 } // namespace LuaWrap

@@ -1,5 +1,4 @@
 #include "rendergraph.hpp"
-#include "Graphics/mesh.hpp"
 #include "Modules/error.hpp"
 #include "graphics.hpp"
 #include "shader.hpp"
@@ -88,18 +87,10 @@ auto AddRenderPass(RenderGraph &graph, const RenderPassDescriptor &descriptor)
          pass.state.bindPoint == VK_PIPELINE_BIND_POINT_COMPUTE);
   assert(descriptor.resourceBindings.size() == descriptor.resources.size() &&
          "Resource bindings size must match resources size");
-  if (pass.state.bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS) {
-    assert((pass.shader != 0) && "shader must be set for graphics pipeline");
+  assert((pass.shader.get() != nullptr) && "shader must be set.");
 
-    auto &shader = Shader::GetShaderModule(pass.shader);
-    assert(shader.module != VK_NULL_HANDLE &&
-           "Fragment shader stage must be present");
-  } else if (pass.state.bindPoint == VK_PIPELINE_BIND_POINT_COMPUTE) {
-    assert(pass.shader != 0 && "shader must be set for compute pipeline");
-    auto &shader = Shader::GetShaderModule(pass.shader);
-    assert(shader.module != VK_NULL_HANDLE &&
-           "Compute shader stage must be present");
-  }
+  auto &shader = *pass.shader.get();
+  assert(shader.module != VK_NULL_HANDLE && "Shader module must be present");
 
   graph.passes.emplace_back(pass);
 
@@ -1448,7 +1439,7 @@ auto inline ApplyPassBarriers(VkCommandBuffer commandBuffer,
 
   std::array<VkPipelineShaderStageCreateInfo, 2> shaderStages = {};
 
-  auto &shader = Shader::GetShaderModule(compiledPass.pass.shader);
+  auto &shader = *compiledPass.pass.shader.get();
 
   shaderStages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
   shaderStages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
@@ -1622,7 +1613,7 @@ auto inline ApplyPassBarriers(VkCommandBuffer commandBuffer,
     return Error::Create("Cannot create compute pipeline for non-compute pass");
   }
 
-  auto &shaderModule = Shader::GetShaderModule(compiledPass.pass.shader);
+  auto &shaderModule = *compiledPass.pass.shader.get();
 
   VkPipelineShaderStageCreateInfo shaderStage = {};
   shaderStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;

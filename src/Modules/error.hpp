@@ -217,9 +217,10 @@ inline auto Create(const char *message, int32_t code = -1) -> Error {
   return Create(std::string(message), code, 1);
 }
 
-inline auto Success() -> Error {
-  return Error{.message = "", .code = 0, .backtrace = ""};
-}
+static const Error SuccessErr =
+    Error{.message = "", .code = 0, .backtrace = ""};
+
+inline auto Success() -> Error { return SuccessErr; }
 
 inline auto IsError(const Error &error) -> bool { return error.code < 0; }
 inline auto IsError(const tl::expected<void, Error> &expected) -> bool {

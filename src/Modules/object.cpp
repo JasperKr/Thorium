@@ -1,9 +1,5 @@
 #include "object.hpp"
 
-Object::Object() : count(1) {}
-Object::Object(const Object &other) : count(1) {
-  // Copy constructor does not copy reference count
-}
 Object::~Object() = default;
 auto Object::getReferenceCount() const -> int { return count.load(); }
 void Object::retain() { count.fetch_add(1); }

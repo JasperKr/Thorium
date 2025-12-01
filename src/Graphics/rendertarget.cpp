@@ -1,11 +1,13 @@
 #include "rendertarget.hpp"
 #include "Graphics/graphics.hpp"
-#include "Graphics/mesh.hpp"
+#include "Graphics/shader.hpp"
 #include "Modules/error.hpp"
 #include "slang/slang.h"
 #include "tl/expected.hpp"
 #include "vulkan/vulkan_core.h"
+#include <array>
 #include <cassert>
+#include <cstddef>
 #include <cstdint>
 #include <set>
 #include <unordered_map>
@@ -13,56 +15,120 @@
 namespace Graphics::RenderTarget {
 
 auto GetPipelineLayout(const GraphicsContext &context, const State &state)
-    -> VkPipelineLayout {
-  auto shader = Shader::GetShaderModule(state.shader);
-  auto *globalLayout = shader.programLayout->getGlobalParamsVarLayout();
+    -> tl::expected<VkPipelineLayout, Error::Error> {
+  auto *shader = state.shader.get();
+  auto *globalLayout = shader->programLayout->getGlobalParamsVarLayout();
 
   std::unordered_map<uint32_t, std::vector<VkDescriptorSetLayoutBinding>>
       setBindingsMap;
 
   auto *typeLayout = globalLayout->getTypeLayout();
 
+  auto pushConstantRanges = std::vector<VkPushConstantRange>{};
+
   for (uint32_t i = 0; i < typeLayout->getFieldCount(); ++i) {
     auto *fieldLayout = typeLayout->getFieldByIndex(i);
-    auto bindingRange = fieldLayout->getBindingRange();
 
-    if (bindingRange.setIndex >= UINT32_MAX) {
+    uint32_t setIndex = fieldLayout->getBindingIndex();
+    uint32_t binding = fieldLayout->getBindingSpace();
+
+    if (binding == UINT32_MAX) {
       continue;
     }
 
-    VkDescriptorSetLayoutBinding binding = {};
-    binding.binding = bindingRange.bindingIndex;
-    binding.descriptorCount = 1;
+    if (fieldLayout->getCategory() ==
+        slang::ParameterCategory::PushConstantBuffer) {
+      size_t size = fieldLayout->getTypeLayout()->getSize(
+          slang::ParameterCategory::PushConstantBuffer);
+
+      pushConstantRanges.push_back({
+          .stageFlags = VK_SHADER_STAGE_ALL,
+          .offset = uint32_t(fieldLayout->getOffset()),
+          .size = uint32_t(size),
+      });
+
+      continue;
+    }
+
+    VkDescriptorSetLayoutBinding vkBinding{};
+    vkBinding.binding = binding;
+    vkBinding.descriptorCount = 1;
+    vkBinding.stageFlags = VK_SHADER_STAGE_ALL;
 
     switch (fieldLayout->getCategory()) {
     case slang::ParameterCategory::ConstantBuffer:
-      binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+      vkBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
       break;
-    case slang::ParameterCategory::MutableResource:
-    case slang::ParameterCategory::ImmutableResource:
-      switch (fieldLayout->getResourceType()) {
-      case slang::ResourceType::Texture_SRV:
-        binding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+
+    case slang::ParameterCategory::ShaderResource: {
+      auto *typeLayout = fieldLayout->getTypeLayout();
+      switch (typeLayout->getKind()) {
+      case slang::TypeReflection::Kind::TextureBuffer:
+        vkBinding.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
         break;
-      case slang::ResourceType::SamplerState:
-        binding.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
-        break;
-      case slang::ResourceType::StructuredBuffer_SRV:
-      case slang::ResourceType::ByteAddressBuffer_SRV:
-        binding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+      case slang::TypeReflection::Kind::Struct:
+      case slang::TypeReflection::Kind::Array:
+        // likely a buffer
+        vkBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
         break;
       default:
-        assert(false && "Unsupported resource type in pipeline layout");
+        vkBinding.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+        break;
       }
       break;
-    default:
-      assert(false && "Unsupported parameter category in pipeline layout");
     }
 
-    binding.stageFlags = VK_SHADER_STAGE_ALL;
+    case slang::ParameterCategory::UnorderedAccess:
+      vkBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+      break;
 
-    setBindingsMap[bindingRange.setIndex].emplace_back(binding);
+    case slang::ParameterCategory::SamplerState:
+      vkBinding.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
+      break;
+
+    default:
+      continue;
+    }
+
+    setBindingsMap[setIndex].push_back(vkBinding);
   }
+
+  std::vector<VkDescriptorSetLayout> setLayouts;
+
+  for (const auto &setBinding : setBindingsMap) {
+    uint32_t setIndex = setBinding.first;
+    const auto &bindings = setBinding.second;
+    VkDescriptorSetLayoutCreateInfo layoutInfo = {};
+    layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
+    layoutInfo.pBindings = bindings.data();
+
+    VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
+    auto error = Error::Create(vkCreateDescriptorSetLayout(
+        context.device, &layoutInfo, nullptr, &descriptorSetLayout));
+
+    if (Error::IsError(error)) {
+      return tl::make_unexpected(error);
+    }
+
+    setLayouts.emplace_back(descriptorSetLayout);
+  }
+
+  VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
+  pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+  pipelineLayoutInfo.setLayoutCount = static_cast<uint32_t>(setLayouts.size());
+  pipelineLayoutInfo.pSetLayouts = setLayouts.data();
+  pipelineLayoutInfo.pushConstantRangeCount = pushConstantRanges.size();
+  pipelineLayoutInfo.pPushConstantRanges = pushConstantRanges.data();
+  VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
+  auto error = Error::Create(vkCreatePipelineLayout(
+      context.device, &pipelineLayoutInfo, nullptr, &pipelineLayout));
+
+  if (Error::IsError(error)) {
+    return tl::make_unexpected(error);
+  }
+
+  return pipelineLayout;
 }
 
 inline auto CreatePipeline(const GraphicsContext &context, const State &state)
@@ -74,7 +140,7 @@ inline auto CreatePipeline(const GraphicsContext &context, const State &state)
 
   std::array<VkPipelineShaderStageCreateInfo, 2> shaderStages = {};
 
-  auto &shader = Shader::GetShaderModule(state.shader);
+  auto &shader = *state.shader.get();
 
   shaderStages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
   shaderStages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
@@ -154,7 +220,7 @@ inline auto CreatePipeline(const GraphicsContext &context, const State &state)
 
   // Loop over attachments and use GetPassAttachmentInfo to fetch blend modes
   for (const auto &rendertarget : state.renderTargets) {
-    int location = rendertarget.location;
+    int location = rendertarget->location;
     if (location == -1) {
       location = idx;
     }
@@ -164,12 +230,12 @@ inline auto CreatePipeline(const GraphicsContext &context, const State &state)
     formats.resize(location + 1);
 
     attachmentCount++;
-    blendAttachments[location] = rendertarget.blendMode;
-    formats[location] = rendertarget.texture.format;
+    blendAttachments[location] = rendertarget->blendMode;
+    formats[location] = rendertarget->texture.format;
 
-    if (Texture::IsDepthTexture(rendertarget.texture.format)) {
+    if (Texture::IsDepthTexture(rendertarget->texture.format)) {
       hasDepthAttachment = true;
-    } else if (Texture::IsStencilTexture(rendertarget.texture.format)) {
+    } else if (Texture::IsStencilTexture(rendertarget->texture.format)) {
       hasStencilAttachment = true;
     }
   }
@@ -227,7 +293,13 @@ inline auto CreatePipeline(const GraphicsContext &context, const State &state)
   pipelineInfo.pColorBlendState = &colorBlending;
   pipelineInfo.pDepthStencilState = &depthStencil;
   pipelineInfo.pDynamicState = &dynamicState;
-  pipelineInfo.layout = GetPipelineLayout(context, state);
+
+  auto layoutResult = GetPipelineLayout(context, state);
+  if (Error::IsError(layoutResult)) {
+    return tl::make_unexpected(layoutResult.error());
+  }
+
+  pipelineInfo.layout = layoutResult.value();
   pipelineInfo.renderPass = VK_NULL_HANDLE; // Not needed
   pipelineInfo.subpass = 0;
   pipelineInfo.pNext = &renderingCreateInfo;
@@ -262,4 +334,297 @@ inline auto GetPipeline(const GraphicsContext &context, const State &state)
 
   return result.value();
 }
+
+// NOLINTNEXTLINE, render target state stack
+static std::vector<State> StateStack{};
+
+// NOLINTNEXTLINE, to keep track of last applied state
+static State LastState{};
+
+// NOLINTNEXTLINE, for rendergraph and present, which do not use the stack but manually modify the vk state
+static bool Dirty;
+
+auto SetDirty() -> void { Dirty = true; }
+
+auto ValidateEndOfFrame(GraphicsContext &context) -> Error::Error {
+  if (StateStack.size() != 1) {
+    return Error::Create("More pushes than pops.");
+  }
+  if (StateStack.back().renderTargets.size() != 0) {
+    return Error::Create("Render targets not cleared at end of frame.");
+  }
+  return Error::Success();
+}
+
+inline auto SetupDefaultState(GraphicsContext &context) -> State {
+  auto defaultState = State();
+
+  defaultState.viewport = {
+      .x = 0.0F,
+      .y = 0.0F,
+      .width = static_cast<float>(context.swapchainInfo.extent.width),
+      .height = static_cast<float>(context.swapchainInfo.extent.height),
+      .minDepth = 0.0F,
+      .maxDepth = 1.0F,
+  };
+
+  defaultState.scissor = {
+      .offset = {0, 0},
+      .extent = {context.swapchainInfo.extent.width,
+                 context.swapchainInfo.extent.height},
+  };
+
+  return defaultState;
+}
+
+auto Load(GraphicsContext &context) -> Error::Error {
+  assert(StateStack.size() == 0 &&
+         "RenderTarget state stack is not empty on Load.");
+
+  StateStack.emplace_back(SetupDefaultState(context));
+
+  return Error::Success();
+}
+
+auto Push(GraphicsContext &context) -> void {
+  if (StateStack.size() == 0) {
+    StateStack.emplace_back(SetupDefaultState(context));
+  } else {
+    StateStack.emplace_back(StateStack.back());
+  }
+}
+
+auto Pop(GraphicsContext &context) -> Error::Error {
+  if (StateStack.size() <= 1) {
+    return Error::Create("More pops than pushes.");
+  }
+
+  StateStack.pop_back();
+
+  return Error::Success();
+}
+
+auto Reset(GraphicsContext &context) -> void {
+  StateStack.clear();
+  StateStack.emplace_back(SetupDefaultState(context));
+
+  LastState = State();
+}
+
+auto Flush(GraphicsContext &context) -> tl::expected<bool, Error::Error> {
+
+  auto &currentState = StateStack.back();
+  if (currentState == LastState && !Dirty) {
+    return false; // No state change
+  }
+
+  LastState = currentState;
+
+  auto pipelineResult = GetPipeline(context, currentState);
+  if (Error::IsError(pipelineResult)) {
+    return tl::make_unexpected(pipelineResult.error());
+  }
+
+  const auto &commandBuffer =
+      Graphics::GetCommandBuffer(context, GetCurrentThreadIndex());
+
+  vkCmdBindPipeline(commandBuffer, currentState.bindPoint,
+                    pipelineResult.value());
+
+  return true;
+}
+
+auto Destroy(GraphicsContext &context) -> void {
+  for (const auto &pair : PipelineCache) {
+    vkDestroyPipeline(context.device, pair.second, nullptr);
+  }
+  PipelineCache.clear();
+}
+
+inline auto BeginRendering(GraphicsContext &context) -> void {
+  auto &currentState = StateStack.back();
+
+  VkRenderingInfo renderingInfo = {};
+  renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+  renderingInfo.renderArea.offset = {
+      .x = static_cast<int32_t>(currentState.viewport.x),
+      .y = static_cast<int32_t>(currentState.viewport.y)};
+  renderingInfo.renderArea.extent = {
+      .width = static_cast<uint32_t>(currentState.viewport.width),
+      .height = static_cast<uint32_t>(currentState.viewport.height)};
+  renderingInfo.layerCount = 1;
+  renderingInfo.viewMask = 0;
+  renderingInfo.flags = 0;
+
+  auto colorAttachments = std::vector<VkRenderingAttachmentInfo>{};
+  auto depthAttachment = VkRenderingAttachmentInfo{};
+  auto stencilAttachment = VkRenderingAttachmentInfo{};
+
+  for (const auto &rendertarget : currentState.renderTargets) {
+    VkRenderingAttachmentInfo attachmentInfo = {};
+    attachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+    attachmentInfo.imageView = rendertarget->texture.view;
+    attachmentInfo.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    attachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    attachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    attachmentInfo.clearValue = rendertarget->clearValue;
+
+    if (Texture::IsDepthTexture(rendertarget->texture.format)) {
+      depthAttachment = attachmentInfo;
+      depthAttachment.imageLayout =
+          VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    } else if (Texture::IsStencilTexture(rendertarget->texture.format)) {
+      stencilAttachment = attachmentInfo;
+      stencilAttachment.imageLayout =
+          VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    } else {
+      colorAttachments.push_back(attachmentInfo);
+    }
+  }
+
+  renderingInfo.colorAttachmentCount =
+      static_cast<uint32_t>(colorAttachments.size());
+  renderingInfo.pColorAttachments = colorAttachments.data();
+  renderingInfo.pDepthAttachment = nullptr;
+  renderingInfo.pStencilAttachment = nullptr;
+
+  vkCmdBeginRendering(
+      Graphics::GetCommandBuffer(context, GetCurrentThreadIndex()),
+      &renderingInfo);
+}
+
+auto PrepareDraw(GraphicsContext &context) -> Error::Error {
+  auto flushResult = Flush(context);
+
+  if (Error::IsError(flushResult)) {
+    return flushResult.error();
+  }
+
+  auto updatedState = flushResult.value();
+
+  if (updatedState) {
+    BeginRendering(context);
+  }
+
+  return Error::Success();
+}
+
+// Setters //
+auto SetDepthMode(bool enable, bool writeEnable, VkCompareOp compareOp)
+    -> void {
+  StateStack.back().depthTestEnable = enable;
+  StateStack.back().depthWriteEnable = writeEnable;
+  StateStack.back().depthCompareOp = compareOp;
+}
+
+auto SetCullMode(VkCullModeFlags cullMode) -> void {
+  StateStack.back().cullMode = cullMode;
+}
+
+auto SetPolygonMode(VkPolygonMode polygonMode) -> void {
+  StateStack.back().polygonMode = polygonMode;
+}
+
+auto SetViewport(const VkViewport &viewport) -> void {
+  StateStack.back().viewport = viewport;
+}
+
+auto SetScissor(const VkRect2D &scissor) -> void {
+  StateStack.back().scissor = scissor;
+}
+
+auto ClipScissor(const VkRect2D &scissor) -> void {
+  auto &currentScissor = StateStack.back().scissor;
+
+  int32_t rectMinX = std::max(currentScissor.offset.x, scissor.offset.x);
+  int32_t rectMinY = std::max(currentScissor.offset.y, scissor.offset.y);
+  int32_t rectMaxX =
+      std::min(currentScissor.offset.x +
+                   static_cast<int32_t>(currentScissor.extent.width),
+               scissor.offset.x + static_cast<int32_t>(scissor.extent.width));
+  int32_t rectMaxY =
+      std::min(currentScissor.offset.y +
+                   static_cast<int32_t>(currentScissor.extent.height),
+               scissor.offset.y + static_cast<int32_t>(scissor.extent.height));
+
+  if (rectMaxX < rectMinX || rectMaxY < rectMinY) {
+    // No intersection, set to zero area
+    currentScissor.offset.x = 0;
+    currentScissor.offset.y = 0;
+    currentScissor.extent.width = 0;
+    currentScissor.extent.height = 0;
+  } else {
+    currentScissor.offset.x = rectMinX;
+    currentScissor.offset.y = rectMinY;
+    currentScissor.extent.width = static_cast<uint32_t>(rectMaxX - rectMinX);
+    currentScissor.extent.height = static_cast<uint32_t>(rectMaxY - rectMinY);
+  }
+}
+
+// TODO: Remove shader handles and use Ref<ShaderModule> instead
+auto SetShader(const Ref<Shader::ShaderModule> &shader) -> void {
+  StateStack.back().shader = shader;
+}
+
+auto SetRenderTargets(const std::vector<Ref<RenderTarget>> &renderTargets)
+    -> void {
+  StateStack.back().renderTargets = renderTargets;
+}
+
+auto SetLineWidth(float lineWidth) -> void {
+  StateStack.back().lineWidth = lineWidth;
+}
+
+auto SetWindingOrder(VkFrontFace frontFace) -> void {
+  StateStack.back().frontFace = frontFace;
+}
+
+// Getters //
+
+auto GetDepthMode() -> std::tuple<bool, bool, VkCompareOp> {
+  auto &currentState = StateStack.back();
+  return {currentState.depthTestEnable, currentState.depthWriteEnable,
+          currentState.depthCompareOp};
+}
+
+auto GetCullMode() -> VkCullModeFlags {
+  auto &currentState = StateStack.back();
+  return currentState.cullMode;
+}
+
+auto GetPolygonMode() -> VkPolygonMode {
+  auto &currentState = StateStack.back();
+  return currentState.polygonMode;
+}
+
+auto GetViewport() -> VkViewport {
+  auto &currentState = StateStack.back();
+  return currentState.viewport;
+}
+
+auto GetScissor() -> VkRect2D {
+  auto &currentState = StateStack.back();
+  return currentState.scissor;
+}
+
+auto GetShader() -> Ref<Shader::ShaderModule> {
+  auto &currentState = StateStack.back();
+  return currentState.shader;
+}
+
+auto GetRenderTargets() -> std::vector<Ref<RenderTarget>> {
+  auto &currentState = StateStack.back();
+  return currentState.renderTargets;
+}
+
+auto GetLineWidth() -> float {
+  auto &currentState = StateStack.back();
+  return currentState.lineWidth;
+}
+
+auto GetWindingOrder() -> VkFrontFace {
+  auto &currentState = StateStack.back();
+  return currentState.frontFace;
+}
+
 } // namespace Graphics::RenderTarget

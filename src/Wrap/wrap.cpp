@@ -1,9 +1,10 @@
 #include "wrap.hpp"
-#include <Modules/object.hpp>
+
 #include <iostream>
 #include <lauxlib.h>
 #include <lua.h>
 
+#include "Modules/object.hpp"
 #include "Wrap/Graphics/graphics.hpp"
 #include "Wrap/Modules/event.hpp"
 #include "Wrap/Modules/timer.hpp"
@@ -120,7 +121,56 @@ auto RegisterLuaModule(lua_State *state, const LuaModule &module) -> void {
   }
 }
 
-auto RegisterLuaType(lua_State *state, const LuaModule &module) -> void {}
+auto RegisterLuaType(lua_State *state, const LuaModule &module) -> void {
+  if (module.ModuleType == nullptr) {
+    std::cerr << "Module " << module.Name << " has no type to register."
+              << "\n";
+    return;
+  }
+
+  const auto *name = module.ModuleType->GetName().c_str();
+
+  luaL_newmetatable(state, name);     // Create metatable [mt]
+  lua_pushvalue(state, -1);           // Duplicate metatable [mt, mt]
+  lua_setfield(state, -2, "__index"); // mt.__index = mt [mt]
+  lua_pushcfunction(state, wrap__gc); // [mt, wrap__gc]
+  lua_setfield(state, -2, "__gc");    // mt.__gc = wrap__gc [mt]
+  lua_pushcfunction(state, wrap__tostring);
+  lua_setfield(state, -2, "__tostring"); // mt.__tostring = wrap__tostring [mt]
+
+  lua_pop(state, 1); // []
+}
+auto PushLuaType(lua_State *state, Type &type, Object *object) -> void {
+  // NOLINTNEXTLINE
+  auto *proxy = (Proxy *)lua_newuserdata(state, sizeof(Proxy));
+  proxy->type = &type;
+  proxy->object = object;
+  if (object != nullptr) {
+    object->retain();
+  }
+
+  const auto *name = type.GetName().c_str();
+
+  luaL_getmetatable(state, name); // Get metatable
+
+  lua_setmetatable(state, -2); // Set metatable for userdata
+}
+
+auto PushLuaType(lua_State *state, const Proxy &proxy) -> void {
+  // NOLINTNEXTLINE
+  auto *lproxy = (Proxy *)lua_newuserdata(state, sizeof(Proxy));
+  lproxy->type = proxy.type;
+  lproxy->object = proxy.object;
+  if (lproxy->object != nullptr) {
+    lproxy->object->retain();
+  }
+
+  const auto *name = lproxy->type->GetName().c_str();
+
+  luaL_getmetatable(state, name); // Get metatable
+
+  lua_setmetatable(state, -2); // Set metatable for userdata
+}
 
 // NOLINTNEXTLINE
 static const luaL_Reg ThoriumModules[] = {

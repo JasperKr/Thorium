@@ -6,3 +6,4 @@ BraceWrapping:
   AfterNamespace: true
   AfterStruct: true
   AfterEnum: true
+CommentPragmas: '.*'

@@ -1,5 +1,6 @@
 #include "Modules/error.hpp"
 #include "graphics.hpp"
+#include "rendertarget.hpp"
 #include <iostream>
 #include <vector>
 
@@ -258,6 +259,11 @@ void InitializeGraphics(Graphics::GraphicsContext &context) {
 }
 
 auto Present(Graphics::GraphicsContext &context) -> Error::Error {
+  auto validateResult = RenderTarget::ValidateEndOfFrame(context);
+  if (Error::IsError(validateResult)) {
+    return validateResult;
+  }
+
   Error::Error error = Present_PostDraw(context);
   if (Error::IsError(error)) {
     return error;
@@ -267,6 +273,8 @@ auto Present(Graphics::GraphicsContext &context) -> Error::Error {
   if (Error::IsError(error)) {
     return error;
   }
+
+  RenderTarget::SetDirty();
 
   return Error::Success();
 }

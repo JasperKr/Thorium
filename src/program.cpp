@@ -19,14 +19,14 @@ struct Vertex {
   float color[3];    // NOLINT
 };
 
-static inline auto GetMeshes() -> std::vector<Graphics::Mesh<Vertex>> & {
-  static std::vector<Graphics::Mesh<Vertex>> meshes = {};
+static inline auto GetMeshes() -> std::vector<Ref<Graphics::Mesh<Vertex>>> & {
+  static std::vector<Ref<Graphics::Mesh<Vertex>>> meshes = {};
   return meshes;
 }
 
 static inline auto GetShaders()
-    -> std::vector<Graphics::Shader::ShaderHandle> & {
-  static std::vector<Graphics::Shader::ShaderHandle> shaders = {};
+    -> std::vector<Ref<Graphics::Shader::ShaderModule>> & {
+  static std::vector<Ref<Graphics::Shader::ShaderModule>> shaders = {};
   return shaders;
 }
 
@@ -213,11 +213,11 @@ auto Draw(Graphics::GraphicsContext &context) -> Error::Error {
 auto Exit(Graphics::GraphicsContext &context) -> Error::Error {
   vkDestroyPipeline(context.device, GetPipeline(), nullptr);
   for (auto &shader : GetShaders()) {
-    auto &module = Graphics::Shader::GetShaderModule(shader);
+    auto &module = *shader.get();
     vkDestroyShaderModule(context.device, module.module, nullptr);
   }
   for (auto &mesh : GetMeshes()) {
-    mesh.Destroy(context);
+    mesh->Destroy(context);
   }
 
   return Error::Success();

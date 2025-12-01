@@ -1,5 +1,6 @@
 #include "Graphics/graphics.hpp"
 #include "Graphics/render.hpp"
+#include "Graphics/rendertarget.hpp"
 #include "Graphics/shader.hpp"
 #include "Modules/config.hpp"
 #include "Modules/error.hpp"
@@ -175,6 +176,11 @@ auto MainLoop() -> Error::Error {
   bool running = true;
 
   Graphics::Shader::LoadModule();
+  auto rendertargetLoadError = Graphics::RenderTarget::Load(context);
+
+  if (Error::IsError(rendertargetLoadError)) {
+    return rendertargetLoadError;
+  }
 
   std::cout << "Loading program..." << "\n";
 

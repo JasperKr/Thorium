@@ -5,11 +5,11 @@
 #include <utility>
 
 class Type {
-  explicit Type(const std::string &name);
+public:
+  explicit Type(std::string name) : Name(std::move(name)) {}
   Type(std::string name, const Type &parent)
       : Name(std::move(name)), Parent(&parent) {}
 
-public:
   [[nodiscard]] auto GetName() const -> const std::string & { return Name; }
   [[nodiscard]] auto GetParent() const -> const Type * { return Parent; }
   [[nodiscard]] auto GetID() const -> uint32_t { return ID; }

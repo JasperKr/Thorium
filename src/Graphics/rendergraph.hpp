@@ -96,7 +96,7 @@ struct Resource {
 
   Type type = Type::Unknown;
 
-  std::variant<Texture::Texture, Buffer> info;
+  std::variant<Texture::Texture, Buffer> info{};
 };
 
 // struct DescriptorSetUpdate {
@@ -170,7 +170,7 @@ struct RenderPass {
     return resources;
   }
 
-  Shader::ShaderHandle shader;
+  Ref<Shader::ShaderModule> shader;
 
   std::function<void(VkCommandBuffer cmd, GraphicsContext &context,
                      struct RenderGraph &graph,
@@ -330,7 +330,7 @@ struct RenderPassDescriptor {
   std::vector<VkPipelineColorBlendAttachmentState> blendModes;
   std::vector<ResourceBinding> resourceBindings;
 
-  Graphics::Shader::ShaderHandle shader;
+  Ref<Graphics::Shader::ShaderModule> shader;
 
   std::function<void(VkCommandBuffer cmd, GraphicsContext &context,
                      struct RenderGraph &graph, CompiledPass &currentPass)>
