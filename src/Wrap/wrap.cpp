@@ -121,14 +121,15 @@ auto RegisterLuaModule(lua_State *state, const LuaModule &module) -> void {
   }
 }
 
-auto RegisterLuaType(lua_State *state, const LuaModule &module) -> void {
-  if (module.ModuleType == nullptr) {
-    std::cerr << "Module " << module.Name << " has no type to register."
-              << "\n";
+auto RegisterLuaType(lua_State *state, const Type *type,
+                     const luaL_Reg *functions) -> void {
+
+  if (type == nullptr) {
+    std::cerr << "Cannot register Lua type: type is null" << "\n";
     return;
   }
 
-  const auto *name = module.ModuleType->GetName().c_str();
+  const auto *name = type->GetName().c_str();
 
   luaL_newmetatable(state, name);     // Create metatable [mt]
   lua_pushvalue(state, -1);           // Duplicate metatable [mt, mt]
@@ -137,6 +138,16 @@ auto RegisterLuaType(lua_State *state, const LuaModule &module) -> void {
   lua_setfield(state, -2, "__gc");    // mt.__gc = wrap__gc [mt]
   lua_pushcfunction(state, wrap__tostring);
   lua_setfield(state, -2, "__tostring"); // mt.__tostring = wrap__tostring [mt]
+
+  // Register functions
+  if (functions != nullptr) {
+    const luaL_Reg *func = functions;
+    while (func->name != nullptr) {
+      lua_pushcfunction(state, func->func); // [mt, func]
+      lua_setfield(state, -2, func->name);  // [mt]
+      func++; // NOLINT, functions are nullptr-terminated
+    }
+  }
 
   lua_pop(state, 1); // []
 }

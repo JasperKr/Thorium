@@ -25,6 +25,7 @@ struct RenderTarget : Object {
   VkClearValue clearValue = {};
   Texture::Texture texture = {};
   int location = -1; // Default to index in the render target array
+  int layer = 0;
 
   auto operator==(const RenderTarget &other) const -> bool {
     return blendMode.blendEnable == other.blendMode.blendEnable &&
@@ -46,7 +47,8 @@ struct RenderTarget : Object {
            texture.mipmapcount == other.texture.mipmapcount &&
            texture.arrayLayers == other.texture.arrayLayers &&
            texture.usage == other.texture.usage &&
-           texture.type == other.texture.type && location == other.location;
+           texture.textureType == other.texture.textureType &&
+           location == other.location;
   }
 
   static auto GetType() -> Type const * { return &type; }
@@ -135,7 +137,7 @@ inline auto HashTexture(const Texture::Texture &texture) -> size_t {
   AddToHash(hash, std::hash<uint32_t>()(texture.mipmapcount));
   AddToHash(hash, std::hash<uint32_t>()(texture.arrayLayers));
   AddToHash(hash, std::hash<VkImageUsageFlags>()(texture.usage));
-  AddToHash(hash, std::hash<Texture::TextureType>()(texture.type));
+  AddToHash(hash, std::hash<Texture::TextureType>()(texture.textureType));
 
   return hash;
 }

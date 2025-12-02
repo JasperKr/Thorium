@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Graphics/sampler.hpp"
+#include "Modules/type.hpp"
 #include "graphics.hpp"
 #include <cmath>
 #include <cstdint>
@@ -22,6 +23,8 @@ enum class WrapMode : uint8_t {
   CLAMPZERO
 };
 
+const static Type type = Type("Texture");
+
 struct Texture {
   VkExtent3D size;
   VkFormat format;
@@ -38,33 +41,35 @@ struct Texture {
   size_t arrayLayers;
   VkImageUsageFlags usage;
 
-  enum TextureType type;
+  enum TextureType textureType;
 
-  auto inline SetFilter(VkFilter minFilter, VkFilter magFilter,
-                        VkSamplerMipmapMode mipFilter) -> void;
-  auto inline GetFilter() const
+  auto SetFilter(VkFilter minFilter, VkFilter magFilter,
+                 VkSamplerMipmapMode mipFilter) -> void;
+  [[nodiscard]] auto GetFilter() const
       -> std::tuple<VkFilter, VkFilter, VkSamplerMipmapMode>;
-  auto inline SetAnisotropy(float anisotropy) -> void;
-  auto inline GetAnisotropy() const -> float;
-  auto inline SetWrapmode(VkSamplerAddressMode addressModeU,
-                          VkSamplerAddressMode addressModeV,
-                          VkSamplerAddressMode addressModeW) -> void;
-  auto inline GetWrapmode() const
+  auto SetAnisotropy(float anisotropy) -> void;
+  [[nodiscard]] auto GetAnisotropy() const -> float;
+  auto SetWrapmode(VkSamplerAddressMode addressModeU,
+                   VkSamplerAddressMode addressModeV,
+                   VkSamplerAddressMode addressModeW) -> void;
+  [[nodiscard]] auto GetWrapmode() const
       -> std::tuple<VkSamplerAddressMode, VkSamplerAddressMode,
                     VkSamplerAddressMode>;
-  auto inline SetLodBias(float mipLodBias) -> void;
-  auto inline GetLodBias() const -> float;
-  auto inline SetLodRange(float minLod, float maxLod) -> void;
-  auto inline GetLodRange() const -> std::tuple<float, float>;
-  auto inline SetDepthCompare(bool enable, VkCompareOp compareOp) -> void;
-  auto inline GetDepthCompare() const -> std::tuple<bool, VkCompareOp>;
-  auto GetWidth() const -> uint32_t { return size.width; };
-  auto GetHeight() const -> uint32_t { return size.height; };
-  auto GetDimensions() const -> VkExtent2D {
+  auto SetLodBias(float mipLodBias) -> void;
+  [[nodiscard]] auto GetLodBias() const -> float;
+  auto SetLodRange(float minLod, float maxLod) -> void;
+  [[nodiscard]] auto GetLodRange() const -> std::tuple<float, float>;
+  auto SetDepthCompare(bool enable, VkCompareOp compareOp) -> void;
+  [[nodiscard]] auto GetDepthCompare() const -> std::tuple<bool, VkCompareOp>;
+  [[nodiscard]] auto GetWidth() const -> uint32_t { return size.width; };
+  [[nodiscard]] auto GetHeight() const -> uint32_t { return size.height; };
+  [[nodiscard]] auto GetDimensions() const -> VkExtent2D {
     return {size.width, size.height};
   };
-  auto GetDepth() const -> uint32_t { return size.depth; };
+  [[nodiscard]] auto GetDepth() const -> uint32_t { return size.depth; };
   auto GetSampler(GraphicsContext &context) -> VkSampler;
+
+  static auto GetType() -> Type const * { return &type; }
 };
 
 struct TextureCreationInfo {
@@ -373,7 +378,7 @@ static inline auto IsCompressedTexture(VkFormat format) -> bool {
 }
 
 auto GetDefaultTexture(GraphicsContext &context, VkFormat format,
-                       Graphics::Texture::TextureType type)
+                       Graphics::Texture::TextureType textureType)
     -> tl::expected<Graphics::Texture::Texture, Error::Error>;
 
 } // namespace Texture

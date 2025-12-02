@@ -42,7 +42,8 @@ inline auto SetStackToRegistry(lua_State *state, const char *key) -> void {
 auto SetStackToTable(lua_State *state, const char *key) -> void;
 auto RegisterLuaType(lua_State *state, const LuaModule &module) -> void;
 auto PushLuaType(lua_State *state, Type &type, Object *object) -> void;
-auto PushLuaType(lua_State *state, Proxy &proxy) -> void;
+auto RegisterLuaType(lua_State *state, const Type *type,
+                     const luaL_Reg *functions) -> void;
 
 inline auto FromLuaObject(lua_State *state, int index) -> Proxy * {
   // NOLINTNEXTLINE

@@ -163,8 +163,10 @@ template <typename Vertex> struct Mesh : Object {
                      std::vector<uint32_t> *indexData)
       -> tl::expected<Ref<Mesh<Vertex>>, Error::Error> {
 
-    auto meshData = Ref<Mesh<Vertex>>(); // Broken here
+    auto meshData = Ref<Mesh<Vertex>>::Make();
     auto *mesh = meshData.get();
+
+    std::cout << meshData.get() << "\n";
 
     uint64_t verticesSize = vertexData.size() * mesh->VertexFormatSize(format);
 

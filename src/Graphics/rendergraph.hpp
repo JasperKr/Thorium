@@ -96,7 +96,7 @@ struct Resource {
 
   Type type = Type::Unknown;
 
-  std::variant<Texture::Texture, Buffer> info{};
+  std::variant<Texture::Texture, Buffer> info;
 };
 
 // struct DescriptorSetUpdate {

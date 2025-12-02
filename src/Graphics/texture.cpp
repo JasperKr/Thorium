@@ -8,7 +8,6 @@
 #include <cstdint>
 #include <iostream>
 
-
 #define VMA_VULKAN_VERSION 1004000
 #define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
@@ -91,7 +90,7 @@ auto Create2D(GraphicsContext &context, TextureCreationInfo info)
 
   texture.size = VkExtent3D{info.width, info.height, 1};
   texture.format = info.format;
-  texture.type = TextureType::DEFAULT;
+  texture.textureType = TextureType::DEFAULT;
   texture.mipmapcount = info.mipmapCount;
   texture.usage = info.usage;
   texture.arrayLayers = 1;
@@ -161,7 +160,7 @@ auto FromSwapchainTexture(GraphicsContext &context, VkImage swapchainImage,
   texture.image = swapchainImage;
   texture.format = format;
   texture.size = VkExtent3D{width, height, 1};
-  texture.type = TextureType::DEFAULT;
+  texture.textureType = TextureType::DEFAULT;
   texture.mipmapcount = 1;
   texture.arrayLayers = 1;
   texture.samplerDirty = true;
@@ -211,7 +210,7 @@ auto CreateCubeMap(GraphicsContext &context, TextureCreationInfo info)
 
   texture.size = VkExtent3D{info.width, info.width, 1};
   texture.format = info.format;
-  texture.type = TextureType::CUBEMAP;
+  texture.textureType = TextureType::CUBEMAP;
   texture.mipmapcount = info.mipmapCount;
   texture.usage = info.usage;
   texture.arrayLayers = CubeFaceCount;
@@ -279,7 +278,7 @@ auto CreateVolume(GraphicsContext &context, TextureCreationInfo info)
 
   texture.size = VkExtent3D{info.width, info.height, info.depth};
   texture.format = info.format;
-  texture.type = TextureType::VOLUME;
+  texture.textureType = TextureType::VOLUME;
   texture.mipmapcount = info.mipmapCount;
   texture.usage = info.usage;
   texture.arrayLayers = 1;
@@ -347,7 +346,7 @@ auto CreateArray(GraphicsContext &context, TextureCreationInfo info)
 
   texture.size = VkExtent3D{info.width, info.height, info.depth};
   texture.format = info.format;
-  texture.type = TextureType::ARRAY;
+  texture.textureType = TextureType::ARRAY;
   texture.mipmapcount = info.mipmapCount;
   texture.usage = info.usage;
   texture.arrayLayers = info.depth;
@@ -715,13 +714,13 @@ struct VkFormatTextureTypeHash {
 };
 
 auto GetDefaultTexture(GraphicsContext &context, VkFormat format,
-                       Graphics::Texture::TextureType type)
+                       Graphics::Texture::TextureType textureType)
     -> tl::expected<Graphics::Texture::Texture, Error::Error> {
   static std::unordered_map<std::pair<VkFormat, TextureType>, Texture,
                             VkFormatTextureTypeHash>
       textureCache;
 
-  auto key = std::make_pair(format, type);
+  auto key = std::make_pair(format, textureType);
   auto textureIterator = textureCache.find(key);
   if (textureIterator != textureCache.end()) {
     return textureIterator->second;
@@ -734,14 +733,14 @@ auto GetDefaultTexture(GraphicsContext &context, VkFormat format,
   texInfo.format = format;
   texInfo.usage = static_cast<uint32_t>(VK_IMAGE_USAGE_SAMPLED_BIT) |
                   static_cast<uint32_t>(VK_IMAGE_USAGE_TRANSFER_DST_BIT);
-  if (type == TextureType::CUBEMAP) {
+  if (textureType == TextureType::CUBEMAP) {
     texInfo.depth = 6; // NOLINT
   }
   texInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
   texInfo.mipmapCount = 1;
 
   tl::expected<Texture, Error::Error> result;
-  switch (type) {
+  switch (textureType) {
   case TextureType::DEFAULT:
     result = Graphics::Texture::Create2D(context, texInfo);
     break;

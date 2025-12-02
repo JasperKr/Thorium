@@ -2,8 +2,11 @@
 #include "Graphics/render.hpp"
 #include "Graphics/rendertarget.hpp"
 #include "Graphics/shader.hpp"
+#include "Graphics/texture.hpp"
 #include "Modules/object.hpp"
 #include "Wrap/wrap.hpp"
+#include "vulkan/vulkan_core.h"
+#include <cstring>
 extern "C" {
 #include <lauxlib.h>
 #include <lua.h>
@@ -165,6 +168,202 @@ auto wrap_SetShader(lua_State *state) -> int {
   RenderTarget::SetShader(Ref<Shader::ShaderModule>(shaderHandle));
   return 0;
 }
+
+auto inline ConvertStringToBlendOp(const char *string) -> VkBlendOp {
+  // add, sub, revsub, min, max
+
+  if (strcmp(string, "add") == 0) {
+    return VK_BLEND_OP_ADD;
+  }
+  if (strcmp(string, "sub") == 0) {
+    return VK_BLEND_OP_SUBTRACT;
+  }
+  if (strcmp(string, "revsub") == 0) {
+    return VK_BLEND_OP_REVERSE_SUBTRACT;
+  }
+  if (strcmp(string, "min") == 0) {
+    return VK_BLEND_OP_MIN;
+  }
+  if (strcmp(string, "max") == 0) {
+    return VK_BLEND_OP_MAX;
+  }
+  {
+    return VK_BLEND_OP_ADD; // Default
+  }
+}
+
+auto inline ConvertStringToBlendFactor(const char *string) -> VkBlendFactor {
+  // zero, one, srccolor, oneminussrccolor, dstcolor, oneminusdstcolor,
+  // srcalpha, oneminussrcalpha, dstalpha, oneminusdstalpha, constantcolor,
+  // oneminusconstantcolor, constantalpha, oneminusconstantalpha, srcalphasat
+
+  if (strcmp(string, "zero") == 0) {
+    return VK_BLEND_FACTOR_ZERO;
+  }
+  if (strcmp(string, "one") == 0) {
+    return VK_BLEND_FACTOR_ONE;
+  }
+  if (strcmp(string, "srccolor") == 0) {
+    return VK_BLEND_FACTOR_SRC_COLOR;
+  }
+  if (strcmp(string, "oneminussrccolor") == 0) {
+    return VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR;
+  }
+  if (strcmp(string, "dstcolor") == 0) {
+    return VK_BLEND_FACTOR_DST_COLOR;
+  }
+  if (strcmp(string, "oneminusdstcolor") == 0) {
+    return VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR;
+  }
+  if (strcmp(string, "srcalpha") == 0) {
+    return VK_BLEND_FACTOR_SRC_ALPHA;
+  }
+  if (strcmp(string, "oneminussrcalpha") == 0) {
+    return VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+  }
+  if (strcmp(string, "dstalpha") == 0) {
+    return VK_BLEND_FACTOR_DST_ALPHA;
+  }
+  if (strcmp(string, "oneminusdstalpha") == 0) {
+    return VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
+  }
+  if (strcmp(string, "constantcolor") == 0) {
+    return VK_BLEND_FACTOR_CONSTANT_COLOR;
+  }
+  if (strcmp(string, "oneminusconstantcolor") == 0) {
+    return VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_COLOR;
+  }
+  if (strcmp(string, "constantalpha") == 0) {
+    return VK_BLEND_FACTOR_CONSTANT_ALPHA;
+  }
+  if (strcmp(string, "oneminusconstantalpha") == 0) {
+    return VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_ALPHA;
+  }
+  if (strcmp(string, "srcalphasat") == 0) {
+    return VK_BLEND_FACTOR_SRC_ALPHA_SATURATE;
+  }
+
+  {
+    return VK_BLEND_FACTOR_ONE; // Default
+  }
+}
+
+// blendmode: { blendmode = "none"|"alpha"|"add"|"sub"|"mul", alphamode = "alphamultiply"|"premultiplied", mask = int }
+// Or, { srccolor = "", dstcolor = "", srcalpha = "", dstalpha = "", opcolor = "", opalpha = "", mask = int }
+auto inline FromLuaState(lua_State *state)
+    -> VkPipelineColorBlendAttachmentState {
+  // blend mode from lua top of stack
+  VkPipelineColorBlendAttachmentState blendMode = {};
+
+  // Enable detailed blendmode if idx 1 is a string
+  if (lua_isstring(state, 1) != 0) {
+    // Error if idx 2 is not a string
+    if (lua_isstring(state, 2) == 0) {
+      luaL_error(state, "Expected string as second argument for blendmode");
+    }
+
+    const char *modeStr = luaL_checkstring(state, 1);
+    if (strcmp(modeStr, "none") == 0) {
+      blendMode.blendEnable = VK_FALSE;
+    } else if (strcmp(modeStr, "alpha") == 0) {
+      blendMode.blendEnable = VK_TRUE;
+      blendMode.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+      blendMode.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+      blendMode.colorBlendOp = VK_BLEND_OP_ADD;
+      blendMode.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+      blendMode.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+      blendMode.alphaBlendOp = VK_BLEND_OP_ADD;
+    } else if (strcmp(modeStr, "add") == 0) {
+      blendMode.blendEnable = VK_TRUE;
+      blendMode.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+      blendMode.dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
+      blendMode.colorBlendOp = VK_BLEND_OP_ADD;
+      blendMode.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+      blendMode.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+      blendMode.alphaBlendOp = VK_BLEND_OP_ADD;
+    } else if (strcmp(modeStr, "sub") == 0) {
+      blendMode.blendEnable = VK_TRUE;
+      blendMode.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+      blendMode.dstColorBlendFactor = VK_BLEND_FACTOR_ONE;
+      blendMode.colorBlendOp = VK_BLEND_OP_SUBTRACT;
+      blendMode.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+      blendMode.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+      blendMode.alphaBlendOp = VK_BLEND_OP_SUBTRACT;
+    } else if (strcmp(modeStr, "mul") == 0) {
+      blendMode.blendEnable = VK_TRUE;
+      blendMode.srcColorBlendFactor = VK_BLEND_FACTOR_DST_COLOR;
+      blendMode.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO;
+      blendMode.colorBlendOp = VK_BLEND_OP_ADD;
+      blendMode.srcAlphaBlendFactor = VK_BLEND_FACTOR_DST_ALPHA;
+      blendMode.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+      blendMode.alphaBlendOp = VK_BLEND_OP_ADD;
+    } else {
+      luaL_error(state, "Invalid blend mode: %s", modeStr);
+    }
+
+    const char *alphaModeStr = luaL_checkstring(state, 2);
+    if (strcmp(alphaModeStr, "alphamultiply") == 0) {
+      // No change needed
+    } else if (strcmp(alphaModeStr, "premultiplied") == 0) {
+      blendMode.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
+    } else {
+      luaL_error(state, "Invalid alpha blend mode: %s", alphaModeStr);
+    }
+  } else {
+    // Detailed blendmode
+    lua_getfield(state, 1, "srccolor");
+    const char *srcColorStr = luaL_checkstring(state, -1);
+    lua_pop(state, 1);
+
+    lua_getfield(state, 1, "dstcolor");
+    const char *dstColorStr = luaL_checkstring(state, -1);
+    lua_pop(state, 1);
+
+    lua_getfield(state, 1, "srcalpha");
+    const char *srcAlphaStr = luaL_checkstring(state, -1);
+    lua_pop(state, 1);
+
+    lua_getfield(state, 1, "dstalpha");
+    const char *dstAlphaStr = luaL_checkstring(state, -1);
+    lua_pop(state, 1);
+
+    lua_getfield(state, 1, "opcolor");
+    const char *opColorStr = luaL_checkstring(state, -1);
+    lua_pop(state, 1);
+
+    lua_getfield(state, 1, "opalpha");
+    const char *opAlphaStr = luaL_checkstring(state, -1);
+    lua_pop(state, 1);
+
+    blendMode.blendEnable = VK_TRUE;
+    blendMode.srcColorBlendFactor = ConvertStringToBlendFactor(srcColorStr);
+    blendMode.dstColorBlendFactor = ConvertStringToBlendFactor(dstColorStr);
+    blendMode.colorBlendOp = ConvertStringToBlendOp(opColorStr);
+    blendMode.srcAlphaBlendFactor = ConvertStringToBlendFactor(srcAlphaStr);
+    blendMode.dstAlphaBlendFactor = ConvertStringToBlendFactor(dstAlphaStr);
+    blendMode.alphaBlendOp = ConvertStringToBlendOp(opAlphaStr);
+  }
+
+  // color write mask
+  lua_getfield(state, 1, "mask");
+  if (lua_isnumber(state, -1) != 0) {
+    blendMode.colorWriteMask = static_cast<uint32_t>(lua_tointeger(state, -1));
+  } else {
+    blendMode.colorWriteMask = static_cast<uint32_t>(VK_COLOR_COMPONENT_R_BIT) |
+                               static_cast<uint32_t>(VK_COLOR_COMPONENT_G_BIT) |
+                               static_cast<uint32_t>(VK_COLOR_COMPONENT_B_BIT) |
+                               static_cast<uint32_t>(VK_COLOR_COMPONENT_A_BIT);
+  }
+  lua_pop(state, 1);
+
+  return blendMode;
+}
+
+// Either { texture, texture, ... }
+// Or, { { texture = t, layer = n, location = n, blendmode = {...}, clearvalue = {r,g,b,a} }, ... }
+//
+// blendmode: { "none"|"alpha"|"add"|"sub"|"mul", "alphamultiply"|"premultiplied" }
+// Or, { srccolor = "", dstcolor = "", srcalpha = "", dstalpha = "", opcolor = "", opalpha = "" }
 auto wrap_SetRenderTargets(lua_State *state) -> int {
   auto *ctx = GetCurrentGraphicsContext();
   std::vector<Ref<RenderTarget::RenderTarget>> renderTargets;
@@ -172,12 +371,62 @@ auto wrap_SetRenderTargets(lua_State *state) -> int {
   luaL_checktype(state, 1, LUA_TTABLE);
   size_t len = lua_objlen(state, 1);
 
-  for (size_t i = 0; i < len; ++i) {
-    auto *renderTarget = LuaWrap::FromLuaObject<RenderTarget::RenderTarget>(
-        state, static_cast<int>(i + 1));
-
-    renderTargets.emplace_back(renderTarget);
+  bool isDetailed = false;
+  lua_rawgeti(state, 1, 1);
+  if (lua_istable(state, -1)) {
+    lua_getfield(state, -1, "texture");
+    if (!lua_isnil(state, -1)) {
+      isDetailed = true;
+    }
     lua_pop(state, 1);
+  }
+  lua_pop(state, 1);
+
+  if (!isDetailed) {
+    for (size_t i = 0; i < len; ++i) {
+      auto *texture = LuaWrap::FromLuaObject<Texture::Texture>(
+          state, static_cast<int>(i + 1));
+
+      auto rendertarget = Ref<RenderTarget::RenderTarget>::Make();
+      rendertarget->texture = *texture;
+      renderTargets.push_back(rendertarget);
+
+      lua_pop(state, 1);
+    }
+  } else {
+    for (size_t i = 0; i < len; ++i) {
+      lua_rawgeti(state, 1, static_cast<int>(i + 1));
+      luaL_checktype(state, -1, LUA_TTABLE);
+
+      auto rendertarget = Ref<RenderTarget::RenderTarget>::Make();
+
+      // texture
+      lua_getfield(state, -1, "texture");
+      auto *texture = LuaWrap::FromLuaObject<Texture::Texture>(state, -1);
+      rendertarget->texture = *texture;
+      lua_pop(state, 1);
+
+      // layer
+      lua_getfield(state, -1, "layer");
+      if (lua_isnumber(state, -1) != 0) {
+        rendertarget->layer = static_cast<int>(lua_tointeger(state, -1));
+      }
+      lua_pop(state, 1);
+
+      // location
+      lua_getfield(state, -1, "location");
+      if (lua_isnumber(state, -1) != 0) {
+        rendertarget->location = static_cast<int>(lua_tointeger(state, -1));
+      }
+      lua_pop(state, 1);
+
+      // blendmode
+      lua_getfield(state, -1, "blendmode");
+      if (lua_istable(state, -1)) {
+        rendertarget->blendMode = FromLuaState(state);
+      }
+      lua_pop(state, 1);
+    }
   }
 
   RenderTarget::SetRenderTargets(renderTargets);

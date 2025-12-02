@@ -2202,7 +2202,7 @@ auto AddTexture(RenderGraph &graph, const TextureDescriptor &descriptor)
   texture.mipmapcount = descriptor.mipLevels;
   texture.arrayLayers = layers;
   texture.usage = descriptor.usage;
-  texture.type = descriptor.type;
+  texture.textureType = descriptor.type;
   texture.samplerDirty = true;
 
   resource.info = texture;

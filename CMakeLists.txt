@@ -209,6 +209,7 @@ add_executable(Thorium
     src/Modules/Editor/imgui.cpp
 
     src/Wrap/Graphics/graphics.cpp
+    src/Wrap/Graphics/texture.cpp
     src/Wrap/Modules/event.cpp
     src/Wrap/Modules/timer.cpp
     src/Wrap/wrap.cpp

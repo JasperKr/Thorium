@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Wrap/Graphics/texture.hpp"
 #include "Wrap/wrap.hpp"
 extern "C" {
 #include <lauxlib.h>
@@ -65,14 +66,15 @@ static const luaL_Reg GraphicsLib[] = {
     {nullptr, nullptr},
 };
 
-// nullptr-terminated
-const static lua_CFunction *const childrenInitFunctions = {nullptr};
+// nullptr-terminated NOLINTNEXTLINE
+const static lua_CFunction childrenInitFunctions[] = {Texture::luaopen_texture,
+                                                      nullptr};
 
 extern "C" inline auto luaopen_graphics(lua_State *state) -> int {
   auto module = LuaWrap::LuaModule{
       .Name = "graphics",
-      .Functions = GraphicsLib, // NOLINT
-      .ChildrenInitFunctions = childrenInitFunctions,
+      .Functions = GraphicsLib,                       // NOLINT
+      .ChildrenInitFunctions = childrenInitFunctions, // NOLINT
       .ModuleType = nullptr,
   };
 

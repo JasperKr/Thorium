@@ -18,7 +18,7 @@ public:
   void retain();
   void release();
 
-  auto getReferenceCount() const -> int;
+  [[nodiscard]] auto getReferenceCount() const -> int;
 
 private:
   std::atomic<int> count{1};
@@ -75,6 +75,10 @@ public:
 
   auto operator->() const -> T * { return ptr; }
   auto get() const -> T * { return ptr; }
+
+  template <typename... Args> static auto Make(Args &&...args) -> Ref<T> {
+    return Ref<T>(new T(std::forward<Args>(args)...));
+  }
 
 private:
   T *ptr = nullptr;
