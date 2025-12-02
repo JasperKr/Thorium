@@ -1,5 +1,6 @@
 #include "Modules/event.hpp"
 #include "Modules/Peripherals/keyboard.hpp"
+#include "SDL3/SDL_events.h"
 #include "event.hpp"
 extern "C" {
 #include <lauxlib.h>
@@ -7,7 +8,6 @@ extern "C" {
 #include <lualib.h>
 }
 #include <string>
-#include <vector>
 
 namespace Event {
 auto wrap_Quit(lua_State *state) -> int {
@@ -33,30 +33,69 @@ auto wrap_Pop(lua_State *state) -> int {
   switch (event->type) {
   case SDL_EVENT_KEY_DOWN: {
     lua_pushstring(state, "keypressed");
-    auto &scancode = Keyboard::ScancodeToString.at(
+
+    auto keycodeIter =
+        Keyboard::KeycodeToString.find(static_cast<uint32_t>(event->key.key));
+    std::string keycode = "unknown";
+    if (keycodeIter != Keyboard::KeycodeToString.end()) {
+      keycode = keycodeIter->second;
+    }
+
+    auto scancodeIter = Keyboard::ScancodeToString.find(
         static_cast<uint32_t>(event->key.scancode));
+    std::string scancode = "unknown";
+    if (scancodeIter != Keyboard::ScancodeToString.end()) {
+      scancode = scancodeIter->second;
+    }
+
+    lua_pushstring(state, keycode.c_str());
     lua_pushstring(state, scancode.c_str());
-    returnValCount = 2;
+    lua_pushboolean(state, static_cast<int>(event->key.repeat));
+    returnValCount = 4;
     break;
   }
   case SDL_EVENT_KEY_UP: {
     lua_pushstring(state, "keyreleased");
-    auto &scancode = Keyboard::ScancodeToString.at(
+
+    auto keycodeIter =
+        Keyboard::KeycodeToString.find(static_cast<uint32_t>(event->key.key));
+    std::string keycode = "unknown";
+    if (keycodeIter != Keyboard::KeycodeToString.end()) {
+      keycode = keycodeIter->second;
+    }
+
+    auto scancodeIter = Keyboard::ScancodeToString.find(
         static_cast<uint32_t>(event->key.scancode));
+    std::string scancode = "unknown";
+    if (scancodeIter != Keyboard::ScancodeToString.end()) {
+      scancode = scancodeIter->second;
+    }
+
+    lua_pushstring(state, keycode.c_str());
     lua_pushstring(state, scancode.c_str());
-    returnValCount = 2;
+
+    returnValCount = 3;
     break;
   }
+  case SDL_EVENT_FINGER_DOWN:
   case SDL_EVENT_MOUSE_BUTTON_DOWN: {
     lua_pushstring(state, "mousepressed");
+    lua_pushnumber(state, event->button.x);
+    lua_pushnumber(state, event->button.y);
     lua_pushinteger(state, event->button.button);
-    returnValCount = 2;
+    lua_pushboolean(state, event->type == SDL_EVENT_FINGER_DOWN ? 1 : 0);
+    lua_pushinteger(state, event->button.clicks);
+    returnValCount = 6; // NOLINT
     break;
   }
+  case SDL_EVENT_FINGER_UP:
   case SDL_EVENT_MOUSE_BUTTON_UP: {
     lua_pushstring(state, "mousereleased");
+    lua_pushnumber(state, event->button.x);
+    lua_pushnumber(state, event->button.y);
     lua_pushinteger(state, event->button.button);
-    returnValCount = 2;
+    lua_pushboolean(state, event->type == SDL_EVENT_FINGER_UP ? 1 : 0);
+    returnValCount = 5; // NOLINT
     break;
   }
   case SDL_EVENT_MOUSE_MOTION: {

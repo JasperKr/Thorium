@@ -34,12 +34,15 @@ function Thorium.run()
 
     local name, a,b,c,d,e,f = Thorium.event.pop()
     while name do
-      print("Event: "..name, a, b, c, d, e, f)
       if name == "quit" then
         if Thorium.quit then
           return Thorium.quit() or 0
         end
         return 0
+      end
+
+      if Thorium[name] then
+        Thorium[name](a,b,c,d,e,f)
       end
 
       name, a,b,c,d,e,f = Thorium.event.pop()
@@ -215,14 +218,15 @@ auto MainLoop() -> Error::Error {
 
   std::cout << "Entering main loop..." << "\n";
 
+  lua_getglobal(state, "debug");
+  lua_getfield(state, -1, "traceback");
+  lua_remove(state, -2); // remove debug table
+  auto tracebackIndex = lua_gettop(state);
+
   while (Event::MainLoopRunning) {
     runCallback.push();
 
-    // lua_getglobal(state, "debug");
-    // lua_getfield(state, -1, "traceback");
-    // lua_remove(state, -2);
-
-    if (lua_pcall(state, 0, 1, 0) != LUA_OK) {
+    if (lua_pcall(state, 0, 1, tracebackIndex) != LUA_OK) {
       std::string luaErrorMessage = lua_tostring(state, -1);
       lua_pop(state, 1); // Remove error message from stack
       Event::MainLoopRunning = false;
