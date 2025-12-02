@@ -4,8 +4,10 @@
 #include "Graphics/shader.hpp"
 #include "Graphics/texture.hpp"
 #include "Modules/object.hpp"
+#include "Wrap/Graphics/graphics.hpp"
 #include "Wrap/wrap.hpp"
 #include "vulkan/vulkan_core.h"
+#include <cstdint>
 #include <cstring>
 extern "C" {
 #include <lauxlib.h>
@@ -628,6 +630,25 @@ auto wrap_GetWindingOrder(lua_State *state) -> int {
   }
 
   lua_pushstring(state, order);
+  return 1;
+}
+
+// Options:
+// { type = "2D"|"3D"|"array"|"cube", format = f, mipmaps = bool, usage = { "sampled", "colorattachment", ... }, mipmapcount = n, mipmapstart = n }
+// Variants:
+// width, height -> 2D rgba8 1 mip, 1 layer texture
+// width, height, Options -> 2D or Cubemap texture
+// width, height, depth|layers, Options, -> 3D or Array texture
+auto wrap_NewTexture(lua_State *state) -> int {
+  auto *ctx = GetCurrentGraphicsContext();
+
+  auto type = *Texture::Texture::GetType();
+
+  NewTextureCallVariant variant = NewTextureCallVariant::WidthHeight;
+  int args = lua_gettop(state);
+
+  LuaWrap::PushLuaType(state, type, texture.get());
+
   return 1;
 }
 

@@ -1,6 +1,7 @@
 #include "texture.hpp"
 #include "Graphics/graphics.hpp"
 #include "Modules/error.hpp"
+#include "Modules/object.hpp"
 #include "sampler.hpp"
 #include "stb/stb_image.h"
 #include "tl/expected.hpp"
@@ -84,17 +85,17 @@ auto GetAspectFlagsForFormat(VkFormat format) -> VkImageAspectFlagBits {
 }
 
 auto Create2D(GraphicsContext &context, TextureCreationInfo info)
-    -> tl::expected<Texture, Error::Error> {
+    -> tl::expected<Ref<Texture>, Error::Error> {
 
-  Texture texture = {};
+  Ref<Texture> texture = Ref<Texture>::Make();
 
-  texture.size = VkExtent3D{info.width, info.height, 1};
-  texture.format = info.format;
-  texture.textureType = TextureType::DEFAULT;
-  texture.mipmapcount = info.mipmapCount;
-  texture.usage = info.usage;
-  texture.arrayLayers = 1;
-  texture.samplerDirty = true;
+  texture->size = VkExtent3D{info.width, info.height, 1};
+  texture->format = info.format;
+  texture->textureType = TextureType::DEFAULT;
+  texture->mipmapcount = info.mipmapCount;
+  texture->usage = info.usage;
+  texture->arrayLayers = 1;
+  texture->samplerDirty = true;
 
   VkImageCreateInfo imageInfo = {};
   imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -118,7 +119,7 @@ auto Create2D(GraphicsContext &context, TextureCreationInfo info)
 
   auto error =
       Error::Create(vmaCreateImage(context.vmaAllocator, &imageInfo, &allocInfo,
-                                   &texture.image, &texture.memory, nullptr));
+                                   &texture->image, &texture->memory, nullptr));
 
   if (Error::IsError(error)) {
     return tl::unexpected(error);
@@ -128,7 +129,7 @@ auto Create2D(GraphicsContext &context, TextureCreationInfo info)
 
   VkImageViewCreateInfo viewInfo = {};
   viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-  viewInfo.image = texture.image;
+  viewInfo.image = texture->image;
   viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
   viewInfo.format = info.format;
   viewInfo.subresourceRange.aspectMask = GetAspectFlagsForFormat(info.format);
@@ -138,32 +139,32 @@ auto Create2D(GraphicsContext &context, TextureCreationInfo info)
   viewInfo.subresourceRange.layerCount = 1;
 
   error = Error::Create(
-      vkCreateImageView(context.device, &viewInfo, nullptr, &texture.view));
+      vkCreateImageView(context.device, &viewInfo, nullptr, &texture->view));
 
   if (Error::IsError(error)) {
     return tl::unexpected(error);
   }
 
   VmaAllocationInfo memRequirements;
-  vmaGetAllocationInfo(context.vmaAllocator, texture.memory, &memRequirements);
-  texture.sizeInBytes = memRequirements.size;
+  vmaGetAllocationInfo(context.vmaAllocator, texture->memory, &memRequirements);
+  texture->sizeInBytes = memRequirements.size;
 
   return texture;
 }
 
 auto FromSwapchainTexture(GraphicsContext &context, VkImage swapchainImage,
                           VkFormat format, uint32_t width, uint32_t height)
-    -> tl::expected<Texture, Error::Error> {
+    -> tl::expected<Ref<Texture>, Error::Error> {
 
-  Texture texture = {};
+  Ref<Texture> texture = Ref<Texture>::Make();
 
-  texture.image = swapchainImage;
-  texture.format = format;
-  texture.size = VkExtent3D{width, height, 1};
-  texture.textureType = TextureType::DEFAULT;
-  texture.mipmapcount = 1;
-  texture.arrayLayers = 1;
-  texture.samplerDirty = true;
+  texture->image = swapchainImage;
+  texture->format = format;
+  texture->size = VkExtent3D{width, height, 1};
+  texture->textureType = TextureType::DEFAULT;
+  texture->mipmapcount = 1;
+  texture->arrayLayers = 1;
+  texture->samplerDirty = true;
 
   VkSurfaceCapabilitiesKHR surfaceCapabilities;
 
@@ -174,11 +175,11 @@ auto FromSwapchainTexture(GraphicsContext &context, VkImage swapchainImage,
     return tl::unexpected(error);
   }
 
-  texture.usage = surfaceCapabilities.supportedUsageFlags;
+  texture->usage = surfaceCapabilities.supportedUsageFlags;
 
   VkImageViewCreateInfo viewInfo = {};
   viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-  viewInfo.image = texture.image;
+  viewInfo.image = texture->image;
   viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
   viewInfo.format = format;
   viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -188,7 +189,7 @@ auto FromSwapchainTexture(GraphicsContext &context, VkImage swapchainImage,
   viewInfo.subresourceRange.layerCount = 1;
 
   error = Error::Create(
-      vkCreateImageView(context.device, &viewInfo, nullptr, &texture.view));
+      vkCreateImageView(context.device, &viewInfo, nullptr, &texture->view));
 
   if (Error::IsError(error)) {
     return tl::unexpected(error);
@@ -198,7 +199,7 @@ auto FromSwapchainTexture(GraphicsContext &context, VkImage swapchainImage,
 }
 
 auto CreateCubeMap(GraphicsContext &context, TextureCreationInfo info)
-    -> tl::expected<Texture, Error::Error> {
+    -> tl::expected<Ref<Texture>, Error::Error> {
 
   if (info.width != info.height) {
     return tl::unexpected(
@@ -206,15 +207,15 @@ auto CreateCubeMap(GraphicsContext &context, TextureCreationInfo info)
   }
   const int CubeFaceCount = 6;
 
-  Texture texture = {};
+  Ref<Texture> texture = Ref<Texture>::Make();
 
-  texture.size = VkExtent3D{info.width, info.width, 1};
-  texture.format = info.format;
-  texture.textureType = TextureType::CUBEMAP;
-  texture.mipmapcount = info.mipmapCount;
-  texture.usage = info.usage;
-  texture.arrayLayers = CubeFaceCount;
-  texture.samplerDirty = true;
+  texture->size = VkExtent3D{info.width, info.width, 1};
+  texture->format = info.format;
+  texture->textureType = TextureType::CUBEMAP;
+  texture->mipmapcount = info.mipmapCount;
+  texture->usage = info.usage;
+  texture->arrayLayers = CubeFaceCount;
+  texture->samplerDirty = true;
 
   VkImageCreateInfo imageInfo = {};
   imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -238,7 +239,7 @@ auto CreateCubeMap(GraphicsContext &context, TextureCreationInfo info)
   allocInfo.preferredFlags = 0;
   Error::Error error =
       Error::Create(vmaCreateImage(context.vmaAllocator, &imageInfo, &allocInfo,
-                                   &texture.image, &texture.memory, nullptr));
+                                   &texture->image, &texture->memory, nullptr));
 
   if (Error::IsError(error)) {
     return tl::unexpected(error);
@@ -248,7 +249,7 @@ auto CreateCubeMap(GraphicsContext &context, TextureCreationInfo info)
 
   VkImageViewCreateInfo viewInfo = {};
   viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-  viewInfo.image = texture.image;
+  viewInfo.image = texture->image;
   viewInfo.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
   viewInfo.format = info.format;
   viewInfo.subresourceRange.aspectMask = GetAspectFlagsForFormat(info.format);
@@ -258,31 +259,31 @@ auto CreateCubeMap(GraphicsContext &context, TextureCreationInfo info)
   viewInfo.subresourceRange.layerCount = CubeFaceCount;
 
   error = Error::Create(
-      vkCreateImageView(context.device, &viewInfo, nullptr, &texture.view));
+      vkCreateImageView(context.device, &viewInfo, nullptr, &texture->view));
 
   if (Error::IsError(error)) {
     return tl::unexpected(error);
   }
 
   VmaAllocationInfo memRequirements;
-  vmaGetAllocationInfo(context.vmaAllocator, texture.memory, &memRequirements);
-  texture.sizeInBytes = memRequirements.size;
+  vmaGetAllocationInfo(context.vmaAllocator, texture->memory, &memRequirements);
+  texture->sizeInBytes = memRequirements.size;
 
   return texture;
 }
 
 auto CreateVolume(GraphicsContext &context, TextureCreationInfo info)
-    -> tl::expected<Texture, Error::Error> {
+    -> tl::expected<Ref<Texture>, Error::Error> {
 
-  Texture texture = {};
+  Ref<Texture> texture = Ref<Texture>::Make();
 
-  texture.size = VkExtent3D{info.width, info.height, info.depth};
-  texture.format = info.format;
-  texture.textureType = TextureType::VOLUME;
-  texture.mipmapcount = info.mipmapCount;
-  texture.usage = info.usage;
-  texture.arrayLayers = 1;
-  texture.samplerDirty = true;
+  texture->size = VkExtent3D{info.width, info.height, info.depth};
+  texture->format = info.format;
+  texture->textureType = TextureType::VOLUME;
+  texture->mipmapcount = info.mipmapCount;
+  texture->usage = info.usage;
+  texture->arrayLayers = 1;
+  texture->samplerDirty = true;
 
   VkImageCreateInfo imageInfo = {};
   imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -306,7 +307,7 @@ auto CreateVolume(GraphicsContext &context, TextureCreationInfo info)
 
   Error::Error error =
       Error::Create(vmaCreateImage(context.vmaAllocator, &imageInfo, &allocInfo,
-                                   &texture.image, &texture.memory, nullptr));
+                                   &texture->image, &texture->memory, nullptr));
 
   if (Error::IsError(error)) {
     return tl::unexpected(error);
@@ -316,7 +317,7 @@ auto CreateVolume(GraphicsContext &context, TextureCreationInfo info)
 
   VkImageViewCreateInfo viewInfo = {};
   viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-  viewInfo.image = texture.image;
+  viewInfo.image = texture->image;
   viewInfo.viewType = VK_IMAGE_VIEW_TYPE_3D;
   viewInfo.format = info.format;
   viewInfo.subresourceRange.aspectMask = GetAspectFlagsForFormat(info.format);
@@ -326,31 +327,31 @@ auto CreateVolume(GraphicsContext &context, TextureCreationInfo info)
   viewInfo.subresourceRange.layerCount = 1;
 
   error = Error::Create(
-      vkCreateImageView(context.device, &viewInfo, nullptr, &texture.view));
+      vkCreateImageView(context.device, &viewInfo, nullptr, &texture->view));
 
   if (Error::IsError(error)) {
     return tl::unexpected(error);
   }
 
   VmaAllocationInfo memRequirements;
-  vmaGetAllocationInfo(context.vmaAllocator, texture.memory, &memRequirements);
-  texture.sizeInBytes = memRequirements.size;
+  vmaGetAllocationInfo(context.vmaAllocator, texture->memory, &memRequirements);
+  texture->sizeInBytes = memRequirements.size;
 
   return texture;
 }
 
 auto CreateArray(GraphicsContext &context, TextureCreationInfo info)
-    -> tl::expected<Texture, Error::Error> {
+    -> tl::expected<Ref<Texture>, Error::Error> {
 
-  Texture texture = {};
+  Ref<Texture> texture = Ref<Texture>::Make();
 
-  texture.size = VkExtent3D{info.width, info.height, info.depth};
-  texture.format = info.format;
-  texture.textureType = TextureType::ARRAY;
-  texture.mipmapcount = info.mipmapCount;
-  texture.usage = info.usage;
-  texture.arrayLayers = info.depth;
-  texture.samplerDirty = true;
+  texture->size = VkExtent3D{info.width, info.height, info.depth};
+  texture->format = info.format;
+  texture->textureType = TextureType::ARRAY;
+  texture->mipmapcount = info.mipmapCount;
+  texture->usage = info.usage;
+  texture->arrayLayers = info.depth;
+  texture->samplerDirty = true;
 
   VkImageCreateInfo imageInfo = {};
   imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -374,7 +375,7 @@ auto CreateArray(GraphicsContext &context, TextureCreationInfo info)
 
   Error::Error error =
       Error::Create(vmaCreateImage(context.vmaAllocator, &imageInfo, &allocInfo,
-                                   &texture.image, &texture.memory, nullptr));
+                                   &texture->image, &texture->memory, nullptr));
 
   if (Error::IsError(error)) {
     return tl::unexpected(error);
@@ -384,7 +385,7 @@ auto CreateArray(GraphicsContext &context, TextureCreationInfo info)
 
   VkImageViewCreateInfo viewInfo = {};
   viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-  viewInfo.image = texture.image;
+  viewInfo.image = texture->image;
   viewInfo.viewType = VK_IMAGE_VIEW_TYPE_3D;
   viewInfo.format = info.format;
   viewInfo.subresourceRange.aspectMask = GetAspectFlagsForFormat(info.format);
@@ -394,15 +395,15 @@ auto CreateArray(GraphicsContext &context, TextureCreationInfo info)
   viewInfo.subresourceRange.layerCount = info.depth;
 
   error = Error::Create(
-      vkCreateImageView(context.device, &viewInfo, nullptr, &texture.view));
+      vkCreateImageView(context.device, &viewInfo, nullptr, &texture->view));
 
   if (Error::IsError(error)) {
     return tl::unexpected(error);
   }
 
   VmaAllocationInfo memRequirements;
-  vmaGetAllocationInfo(context.vmaAllocator, texture.memory, &memRequirements);
-  texture.sizeInBytes = memRequirements.size;
+  vmaGetAllocationInfo(context.vmaAllocator, texture->memory, &memRequirements);
+  texture->sizeInBytes = memRequirements.size;
 
   return texture;
 }
@@ -423,7 +424,7 @@ void Destroy(GraphicsContext &context, Texture *texture) {
 }
 
 auto LoadFromFile(GraphicsContext &context, const char *path)
-    -> tl::expected<Texture, Error::Error> {
+    -> tl::expected<Ref<Texture>, Error::Error> {
   int texWidth = 0;
   int texHeight = 0;
   int texChannels = 0;
@@ -476,25 +477,25 @@ auto LoadFromFile(GraphicsContext &context, const char *path)
     return result;
   }
 
-  Texture texture = result.value();
+  auto texture = result.value();
 
   // Transition image layout and copy data from staging buffer
-  error = (TransitionLayout(context, &texture, VK_IMAGE_LAYOUT_UNDEFINED,
+  error = (TransitionLayout(context, texture.get(), VK_IMAGE_LAYOUT_UNDEFINED,
                             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL));
 
   if (Error::IsError(error)) {
     return tl::unexpected(error);
   }
 
-  error = (CopyBufferToImage(context, stagingBuffer, &texture));
+  error = (CopyBufferToImage(context, stagingBuffer, texture.get()));
 
   if (Error::IsError(error)) {
     return tl::unexpected(error);
   }
 
-  error =
-      (TransitionLayout(context, &texture, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL));
+  error = (TransitionLayout(context, texture.get(),
+                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL));
 
   if (Error::IsError(error)) {
     return tl::unexpected(error);
@@ -695,12 +696,12 @@ auto Texture::GetSampler(GraphicsContext &context) -> VkSampler {
     sampler = GetOrCreateSampler(context, samplerDescription);
     samplerDirty = false;
 
-    std::cout << "Created new sampler for texture.\n";
+    std::cout << "Created new sampler for texture->\n";
 
     return sampler;
   }
 
-  std::cout << "Reusing existing sampler for texture.\n";
+  std::cout << "Reusing existing sampler for texture->\n";
 
   return sampler;
 }
@@ -715,8 +716,8 @@ struct VkFormatTextureTypeHash {
 
 auto GetDefaultTexture(GraphicsContext &context, VkFormat format,
                        Graphics::Texture::TextureType textureType)
-    -> tl::expected<Graphics::Texture::Texture, Error::Error> {
-  static std::unordered_map<std::pair<VkFormat, TextureType>, Texture,
+    -> tl::expected<Ref<Graphics::Texture::Texture>, Error::Error> {
+  static std::unordered_map<std::pair<VkFormat, TextureType>, Ref<Texture>,
                             VkFormatTextureTypeHash>
       textureCache;
 
@@ -739,7 +740,7 @@ auto GetDefaultTexture(GraphicsContext &context, VkFormat format,
   texInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
   texInfo.mipmapCount = 1;
 
-  tl::expected<Texture, Error::Error> result;
+  tl::expected<Ref<Texture>, Error::Error> result;
   switch (textureType) {
   case TextureType::DEFAULT:
     result = Graphics::Texture::Create2D(context, texInfo);
@@ -755,14 +756,14 @@ auto GetDefaultTexture(GraphicsContext &context, VkFormat format,
     break;
   default:
     return tl::unexpected(
-        Error::Create("Unsupported texture type for default texture."));
+        Error::Create("Unsupported texture type for default texture->"));
   }
 
   if (Error::IsError(result)) {
     return result;
   }
 
-  Texture &texture = result.value();
+  auto &texture = result.value();
 
   // Fill texture with 1x1 of opaque white pixel data
   std::array<uint8_t, 4> whitePixel = {UINT8_MAX, UINT8_MAX, UINT8_MAX,
@@ -787,18 +788,18 @@ auto GetDefaultTexture(GraphicsContext &context, VkFormat format,
   memcpy(data, whitePixel.data(), whitePixel.size());
   vmaUnmapMemory(context.vmaAllocator, stagingBufferMemory);
   error = Graphics::Texture::TransitionLayout(
-      context, &texture, VK_IMAGE_LAYOUT_UNDEFINED,
+      context, texture.get(), VK_IMAGE_LAYOUT_UNDEFINED,
       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
   if (Error::IsError(error)) {
     return tl::unexpected(error);
   }
-  error =
-      Graphics::Texture::CopyBufferToImage(context, stagingBuffer, &texture);
+  error = Graphics::Texture::CopyBufferToImage(context, stagingBuffer,
+                                               texture.get());
   if (Error::IsError(error)) {
     return tl::unexpected(error);
   }
   error = Graphics::Texture::TransitionLayout(
-      context, &texture, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+      context, texture.get(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
       VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
   if (Error::IsError(error)) {
     return tl::unexpected(error);

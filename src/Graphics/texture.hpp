@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Graphics/sampler.hpp"
+#include "Modules/object.hpp"
 #include "Modules/type.hpp"
 #include "graphics.hpp"
 #include <cmath>
@@ -25,7 +26,7 @@ enum class WrapMode : uint8_t {
 
 const static Type type = Type("Texture");
 
-struct Texture {
+struct Texture : Object {
   VkExtent3D size;
   VkFormat format;
   VkImage image;
@@ -82,16 +83,16 @@ struct TextureCreationInfo {
 };
 
 auto Create2D(GraphicsContext &context, TextureCreationInfo info)
-    -> tl::expected<Texture, Error::Error>;
+    -> tl::expected<Ref<Texture>, Error::Error>;
 auto FromSwapchainTexture(GraphicsContext &context, VkImage swapchainImage,
                           VkFormat format, uint32_t width, uint32_t height)
-    -> tl::expected<Texture, Error::Error>;
+    -> tl::expected<Ref<Texture>, Error::Error>;
 auto CreateCubeMap(GraphicsContext &context, TextureCreationInfo info)
-    -> tl::expected<Texture, Error::Error>;
+    -> tl::expected<Ref<Texture>, Error::Error>;
 auto CreateVolume(GraphicsContext &context, TextureCreationInfo info)
-    -> tl::expected<Texture, Error::Error>;
+    -> tl::expected<Ref<Texture>, Error::Error>;
 auto CreateArray(GraphicsContext &context, TextureCreationInfo info)
-    -> tl::expected<Texture, Error::Error>;
+    -> tl::expected<Ref<Texture>, Error::Error>;
 
 void Destroy(GraphicsContext &context, Texture *texture);
 auto TransitionLayout(GraphicsContext &context, Texture *texture,
@@ -379,7 +380,7 @@ static inline auto IsCompressedTexture(VkFormat format) -> bool {
 
 auto GetDefaultTexture(GraphicsContext &context, VkFormat format,
                        Graphics::Texture::TextureType textureType)
-    -> tl::expected<Graphics::Texture::Texture, Error::Error>;
+    -> tl::expected<Ref<Graphics::Texture::Texture>, Error::Error>;
 
 } // namespace Texture
 } // namespace Graphics

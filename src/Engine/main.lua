@@ -29,3 +29,4 @@ end
 function Thorium.quit()
   print("Quitting the application.")
 end
+local x = Thorium.newTexture()
