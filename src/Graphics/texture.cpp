@@ -1,6 +1,7 @@
 #include "texture.hpp"
 #include "Graphics/graphics.hpp"
 #include "Modules/error.hpp"
+#include "Modules/filesystem.hpp"
 #include "Modules/object.hpp"
 #include "sampler.hpp"
 #include "stb/stb_image.h"
@@ -428,8 +429,18 @@ auto LoadFromFile(GraphicsContext &context, const char *path)
   int texWidth = 0;
   int texHeight = 0;
   int texChannels = 0;
-  stbi_uc *pixels =
-      stbi_load(path, &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+
+  auto fileLoadResult = Filesystem::ReadFile(path);
+
+  if (Error::IsError(fileLoadResult)) {
+    return tl::unexpected(fileLoadResult.error());
+  }
+
+  auto filedata = fileLoadResult.value();
+
+  stbi_uc *pixels = stbi_load_from_memory(
+      filedata.data(), static_cast<int>(filedata.size()), &texWidth, &texHeight,
+      &texChannels, STBI_rgb_alpha);
   if (pixels == nullptr) {
     return tl::unexpected(
         Error::Create("Failed to load texture image from file."));

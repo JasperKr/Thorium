@@ -25,8 +25,8 @@ template <typename Vertex> struct Mesh : Object {
   std::vector<Vertex> VertexData;
   std::vector<uint32_t> IndexData;
 
-  Buffer VertexBuffer = {};
-  Buffer IndexBuffer = {};
+  Ref<Buffer> VertexBuffer;
+  Ref<Buffer> IndexBuffer;
 
   MeshDrawRange DrawRange = {.Offset = 0, .Count = 0};
 
@@ -149,13 +149,13 @@ template <typename Vertex> struct Mesh : Object {
   auto UploadVertices(GraphicsContext &context) -> Error::Error {
     uint32_t dataSize = VertexData.size() * VertexFormatSize(Format);
 
-    return VertexBuffer.SetData(context, VertexData.data(), dataSize, 0);
+    return VertexBuffer->SetData(context, VertexData.data(), dataSize, 0);
   }
 
   auto UploadIndices(GraphicsContext &context) -> Error::Error {
     uint64_t dataSize = IndexData.size() * sizeof(uint32_t);
 
-    return IndexBuffer.SetData(context, IndexData.data(), dataSize, 0);
+    return IndexBuffer->SetData(context, IndexData.data(), dataSize, 0);
   }
 
   static auto Create(GraphicsContext &context, VertexFormat &format,
@@ -235,8 +235,8 @@ template <typename Vertex> struct Mesh : Object {
   }
 
   void Destroy(GraphicsContext &context) {
-    VertexBuffer.Destroy(context);
-    IndexBuffer.Destroy(context);
+    VertexBuffer->Destroy(context);
+    IndexBuffer->Destroy(context);
   }
 
   auto GetVertexFormat() -> VertexFormat { return Format; }
@@ -262,12 +262,12 @@ template <typename Vertex> struct Mesh : Object {
   auto GetDrawRange() -> MeshDrawRange { return DrawRange; }
 
   void Bind(VkCommandBuffer cmdBuffer) {
-    std::vector<VkBuffer> vertexBuffers = {VertexBuffer.handle};
+    std::vector<VkBuffer> vertexBuffers = {VertexBuffer->handle};
     std::vector<VkDeviceSize> offsets = {0};
     vkCmdBindVertexBuffers(cmdBuffer, 0, 1, vertexBuffers.data(),
                            offsets.data());
     if (IndexData.size() > 0) {
-      vkCmdBindIndexBuffer(cmdBuffer, IndexBuffer.handle, 0,
+      vkCmdBindIndexBuffer(cmdBuffer, IndexBuffer->handle, 0,
                            VK_INDEX_TYPE_UINT32);
     }
   }

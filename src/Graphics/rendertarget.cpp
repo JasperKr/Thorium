@@ -231,11 +231,11 @@ inline auto CreatePipeline(const GraphicsContext &context, const State &state)
 
     attachmentCount++;
     blendAttachments[location] = rendertarget->blendMode;
-    formats[location] = rendertarget->texture.format;
+    formats[location] = rendertarget->texture->format;
 
-    if (Texture::IsDepthTexture(rendertarget->texture.format)) {
+    if (Texture::IsDepthTexture(rendertarget->texture->format)) {
       hasDepthAttachment = true;
-    } else if (Texture::IsStencilTexture(rendertarget->texture.format)) {
+    } else if (Texture::IsStencilTexture(rendertarget->texture->format)) {
       hasStencilAttachment = true;
     }
   }
@@ -463,17 +463,17 @@ inline auto BeginRendering(GraphicsContext &context) -> void {
   for (const auto &rendertarget : currentState.renderTargets) {
     VkRenderingAttachmentInfo attachmentInfo = {};
     attachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-    attachmentInfo.imageView = rendertarget->texture.view;
+    attachmentInfo.imageView = rendertarget->texture->view;
     attachmentInfo.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     attachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     attachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     attachmentInfo.clearValue = rendertarget->clearValue;
 
-    if (Texture::IsDepthTexture(rendertarget->texture.format)) {
+    if (Texture::IsDepthTexture(rendertarget->texture->format)) {
       depthAttachment = attachmentInfo;
       depthAttachment.imageLayout =
           VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-    } else if (Texture::IsStencilTexture(rendertarget->texture.format)) {
+    } else if (Texture::IsStencilTexture(rendertarget->texture->format)) {
       stencilAttachment = attachmentInfo;
       stencilAttachment.imageLayout =
           VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;

@@ -23,7 +23,7 @@ const static Type type = Type("RenderTarget");
 struct RenderTarget : Object {
   VkPipelineColorBlendAttachmentState blendMode = {};
   VkClearValue clearValue = {};
-  Texture::Texture texture = {};
+  Ref<Texture::Texture> texture;
   int location = -1; // Default to index in the render target array
   int layer = 0;
 
@@ -40,14 +40,14 @@ struct RenderTarget : Object {
                other.blendMode.dstAlphaBlendFactor &&
            blendMode.alphaBlendOp == other.blendMode.alphaBlendOp &&
            blendMode.colorWriteMask == other.blendMode.colorWriteMask &&
-           texture.format == other.texture.format &&
-           texture.size.width == other.texture.size.width &&
-           texture.size.height == other.texture.size.height &&
-           texture.size.depth == other.texture.size.depth &&
-           texture.mipmapcount == other.texture.mipmapcount &&
-           texture.arrayLayers == other.texture.arrayLayers &&
-           texture.usage == other.texture.usage &&
-           texture.textureType == other.texture.textureType &&
+           texture->format == other.texture->format &&
+           texture->size.width == other.texture->size.width &&
+           texture->size.height == other.texture->size.height &&
+           texture->size.depth == other.texture->size.depth &&
+           texture->mipmapcount == other.texture->mipmapcount &&
+           texture->arrayLayers == other.texture->arrayLayers &&
+           texture->usage == other.texture->usage &&
+           texture->textureType == other.texture->textureType &&
            location == other.location;
   }
 
@@ -127,17 +127,17 @@ inline auto HashBlendmode(VkPipelineColorBlendAttachmentState const &blendMode)
   return hash;
 }
 
-inline auto HashTexture(const Texture::Texture &texture) -> size_t {
+inline auto HashTexture(const Texture::Texture *texture) -> size_t {
   size_t hash = 0;
 
-  AddToHash(hash, std::hash<VkFormat>()(texture.format));
-  AddToHash(hash, std::hash<uint32_t>()(texture.size.width));
-  AddToHash(hash, std::hash<uint32_t>()(texture.size.height));
-  AddToHash(hash, std::hash<uint32_t>()(texture.size.depth));
-  AddToHash(hash, std::hash<uint32_t>()(texture.mipmapcount));
-  AddToHash(hash, std::hash<uint32_t>()(texture.arrayLayers));
-  AddToHash(hash, std::hash<VkImageUsageFlags>()(texture.usage));
-  AddToHash(hash, std::hash<Texture::TextureType>()(texture.textureType));
+  AddToHash(hash, std::hash<VkFormat>()(texture->format));
+  AddToHash(hash, std::hash<uint32_t>()(texture->size.width));
+  AddToHash(hash, std::hash<uint32_t>()(texture->size.height));
+  AddToHash(hash, std::hash<uint32_t>()(texture->size.depth));
+  AddToHash(hash, std::hash<uint32_t>()(texture->mipmapcount));
+  AddToHash(hash, std::hash<uint32_t>()(texture->arrayLayers));
+  AddToHash(hash, std::hash<VkImageUsageFlags>()(texture->usage));
+  AddToHash(hash, std::hash<Texture::TextureType>()(texture->textureType));
 
   return hash;
 }
@@ -146,7 +146,7 @@ inline auto HashRenderTarget(const RenderTarget *renderTarget) -> size_t {
   size_t hash = 0;
 
   AddToHash(hash, HashBlendmode(renderTarget->blendMode));
-  AddToHash(hash, HashTexture(renderTarget->texture));
+  AddToHash(hash, HashTexture(renderTarget->texture.get()));
 
   return hash;
 }

@@ -12,7 +12,6 @@
 #include <iostream>
 #include <print>
 
-
 #define VK_NO_PROTOTYPES
 #include <vulkan/vulkan.h>
 
@@ -27,7 +26,7 @@ void CheckVk(VkResult err) {
 
 static void ImGui_ImplVulkan_SetupRenderState(
     ImDrawData *draw_data, VkPipeline pipeline, VkCommandBuffer command_buffer,
-    std::pair<Graphics::Buffer, Graphics::Buffer> renderBuffers,
+    std::pair<Ref<Graphics::Buffer>, Ref<Graphics::Buffer>> &renderBuffers,
     int fb_width, // NOLINT
     int fb_height, Graphics::Rendergraph::CompiledPass &currentPass) {
 
@@ -39,11 +38,11 @@ static void ImGui_ImplVulkan_SetupRenderState(
 
   // Bind Vertex And Index Buffer:
   if (draw_data->TotalVtxCount > 0) {
-    std::array<VkBuffer, 1> vertex_buffers = {renderBuffers.first.handle};
+    std::array<VkBuffer, 1> vertex_buffers = {renderBuffers.first->handle};
     std::array<VkDeviceSize, 1> vertex_offset = {0};
     vkCmdBindVertexBuffers(command_buffer, 0, 1, vertex_buffers.data(),
                            vertex_offset.data());
-    vkCmdBindIndexBuffer(command_buffer, renderBuffers.second.handle, 0,
+    vkCmdBindIndexBuffer(command_buffer, renderBuffers.second->handle, 0,
                          sizeof(ImDrawIdx) == 2 ? VK_INDEX_TYPE_UINT16
                                                 : VK_INDEX_TYPE_UINT32);
   }
@@ -84,9 +83,10 @@ static void ImGui_ImplVulkan_SetupRenderState(
 
 namespace Editor {
 
-auto GetMeshBuffers() -> std::pair<Graphics::Buffer, Graphics::Buffer> {
-  static Graphics::Buffer vertexBuffer = {};
-  static Graphics::Buffer indexBuffer = {};
+auto GetMeshBuffers()
+    -> std::pair<Ref<Graphics::Buffer>, Ref<Graphics::Buffer>> {
+  static auto vertexBuffer = Ref<Graphics::Buffer>::Make();
+  static auto indexBuffer = Ref<Graphics::Buffer>::Make();
 
   return {vertexBuffer, indexBuffer};
 }
@@ -132,7 +132,7 @@ auto RenderImguiDrawLists(VkCommandBuffer commandBuffer,
         draw_data->TotalVtxCount * sizeof(ImDrawVert);
     VkDeviceSize indexBufferSize = draw_data->TotalIdxCount * sizeof(ImDrawIdx);
 
-    if (vertexBuffer.handle == VK_NULL_HANDLE) {
+    if (vertexBuffer->handle == VK_NULL_HANDLE) {
       auto vtxBufferResult = Graphics::Buffer::Create(
           context,
           Graphics::BufferCreationInfo{
@@ -149,7 +149,7 @@ auto RenderImguiDrawLists(VkCommandBuffer commandBuffer,
       vertexBuffer = vtxBufferResult.value();
     }
 
-    if (indexBuffer.handle == VK_NULL_HANDLE) {
+    if (indexBuffer->handle == VK_NULL_HANDLE) {
       auto idxBufferResult = Graphics::Buffer::Create(
           context,
           Graphics::BufferCreationInfo{
@@ -165,15 +165,15 @@ auto RenderImguiDrawLists(VkCommandBuffer commandBuffer,
       indexBuffer = idxBufferResult.value();
     }
 
-    if (vertexBuffer.size < vertexBufferSize) {
-      auto resizeResult = vertexBuffer.Resize(context, vertexBufferSize);
+    if (vertexBuffer->size < vertexBufferSize) {
+      auto resizeResult = vertexBuffer->Resize(context, vertexBufferSize);
       if (Error::IsError(resizeResult)) {
         return resizeResult;
       }
     }
 
-    if (indexBuffer.size < indexBufferSize) {
-      auto resizeResult = indexBuffer.Resize(context, indexBufferSize);
+    if (indexBuffer->size < indexBufferSize) {
+      auto resizeResult = indexBuffer->Resize(context, indexBufferSize);
       if (Error::IsError(resizeResult)) {
         return resizeResult;
       }
@@ -350,6 +350,8 @@ auto InitializeImGui(
   std::cout << "Initializing ImGui Vulkan backend..." << "\n";
 
   PFN_vkGetDeviceProcAddr func = vkGetDeviceProcAddr;
+
+  //NOLINTNEXTLINE
   std::cout << "vkGetDeviceProcAddr = " << (void *)func << "\n";
 
   auto load_vk_func = [&](const char *func) -> auto {

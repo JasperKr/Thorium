@@ -45,14 +45,14 @@ struct ResourceUsageLifetime {
 };
 
 struct ImportedTexture {
-  Graphics::Texture::Texture texture;
+  Ref<Graphics::Texture::Texture> texture;
 
   VkImageLayout initialLayout;
   VkImageLayout finalLayout;
 };
 
 struct ImportedBuffer {
-  Graphics::Buffer buffer;
+  Ref<Graphics::Buffer> buffer;
 };
 
 enum class Type : uint8_t { Texture, Buffer, Unknown };
@@ -96,7 +96,7 @@ struct Resource {
 
   Type type = Type::Unknown;
 
-  std::variant<Texture::Texture, Buffer> info;
+  std::variant<Ref<Texture::Texture>, Ref<Buffer>> info;
 };
 
 // struct DescriptorSetUpdate {
@@ -311,10 +311,11 @@ auto AddTexture(RenderGraph &graph, const TextureDescriptor &descriptor)
 auto AddBuffer(RenderGraph &graph, const BufferDescriptor &descriptor)
     -> ResourceHandle;
 
-auto ImportTexture(RenderGraph &graph, Graphics::Texture::Texture texture,
+auto ImportTexture(RenderGraph &graph,
+                   const Ref<Graphics::Texture::Texture> &texture,
                    LayoutUpdate layoutUpdate) -> ResourceHandle;
 
-auto ImportBuffer(RenderGraph &graph, const Graphics::Buffer &buffer)
+auto ImportBuffer(RenderGraph &graph, const Ref<Graphics::Buffer> &buffer)
     -> ResourceHandle;
 
 struct RenderPassDescriptor {

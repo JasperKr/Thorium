@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Modules/error.hpp"
+#include "Modules/object.hpp"
 #include "graphics.hpp"
 #define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
@@ -12,7 +13,7 @@ struct BufferCreationInfo {
   VkMemoryPropertyFlags properties;
 };
 
-struct Buffer {
+struct Buffer : Object {
   VkBuffer handle;
   VmaAllocation memory;
   VkDeviceSize size;
@@ -22,7 +23,7 @@ struct Buffer {
 
   static auto Create(Graphics::GraphicsContext &context,
                      Graphics::BufferCreationInfo info)
-      -> tl::expected<Graphics::Buffer, Error::Error>;
+      -> tl::expected<Ref<Graphics::Buffer>, Error::Error>;
 
   void Destroy(GraphicsContext &context) const;
   auto SetData(GraphicsContext &context, const void *data, VkDeviceSize size,

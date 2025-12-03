@@ -386,7 +386,7 @@ auto wrap_SetRenderTargets(lua_State *state) -> int {
 
   if (!isDetailed) {
     for (size_t i = 0; i < len; ++i) {
-      auto *texture = LuaWrap::FromLuaObject<Texture::Texture>(
+      auto *texture = LuaWrap::FromLuaObject<Ref<Texture::Texture>>(
           state, static_cast<int>(i + 1));
 
       auto rendertarget = Ref<RenderTarget::RenderTarget>::Make();
@@ -404,7 +404,7 @@ auto wrap_SetRenderTargets(lua_State *state) -> int {
 
       // texture
       lua_getfield(state, -1, "texture");
-      auto *texture = LuaWrap::FromLuaObject<Texture::Texture>(state, -1);
+      auto *texture = LuaWrap::FromLuaObject<Ref<Texture::Texture>>(state, -1);
       rendertarget->texture = *texture;
       lua_pop(state, 1);
 
@@ -636,6 +636,9 @@ auto wrap_GetWindingOrder(lua_State *state) -> int {
 // Options:
 // { type = "2D"|"3D"|"array"|"cube", format = f, mipmaps = bool, usage = { "sampled", "colorattachment", ... }, mipmapcount = n, mipmapstart = n }
 // Variants:
+// Filepath -> load from file
+// Imagedata -> load from image data
+// Bytedata -> load from raw byte data
 // width, height -> 2D rgba8 1 mip, 1 layer texture
 // width, height, Options -> 2D or Cubemap texture
 // width, height, depth|layers, Options, -> 3D or Array texture
@@ -643,11 +646,9 @@ auto wrap_NewTexture(lua_State *state) -> int {
   auto *ctx = GetCurrentGraphicsContext();
 
   auto type = *Texture::Texture::GetType();
-
-  NewTextureCallVariant variant = NewTextureCallVariant::WidthHeight;
   int args = lua_gettop(state);
 
-  LuaWrap::PushLuaType(state, type, texture.get());
+  // LuaWrap::PushLuaType(state, type, texture.get());
 
   return 1;
 }

@@ -7,9 +7,9 @@
 
 auto Graphics::Buffer::Create(Graphics::GraphicsContext &context,
                               Graphics::BufferCreationInfo info)
-    -> tl::expected<Graphics::Buffer, Error::Error> {
+    -> tl::expected<Ref<Graphics::Buffer>, Error::Error> {
 
-  Graphics::Buffer buffer = {};
+  auto buffer = Ref<Graphics::Buffer>::Make();
 
   VkBufferCreateInfo bufferInfo = {};
   bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -26,19 +26,19 @@ auto Graphics::Buffer::Create(Graphics::GraphicsContext &context,
 
   VkResult result =
       vmaCreateBuffer(context.vmaAllocator, &bufferInfo, &allocInfo,
-                      &buffer.handle, &buffer.memory, nullptr);
+                      &buffer->handle, &buffer->memory, nullptr);
 
   if (result != VK_SUCCESS) {
     return tl::unexpected(Error::Create(result));
   }
 
-  buffer.size = info.size;
-  buffer.usage = info.usage;
-  buffer.properties = info.properties;
+  buffer->size = info.size;
+  buffer->usage = info.usage;
+  buffer->properties = info.properties;
 
   VmaAllocationInfo memRequirements;
-  vmaGetAllocationInfo(context.vmaAllocator, buffer.memory, &memRequirements);
-  buffer.sizeInBytes = memRequirements.size;
+  vmaGetAllocationInfo(context.vmaAllocator, buffer->memory, &memRequirements);
+  buffer->sizeInBytes = memRequirements.size;
 
   return buffer;
 }

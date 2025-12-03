@@ -60,4 +60,13 @@ find "$TEMP_DIR/contents/lib" -maxdepth 1 -type f -exec cp {} ./lib/slang/ \;
 echo "Cleaning up..."
 rm -rf "$TEMP_DIR"
 
+echo "Fetching float-16"
+URL="https://github.com/fengwang/float16_t.git"
+if [ ! -d "float16_t_temp" ]; then
+    git clone --depth 1 "$URL" float16_t_temp
+fi
+mkdir -p include/float16_t
+cp float16_t_temp/float16_t.hpp include/float16_t/float16_t.hpp
+rm -rf float16_t_temp
+
 echo "All dependencies fetched into include/"

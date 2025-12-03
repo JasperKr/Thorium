@@ -1,4 +1,4 @@
-#include "Modules/color.hpp"
+#include "Modules/console.hpp"
 #include "Modules/errorhandler.hpp"
 #include "loop.hpp"
 #include <iostream>

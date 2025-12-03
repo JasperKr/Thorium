@@ -9,7 +9,7 @@
 #include "Wrap/Modules/event.hpp"
 #include "Wrap/Modules/timer.hpp"
 
-#include "Modules/color.hpp"
+#include "Modules/console.hpp"
 
 namespace LuaWrap {
 

@@ -80,6 +80,8 @@ public:
     return Ref<T>(new T(std::forward<Args>(args)...));
   }
 
+  [[nodiscard]] static auto GetType() -> Type const * { return T::GetType(); }
+
 private:
   T *ptr = nullptr;
 };

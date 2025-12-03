@@ -600,18 +600,18 @@ auto inline DeallocateResourceInBlocks(RenderGraph &graph,
 }
 
 auto inline QueryMemoryAlignmentOfTexture(GraphicsContext &context,
-                                          const Texture::Texture &texture)
+                                          const Ref<Texture::Texture> &texture)
     -> VkDeviceSize {
   VkImageCreateInfo imageInfo = {};
   imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
   imageInfo.imageType = VK_IMAGE_TYPE_2D;
-  imageInfo.format = texture.format;
-  imageInfo.extent = texture.size;
-  imageInfo.mipLevels = texture.mipmapcount;
-  imageInfo.arrayLayers = texture.arrayLayers;
+  imageInfo.format = texture->format;
+  imageInfo.extent = texture->size;
+  imageInfo.mipLevels = texture->mipmapcount;
+  imageInfo.arrayLayers = texture->arrayLayers;
   imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
   imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-  imageInfo.usage = texture.usage;
+  imageInfo.usage = texture->usage;
   imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
   imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 
@@ -631,11 +631,12 @@ auto inline QueryMemoryAlignmentOfTexture(GraphicsContext &context,
 }
 
 auto inline QueryMemoryAlignmentOfBuffer(GraphicsContext &context,
-                                         const Buffer &buffer) -> VkDeviceSize {
+                                         const Ref<Buffer> &buffer)
+    -> VkDeviceSize {
   VkBufferCreateInfo bufferInfo = {};
   bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-  bufferInfo.size = buffer.size;
-  bufferInfo.usage = buffer.usage;
+  bufferInfo.size = buffer->size;
+  bufferInfo.usage = buffer->usage;
   bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
   VkBuffer tempBuffer = nullptr;
@@ -1026,10 +1027,10 @@ auto inline GetImageBindingLayout(const RenderGraph &graph,
                                   const ResourceBinding &binding)
     -> VkImageLayout {
   const auto &resource = graph.resources[binding.resource];
-  const auto &texture = std::get<Texture::Texture>(resource.info);
+  const auto &texture = std::get<Ref<Texture::Texture>>(resource.info);
 
-  bool isDepthTexture = Texture::IsDepthTexture(texture.format);
-  bool isStencilTexture = Texture::IsStencilTexture(texture.format);
+  bool isDepthTexture = Texture::IsDepthTexture(texture->format);
+  bool isStencilTexture = Texture::IsStencilTexture(texture->format);
   bool isDepthStencilTexture = isDepthTexture && isStencilTexture;
 
   // === STORAGES === //
@@ -1157,7 +1158,7 @@ auto inline ConfigurePassDescriptors(GraphicsContext &context,
   VkDescriptorBufferInfo bufferInfo = {};
 
   if (resource.type == Type::Texture) {
-    auto &texture = std::get<Texture::Texture>(resource.info);
+    auto &texture = std::get<Ref<Texture::Texture>>(resource.info);
     if (binding.type == BindingType::Attachment) {
       return; // Skip raster attachments
     }
@@ -1171,10 +1172,10 @@ auto inline ConfigurePassDescriptors(GraphicsContext &context,
               << "\n";
 
     imageInfo.imageLayout = GetImageBindingLayout(graph, binding);
-    imageInfo.imageView = texture.view;
+    imageInfo.imageView = texture->view;
     assert(imageInfo.imageView != VK_NULL_HANDLE &&
            "Texture image view is null in descriptor setup");
-    imageInfo.sampler = texture.GetSampler(context);
+    imageInfo.sampler = texture->GetSampler(context);
     std::cout << "Configured descriptor for texture resource "
               << resource.handle << " with sampler "
               << (imageInfo.sampler != VK_NULL_HANDLE ? "set" : "null") << "\n";
@@ -1183,10 +1184,10 @@ auto inline ConfigurePassDescriptors(GraphicsContext &context,
     cache[resource.handle] = imageInfo.sampler;
 
   } else if (resource.type == Type::Buffer) {
-    const auto &buffer = std::get<Buffer>(resource.info);
+    const auto &buffer = std::get<Ref<Buffer>>(resource.info);
 
     bufferInfo.offset = 0;
-    bufferInfo.range = buffer.sizeInBytes;
+    bufferInfo.range = buffer->sizeInBytes;
     // Buffer would be set during actual execution
     bufferInfo.buffer = VK_NULL_HANDLE;
   }
@@ -1225,7 +1226,7 @@ auto inline CreateGraphLayoutStates(GraphicsContext &context,
       const auto &resource = graph.resources[binding.resource];
 
       if (resource.type == Type::Texture) {
-        const auto &texture = std::get<Texture::Texture>(resource.info);
+        const auto &texture = std::get<Ref<Texture::Texture>>(resource.info);
 
         auto layout = GetImageBindingLayout(graph, binding);
 
@@ -1284,7 +1285,7 @@ auto inline CreateGraphResourceTransitions(GraphicsContext &context,
 
       // Create transitions only for textures
       if (resource.type == Type::Texture) {
-        const auto &texture = std::get<Texture::Texture>(resource.info);
+        const auto &texture = std::get<Ref<Texture::Texture>>(resource.info);
 
         auto currentLayoutIterator = currentLayouts.find(resource.handle);
         LayoutState oldLayoutState = {
@@ -1343,7 +1344,7 @@ auto inline CreateGraphResourceTransitions(GraphicsContext &context,
                 << resourceHandle << "\n";
 
       const auto &resource = graph.resources[resourceHandle];
-      const auto &texture = std::get<Texture::Texture>(resource.info);
+      const auto &texture = std::get<Ref<Texture::Texture>>(resource.info);
 
       VkImageMemoryBarrier barrier = {};
       barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -1353,13 +1354,13 @@ auto inline CreateGraphResourceTransitions(GraphicsContext &context,
       barrier.dstAccessMask = desiredLayoutState.access;
       barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
       barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-      barrier.image = texture.image;
+      barrier.image = texture->image;
       barrier.subresourceRange.aspectMask =
-          Texture::GetTextureAspectFlags(texture.format);
+          Texture::GetTextureAspectFlags(texture->format);
       barrier.subresourceRange.baseMipLevel = 0;
-      barrier.subresourceRange.levelCount = texture.mipmapcount;
+      barrier.subresourceRange.levelCount = texture->mipmapcount;
       barrier.subresourceRange.baseArrayLayer = 0;
-      barrier.subresourceRange.layerCount = texture.arrayLayers;
+      barrier.subresourceRange.layerCount = texture->arrayLayers;
 
       graph.postGraphUpdates.emplace_back(barrier);
     }
@@ -1379,7 +1380,7 @@ auto inline CreateGraphImageBarriers(GraphicsContext &context,
 
     for (const auto &layoutUpdate : compiledPass.layoutUpdates) {
       const auto &resource = graph.resources[layoutUpdate.resource];
-      const auto &texture = std::get<Texture::Texture>(resource.info);
+      const auto &texture = std::get<Ref<Texture::Texture>>(resource.info);
 
       std::cout << "Pass " << compiledPass.pass.handle
                 << ": Creating image barrier for resource "
@@ -1397,13 +1398,13 @@ auto inline CreateGraphImageBarriers(GraphicsContext &context,
       barrier.dstAccessMask = layoutUpdate.newState.access;
       barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
       barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-      barrier.image = texture.image;
+      barrier.image = texture->image;
       barrier.subresourceRange.aspectMask =
-          Texture::GetTextureAspectFlags(texture.format);
+          Texture::GetTextureAspectFlags(texture->format);
       barrier.subresourceRange.baseMipLevel = 0;
-      barrier.subresourceRange.levelCount = texture.mipmapcount;
+      barrier.subresourceRange.levelCount = texture->mipmapcount;
       barrier.subresourceRange.baseArrayLayer = 0;
-      barrier.subresourceRange.layerCount = texture.arrayLayers;
+      barrier.subresourceRange.layerCount = texture->arrayLayers;
 
       compiledPass.imageBarriers.emplace_back(barrier);
     }
@@ -1528,10 +1529,10 @@ auto inline ApplyPassBarriers(VkCommandBuffer commandBuffer,
     if (binding.type == BindingType::Attachment) {
       auto &resource = graph.resources[binding.resource];
       if (resource.type == Type::Texture) {
-        const auto &texture = std::get<Texture::Texture>(resource.info);
-        if (Texture::IsDepthTexture(texture.format)) {
+        const auto &texture = std::get<Ref<Texture::Texture>>(resource.info);
+        if (Texture::IsDepthTexture(texture->format)) {
           hasDepthAttachment = true;
-        } else if (Texture::IsStencilTexture(texture.format)) {
+        } else if (Texture::IsStencilTexture(texture->format)) {
           hasStencilAttachment = true;
         } else {
           colorAttachmentCount++;
@@ -1552,9 +1553,9 @@ auto inline ApplyPassBarriers(VkCommandBuffer commandBuffer,
   for (const auto &binding : compiledPass.pass.resourceBindings) {
     if (binding.type == BindingType::Attachment) {
       auto &resource = graph.resources[binding.resource];
-      const auto &texture = std::get<Texture::Texture>(resource.info);
+      const auto &texture = std::get<Ref<Texture::Texture>>(resource.info);
 
-      formats[binding.location] = texture.format;
+      formats[binding.location] = texture->format;
       std::cout << "  Using format for attachment at location "
                 << binding.location << ": "
                 << static_cast<uint32_t>(formats[binding.location]) << "\n";
@@ -1706,17 +1707,17 @@ auto inline ApplyPassBarriers(VkCommandBuffer commandBuffer,
       allocationInfo.handle = resource.handle;
 
       if (resource.type == Type::Texture) {
-        const auto &tex = std::get<Texture::Texture>(resource.info);
+        const auto &tex = std::get<Ref<Texture::Texture>>(resource.info);
 
         // Heuristic size (not actual alloc size)
-        auto texels = Texture::GetTexelCount(tex.size, tex.mipmapcount);
-        texels *= tex.arrayLayers;
-        allocationInfo.size = texels * Texture::GetFormatSize(tex.format);
+        auto texels = Texture::GetTexelCount(tex->size, tex->mipmapcount);
+        texels *= tex->arrayLayers;
+        allocationInfo.size = texels * Texture::GetFormatSize(tex->format);
 
         allocationInfo.alignment = QueryMemoryAlignmentOfTexture(context, tex);
       } else {
-        const auto &buf = std::get<Buffer>(resource.info);
-        allocationInfo.size = buf.size;
+        const auto &buf = std::get<Ref<Buffer>>(resource.info);
+        allocationInfo.size = buf->size;
         allocationInfo.alignment = QueryMemoryAlignmentOfBuffer(context, buf);
       }
 
@@ -1783,29 +1784,29 @@ auto inline AllocateResourceMemory(GraphicsContext &context, RenderGraph &graph,
   }
 
   if (resource.type == Type::Texture) {
-    auto &texture = std::get<Texture::Texture>(resource.info);
+    auto &texture = std::get<Ref<Texture::Texture>>(resource.info);
 
     VkImageCreateInfo imageInfo = {};
     imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     imageInfo.imageType = VK_IMAGE_TYPE_2D;
-    imageInfo.format = texture.format;
-    imageInfo.extent = texture.size;
-    imageInfo.mipLevels = texture.mipmapcount;
-    imageInfo.arrayLayers = texture.arrayLayers;
+    imageInfo.format = texture->format;
+    imageInfo.extent = texture->size;
+    imageInfo.mipLevels = texture->mipmapcount;
+    imageInfo.arrayLayers = texture->arrayLayers;
     imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
     imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-    imageInfo.usage = texture.usage;
+    imageInfo.usage = texture->usage;
     imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 
     auto result = Error::Create(
-        vkCreateImage(context.device, &imageInfo, nullptr, &texture.image));
+        vkCreateImage(context.device, &imageInfo, nullptr, &texture->image));
 
     if (Error::IsError(result)) {
       return result;
     }
 
-    result = Error::Create(vkBindImageMemory(context.device, texture.image,
+    result = Error::Create(vkBindImageMemory(context.device, texture->image,
                                              block.memory, allocation.offset));
     if (Error::IsError(result)) {
       return result;
@@ -1813,37 +1814,37 @@ auto inline AllocateResourceMemory(GraphicsContext &context, RenderGraph &graph,
 
     VkImageViewCreateInfo viewInfo = {};
     viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-    viewInfo.image = texture.image;
+    viewInfo.image = texture->image;
     viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    viewInfo.format = texture.format;
+    viewInfo.format = texture->format;
     viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     viewInfo.subresourceRange.baseMipLevel = 0;
-    viewInfo.subresourceRange.levelCount = texture.mipmapcount;
+    viewInfo.subresourceRange.levelCount = texture->mipmapcount;
     viewInfo.subresourceRange.baseArrayLayer = 0;
-    viewInfo.subresourceRange.layerCount = texture.arrayLayers;
+    viewInfo.subresourceRange.layerCount = texture->arrayLayers;
 
     result = Error::Create(
-        vkCreateImageView(context.device, &viewInfo, nullptr, &texture.view));
+        vkCreateImageView(context.device, &viewInfo, nullptr, &texture->view));
 
     if (Error::IsError(result)) {
       return result;
     }
   } else if (resource.type == Type::Buffer) {
-    auto &buffer = std::get<Buffer>(resource.info);
+    auto &buffer = std::get<Ref<Buffer>>(resource.info);
 
     VkBufferCreateInfo bufferInfo = {};
     bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    bufferInfo.size = buffer.size;
-    bufferInfo.usage = buffer.usage;
+    bufferInfo.size = buffer->size;
+    bufferInfo.usage = buffer->usage;
     bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
     VmaAllocationCreateInfo allocInfo = {};
     allocInfo.usage = VMA_MEMORY_USAGE_AUTO; // Let VMA decide
-    allocInfo.requiredFlags = buffer.properties;
+    allocInfo.requiredFlags = buffer->properties;
 
     VkResult result =
         vmaCreateBuffer(context.vmaAllocator, &bufferInfo, &allocInfo,
-                        &buffer.handle, &buffer.memory, nullptr);
+                        &buffer->handle, &buffer->memory, nullptr);
   }
 
   return Error::Success();
@@ -1852,13 +1853,13 @@ auto inline AllocateResourceMemory(GraphicsContext &context, RenderGraph &graph,
 auto inline ValidateResources(const RenderGraph &graph) -> Error::Error {
   for (const auto &resource : graph.resources) {
     if (resource.type == Type::Texture) {
-      const auto &texture = std::get<Texture::Texture>(resource.info);
-      if (texture.image == VK_NULL_HANDLE || texture.view == VK_NULL_HANDLE) {
+      const auto &texture = std::get<Ref<Texture::Texture>>(resource.info);
+      if (texture->image == VK_NULL_HANDLE || texture->view == VK_NULL_HANDLE) {
         return Error::Create("Texture resource not properly allocated");
       }
     } else if (resource.type == Type::Buffer) {
-      const auto &buffer = std::get<Buffer>(resource.info);
-      if (buffer.handle == VK_NULL_HANDLE) {
+      const auto &buffer = std::get<Ref<Buffer>>(resource.info);
+      if (buffer->handle == VK_NULL_HANDLE) {
         return Error::Create("Buffer resource not properly allocated");
       }
     }
@@ -1939,15 +1940,15 @@ auto inline AllocateGraphResourceMemory(GraphicsContext &context,
 
   for (auto &resource : graph.resources) {
     if (resource.type == Type::Texture) {
-      auto &texture = std::get<Texture::Texture>(resource.info);
+      auto &texture = std::get<Ref<Texture::Texture>>(resource.info);
       resource.cost =
-          Texture::GetTexelCount(texture.size, texture.mipmapcount) *
-          Texture::GetFormatSize(texture.format);
+          Texture::GetTexelCount(texture->size, texture->mipmapcount) *
+          Texture::GetFormatSize(texture->format);
 
-      resource.cost *= texture.arrayLayers;
+      resource.cost *= texture->arrayLayers;
     } else if (resource.type == Type::Buffer) {
-      auto &buffer = std::get<Buffer>(resource.info);
-      resource.cost = static_cast<uint32_t>(buffer.size);
+      auto &buffer = std::get<Ref<Buffer>>(resource.info);
+      resource.cost = static_cast<uint32_t>(buffer->size);
     }
   }
 
@@ -2058,14 +2059,14 @@ auto BeginPassRendering(GraphicsContext &context, RenderGraph &graph,
       AttachmentInfo attachInfo =
           GetPassAttachmentInfo(compiledPass.pass, binding);
 
-      Texture::Texture texture = std::get<Texture::Texture>(resource.info);
+      auto texture = std::get<Ref<Texture::Texture>>(resource.info);
 
-      if (Texture::IsDepthTexture(texture.format)) {
+      if (Texture::IsDepthTexture(texture->format)) {
         hasDepthAttachment = true;
         continue;
       }
 
-      if (Texture::IsStencilTexture(texture.format)) {
+      if (Texture::IsStencilTexture(texture->format)) {
         hasStencilAttachment = true;
         continue;
       }
@@ -2076,7 +2077,7 @@ auto BeginPassRendering(GraphicsContext &context, RenderGraph &graph,
       colorAttach.storeOp = attachInfo.storeOp;
       colorAttach.clearValue = attachInfo.clearValue;
 
-      colorAttach.imageView = texture.view;
+      colorAttach.imageView = texture->view;
       assert(colorAttach.imageView != VK_NULL_HANDLE &&
              "Invalid image view for color attachment");
       colorAttach.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
@@ -2190,20 +2191,20 @@ auto AddTexture(RenderGraph &graph, const TextureDescriptor &descriptor)
   resource.lifetime = descriptor.lifetime;
   resource.type = Type::Texture;
 
-  Texture::Texture texture = {};
+  auto texture = Ref<Texture::Texture>::Make();
 
   bool volumeTexture = descriptor.type == Texture::TextureType::VOLUME;
   uint32_t depth = volumeTexture ? descriptor.depthOrLayers : 1U;
   uint32_t layers = volumeTexture ? 1U : descriptor.depthOrLayers;
 
-  texture.format = descriptor.format;
-  texture.size = {
+  texture->format = descriptor.format;
+  texture->size = {
       .width = descriptor.width, .height = descriptor.height, .depth = depth};
-  texture.mipmapcount = descriptor.mipLevels;
-  texture.arrayLayers = layers;
-  texture.usage = descriptor.usage;
-  texture.textureType = descriptor.type;
-  texture.samplerDirty = true;
+  texture->mipmapcount = descriptor.mipLevels;
+  texture->arrayLayers = layers;
+  texture->usage = descriptor.usage;
+  texture->textureType = descriptor.type;
+  texture->samplerDirty = true;
 
   resource.info = texture;
   graph.resources.emplace_back(resource);
@@ -2221,11 +2222,11 @@ auto AddBuffer(RenderGraph &graph, BufferDescriptor descriptor)
   resource.lifetime = descriptor.lifetime;
   resource.type = Type::Buffer;
 
-  Buffer buffer = {};
+  auto buffer = Ref<Buffer>::Make();
 
-  buffer.size = descriptor.size;
-  buffer.usage = descriptor.usage;
-  buffer.properties = descriptor.memory;
+  buffer->size = descriptor.size;
+  buffer->usage = descriptor.usage;
+  buffer->properties = descriptor.memory;
 
   resource.info = buffer;
   graph.resources.emplace_back(resource);
@@ -2233,19 +2234,20 @@ auto AddBuffer(RenderGraph &graph, BufferDescriptor descriptor)
   return resource.handle;
 }
 
-auto ImportTexture(RenderGraph &graph, const Graphics::Texture::Texture texture,
+auto ImportTexture(RenderGraph &graph,
+                   const Ref<Graphics::Texture::Texture> &texture,
                    const LayoutUpdate layoutUpdate) -> ResourceHandle {
 
-  assert(texture.image != VK_NULL_HANDLE &&
+  assert(texture->image != VK_NULL_HANDLE &&
          "Imported texture must have a valid image handle");
-  assert(texture.mipmapcount > 0 &&
+  assert(texture->mipmapcount > 0 &&
          "Imported texture must have at least one mipmap level");
-  assert(texture.arrayLayers > 0 &&
+  assert(texture->arrayLayers > 0 &&
          "Imported texture must have at least one array layer");
-  assert(texture.size.width > 0 && "Imported texture must have a valid width");
-  assert(texture.size.height > 0 &&
+  assert(texture->size.width > 0 && "Imported texture must have a valid width");
+  assert(texture->size.height > 0 &&
          "Imported texture must have a valid height");
-  assert(texture.size.depth > 0 && "Imported texture must have a valid depth");
+  assert(texture->size.depth > 0 && "Imported texture must have a valid depth");
 
   Resource resource = {};
   resource.handle = static_cast<ResourceHandle>(graph.resources.size());
@@ -2253,7 +2255,7 @@ auto ImportTexture(RenderGraph &graph, const Graphics::Texture::Texture texture,
   resource.type = Type::Texture;
   resource.info = texture;
 
-  assert(texture.view != VK_NULL_HANDLE &&
+  assert(texture->view != VK_NULL_HANDLE &&
          "Imported texture must have a valid image view");
 
   graph.resources.emplace_back(resource);
@@ -2263,12 +2265,12 @@ auto ImportTexture(RenderGraph &graph, const Graphics::Texture::Texture texture,
 
   std::cout << "Imported texture resource with handle " << resource.handle
             << "\n";
-  std::cout << "  Usage flags: " << texture.usage << "\n";
+  std::cout << "  Usage flags: " << texture->usage << "\n";
 
   return resource.handle;
 }
 
-auto ImportBuffer(RenderGraph &graph, const Graphics::Buffer &buffer)
+auto ImportBuffer(RenderGraph &graph, const Ref<Graphics::Buffer> &buffer)
     -> ResourceHandle {
   Resource resource = {};
   resource.handle = static_cast<ResourceHandle>(graph.resources.size());

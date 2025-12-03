@@ -24,7 +24,7 @@ struct ApplicationConfig {
   bool Vsync = true;
   std::string Title = "Thorium Engine"; // Window title
   std::string Identity = "Thorium";     // Filesystem identity
-  WindowSize Size = {DefaultWidth, DefaultHeight};
+  WindowSize Size = {.width = DefaultWidth, .height = DefaultHeight};
 };
 
 auto Configure(lua_State *state)

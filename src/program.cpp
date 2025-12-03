@@ -46,8 +46,8 @@ static inline auto GetSwapchainHandleIndex() -> size_t & {
 }
 
 static inline auto GetSwapchainTextures()
-    -> std::vector<Graphics::Texture::Texture> & {
-  static std::vector<Graphics::Texture::Texture> textures = {};
+    -> std::vector<Ref<Graphics::Texture::Texture>> & {
+  static std::vector<Ref<Graphics::Texture::Texture>> textures = {};
   return textures;
 }
 
