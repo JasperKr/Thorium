@@ -314,7 +314,7 @@ namespace Image {
 auto ImageData::SetColor(Uvec2 position, const Color &color) -> void {
   size_t index = (static_cast<size_t>(position.y) * static_cast<size_t>(width) +
                   static_cast<size_t>(position.x)) *
-                 static_cast<size_t>(channels);
+                 GetFormatSize();
   auto funcIterator = formatFunctionMap.find(format);
   if (funcIterator != formatFunctionMap.end()) {
     const FormatFunctions &functions = funcIterator->second;
@@ -327,7 +327,7 @@ auto ImageData::SetColor(Uvec2 position, const Color &color) -> void {
 auto ImageData::GetColor(Uvec2 position) -> Color & {
   size_t index = (static_cast<size_t>(position.y) * static_cast<size_t>(width) +
                   static_cast<size_t>(position.x)) *
-                 static_cast<size_t>(channels);
+                 GetFormatSize();
   auto funcIterator = formatFunctionMap.find(format);
   static Color outColor; // NOLINT
   if (funcIterator != formatFunctionMap.end()) {

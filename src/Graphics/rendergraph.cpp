@@ -1,5 +1,6 @@
 #include "rendergraph.hpp"
 #include "Modules/error.hpp"
+#include "Modules/image.hpp"
 #include "graphics.hpp"
 #include "shader.hpp"
 #include "texture.hpp"
@@ -1712,7 +1713,7 @@ auto inline ApplyPassBarriers(VkCommandBuffer commandBuffer,
         // Heuristic size (not actual alloc size)
         auto texels = Texture::GetTexelCount(tex->size, tex->mipmapcount);
         texels *= tex->arrayLayers;
-        allocationInfo.size = texels * Texture::GetFormatSize(tex->format);
+        allocationInfo.size = texels * Image::GetFormatSize(tex->format);
 
         allocationInfo.alignment = QueryMemoryAlignmentOfTexture(context, tex);
       } else {
@@ -1943,7 +1944,7 @@ auto inline AllocateGraphResourceMemory(GraphicsContext &context,
       auto &texture = std::get<Ref<Texture::Texture>>(resource.info);
       resource.cost =
           Texture::GetTexelCount(texture->size, texture->mipmapcount) *
-          Texture::GetFormatSize(texture->format);
+          Image::GetFormatSize(texture->format);
 
       resource.cost *= texture->arrayLayers;
     } else if (resource.type == Type::Buffer) {

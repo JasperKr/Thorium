@@ -12,8 +12,7 @@
 #include <cstdint>
 #include <vector>
 
-namespace Graphics {
-namespace Rendergraph {
+namespace Graphics::Rendergraph {
 
 using ResourceHandle = uint16_t;
 
@@ -347,5 +346,4 @@ auto AddRenderPass(RenderGraph &graph, const RenderPassDescriptor &descriptor)
 auto Execute(GraphicsContext &context, RenderGraph &graph,
              VkCommandBuffer commandBuffer) -> void;
 
-} // namespace Rendergraph
-} // namespace Graphics
+} // namespace Graphics::Rendergraph

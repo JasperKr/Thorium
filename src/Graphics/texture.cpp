@@ -2,6 +2,7 @@
 #include "Graphics/graphics.hpp"
 #include "Modules/error.hpp"
 #include "Modules/filesystem.hpp"
+#include "Modules/imagedata.hpp"
 #include "Modules/object.hpp"
 #include "sampler.hpp"
 #include "stb/stb_image.h"
@@ -448,72 +449,194 @@ auto LoadFromFile(GraphicsContext &context, const char *path)
 
   int imageSize = (texWidth * texHeight * 4);
 
-  // Create staging buffer
-  VkBuffer stagingBuffer = nullptr;
-  VmaAllocation stagingBufferMemory = nullptr;
-
-  VkBufferCreateInfo bufferInfo = {};
-  bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-  bufferInfo.size = imageSize;
-  bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-  bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-  VmaAllocationCreateInfo allocInfo = {};
-  allocInfo.usage = VMA_MEMORY_USAGE_CPU_ONLY;
-
-  Error::Error error = Error::Create(
-      vmaCreateBuffer(context.vmaAllocator, &bufferInfo, &allocInfo,
-                      &stagingBuffer, &stagingBufferMemory, nullptr));
-
-  // Copy pixel data to staging buffer
-  void *data = nullptr;
-  vmaMapMemory(context.vmaAllocator, stagingBufferMemory, &data);
-  memcpy(data, pixels, imageSize);
-  vmaUnmapMemory(context.vmaAllocator, stagingBufferMemory);
+  auto imageData = Image::ImageData(texWidth, texHeight, pixels, imageSize);
 
   stbi_image_free(pixels);
 
-  TextureCreationInfo texInfo = {};
-  texInfo.width = texWidth;
-  texInfo.height = texHeight;
-  texInfo.depth = 1;
-  texInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
-  texInfo.usage = static_cast<uint32_t>(VK_IMAGE_USAGE_TRANSFER_DST_BIT) |
-                  static_cast<uint32_t>(VK_IMAGE_USAGE_SAMPLED_BIT);
+  auto texture =
+      Create2D(context, TextureCreationInfo{
+                            .width = static_cast<uint32_t>(texWidth),
+                            .height = static_cast<uint32_t>(texHeight),
+                            .format = VK_FORMAT_R8G8B8A8_UNORM,
+                            .usage = VK_IMAGE_USAGE_SAMPLED_BIT |
+                                     VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+                            .mipmapCount = 1,
+                        });
 
-  // Create texture image
-  auto result = Create2D(context, texInfo);
-
-  if (Error::IsError(error)) {
-    return result;
+  if (Error::IsError(texture)) {
+    return tl::unexpected(texture.error());
   }
 
-  auto texture = result.value();
+  auto result = texture.value()->SetPixels(context, imageData, 0, 0);
 
-  // Transition image layout and copy data from staging buffer
-  error = (TransitionLayout(context, texture.get(), VK_IMAGE_LAYOUT_UNDEFINED,
-                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL));
-
-  if (Error::IsError(error)) {
-    return tl::unexpected(error);
+  if (Error::IsError(result)) {
+    return tl::unexpected(result);
   }
 
-  error = (CopyBufferToImage(context, stagingBuffer, texture.get()));
+  return texture;
+}
 
-  if (Error::IsError(error)) {
-    return tl::unexpected(error);
+// texture 2D From byte array
+auto LoadFromMemory(GraphicsContext &context, const unsigned char *data,
+                    size_t dataSize, VkFormat format)
+    -> tl::expected<Ref<Texture>, Error::Error> {
+  int texWidth = 0;
+  int texHeight = 0;
+  int texChannels = 0;
+  stbi_uc *pixels =
+      stbi_load_from_memory(data, static_cast<int>(dataSize), &texWidth,
+                            &texHeight, &texChannels, STBI_rgb_alpha);
+  if (pixels == nullptr) {
+    return tl::unexpected(
+        Error::Create("Failed to load texture image from memory."));
   }
 
-  error = (TransitionLayout(context, texture.get(),
-                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL));
+  int imageSize = (texWidth * texHeight * 4);
 
-  if (Error::IsError(error)) {
-    return tl::unexpected(error);
+  auto imageData = Image::ImageData(texWidth, texHeight, pixels, imageSize);
+
+  stbi_image_free(pixels);
+
+  auto texture =
+      Create2D(context, TextureCreationInfo{
+                            .width = static_cast<uint32_t>(texWidth),
+                            .height = static_cast<uint32_t>(texHeight),
+                            .format = format,
+                            .usage = VK_IMAGE_USAGE_SAMPLED_BIT |
+                                     VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+                            .mipmapCount = 1,
+                        });
+
+  if (Error::IsError(texture)) {
+    return tl::unexpected(texture.error());
   }
 
-  // Clean up staging buffer
-  vmaDestroyBuffer(context.vmaAllocator, stagingBuffer, stagingBufferMemory);
+  auto result = texture.value()->SetPixels(context, imageData, 0, 0);
+
+  if (Error::IsError(result)) {
+    return tl::unexpected(result);
+  }
+
+  return texture;
+}
+
+// texture 2D From ImageData
+auto LoadFromMemory(GraphicsContext &context, Image::ImageData &imageData)
+    -> tl::expected<Ref<Texture>, Error::Error> {
+  auto texture = Create2D(context, TextureCreationInfo{
+                                       .width = imageData.GetWidth(),
+                                       .height = imageData.GetHeight(),
+                                       .format = VK_FORMAT_R8G8B8A8_UNORM,
+                                       .usage = VK_IMAGE_USAGE_SAMPLED_BIT |
+                                                VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+                                       .mipmapCount = 1,
+                                   });
+
+  if (Error::IsError(texture)) {
+    return tl::unexpected(texture.error());
+  }
+
+  auto result = texture.value()->SetPixels(context, imageData, 0, 0);
+  if (Error::IsError(result)) {
+    return tl::unexpected(result);
+  }
+
+  return texture;
+}
+
+// texture 3D/Array/Cubemap From array of ImageData slices
+auto LoadFromMemory(GraphicsContext &context,
+                    const std::vector<Image::ImageData *> &slices,
+                    TextureType type)
+    -> tl::expected<Ref<Texture>, Error::Error> {
+  if (slices.empty()) {
+    return tl::unexpected(Error::Create("No image slices provided."));
+  }
+
+  uint32_t width = slices[0]->GetWidth();
+  uint32_t height = slices[0]->GetHeight();
+
+  Ref<Texture> texture;
+
+  switch (type) {
+  case TextureType::CUBEMAP: {
+    if (slices.size() != 6) { // NOLINT
+      return tl::unexpected(
+          Error::Create("Cubemap textures require 6 image slices."));
+    }
+
+    auto cubeMapTexture =
+        CreateCubeMap(context, TextureCreationInfo{
+                                   .width = width,
+                                   .height = height,
+                                   .format = VK_FORMAT_R8G8B8A8_UNORM,
+                                   .usage = VK_IMAGE_USAGE_SAMPLED_BIT |
+                                            VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+                                   .mipmapCount = 1,
+                               });
+
+    if (Error::IsError(cubeMapTexture)) {
+      return tl::unexpected(cubeMapTexture.error());
+    }
+
+    texture = cubeMapTexture.value();
+    break;
+  }
+  case TextureType::ARRAY: {
+    auto arrayTexture =
+        CreateArray(context, TextureCreationInfo{
+                                 .width = width,
+                                 .height = height,
+                                 .depth = static_cast<uint32_t>(slices.size()),
+                                 .format = VK_FORMAT_R8G8B8A8_UNORM,
+                                 .usage = VK_IMAGE_USAGE_SAMPLED_BIT |
+                                          VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+                                 .mipmapCount = 1,
+                             });
+
+    if (Error::IsError(arrayTexture)) {
+      return tl::unexpected(arrayTexture.error());
+    }
+
+    texture = arrayTexture.value();
+    break;
+  }
+  case TextureType::VOLUME: {
+    auto volumeTexture =
+        CreateVolume(context, TextureCreationInfo{
+                                  .width = width,
+                                  .height = height,
+                                  .depth = static_cast<uint32_t>(slices.size()),
+                                  .format = VK_FORMAT_R8G8B8A8_UNORM,
+                                  .usage = VK_IMAGE_USAGE_SAMPLED_BIT |
+                                           VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+                                  .mipmapCount = 1,
+                              });
+
+    if (Error::IsError(volumeTexture)) {
+      return tl::unexpected(volumeTexture.error());
+    }
+
+    texture = volumeTexture.value();
+    break;
+  }
+  default:
+    return tl::unexpected(
+        Error::Create("Unsupported texture type for multiple image slices."));
+  }
+
+  for (size_t i = 0; i < slices.size(); ++i) {
+    auto result =
+        texture->SetPixels(context, *slices[i], 0, static_cast<uint32_t>(i),
+                           VkRect2D{
+                               .offset = VkOffset2D{0, 0},
+                               .extent = VkExtent2D{width, height},
+                           },
+                           VkOffset2D{0, 0});
+    if (Error::IsError(result)) {
+      return tl::unexpected(result);
+    }
+  }
 
   return texture;
 }
@@ -586,7 +709,8 @@ auto TransitionLayout(GraphicsContext &context, Texture *texture,
 }
 
 auto CopyBufferToImage(GraphicsContext &context, VkBuffer buffer,
-                       Texture *texture) -> Error::Error {
+                       Texture *texture, VkBufferImageCopy region)
+    -> Error::Error {
   VkCommandBufferAllocateInfo allocInfo = {};
   allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
   allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
@@ -599,16 +723,7 @@ auto CopyBufferToImage(GraphicsContext &context, VkBuffer buffer,
   beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
   vkBeginCommandBuffer(commandBuffer, &beginInfo);
 
-  VkBufferImageCopy region = {};
-  region.bufferOffset = 0;
-  region.bufferRowLength = 0;
-  region.bufferImageHeight = 0;
   region.imageSubresource.aspectMask = GetAspectFlagsForFormat(texture->format);
-  region.imageSubresource.mipLevel = 0;
-  region.imageSubresource.baseArrayLayer = 0;
-  region.imageSubresource.layerCount = 1;
-  region.imageOffset = {.x = 0, .y = 0, .z = 0};
-  region.imageExtent = texture->size;
 
   vkCmdCopyBufferToImage(commandBuffer, buffer, texture->image,
                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
@@ -717,6 +832,114 @@ auto Texture::GetSampler(GraphicsContext &context) -> VkSampler {
   return sampler;
 }
 
+auto Texture::SetPixels(GraphicsContext &context, Image::ImageData &imageData,
+                        uint32_t mipLevel, uint32_t arrayLayer, // NOLINT
+                        VkRect2D source,                        // NOLINT
+                        VkOffset2D target) -> Error::Error {
+  if (source.extent.width > size.width || source.extent.height > size.height) {
+    return Error::Create(
+        "ImageData dimensions exceed texture dimensions in SetPixels.");
+  }
+  if (source.extent.width + source.offset.x + target.x > size.width ||
+      source.extent.height + source.offset.y + target.y > size.height) {
+    return Error::Create(
+        "Source and target offsets exceed texture dimensions in SetPixels.");
+  }
+  if (target.x < 0 || target.y < 0) {
+    return Error::Create(
+        "Negative target offsets are not supported in SetPixels.");
+  }
+  if (source.extent.width > imageData.GetWidth() ||
+      source.extent.height > imageData.GetHeight()) {
+    return Error::Create(
+        "Source rectangle exceeds ImageData dimensions in SetPixels.");
+  }
+  if (source.offset.x < 0 || source.offset.y < 0) {
+    return Error::Create(
+        "Negative source offsets are not supported in SetPixels.");
+  }
+
+  // Create staging buffer
+  VkBuffer stagingBuffer = nullptr;
+  VmaAllocation stagingBufferMemory = nullptr;
+
+  VkBufferCreateInfo bufferInfo = {};
+  bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+  bufferInfo.size = imageData.GetSize();
+  bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+  bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+  VmaAllocationCreateInfo allocInfo = {};
+  allocInfo.usage = VMA_MEMORY_USAGE_CPU_ONLY;
+
+  Error::Error error = Error::Create(
+      vmaCreateBuffer(context.vmaAllocator, &bufferInfo, &allocInfo,
+                      &stagingBuffer, &stagingBufferMemory, nullptr));
+
+  // Copy pixel data to staging buffer
+  void *data = nullptr;
+  vmaMapMemory(context.vmaAllocator, stagingBufferMemory, &data);
+  memcpy(data, imageData.GetDataPtr(), imageData.GetSize());
+  vmaUnmapMemory(context.vmaAllocator, stagingBufferMemory);
+
+  // Transition image layout and copy data from staging buffer
+  error = (TransitionLayout(context, this, VK_IMAGE_LAYOUT_UNDEFINED,
+                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL));
+
+  if (Error::IsError(error)) {
+    vmaDestroyBuffer(context.vmaAllocator, stagingBuffer, stagingBufferMemory);
+    return error;
+  }
+
+  if (imageData.GetWidth() > size.width ||
+      imageData.GetHeight() > size.height) {
+    vmaDestroyBuffer(context.vmaAllocator, stagingBuffer, stagingBufferMemory);
+    return Error::Create(
+        "ImageData dimensions exceed texture dimensions in SetPixels.");
+  }
+
+  VkBufferImageCopy region = {};
+  region.bufferOffset = 0;
+  region.bufferRowLength = 0;
+  region.bufferImageHeight = 0;
+  region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  region.imageSubresource.mipLevel = mipLevel;
+  region.imageSubresource.baseArrayLayer = arrayLayer;
+  region.imageSubresource.layerCount = 1;
+  region.imageOffset = {.x = 0, .y = 0, .z = 0};
+  region.imageExtent = {.width = size.width, .height = size.height, .depth = 1};
+
+  error = (CopyBufferToImage(context, stagingBuffer, this, region));
+
+  if (Error::IsError(error)) {
+    vmaDestroyBuffer(context.vmaAllocator, stagingBuffer, stagingBufferMemory);
+    return error;
+  }
+
+  error = (TransitionLayout(context, this, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL));
+
+  if (Error::IsError(error)) {
+    vmaDestroyBuffer(context.vmaAllocator, stagingBuffer, stagingBufferMemory);
+    return error;
+  }
+
+  // Clean up staging buffer
+  vmaDestroyBuffer(context.vmaAllocator, stagingBuffer, stagingBufferMemory);
+
+  return Error::Success();
+}
+
+auto Texture::SetPixels(GraphicsContext &context, Image::ImageData &imageData,
+                        uint32_t mipLevel, uint32_t arrayLayer) // NOLINT
+    -> Error::Error {
+  VkRect2D source = {};
+  source.offset = {.x = 0, .y = 0};
+  source.extent = {.width = size.width, .height = size.height};
+  VkOffset2D target = {0, 0};
+  return SetPixels(context, imageData, mipLevel, arrayLayer, source, target);
+}
+
 struct VkFormatTextureTypeHash {
   auto operator()(const std::pair<VkFormat, TextureType> &key) const noexcept
       -> size_t {
@@ -779,43 +1002,14 @@ auto GetDefaultTexture(GraphicsContext &context, VkFormat format,
   // Fill texture with 1x1 of opaque white pixel data
   std::array<uint8_t, 4> whitePixel = {UINT8_MAX, UINT8_MAX, UINT8_MAX,
                                        UINT8_MAX};
-  VkBuffer stagingBuffer = nullptr;
-  VmaAllocation stagingBufferMemory = nullptr;
-  VkBufferCreateInfo bufferInfo = {};
-  bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-  bufferInfo.size = whitePixel.size();
-  bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-  bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-  VmaAllocationCreateInfo allocInfo = {};
-  allocInfo.usage = VMA_MEMORY_USAGE_CPU_ONLY;
-  Error::Error error = Error::Create(
-      vmaCreateBuffer(context.vmaAllocator, &bufferInfo, &allocInfo,
-                      &stagingBuffer, &stagingBufferMemory, nullptr));
-  if (Error::IsError(error)) {
-    return tl::unexpected(error);
+
+  Image::ImageData imageData(1, 1, whitePixel.data(), whitePixel.size());
+
+  auto setPixelsResult = texture->SetPixels(context, imageData, 0, 0);
+
+  if (Error::IsError(setPixelsResult)) {
+    return tl::unexpected(setPixelsResult);
   }
-  void *data = nullptr;
-  vmaMapMemory(context.vmaAllocator, stagingBufferMemory, &data);
-  memcpy(data, whitePixel.data(), whitePixel.size());
-  vmaUnmapMemory(context.vmaAllocator, stagingBufferMemory);
-  error = Graphics::Texture::TransitionLayout(
-      context, texture.get(), VK_IMAGE_LAYOUT_UNDEFINED,
-      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-  if (Error::IsError(error)) {
-    return tl::unexpected(error);
-  }
-  error = Graphics::Texture::CopyBufferToImage(context, stagingBuffer,
-                                               texture.get());
-  if (Error::IsError(error)) {
-    return tl::unexpected(error);
-  }
-  error = Graphics::Texture::TransitionLayout(
-      context, texture.get(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-      VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-  if (Error::IsError(error)) {
-    return tl::unexpected(error);
-  }
-  vmaDestroyBuffer(context.vmaAllocator, stagingBuffer, stagingBufferMemory);
 
   textureCache[key] = texture;
 
