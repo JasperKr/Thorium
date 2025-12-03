@@ -1,5 +1,9 @@
 #include "Graphics/texture.hpp"
+#include "Graphics/graphics.hpp"
+#include "Modules/image.hpp"
+#include "Modules/imagedata.hpp"
 #include "Modules/object.hpp"
+#include "Wrap/wrap.hpp"
 #include <cstdint>
 #include <lauxlib.h>
 #include <lua.h>
@@ -12,272 +16,328 @@ enum class TextureUsage : uint8_t {
   Storage = 1U << 2U,
 };
 
-struct TextureOptions {
-  VkFormat format = VK_FORMAT_R8G8B8A8_UNORM;
-  TextureUsage usage = TextureUsage::Sampled;
-  uint32_t mipmapStart = 0;
-  uint32_t mipmapCount = 1;
-  bool linear = true;
-};
+static inline auto TextureUsageToVkImageUsage(VkFormat format,
+                                              TextureUsage usage)
+    -> VkImageUsageFlags {
+  VkImageUsageFlags flags = 0;
+  if ((static_cast<uint8_t>(usage) &
+       static_cast<uint8_t>(TextureUsage::Sampled)) != 0) {
+    flags |= VK_IMAGE_USAGE_SAMPLED_BIT;
+  }
+  if ((static_cast<uint8_t>(usage) &
+       static_cast<uint8_t>(TextureUsage::RenderTarget)) != 0) {
+    if (Image::IsDepthTexture(format)) {
+      flags |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+    } else if (Image::IsStencilTexture(format)) {
+      flags |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+    } else {
+      flags |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    }
+  }
+  if ((static_cast<uint8_t>(usage) &
+       static_cast<uint8_t>(TextureUsage::Storage)) != 0) {
+    flags |= VK_IMAGE_USAGE_STORAGE_BIT;
+  }
+  return flags;
+}
 
 constexpr VkFormat DefaultFormat = VK_FORMAT_R8G8B8A8_UNORM;
 
-// NOLINTNEXTLINE
-auto inline StringToFormat(std::string &format) -> VkFormat {
-  // 8-bit unorm
-  if (format == "rgba8") {
-    return VK_FORMAT_R8G8B8A8_UNORM;
-  }
-  if (format == "rg8") {
-    return VK_FORMAT_R8G8_UNORM;
-  }
-  if (format == "r8") {
-    return VK_FORMAT_R8_UNORM;
-  }
-  // 16-bit unorm
-  if (format == "rgba16") {
-    return VK_FORMAT_R16G16B16A16_UNORM;
-  }
-  if (format == "rg16") {
-    return VK_FORMAT_R16G16_UNORM;
-  }
-  if (format == "r16") {
-    return VK_FORMAT_R16_UNORM;
-  }
-  // 16-bit float
-  if (format == "rgba16f") {
-    return VK_FORMAT_R16G16B16A16_SFLOAT;
-  }
-  if (format == "rg16f") {
-    return VK_FORMAT_R16G16_SFLOAT;
-  }
-  if (format == "r16f") {
-    return VK_FORMAT_R16_SFLOAT;
-  }
-  // 32-bit float
-  if (format == "rgba32f") {
-    return VK_FORMAT_R32G32B32A32_SFLOAT;
-  }
-  if (format == "rg32f") {
-    return VK_FORMAT_R32G32_SFLOAT;
-  }
-  if (format == "r32f") {
-    return VK_FORMAT_R32_SFLOAT;
-  }
-  // 8-bit uint
-  if (format == "rgba8ui") {
-    return VK_FORMAT_R8G8B8A8_UINT;
-  }
-  if (format == "rg8ui") {
-    return VK_FORMAT_R8G8_UINT;
-  }
-  if (format == "r8ui") {
-    return VK_FORMAT_R8_UINT;
-  }
-  // 16-bit uint
-  if (format == "rgba16ui") {
-    return VK_FORMAT_R16G16B16A16_UINT;
-  }
-  if (format == "rg16ui") {
-    return VK_FORMAT_R16G16_UINT;
-  }
-  if (format == "r16ui") {
-    return VK_FORMAT_R16_UINT;
-  }
-  // 32-bit uint
-  if (format == "rgba32ui") {
-    return VK_FORMAT_R32G32B32A32_UINT;
-  }
-  if (format == "rg32ui") {
-    return VK_FORMAT_R32G32_UINT;
-  }
-  if (format == "r32ui") {
-    return VK_FORMAT_R32_UINT;
-  }
-  // 8-bit sint
-  if (format == "rgba8si") {
-    return VK_FORMAT_R8G8B8A8_SINT;
-  }
-  if (format == "rg8si") {
-    return VK_FORMAT_R8G8_SINT;
-  }
-  if (format == "r8si") {
-    return VK_FORMAT_R8_SINT;
-  }
-  // 16-bit sint
-  if (format == "rgba16si") {
-    return VK_FORMAT_R16G16B16A16_SINT;
-  }
-  if (format == "rg16si") {
-    return VK_FORMAT_R16G16_SINT;
-  }
-  if (format == "r16si") {
-    return VK_FORMAT_R16_SINT;
-  }
-  // 32-bit sint
-  if (format == "rgba32si") {
-    return VK_FORMAT_R32G32B32A32_SINT;
-  }
-  if (format == "rg32si") {
-    return VK_FORMAT_R32G32_SINT;
-  }
-  if (format == "r32si") {
-    return VK_FORMAT_R32_SINT;
-  }
-  // Depth formats
-  if (format == "depth16") {
-    return VK_FORMAT_D16_UNORM;
-  }
-  if (format == "depth24") {
-    return VK_FORMAT_X8_D24_UNORM_PACK32;
-  }
-  if (format == "depth32") {
-    return VK_FORMAT_D32_SFLOAT;
-  }
-  // Depth-stencil formats
-  if (format == "depth24stencil8") {
-    return VK_FORMAT_D24_UNORM_S8_UINT;
-  }
-  if (format == "depth32stencil8") {
-    return VK_FORMAT_D32_SFLOAT_S8_UINT;
-  }
-  // packed formats
-  if (format == "rg11b10f") {
-    return VK_FORMAT_B10G11R11_UFLOAT_PACK32;
-  }
-  if (format == "rgb9e5") {
-    return VK_FORMAT_E5B9G9R9_UFLOAT_PACK32;
-  }
-  if (format == "rgb10a2") {
-    return VK_FORMAT_A2B10G10R10_UNORM_PACK32;
-  }
-  if (format == "rgb10a2ui") {
-    return VK_FORMAT_A2B10G10R10_UINT_PACK32;
-  }
-  if (format == "bgr5a1") {
-    return VK_FORMAT_A1R5G5B5_UNORM_PACK16;
-  }
-  if (format == "bgr565") {
-    return VK_FORMAT_R5G6B5_UNORM_PACK16;
-  }
-  if (format == "rgba4") {
-    return VK_FORMAT_R4G4B4A4_UNORM_PACK16;
-  }
-  // compressed formats
-  if (format == "bc1") {
-    return VK_FORMAT_BC1_RGBA_UNORM_BLOCK;
-  }
-  if (format == "bc3") {
-    return VK_FORMAT_BC3_UNORM_BLOCK;
-  }
-  if (format == "bc4") {
-    return VK_FORMAT_BC4_UNORM_BLOCK;
-  }
-  if (format == "bc5") {
-    return VK_FORMAT_BC5_UNORM_BLOCK;
-  }
-  if (format == "bc6h") {
-    return VK_FORMAT_BC6H_UFLOAT_BLOCK;
-  }
-  if (format == "bc6hs") {
-    return VK_FORMAT_BC6H_SFLOAT_BLOCK;
-  }
-  if (format == "bc7") {
-    return VK_FORMAT_BC7_UNORM_BLOCK;
-  }
+// Options:
+// { type = "2D"|"3D"|"array"|"cube", format = f, mipmaps = bool, usage = int, mipmapcount = n, mipmapstart = n, linear = bool }
+struct LuaOptions {
+  Graphics::Texture::TextureType type = Graphics::Texture::TextureType::DEFAULT;
+  VkFormat format = VK_FORMAT_R8G8B8A8_UNORM;
+  bool mipmaps = false;
+  TextureUsage usage = TextureUsage::Sampled;
+  uint32_t mipmapCount = 0;
+  uint32_t mipmapStart = 0;
+  bool linear = true;
 
-  return VK_FORMAT_UNDEFINED;
+  LuaOptions(lua_State *state, int index) {
+    luaL_checktype(state, index, LUA_TTABLE);
+
+    // type
+    lua_getfield(state, index, "type");
+    if (lua_isstring(state, -1) != 0) {
+      const char *typeStr = luaL_checkstring(state, -1);
+      if (strcmp(typeStr, "2D") == 0) {
+        this->type = Graphics::Texture::TextureType::DEFAULT;
+      } else if (strcmp(typeStr, "3D") == 0) {
+        this->type = Graphics::Texture::TextureType::VOLUME;
+      } else if (strcmp(typeStr, "array") == 0) {
+        this->type = Graphics::Texture::TextureType::ARRAY;
+      } else if (strcmp(typeStr, "cube") == 0) {
+        this->type = Graphics::Texture::TextureType::CUBEMAP;
+      }
+    }
+    lua_pop(state, 1);
+
+    // format
+    lua_getfield(state, index, "format");
+    if (lua_isstring(state, -1) != 0) {
+      const char *formatStr = luaL_checkstring(state, -1);
+      this->format = Image::StringToFormat(std::string(formatStr));
+    }
+    lua_pop(state, 1);
+
+    // mipmaps
+    lua_getfield(state, index, "mipmaps");
+    if (lua_isboolean(state, -1) != 0) {
+      this->mipmaps = (lua_toboolean(state, -1) != 0);
+    }
+    lua_pop(state, 1);
+
+    // usage
+    lua_getfield(state, index, "usage");
+    if (lua_isnumber(state, -1) != 0) {
+      int usageInt = static_cast<int>(lua_tointeger(state, -1));
+      this->usage = static_cast<TextureUsage>(usageInt);
+    }
+    lua_pop(state, 1);
+
+    // mipmapcount
+    lua_getfield(state, index, "mipmapcount");
+    if (lua_isnumber(state, -1) != 0) {
+      this->mipmapCount = static_cast<uint32_t>(lua_tointeger(state, -1));
+    }
+    lua_pop(state, 1);
+
+    // mipmapstart
+    lua_getfield(state, index, "mipmapstart");
+    if (lua_isnumber(state, -1) != 0) {
+      this->mipmapStart = static_cast<uint32_t>(lua_tointeger(state, -1));
+    }
+    lua_pop(state, 1);
+
+    // linear
+    lua_getfield(state, index, "linear");
+    if (lua_isboolean(state, -1) != 0) {
+      this->linear = (lua_toboolean(state, -1) != 0);
+    }
+    lua_pop(state, 1);
+  }
+};
+
+static inline auto TextureFromImagedata(lua_State *state)
+    -> tl::expected<Ref<Graphics::Texture::Texture>, Error::Error> {
+  auto *ctx = Graphics::GetCurrentGraphicsContext();
+  auto *imageData = LuaWrap::FromLuaObject<Image::ImageData>(state, 1);
+
+  auto result = Graphics::Texture::LoadFromMemory(*ctx, *imageData);
+  if (Error::IsError(result)) {
+    return tl::unexpected(result.error());
+  }
+  return result.value();
 }
 
-auto inline TextureOptionsFromLuaState(lua_State *state, int index)
-    -> TextureOptions {
-  TextureOptions options = {};
+static inline auto TextureFromFilepath(lua_State *state)
+    -> tl::expected<Ref<Graphics::Texture::Texture>, Error::Error> {
+  auto *ctx = Graphics::GetCurrentGraphicsContext();
+  const char *filepath = luaL_checkstring(state, 1);
 
-  lua_getfield(state, index, "format");
-  if (lua_isstring(state, -1) != 0) {
-    std::string formatStr = lua_tostring(state, -1);
-    options.format = StringToFormat(formatStr);
+  auto result = Graphics::Texture::LoadFromFile(*ctx, filepath);
+  if (Error::IsError(result)) {
+    return tl::unexpected(result.error());
   }
-  lua_pop(state, 1);
-
-  lua_getfield(state, index, "usage");
-  if (lua_isnumber(state, -1) != 0) {
-    options.usage = static_cast<TextureUsage>(lua_tointeger(state, -1));
-  }
-  lua_pop(state, 1);
-
-  lua_getfield(state, index, "mipmapstart");
-  if (lua_isnumber(state, -1) != 0) {
-    options.mipmapStart = static_cast<uint32_t>(lua_tointeger(state, -1));
-  }
-  lua_pop(state, 1);
-
-  lua_getfield(state, index, "mipmapcount");
-  if (lua_isnumber(state, -1) != 0) {
-    options.mipmapCount = static_cast<uint32_t>(lua_tointeger(state, -1));
-  }
-  lua_pop(state, 1);
-
-  lua_getfield(state, index, "linear");
-  if (lua_isboolean(state, -1)) {
-    options.linear = (lua_toboolean(state, -1) != 0);
-  }
-  lua_pop(state, 1);
-
-  return options;
+  return result.value();
 }
 
-// 1: width, height, {format = "rgba8", usage = enum, mipmapstart = 0, mipmapcount = 1, linear = true}
-// 2: filepath, {usage = enum, mipmapstart = 0, mipmapcount = 1, linear = true}
-// 3: imagedata, {usage = enum, mipmapstart = 0, mipmapcount = 1, linear = true}
-// returns: texture wrapper
-auto wrap_newTexture(lua_State *state) -> int {
-  auto argCount = lua_gettop(state);
-  bool createdFromSize =
-      (lua_isnumber(state, 1) != 0) && (lua_isnumber(state, 2) != 0);
-  bool createdFromFilepath = (lua_isstring(state, 1) != 0);
-  bool createdFromImageData =
-      (lua_islightuserdata(state, 1) != 0); // TODO: check type
-  if (!createdFromSize && !createdFromFilepath && !createdFromImageData) {
-    return luaL_error(
-        state,
-        "Invalid arguments to Texture.new. Expected (width: number, "
-        "height: number, [options: table]) or (filepath: string, [options: "
-        "table]) or (imagedata: userdata, [options: table])");
+static inline auto TextureFromImagedataAndOptions(lua_State *state)
+    -> tl::expected<Ref<Graphics::Texture::Texture>, Error::Error> {
+  auto *ctx = Graphics::GetCurrentGraphicsContext();
+  auto *imageData = LuaWrap::FromLuaObject<Image::ImageData>(state, 1);
+  LuaOptions options(state, 2);
+
+  auto usage = TextureUsageToVkImageUsage(options.format, options.usage);
+
+  auto result = Graphics::Texture::LoadFromMemory(*ctx, *imageData, usage);
+  if (Error::IsError(result)) {
+    return tl::unexpected(result.error());
+  }
+  return result.value();
+}
+
+static inline auto TextureFromFilepathAndOptions(lua_State *state)
+    -> tl::expected<Ref<Graphics::Texture::Texture>, Error::Error> {
+  auto *ctx = Graphics::GetCurrentGraphicsContext();
+  const char *filepath = luaL_checkstring(state, 1);
+  LuaOptions options(state, 2);
+
+  auto usage = TextureUsageToVkImageUsage(options.format, options.usage);
+
+  auto result = Graphics::Texture::LoadFromFile(*ctx, filepath, usage);
+  if (Error::IsError(result)) {
+    return tl::unexpected(result.error());
+  }
+  return result.value();
+}
+
+static inline auto TextureFromImagedataArrayAndOptions(lua_State *state)
+    -> tl::expected<Ref<Graphics::Texture::Texture>, Error::Error> {
+  std::vector<Image::ImageData *> slices;
+  size_t len = lua_objlen(state, 1);
+  for (size_t i = 0; i < len; ++i) {
+    lua_rawgeti(state, 1, static_cast<int>(i + 1));
+    auto *imageData = LuaWrap::FromLuaObject<Image::ImageData>(state, -1);
+    slices.push_back(imageData);
+    lua_pop(state, 1);
   }
 
-  auto *context = Graphics::GetCurrentGraphicsContext();
-  Graphics::Texture::Texture texture{};
+  // Options
+  LuaOptions options(state, 2);
 
-  if (createdFromSize) {
-    // Create texture from size
-    auto width = static_cast<uint32_t>(lua_tointeger(state, 1));
-    auto height = static_cast<uint32_t>(lua_tointeger(state, 2));
-    bool hasOptions = lua_istable(state, 3);
+  auto *ctx = Graphics::GetCurrentGraphicsContext();
 
-    TextureOptions options = {};
+  auto result = Graphics::Texture::LoadFromMemory(*ctx, slices, options.type);
+  if (Error::IsError(result)) {
+    return tl::unexpected(result.error());
+  }
+  return result.value();
+}
 
-    if (hasOptions) {
-      options = TextureOptionsFromLuaState(state, 3);
-    }
+static inline auto TextureFromWidthAndHeight(lua_State *state)
+    -> tl::expected<Ref<Graphics::Texture::Texture>, Error::Error> {
+  auto *ctx = Graphics::GetCurrentGraphicsContext();
+  auto width = static_cast<uint32_t>(luaL_checkinteger(state, 1));
+  auto height = static_cast<uint32_t>(luaL_checkinteger(state, 2));
 
-    Graphics::Texture::TextureCreationInfo info = {
-        .width = width, .height = height, .format = options.format};
+  auto result = Graphics::Texture::Create2D(
+      *ctx,
+      Graphics::Texture::TextureCreationInfo{
+          .width = width,
+          .height = height,
+          .format = VK_FORMAT_R8G8B8A8_UNORM,
+          .usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+          .mipmapCount = 1,
+      });
+  if (Error::IsError(result)) {
+    return tl::unexpected(result.error());
+  }
+  return result.value();
+}
 
-    auto result = Graphics::Texture::Create2D(*context, info);
+static inline auto TextureFromWidthHeightAndOptions(lua_State *state)
+    -> tl::expected<Ref<Graphics::Texture::Texture>, Error::Error> {
+  auto *ctx = Graphics::GetCurrentGraphicsContext();
+  auto width = static_cast<uint32_t>(luaL_checkinteger(state, 1));
+  auto height = static_cast<uint32_t>(luaL_checkinteger(state, 2));
+  LuaOptions options(state, 3);
 
-    if (Error::IsError(result)) {
-      return luaL_error(state, "Failed to create texture: %s",
-                        result.error().ToString().c_str());
-    }
-    texture = result.value();
+  auto usage = TextureUsageToVkImageUsage(options.format, options.usage);
+
+  auto result = Graphics::Texture::Create2D(
+      *ctx, Graphics::Texture::TextureCreationInfo{
+                .width = width,
+                .height = height,
+                .format = options.format,
+                .usage = usage,
+                .mipmapCount = options.mipmaps ? 0 : 1,
+            });
+  if (Error::IsError(result)) {
+    return tl::unexpected(result.error());
+  }
+  return result.value();
+}
+
+static inline auto
+TextureFromWidthHeightDepthOrLayersAndOptions(lua_State *state)
+    -> tl::expected<Ref<Graphics::Texture::Texture>, Error::Error> {
+  auto *ctx = Graphics::GetCurrentGraphicsContext();
+  auto width = static_cast<uint32_t>(luaL_checkinteger(state, 1));
+  auto height = static_cast<uint32_t>(luaL_checkinteger(state, 2));
+  auto depthOrLayers = static_cast<uint32_t>(luaL_checkinteger(state, 3));
+  LuaOptions options(state, 4);
+
+  auto usage = TextureUsageToVkImageUsage(options.format, options.usage);
+
+  tl::expected<Ref<Graphics::Texture::Texture>, Error::Error> result;
+  switch (options.type) {
+  case Graphics::Texture::TextureType::VOLUME:
+    result = Graphics::Texture::CreateVolume(
+        *ctx, Graphics::Texture::TextureCreationInfo{
+                  .width = width,
+                  .height = height,
+                  .depth = depthOrLayers,
+                  .format = options.format,
+                  .usage = usage,
+                  .mipmapCount = options.mipmaps ? 0 : 1,
+              });
+    break;
+  case Graphics::Texture::TextureType::ARRAY:
+    result = Graphics::Texture::CreateArray(
+        *ctx, Graphics::Texture::TextureCreationInfo{
+                  .width = width,
+                  .height = height,
+                  .depth = depthOrLayers,
+                  .format = options.format,
+                  .usage = usage,
+                  .mipmapCount = options.mipmaps ? 0 : 1,
+              });
+    break;
+  default:
+    return tl::unexpected(
+        Error::Create("Invalid texture type for 3D/Array texture creation."));
   }
 
-  // auto *proxy = new Proxy(texture);
+  if (Error::IsError(result)) {
+    return tl::unexpected(result.error());
+  }
+  return result.value();
+}
 
-  // lua_pushlightuserdata(state, proxy);
+// Variants:
+// Filepath -> load from file
+// Imagedata -> load from image data
+// Filepath, Options -> load from file with options
+// Imagedata, Options -> load from image data with options
+// Array of Imagedata, Options -> load 3D/Array/Cubemap texture
+// width, height -> 2D rgba8 1 mip, 1 layer texture
+// width, height, Options -> 2D or Cubemap texture
+// width, height, depth|layers, Options, -> 3D or Array texture
+auto wrap_NewTexture(lua_State *state) -> int {
+  auto *ctx = Graphics::GetCurrentGraphicsContext();
 
-  return 1; // Number of return values
+  auto type = *Graphics::Texture::Texture::GetType();
+  int args = lua_gettop(state);
+
+  Ref<Graphics::Texture::Texture> texture;
+  tl::expected<Ref<Graphics::Texture::Texture>, Error::Error> result;
+
+  if (args == 1) {
+    if (LuaWrap::LuaIsType<Image::ImageData>(state, 1)) {
+      result = TextureFromImagedata(state);
+    } else if (lua_isstring(state, 1) != 0) {
+      result = TextureFromFilepath(state);
+    } else {
+      return luaL_error(state, "Invalid argument to newTexture");
+    }
+  } else if (args == 2) {
+    // Width, Height or ImageData array + Options or Filepath + Options or ImageData + Options
+    if (LuaWrap::LuaIsType<Image::ImageData>(state, 1)) {
+      result = TextureFromImagedataAndOptions(state);
+    } else if (lua_isstring(state, 1) != 0) {
+      result = TextureFromFilepathAndOptions(state);
+    } else if (lua_istable(state, 1) != 0 && lua_istable(state, 2) != 0) { // ImageData array + Options
+      result = TextureFromImagedataArrayAndOptions(state);
+    } else { // Width, Height
+      result = TextureFromWidthAndHeight(state);
+    }
+  } else if (args == 3) { // width, height, Options
+    result = TextureFromWidthHeightAndOptions(state);
+  } else if (args == 4) { // width, height, depth|layers, Options
+    result = TextureFromWidthHeightDepthOrLayersAndOptions(state);
+  } else {
+    return luaL_error(state, "Invalid arguments to newTexture");
+  }
+
+  if (Error::IsError(result)) {
+    return luaL_error(state, "Failed to create texture: %s",
+                      result.error().message.c_str());
+  }
+  texture = result.value();
+
+  return 1;
 }
 
 } // namespace WrapTemplate

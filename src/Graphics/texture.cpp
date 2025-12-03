@@ -425,7 +425,8 @@ void Destroy(GraphicsContext &context, Texture *texture) {
   context.runtimeInfo.textureCount--;
 }
 
-auto LoadFromFile(GraphicsContext &context, const char *path)
+auto LoadFromFile(GraphicsContext &context, const char *path,
+                  VkImageUsageFlags usage)
     -> tl::expected<Ref<Texture>, Error::Error> {
   int texWidth = 0;
   int texHeight = 0;
@@ -458,8 +459,7 @@ auto LoadFromFile(GraphicsContext &context, const char *path)
                             .width = static_cast<uint32_t>(texWidth),
                             .height = static_cast<uint32_t>(texHeight),
                             .format = VK_FORMAT_R8G8B8A8_UNORM,
-                            .usage = VK_IMAGE_USAGE_SAMPLED_BIT |
-                                     VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+                            .usage = usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
                             .mipmapCount = 1,
                         });
 
@@ -478,7 +478,7 @@ auto LoadFromFile(GraphicsContext &context, const char *path)
 
 // texture 2D From byte array
 auto LoadFromMemory(GraphicsContext &context, const unsigned char *data,
-                    size_t dataSize, VkFormat format)
+                    size_t dataSize, VkFormat format, VkImageUsageFlags usage)
     -> tl::expected<Ref<Texture>, Error::Error> {
   int texWidth = 0;
   int texHeight = 0;
@@ -502,8 +502,7 @@ auto LoadFromMemory(GraphicsContext &context, const unsigned char *data,
                             .width = static_cast<uint32_t>(texWidth),
                             .height = static_cast<uint32_t>(texHeight),
                             .format = format,
-                            .usage = VK_IMAGE_USAGE_SAMPLED_BIT |
-                                     VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+                            .usage = usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
                             .mipmapCount = 1,
                         });
 
@@ -521,16 +520,17 @@ auto LoadFromMemory(GraphicsContext &context, const unsigned char *data,
 }
 
 // texture 2D From ImageData
-auto LoadFromMemory(GraphicsContext &context, Image::ImageData &imageData)
+auto LoadFromMemory(GraphicsContext &context, Image::ImageData &imageData,
+                    VkImageUsageFlags usage)
     -> tl::expected<Ref<Texture>, Error::Error> {
-  auto texture = Create2D(context, TextureCreationInfo{
-                                       .width = imageData.GetWidth(),
-                                       .height = imageData.GetHeight(),
-                                       .format = VK_FORMAT_R8G8B8A8_UNORM,
-                                       .usage = VK_IMAGE_USAGE_SAMPLED_BIT |
-                                                VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-                                       .mipmapCount = 1,
-                                   });
+  auto texture =
+      Create2D(context, TextureCreationInfo{
+                            .width = imageData.GetWidth(),
+                            .height = imageData.GetHeight(),
+                            .format = imageData.GetFormat(),
+                            .usage = usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+                            .mipmapCount = 1,
+                        });
 
   if (Error::IsError(texture)) {
     return tl::unexpected(texture.error());
@@ -547,7 +547,7 @@ auto LoadFromMemory(GraphicsContext &context, Image::ImageData &imageData)
 // texture 3D/Array/Cubemap From array of ImageData slices
 auto LoadFromMemory(GraphicsContext &context,
                     const std::vector<Image::ImageData *> &slices,
-                    TextureType type)
+                    TextureType type, VkImageUsageFlags usage)
     -> tl::expected<Ref<Texture>, Error::Error> {
   if (slices.empty()) {
     return tl::unexpected(Error::Create("No image slices provided."));
@@ -565,15 +565,14 @@ auto LoadFromMemory(GraphicsContext &context,
           Error::Create("Cubemap textures require 6 image slices."));
     }
 
-    auto cubeMapTexture =
-        CreateCubeMap(context, TextureCreationInfo{
-                                   .width = width,
-                                   .height = height,
-                                   .format = VK_FORMAT_R8G8B8A8_UNORM,
-                                   .usage = VK_IMAGE_USAGE_SAMPLED_BIT |
-                                            VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-                                   .mipmapCount = 1,
-                               });
+    auto cubeMapTexture = CreateCubeMap(
+        context, TextureCreationInfo{
+                     .width = width,
+                     .height = height,
+                     .format = slices[0]->GetFormat(),
+                     .usage = usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+                     .mipmapCount = 1,
+                 });
 
     if (Error::IsError(cubeMapTexture)) {
       return tl::unexpected(cubeMapTexture.error());
@@ -583,16 +582,15 @@ auto LoadFromMemory(GraphicsContext &context,
     break;
   }
   case TextureType::ARRAY: {
-    auto arrayTexture =
-        CreateArray(context, TextureCreationInfo{
-                                 .width = width,
-                                 .height = height,
-                                 .depth = static_cast<uint32_t>(slices.size()),
-                                 .format = VK_FORMAT_R8G8B8A8_UNORM,
-                                 .usage = VK_IMAGE_USAGE_SAMPLED_BIT |
-                                          VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-                                 .mipmapCount = 1,
-                             });
+    auto arrayTexture = CreateArray(
+        context, TextureCreationInfo{
+                     .width = width,
+                     .height = height,
+                     .depth = static_cast<uint32_t>(slices.size()),
+                     .format = slices[0]->GetFormat(),
+                     .usage = usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+                     .mipmapCount = 1,
+                 });
 
     if (Error::IsError(arrayTexture)) {
       return tl::unexpected(arrayTexture.error());
@@ -602,16 +600,15 @@ auto LoadFromMemory(GraphicsContext &context,
     break;
   }
   case TextureType::VOLUME: {
-    auto volumeTexture =
-        CreateVolume(context, TextureCreationInfo{
-                                  .width = width,
-                                  .height = height,
-                                  .depth = static_cast<uint32_t>(slices.size()),
-                                  .format = VK_FORMAT_R8G8B8A8_UNORM,
-                                  .usage = VK_IMAGE_USAGE_SAMPLED_BIT |
-                                           VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-                                  .mipmapCount = 1,
-                              });
+    auto volumeTexture = CreateVolume(
+        context, TextureCreationInfo{
+                     .width = width,
+                     .height = height,
+                     .depth = static_cast<uint32_t>(slices.size()),
+                     .format = slices[0]->GetFormat(),
+                     .usage = usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+                     .mipmapCount = 1,
+                 });
 
     if (Error::IsError(volumeTexture)) {
       return tl::unexpected(volumeTexture.error());

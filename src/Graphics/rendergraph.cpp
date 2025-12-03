@@ -1030,8 +1030,8 @@ auto inline GetImageBindingLayout(const RenderGraph &graph,
   const auto &resource = graph.resources[binding.resource];
   const auto &texture = std::get<Ref<Texture::Texture>>(resource.info);
 
-  bool isDepthTexture = Texture::IsDepthTexture(texture->format);
-  bool isStencilTexture = Texture::IsStencilTexture(texture->format);
+  bool isDepthTexture = Image::IsDepthTexture(texture->format);
+  bool isStencilTexture = Image::IsStencilTexture(texture->format);
   bool isDepthStencilTexture = isDepthTexture && isStencilTexture;
 
   // === STORAGES === //
@@ -1357,7 +1357,7 @@ auto inline CreateGraphResourceTransitions(GraphicsContext &context,
       barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
       barrier.image = texture->image;
       barrier.subresourceRange.aspectMask =
-          Texture::GetTextureAspectFlags(texture->format);
+          Image::GetTextureAspectFlags(texture->format);
       barrier.subresourceRange.baseMipLevel = 0;
       barrier.subresourceRange.levelCount = texture->mipmapcount;
       barrier.subresourceRange.baseArrayLayer = 0;
@@ -1401,7 +1401,7 @@ auto inline CreateGraphImageBarriers(GraphicsContext &context,
       barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
       barrier.image = texture->image;
       barrier.subresourceRange.aspectMask =
-          Texture::GetTextureAspectFlags(texture->format);
+          Image::GetTextureAspectFlags(texture->format);
       barrier.subresourceRange.baseMipLevel = 0;
       barrier.subresourceRange.levelCount = texture->mipmapcount;
       barrier.subresourceRange.baseArrayLayer = 0;
@@ -1531,9 +1531,9 @@ auto inline ApplyPassBarriers(VkCommandBuffer commandBuffer,
       auto &resource = graph.resources[binding.resource];
       if (resource.type == Type::Texture) {
         const auto &texture = std::get<Ref<Texture::Texture>>(resource.info);
-        if (Texture::IsDepthTexture(texture->format)) {
+        if (Image::IsDepthTexture(texture->format)) {
           hasDepthAttachment = true;
-        } else if (Texture::IsStencilTexture(texture->format)) {
+        } else if (Image::IsStencilTexture(texture->format)) {
           hasStencilAttachment = true;
         } else {
           colorAttachmentCount++;
@@ -1711,7 +1711,7 @@ auto inline ApplyPassBarriers(VkCommandBuffer commandBuffer,
         const auto &tex = std::get<Ref<Texture::Texture>>(resource.info);
 
         // Heuristic size (not actual alloc size)
-        auto texels = Texture::GetTexelCount(tex->size, tex->mipmapcount);
+        auto texels = Image::GetTexelCount(tex->size, tex->mipmapcount);
         texels *= tex->arrayLayers;
         allocationInfo.size = texels * Image::GetFormatSize(tex->format);
 
@@ -1943,7 +1943,7 @@ auto inline AllocateGraphResourceMemory(GraphicsContext &context,
     if (resource.type == Type::Texture) {
       auto &texture = std::get<Ref<Texture::Texture>>(resource.info);
       resource.cost =
-          Texture::GetTexelCount(texture->size, texture->mipmapcount) *
+          Image::GetTexelCount(texture->size, texture->mipmapcount) *
           Image::GetFormatSize(texture->format);
 
       resource.cost *= texture->arrayLayers;
@@ -2062,12 +2062,12 @@ auto BeginPassRendering(GraphicsContext &context, RenderGraph &graph,
 
       auto texture = std::get<Ref<Texture::Texture>>(resource.info);
 
-      if (Texture::IsDepthTexture(texture->format)) {
+      if (Image::IsDepthTexture(texture->format)) {
         hasDepthAttachment = true;
         continue;
       }
 
-      if (Texture::IsStencilTexture(texture->format)) {
+      if (Image::IsStencilTexture(texture->format)) {
         hasStencilAttachment = true;
         continue;
       }

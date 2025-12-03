@@ -64,4 +64,24 @@ inline auto FromLuaObject(lua_State *state, int index) -> T * {
   return obj;
 }
 
+auto LuaType(lua_State *state, int index) -> Type const * {
+  // NOLINTNEXTLINE
+  auto *proxy = static_cast<Proxy *>(lua_touserdata(state, index));
+  if (proxy == nullptr || proxy->object == nullptr) {
+    return nullptr;
+  }
+
+  return proxy->type;
+}
+
+template <typename T> auto LuaIsType(lua_State *state, int index) -> bool {
+  // NOLINTNEXTLINE
+  auto *proxy = static_cast<Proxy *>(lua_touserdata(state, index));
+  if (proxy == nullptr || proxy->object == nullptr) {
+    return false;
+  }
+
+  return proxy->type == T::GetType();
+}
+
 } // namespace LuaWrap

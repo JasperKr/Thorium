@@ -633,24 +633,4 @@ auto wrap_GetWindingOrder(lua_State *state) -> int {
   return 1;
 }
 
-// Options:
-// { type = "2D"|"3D"|"array"|"cube", format = f, mipmaps = bool, usage = { "sampled", "colorattachment", ... }, mipmapcount = n, mipmapstart = n }
-// Variants:
-// Filepath -> load from file
-// Imagedata -> load from image data
-// Bytedata -> load from raw byte data
-// width, height -> 2D rgba8 1 mip, 1 layer texture
-// width, height, Options -> 2D or Cubemap texture
-// width, height, depth|layers, Options, -> 3D or Array texture
-auto wrap_NewTexture(lua_State *state) -> int {
-  auto *ctx = GetCurrentGraphicsContext();
-
-  auto type = *Texture::Texture::GetType();
-  int args = lua_gettop(state);
-
-  // LuaWrap::PushLuaType(state, type, texture.get());
-
-  return 1;
-}
-
 } // namespace Graphics
