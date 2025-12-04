@@ -19,8 +19,8 @@ struct Vertex {
   float color[3];    // NOLINT
 };
 
-static inline auto GetMeshes() -> std::vector<Ref<Graphics::Mesh<Vertex>>> & {
-  static std::vector<Ref<Graphics::Mesh<Vertex>>> meshes = {};
+static inline auto GetMeshes() -> std::vector<Ref<Graphics::Mesh>> & {
+  static std::vector<Ref<Graphics::Mesh>> meshes = {};
   return meshes;
 }
 
@@ -137,25 +137,6 @@ auto Load(Graphics::GraphicsContext &context) -> Error::Error {
     return graphErr;
   }
 
-  Graphics::VertexFormat format = {};
-  format.Attributes = {
-      {.location = 0,
-       .binding = 0,
-       .format = VK_FORMAT_R32G32B32_SFLOAT,
-       .offset = offsetof(Vertex, position)},
-      {.location = 1,
-       .binding = 0,
-       .format = VK_FORMAT_R32G32B32_SFLOAT,
-       .offset = offsetof(Vertex, color)},
-  };
-  format.Bindings = {
-      {.binding = 0,
-       .stride = sizeof(Vertex),
-       .inputRate = VK_VERTEX_INPUT_RATE_VERTEX},
-  };
-
-  VkVertexInputBindingDescription bindingDescription = format.Bindings[0];
-
   uint32_t vertexCount = 4;
   std::vector<Vertex> vertexData = {
 
@@ -169,7 +150,7 @@ auto Load(Graphics::GraphicsContext &context) -> Error::Error {
   std::cout << "Creating mesh..." << "\n";
 
   auto meshResult =
-      Graphics::Mesh<Vertex>::Create(context, format, vertexData, &indexData);
+      Graphics::Mesh::Create(context, format, vertexData, &indexData);
 
   if (Error::IsError(meshResult)) {
     std::cerr << "Failed to create mesh: " << meshResult.error().message

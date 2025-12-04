@@ -6,6 +6,8 @@
 #include "graphics.hpp"
 #include "rendertarget.hpp"
 #include "tl/expected.hpp"
+#include <cstdint>
+#include <span>
 #define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
 
@@ -19,10 +21,10 @@ struct MeshDrawRange {
 
 static const Type type = Type("Mesh");
 
-template <typename Vertex> struct Mesh : Object {
+struct Mesh : Object {
   VertexFormat Format = {.Attributes = {}, .Bindings = {}};
 
-  std::vector<Vertex> VertexData;
+  std::span<uint8_t> VertexData;
   std::vector<uint32_t> IndexData;
 
   Ref<Buffer> VertexBuffer;
@@ -30,7 +32,7 @@ template <typename Vertex> struct Mesh : Object {
 
   MeshDrawRange DrawRange = {.Offset = 0, .Count = 0};
 
-  auto VkFormatSize(VkFormat format) -> uint32_t {
+  static auto VkFormatSize(VkFormat format) -> uint32_t {
     const int floatSize = 4;
     const int intSize = 4;
     const int shortSize = 2;
@@ -138,7 +140,7 @@ template <typename Vertex> struct Mesh : Object {
     }
   }
 
-  auto VertexFormatSize(VertexFormat &format) -> uint32_t {
+  static auto VertexFormatSize(VertexFormat &format) -> uint32_t {
     uint32_t size = 0;
     for (auto &Attribute : format.Attributes) {
       size += VkFormatSize(Attribute.format);
@@ -158,17 +160,27 @@ template <typename Vertex> struct Mesh : Object {
     return IndexBuffer->SetData(context, IndexData.data(), dataSize, 0);
   }
 
-  static auto Create(GraphicsContext &context, VertexFormat &format,
-                     std::vector<Vertex> &vertexData,
+  static auto Create(GraphicsContext &context, VertexFormats format,
+                     std::span<uint8_t> &vertexData,
                      std::vector<uint32_t> *indexData)
-      -> tl::expected<Ref<Mesh<Vertex>>, Error::Error> {
+      -> tl::expected<Ref<Mesh>, Error::Error> {
 
-    auto meshData = Ref<Mesh<Vertex>>::Make();
+    auto meshData = Ref<Mesh>::Make();
     auto *mesh = meshData.get();
 
     std::cout << meshData.get() << "\n";
 
-    uint64_t verticesSize = vertexData.size() * mesh->VertexFormatSize(format);
+    auto vertexFormatIterator = PredefinedVertexFormats.find(format);
+
+    if (vertexFormatIterator == PredefinedVertexFormats.end()) {
+      return tl::make_unexpected(Error::Create(
+          "Unsupported vertex format specified for mesh creation."));
+    }
+
+    VertexFormat vertexFormat = vertexFormatIterator->second;
+
+    uint64_t verticesSize =
+        vertexData.size() * Graphics::Mesh::VertexFormatSize(vertexFormat);
 
     bool hasIndices = indexData != nullptr;
     uint32_t indexCount =
@@ -176,7 +188,7 @@ template <typename Vertex> struct Mesh : Object {
 
     uint64_t indicesSize = indexCount * sizeof(uint32_t);
 
-    mesh->Format = format;
+    mesh->Format = vertexFormat;
     mesh->VertexData = vertexData;
     mesh->IndexData = hasIndices ? *indexData : std::vector<uint32_t>{};
 
@@ -234,17 +246,17 @@ template <typename Vertex> struct Mesh : Object {
     return meshData;
   }
 
-  void Destroy(GraphicsContext &context) {
+  void Destroy(GraphicsContext &context) const {
     VertexBuffer->Destroy(context);
     IndexBuffer->Destroy(context);
   }
 
-  auto GetVertexFormat() -> VertexFormat { return Format; }
-  auto GetVertexCount() -> uint32_t {
+  auto GetVertexFormat() const -> VertexFormat { return Format; }
+  auto GetVertexCount() const -> uint32_t {
     return static_cast<uint32_t>(VertexData.size());
   }
   auto GetVertexData() -> auto * { return VertexData.data(); }
-  auto GetIndexCount() -> uint32_t {
+  auto GetIndexCount() const -> uint32_t {
     return static_cast<uint32_t>(IndexData.size());
   }
   auto GetIndexData() -> void * { return IndexData.data(); }
@@ -259,9 +271,9 @@ template <typename Vertex> struct Mesh : Object {
     DrawRange.Offset = range.Offset;
     DrawRange.Count = range.Count;
   }
-  auto GetDrawRange() -> MeshDrawRange { return DrawRange; }
+  auto GetDrawRange() const -> MeshDrawRange { return DrawRange; }
 
-  void Bind(VkCommandBuffer cmdBuffer) {
+  void Bind(VkCommandBuffer cmdBuffer) const {
     std::vector<VkBuffer> vertexBuffers = {VertexBuffer->handle};
     std::vector<VkDeviceSize> offsets = {0};
     vkCmdBindVertexBuffers(cmdBuffer, 0, 1, vertexBuffers.data(),
@@ -272,7 +284,7 @@ template <typename Vertex> struct Mesh : Object {
     }
   }
 
-  auto Draw(GraphicsContext &context) -> Error::Error {
+  auto Draw(GraphicsContext &context) const -> Error::Error {
     auto error = RenderTarget::PrepareDraw(context);
     if (Error::IsError(error)) {
       return error;
@@ -293,7 +305,7 @@ template <typename Vertex> struct Mesh : Object {
     return Error::Success();
   }
 
-  auto DrawInstanced(GraphicsContext &context, uint32_t instanceCount)
+  auto DrawInstanced(GraphicsContext &context, uint32_t instanceCount) const
       -> Error::Error {
     auto error = RenderTarget::PrepareDraw(context);
     if (Error::IsError(error)) {
