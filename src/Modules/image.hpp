@@ -395,6 +395,72 @@ static inline auto StringToFormat(const std::string &format) -> VkFormat {
   return VK_FORMAT_UNDEFINED;
 }
 
+// NOLINTNEXTLINE VkFormat -> string
+static inline auto FormatToString(VkFormat format) -> std::string {
+  switch (format) {
+  case VK_FORMAT_R8G8B8A8_UNORM:
+    return "rgba8";
+  case VK_FORMAT_R16G16B16A16_UNORM:
+    return "rgba16";
+  case VK_FORMAT_R16G16B16A16_SFLOAT:
+    return "rgba16f";
+  case VK_FORMAT_R32G32B32A32_SFLOAT:
+    return "rgba32f";
+  case VK_FORMAT_R8G8B8A8_UINT:
+    return "rgba8ui";
+  case VK_FORMAT_R16G16B16A16_UINT:
+    return "rgba16ui";
+  case VK_FORMAT_R32G32B32A32_UINT:
+    return "rgba32ui";
+  case VK_FORMAT_R8G8B8A8_SINT:
+    return "rgba8si";
+  case VK_FORMAT_R16G16B16A16_SINT:
+    return "rgba16si";
+  case VK_FORMAT_R32G32B32A32_SINT:
+    return "rgba32si";
+  case VK_FORMAT_D16_UNORM:
+    return "depth16";
+  case VK_FORMAT_X8_D24_UNORM_PACK32:
+    return "depth24";
+  case VK_FORMAT_D32_SFLOAT:
+    return "depth32";
+  case VK_FORMAT_D24_UNORM_S8_UINT:
+    return "depth24stencil8";
+  case VK_FORMAT_D32_SFLOAT_S8_UINT:
+    return "depth32stencil8";
+  case VK_FORMAT_B10G11R11_UFLOAT_PACK32:
+    return "rg11b10f";
+  case VK_FORMAT_E5B9G9R9_UFLOAT_PACK32:
+    return "rgb9e5";
+  case VK_FORMAT_A2B10G10R10_UNORM_PACK32:
+    return "rgb10a2";
+  case VK_FORMAT_A2B10G10R10_UINT_PACK32:
+    return "rgb10a2ui";
+  case VK_FORMAT_A1R5G5B5_UNORM_PACK16:
+    return "bgr5a1";
+  case VK_FORMAT_R5G6B5_UNORM_PACK16:
+    return "bgr565";
+  case VK_FORMAT_R4G4B4A4_UNORM_PACK16:
+    return "rgba4";
+  case VK_FORMAT_BC1_RGBA_UNORM_BLOCK:
+    return "bc1";
+  case VK_FORMAT_BC3_UNORM_BLOCK:
+    return "bc3";
+  case VK_FORMAT_BC4_UNORM_BLOCK:
+    return "bc4";
+  case VK_FORMAT_BC5_UNORM_BLOCK:
+    return "bc5";
+  case VK_FORMAT_BC6H_UFLOAT_BLOCK:
+    return "bc6h";
+  case VK_FORMAT_BC6H_SFLOAT_BLOCK:
+    return "bc6hs";
+  case VK_FORMAT_BC7_UNORM_BLOCK:
+    return "bc7";
+  default:
+    return "undefined";
+  }
+}
+
 // Returns total texel count for ALL mip levels, for ONE layer only.
 // Caller must multiply by arrayLayers or 6 for cubemaps if needed.
 static inline auto GetTexelCount(const VkExtent2D &extent,

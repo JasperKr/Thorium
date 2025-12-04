@@ -2,6 +2,7 @@
 
 #include "Graphics/texture.hpp"
 #include "Wrap/wrap.hpp"
+#include <iostream>
 #include <lauxlib.h>
 #include <lua.h>
 namespace Graphics::Texture {
@@ -21,6 +22,10 @@ auto Wrap_GetWidth(lua_State *state) -> int;
 auto Wrap_GetHeight(lua_State *state) -> int;
 auto Wrap_GetDepth(lua_State *state) -> int;
 auto Wrap_GetDimensions(lua_State *state) -> int;
+auto Wrap_GetMipmapCount(lua_State *state) -> int;
+auto Wrap_GetFormat(lua_State *state) -> int;
+
+auto wrap_NewTexture(lua_State *state) -> int;
 
 // NOLINTNEXTLINE
 static const luaL_Reg TextureLib[] = {
@@ -28,8 +33,8 @@ static const luaL_Reg TextureLib[] = {
     {"getFilter", Wrap_GetFilter},
     {"setAnisotropy", Wrap_SetAnisotropy},
     {"getAnisotropy", Wrap_GetAnisotropy},
-    {"setWrapmode", Wrap_SetWrapmode},
-    {"getWrapmode", Wrap_GetWrapmode},
+    {"setWrap", Wrap_SetWrapmode},
+    {"getWrap", Wrap_GetWrapmode},
     {"setLodBias", Wrap_SetLodBias},
     {"getLodBias", Wrap_GetLodBias},
     {"setLodRange", Wrap_SetLodRange},
@@ -40,16 +45,13 @@ static const luaL_Reg TextureLib[] = {
     {"getHeight", Wrap_GetHeight},
     {"getDepth", Wrap_GetDepth},
     {"getDimensions", Wrap_GetDimensions},
+    {"getMipmapCount", Wrap_GetMipmapCount},
+    {"getFormat", Wrap_GetFormat},
     {nullptr, nullptr} // terminate with nullptr
 };
 
 extern "C" inline auto luaopen_texture(lua_State *state) -> int {
-  LuaWrap::LuaModule module = {
-      .Name = "Texture",
-      .Functions = TextureLib, // NOLINT
-      .ChildrenInitFunctions = nullptr,
-      .ModuleType = nullptr,
-  };
+  std::cout << "Registering Texture Lua type.\n";
 
   // NOLINTNEXTLINE
   LuaWrap::RegisterLuaType(state, Texture::GetType(), TextureLib);

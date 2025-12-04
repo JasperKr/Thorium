@@ -774,7 +774,7 @@ auto Texture::SetWrapmode(VkSamplerAddressMode addressModeU,
   samplerDirty = true;
 }
 
-auto Texture::GetWrapmode() const
+auto Texture::GetWrap() const
     -> std::tuple<VkSamplerAddressMode, VkSamplerAddressMode,
                   VkSamplerAddressMode> {
   return {samplerDescription.addressModeU, samplerDescription.addressModeV,

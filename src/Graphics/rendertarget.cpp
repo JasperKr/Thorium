@@ -2,6 +2,7 @@
 #include "Graphics/graphics.hpp"
 #include "Graphics/shader.hpp"
 #include "Modules/error.hpp"
+#include "Modules/image.hpp"
 #include "slang/slang.h"
 #include "tl/expected.hpp"
 #include "vulkan/vulkan_core.h"
@@ -233,9 +234,9 @@ inline auto CreatePipeline(const GraphicsContext &context, const State &state)
     blendAttachments[location] = rendertarget->blendMode;
     formats[location] = rendertarget->texture->format;
 
-    if (Texture::IsDepthTexture(rendertarget->texture->format)) {
+    if (Image::IsDepthTexture(rendertarget->texture->format)) {
       hasDepthAttachment = true;
-    } else if (Texture::IsStencilTexture(rendertarget->texture->format)) {
+    } else if (Image::IsStencilTexture(rendertarget->texture->format)) {
       hasStencilAttachment = true;
     }
   }
@@ -469,11 +470,11 @@ inline auto BeginRendering(GraphicsContext &context) -> void {
     attachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     attachmentInfo.clearValue = rendertarget->clearValue;
 
-    if (Texture::IsDepthTexture(rendertarget->texture->format)) {
+    if (Image::IsDepthTexture(rendertarget->texture->format)) {
       depthAttachment = attachmentInfo;
       depthAttachment.imageLayout =
           VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-    } else if (Texture::IsStencilTexture(rendertarget->texture->format)) {
+    } else if (Image::IsStencilTexture(rendertarget->texture->format)) {
       stencilAttachment = attachmentInfo;
       stencilAttachment.imageLayout =
           VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;

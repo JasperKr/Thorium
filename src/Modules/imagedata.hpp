@@ -2,6 +2,8 @@
 
 #include "Modules/bytedata.hpp"
 #include "Modules/image.hpp"
+#include "Modules/object.hpp"
+#include "Modules/type.hpp"
 #include "color.hpp"
 #include "vector.hpp"
 #include "vulkan/vulkan_core.h"
@@ -10,7 +12,9 @@
 #include <vector>
 namespace Image {
 
-struct ImageData {
+static const Type type = Type("ImageData");
+
+struct ImageData : Object {
 public:
   auto SetColor(Uvec2 position, const Color &color) -> void;
   auto GetColor(Uvec2 position) -> Color &;
@@ -49,6 +53,8 @@ public:
         data(byteData.GetSize()) {
     std::memcpy(data.data(), byteData.GetData(), byteData.GetSize());
   }
+
+  static auto GetType() -> const Type * { return &type; }
 
 private:
   uint32_t width;

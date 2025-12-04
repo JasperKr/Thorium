@@ -41,11 +41,16 @@ inline auto SetStackToRegistry(lua_State *state, const char *key) -> void {
 
 auto SetStackToTable(lua_State *state, const char *key) -> void;
 auto RegisterLuaType(lua_State *state, const LuaModule &module) -> void;
-auto PushLuaType(lua_State *state, Type &type, Object *object) -> void;
+auto PushLuaType(lua_State *state, const Type *type, Object *object) -> void;
 auto RegisterLuaType(lua_State *state, const Type *type,
                      const luaL_Reg *functions) -> void;
 
-inline auto FromLuaObject(lua_State *state, int index) -> Proxy * {
+inline auto ProxyFromLuaObject(lua_State *state, int index) -> Proxy * {
+  // Check if userdata
+  if (lua_isuserdata(state, index) == 0) {
+    return nullptr;
+  }
+
   // NOLINTNEXTLINE
   auto *proxy = static_cast<Proxy *>(lua_touserdata(state, index));
   return proxy;
@@ -64,7 +69,7 @@ inline auto FromLuaObject(lua_State *state, int index) -> T * {
   return obj;
 }
 
-auto LuaType(lua_State *state, int index) -> Type const * {
+inline auto LuaType(lua_State *state, int index) -> Type const * {
   // NOLINTNEXTLINE
   auto *proxy = static_cast<Proxy *>(lua_touserdata(state, index));
   if (proxy == nullptr || proxy->object == nullptr) {
@@ -74,7 +79,8 @@ auto LuaType(lua_State *state, int index) -> Type const * {
   return proxy->type;
 }
 
-template <typename T> auto LuaIsType(lua_State *state, int index) -> bool {
+template <typename T>
+inline auto LuaIsType(lua_State *state, int index) -> bool {
   // NOLINTNEXTLINE
   auto *proxy = static_cast<Proxy *>(lua_touserdata(state, index));
   if (proxy == nullptr || proxy->object == nullptr) {

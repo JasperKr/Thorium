@@ -1,5 +1,6 @@
 #include "wrap.hpp"
 
+#include <cstdint>
 #include <iostream>
 #include <lauxlib.h>
 #include <lua.h>
@@ -13,10 +14,9 @@
 
 namespace LuaWrap {
 
-// NOLINTNEXTLINE
-static auto wrap__gc(lua_State *state) -> int {
-  // NOLINTNEXTLINE
-  auto *proxy = (Proxy *)lua_touserdata(state, 1);
+static auto wrap_gc(lua_State *state) -> int {
+  std::cout << "Calling __gc metamethod.\n";
+  Proxy *proxy = ProxyFromLuaObject(state, 1);
   if (proxy->object != nullptr) {
     proxy->object->release();
     proxy->object = nullptr;
@@ -25,11 +25,66 @@ static auto wrap__gc(lua_State *state) -> int {
 }
 
 // NOLINTNEXTLINE
-static auto wrap__tostring(lua_State *state) -> int {
-  // NOLINTNEXTLINE
-  auto *proxy = (Proxy *)lua_touserdata(state, 1);
+static auto wrap_tostring(lua_State *state) -> int {
+  Proxy *proxy = ProxyFromLuaObject(state, 1);
   lua_pushfstring(state, "%s: %p", proxy->type->GetName().c_str(),
                   static_cast<void *>(proxy->object));
+  return 1;
+}
+
+static auto wrap_type(lua_State *state) -> int {
+  Proxy *proxy = ProxyFromLuaObject(state, 1);
+
+  if (proxy == nullptr) {
+    lua_pushnil(state);
+    return 1;
+  }
+
+  std::cout << "Getting type of object.\n";
+  std::cout << "Type name: " << proxy->type->GetName() << "\n";
+  lua_pushstring(state, proxy->type->GetName().c_str());
+  return 1;
+}
+
+static auto wrap_typeof(lua_State *state) -> int {
+  Proxy *proxy = ProxyFromLuaObject(state, 1);
+  const auto *typeName = luaL_checkstring(state, 2);
+  bool sameType = (proxy->type->GetName() == typeName);
+  lua_pushboolean(state, sameType ? 1 : 0);
+  return 1;
+}
+
+static auto wrap_eq(lua_State *state) -> int {
+  Proxy *proxyA = ProxyFromLuaObject(state, 1);
+  Proxy *proxyB = ProxyFromLuaObject(state, 2);
+  bool isEqual = (proxyA->object == proxyB->object);
+  lua_pushboolean(state, isEqual ? 1 : 0);
+  return 1;
+}
+
+static auto wrap_release(lua_State *state) -> int {
+  std::cout << "Releasing Lua object.\n";
+  Proxy *proxy = ProxyFromLuaObject(state, 1);
+  if (proxy->object != nullptr) {
+    proxy->object->release();
+    proxy->object = nullptr;
+
+    // load "Thorium" table
+    lua_getglobal(state, "Thorium"); // [Thorium]
+
+    // NOLINTNEXTLINE
+    auto key = (uintptr_t)(proxy->object);
+    // NOLINTNEXTLINE
+    lua_pushlightuserdata(state, (void *)key); // [Thorium, key]
+    lua_pushnil(state);                        // [Thorium, key, nil]
+    lua_settable(state, -3);                   // Thorium[key] = nil  [Thorium]
+
+    lua_pop(state, -1); // []
+  }
+
+  // Success if object is now null
+  lua_pushboolean(state, proxy->object == nullptr ? 1 : 0);
+
   return 1;
 }
 
@@ -42,6 +97,10 @@ auto SetStackToTable(lua_State *state, const char *key) -> void {
     lua_pushvalue(state, -1);
     lua_setglobal(state, key);
   }
+}
+
+auto LoadStorageTable(lua_State *state, const char *key) -> void {
+  lua_getfield(state, LUA_REGISTRYINDEX, key);
 }
 
 auto RegisterLuaModule(lua_State *state, const LuaModule &module) -> void {
@@ -64,7 +123,7 @@ auto RegisterLuaModule(lua_State *state, const LuaModule &module) -> void {
   luaL_newmetatable(state, name);     // Create metatable [_modules, mt]
   lua_pushvalue(state, -1);           // Duplicate metatable [_modules, mt, mt]
   lua_setfield(state, -2, "__index"); // mt.__index = mt [_modules, mt]
-  lua_pushcfunction(state, wrap__gc); // [_modules, mt, wrap__gc]
+  lua_pushcfunction(state, wrap_gc);  // [_modules, mt, wrap__gc]
   lua_setfield(state, -2, "__gc");    // mt.__gc = wrap__gc [_modules, mt]
 
   lua_setmetatable(state, -2); // [_modules, module] Set metatable for userdata
@@ -129,15 +188,51 @@ auto RegisterLuaType(lua_State *state, const Type *type,
     return;
   }
 
+  std::cout << "Registering Lua type: " << type->GetName() << "\n";
+
+  // Make sure permanent object storage table exists with weak values
+  LoadStorageTable(state, "ThoriumObjectStorage"); // [storage]
+
+  if (!lua_istable(state, -1)) {
+    // Remove non-table value
+    lua_pop(state, 1); // []
+
+    std::cout << "Creating permanent object storage table."
+              << "\n";
+
+    lua_newtable(state);      // [object storage]
+    lua_pushvalue(state, -1); // [object storage]
+
+    lua_newtable(state);        // [object storage, mt]
+    lua_pushstring(state, "v"); // [object storage, mt, "v"]
+    lua_setfield(
+        state, -2,
+        "__mode");    // mt.__mode = "v" [object storage, mt] make weak values
+    lua_setmetatable( // [object storage]
+        state, -2);   // set metatable for object storage
+    lua_setfield(state, LUA_REGISTRYINDEX,
+                 "ThoriumObjectStorage"); // [storage]
+  } else {
+    lua_pop(state, 1); // Remove table value
+  }
+
   const auto *name = type->GetName().c_str();
 
   luaL_newmetatable(state, name);     // Create metatable [mt]
   lua_pushvalue(state, -1);           // Duplicate metatable [mt, mt]
   lua_setfield(state, -2, "__index"); // mt.__index = mt [mt]
-  lua_pushcfunction(state, wrap__gc); // [mt, wrap__gc]
+  lua_pushcfunction(state, wrap_gc);  // [mt, wrap__gc]
   lua_setfield(state, -2, "__gc");    // mt.__gc = wrap__gc [mt]
-  lua_pushcfunction(state, wrap__tostring);
+  lua_pushcfunction(state, wrap_tostring);
   lua_setfield(state, -2, "__tostring"); // mt.__tostring = wrap__tostring [mt]
+  lua_pushcfunction(state, wrap_type);
+  lua_setfield(state, -2, "type"); // mt.type = wrap_type [mt]
+  lua_pushcfunction(state, wrap_typeof);
+  lua_setfield(state, -2, "typeof"); // mt.typeof = wrap_typeof [mt]
+  lua_pushcfunction(state, wrap_eq);
+  lua_setfield(state, -2, "__eq"); // mt.__eq = wrap_eq [mt]
+  lua_pushcfunction(state, wrap_release);
+  lua_setfield(state, -2, "release"); // mt.release = wrap_release [mt]
 
   // Register functions
   if (functions != nullptr) {
@@ -145,42 +240,100 @@ auto RegisterLuaType(lua_State *state, const Type *type,
     while (func->name != nullptr) {
       lua_pushcfunction(state, func->func); // [mt, func]
       lua_setfield(state, -2, func->name);  // [mt]
+      std::cout << "Registered Lua type function " << type->GetName() << ": "
+                << func->name << "\n";
       func++; // NOLINT, functions are nullptr-terminated
     }
   }
 
   lua_pop(state, 1); // []
 }
-auto PushLuaType(lua_State *state, Type &type, Object *object) -> void {
+
+auto SetupLuaType(lua_State *state, const Type *type, Object *object) -> void {
   // NOLINTNEXTLINE
-  auto *proxy = (Proxy *)lua_newuserdata(state, sizeof(Proxy));
-  proxy->type = &type;
+  auto *proxy = (Proxy *)lua_newuserdata(state, sizeof(Proxy)); // [userdata]
+  proxy->type = type;
   proxy->object = object;
-  if (object != nullptr) {
-    object->retain();
+
+  object->retain();
+
+  const auto *name = type->GetName().c_str();
+
+  std::cout << "Pushing Lua type: " << name << "\n";
+
+  luaL_newmetatable(state, name); // Get metatable, [userdata, mt]
+
+  lua_getfield(state, -1, "__gc");
+  bool hasGC = (lua_isfunction(state, -1) != 0);
+  lua_pop(state, 1);
+
+  if (!hasGC) {
+    // Add GC function
+    lua_pushcfunction(state, wrap_gc); // [mt, wrap__gc]
+    lua_setfield(state, -2, "__gc");   // mt.__gc = wrap__gc [mt]
   }
 
-  const auto *name = type.GetName().c_str();
-
-  luaL_getmetatable(state, name); // Get metatable
-
-  lua_setmetatable(state, -2); // Set metatable for userdata
+  lua_setmetatable(state, -2); // Set metatable for userdata, [userdata]
 }
 
-auto PushLuaType(lua_State *state, const Proxy &proxy) -> void {
-  // NOLINTNEXTLINE
-  auto *lproxy = (Proxy *)lua_newuserdata(state, sizeof(Proxy));
-  lproxy->type = proxy.type;
-  lproxy->object = proxy.object;
-  if (lproxy->object != nullptr) {
-    lproxy->object->retain();
+auto PushLuaType(lua_State *state, const Type *type, Object *object) -> void {
+  std::cout << "Pushing Lua type for object of type: " << type->GetName()
+            << "\n";
+
+  if (object == nullptr) {
+    lua_pushnil(state);
+    return;
   }
 
-  const auto *name = lproxy->type->GetName().c_str();
+  // fetch permanent object storage table
+  LoadStorageTable(state, "ThoriumObjectStorage"); // [storage]
 
-  luaL_getmetatable(state, name); // Get metatable
+  if (lua_isnil(state, -1) != 0) {
+    lua_pop(state, 1); // Remove nil [empty]
 
-  lua_setmetatable(state, -2); // Set metatable for userdata
+    std::cout << "Creating permanent object storage table."
+              << "\n";
+
+    SetupLuaType(state, type, object); // [userdata]
+    return;
+  }
+
+  auto key = (uintptr_t)(object);            // NOLINT
+  lua_pushlightuserdata(state, (void *)key); // [storage, key] NOLINT
+  lua_gettable(state, -2);                   // [storage, value]
+
+  if (lua_type(state, -1) != LUA_TUSERDATA) {
+    lua_pop(state, 1); // Remove nil [storage]
+
+    // Create new userdata
+    SetupLuaType(state, type, object); // [storage, userdata]
+    std::cout << "Created new Lua userdata for object of type: "
+              << type->GetName() << "\n";
+
+    // Store in storage table
+    lua_pushlightuserdata(state,
+                          (void *)key); // [storage, userdata, key] NOLINT
+    lua_pushvalue(state, -2);           // [storage, userdata, key, userdata]
+    lua_settable(state, -4); // storage[key] = userdata [storage, userdata]
+  }
+
+  lua_remove(state, -2); // Remove storage table [userdata]
+
+  // debug print amount of key-value pairs in storage
+  // LoadStorageTable(state, "ThoriumObjectStorage"); // [storage]
+  // int count = 0;
+  // lua_pushnil(state); // first key
+  // while (lua_next(state, -2) != 0) {
+  //   count++;
+  //   lua_pop(state, 1); // remove value, keep key for next iteration
+  // }
+  // std::cout << "Permanent object storage contains " << count << " objects."
+  //           << "\n";
+
+  // Debug load the userdata again to verify
+  auto *proxy = ProxyFromLuaObject(state, -1);
+  std::cout << "Pushed Lua userdata for object of type: "
+            << proxy->type->GetName() << "\n";
 }
 
 // NOLINTNEXTLINE

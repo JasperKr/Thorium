@@ -29,4 +29,19 @@ end
 function Thorium.quit()
   print("Quitting the application.")
 end
-local x = Thorium.graphics.newTexture()
+local x = Thorium.graphics.newTexture(32, 32)
+print(type(x))
+
+local mt = getmetatable(x)
+for k, v in pairs(mt) do
+  print("Metatable key:", k, "value type:", type(v))
+end
+
+print(x:type())
+print(x:typeof("Texture"))
+print(x:getWidth(), x:getHeight())
+print(x:getFormat())
+print(x:getMipmapCount())
+print(x:getFilter())
+print(x:getWrap())
+print(x:getDimensions())

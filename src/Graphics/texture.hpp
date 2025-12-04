@@ -54,7 +54,7 @@ struct Texture : Object {
   auto SetWrapmode(VkSamplerAddressMode addressModeU,
                    VkSamplerAddressMode addressModeV,
                    VkSamplerAddressMode addressModeW) -> void;
-  [[nodiscard]] auto GetWrapmode() const
+  [[nodiscard]] auto GetWrap() const
       -> std::tuple<VkSamplerAddressMode, VkSamplerAddressMode,
                     VkSamplerAddressMode>;
   auto SetLodBias(float mipLodBias) -> void;
@@ -75,6 +75,8 @@ struct Texture : Object {
                  VkOffset2D target) -> Error::Error;
   auto SetPixels(GraphicsContext &context, Image::ImageData &imageData,
                  uint32_t mipLevel, uint32_t arrayLayer) -> Error::Error;
+  [[nodiscard]] auto GetMipmapCount() const -> size_t { return mipmapcount; }
+  [[nodiscard]] auto GetFormat() const -> VkFormat { return format; }
 
   static auto GetType() -> Type const * { return &type; }
 };

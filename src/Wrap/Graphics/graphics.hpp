@@ -38,8 +38,6 @@ auto wrap_GetRenderTargets(lua_State *state) -> int;
 auto wrap_GetLineWidth(lua_State *state) -> int;
 auto wrap_GetWindingOrder(lua_State *state) -> int;
 
-auto wrap_NewTexture(lua_State *state) -> int;
-
 // NOLINTNEXTLINE
 static const luaL_Reg GraphicsLib[] = {
     {"present", wrap_Present},
@@ -65,7 +63,7 @@ static const luaL_Reg GraphicsLib[] = {
     {"getRenderTargets", wrap_GetRenderTargets},
     {"getLineWidth", wrap_GetLineWidth},
     {"getWindingOrder", wrap_GetWindingOrder},
-    {"newTexture", wrap_NewTexture},
+    {"newTexture", Texture::wrap_NewTexture},
     {nullptr, nullptr},
 };
 

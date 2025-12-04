@@ -590,7 +590,7 @@ auto wrap_GetShader(lua_State *state) -> int {
   auto *ctx = GetCurrentGraphicsContext();
   auto ref = RenderTarget::GetShader();
 
-  auto type = *Shader::ShaderModule::GetType();
+  const auto *type = Shader::ShaderModule::GetType();
 
   LuaWrap::PushLuaType(state, type, ref.get());
 
@@ -604,7 +604,7 @@ auto wrap_GetRenderTargets(lua_State *state) -> int {
   lua_newtable(state);
   for (size_t i = 0; i < renderTargets.size(); ++i) {
     auto &renderTarget = renderTargets[i];
-    auto type = *RenderTarget::RenderTarget::GetType();
+    const auto *type = RenderTarget::RenderTarget::GetType();
 
     LuaWrap::PushLuaType(state, type, renderTarget.get());
     lua_rawseti(state, -2, static_cast<int>(i + 1));
