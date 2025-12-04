@@ -44,6 +44,8 @@ auto RegisterLuaType(lua_State *state, const LuaModule &module) -> void;
 auto PushLuaType(lua_State *state, const Type *type, Object *object) -> void;
 auto RegisterLuaType(lua_State *state, const Type *type,
                      const luaL_Reg *functions) -> void;
+auto SetupLuaType(lua_State *state, const Type *type, Object *object) -> void;
+auto LoadStorageTable(lua_State *state, const char *key) -> void;
 
 inline auto ProxyFromLuaObject(lua_State *state, int index) -> Proxy * {
   // Check if userdata

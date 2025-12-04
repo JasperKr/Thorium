@@ -10,12 +10,9 @@
 #include "Wrap/Modules/event.hpp"
 #include "Wrap/Modules/timer.hpp"
 
-#include "Modules/console.hpp"
-
 namespace LuaWrap {
 
 static auto wrap_gc(lua_State *state) -> int {
-  std::cout << "Calling __gc metamethod.\n";
   Proxy *proxy = ProxyFromLuaObject(state, 1);
   if (proxy->object != nullptr) {
     proxy->object->release();
@@ -40,8 +37,6 @@ static auto wrap_type(lua_State *state) -> int {
     return 1;
   }
 
-  std::cout << "Getting type of object.\n";
-  std::cout << "Type name: " << proxy->type->GetName() << "\n";
   lua_pushstring(state, proxy->type->GetName().c_str());
   return 1;
 }
@@ -63,21 +58,23 @@ static auto wrap_eq(lua_State *state) -> int {
 }
 
 static auto wrap_release(lua_State *state) -> int {
-  std::cout << "Releasing Lua object.\n";
   Proxy *proxy = ProxyFromLuaObject(state, 1);
-  if (proxy->object != nullptr) {
-    proxy->object->release();
+  Object *object = proxy->object;
+
+  if (object != nullptr) {
     proxy->object = nullptr;
+    object->release();
 
-    // load "Thorium" table
-    lua_getglobal(state, "Thorium"); // [Thorium]
+    // load object storage table
+    LoadStorageTable(state, "ThoriumObjectStorage"); // [storage]
 
     // NOLINTNEXTLINE
-    auto key = (uintptr_t)(proxy->object);
+    auto key = (uintptr_t)(object);
+
     // NOLINTNEXTLINE
-    lua_pushlightuserdata(state, (void *)key); // [Thorium, key]
-    lua_pushnil(state);                        // [Thorium, key, nil]
-    lua_settable(state, -3);                   // Thorium[key] = nil  [Thorium]
+    lua_pushlightuserdata(state, (void *)key); // [storage, key]
+    lua_pushnil(state);                        // [storage, key, nil]
+    lua_settable(state, -3);                   // storage[key] = nil  [storage]
 
     lua_pop(state, -1); // []
   }
@@ -104,7 +101,6 @@ auto LoadStorageTable(lua_State *state, const char *key) -> void {
 }
 
 auto RegisterLuaModule(lua_State *state, const LuaModule &module) -> void {
-  std::cout << "Registering Lua module: " << module.Name << "...\n";
   if (module.Functions == nullptr) {
     std::cerr << "Module " << module.Name << " has no functions to register."
               << "\n";
@@ -130,21 +126,14 @@ auto RegisterLuaModule(lua_State *state, const LuaModule &module) -> void {
   lua_setfield(state, -2, name); // [_modules] _modules[name] = module
   lua_pop(state, 1);             // []
 
-  std::cout << "Module " << module.Name << " metatable registered."
-            << "\n";
-
   SetStackToTable(state, "Thorium"); // [Thorium]
 
   lua_newtable(state); // [Thorium, module]
-
-  std::cout << "Module " << module.Name << " registered." << "\n";
 
   // register Functions to Thorium.modulename.functionname
   if (module.Functions != nullptr) {
     const luaL_Reg *func = module.Functions;
     while (func->name != nullptr) {
-      std::cout << "Registering function " << func->name << " in module "
-                << module.Name << "\n";
       lua_pushcfunction(state, func->func); // [Thorium, module, func]
       lua_setfield(state, -2, func->name);  // [Thorium, module]
       func++; // NOLINT, functions are nullptr-terminated
@@ -152,8 +141,6 @@ auto RegisterLuaModule(lua_State *state, const LuaModule &module) -> void {
   }
 
   lua_setfield(state, -2, name); // [Thorium]
-
-  std::cout << "Module " << module.Name << " functions registered." << "\n";
 
   // register init functions
   if (module.ChildrenInitFunctions != nullptr) {
@@ -164,9 +151,6 @@ auto RegisterLuaModule(lua_State *state, const LuaModule &module) -> void {
     }
   }
 
-  std::cout << "Module " << module.Name << " children initialized."
-            << "\n";
-
   // done, remove module table from stack
   lua_pop(state, 1); // []
 
@@ -174,10 +158,6 @@ auto RegisterLuaModule(lua_State *state, const LuaModule &module) -> void {
   lua_getglobal(state, "Thorium");                 // [Thorium]
   lua_getfield(state, -1, module.Name.c_str());    // [Thorium, module]
   lua_getfield(state, -1, module.Functions->name); // [Thorium, module, func]
-  if (lua_isfunction(state, -1)) {
-    std::cout << ColorText("Registed module successfully", ConsoleColor::Green)
-              << ": " << module.Name << "\n";
-  }
 }
 
 auto RegisterLuaType(lua_State *state, const Type *type,
@@ -188,17 +168,12 @@ auto RegisterLuaType(lua_State *state, const Type *type,
     return;
   }
 
-  std::cout << "Registering Lua type: " << type->GetName() << "\n";
-
   // Make sure permanent object storage table exists with weak values
   LoadStorageTable(state, "ThoriumObjectStorage"); // [storage]
 
   if (!lua_istable(state, -1)) {
     // Remove non-table value
     lua_pop(state, 1); // []
-
-    std::cout << "Creating permanent object storage table."
-              << "\n";
 
     lua_newtable(state);      // [object storage]
     lua_pushvalue(state, -1); // [object storage]
@@ -240,8 +215,6 @@ auto RegisterLuaType(lua_State *state, const Type *type,
     while (func->name != nullptr) {
       lua_pushcfunction(state, func->func); // [mt, func]
       lua_setfield(state, -2, func->name);  // [mt]
-      std::cout << "Registered Lua type function " << type->GetName() << ": "
-                << func->name << "\n";
       func++; // NOLINT, functions are nullptr-terminated
     }
   }
@@ -259,8 +232,6 @@ auto SetupLuaType(lua_State *state, const Type *type, Object *object) -> void {
 
   const auto *name = type->GetName().c_str();
 
-  std::cout << "Pushing Lua type: " << name << "\n";
-
   luaL_newmetatable(state, name); // Get metatable, [userdata, mt]
 
   lua_getfield(state, -1, "__gc");
@@ -277,9 +248,6 @@ auto SetupLuaType(lua_State *state, const Type *type, Object *object) -> void {
 }
 
 auto PushLuaType(lua_State *state, const Type *type, Object *object) -> void {
-  std::cout << "Pushing Lua type for object of type: " << type->GetName()
-            << "\n";
-
   if (object == nullptr) {
     lua_pushnil(state);
     return;
@@ -290,9 +258,6 @@ auto PushLuaType(lua_State *state, const Type *type, Object *object) -> void {
 
   if (lua_isnil(state, -1) != 0) {
     lua_pop(state, 1); // Remove nil [empty]
-
-    std::cout << "Creating permanent object storage table."
-              << "\n";
 
     SetupLuaType(state, type, object); // [userdata]
     return;
@@ -307,8 +272,6 @@ auto PushLuaType(lua_State *state, const Type *type, Object *object) -> void {
 
     // Create new userdata
     SetupLuaType(state, type, object); // [storage, userdata]
-    std::cout << "Created new Lua userdata for object of type: "
-              << type->GetName() << "\n";
 
     // Store in storage table
     lua_pushlightuserdata(state,
@@ -318,22 +281,6 @@ auto PushLuaType(lua_State *state, const Type *type, Object *object) -> void {
   }
 
   lua_remove(state, -2); // Remove storage table [userdata]
-
-  // debug print amount of key-value pairs in storage
-  // LoadStorageTable(state, "ThoriumObjectStorage"); // [storage]
-  // int count = 0;
-  // lua_pushnil(state); // first key
-  // while (lua_next(state, -2) != 0) {
-  //   count++;
-  //   lua_pop(state, 1); // remove value, keep key for next iteration
-  // }
-  // std::cout << "Permanent object storage contains " << count << " objects."
-  //           << "\n";
-
-  // Debug load the userdata again to verify
-  auto *proxy = ProxyFromLuaObject(state, -1);
-  std::cout << "Pushed Lua userdata for object of type: "
-            << proxy->type->GetName() << "\n";
 }
 
 // NOLINTNEXTLINE
@@ -351,7 +298,6 @@ auto RegisterModules(lua_State *state) -> void {
 
   const luaL_Reg *module = ThoriumModules; // NOLINT
   while (module->name != nullptr) {
-    std::cout << "Registering Lua module: " << module->name << "\n";
     module->func(state);
     module++; // NOLINT, modules are nullptr-terminated
   }
