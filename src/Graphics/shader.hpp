@@ -6,8 +6,10 @@
 #include "graphics.hpp"
 #include "hash.hpp"
 #include "slang/slang.h"
+#include <cstdint>
 #include <string>
 #include <unordered_map>
+#include <variant>
 #include <vector>
 #define VK_NO_PROTOTYPES
 #include "tl/expected.hpp"
@@ -17,16 +19,6 @@
 
 namespace Graphics::Shader {
 
-struct ShaderSource {
-  std::string source;
-  std::string code;
-  std::vector<ShaderSource> includeSources;
-  uint64_t modTime;
-
-  uint32_t lineCount;
-  uint32_t includedLineOffset;
-};
-
 struct ShaderExtern {
   std::string name;
   std::string value;
@@ -34,6 +26,52 @@ struct ShaderExtern {
   auto operator==(const ShaderExtern &other) const -> bool {
     return name == other.name && value == other.value;
   }
+};
+
+enum class ResourceKind : uint8_t {
+  UniformBuffer,
+  StorageBuffer,
+  SampledImage,
+  StorageImage,
+  Sampler,
+  CombinedImageSampler,
+  PushConstant
+};
+
+struct BufferInfo {
+  VkBuffer buffer;
+  VkDeviceSize offset;
+  VkDeviceSize range;
+};
+
+struct ImageInfo {
+  VkImageView view;
+  VkImageLayout layout;
+};
+
+struct SamplerInfo {
+  VkSampler sampler;
+};
+
+using ResourceInfo = std::variant<BufferInfo, ImageInfo, SamplerInfo>;
+
+struct ShaderResource {
+  std::string name;
+
+  uint32_t set;
+  uint32_t binding;
+
+  ResourceKind kind;
+  ResourceInfo value;
+
+  bool dirty = false;
+};
+
+struct PushConstantRange {
+  uint32_t offset;
+  uint32_t size;
+  std::vector<uint8_t> data;
+  bool dirty = false;
 };
 
 static const Type type = Type("Shader");
@@ -93,15 +131,6 @@ extern Ref<ShaderModule> DefaultShaderModule; // NOLINT
 
 auto LoadModule() -> Error::Error;
 void UnloadModule();
-
-static inline auto
-PreprocessShaderCodeLine(ShaderModule &shader, ShaderSource &currentSource,
-                         std::string &line, uint64_t &currentLineNumber)
-    -> Error::Error;
-static inline auto PreprocessShaderCode(ShaderModule &shader,
-                                        ShaderSource &currentSource,
-                                        uint64_t &currentLineNumber)
-    -> tl::expected<std::string, Error::Error>;
 
 auto AddGlobalShaderExtern(const ShaderExtern &externVar) -> void;
 

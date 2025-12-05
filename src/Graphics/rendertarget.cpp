@@ -60,6 +60,7 @@ auto inline BuildDescriptorSetLayoutBindings(
     vkBinding.stageFlags = VK_SHADER_STAGE_ALL;
 
     std::cout << fieldLayout->getCategory() << "\n";
+    std::cout << "NAME: " << fieldLayout->getName() << "\n";
 
     switch (fieldLayout->getCategory()) {
     case slang::ParameterCategory::ConstantBuffer:
