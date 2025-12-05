@@ -15,8 +15,7 @@
 
 #include "vertexformat.hpp"
 
-namespace Graphics {
-namespace Shader {
+namespace Graphics::Shader {
 
 struct ShaderSource {
   std::string source;
@@ -49,7 +48,11 @@ struct ShaderModule : Object {
 
   std::string name;
   std::vector<ShaderExtern> externs;
+
   slang::ProgramLayout *programLayout = nullptr;
+  Slang::ComPtr<slang::IModule> slangModule = nullptr;
+  Slang::ComPtr<slang::IComponentType> linkedProgram;
+
   VertexFormats expectedVertexFormat = VertexFormats::Unknown;
   std::unordered_map<SlangStage, size_t> entryPointToStageIndex;
 
@@ -86,7 +89,9 @@ struct ShaderModule : Object {
   static auto GetType() -> Type const * { return &type; }
 };
 
-void LoadModule();
+extern Ref<ShaderModule> DefaultShaderModule; // NOLINT
+
+auto LoadModule() -> Error::Error;
 void UnloadModule();
 
 static inline auto
@@ -100,5 +105,4 @@ static inline auto PreprocessShaderCode(ShaderModule &shader,
 
 auto AddGlobalShaderExtern(const ShaderExtern &externVar) -> void;
 
-} // namespace Shader
-} // namespace Graphics
+} // namespace Graphics::Shader

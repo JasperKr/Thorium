@@ -1,8 +1,10 @@
 #include "rendertarget.hpp"
 #include "Graphics/graphics.hpp"
 #include "Graphics/shader.hpp"
+#include "Graphics/texture.hpp"
 #include "Modules/error.hpp"
 #include "Modules/image.hpp"
+#include "Modules/object.hpp"
 #include "slang/slang.h"
 #include "tl/expected.hpp"
 #include "vulkan/vulkan_core.h"
@@ -15,17 +17,18 @@
 
 namespace Graphics::RenderTarget {
 
-auto GetPipelineLayout(const GraphicsContext &context, const State &state)
-    -> tl::expected<VkPipelineLayout, Error::Error> {
-  auto *shader = state.shader.get();
-  auto *globalLayout = shader->programLayout->getGlobalParamsVarLayout();
+auto GetSwapchainTextures() -> std::vector<Ref<Graphics::Texture::Texture>> & {
+  static std::vector<Ref<Graphics::Texture::Texture>> textures = {};
+  return textures;
+}
 
-  std::unordered_map<uint32_t, std::vector<VkDescriptorSetLayoutBinding>>
-      setBindingsMap;
-
-  auto *typeLayout = globalLayout->getTypeLayout();
-
-  auto pushConstantRanges = std::vector<VkPushConstantRange>{};
+auto inline BuildDescriptorSetLayoutBindings(
+    const Shader::ShaderModule *shader, slang::TypeLayoutReflection *typeLayout,
+    std::vector<VkPushConstantRange> &pushConstantRanges,
+    std::unordered_map<uint32_t, std::vector<VkDescriptorSetLayoutBinding>>
+        &setBindingsMap) -> Error::Error {
+  std::cout << "Building descriptor set layout bindings\n";
+  std::cout << "Field count: " << typeLayout->getFieldCount() << "\n";
 
   for (uint32_t i = 0; i < typeLayout->getFieldCount(); ++i) {
     auto *fieldLayout = typeLayout->getFieldByIndex(i);
@@ -56,14 +59,14 @@ auto GetPipelineLayout(const GraphicsContext &context, const State &state)
     vkBinding.descriptorCount = 1;
     vkBinding.stageFlags = VK_SHADER_STAGE_ALL;
 
+    std::cout << fieldLayout->getCategory() << "\n";
+
     switch (fieldLayout->getCategory()) {
     case slang::ParameterCategory::ConstantBuffer:
       vkBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
       break;
-
     case slang::ParameterCategory::ShaderResource: {
-      auto *typeLayout = fieldLayout->getTypeLayout();
-      switch (typeLayout->getKind()) {
+      switch (fieldLayout->getTypeLayout()->getKind()) {
       case slang::TypeReflection::Kind::TextureBuffer:
         vkBinding.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
         break;
@@ -78,7 +81,6 @@ auto GetPipelineLayout(const GraphicsContext &context, const State &state)
       }
       break;
     }
-
     case slang::ParameterCategory::UnorderedAccess:
       vkBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
       break;
@@ -86,15 +88,157 @@ auto GetPipelineLayout(const GraphicsContext &context, const State &state)
     case slang::ParameterCategory::SamplerState:
       vkBinding.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
       break;
+    case slang::ParameterCategory::DescriptorTableSlot: {
+      // auto *tableLayout = fieldLayout->getTypeLayout();
 
+      // auto error = BuildDescriptorSetLayoutBindings(
+      //     shader, tableLayout, pushConstantRanges, setBindingsMap);
+
+      continue;
+    }
     default:
+      std::cout << "Unsupported descriptor type in shader reflection\n";
       continue;
     }
 
+    std::cout << "Set " << setIndex << ", binding " << binding << "\n";
     setBindingsMap[setIndex].push_back(vkBinding);
   }
 
+  std::cout << "Processing descriptor sets\n";
+  std::cout << "Descriptor set count: " << typeLayout->getDescriptorSetCount()
+            << "\n";
+
+  for (uint32_t i = 0; i < typeLayout->getDescriptorSetCount(); ++i) {
+    auto count = typeLayout->getDescriptorSetDescriptorRangeCount(i);
+    std::cout << "Descriptor set " << i << " has " << count << " bindings\n";
+
+    for (uint32_t j = 0; j < count; ++j) {
+      auto arraySize =
+          typeLayout->getDescriptorSetDescriptorRangeDescriptorCount(i, j);
+      auto type = typeLayout->getDescriptorSetDescriptorRangeType(i, j);
+      auto category = typeLayout->getDescriptorSetDescriptorRangeCategory(i, j);
+      auto index = typeLayout->getDescriptorSetDescriptorRangeIndexOffset(i, j);
+
+      VkDescriptorSetLayoutBinding vkBinding{};
+      vkBinding.binding = index;
+      vkBinding.descriptorCount = arraySize;
+      vkBinding.stageFlags = VK_SHADER_STAGE_ALL;
+
+      switch (category) {
+      case slang::ParameterCategory::ConstantBuffer:
+        vkBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        break;
+      case slang::ParameterCategory::ShaderResource: {
+        switch (type) {
+        case slang::BindingType::Texture:
+          vkBinding.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+          break;
+        case slang::BindingType::RawBuffer:
+        case slang::BindingType::TypedBuffer:
+          vkBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+          break;
+        case slang::BindingType::Unknown:
+          break;
+        case slang::BindingType::Sampler:
+          vkBinding.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
+          break;
+        case slang::BindingType::ConstantBuffer:
+          vkBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+          break;
+        case slang::BindingType::ParameterBlock:
+          // Handled separately
+          break;
+        case slang::BindingType::CombinedTextureSampler:
+          vkBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+          break;
+        case slang::BindingType::InputRenderTarget:
+          vkBinding.descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
+          break;
+        case slang::BindingType::InlineUniformData:
+          // Not supported in Vulkan
+          break;
+        case slang::BindingType::RayTracingAccelerationStructure:
+          vkBinding.descriptorType =
+              VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
+          break;
+        case slang::BindingType::VaryingInput:
+        case slang::BindingType::VaryingOutput:
+        case slang::BindingType::ExistentialValue:
+        case slang::BindingType::PushConstant:
+        case slang::BindingType::MutableFlag:
+        case slang::BindingType::MutableTexture:
+        case slang::BindingType::MutableTypedBuffer:
+        case slang::BindingType::MutableRawBuffer:
+        case slang::BindingType::BaseMask:
+        case slang::BindingType::ExtMask:
+          std::cout << "Unsupported shader resource type in reflection\n";
+          std::cout << "Type: " << static_cast<int>(type) << "\n";
+          break;
+        }
+        break;
+      }
+
+      case slang::None:
+      case slang::Mixed:
+      case slang::UnorderedAccess:
+      case slang::VaryingInput:
+      case slang::VaryingOutput:
+      case slang::SamplerState:
+      case slang::Uniform:
+      case slang::DescriptorTableSlot:
+      case slang::SpecializationConstant:
+      case slang::PushConstantBuffer:
+      case slang::RegisterSpace:
+      case slang::GenericResource:
+      case slang::RayPayload:
+      case slang::HitAttributes:
+      case slang::CallablePayload:
+      case slang::ShaderRecord:
+      case slang::ExistentialTypeParam:
+      case slang::ExistentialObjectParam:
+      case slang::SubElementRegisterSpace:
+      case slang::InputAttachmentIndex:
+      case slang::MetalArgumentBufferElement:
+      case slang::MetalAttribute:
+      case slang::MetalPayload:
+        std::cout << "Unsupported descriptor type in shader reflection\n";
+        std::cout << "Category: " << static_cast<int>(category) << "\n";
+        break;
+      }
+
+      setBindingsMap[i].push_back(vkBinding);
+    }
+  }
+
+  return Error::Success();
+}
+
+auto GetPipelineLayout(const GraphicsContext &context,
+                       const Shader::ShaderModule *shader)
+    -> tl::expected<VkPipelineLayout, Error::Error> {
+  auto *globalLayout = shader->programLayout->getGlobalParamsVarLayout();
+
+  std::cout << globalLayout << "\n";
+
+  std::unordered_map<uint32_t, std::vector<VkDescriptorSetLayoutBinding>>
+      setBindingsMap;
+
+  auto *typeLayout = globalLayout->getTypeLayout();
+
+  auto pushConstantRanges = std::vector<VkPushConstantRange>{};
+
+  std::cout << "Creating pipeline layout from shader reflection\n";
+
   std::vector<VkDescriptorSetLayout> setLayouts;
+
+  auto error = BuildDescriptorSetLayoutBindings(
+      shader, typeLayout, pushConstantRanges, setBindingsMap);
+  if (Error::IsError(error)) {
+    return tl::make_unexpected(error);
+  }
+
+  std::cout << "Creating descriptor set layouts\n";
 
   for (const auto &setBinding : setBindingsMap) {
     uint32_t setIndex = setBinding.first;
@@ -122,7 +266,7 @@ auto GetPipelineLayout(const GraphicsContext &context, const State &state)
   pipelineLayoutInfo.pushConstantRangeCount = pushConstantRanges.size();
   pipelineLayoutInfo.pPushConstantRanges = pushConstantRanges.data();
   VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
-  auto error = Error::Create(vkCreatePipelineLayout(
+  error = Error::Create(vkCreatePipelineLayout(
       context.device, &pipelineLayoutInfo, nullptr, &pipelineLayout));
 
   if (Error::IsError(error)) {
@@ -132,6 +276,18 @@ auto GetPipelineLayout(const GraphicsContext &context, const State &state)
   return pipelineLayout;
 }
 
+inline auto GetSwapchainRendertarget(const GraphicsContext &context)
+    -> Ref<RenderTarget> {
+  static Ref<RenderTarget> swapchainRendertarget = Ref<RenderTarget>::Make();
+  auto texture = GetSwapchainTextures()[context.swapchainImageIndex];
+
+  swapchainRendertarget->texture = texture;
+  swapchainRendertarget->location = 0;
+  swapchainRendertarget->blendMode = {};
+  swapchainRendertarget->clearValue = {0.0F, 0.0F, 0.0F, 1.0F};
+  return swapchainRendertarget;
+}
+
 inline auto CreatePipeline(const GraphicsContext &context, const State &state)
     -> tl::expected<VkPipeline, Error::Error> {
   if (state.bindPoint != VK_PIPELINE_BIND_POINT_GRAPHICS) {
@@ -139,22 +295,30 @@ inline auto CreatePipeline(const GraphicsContext &context, const State &state)
         Error::Create("Only graphics pipelines are supported currently"));
   }
 
+  std::cout << "Creating graphics pipeline\n";
+
   std::array<VkPipelineShaderStageCreateInfo, 2> shaderStages = {};
 
-  auto &shader = *state.shader.get();
+  auto *shader = state.shader.get();
+
+  if (shader == nullptr) {
+    shader = Shader::DefaultShaderModule.get();
+  }
 
   shaderStages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
   shaderStages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
-  shaderStages[0].module = shader.module;
-  shaderStages[0].pName = "main";
+  shaderStages[0].module = shader->module;
+  shaderStages[0].pName = "vertexMain";
 
   shaderStages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
   shaderStages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-  shaderStages[1].module = shader.module;
-  shaderStages[1].pName = "main";
+  shaderStages[1].module = shader->module;
+  shaderStages[1].pName = "fragmentMain";
+
+  std::cout << "Setting up vertex input state\n";
 
   auto vertexformat =
-      Graphics::PredefinedVertexFormats.at(shader.GetExpectedVertexFormat());
+      Graphics::PredefinedVertexFormats.at(shader->GetExpectedVertexFormat());
 
   VkPipelineVertexInputStateCreateInfo vertexInputInfo = {};
   vertexInputInfo.sType =
@@ -165,6 +329,8 @@ inline auto CreatePipeline(const GraphicsContext &context, const State &state)
       vertexformat.Attributes.size();
   vertexInputInfo.pVertexAttributeDescriptions = vertexformat.Attributes.data();
   VkPipelineInputAssemblyStateCreateInfo inputAssembly = {};
+
+  std::cout << "Setting up input assembly state\n";
 
   inputAssembly.sType =
       VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -194,11 +360,34 @@ inline auto CreatePipeline(const GraphicsContext &context, const State &state)
   multisampling.sampleShadingEnable = VK_FALSE;
   multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 
+  std::cout << "Determining expected output attachments\n";
+
   auto entryPointIndex =
-      shader.entryPointToStageIndex.at(SlangStage::SLANG_STAGE_FRAGMENT);
+      shader->entryPointToStageIndex.at(SlangStage::SLANG_STAGE_FRAGMENT);
+  std::cout << "Fragment entry point index: " << entryPointIndex << "\n";
+
+  std::cout << shader->programLayout << "\n";
+  std::cout << shader->programLayout->getEntryPointByIndex(1) << "\n";
+  std::cout << shader->programLayout->getEntryPointByIndex(1)->getName()
+            << "\n";
+
   auto *entryPoint =
-      shader.programLayout->getEntryPointByIndex(entryPointIndex);
+      shader->programLayout->getEntryPointByIndex(entryPointIndex);
+
+  if (entryPoint == nullptr) {
+    return tl::make_unexpected(Error::Create(
+        "Failed to get fragment entry point from shader program layout"));
+  }
+
+  std::cout << "Fetched entry point reflection.\n";
   auto *outputVariableLayout = entryPoint->getResultVarLayout();
+
+  if (outputVariableLayout == nullptr) {
+    return tl::make_unexpected(Error::Create(
+        "Shader has no output variable layout for fragment stage"));
+  }
+
+  std::cout << "Determining expected output attachments\n";
 
   std::set<uint32_t> expectedAttachments = {};
   for (uint32_t i = 0;
@@ -209,18 +398,32 @@ inline auto CreatePipeline(const GraphicsContext &context, const State &state)
     }
   }
 
+  std::vector<Ref<RenderTarget>> renderTargets = state.renderTargets;
+
+  if (state.renderTargets.empty() ||
+      state.renderTargets[0]->texture.get() == nullptr) {
+    renderTargets.clear();
+    renderTargets.push_back(GetSwapchainRendertarget(context));
+
+    if (!state.renderTargets.empty()) {
+      renderTargets.back()->location = state.renderTargets[0]->location;
+      renderTargets.back()->blendMode = state.renderTargets[0]->blendMode;
+      renderTargets.back()->clearValue = state.renderTargets[0]->clearValue;
+    }
+  }
+
   uint32_t attachmentCount = 0;
   auto idx = 0;
   auto blendAttachments = std::vector<VkPipelineColorBlendAttachmentState>(
-      state.renderTargets.size() + 1);
-  auto formats = std::vector<VkFormat>(state.renderTargets.size() + 1,
-                                       VK_FORMAT_UNDEFINED);
+      renderTargets.size() + 1);
+  auto formats =
+      std::vector<VkFormat>(renderTargets.size() + 1, VK_FORMAT_UNDEFINED);
 
   bool hasDepthAttachment = false;
   bool hasStencilAttachment = false;
 
   // Loop over attachments and use GetPassAttachmentInfo to fetch blend modes
-  for (const auto &rendertarget : state.renderTargets) {
+  for (const auto &rendertarget : renderTargets) {
     int location = rendertarget->location;
     if (location == -1) {
       location = idx;
@@ -239,6 +442,11 @@ inline auto CreatePipeline(const GraphicsContext &context, const State &state)
     } else if (Image::IsStencilTexture(rendertarget->texture->format)) {
       hasStencilAttachment = true;
     }
+  }
+
+  std::cout << "Expected attachments:\n";
+  for (const auto &att : expectedAttachments) {
+    std::cout << " - " << att << "\n";
   }
 
   for (uint32_t i = 0; i <= blendAttachments.size(); ++i) {
@@ -295,7 +503,9 @@ inline auto CreatePipeline(const GraphicsContext &context, const State &state)
   pipelineInfo.pDepthStencilState = &depthStencil;
   pipelineInfo.pDynamicState = &dynamicState;
 
-  auto layoutResult = GetPipelineLayout(context, state);
+  std::cout << "Getting pipeline layout\n";
+
+  auto layoutResult = GetPipelineLayout(context, shader);
   if (Error::IsError(layoutResult)) {
     return tl::make_unexpected(layoutResult.error());
   }
@@ -310,6 +520,7 @@ inline auto CreatePipeline(const GraphicsContext &context, const State &state)
   auto error = Error::Create(vkCreateGraphicsPipelines(
       context.device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline));
 
+  std::cout << "STORING PIPELINE IN CACHE\n";
   PipelineCache[state] = pipeline;
 
   if (Error::IsError(error)) {
@@ -321,9 +532,16 @@ inline auto CreatePipeline(const GraphicsContext &context, const State &state)
 
 inline auto GetPipeline(const GraphicsContext &context, const State &state)
     -> tl::expected<VkPipeline, Error::Error> {
+
+  std::cout << "Getting pipeline from cache\n";
+
   auto cacheIterator = PipelineCache.find(state);
 
+  std::cout << "Cache iterator found\n";
+
   if (cacheIterator != PipelineCache.end()) {
+    std::cout << "Pipeline found in cache\n";
+
     return cacheIterator->second;
   }
 
@@ -346,16 +564,6 @@ static State LastState{};
 static bool Dirty;
 
 auto SetDirty() -> void { Dirty = true; }
-
-auto ValidateEndOfFrame(GraphicsContext &context) -> Error::Error {
-  if (StateStack.size() != 1) {
-    return Error::Create("More pushes than pops.");
-  }
-  if (StateStack.back().renderTargets.size() != 0) {
-    return Error::Create("Render targets not cleared at end of frame.");
-  }
-  return Error::Success();
-}
 
 inline auto SetupDefaultState(GraphicsContext &context) -> State {
   auto defaultState = State();
@@ -383,6 +591,22 @@ auto Load(GraphicsContext &context) -> Error::Error {
          "RenderTarget state stack is not empty on Load.");
 
   StateStack.emplace_back(SetupDefaultState(context));
+
+  auto &swapchainTextures = GetSwapchainTextures();
+  swapchainTextures.reserve(context.swapchainInfo.imageCount);
+
+  for (uint32_t i = 0; i < context.swapchainInfo.imageCount; i++) {
+    auto textureResult = Graphics::Texture::FromSwapchainTexture(
+        context, context.swapchainInfo.images[i], context.swapchainInfo.format,
+        context.swapchainInfo.extent.width,
+        context.swapchainInfo.extent.height);
+
+    if (Error::IsError(textureResult)) {
+      return textureResult.error();
+    }
+
+    swapchainTextures.emplace_back(textureResult.value());
+  }
 
   return Error::Success();
 }
@@ -421,6 +645,7 @@ auto Flush(GraphicsContext &context) -> tl::expected<bool, Error::Error> {
 
   LastState = currentState;
 
+  std::cout << "Flushing render target state changes\n";
   auto pipelineResult = GetPipeline(context, currentState);
   if (Error::IsError(pipelineResult)) {
     return tl::make_unexpected(pipelineResult.error());
@@ -441,6 +666,9 @@ auto Destroy(GraphicsContext &context) -> void {
   }
   PipelineCache.clear();
 }
+
+// NOLINTNEXTLINE, to call vkCmdEndRendering
+static bool BegunRendering = false;
 
 inline auto BeginRendering(GraphicsContext &context) -> void {
   auto &currentState = StateStack.back();
@@ -492,6 +720,16 @@ inline auto BeginRendering(GraphicsContext &context) -> void {
   vkCmdBeginRendering(
       Graphics::GetCommandBuffer(context, GetCurrentThreadIndex()),
       &renderingInfo);
+
+  BegunRendering = true;
+}
+
+auto EndRendering(GraphicsContext &context) -> void {
+  if (BegunRendering) {
+    vkCmdEndRendering(
+        Graphics::GetCommandBuffer(context, GetCurrentThreadIndex()));
+    BegunRendering = false;
+  }
 }
 
 auto PrepareDraw(GraphicsContext &context) -> Error::Error {
@@ -504,9 +742,22 @@ auto PrepareDraw(GraphicsContext &context) -> Error::Error {
   auto updatedState = flushResult.value();
 
   if (updatedState) {
+    EndRendering(context);
+    std::cout << "Beginning rendering\n";
     BeginRendering(context);
   }
 
+  return Error::Success();
+}
+
+auto FinalizeFrame(GraphicsContext &context) -> Error::Error {
+  if (StateStack.size() != 1) {
+    return Error::Create("More pushes than pops.");
+  }
+  if (StateStack.back().renderTargets.size() != 0) {
+    return Error::Create("Render targets not cleared at end of frame.");
+  }
+  EndRendering(context);
   return Error::Success();
 }
 

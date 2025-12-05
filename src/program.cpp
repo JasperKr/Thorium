@@ -2,6 +2,7 @@
 #include "Graphics/graphics.hpp"
 #include "Graphics/mesh.hpp"
 #include "Graphics/rendergraph.hpp"
+#include "Graphics/rendertarget.hpp"
 #include "Graphics/shader.hpp"
 #include "Modules/error.hpp"
 #include "Modules/timer.hpp"
@@ -45,12 +46,6 @@ static inline auto GetSwapchainHandleIndex() -> size_t & {
   return index;
 }
 
-static inline auto GetSwapchainTextures()
-    -> std::vector<Ref<Graphics::Texture::Texture>> & {
-  static std::vector<Ref<Graphics::Texture::Texture>> textures = {};
-  return textures;
-}
-
 auto Load(Graphics::GraphicsContext &context) -> Error::Error {
 
   // Setup render graph to debug it
@@ -74,36 +69,12 @@ auto Load(Graphics::GraphicsContext &context) -> Error::Error {
         }));
   }
 
-  auto shaderResult = Graphics::Shader::ShaderModule::Create(context, "default",
-                                                             "Default shader");
-  if (Error::IsError(shaderResult)) {
-    return shaderResult.error();
-  }
-
-  GetShaders().emplace_back(shaderResult.value());
-
   // Create swapchain textures
-
-  auto &swapchainTextures = GetSwapchainTextures();
-  swapchainTextures.reserve(context.swapchainInfo.imageCount);
-
-  for (uint32_t i = 0; i < context.swapchainInfo.imageCount; i++) {
-    auto textureResult = Graphics::Texture::FromSwapchainTexture(
-        context, context.swapchainInfo.images[i], context.swapchainInfo.format,
-        context.swapchainInfo.extent.width,
-        context.swapchainInfo.extent.height);
-
-    if (Error::IsError(textureResult)) {
-      return textureResult.error();
-    }
-
-    swapchainTextures.emplace_back(textureResult.value());
-  }
 
   // Import swapchain texture
   // We will swap the texture pointer during rendering
   auto swapchainHandle = Graphics::Rendergraph::ImportTexture(
-      graph, swapchainTextures[0],
+      graph, Graphics::RenderTarget::GetSwapchainTextures()[0],
       {
           .oldState =
               {
@@ -137,31 +108,6 @@ auto Load(Graphics::GraphicsContext &context) -> Error::Error {
     return graphErr;
   }
 
-  uint32_t vertexCount = 4;
-  std::vector<Vertex> vertexData = {
-
-      {.position = {-0.5F, -0.5F, 0.0F}, .color = {1, 0, 0}}, // NOLINT
-      {.position = {0.5F, -0.5F, 0.0F}, .color = {0, 1, 0}},  // NOLINT
-      {.position = {0.5F, 0.5F, 0.0F}, .color = {0, 0, 1}},   // NOLINT
-      {.position = {-0.5F, 0.5F, 0.0F}, .color = {1, 1, 1}}}; // NOLINT
-
-  std::vector<uint32_t> indexData = {0, 1, 2, 2, 3, 0};
-
-  std::cout << "Creating mesh..." << "\n";
-
-  auto meshResult =
-      Graphics::Mesh::Create(context, format, vertexData, &indexData);
-
-  if (Error::IsError(meshResult)) {
-    std::cerr << "Failed to create mesh: " << meshResult.error().message
-              << "\n";
-    return meshResult.error();
-  }
-
-  auto mesh = meshResult.value();
-
-  GetMeshes().emplace_back(mesh);
-
   return Error::Success();
 }
 
@@ -175,7 +121,7 @@ auto Update(double deltaTime) -> Error::Error {
 auto Draw(Graphics::GraphicsContext &context) -> Error::Error {
   auto handle = GetSwapchainHandleIndex();
   auto swapchainIndex = context.swapchainImageIndex;
-  auto &swapchainTextures = GetSwapchainTextures();
+  auto &swapchainTextures = Graphics::RenderTarget::GetSwapchainTextures();
 
   auto texture = swapchainTextures[swapchainIndex];
   auto &graph = GetRenderGraph();

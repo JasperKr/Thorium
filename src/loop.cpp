@@ -178,7 +178,14 @@ auto MainLoop() -> Error::Error {
 
   bool running = true;
 
-  Graphics::Shader::LoadModule();
+  Graphics::SetCurrentGraphicsContext(&context);
+
+  auto shaderModuleLoadResult = Graphics::Shader::LoadModule();
+
+  if (Error::IsError(shaderModuleLoadResult)) {
+    return shaderModuleLoadResult;
+  }
+
   auto rendertargetLoadError = Graphics::RenderTarget::Load(context);
 
   if (Error::IsError(rendertargetLoadError)) {
@@ -207,8 +214,6 @@ auto MainLoop() -> Error::Error {
       return err;
     }
   }
-
-  Graphics::SetCurrentGraphicsContext(&context);
 
   auto luaLoadErr = LoadLua(state);
 
@@ -258,6 +263,8 @@ auto MainLoop() -> Error::Error {
   std::cout << "Program exited successfully." << "\n";
 
   Graphics::Deinitialize(context);
+
+  Graphics::RenderTarget::Destroy(context);
 
   return Error::Success();
 }

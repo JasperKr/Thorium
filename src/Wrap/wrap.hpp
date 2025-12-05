@@ -60,6 +60,11 @@ inline auto ProxyFromLuaObject(lua_State *state, int index) -> Proxy * {
 
 template <typename T>
 inline auto FromLuaObject(lua_State *state, int index) -> T * {
+  // Check if userdata
+  if (lua_isuserdata(state, index) == 0) {
+    return nullptr;
+  }
+
   // NOLINTNEXTLINE
   auto *proxy = static_cast<Proxy *>(lua_touserdata(state, index));
   if (proxy == nullptr || proxy->object == nullptr ||

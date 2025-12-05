@@ -10,7 +10,7 @@ static const Type type = Type("ByteData");
 
 struct ByteData : Object {
 public:
-  static auto GetType() -> Type { return type; }
+  static auto GetType() -> Type const * { return &type; }
 
   explicit ByteData(size_t size) : size(size), data(new uint8_t[size]) {}
 

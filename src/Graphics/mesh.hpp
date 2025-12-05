@@ -8,6 +8,7 @@
 #include "tl/expected.hpp"
 #include <cstdint>
 #include <span>
+#include <vector>
 #define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
 
@@ -160,6 +161,13 @@ struct Mesh : Object {
     return IndexBuffer->SetData(context, IndexData.data(), dataSize, 0);
   }
 
+  template <typename T>
+  static auto ToVertexSpan(std::vector<T> &vertices) -> std::span<uint8_t> {
+    // NOLINTNEXTLINE; Reinterpret cast is necessary here
+    return std::span<uint8_t>(reinterpret_cast<uint8_t *>(vertices.data()),
+                              sizeof(T) * vertices.size());
+  }
+
   static auto Create(GraphicsContext &context, VertexFormats format,
                      std::span<uint8_t> &vertexData,
                      std::vector<uint32_t> *indexData)
@@ -251,12 +259,14 @@ struct Mesh : Object {
     IndexBuffer->Destroy(context);
   }
 
-  auto GetVertexFormat() const -> VertexFormat { return Format; }
-  auto GetVertexCount() const -> uint32_t {
+  [[nodiscard]] auto GetVertexFormat() const -> VertexFormat { return Format; }
+  [[nodiscard]] auto GetVertexCount() const -> uint32_t {
     return static_cast<uint32_t>(VertexData.size());
   }
-  auto GetVertexData() -> auto * { return VertexData.data(); }
-  auto GetIndexCount() const -> uint32_t {
+  [[nodiscard]] auto GetVertexData() const -> auto * {
+    return VertexData.data();
+  }
+  [[nodiscard]] auto GetIndexCount() const -> uint32_t {
     return static_cast<uint32_t>(IndexData.size());
   }
   auto GetIndexData() -> void * { return IndexData.data(); }
@@ -271,7 +281,7 @@ struct Mesh : Object {
     DrawRange.Offset = range.Offset;
     DrawRange.Count = range.Count;
   }
-  auto GetDrawRange() const -> MeshDrawRange { return DrawRange; }
+  [[nodiscard]] auto GetDrawRange() const -> MeshDrawRange { return DrawRange; }
 
   void Bind(VkCommandBuffer cmdBuffer) const {
     std::vector<VkBuffer> vertexBuffers = {VertexBuffer->handle};
@@ -285,15 +295,18 @@ struct Mesh : Object {
   }
 
   auto Draw(GraphicsContext &context) const -> Error::Error {
+    std::cout << "Preparing to draw mesh\n";
     auto error = RenderTarget::PrepareDraw(context);
     if (Error::IsError(error)) {
       return error;
     }
 
+    std::cout << "Binding mesh\n";
     RenderData renderData = GetRenderData(context, GetCurrentThreadIndex());
     Bind(renderData.commandBuffers[context.frameIndex]);
     MeshDrawRange range = DrawRange;
 
+    std::cout << "Issuing draw call\n";
     if (IndexData.size() > 0) {
       vkCmdDrawIndexed(renderData.commandBuffers[context.frameIndex],
                        range.Count, 1, range.Offset, 0, 0);
@@ -328,7 +341,7 @@ struct Mesh : Object {
     return Error::Success();
   }
 
-  static auto GetType() -> Type { return type; }
+  static auto GetType() -> Type const * { return &type; }
 };
 
 } // namespace Graphics

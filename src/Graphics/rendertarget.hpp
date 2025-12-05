@@ -18,6 +18,8 @@ struct ShaderModule;
 
 namespace RenderTarget {
 
+auto GetSwapchainTextures() -> std::vector<Ref<Graphics::Texture::Texture>> &;
+
 const static Type type = Type("RenderTarget");
 
 struct RenderTarget : Object {
@@ -175,7 +177,8 @@ struct StateHash {
     AddToHash(hash, std::hash<int32_t>()(state.scissor.offset.y));
     AddToHash(hash, std::hash<uint32_t>()(state.scissor.extent.width));
     AddToHash(hash, std::hash<uint32_t>()(state.scissor.extent.height));
-    AddToHash(hash, state.shader.get()->hash());
+    AddToHash(hash,
+              state.shader.get() == nullptr ? 0 : state.shader.get()->hash());
     AddToHash(hash, std::hash<VkPipelineBindPoint>()(state.bindPoint));
 
     for (const auto &renderTarget : state.renderTargets) {
@@ -190,7 +193,7 @@ struct StateHash {
 static std::unordered_map<State, VkPipeline, StateHash> PipelineCache = {};
 
 auto SetDirty() -> void;
-auto ValidateEndOfFrame(GraphicsContext &context) -> Error::Error;
+auto FinalizeFrame(GraphicsContext &context) -> Error::Error;
 
 auto Push(GraphicsContext &context) -> void;
 auto Pop(GraphicsContext &context) -> Error::Error;

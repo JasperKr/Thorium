@@ -259,7 +259,7 @@ void InitializeGraphics(Graphics::GraphicsContext &context) {
 }
 
 auto Present(Graphics::GraphicsContext &context) -> Error::Error {
-  auto validateResult = RenderTarget::ValidateEndOfFrame(context);
+  auto validateResult = RenderTarget::FinalizeFrame(context);
   if (Error::IsError(validateResult)) {
     return validateResult;
   }

@@ -30,17 +30,12 @@ function Thorium.quit()
   print("Quitting the application.")
 end
 
-for i = 1, 10 do
-local x = Thorium.graphics.newTexture(i, 32)
-print(type(x))
+local sampler = 1
+local rendertarget = 2
+local ssbo = 4
 
-local mt = getmetatable(x)
--- print(x:type())
--- print(x:typeof("Texture"))
-print(x:getWidth(), x:getHeight())
--- print(x:getFormat())
--- print(x:getMipmapCount())
--- print(x:getFilter())
--- print(x:getWrap())
-x:release()
-end
+local target = Thorium.graphics.newTexture(32, 32, {usage = sampler + rendertarget})
+local image = Thorium.graphics.newTexture(32, 32, {usage = sampler})
+Thorium.graphics.setRenderTarget(target)
+Thorium.graphics.draw(image)
+Thorium.graphics.setRenderTarget()
