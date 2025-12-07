@@ -1,9 +1,9 @@
-#include "rendertarget.hpp"
+#include "wrap_rendertarget.hpp"
 
 #include "Graphics/graphics.hpp"
 #include "Graphics/rendertarget.hpp"
 #include "Graphics/texture.hpp"
-#include "Wrap/Graphics/color.hpp"
+#include "Wrap/Graphics/wrap_color.hpp"
 #include "Wrap/wrap.hpp"
 #include "vulkan/vulkan_core.h"
 #include <cstring>

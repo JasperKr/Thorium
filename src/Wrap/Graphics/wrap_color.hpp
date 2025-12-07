@@ -31,4 +31,6 @@ static inline auto ColorFromLuaState(lua_State *state, ColorFormat format)
     return {red, green, blue, alpha};
   }
   }
+
+  return Color{}; // Impossible to reach but windows compiler is stupid af
 }

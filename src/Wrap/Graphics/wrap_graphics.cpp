@@ -1,4 +1,4 @@
-#include "Wrap/Graphics/graphics.hpp"
+#include "Wrap/Graphics/wrap_graphics.hpp"
 
 #include "Graphics/graphics.hpp"
 #include "Graphics/mesh.hpp"

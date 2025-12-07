@@ -14,8 +14,6 @@ echo "Extracting slang..."
 mkdir %TEMP_DIR%\contents
 tar -xf %TEMP_DIR%\slang.zip -C %TEMP_DIR%\contents
 
-pause
-
 if not exist .\include\slang\ (
     mkdir .\include\slang\
 )
@@ -33,6 +31,15 @@ if not exist .\lib\slang\ (
 )
 
 copy %TEMP_DIR%\contents\lib\* .\lib\slang\ /Y
+
+echo "Fetching float-16..."
+set FLOAT16_URL="https://github.com/fengwang/float16_t/blob/master/float16_t.hpp?raw=true"
+
+if not exist .\include\float16_t\ (
+    mkdir .\include\float16_t\
+)
+
+curl -L %FLOAT16_URL% -o .\include\float16_t\float16_t.hpp
 
 echo "Cleaning up..."
 rmdir /s /q %TEMP_DIR%

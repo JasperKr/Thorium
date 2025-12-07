@@ -8,7 +8,8 @@
 #include "vulkan/vulkan_core.h"
 #include <cstdint>
 
-namespace Graphics::Texture {
+namespace Graphics {
+namespace Texture {
 
 enum class TextureType : uint8_t {
   DEFAULT, // 2D texture, but we cannot start a variable with a number
@@ -138,4 +139,5 @@ auto GetDefaultTexture(GraphicsContext &context, VkFormat format,
                        Graphics::Texture::TextureType textureType)
     -> tl::expected<Ref<Graphics::Texture::Texture>, Error::Error>;
 
-} // namespace Graphics::Texture
+} // namespace Texture
+} // namespace Graphics

@@ -1,12 +1,13 @@
 cmake_minimum_required(VERSION 3.25)
 project(Thorium LANGUAGES C CXX)
 
-set(CMAKE_CXX_STANDARD 23)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
+# set(CMAKE_CXX_STANDARD_REQUIRED ON)
+# set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_C_STANDARD 11)
 
 if(MSVC)
     add_compile_options(/Zc:__cplusplus)
+    add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:/std:c++23preview>")
 endif()
 
 # -------------------------------
@@ -198,6 +199,7 @@ add_executable(Thorium
     src/Graphics/rendergraph.cpp
     src/Graphics/sampler.cpp
     src/Graphics/rendertarget.cpp
+    src/Graphics/reflect.cpp
 
     src/Modules/filesystem.cpp
     src/Modules/timer.cpp
@@ -208,11 +210,11 @@ add_executable(Thorium
 
     src/Modules/Editor/imgui.cpp
 
-    src/Wrap/Graphics/graphics.cpp
-    src/Wrap/Graphics/texture.cpp
-    src/Wrap/Graphics/rendertarget.cpp
-    src/Wrap/Modules/event.cpp
-    src/Wrap/Modules/timer.cpp
+    src/Wrap/Graphics/wrap_graphics.cpp
+    src/Wrap/Graphics/wrap_texture.cpp
+    src/Wrap/Graphics/wrap_rendertarget.cpp
+    src/Wrap/Modules/wrap_event.cpp
+    src/Wrap/Modules/wrap_timer.cpp
     src/Wrap/wrap.cpp
 
     src/Libraries/vma.cpp
@@ -236,8 +238,8 @@ add_custom_command(TARGET Thorium POST_BUILD
 target_include_directories(Thorium
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
     SYSTEM PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
         ${CMAKE_CURRENT_SOURCE_DIR}/external/physfs/src
         ${Vulkan_INCLUDE_DIRS}   # now valid
 )

@@ -135,17 +135,6 @@ static auto GetShaderCCompiler() -> shaderc::Compiler & {
   return compiler;
 }
 
-template <typename F>
-static inline auto TraverseShaderIncludes(const ShaderSource &source,
-                                          F &&action) -> void {
-  action(source);
-
-  // NOLINTNEXTLINE
-  for (const auto &includeSource : source.includeSources) {
-    TraverseShaderIncludes(includeSource, std::forward<F>(action));
-  }
-}
-
 static inline auto
 SpvCompilationStatusToString(const shaderc_compilation_status result)
     -> std::string {
@@ -311,6 +300,201 @@ auto printProgramLayout(slang::ProgramLayout *programLayout) -> void {
     const auto *name = programLayout->getEntryPointByIndex(i)->getName();
     std::cout << (name == nullptr ? "<unnamed>" : name);
   }
+}
+
+auto inline BuildDescriptorSetLayoutBindings(
+    slang::ProgramLayout *programLayout, std::vector<ShaderResource> &resources,
+    std::vector<PushConstantResource> &pushConstants) -> Error::Error {
+
+  auto *globalLayout = programLayout->getGlobalParamsVarLayout();
+  auto *typeLayout = globalLayout->getTypeLayout();
+
+  std::cout << "Building descriptor set layout bindings\n";
+  std::cout << "Descriptor set count: " << typeLayout->getDescriptorSetCount()
+            << "\n";
+
+  std::unordered_map<uint64_t, std::string> bindingNames;
+
+  std::cout << "Field count: " << typeLayout->getFieldCount() << "\n";
+
+  for (uint32_t i = 0; i < typeLayout->getFieldCount(); ++i) {
+    auto *fieldLayout = typeLayout->getFieldByIndex(i);
+
+    auto space = fieldLayout->getBindingSpace();
+    auto index = fieldLayout->getBindingIndex();
+
+    auto combined = (static_cast<uint64_t>(space) << 32U) | index;
+
+    bindingNames[combined] = fieldLayout->getName();
+    std::cout << "Found binding: " << fieldLayout->getName() << "\n";
+  }
+
+  auto *entryPoint = programLayout->getEntryPointByIndex(1);
+  for (int i = 0; i < entryPoint->getParameterCount(); ++i) {
+    auto *param = entryPoint->getParameterByIndex(i);
+    std::cout << "Uniform name: " << param->getName() << "\n";
+  }
+
+  for (uint32_t i = 0; i < typeLayout->getDescriptorSetCount(); ++i) {
+    auto count = typeLayout->getDescriptorSetDescriptorRangeCount(i);
+    std::cout << "Descriptor set " << i << " has " << count << " bindings\n";
+
+    for (uint32_t j = 0; j < count; ++j) {
+      auto arraySize =
+          typeLayout->getDescriptorSetDescriptorRangeDescriptorCount(i, j);
+      auto type = typeLayout->getDescriptorSetDescriptorRangeType(i, j);
+      auto category = typeLayout->getDescriptorSetDescriptorRangeCategory(i, j);
+      auto index = typeLayout->getDescriptorSetDescriptorRangeIndexOffset(i, j);
+
+      auto key =
+          (static_cast<uint64_t>(i) << 32U) | static_cast<uint64_t>(index);
+
+      std::string name = "unknown";
+
+      auto nameIter = bindingNames.find(key);
+      if (nameIter != bindingNames.end()) {
+        name = nameIter->second;
+      }
+
+      std::cout << "Binding " << index << ": " << name << "\n";
+
+      VkDescriptorSetLayoutBinding vkBinding{};
+      vkBinding.binding = index;
+      vkBinding.descriptorCount = arraySize;
+      vkBinding.stageFlags = VK_SHADER_STAGE_ALL;
+
+      bool valid = true;
+
+      switch (category) {
+      case slang::ParameterCategory::ConstantBuffer:
+        vkBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        break;
+      case slang::ParameterCategory::ShaderResource: {
+      case slang::ParameterCategory::DescriptorTableSlot:
+        std::cout << "Descriptor table slot encountered in shader reflection\n";
+        std::cout << "Type: " << static_cast<int>(type) << "\n";
+        switch (type) {
+        case slang::BindingType::Texture:
+          vkBinding.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+          break;
+        case slang::BindingType::RawBuffer:
+        case slang::BindingType::TypedBuffer:
+          vkBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+          break;
+        case slang::BindingType::Unknown:
+          break;
+        case slang::BindingType::Sampler:
+          vkBinding.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
+          break;
+        case slang::BindingType::ConstantBuffer:
+          vkBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+          break;
+        case slang::BindingType::ParameterBlock:
+          // Handled separately
+          break;
+        case slang::BindingType::CombinedTextureSampler:
+          vkBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+          break;
+        case slang::BindingType::InputRenderTarget:
+          vkBinding.descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
+          break;
+        case slang::BindingType::InlineUniformData:
+          // Not supported in Vulkan
+          break;
+        case slang::BindingType::RayTracingAccelerationStructure:
+          vkBinding.descriptorType =
+              VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
+          break;
+        case slang::BindingType::PushConstant: {
+          auto *constantBufferTypeLayout =
+              typeLayout->getBindingRangeLeafTypeLayout(i);
+          auto *elementTypeLayout =
+              constantBufferTypeLayout->getElementTypeLayout();
+          auto elementSize = elementTypeLayout->getSize(
+              slang::ParameterCategory::PushConstantBuffer);
+
+          if (elementSize == 0) {
+            return Error::Create(
+                "Push constant buffer has size 0 in shader reflection");
+          }
+
+          for (uint32_t i = 0; i < constantBufferTypeLayout->getFieldCount();
+               ++i) {
+            auto *field = constantBufferTypeLayout->getFieldByIndex(i);
+            auto offset = field->getOffset();
+            std::cout << "Push constant: " << field->getName() << "\n";
+
+            PushConstantResource resource = {
+                .offset = static_cast<uint32_t>(offset),
+                .size = static_cast<uint32_t>(elementSize),
+                .name = name,
+            };
+
+            pushConstants.emplace_back(resource);
+          }
+
+          continue;
+        }
+        case slang::BindingType::VaryingInput:
+        case slang::BindingType::VaryingOutput:
+        case slang::BindingType::ExistentialValue:
+        case slang::BindingType::MutableFlag:
+        case slang::BindingType::MutableTexture:
+        case slang::BindingType::MutableTypedBuffer:
+        case slang::BindingType::MutableRawBuffer:
+        case slang::BindingType::BaseMask:
+        case slang::BindingType::ExtMask:
+          std::cout << "Unsupported shader resource type in reflection\n";
+          std::cout << "Type: " << static_cast<int>(type) << "\n";
+          valid = false;
+          break;
+        }
+        break;
+      }
+      case slang::ParameterCategory::PushConstantBuffer:
+      case slang::None:
+      case slang::Mixed:
+      case slang::UnorderedAccess:
+      case slang::VaryingInput:
+      case slang::VaryingOutput:
+      case slang::SamplerState:
+      case slang::Uniform:
+      case slang::SpecializationConstant:
+      case slang::RegisterSpace:
+      case slang::GenericResource:
+      case slang::RayPayload:
+      case slang::HitAttributes:
+      case slang::CallablePayload:
+      case slang::ShaderRecord:
+      case slang::ExistentialTypeParam:
+      case slang::ExistentialObjectParam:
+      case slang::SubElementRegisterSpace:
+      case slang::InputAttachmentIndex:
+      case slang::MetalArgumentBufferElement:
+      case slang::MetalAttribute:
+      case slang::MetalPayload:
+        std::cout << "Unsupported descriptor type in shader reflection\n";
+        std::cout << "Category: " << static_cast<int>(category) << "\n";
+        continue;
+      }
+
+      if (!valid) {
+        continue;
+      }
+
+      // setBindingsMap[i].push_back(vkBinding);
+      resources.push_back(ShaderResource{
+          .name = name,
+          .set = i,
+          .binding = static_cast<uint32_t>(index),
+          .stage = VK_SHADER_STAGE_ALL,
+          .type = vkBinding.descriptorType,
+          .count = static_cast<uint32_t>(arraySize),
+      });
+    }
+  }
+
+  return Error::Success();
 }
 
 static inline auto LoadSlang(GraphicsContext &context,
@@ -504,6 +688,18 @@ auto ShaderModule::Create(Graphics::GraphicsContext &context,
   auto error = LoadSlang(context, shader);
   if (Error::IsError(error)) {
     return tl::unexpected(error);
+  }
+
+  // auto buildResult = BuildDescriptorSetLayoutBindings(
+  //     shader->programLayout, shader->resources, shader->pushConstantResources);
+  // if (Error::IsError(buildResult)) {
+  //   return tl::make_unexpected(buildResult);
+  // }
+
+  auto reflectResult = ReflectShader(shader->programLayout, shader->reflection);
+
+  if (Error::IsError(reflectResult)) {
+    return tl::unexpected(reflectResult);
   }
 
   return shader;

@@ -34,9 +34,16 @@ struct FragmentInput
 
 Sampler2D MainTexture;
 
+uniform float test;
+uniform float3 testColor;
+uniform float4x4 testMatrix;
+
+ConstantBuffer<float4x4> testUBO;
+
 [shader("fragment")]
 float4 fragmentMain(FragmentInput input)
 {
   float4 texColor = MainTexture.Sample(input.tex_coord);
+  texColor.rgb += testColor * test;
   return input.color * texColor;
 }

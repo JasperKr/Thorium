@@ -1,7 +1,8 @@
-#include "Modules/event.hpp"
+#include "wrap_event.hpp"
 #include "Modules/Peripherals/keyboard.hpp"
+#include "Modules/event.hpp"
 #include "SDL3/SDL_events.h"
-#include "event.hpp"
+
 extern "C" {
 #include <lauxlib.h>
 #include <lua.h>

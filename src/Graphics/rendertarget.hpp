@@ -56,6 +56,12 @@ struct RenderTarget : Object {
   static auto GetType() -> Type const * { return &type; }
 };
 
+struct SetBindingEntry {
+  uint32_t setIndex;
+  uint32_t binding;
+  std::string name;
+};
+
 struct State {
   VkCullModeFlags cullMode = VK_CULL_MODE_BACK_BIT;
   VkFrontFace frontFace = VK_FRONT_FACE_CLOCKWISE;

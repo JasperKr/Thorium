@@ -40,7 +40,6 @@ inline auto SetStackToRegistry(lua_State *state, const char *key) -> void {
 }
 
 auto SetStackToTable(lua_State *state, const char *key) -> void;
-auto RegisterLuaType(lua_State *state, const LuaModule &module) -> void;
 auto PushLuaType(lua_State *state, const Type *type, Object *object) -> void;
 auto RegisterLuaType(lua_State *state, const Type *type,
                      const luaL_Reg *functions) -> void;

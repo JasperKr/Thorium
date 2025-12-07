@@ -13,206 +13,15 @@
 #include <cstddef>
 #include <cstdint>
 #include <set>
+#include <stdint.h>
 #include <unordered_map>
+#include <utility>
 
 namespace Graphics::RenderTarget {
 
 auto GetSwapchainTextures() -> std::vector<Ref<Graphics::Texture::Texture>> & {
   static std::vector<Ref<Graphics::Texture::Texture>> textures = {};
   return textures;
-}
-
-auto inline BuildDescriptorSetLayoutBindings(
-    const Shader::ShaderModule *shader, slang::TypeLayoutReflection *typeLayout,
-    std::vector<VkPushConstantRange> &pushConstantRanges,
-    std::unordered_map<uint32_t, std::vector<VkDescriptorSetLayoutBinding>>
-        &setBindingsMap) -> Error::Error {
-  std::cout << "Building descriptor set layout bindings\n";
-  std::cout << "Field count: " << typeLayout->getFieldCount() << "\n";
-
-  for (uint32_t i = 0; i < typeLayout->getFieldCount(); ++i) {
-    auto *fieldLayout = typeLayout->getFieldByIndex(i);
-
-    uint32_t setIndex = fieldLayout->getBindingIndex();
-    uint32_t binding = fieldLayout->getBindingSpace();
-
-    if (binding == UINT32_MAX) {
-      continue;
-    }
-
-    if (fieldLayout->getCategory() ==
-        slang::ParameterCategory::PushConstantBuffer) {
-      size_t size = fieldLayout->getTypeLayout()->getSize(
-          slang::ParameterCategory::PushConstantBuffer);
-
-      pushConstantRanges.push_back({
-          .stageFlags = VK_SHADER_STAGE_ALL,
-          .offset = uint32_t(fieldLayout->getOffset()),
-          .size = uint32_t(size),
-      });
-
-      continue;
-    }
-
-    VkDescriptorSetLayoutBinding vkBinding{};
-    vkBinding.binding = binding;
-    vkBinding.descriptorCount = 1;
-    vkBinding.stageFlags = VK_SHADER_STAGE_ALL;
-
-    std::cout << fieldLayout->getCategory() << "\n";
-    std::cout << "NAME: " << fieldLayout->getName() << "\n";
-
-    switch (fieldLayout->getCategory()) {
-    case slang::ParameterCategory::ConstantBuffer:
-      vkBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-      break;
-    case slang::ParameterCategory::ShaderResource: {
-      switch (fieldLayout->getTypeLayout()->getKind()) {
-      case slang::TypeReflection::Kind::TextureBuffer:
-        vkBinding.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-        break;
-      case slang::TypeReflection::Kind::Struct:
-      case slang::TypeReflection::Kind::Array:
-        // likely a buffer
-        vkBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        break;
-      default:
-        vkBinding.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-        break;
-      }
-      break;
-    }
-    case slang::ParameterCategory::UnorderedAccess:
-      vkBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-      break;
-
-    case slang::ParameterCategory::SamplerState:
-      vkBinding.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
-      break;
-    case slang::ParameterCategory::DescriptorTableSlot: {
-      // auto *tableLayout = fieldLayout->getTypeLayout();
-
-      // auto error = BuildDescriptorSetLayoutBindings(
-      //     shader, tableLayout, pushConstantRanges, setBindingsMap);
-
-      continue;
-    }
-    default:
-      std::cout << "Unsupported descriptor type in shader reflection\n";
-      continue;
-    }
-
-    std::cout << "Set " << setIndex << ", binding " << binding << "\n";
-    setBindingsMap[setIndex].push_back(vkBinding);
-  }
-
-  std::cout << "Processing descriptor sets\n";
-  std::cout << "Descriptor set count: " << typeLayout->getDescriptorSetCount()
-            << "\n";
-
-  for (uint32_t i = 0; i < typeLayout->getDescriptorSetCount(); ++i) {
-    auto count = typeLayout->getDescriptorSetDescriptorRangeCount(i);
-    std::cout << "Descriptor set " << i << " has " << count << " bindings\n";
-
-    for (uint32_t j = 0; j < count; ++j) {
-      auto arraySize =
-          typeLayout->getDescriptorSetDescriptorRangeDescriptorCount(i, j);
-      auto type = typeLayout->getDescriptorSetDescriptorRangeType(i, j);
-      auto category = typeLayout->getDescriptorSetDescriptorRangeCategory(i, j);
-      auto index = typeLayout->getDescriptorSetDescriptorRangeIndexOffset(i, j);
-
-      VkDescriptorSetLayoutBinding vkBinding{};
-      vkBinding.binding = index;
-      vkBinding.descriptorCount = arraySize;
-      vkBinding.stageFlags = VK_SHADER_STAGE_ALL;
-
-      switch (category) {
-      case slang::ParameterCategory::ConstantBuffer:
-        vkBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        break;
-      case slang::ParameterCategory::ShaderResource: {
-        switch (type) {
-        case slang::BindingType::Texture:
-          vkBinding.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-          break;
-        case slang::BindingType::RawBuffer:
-        case slang::BindingType::TypedBuffer:
-          vkBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-          break;
-        case slang::BindingType::Unknown:
-          break;
-        case slang::BindingType::Sampler:
-          vkBinding.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
-          break;
-        case slang::BindingType::ConstantBuffer:
-          vkBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-          break;
-        case slang::BindingType::ParameterBlock:
-          // Handled separately
-          break;
-        case slang::BindingType::CombinedTextureSampler:
-          vkBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-          break;
-        case slang::BindingType::InputRenderTarget:
-          vkBinding.descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
-          break;
-        case slang::BindingType::InlineUniformData:
-          // Not supported in Vulkan
-          break;
-        case slang::BindingType::RayTracingAccelerationStructure:
-          vkBinding.descriptorType =
-              VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
-          break;
-        case slang::BindingType::VaryingInput:
-        case slang::BindingType::VaryingOutput:
-        case slang::BindingType::ExistentialValue:
-        case slang::BindingType::PushConstant:
-        case slang::BindingType::MutableFlag:
-        case slang::BindingType::MutableTexture:
-        case slang::BindingType::MutableTypedBuffer:
-        case slang::BindingType::MutableRawBuffer:
-        case slang::BindingType::BaseMask:
-        case slang::BindingType::ExtMask:
-          std::cout << "Unsupported shader resource type in reflection\n";
-          std::cout << "Type: " << static_cast<int>(type) << "\n";
-          break;
-        }
-        break;
-      }
-
-      case slang::None:
-      case slang::Mixed:
-      case slang::UnorderedAccess:
-      case slang::VaryingInput:
-      case slang::VaryingOutput:
-      case slang::SamplerState:
-      case slang::Uniform:
-      case slang::DescriptorTableSlot:
-      case slang::SpecializationConstant:
-      case slang::PushConstantBuffer:
-      case slang::RegisterSpace:
-      case slang::GenericResource:
-      case slang::RayPayload:
-      case slang::HitAttributes:
-      case slang::CallablePayload:
-      case slang::ShaderRecord:
-      case slang::ExistentialTypeParam:
-      case slang::ExistentialObjectParam:
-      case slang::SubElementRegisterSpace:
-      case slang::InputAttachmentIndex:
-      case slang::MetalArgumentBufferElement:
-      case slang::MetalAttribute:
-      case slang::MetalPayload:
-        std::cout << "Unsupported descriptor type in shader reflection\n";
-        std::cout << "Category: " << static_cast<int>(category) << "\n";
-        break;
-      }
-
-      setBindingsMap[i].push_back(vkBinding);
-    }
-  }
-
-  return Error::Success();
 }
 
 auto GetPipelineLayout(const GraphicsContext &context,
@@ -232,12 +41,6 @@ auto GetPipelineLayout(const GraphicsContext &context,
   std::cout << "Creating pipeline layout from shader reflection\n";
 
   std::vector<VkDescriptorSetLayout> setLayouts;
-
-  auto error = BuildDescriptorSetLayoutBindings(
-      shader, typeLayout, pushConstantRanges, setBindingsMap);
-  if (Error::IsError(error)) {
-    return tl::make_unexpected(error);
-  }
 
   std::cout << "Creating descriptor set layouts\n";
 
@@ -267,7 +70,7 @@ auto GetPipelineLayout(const GraphicsContext &context,
   pipelineLayoutInfo.pushConstantRangeCount = pushConstantRanges.size();
   pipelineLayoutInfo.pPushConstantRanges = pushConstantRanges.data();
   VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
-  error = Error::Create(vkCreatePipelineLayout(
+  auto error = Error::Create(vkCreatePipelineLayout(
       context.device, &pipelineLayoutInfo, nullptr, &pipelineLayout));
 
   if (Error::IsError(error)) {

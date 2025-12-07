@@ -5,6 +5,7 @@
 #include "Modules/type.hpp"
 #include "graphics.hpp"
 #include "hash.hpp"
+#include "reflect.hpp"
 #include "slang/slang.h"
 #include <cstdint>
 #include <string>
@@ -28,52 +29,6 @@ struct ShaderExtern {
   }
 };
 
-enum class ResourceKind : uint8_t {
-  UniformBuffer,
-  StorageBuffer,
-  SampledImage,
-  StorageImage,
-  Sampler,
-  CombinedImageSampler,
-  PushConstant
-};
-
-struct BufferInfo {
-  VkBuffer buffer;
-  VkDeviceSize offset;
-  VkDeviceSize range;
-};
-
-struct ImageInfo {
-  VkImageView view;
-  VkImageLayout layout;
-};
-
-struct SamplerInfo {
-  VkSampler sampler;
-};
-
-using ResourceInfo = std::variant<BufferInfo, ImageInfo, SamplerInfo>;
-
-struct ShaderResource {
-  std::string name;
-
-  uint32_t set;
-  uint32_t binding;
-
-  ResourceKind kind;
-  ResourceInfo value;
-
-  bool dirty = false;
-};
-
-struct PushConstantRange {
-  uint32_t offset;
-  uint32_t size;
-  std::vector<uint8_t> data;
-  bool dirty = false;
-};
-
 static const Type type = Type("Shader");
 
 struct ShaderModule : Object {
@@ -93,6 +48,8 @@ struct ShaderModule : Object {
 
   VertexFormats expectedVertexFormat = VertexFormats::Unknown;
   std::unordered_map<SlangStage, size_t> entryPointToStageIndex;
+
+  ShaderReflection reflection;
 
   static auto Create(Graphics::GraphicsContext &context,
                      const std::string &path, const std::string &name)

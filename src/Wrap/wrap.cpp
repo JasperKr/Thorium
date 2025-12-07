@@ -6,9 +6,9 @@
 #include <lua.h>
 
 #include "Modules/object.hpp"
-#include "Wrap/Graphics/graphics.hpp"
-#include "Wrap/Modules/event.hpp"
-#include "Wrap/Modules/timer.hpp"
+#include "Wrap/Graphics/wrap_graphics.hpp"
+#include "Wrap/Modules/wrap_event.hpp"
+#include "Wrap/Modules/wrap_timer.hpp"
 
 namespace LuaWrap {
 

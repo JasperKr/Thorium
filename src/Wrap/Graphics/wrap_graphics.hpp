@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Wrap/Graphics/rendertarget.hpp"
-#include "Wrap/Graphics/texture.hpp"
+#include "Wrap/Graphics/wrap_rendertarget.hpp"
+#include "Wrap/Graphics/wrap_texture.hpp"
 #include "Wrap/wrap.hpp"
 extern "C" {
 #include <lauxlib.h>
