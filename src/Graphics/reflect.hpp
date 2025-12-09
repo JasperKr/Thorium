@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Graphics/graphics.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "hash.hpp"
 #include "slang/slang.h"
@@ -162,14 +163,13 @@ struct SamplerInfo {
   SlangResourceShape shape;
   SlangResourceAccess access;
 
-  [[nodiscard]] auto ToString() const -> std::string {
-    std::string str = "SamplerInfo { ";
-    str += "set: " + std::to_string(set) + ", ";
-    str += "binding: " + std::to_string(binding) + ", ";
-    str += "shape: " + std::to_string(static_cast<uint32_t>(shape)) + ", ";
-    str += "access: " + std::to_string(static_cast<uint32_t>(access)) + " ";
-    str += "}";
-    return str;
+  void ToString(IndentedPrinter &printer) const {
+    printer *= "SamplerInfo {";
+    printer += "set: " + std::to_string(set) + ", ";
+    printer *= "binding: " + std::to_string(binding) + ", ";
+    printer *= "shape: " + std::to_string(static_cast<uint32_t>(shape)) + ", ";
+    printer *= "access: " + std::to_string(static_cast<uint32_t>(access)) + "";
+    printer -= "}";
   }
 };
 
@@ -179,13 +179,12 @@ struct ScalarInfo {
 
   ScalarType type;
 
-  [[nodiscard]] auto ToString() const -> std::string {
-    std::string str = "ScalarInfo { ";
-    str += "size: " + std::to_string(size) + ", ";
-    str += "offset: " + std::to_string(offset) + ", ";
-    str += "type: " + std::to_string(static_cast<uint32_t>(type)) + " ";
-    str += "}";
-    return str;
+  void ToString(IndentedPrinter &printer) const {
+    printer *= "ScalarInfo {";
+    printer += "size: " + std::to_string(size) + ", ";
+    printer *= "offset: " + std::to_string(offset) + ", ";
+    printer *= "type: " + std::to_string(static_cast<uint32_t>(type)) + "";
+    printer -= "}";
   }
 };
 
@@ -196,16 +195,16 @@ struct VectorInfo {
   ScalarType scalarType;
   VectorType vectorType;
 
-  [[nodiscard]] auto ToString() const -> std::string {
-    std::string str = "VectorInfo { ";
-    str += "size: " + std::to_string(size) + ", ";
-    str += "offset: " + std::to_string(offset) + ", ";
-    str += "scalarType: " + std::to_string(static_cast<uint32_t>(scalarType)) +
-           ", ";
-    str += "vectorType: " + std::to_string(static_cast<uint32_t>(vectorType)) +
-           " ";
-    str += "}";
-    return str;
+  void ToString(IndentedPrinter &printer) const {
+    printer *= "VectorInfo {";
+    printer += "size: " + std::to_string(size) + ", ";
+    printer *= "offset: " + std::to_string(offset) + ", ";
+    printer *=
+        "scalarType: " + std::to_string(static_cast<uint32_t>(scalarType)) +
+        ", ";
+    printer *=
+        "vectorType: " + std::to_string(static_cast<uint32_t>(vectorType)) + "";
+    printer -= "}";
   }
 };
 
@@ -215,14 +214,13 @@ struct MatrixInfo {
 
   MatrixType matrixType;
 
-  [[nodiscard]] auto ToString() const -> std::string {
-    std::string str = "MatrixInfo { ";
-    str += "size: " + std::to_string(size) + ", ";
-    str += "offset: " + std::to_string(offset) + ", ";
-    str += "matrixType: " + std::to_string(static_cast<uint32_t>(matrixType)) +
-           " ";
-    str += "}";
-    return str;
+  void ToString(IndentedPrinter &printer) const {
+    printer *= "MatrixInfo {";
+    printer += "size: " + std::to_string(size) + ", ";
+    printer *= "offset: " + std::to_string(offset) + ", ";
+    printer *=
+        "matrixType: " + std::to_string(static_cast<uint32_t>(matrixType)) + "";
+    printer -= "}";
   }
 };
 
@@ -250,40 +248,52 @@ struct StructInfo {
     }
   }
 
-  [[nodiscard]] auto ToString() const -> std::string {
-    std::string str = "StructInfo { ";
-    str += "fields: [ ";
+  void ToString(IndentedPrinter &printer) const {
+    printer *= "StructInfo";
+    printer *= "Fields: ";
+    printer *= "{";
+    printer.Indent();
     for (const auto &field : fields) {
-      str += "{ name: " + field.name + "; type: ";
+      printer *= "{";
+      printer += "name: " + field.name;
+      printer *= "type: ";
+      printer.Inline();
       switch (field.variant) {
       case StructFieldVariant::Scalar: {
-        str += std::get<ScalarInfo>(field.info).ToString();
+        std::get<ScalarInfo>(field.info).ToString(printer);
         break;
       }
       case StructFieldVariant::Vector: {
-        str += std::get<VectorInfo>(field.info).ToString();
+        std::get<VectorInfo>(field.info).ToString(printer);
         break;
       }
       case StructFieldVariant::Matrix: {
-        str += std::get<MatrixInfo>(field.info).ToString();
+        std::get<MatrixInfo>(field.info).ToString(printer);
         break;
       }
       case StructFieldVariant::Unknown:
-        str += "Unknown";
+        printer *= "Unknown";
         break;
       }
+
+      printer -= "},";
     }
-    str += "] }";
-    return str;
+    printer -= "},";
   }
 };
 
-enum class StructResourceType : uint8_t {
+enum class BufferResourceType : uint8_t {
   Unknown,
   Scalar,
   Vector,
   Matrix,
   Struct,
+};
+
+enum class BufferType : uint8_t {
+  Unknown,
+  Uniform,
+  Storage,
 };
 
 struct BufferInfo {
@@ -292,33 +302,42 @@ struct BufferInfo {
   uint32_t set;
   uint32_t binding;
 
-  StructResourceType type;
+  BufferResourceType type;
+  SlangResourceAccess access;
+  BufferType bufferType;
   std::variant<StructInfo, ScalarInfo, VectorInfo, MatrixInfo> info;
 
-  [[nodiscard]] auto ToString() const -> std::string {
-    std::string str = "BufferInfo { ";
-    str += "size: " + std::to_string(size) + ", ";
-    str += "set: " + std::to_string(set) + ", ";
-    str += "binding: " + std::to_string(binding) + ", ";
+  void ToString(IndentedPrinter &printer) const {
+    printer *= "BufferInfo";
+    printer *= "{";
+    printer += "size: " + std::to_string(size) + ", ";
+    printer *= "set: " + std::to_string(set) + ", ";
+    printer *= "binding: " + std::to_string(binding) + ", ";
+    printer *=
+        "access: " + std::to_string(static_cast<uint32_t>(access)) + ", ";
+    printer *=
+        "bufferType: " + std::to_string(static_cast<uint32_t>(bufferType)) +
+        ", ";
+    printer *= "type: ";
+    printer.Inline();
     switch (type) {
-    case StructResourceType::Scalar:
-      str += "type: " + std::get<ScalarInfo>(info).ToString() + " ";
+    case BufferResourceType::Scalar:
+      std::get<ScalarInfo>(info).ToString(printer);
       break;
-    case StructResourceType::Vector:
-      str += "type: " + std::get<VectorInfo>(info).ToString() + " ";
+    case BufferResourceType::Vector:
+      std::get<VectorInfo>(info).ToString(printer);
       break;
-    case StructResourceType::Matrix:
-      str += "type: " + std::get<MatrixInfo>(info).ToString() + " ";
+    case BufferResourceType::Matrix:
+      std::get<MatrixInfo>(info).ToString(printer);
       break;
-    case StructResourceType::Struct:
-      str += "type: " + std::get<StructInfo>(info).ToString() + " ";
+    case BufferResourceType::Struct:
+      std::get<StructInfo>(info).ToString(printer);
       break;
     default:
-      str += "type: Unknown ";
+      printer *= "Unknown";
       break;
     }
-    str += "}";
-    return str;
+    printer -= "},";
   }
 };
 
@@ -393,15 +412,15 @@ struct ShaderReflection {
       return;
     }
 
-    std::cout << "Constructed global UBO struct:\n";
-
     globalUBOStruct.ConstructFieldMap();
 
     BufferInfo globalUBOInfo{
         .size = size,
         .set = set,
         .binding = binding,
-        .type = StructResourceType::Struct,
+        .type = BufferResourceType::Struct,
+        .access = SlangResourceAccess::SLANG_RESOURCE_ACCESS_READ,
+        .bufferType = BufferType::Uniform,
         .info = globalUBOStruct,
     };
 

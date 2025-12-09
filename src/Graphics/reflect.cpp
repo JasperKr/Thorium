@@ -1,5 +1,6 @@
 #include "reflect.hpp"
 #include "Graphics/graphics.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "slang/slang.h"
 #include "vulkan/vulkan_core.h"
@@ -58,12 +59,142 @@ auto FindShaderParameter(slang::ProgramLayout *programLayout,
   return FindShaderParameterResult{};
 }
 
+auto SetupStruct(slang::TypeLayoutReflection *bufferLayout,
+                 slang::TypeLayoutReflection *typeLayout, BufferInfo &info)
+    -> Error::Error {
+  switch (bufferLayout->getKind()) {
+  case slang::TypeReflection::Kind::Struct: {
+    info.type = BufferResourceType::Struct;
+    StructInfo structInfo{};
+    auto fieldCount = bufferLayout->getFieldCount();
+
+    for (int i = 0; i < fieldCount; ++i) {
+      auto *fieldVariableType = bufferLayout->getFieldByIndex(i);
+      auto *fieldType = fieldVariableType->getTypeLayout();
+
+      switch (fieldType->getKind()) {
+      case slang::TypeReflection::Kind::Scalar: {
+        ScalarInfo scalarInfo{
+            .size = static_cast<uint32_t>(fieldType->getSize()),
+            .offset = static_cast<uint32_t>(fieldVariableType->getOffset()),
+            .type = FromScalarType(fieldType->getScalarType()),
+        };
+
+        StructFieldInfo fieldInfo{
+            .name = fieldVariableType->getName(),
+            .variant = StructFieldVariant::Scalar,
+            .info = scalarInfo,
+        };
+
+        structInfo.fields.emplace_back(fieldInfo);
+
+        break;
+      }
+      case slang::TypeReflection::Kind::Vector: {
+        VectorInfo vectorInfo{
+            .size = static_cast<uint32_t>(fieldType->getSize()),
+            .offset = static_cast<uint32_t>(fieldVariableType->getOffset()),
+            .scalarType = FromScalarType(fieldType->getScalarType()),
+            .vectorType = ToVectorType(fieldType->getElementCount()),
+        };
+
+        StructFieldInfo fieldInfo{
+            .name = fieldVariableType->getName(),
+            .variant = StructFieldVariant::Vector,
+            .info = vectorInfo,
+        };
+
+        structInfo.fields.emplace_back(fieldInfo);
+
+        break;
+      }
+      case slang::TypeReflection::Kind::Matrix: {
+        MatrixInfo matrixInfo{
+            .size = static_cast<uint32_t>(fieldType->getSize()),
+            .offset = static_cast<uint32_t>(fieldVariableType->getOffset()),
+            .matrixType = ToMatrixType(fieldType->getRowCount(),
+                                       fieldType->getColumnCount()),
+        };
+
+        StructFieldInfo fieldInfo{
+            .name = fieldVariableType->getName(),
+            .variant = StructFieldVariant::Matrix,
+            .info = matrixInfo,
+        };
+
+        structInfo.fields.emplace_back(fieldInfo);
+
+        break;
+      }
+      default: {
+        return Error::Create(
+            "Unsupported struct field type in Buffer struct reflection.");
+      }
+      }
+    }
+
+    structInfo.ConstructFieldMap();
+    info.info = structInfo;
+
+    break;
+  }
+  case slang::TypeReflection::Kind::Scalar: {
+    info.type = BufferResourceType::Scalar;
+
+    ScalarInfo scalarInfo{
+        .size = static_cast<uint32_t>(bufferLayout->getSize()),
+        .offset = static_cast<uint32_t>(
+            typeLayout->getElementVarLayout()->getOffset()),
+        .type = FromScalarType(bufferLayout->getScalarType()),
+    };
+
+    info.info = scalarInfo;
+
+    break;
+  }
+  case slang::TypeReflection::Kind::Vector: {
+    info.type = BufferResourceType::Vector;
+
+    VectorInfo vectorInfo{
+        .size = static_cast<uint32_t>(bufferLayout->getSize()),
+        .offset = static_cast<uint32_t>(
+            typeLayout->getElementVarLayout()->getOffset()),
+        .scalarType = FromScalarType(bufferLayout->getScalarType()),
+        .vectorType = ToVectorType(bufferLayout->getElementCount()),
+    };
+
+    info.info = vectorInfo;
+    break;
+  }
+  case slang::TypeReflection::Kind::Matrix: {
+    info.type = BufferResourceType::Matrix;
+
+    MatrixInfo matrixInfo{
+        .size = static_cast<uint32_t>(bufferLayout->getSize()),
+        .offset = static_cast<uint32_t>(
+            typeLayout->getElementVarLayout()->getOffset()),
+        .matrixType = ToMatrixType(bufferLayout->getRowCount(),
+                                   bufferLayout->getColumnCount()),
+    };
+
+    info.info = matrixInfo;
+    break;
+  }
+  default: {
+    std::cout << "Buffer layout kind: "
+              << static_cast<int>(bufferLayout->getKind()) << "\n";
+    return Error::Create(
+        "Unsupported buffer element type in Buffer reflection.");
+  }
+  }
+
+  return Error::Success();
+}
+
 auto SetupFromType(slang::VariableLayoutReflection *variableLayout,
                    ShaderReflection &reflection) -> Error::Error {
   auto *typeLayout = variableLayout->getTypeLayout();
   auto kind = typeLayout->getKind();
-
-  std::cout << "Setting up: " << variableLayout->getName() << "\n";
 
   switch (typeLayout->getKind()) {
   case slang::TypeReflection::Kind::Struct: {
@@ -91,133 +222,18 @@ auto SetupFromType(slang::VariableLayoutReflection *variableLayout,
   case slang::TypeReflection::Kind::ConstantBuffer: {
     auto *bufferLayout = typeLayout->getElementVarLayout()->getTypeLayout();
 
+    auto access = typeLayout->getResourceAccess();
+
     BufferInfo info{
         .set = variableLayout->getBindingSpace(),
         .binding = variableLayout->getBindingIndex(),
+        .access = access,
+        .bufferType = BufferType::Uniform,
     };
 
-    switch (bufferLayout->getKind()) {
-    case slang::TypeReflection::Kind::Struct: {
-      info.type = StructResourceType::Struct;
-      StructInfo structInfo{};
-      auto fieldCount = bufferLayout->getFieldCount();
-
-      for (int i = 0; i < fieldCount; ++i) {
-        auto *fieldVariableType = bufferLayout->getFieldByIndex(i);
-        auto *fieldType = fieldVariableType->getTypeLayout();
-
-        switch (fieldType->getKind()) {
-        case slang::TypeReflection::Kind::Scalar: {
-          ScalarInfo scalarInfo{
-              .size = static_cast<uint32_t>(fieldType->getSize()),
-              .offset = static_cast<uint32_t>(fieldVariableType->getOffset()),
-              .type = FromScalarType(fieldType->getScalarType()),
-          };
-
-          StructFieldInfo fieldInfo{
-              .name = fieldVariableType->getName(),
-              .variant = StructFieldVariant::Scalar,
-              .info = scalarInfo,
-          };
-
-          structInfo.fields.emplace_back(fieldInfo);
-
-          break;
-        }
-        case slang::TypeReflection::Kind::Vector: {
-          VectorInfo vectorInfo{
-              .size = static_cast<uint32_t>(fieldType->getSize()),
-              .offset = static_cast<uint32_t>(fieldVariableType->getOffset()),
-              .scalarType = FromScalarType(fieldType->getScalarType()),
-              .vectorType = ToVectorType(fieldType->getElementCount()),
-          };
-
-          StructFieldInfo fieldInfo{
-              .name = fieldVariableType->getName(),
-              .variant = StructFieldVariant::Vector,
-              .info = vectorInfo,
-          };
-
-          structInfo.fields.emplace_back(fieldInfo);
-
-          break;
-        }
-        case slang::TypeReflection::Kind::Matrix: {
-          MatrixInfo matrixInfo{
-              .size = static_cast<uint32_t>(fieldType->getSize()),
-              .offset = static_cast<uint32_t>(fieldVariableType->getOffset()),
-              .matrixType = ToMatrixType(fieldType->getRowCount(),
-                                         fieldType->getColumnCount()),
-          };
-
-          StructFieldInfo fieldInfo{
-              .name = fieldVariableType->getName(),
-              .variant = StructFieldVariant::Matrix,
-              .info = matrixInfo,
-          };
-
-          structInfo.fields.emplace_back(fieldInfo);
-
-          break;
-        }
-        default: {
-          return Error::Create(
-              "Unsupported struct field type in Buffer struct reflection.");
-        }
-        }
-      }
-
-      structInfo.ConstructFieldMap();
-      info.info = structInfo;
-
-      break;
-    }
-    case slang::TypeReflection::Kind::Scalar: {
-      info.type = StructResourceType::Scalar;
-
-      ScalarInfo scalarInfo{
-          .size = static_cast<uint32_t>(bufferLayout->getSize()),
-          .offset = static_cast<uint32_t>(
-              typeLayout->getElementVarLayout()->getOffset()),
-          .type = FromScalarType(bufferLayout->getScalarType()),
-      };
-
-      info.info = scalarInfo;
-
-      break;
-    }
-    case slang::TypeReflection::Kind::Vector: {
-      info.type = StructResourceType::Vector;
-
-      VectorInfo vectorInfo{
-          .size = static_cast<uint32_t>(bufferLayout->getSize()),
-          .offset = static_cast<uint32_t>(
-              typeLayout->getElementVarLayout()->getOffset()),
-          .scalarType = FromScalarType(bufferLayout->getScalarType()),
-          .vectorType = ToVectorType(bufferLayout->getElementCount()),
-      };
-
-      info.info = vectorInfo;
-      break;
-    }
-    case slang::TypeReflection::Kind::Matrix: {
-      info.type = StructResourceType::Matrix;
-
-      MatrixInfo matrixInfo{
-          .size = static_cast<uint32_t>(bufferLayout->getSize()),
-          .offset = static_cast<uint32_t>(
-              typeLayout->getElementVarLayout()->getOffset()),
-          .matrixType = ToMatrixType(bufferLayout->getRowCount(),
-                                     bufferLayout->getColumnCount()),
-      };
-
-      info.info = matrixInfo;
-      break;
-    }
-    default: {
-      return Error::Create(
-          "Unsupported buffer element type in Buffer reflection.");
-    }
+    auto err = SetupStruct(bufferLayout, typeLayout, info);
+    if (Error::IsError(err)) {
+      return err;
     }
 
     ResourceInfo resourceInfo = {
@@ -233,21 +249,133 @@ auto SetupFromType(slang::VariableLayoutReflection *variableLayout,
     auto shape = typeLayout->getResourceShape();
     auto access = typeLayout->getResourceAccess();
 
-    SamplerInfo samplerInfo{
-        .set = variableLayout->getBindingSpace(),
-        .binding = variableLayout->getBindingIndex(),
-        .shape = shape,
-        .access = access,
-    };
+    // Masked out shape flags
+    auto maskedShape = shape & SLANG_RESOURCE_BASE_SHAPE_MASK;
 
-    ResourceInfo resourceInfo = {
-        .name = variableLayout->getName(),
-        // .stage = SlangStage::SLANG_STAGE_FRAGMENT,
-        .variant = ResourceVariant::Sampler,
-        .info = samplerInfo,
-    };
+    if (maskedShape == SLANG_TEXTURE_1D || maskedShape == SLANG_TEXTURE_2D ||
+        maskedShape == SLANG_TEXTURE_3D || maskedShape == SLANG_TEXTURE_CUBE ||
+        maskedShape == SLANG_TEXTURE_BUFFER) {
 
-    reflection.resources.emplace_back(resourceInfo);
+      SamplerInfo samplerInfo{
+          .set = variableLayout->getBindingSpace(),
+          .binding = variableLayout->getBindingIndex(),
+          .shape = shape,
+          .access = access,
+      };
+
+      ResourceInfo resourceInfo = {
+          .name = variableLayout->getName(),
+          // .stage = SlangStage::SLANG_STAGE_FRAGMENT,
+          .variant = ResourceVariant::Sampler,
+          .info = samplerInfo,
+      };
+
+      reflection.resources.emplace_back(resourceInfo);
+    } else if (maskedShape == SLANG_STRUCTURED_BUFFER ||
+               maskedShape == SLANG_BYTE_ADDRESS_BUFFER) {
+      // SSBO
+      BufferInfo info{
+          .set = variableLayout->getBindingSpace(),
+          .binding = variableLayout->getBindingIndex(),
+          .access = access,
+          .bufferType = BufferType::Storage,
+      };
+
+      auto *bufferLayout =
+          variableLayout->getTypeLayout()->getResourceResultType();
+
+      switch (bufferLayout->getKind()) {
+      case slang::TypeReflection::Kind::Struct: {
+        info.type = BufferResourceType::Struct;
+        StructInfo structInfo{};
+        auto fieldCount = bufferLayout->getFieldCount();
+        std::cout << "SSBO Struct fields: " << fieldCount << "\n";
+
+        for (int i = 0; i < fieldCount; ++i) {
+          auto *fieldVariableType = bufferLayout->getFieldByIndex(i);
+          auto *fieldType = fieldVariableType->getType();
+          std::cout << "- Field: " << fieldVariableType->getName() << "\n";
+
+          // switch (fieldType->getKind()) {
+          // case slang::TypeReflection::Kind::Scalar: {
+          //   ScalarInfo scalarInfo{
+          //       .size = static_cast<uint32_t>(fieldType->getSize()),
+          //       .offset = static_cast<uint32_t>(fieldVariableType->getOffset()),
+          //       .type = FromScalarType(fieldType->getScalarType()),
+          //   };
+
+          //   StructFieldInfo fieldInfo{
+          //       .name = fieldVariableType->getName(),
+          //       .variant = StructFieldVariant::Scalar,
+          //       .info = scalarInfo,
+          //   };
+
+          //   structInfo.fields.emplace_back(fieldInfo);
+
+          //   break;
+          // }
+          // default: {
+          //   return Error::Create(
+          //       "Unsupported struct field type in SSBO struct reflection.");
+          // }
+          // }
+        }
+
+        break;
+      }
+      case slang::TypeReflection::Kind::Scalar: {
+        info.type = BufferResourceType::Scalar;
+        ScalarInfo scalarInfo{
+            .size = static_cast<uint32_t>(sizeof(float)),
+            .offset = 0,
+            .type = FromScalarType(bufferLayout->getScalarType()),
+        };
+        info.info = scalarInfo;
+        break;
+      }
+      case slang::TypeReflection::Kind::Vector: {
+        info.type = BufferResourceType::Vector;
+        VectorInfo vectorInfo{
+            .size = static_cast<uint32_t>(sizeof(float) *
+                                          bufferLayout->getElementCount()),
+            .offset = 0,
+            .scalarType = FromScalarType(bufferLayout->getScalarType()),
+            .vectorType = ToVectorType(bufferLayout->getElementCount()),
+        };
+
+        info.info = vectorInfo;
+        break;
+      }
+      case slang::TypeReflection::Kind::Matrix: {
+        info.type = BufferResourceType::Matrix;
+        MatrixInfo matrixInfo{
+            .size = static_cast<uint32_t>(sizeof(float) *
+                                          bufferLayout->getRowCount() *
+                                          bufferLayout->getColumnCount()),
+            .offset = 0,
+            .matrixType = ToMatrixType(bufferLayout->getRowCount(),
+                                       bufferLayout->getColumnCount()),
+        };
+
+        info.info = matrixInfo;
+        break;
+      }
+      default: {
+        return Error::Create(
+            "Unsupported buffer element type in SSBO reflection.");
+      }
+      };
+
+      ResourceInfo resourceInfo = {
+          .name = variableLayout->getName(),
+          .variant = ResourceVariant::Buffer,
+          .info = info,
+      };
+
+      reflection.resources.emplace_back(resourceInfo);
+    } else {
+      return Error::Create("Unsupported resource shape in reflection.");
+    }
 
     break;
   }
@@ -363,10 +491,6 @@ auto ReflectShader(Graphics::GraphicsContext &context,
     const auto *typeName = typeLayout->getType()->getName();
     const auto *paramName = param->getName();
 
-    std::cout << "Parameter: " << (paramName != nullptr ? paramName : "null")
-              << ", Type: " << (typeName != nullptr ? typeName : "null")
-              << "\n";
-
     auto category = param->getCategory();
 
     auto err = SetupFromType(param, outReflection);
@@ -379,46 +503,47 @@ auto ReflectShader(Graphics::GraphicsContext &context,
   outReflection.ConstructUBOStruct(globalParamsLayout->getBindingSpace(),
                                    globalParamsLayout->getBindingIndex());
 
+  IndentedPrinter printer{0};
+
   for (auto &resource : outReflection.resources) {
     outReflection.resourceMap[resource.name] = resource;
-    std::cout << "Reflected resource: " << resource.name << ": ";
+
+    printer *= "Reflected resource: " + resource.name + ": ";
 
     switch (resource.variant) {
     case ResourceVariant::Sampler: {
       auto info = std::get<SamplerInfo>(resource.info);
-      std::cout << info.ToString() << "\n";
+      info.ToString(printer);
       break;
     }
     case ResourceVariant::Scalar: {
       auto info = std::get<ScalarInfo>(resource.info);
-      std::cout << info.ToString() << "\n";
+      info.ToString(printer);
       break;
     }
     case ResourceVariant::Vector: {
       auto info = std::get<VectorInfo>(resource.info);
-      std::cout << info.ToString() << "\n";
+      info.ToString(printer);
       break;
     }
     case ResourceVariant::Matrix: {
       auto info = std::get<MatrixInfo>(resource.info);
-      std::cout << info.ToString() << "\n";
+      info.ToString(printer);
       break;
     }
     case ResourceVariant::Buffer: {
       auto info = std::get<BufferInfo>(resource.info);
-      std::cout << info.ToString() << "\n";
+      info.ToString(printer);
       break;
     }
     default: {
-      std::cout << "Unknown resource variant\n";
+      printer *= "Unknown resource variant";
       break;
     }
     }
   }
 
-  // if (Error::IsError(result)) {
-  //   return result;
-  // }
+  printer();
 
   return Error::Create("Stop");
 }
