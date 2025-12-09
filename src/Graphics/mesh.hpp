@@ -152,13 +152,15 @@ struct Mesh : Object {
   auto UploadVertices(GraphicsContext &context) -> Error::Error {
     uint32_t dataSize = VertexData.size() * VertexFormatSize(Format);
 
-    return VertexBuffer->SetData(context, VertexData.data(), dataSize, 0);
+    return VertexBuffer->SetData(context, VertexData, 0);
   }
 
   auto UploadIndices(GraphicsContext &context) -> Error::Error {
     uint64_t dataSize = IndexData.size() * sizeof(uint32_t);
+    std::span<uint8_t> IndexDataSpan( // NOLINTNEXTLINE
+        reinterpret_cast<uint8_t *>(IndexData.data()), dataSize);
 
-    return IndexBuffer->SetData(context, IndexData.data(), dataSize, 0);
+    return IndexBuffer->SetData(context, IndexDataSpan, 0);
   }
 
   template <typename T>

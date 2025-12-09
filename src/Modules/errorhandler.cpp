@@ -20,6 +20,7 @@ auto ErrorHandlerMainLoop() -> void {
       case SDL_EVENT_QUIT:
       case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
       case SDL_EVENT_KEY_DOWN:
+      case SDL_EVENT_KEY_UP:
         running = false;
         break;
       default:

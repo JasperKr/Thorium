@@ -302,6 +302,7 @@ auto printProgramLayout(slang::ProgramLayout *programLayout) -> void {
   }
 }
 
+/*
 auto inline BuildDescriptorSetLayoutBindings(
     slang::ProgramLayout *programLayout, std::vector<ShaderResource> &resources,
     std::vector<PushConstantResource> &pushConstants) -> Error::Error {
@@ -496,6 +497,7 @@ auto inline BuildDescriptorSetLayoutBindings(
 
   return Error::Success();
 }
+*/
 
 static inline auto LoadSlang(GraphicsContext &context,
                              Ref<ShaderModule> &shader) -> Error::Error {
@@ -696,7 +698,8 @@ auto ShaderModule::Create(Graphics::GraphicsContext &context,
   //   return tl::make_unexpected(buildResult);
   // }
 
-  auto reflectResult = ReflectShader(shader->programLayout, shader->reflection);
+  auto reflectResult =
+      ReflectShader(context, shader->programLayout, shader->reflection);
 
   if (Error::IsError(reflectResult)) {
     return tl::unexpected(reflectResult);

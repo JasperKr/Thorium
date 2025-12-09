@@ -418,14 +418,12 @@ inline auto GetQuadMesh(GraphicsContext &context, const VkRect2D size,
 
   const static auto mesh =
       Mesh::Create(context, VertexFormats::Default2D, span, &indices);
-  auto setDataError = mesh->get()->VertexBuffer->SetData(
-      context, vertices.data(), sizeof(Format_Default2D) * vertices.size(), 0);
+  auto setDataError = mesh->get()->VertexBuffer->SetData(context, vertices);
   if (Error::IsError(setDataError)) {
     return tl::unexpected(setDataError);
   }
 
-  setDataError = mesh->get()->IndexBuffer->SetData(
-      context, indices.data(), sizeof(uint32_t) * indices.size(), 0);
+  setDataError = mesh->get()->IndexBuffer->SetData(context, indices);
   if (Error::IsError(setDataError)) {
     return tl::unexpected(setDataError);
   }

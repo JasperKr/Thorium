@@ -1,13 +1,14 @@
 cmake_minimum_required(VERSION 3.25)
 project(Thorium LANGUAGES C CXX)
 
-# set(CMAKE_CXX_STANDARD_REQUIRED ON)
-# set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_C_STANDARD 11)
 
 if(MSVC)
     add_compile_options(/Zc:__cplusplus)
     add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:/std:c++23preview>")
+else()
+    set(CMAKE_CXX_STANDARD 23)
+    set(CMAKE_CXX_STANDARD_REQUIRED ON)
 endif()
 
 # -------------------------------

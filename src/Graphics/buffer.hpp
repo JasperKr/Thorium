@@ -26,8 +26,24 @@ struct Buffer : Object {
       -> tl::expected<Ref<Graphics::Buffer>, Error::Error>;
 
   void Destroy(GraphicsContext &context) const;
-  auto SetData(GraphicsContext &context, const void *data, VkDeviceSize size,
+  auto SetData(GraphicsContext &context, std::span<const uint8_t> data,
                VkDeviceSize offset) const -> Error::Error;
+  template <typename T>
+  auto SetData(GraphicsContext &context, std::span<T> data,
+               VkDeviceSize offset = 0) const -> Error::Error {
+    auto byteSpan = // NOLINTNEXTLINE
+        std::span<const uint8_t>(reinterpret_cast<const uint8_t *>(data.data()),
+                                 sizeof(T) * data.size());
+    return SetData(context, byteSpan, offset);
+  }
+  template <typename T>
+  auto SetData(GraphicsContext &context, const std::vector<T> &data,
+               VkDeviceSize offset = 0) const -> Error::Error {
+    auto byteSpan = // NOLINTNEXTLINE
+        std::span<const uint8_t>(reinterpret_cast<const uint8_t *>(data.data()),
+                                 sizeof(T) * data.size());
+    return SetData(context, byteSpan, offset);
+  }
 
   // Resizes the buffer to the new size. Note: This will destroy the existing
   // buffer and create a new one. Data will be lost. TODO: Implement data copy.

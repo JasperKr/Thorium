@@ -1,6 +1,7 @@
 #include "buffer.hpp"
 #include "Modules/error.hpp"
 #include "graphics.hpp"
+#include <cstdint>
 #include <iostream>
 #define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
@@ -44,10 +45,11 @@ auto Graphics::Buffer::Create(Graphics::GraphicsContext &context,
 }
 
 auto Graphics::Buffer::SetData(Graphics::GraphicsContext &context,
-                               const void *srcData,
-                               VkDeviceSize size = 0, // NOLINT
+                               std::span<const uint8_t> data,
                                VkDeviceSize offset = 0) const -> Error::Error {
-  std::cout << "Setting buffer data of size " << size << " bytes at offset "
+  auto dataSize = data.size();
+
+  std::cout << "Setting buffer data of size " << dataSize << " bytes at offset "
             << offset << "\n";
   void *mapped = nullptr;
   auto result =
@@ -56,17 +58,18 @@ auto Graphics::Buffer::SetData(Graphics::GraphicsContext &context,
     return result;
   }
 
-  if (size == 0) {
-    size = size;
+  if (dataSize == 0) {
+    dataSize = size;
   }
 
-  if (offset + size > size) {
+  if (offset + dataSize > size) {
     vmaUnmapMemory(context.vmaAllocator, memory);
     return Error::Create("Data out of bounds for buffer set data.");
   }
 
   // NOLINTNEXTLINE, because of pointer arithmetic
-  std::memcpy(static_cast<uint8_t *>(mapped) + offset, srcData, size - offset);
+  std::memcpy(static_cast<uint8_t *>(mapped) + offset, data.data(),
+              dataSize - offset);
   vmaUnmapMemory(context.vmaAllocator, memory);
 
   return Error::Success();

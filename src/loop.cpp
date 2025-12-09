@@ -176,8 +176,6 @@ auto MainLoop() -> Error::Error {
 
   std::cout << "Graphics initialized successfully." << "\n";
 
-  bool running = true;
-
   Graphics::SetCurrentGraphicsContext(&context);
 
   auto shaderModuleLoadResult = Graphics::Shader::LoadModule();
@@ -227,6 +225,8 @@ auto MainLoop() -> Error::Error {
   lua_getfield(state, -1, "traceback");
   lua_remove(state, -2); // remove debug table
   auto tracebackIndex = lua_gettop(state);
+
+  Event::MainLoopRunning = false;
 
   while (Event::MainLoopRunning) {
     runCallback.push();

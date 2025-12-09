@@ -154,10 +154,10 @@ inline auto GetStackTrace(uint32_t level = 0) -> std::string {
   char **symbols = backtrace_symbols(stack.data(), frames);
 
   std::string trace;
-  for (int i = 0; i < frames; i++) {
-    // NOLINTNEXTLINE
-    trace += std::string(symbols[i]) + "\n";
-  }
+  // for (int i = 0; i < frames; i++) {
+  // NOLINTNEXTLINE
+  //   trace += std::string(symbols[i]) + "\n";
+  // }
 
   free(symbols); // NOLINT
   return trace;

@@ -44,6 +44,6 @@ ConstantBuffer<float4x4> testUBO;
 float4 fragmentMain(FragmentInput input)
 {
   float4 texColor = MainTexture.Sample(input.tex_coord);
-  texColor.rgb += testColor * test;
+    texColor.rgb += testColor * test;
   return input.color * texColor;
 }
