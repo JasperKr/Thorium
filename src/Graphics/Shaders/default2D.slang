@@ -44,6 +44,7 @@ struct PushConstants
 {
     float4x4 model;
     float2 aaaaaa;
+    float4 b;
 };
 
 [[vk::push_constant]]

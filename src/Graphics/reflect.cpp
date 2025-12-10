@@ -65,7 +65,10 @@ auto SetupStruct(slang::TypeLayoutReflection *bufferLayout,
   switch (bufferLayout->getKind()) {
   case slang::TypeReflection::Kind::Struct: {
     info.type = BufferResourceType::Struct;
-    StructInfo structInfo{};
+    StructInfo structInfo{
+        .size = static_cast<uint32_t>(bufferLayout->getSize()),
+        .alignment = static_cast<uint32_t>(bufferLayout->getAlignment()),
+    };
     auto fieldCount = bufferLayout->getFieldCount();
 
     for (int i = 0; i < fieldCount; ++i) {
@@ -191,6 +194,190 @@ auto SetupStruct(slang::TypeLayoutReflection *bufferLayout,
   return Error::Success();
 }
 
+auto SetupResource(slang::VariableLayoutReflection *variableLayout,
+                   ShaderReflection &reflection) -> Error::Error {
+
+  auto *typeLayout = variableLayout->getTypeLayout();
+  auto kind = typeLayout->getKind();
+  auto shape = typeLayout->getResourceShape();
+  auto access = typeLayout->getResourceAccess();
+
+  // Masked out shape flags
+  auto maskedShape = shape & SLANG_RESOURCE_BASE_SHAPE_MASK;
+
+  if (maskedShape == SLANG_TEXTURE_1D || maskedShape == SLANG_TEXTURE_2D ||
+      maskedShape == SLANG_TEXTURE_3D || maskedShape == SLANG_TEXTURE_CUBE ||
+      maskedShape == SLANG_TEXTURE_BUFFER) {
+
+    SamplerInfo samplerInfo{
+        .set = variableLayout->getBindingSpace(),
+        .binding = variableLayout->getBindingIndex(),
+        .shape = shape,
+        .access = access,
+    };
+
+    ResourceInfo resourceInfo = {
+        .name = variableLayout->getName(),
+        // .stage = SlangStage::SLANG_STAGE_FRAGMENT,
+        .variant = ResourceVariant::Sampler,
+        .info = samplerInfo,
+    };
+
+    reflection.resources.emplace_back(resourceInfo);
+  } else if (maskedShape == SLANG_STRUCTURED_BUFFER ||
+             maskedShape == SLANG_BYTE_ADDRESS_BUFFER) {
+    // SSBO
+    BufferInfo info{
+        .set = variableLayout->getBindingSpace(),
+        .binding = variableLayout->getBindingIndex(),
+        .access = access,
+        .bufferType = BufferType::Storage,
+    };
+
+    auto *bufferLayout =
+        variableLayout->getTypeLayout()->getElementTypeLayout();
+
+    switch (bufferLayout->getKind()) {
+    case slang::TypeReflection::Kind::Struct: {
+      info.type = BufferResourceType::Struct;
+      StructInfo structInfo{
+          .size = static_cast<uint32_t>(bufferLayout->getSize()),
+          .alignment = static_cast<uint32_t>(bufferLayout->getAlignment()),
+      };
+      auto fieldCount = bufferLayout->getFieldCount();
+
+      for (int i = 0; i < fieldCount; ++i) {
+        auto *fieldVariableType = bufferLayout->getFieldByIndex(i);
+        auto *fieldType = fieldVariableType->getType();
+
+        switch (fieldType->getKind()) {
+        case slang::TypeReflection::Kind::Scalar: {
+          ScalarInfo scalarInfo{
+              .size = sizeof(float),
+              .offset = static_cast<uint32_t>(fieldVariableType->getOffset()),
+              .type = FromScalarType(fieldType->getScalarType()),
+          };
+
+          StructFieldInfo fieldInfo{
+              .name = fieldVariableType->getName(),
+              .variant = StructFieldVariant::Scalar,
+              .info = scalarInfo,
+          };
+
+          structInfo.fields.emplace_back(fieldInfo);
+
+          break;
+        }
+        case slang::TypeReflection::Kind::Vector: {
+          VectorInfo vectorInfo{
+              .size = static_cast<uint32_t>(sizeof(float) *
+                                            fieldType->getElementCount()),
+              .offset = static_cast<uint32_t>(fieldVariableType->getOffset()),
+              .scalarType = FromScalarType(fieldType->getScalarType()),
+              .vectorType = ToVectorType(fieldType->getElementCount()),
+          };
+
+          StructFieldInfo fieldInfo{
+              .name = fieldVariableType->getName(),
+              .variant = StructFieldVariant::Vector,
+              .info = vectorInfo,
+          };
+
+          structInfo.fields.emplace_back(fieldInfo);
+
+          break;
+        }
+        case slang::TypeReflection::Kind::Matrix: {
+          MatrixInfo matrixInfo{
+              .size = static_cast<uint32_t>(sizeof(float) *
+                                            fieldType->getRowCount() *
+                                            fieldType->getColumnCount()),
+              .offset = static_cast<uint32_t>(fieldVariableType->getOffset()),
+              .matrixType = ToMatrixType(fieldType->getRowCount(),
+                                         fieldType->getColumnCount()),
+          };
+
+          StructFieldInfo fieldInfo{
+              .name = fieldVariableType->getName(),
+              .variant = StructFieldVariant::Matrix,
+              .info = matrixInfo,
+          };
+
+          structInfo.fields.emplace_back(fieldInfo);
+          break;
+        }
+        default: {
+          return Error::Create(
+              "Unsupported struct field type in SSBO struct reflection.");
+        }
+        }
+      }
+
+      structInfo.ConstructFieldMap();
+      info.info = structInfo;
+
+      break;
+    }
+    case slang::TypeReflection::Kind::Scalar: {
+      info.type = BufferResourceType::Scalar;
+      ScalarInfo scalarInfo{
+          .size = static_cast<uint32_t>(sizeof(float)),
+          .offset = static_cast<uint32_t>(
+              bufferLayout->getElementVarLayout()->getOffset()),
+          .type = FromScalarType(bufferLayout->getScalarType()),
+      };
+      info.info = scalarInfo;
+      break;
+    }
+    case slang::TypeReflection::Kind::Vector: {
+      info.type = BufferResourceType::Vector;
+      VectorInfo vectorInfo{
+          .size = static_cast<uint32_t>(sizeof(float) *
+                                        bufferLayout->getElementCount()),
+          .offset = static_cast<uint32_t>(
+              bufferLayout->getElementVarLayout()->getOffset()),
+          .scalarType = FromScalarType(bufferLayout->getScalarType()),
+          .vectorType = ToVectorType(bufferLayout->getElementCount()),
+      };
+
+      info.info = vectorInfo;
+      break;
+    }
+    case slang::TypeReflection::Kind::Matrix: {
+      info.type = BufferResourceType::Matrix;
+      MatrixInfo matrixInfo{
+          .size = static_cast<uint32_t>(sizeof(float) *
+                                        bufferLayout->getRowCount() *
+                                        bufferLayout->getColumnCount()),
+          .offset = static_cast<uint32_t>(
+              bufferLayout->getElementVarLayout()->getOffset()),
+          .matrixType = ToMatrixType(bufferLayout->getRowCount(),
+                                     bufferLayout->getColumnCount()),
+      };
+
+      info.info = matrixInfo;
+      break;
+    }
+    default: {
+      return Error::Create(
+          "Unsupported buffer element type in SSBO reflection.");
+    }
+    };
+
+    ResourceInfo resourceInfo = {
+        .name = variableLayout->getName(),
+        .variant = ResourceVariant::Buffer,
+        .info = info,
+    };
+
+    reflection.resources.emplace_back(resourceInfo);
+  } else {
+    return Error::Create("Unsupported resource shape in reflection.");
+  }
+
+  return Error::Success();
+}
+
 auto SetupFromType(slang::VariableLayoutReflection *variableLayout,
                    ShaderReflection &reflection) -> Error::Error {
   auto *typeLayout = variableLayout->getTypeLayout();
@@ -220,15 +407,21 @@ auto SetupFromType(slang::VariableLayoutReflection *variableLayout,
     break;
   }
   case slang::TypeReflection::Kind::ConstantBuffer: {
+    auto category = variableLayout->getCategory();
     auto *bufferLayout = typeLayout->getElementVarLayout()->getTypeLayout();
 
     auto access = typeLayout->getResourceAccess();
 
+    bool isPushConstant =
+        (category == slang::ParameterCategory::PushConstantBuffer);
+
     BufferInfo info{
+        .offset = static_cast<uint32_t>(variableLayout->getOffset()),
         .set = variableLayout->getBindingSpace(),
         .binding = variableLayout->getBindingIndex(),
         .access = access,
-        .bufferType = BufferType::Uniform,
+        .bufferType =
+            isPushConstant ? BufferType::PushConstant : BufferType::Uniform,
     };
 
     auto err = SetupStruct(bufferLayout, typeLayout, info);
@@ -246,137 +439,10 @@ auto SetupFromType(slang::VariableLayoutReflection *variableLayout,
     break;
   }
   case slang::TypeReflection::Kind::Resource: {
-    auto shape = typeLayout->getResourceShape();
-    auto access = typeLayout->getResourceAccess();
-
-    // Masked out shape flags
-    auto maskedShape = shape & SLANG_RESOURCE_BASE_SHAPE_MASK;
-
-    if (maskedShape == SLANG_TEXTURE_1D || maskedShape == SLANG_TEXTURE_2D ||
-        maskedShape == SLANG_TEXTURE_3D || maskedShape == SLANG_TEXTURE_CUBE ||
-        maskedShape == SLANG_TEXTURE_BUFFER) {
-
-      SamplerInfo samplerInfo{
-          .set = variableLayout->getBindingSpace(),
-          .binding = variableLayout->getBindingIndex(),
-          .shape = shape,
-          .access = access,
-      };
-
-      ResourceInfo resourceInfo = {
-          .name = variableLayout->getName(),
-          // .stage = SlangStage::SLANG_STAGE_FRAGMENT,
-          .variant = ResourceVariant::Sampler,
-          .info = samplerInfo,
-      };
-
-      reflection.resources.emplace_back(resourceInfo);
-    } else if (maskedShape == SLANG_STRUCTURED_BUFFER ||
-               maskedShape == SLANG_BYTE_ADDRESS_BUFFER) {
-      // SSBO
-      BufferInfo info{
-          .set = variableLayout->getBindingSpace(),
-          .binding = variableLayout->getBindingIndex(),
-          .access = access,
-          .bufferType = BufferType::Storage,
-      };
-
-      auto *bufferLayout =
-          variableLayout->getTypeLayout()->getResourceResultType();
-
-      switch (bufferLayout->getKind()) {
-      case slang::TypeReflection::Kind::Struct: {
-        info.type = BufferResourceType::Struct;
-        StructInfo structInfo{};
-        auto fieldCount = bufferLayout->getFieldCount();
-        std::cout << "SSBO Struct fields: " << fieldCount << "\n";
-
-        for (int i = 0; i < fieldCount; ++i) {
-          auto *fieldVariableType = bufferLayout->getFieldByIndex(i);
-          auto *fieldType = fieldVariableType->getType();
-          std::cout << "- Field: " << fieldVariableType->getName() << "\n";
-
-          // switch (fieldType->getKind()) {
-          // case slang::TypeReflection::Kind::Scalar: {
-          //   ScalarInfo scalarInfo{
-          //       .size = static_cast<uint32_t>(fieldType->getSize()),
-          //       .offset = static_cast<uint32_t>(fieldVariableType->getOffset()),
-          //       .type = FromScalarType(fieldType->getScalarType()),
-          //   };
-
-          //   StructFieldInfo fieldInfo{
-          //       .name = fieldVariableType->getName(),
-          //       .variant = StructFieldVariant::Scalar,
-          //       .info = scalarInfo,
-          //   };
-
-          //   structInfo.fields.emplace_back(fieldInfo);
-
-          //   break;
-          // }
-          // default: {
-          //   return Error::Create(
-          //       "Unsupported struct field type in SSBO struct reflection.");
-          // }
-          // }
-        }
-
-        break;
-      }
-      case slang::TypeReflection::Kind::Scalar: {
-        info.type = BufferResourceType::Scalar;
-        ScalarInfo scalarInfo{
-            .size = static_cast<uint32_t>(sizeof(float)),
-            .offset = 0,
-            .type = FromScalarType(bufferLayout->getScalarType()),
-        };
-        info.info = scalarInfo;
-        break;
-      }
-      case slang::TypeReflection::Kind::Vector: {
-        info.type = BufferResourceType::Vector;
-        VectorInfo vectorInfo{
-            .size = static_cast<uint32_t>(sizeof(float) *
-                                          bufferLayout->getElementCount()),
-            .offset = 0,
-            .scalarType = FromScalarType(bufferLayout->getScalarType()),
-            .vectorType = ToVectorType(bufferLayout->getElementCount()),
-        };
-
-        info.info = vectorInfo;
-        break;
-      }
-      case slang::TypeReflection::Kind::Matrix: {
-        info.type = BufferResourceType::Matrix;
-        MatrixInfo matrixInfo{
-            .size = static_cast<uint32_t>(sizeof(float) *
-                                          bufferLayout->getRowCount() *
-                                          bufferLayout->getColumnCount()),
-            .offset = 0,
-            .matrixType = ToMatrixType(bufferLayout->getRowCount(),
-                                       bufferLayout->getColumnCount()),
-        };
-
-        info.info = matrixInfo;
-        break;
-      }
-      default: {
-        return Error::Create(
-            "Unsupported buffer element type in SSBO reflection.");
-      }
-      };
-
-      ResourceInfo resourceInfo = {
-          .name = variableLayout->getName(),
-          .variant = ResourceVariant::Buffer,
-          .info = info,
-      };
-
-      reflection.resources.emplace_back(resourceInfo);
-    } else {
-      return Error::Create("Unsupported resource shape in reflection.");
+    auto err = SetupResource(variableLayout, reflection);
+    if (Error::IsError(err)) {
+      return err;
     }
-
     break;
   }
   case slang::TypeReflection::Kind::Array:
@@ -545,5 +611,5 @@ auto ReflectShader(Graphics::GraphicsContext &context,
 
   printer();
 
-  return Error::Create("Stop");
+  return Error::Success();
 }

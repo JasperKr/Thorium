@@ -73,6 +73,35 @@ enum class MatrixType : uint8_t {
   Matrix4x3,
 };
 
+inline static auto AlignUp(size_t offset, size_t align) -> size_t {
+  return (offset + align - 1) & ~(align - 1);
+}
+
+inline static auto BaseAlignment(uint8_t componentCount) -> size_t {
+  switch (componentCount) {
+  case 2:
+    return 8; // NOLINT
+  case 3:
+  case 4:
+    return 16; // NOLINT
+  default:
+    return 4;
+  }
+}
+
+inline static auto SizeOf(VectorType vectorType) -> size_t {
+  switch (vectorType) {
+  case VectorType::Vector2:
+    return sizeof(float) * 2;
+  case VectorType::Vector3:
+    return sizeof(float) * 3;
+  case VectorType::Vector4:
+    return sizeof(float) * 4;
+  default:
+    return sizeof(float);
+  }
+}
+
 inline auto ToMatrixType(uint8_t rowCount, uint8_t columnCount) -> MatrixType {
   if (rowCount == 2 && columnCount == 2) {
     return MatrixType::Matrix2x2;
@@ -241,6 +270,8 @@ struct StructFieldInfo {
 struct StructInfo {
   std::vector<StructFieldInfo> fields;
   std::unordered_map<std::string, StructFieldInfo> fieldMap;
+  uint32_t size;
+  uint32_t alignment;
 
   auto ConstructFieldMap() -> void {
     for (const auto &field : fields) {
@@ -250,6 +281,8 @@ struct StructInfo {
 
   void ToString(IndentedPrinter &printer) const {
     printer *= "StructInfo";
+    printer *= "Size: " + std::to_string(size) + ",";
+    printer *= "Alignment: " + std::to_string(alignment) + ",";
     printer *= "Fields: ";
     printer *= "{";
     printer.Indent();
@@ -294,10 +327,12 @@ enum class BufferType : uint8_t {
   Unknown,
   Uniform,
   Storage,
+  PushConstant,
 };
 
 struct BufferInfo {
   uint32_t size;
+  uint32_t offset; // For push constants
 
   uint32_t set;
   uint32_t binding;
