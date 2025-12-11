@@ -265,6 +265,32 @@ struct StructFieldInfo {
 
   StructFieldVariant variant;
   std::variant<ScalarInfo, VectorInfo, MatrixInfo> info;
+
+  [[nodiscard]] auto GetSize() const -> size_t {
+    switch (variant) {
+    case StructFieldVariant::Scalar:
+      return std::get<ScalarInfo>(info).size;
+    case StructFieldVariant::Vector:
+      return std::get<VectorInfo>(info).size;
+    case StructFieldVariant::Matrix:
+      return std::get<MatrixInfo>(info).size;
+    default:
+      return 0;
+    }
+  }
+
+  [[nodiscard]] auto GetOffset() const -> size_t {
+    switch (variant) {
+    case StructFieldVariant::Scalar:
+      return std::get<ScalarInfo>(info).offset;
+    case StructFieldVariant::Vector:
+      return std::get<VectorInfo>(info).offset;
+    case StructFieldVariant::Matrix:
+      return std::get<MatrixInfo>(info).offset;
+    default:
+      return 0;
+    }
+  }
 };
 
 struct StructInfo {
@@ -331,6 +357,8 @@ enum class BufferType : uint8_t {
 };
 
 struct BufferInfo {
+  std::string name;
+
   uint32_t size;
   uint32_t offset; // For push constants
 
@@ -389,7 +417,6 @@ enum class ResourceVariant : uint8_t {
 
 struct ResourceInfo {
   std::string name;
-  // SlangStage stage;
 
   ResourceVariant variant;
   std::variant<SamplerInfo, ScalarInfo, VectorInfo, MatrixInfo, BufferInfo>
@@ -397,7 +424,6 @@ struct ResourceInfo {
 };
 
 struct ShaderReflection {
-  std::vector<PushConstantResource> pushConstants;
   std::vector<ResourceInfo> resources;
   std::unordered_map<std::string, ResourceInfo> resourceMap;
 

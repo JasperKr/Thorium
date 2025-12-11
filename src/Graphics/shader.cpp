@@ -1,4 +1,6 @@
 #include "shader.hpp"
+#include "Graphics/Buffers/push.hpp"
+#include "Graphics/reflect.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/filesystem.hpp"
@@ -10,16 +12,16 @@
 #include "slang/slang-com-ptr.h"
 #include "slang/slang.h"
 #include "tl/expected.hpp"
+#include "vulkan/vulkan_core.h"
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace Graphics::Shader {
 
-// TODO: Use Ref<ShaderModule> instead of shader handles
-static std::vector<ShaderModule> ShaderModules = {};        // NOLINT
 static slang::IGlobalSession *GlobalSlangSession = nullptr; // NOLINT
 
 const std::vector<slang::CompilerOptionEntry> CompilerOptions = {
@@ -404,6 +406,77 @@ static inline auto LoadSlang(GraphicsContext &context,
   return Error::Success();
 }
 
+inline auto CreateShaderDescriptorSets(GraphicsContext &context,
+                                       ShaderModule *shader) -> Error::Error {
+  std::unordered_map<uint32_t, std::vector<VkDescriptorSetLayoutBinding>>
+      descriptorSetLayoutBindings;
+
+  PrintAlways("Creating shader descriptor sets...");
+
+  PrintfAlways("Shader PTR: {}", (void *)shader);
+  PrintfAlways("Shader name: {}", shader->name);
+
+  for (auto &layout : shader->reflection.resources) {
+    if (layout.variant == ResourceVariant::Buffer) {
+      auto &bufferInfo = std::get<BufferInfo>(layout.info);
+
+      if (bufferInfo.bufferType == BufferType::PushConstant) {
+        auto result = PushBuffer(bufferInfo);
+
+        shader->pushBuffers.emplace_back(result);
+      } else if (bufferInfo.bufferType == BufferType::Uniform ||
+                 bufferInfo.bufferType == BufferType::Storage) {
+        auto layoutBinding = VkDescriptorSetLayoutBinding{
+            .binding = bufferInfo.binding,
+            .descriptorType = bufferInfo.bufferType == BufferType::Uniform
+                                  ? VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
+                                  : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+            .descriptorCount = 1,
+            .stageFlags = VK_SHADER_STAGE_ALL,
+            .pImmutableSamplers = nullptr,
+        };
+
+        descriptorSetLayoutBindings[bufferInfo.set].emplace_back(layoutBinding);
+      }
+    }
+  }
+
+  for (const auto &setBinding : descriptorSetLayoutBindings) {
+    uint32_t setIndex = setBinding.first;
+    const auto &bindings = setBinding.second;
+    VkDescriptorSetLayoutCreateInfo layoutInfo = {};
+    layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
+    layoutInfo.pBindings = bindings.data();
+
+    VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
+    auto error = Error::Create(vkCreateDescriptorSetLayout(
+        context.device, &layoutInfo, nullptr, &descriptorSetLayout));
+
+    shader->descriptorSetLayouts[setIndex] = descriptorSetLayout;
+
+    if (Error::IsError(error)) {
+      return error;
+    }
+
+    VkDescriptorSetAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    allocInfo.descriptorPool = context.descriptorPool;
+    allocInfo.descriptorSetCount = 1;
+    allocInfo.pSetLayouts = &descriptorSetLayout;
+
+    error = Error::Create(vkAllocateDescriptorSets(
+        context.device, &allocInfo, &shader->descriptorSets[setIndex]));
+    if (Error::IsError(error)) {
+      return error;
+    }
+  }
+
+  PrintAlways("Shader descriptor sets created successfully.");
+
+  return Error::Success();
+}
+
 auto ShaderModule::Create(Graphics::GraphicsContext &context,
                           const std::string &path, const std::string &name)
     -> tl::expected<Ref<ShaderModule>, Error::Error> {
@@ -424,7 +497,107 @@ auto ShaderModule::Create(Graphics::GraphicsContext &context,
     return tl::unexpected(reflectResult);
   }
 
+  error = CreateShaderDescriptorSets(context, shader.get());
+  if (Error::IsError(error)) {
+    return tl::unexpected(error);
+  }
+
   return shader;
+}
+
+inline auto ValidateBuffers(const ShaderModule &shader) -> Error::Error {
+  // Loop over shader->reflection.resources, and check if all buffers are
+  // set up in shader->uniformBuffers and shader->storageBuffers,
+  // this is done outside the shader as the user must manage these
+  // resources themselves.
+
+  for (const auto &resource : shader.reflection.resources) {
+    if (resource.variant != ResourceVariant::Buffer) {
+      continue;
+    }
+
+    const auto &bufferInfo = std::get<BufferInfo>(resource.info);
+
+    if (bufferInfo.bufferType == BufferType::Uniform) {
+      if (!shader.uniformBuffers.contains(bufferInfo.set)) {
+        return Error::Create("Uniform buffer '" + resource.name +
+                             "' not set up in shader.");
+      }
+    } else if (bufferInfo.bufferType == BufferType::Storage) {
+      if (!shader.storageBuffers.contains(bufferInfo.set)) {
+        return Error::Create("Storage buffer '" + resource.name +
+                             "' not set up in shader.");
+      }
+    }
+  }
+
+  return Error::Success();
+}
+
+auto ShaderModule::FlushBuffers(GraphicsContext &context,
+                                VkPipelineLayout layout) -> Error::Error {
+  std::vector<VkWriteDescriptorSet> writeDescriptorSets;
+
+  auto validateResult = ValidateBuffers(*this);
+  if (Error::IsError(validateResult)) {
+    return validateResult;
+  }
+
+  PrintAlways("Flushing shader buffers...");
+
+  for (auto &bufferPair : uniformBuffers) {
+    auto &buffer = bufferPair.second;
+    VkDescriptorBufferInfo bufferInfo{};
+    bufferInfo.buffer = buffer.GetBuffer().get()->handle;
+    bufferInfo.offset = 0;
+    bufferInfo.range = buffer.GetLayout().size;
+
+    VkWriteDescriptorSet descriptorWrite{};
+    descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    descriptorWrite.dstSet = descriptorSets[buffer.layout.set];
+    descriptorWrite.dstBinding = buffer.layout.binding;
+    descriptorWrite.dstArrayElement = 0;
+    descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    descriptorWrite.descriptorCount = 1;
+    descriptorWrite.pBufferInfo = &bufferInfo;
+
+    writeDescriptorSets.emplace_back(descriptorWrite);
+  }
+
+  for (auto &bufferPair : storageBuffers) {
+    auto &buffer = bufferPair.second;
+    VkDescriptorBufferInfo bufferInfo{};
+    bufferInfo.buffer = buffer.GetBuffer().get()->handle;
+    bufferInfo.offset = 0;
+    bufferInfo.range = buffer.GetLayout().size;
+
+    VkWriteDescriptorSet descriptorWrite{};
+    descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    descriptorWrite.dstSet = descriptorSets[buffer.layout.set];
+    descriptorWrite.dstBinding = buffer.layout.binding;
+    descriptorWrite.dstArrayElement = 0;
+    descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    descriptorWrite.descriptorCount = 1;
+    descriptorWrite.pBufferInfo = &bufferInfo;
+
+    writeDescriptorSets.emplace_back(descriptorWrite);
+  }
+
+  vkUpdateDescriptorSets(context.device,
+                         static_cast<uint32_t>(writeDescriptorSets.size()),
+                         writeDescriptorSets.data(), 0, nullptr);
+
+  for (auto &pushBuffer : pushBuffers) {
+    FlushInfo info{
+        .commandBuffer = GetCommandBuffer(context, GetCurrentThreadIndex()),
+        .pipelineLayout = layout,
+        .stageFlags = VK_SHADER_STAGE_ALL,
+    };
+
+    pushBuffer.FlushData(info);
+  }
+
+  return Error::Success();
 }
 
 } // namespace Graphics::Shader

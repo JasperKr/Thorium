@@ -222,8 +222,6 @@ auto MainLoop() -> Error::Error {
   lua_remove(state, -2); // remove debug table
   auto tracebackIndex = lua_gettop(state);
 
-  Event::MainLoopRunning = false;
-
   while (Event::MainLoopRunning) {
     runCallback.push();
 

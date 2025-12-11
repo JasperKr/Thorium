@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Graphics/Buffers/push.hpp"
+#include "Graphics/Buffers/structured.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Modules/type.hpp"
@@ -49,10 +51,82 @@ struct ShaderModule : Object {
   std::unordered_map<SlangStage, size_t> entryPointToStageIndex;
 
   ShaderReflection reflection;
+  std::vector<PushBuffer> pushBuffers;
+  StructuredBuffer globalUniformBuffer;
+
+  std::unordered_map<uint64_t, StructuredBuffer> uniformBuffers;
+  std::unordered_map<uint64_t, StructuredBuffer> storageBuffers;
+
+  std::unordered_map<uint32_t, VkDescriptorSetLayout> descriptorSetLayouts;
+  std::unordered_map<uint32_t, VkDescriptorSet> descriptorSets;
 
   static auto Create(Graphics::GraphicsContext &context,
                      const std::string &path, const std::string &name)
       -> tl::expected<Ref<ShaderModule>, Error::Error>;
+
+  template <typename T>
+  auto Send(GraphicsContext &context, const std::string &name, T &value)
+      -> Error::Error {
+    for (auto &pushBuffer : pushBuffers) {
+      if (pushBuffer.GetLayout().name == name) {
+        return pushBuffer.SetData(value);
+      }
+    }
+
+    // check global ubo
+    const auto &layout = globalUniformBuffer.GetLayout();
+    switch (layout.type) {
+    case BufferResourceType::Unknown:
+    case BufferResourceType::Scalar:
+    case BufferResourceType::Vector:
+    case BufferResourceType::Matrix:
+      if (layout.name == name) {
+        return globalUniformBuffer.GetBuffer()->SetData(context, value);
+      }
+    case BufferResourceType::Struct: {
+      auto structInfo = std::get<StructInfo>(layout.info);
+      auto fieldIt = structInfo.fieldMap.find(name);
+      if (fieldIt != structInfo.fieldMap.end()) {
+        const auto &fieldInfo = fieldIt->second;
+        auto buffer = globalUniformBuffer.GetBuffer();
+        return buffer->SetData(context, value, fieldInfo.GetOffset());
+      }
+    }
+    }
+
+    return Error::Create("Push buffer not found: " + name);
+  }
+
+  auto Send(GraphicsContext &context, const std::string &name,
+            StructuredBuffer &buffer) -> Error::Error {
+
+    for (const auto &resource : reflection.resources) {
+      if (resource.variant != ResourceVariant::Buffer) {
+        continue;
+      }
+
+      const auto &bufferInfo = std::get<BufferInfo>(resource.info);
+      if (bufferInfo.name == name) {
+        // NOLINTNEXTLINE
+        auto key = bufferInfo.set | ((uint64_t)bufferInfo.binding << 32U);
+
+        if (bufferInfo.bufferType == BufferType::Uniform) {
+          uniformBuffers[key] = buffer;
+        } else if (bufferInfo.bufferType == BufferType::Storage) {
+          storageBuffers[key] = buffer;
+        } else {
+          return Error::Create("Buffer is not uniform or storage: " + name);
+        }
+
+        return Error::Success();
+      }
+    }
+
+    return Error::Create("Buffer not found in shader reflection: " + name);
+  }
+
+  auto FlushBuffers(GraphicsContext &context, VkPipelineLayout layout)
+      -> Error::Error;
 
   void Destroy(VkDevice device);
   void ReloadMaybe(Graphics::GraphicsContext &context);

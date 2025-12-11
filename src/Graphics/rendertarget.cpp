@@ -30,40 +30,29 @@ auto GetSwapchainTextures() -> std::vector<Ref<Graphics::Texture::Texture>> & {
 auto GetPipelineLayout(const GraphicsContext &context,
                        const Shader::ShaderModule *shader)
     -> tl::expected<VkPipelineLayout, Error::Error> {
-  auto *globalLayout = shader->programLayout->getGlobalParamsVarLayout();
-
-  PrintDebug("globalLayout: {}", static_cast<const void *>(globalLayout));
-
-  std::unordered_map<uint32_t, std::vector<VkDescriptorSetLayoutBinding>>
-      setBindingsMap;
-
-  auto *typeLayout = globalLayout->getTypeLayout();
-
   auto pushConstantRanges = std::vector<VkPushConstantRange>{};
+
+  for (const auto &buffer : shader->pushBuffers) {
+    VkPushConstantRange pushConstantRange = {};
+    pushConstantRange.stageFlags = VK_SHADER_STAGE_ALL;
+    pushConstantRange.offset = buffer.GetBufferOffset();
+    pushConstantRange.size = static_cast<uint32_t>(buffer.GetBufferSize());
+    pushConstantRanges.emplace_back(pushConstantRange);
+  }
 
   PrintDebug("Creating pipeline layout from shader reflection");
 
   std::vector<VkDescriptorSetLayout> setLayouts;
 
-  PrintDebug("Creating descriptor set layouts");
+  auto maxSet = 0U;
+  for (const auto &pair : shader->descriptorSetLayouts) {
+    maxSet = (std::max)(maxSet, pair.first);
+  }
 
-  for (const auto &setBinding : setBindingsMap) {
-    uint32_t setIndex = setBinding.first;
-    const auto &bindings = setBinding.second;
-    VkDescriptorSetLayoutCreateInfo layoutInfo = {};
-    layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
-    layoutInfo.pBindings = bindings.data();
+  setLayouts.resize(maxSet + 1);
 
-    VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
-    auto error = Error::Create(vkCreateDescriptorSetLayout(
-        context.device, &layoutInfo, nullptr, &descriptorSetLayout));
-
-    if (Error::IsError(error)) {
-      return tl::make_unexpected(error);
-    }
-
-    setLayouts.emplace_back(descriptorSetLayout);
+  for (const auto &pair : shader->descriptorSetLayouts) {
+    setLayouts[pair.first] = pair.second;
   }
 
   VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
@@ -96,7 +85,7 @@ inline auto GetSwapchainRendertarget(const GraphicsContext &context)
 }
 
 inline auto CreatePipeline(const GraphicsContext &context, const State &state)
-    -> tl::expected<VkPipeline, Error::Error> {
+    -> tl::expected<std::pair<VkPipeline, VkPipelineLayout>, Error::Error> {
   if (state.bindPoint != VK_PIPELINE_BIND_POINT_GRAPHICS) {
     return Error::Unexpected("Only graphics pipelines are supported currently");
   }
@@ -329,17 +318,18 @@ inline auto CreatePipeline(const GraphicsContext &context, const State &state)
       context.device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline));
 
   PrintDebug("STORING PIPELINE IN CACHE");
-  PipelineCache[state] = pipeline;
+  PipelineCache[state] = {pipeline, layoutResult.value()};
 
   if (Error::IsError(error)) {
     return tl::make_unexpected(error);
   }
 
-  return pipeline;
+  return std::pair<VkPipeline, VkPipelineLayout>(pipeline,
+                                                 layoutResult.value());
 }
 
 inline auto GetPipeline(const GraphicsContext &context, const State &state)
-    -> tl::expected<VkPipeline, Error::Error> {
+    -> tl::expected<std::pair<VkPipeline, VkPipelineLayout>, Error::Error> {
 
   PrintDebug("Getting pipeline from cache");
 
@@ -356,7 +346,7 @@ inline auto GetPipeline(const GraphicsContext &context, const State &state)
   auto result = CreatePipeline(context, state);
 
   if (Error::IsError(result)) {
-    return result;
+    return tl::make_unexpected(result.error());
   }
 
   return result.value();
@@ -462,15 +452,21 @@ auto Flush(GraphicsContext &context) -> tl::expected<bool, Error::Error> {
   const auto &commandBuffer =
       Graphics::GetCommandBuffer(context, GetCurrentThreadIndex());
 
+  auto error =
+      currentState.shader->FlushBuffers(context, pipelineResult.value().second);
+  if (Error::IsError(error)) {
+    return tl::make_unexpected(error);
+  }
+
   vkCmdBindPipeline(commandBuffer, currentState.bindPoint,
-                    pipelineResult.value());
+                    pipelineResult.value().first);
 
   return true;
 }
 
 auto Destroy(GraphicsContext &context) -> void {
   for (const auto &pair : PipelineCache) {
-    vkDestroyPipeline(context.device, pair.second, nullptr);
+    vkDestroyPipeline(context.device, pair.second.first, nullptr);
   }
   PipelineCache.clear();
 }
@@ -621,7 +617,6 @@ auto ClipScissor(const VkRect2D &scissor) -> void {
   }
 }
 
-// TODO: Remove shader handles and use Ref<ShaderModule> instead
 auto SetShader(const Ref<Shader::ShaderModule> &shader) -> void {
   StateStack.back().shader = shader;
 }

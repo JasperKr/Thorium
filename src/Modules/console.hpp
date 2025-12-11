@@ -13,8 +13,12 @@ enum class LogLevel : uint8_t {
   Fatal    // Critical errors causing application termination
 };
 
+#ifdef NDEBUG
+inline LogLevel CurrentLogLevel = LogLevel::Warning;
+#else
 // NOLINTNEXTLINE
 inline LogLevel CurrentLogLevel = LogLevel::Debug;
+#endif
 
 inline auto SetLogLevel(LogLevel level) -> void { CurrentLogLevel = level; }
 

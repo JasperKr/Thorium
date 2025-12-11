@@ -37,6 +37,7 @@ public:
 
   [[nodiscard]] auto GetBufferOffset() const -> size_t { return layout.offset; }
   [[nodiscard]] auto GetBufferSize() const -> size_t { return layout.size; }
+  [[nodiscard]] auto GetLayout() const -> const BufferInfo & { return layout; }
   auto FlushData(FlushInfo &info) -> void;
 
   template <typename T>
@@ -86,8 +87,5 @@ private:
   BufferInfo layout;
   std::vector<uint8_t> data;
 };
-
-auto CreatePushBuffer(const BufferInfo &layout)
-    -> tl::expected<PushBuffer, Error::Error>;
 
 } // namespace Graphics

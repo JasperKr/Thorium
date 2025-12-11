@@ -224,6 +224,7 @@ auto SetupResource(slang::VariableLayoutReflection *variableLayout,
              maskedShape == SLANG_BYTE_ADDRESS_BUFFER) {
     // SSBO
     BufferInfo info{
+        .name = variableLayout->getName(),
         .set = variableLayout->getBindingSpace(),
         .binding = variableLayout->getBindingIndex(),
         .access = access,
@@ -405,6 +406,7 @@ auto SetupFromType(slang::VariableLayoutReflection *variableLayout,
         (category == slang::ParameterCategory::PushConstantBuffer);
 
     BufferInfo info{
+        .name = variableLayout->getName(),
         .offset = static_cast<uint32_t>(variableLayout->getOffset()),
         .set = variableLayout->getBindingSpace(),
         .binding = variableLayout->getBindingIndex(),
@@ -531,11 +533,6 @@ auto ReflectGlobals(Graphics::GraphicsContext &context,
 auto ReflectShader(Graphics::GraphicsContext &context,
                    slang::ProgramLayout *programLayout,
                    ShaderReflection &outReflection) -> Error::Error {
-
-  // auto result = ReflectGlobals(context, programLayout, outReflection);
-
-  uint32_t pushConstantSize = 0;
-  uint32_t pushConstantOffset = 0;
 
   /// Search parameters ///
   auto parameterCount = programLayout->getParameterCount();

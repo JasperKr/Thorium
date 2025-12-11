@@ -195,8 +195,9 @@ struct StateHash {
   }
 };
 
-// NOLINTNEXTLINE Pipeline cache
-static std::unordered_map<State, VkPipeline, StateHash> PipelineCache = {};
+inline static std::unordered_map<State, std::pair<VkPipeline, VkPipelineLayout>,
+                                 StateHash> // NOLINTNEXTLINE Pipeline cache
+    PipelineCache = {};
 
 auto SetDirty() -> void;
 auto FinalizeFrame(GraphicsContext &context) -> Error::Error;
