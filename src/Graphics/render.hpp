@@ -4,5 +4,5 @@
 #include "graphics.hpp"
 namespace Graphics {
 auto Present(GraphicsContext &context) -> Error::Error;
-void InitializeGraphics(GraphicsContext &context);
+auto InitializeGraphics(GraphicsContext &context) -> Error::Error;
 } // namespace Graphics

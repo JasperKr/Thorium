@@ -1,7 +1,6 @@
 #include "Modules/error.hpp"
 #include "graphics.hpp"
 #include "rendertarget.hpp"
-#include <iostream>
 #include <vector>
 
 namespace Graphics {
@@ -249,13 +248,14 @@ auto Present_PostDraw(Graphics::GraphicsContext &context) -> Error::Error {
   return Error::Success();
 }
 
-void InitializeGraphics(Graphics::GraphicsContext &context) {
+auto InitializeGraphics(Graphics::GraphicsContext &context) -> Error::Error {
   auto error = Present_PreDraw(context);
 
   if (Error::IsError(error)) {
-    std::cout << "Error during graphics initialization (PreDraw): "
-              << error.message << "\n";
+    return error;
   }
+
+  return Error::Success();
 }
 
 auto Present(Graphics::GraphicsContext &context) -> Error::Error {

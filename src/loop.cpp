@@ -3,14 +3,12 @@
 #include "Graphics/rendertarget.hpp"
 #include "Graphics/shader.hpp"
 #include "Modules/config.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/filesystem.hpp"
 #include <cstdint>
-#include <iostream>
 #define VK_NO_PROTOTYPES
 #include <vulkan/vulkan.h>
-
-#include "program.hpp"
 
 extern "C" {
 #include <lauxlib.h>
@@ -72,7 +70,7 @@ static LuaWrap::LuaRef runCallback;
 
 auto LoadLua(lua_State *state) -> Error::Error {
   // Load src/Engine/main.lua
-  std::cout << "Loading main Lua script..." << "\n";
+  PrintDebug("Loading main Lua script...");
 
   auto luaLoadErr = luaL_dofile(state, "src/Engine/main.lua");
   if (static_cast<int>(luaLoadErr) != LUA_OK) {
@@ -87,8 +85,7 @@ auto LoadLua(lua_State *state) -> Error::Error {
 
   if (!lua_isfunction(state, -1)) {
     // If Thorium.run is not defined, load default
-    std::cout << "Thorium.run not found, loading default run function..."
-              << "\n";
+    PrintWarning("Thorium.run not found, loading default run function...");
     lua_pop(state, 2); // Remove non-function and Thorium table from stack
     if (luaL_dostring(state, defaultRunFunction) != LUA_OK) {
       std::string luaErrorMessage = lua_tostring(state, -1);
@@ -117,7 +114,7 @@ auto LoadLua(lua_State *state) -> Error::Error {
     return Error::Create("Thorium.run did not return a function.");
   }
 
-  std::cout << "Main Lua script loaded successfully." << "\n";
+  PrintDebug("Main Lua script loaded successfully.");
 
   runCallback = LuaWrap::LuaRef::FromStack(state);
 
@@ -128,17 +125,16 @@ auto MainLoop() -> Error::Error {
   Graphics::GetCurrentThreadIndex() = 0;
   Error::SetupTraceback();
 
-  std::cout << "Initializing Lua state..." << "\n";
-  std::flush(std::cout);
+  PrintDebug("Initializing Lua state...");
 
   lua_State *state = luaL_newstate();
   luaL_openlibs(state);
 
-  std::cout << "Registering Lua modules..." << "\n";
+  PrintDebug("Registering Lua modules...");
 
   LuaWrap::RegisterModules(state);
 
-  std::cout << "Lua modules registered." << "\n";
+  PrintDebug("Lua modules registered.");
 
   auto configResult = Config::Configure(state);
 
@@ -155,26 +151,26 @@ auto MainLoop() -> Error::Error {
     return fsInitErr;
   }
 
-  std::cout << "Save directory: " << Filesystem::GetSaveDirectory() << "\n";
+  PrintInfo("Save directory: " + Filesystem::GetSaveDirectory());
 
   Error::Error fsMntErr = Filesystem::Mount(".", "/", true);
   if (Error::IsError(fsMntErr)) {
     return fsMntErr;
   }
 
-  std::cout << "Source directory: " << Filesystem::GetSourceDirectory() << "\n";
+  PrintInfo("Source directory: " + Filesystem::GetSourceDirectory());
 
   Graphics::GraphicsContext context = {};
   context.renderThreadCount = 1;
 
-  std::cout << "Initializing graphics..." << "\n";
+  PrintDebug("Initializing graphics...");
 
   auto result = Graphics::Initialize(context, config);
   if (Error::IsError(result)) {
     return result;
   }
 
-  std::cout << "Graphics initialized successfully." << "\n";
+  PrintDebug("Graphics initialized successfully.");
 
   Graphics::SetCurrentGraphicsContext(&context);
 
@@ -184,23 +180,23 @@ auto MainLoop() -> Error::Error {
     return shaderModuleLoadResult;
   }
 
+  PrintDebug("Shader modules loaded successfully.");
+
   auto rendertargetLoadError = Graphics::RenderTarget::Load(context);
 
   if (Error::IsError(rendertargetLoadError)) {
     return rendertargetLoadError;
   }
 
-  std::cout << "Loading program..." << "\n";
+  PrintDebug("Rendertargets loaded successfully.");
 
-  Error::Error loadErr = Program::Load(context);
+  result = Graphics::InitializeGraphics(context);
 
-  if (Error::IsError(loadErr)) {
-    return loadErr;
+  if (Error::IsError(result)) {
+    return result;
   }
 
-  std::cout << "Program loaded successfully." << "\n";
-
-  Graphics::InitializeGraphics(context);
+  PrintDebug("Swapchains filled successfully.");
 
   for (int32_t idx = 0; idx < context.swapchainInfo.imageCount; idx++) {
     // Fill swapchain images initially
@@ -219,7 +215,7 @@ auto MainLoop() -> Error::Error {
     return luaLoadErr;
   }
 
-  std::cout << "Entering main loop..." << "\n";
+  PrintDebug("Entering main loop...");
 
   lua_getglobal(state, "debug");
   lua_getfield(state, -1, "traceback");
@@ -246,25 +242,16 @@ auto MainLoop() -> Error::Error {
     } else {
       int exitCode = static_cast<int>(lua_tointeger(state, -1));
       lua_pop(state, 1); // pop exit code
-      std::cout << "Exiting main loop with code " << exitCode << "\n";
+      PrintInfo("Exiting main loop with code " + std::to_string(exitCode));
       Event::ExitCode = exitCode;
       Event::MainLoopRunning = false;
     }
   }
 
-  std::cout << "Exiting program..." << "\n";
-
-  Error::Error exitErr = Program::Exit(context);
-  if (Error::IsError(exitErr)) {
-    std::cerr << "Error::Error during program exit: " << exitErr.message
-              << "\n";
-  }
-
-  std::cout << "Program exited successfully." << "\n";
-
   Graphics::Deinitialize(context);
-
   Graphics::RenderTarget::Destroy(context);
+
+  PrintInfo("App shutdown complete.");
 
   return Error::Success();
 }

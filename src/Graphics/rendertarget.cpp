@@ -2,6 +2,7 @@
 #include "Graphics/graphics.hpp"
 #include "Graphics/shader.hpp"
 #include "Graphics/texture.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/image.hpp"
 #include "Modules/object.hpp"
@@ -10,10 +11,12 @@
 #include "vulkan/vulkan_core.h"
 #include <array>
 #include <cassert>
-#include <cstddef>
 #include <cstdint>
 #include <set>
+#ifdef WIN32
+#include <cstddef>
 #include <stdint.h>
+#endif
 #include <unordered_map>
 #include <utility>
 
@@ -29,7 +32,7 @@ auto GetPipelineLayout(const GraphicsContext &context,
     -> tl::expected<VkPipelineLayout, Error::Error> {
   auto *globalLayout = shader->programLayout->getGlobalParamsVarLayout();
 
-  std::cout << globalLayout << "\n";
+  PrintDebug("globalLayout: {}", static_cast<const void *>(globalLayout));
 
   std::unordered_map<uint32_t, std::vector<VkDescriptorSetLayoutBinding>>
       setBindingsMap;
@@ -38,11 +41,11 @@ auto GetPipelineLayout(const GraphicsContext &context,
 
   auto pushConstantRanges = std::vector<VkPushConstantRange>{};
 
-  std::cout << "Creating pipeline layout from shader reflection\n";
+  PrintDebug("Creating pipeline layout from shader reflection");
 
   std::vector<VkDescriptorSetLayout> setLayouts;
 
-  std::cout << "Creating descriptor set layouts\n";
+  PrintDebug("Creating descriptor set layouts");
 
   for (const auto &setBinding : setBindingsMap) {
     uint32_t setIndex = setBinding.first;
@@ -98,7 +101,7 @@ inline auto CreatePipeline(const GraphicsContext &context, const State &state)
     return Error::Unexpected("Only graphics pipelines are supported currently");
   }
 
-  std::cout << "Creating graphics pipeline\n";
+  PrintDebug("Creating graphics pipeline");
 
   std::array<VkPipelineShaderStageCreateInfo, 2> shaderStages = {};
 
@@ -118,7 +121,7 @@ inline auto CreatePipeline(const GraphicsContext &context, const State &state)
   shaderStages[1].module = shader->module;
   shaderStages[1].pName = "fragmentMain";
 
-  std::cout << "Setting up vertex input state\n";
+  PrintDebug("Setting up vertex input state");
 
   auto vertexformat =
       Graphics::PredefinedVertexFormats.at(shader->GetExpectedVertexFormat());
@@ -133,7 +136,7 @@ inline auto CreatePipeline(const GraphicsContext &context, const State &state)
   vertexInputInfo.pVertexAttributeDescriptions = vertexformat.Attributes.data();
   VkPipelineInputAssemblyStateCreateInfo inputAssembly = {};
 
-  std::cout << "Setting up input assembly state\n";
+  PrintDebug("Setting up input assembly state");
 
   inputAssembly.sType =
       VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
@@ -163,16 +166,19 @@ inline auto CreatePipeline(const GraphicsContext &context, const State &state)
   multisampling.sampleShadingEnable = VK_FALSE;
   multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
 
-  std::cout << "Determining expected output attachments\n";
+  PrintDebug("Determining expected output attachments");
 
   auto entryPointIndex =
       shader->entryPointToStageIndex.at(SlangStage::SLANG_STAGE_FRAGMENT);
-  std::cout << "Fragment entry point index: " << entryPointIndex << "\n";
+  PrintDebug("Fragment entry point index: {}", entryPointIndex);
 
-  std::cout << shader->programLayout << "\n";
-  std::cout << shader->programLayout->getEntryPointByIndex(1) << "\n";
-  std::cout << shader->programLayout->getEntryPointByIndex(1)->getName()
-            << "\n";
+  PrintDebug("programLayout: {}",
+             static_cast<const void *>(shader->programLayout));
+  PrintDebug("EntryPointByIndex(1): {}",
+             static_cast<const void *>(
+                 shader->programLayout->getEntryPointByIndex(1)));
+  PrintDebug("EntryPointByIndex(1) name: {}",
+             shader->programLayout->getEntryPointByIndex(1)->getName());
 
   auto *entryPoint =
       shader->programLayout->getEntryPointByIndex(entryPointIndex);
@@ -182,7 +188,7 @@ inline auto CreatePipeline(const GraphicsContext &context, const State &state)
         "Failed to get fragment entry point from shader program layout");
   }
 
-  std::cout << "Fetched entry point reflection.\n";
+  PrintDebug("Fetched entry point reflection.");
   auto *outputVariableLayout = entryPoint->getResultVarLayout();
 
   if (outputVariableLayout == nullptr) {
@@ -190,7 +196,7 @@ inline auto CreatePipeline(const GraphicsContext &context, const State &state)
         "Shader has no output variable layout for fragment stage");
   }
 
-  std::cout << "Determining expected output attachments\n";
+  PrintDebug("Determining expected output attachments");
 
   std::set<uint32_t> expectedAttachments = {};
   for (uint32_t i = 0;
@@ -247,9 +253,9 @@ inline auto CreatePipeline(const GraphicsContext &context, const State &state)
     }
   }
 
-  std::cout << "Expected attachments:\n";
+  PrintDebug("Expected attachments:");
   for (const auto &att : expectedAttachments) {
-    std::cout << " - " << att << "\n";
+    PrintDebug(" - {}", att);
   }
 
   for (uint32_t i = 0; i <= blendAttachments.size(); ++i) {
@@ -273,9 +279,8 @@ inline auto CreatePipeline(const GraphicsContext &context, const State &state)
   renderingCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
 
   renderingCreateInfo.colorAttachmentCount = attachmentCount;
-  std::cout << "Creating graphics pipeline with " << attachmentCount
-            << " color attachments."
-            << "\n";
+  PrintDebug("Creating graphics pipeline with {} color attachments.",
+             attachmentCount);
 
   renderingCreateInfo.pColorAttachmentFormats = formats.data();
 
@@ -306,7 +311,7 @@ inline auto CreatePipeline(const GraphicsContext &context, const State &state)
   pipelineInfo.pDepthStencilState = &depthStencil;
   pipelineInfo.pDynamicState = &dynamicState;
 
-  std::cout << "Getting pipeline layout\n";
+  PrintDebug("Getting pipeline layout");
 
   auto layoutResult = GetPipelineLayout(context, shader);
   if (Error::IsError(layoutResult)) {
@@ -323,7 +328,7 @@ inline auto CreatePipeline(const GraphicsContext &context, const State &state)
   auto error = Error::Create(vkCreateGraphicsPipelines(
       context.device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline));
 
-  std::cout << "STORING PIPELINE IN CACHE\n";
+  PrintDebug("STORING PIPELINE IN CACHE");
   PipelineCache[state] = pipeline;
 
   if (Error::IsError(error)) {
@@ -336,14 +341,14 @@ inline auto CreatePipeline(const GraphicsContext &context, const State &state)
 inline auto GetPipeline(const GraphicsContext &context, const State &state)
     -> tl::expected<VkPipeline, Error::Error> {
 
-  std::cout << "Getting pipeline from cache\n";
+  PrintDebug("Getting pipeline from cache");
 
   auto cacheIterator = PipelineCache.find(state);
 
-  std::cout << "Cache iterator found\n";
+  PrintDebug("Cache iterator found");
 
   if (cacheIterator != PipelineCache.end()) {
-    std::cout << "Pipeline found in cache\n";
+    PrintDebug("Pipeline found in cache");
 
     return cacheIterator->second;
   }
@@ -448,7 +453,7 @@ auto Flush(GraphicsContext &context) -> tl::expected<bool, Error::Error> {
 
   LastState = currentState;
 
-  std::cout << "Flushing render target state changes\n";
+  PrintDebug("Flushing render target state changes");
   auto pipelineResult = GetPipeline(context, currentState);
   if (Error::IsError(pipelineResult)) {
     return tl::make_unexpected(pipelineResult.error());
@@ -546,7 +551,7 @@ auto PrepareDraw(GraphicsContext &context) -> Error::Error {
 
   if (updatedState) {
     EndRendering(context);
-    std::cout << "Beginning rendering\n";
+    PrintDebug("Beginning rendering");
     BeginRendering(context);
   }
 

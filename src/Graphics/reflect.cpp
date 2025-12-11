@@ -1,10 +1,8 @@
 #include "reflect.hpp"
 #include "Graphics/graphics.hpp"
-#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "slang/slang.h"
 #include "vulkan/vulkan_core.h"
-#include <iostream>
 
 struct FindShaderParameterResult {
   bool found = false;
@@ -184,8 +182,6 @@ auto SetupStruct(slang::TypeLayoutReflection *bufferLayout,
     break;
   }
   default: {
-    std::cout << "Buffer layout kind: "
-              << static_cast<int>(bufferLayout->getKind()) << "\n";
     return Error::Create(
         "Unsupported buffer element type in Buffer reflection.");
   }
@@ -385,17 +381,10 @@ auto SetupFromType(slang::VariableLayoutReflection *variableLayout,
 
   switch (typeLayout->getKind()) {
   case slang::TypeReflection::Kind::Struct: {
-    std::cout << "parameters: " << "\n";
-
     auto paramCount = typeLayout->getFieldCount();
     for (int i = 0; i < paramCount; i++) {
-      std::cout << "- ";
-
       auto *param = typeLayout->getFieldByIndex(i);
-      std::cout << param->getName() << "\n";
-
       auto kind = param->getTypeLayout()->getKind();
-      std::cout << "  Kind: " << static_cast<int>(kind) << "\n";
       auto *typeLayout = param->getTypeLayout();
 
       auto err = SetupFromType(variableLayout, reflection);
@@ -568,48 +557,6 @@ auto ReflectShader(Graphics::GraphicsContext &context,
   auto *globalParamsLayout = programLayout->getGlobalParamsVarLayout();
   outReflection.ConstructUBOStruct(globalParamsLayout->getBindingSpace(),
                                    globalParamsLayout->getBindingIndex());
-
-  IndentedPrinter printer{0};
-
-  for (auto &resource : outReflection.resources) {
-    outReflection.resourceMap[resource.name] = resource;
-
-    printer *= "Reflected resource: " + resource.name + ": ";
-
-    switch (resource.variant) {
-    case ResourceVariant::Sampler: {
-      auto info = std::get<SamplerInfo>(resource.info);
-      info.ToString(printer);
-      break;
-    }
-    case ResourceVariant::Scalar: {
-      auto info = std::get<ScalarInfo>(resource.info);
-      info.ToString(printer);
-      break;
-    }
-    case ResourceVariant::Vector: {
-      auto info = std::get<VectorInfo>(resource.info);
-      info.ToString(printer);
-      break;
-    }
-    case ResourceVariant::Matrix: {
-      auto info = std::get<MatrixInfo>(resource.info);
-      info.ToString(printer);
-      break;
-    }
-    case ResourceVariant::Buffer: {
-      auto info = std::get<BufferInfo>(resource.info);
-      info.ToString(printer);
-      break;
-    }
-    default: {
-      printer *= "Unknown resource variant";
-      break;
-    }
-    }
-  }
-
-  printer();
 
   return Error::Success();
 }

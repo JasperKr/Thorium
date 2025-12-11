@@ -528,14 +528,7 @@ auto wrap_NewTexture(lua_State *state) -> int {
   const auto *type = Graphics::Texture::Texture::GetType();
   int args = lua_gettop(state);
 
-  std::cout << "Creating new texture with " << args << " arguments."
-            << "\n";
-
   tl::expected<Ref<Graphics::Texture::Texture>, Error::Error> result;
-
-  for (int i = 1; i <= args; ++i) {
-    std::cout << "Arg " << i << ": " << luaL_typename(state, i) << "\n";
-  }
 
   if (args == 1) {
     if (LuaWrap::LuaIsType<Image::ImageData>(state, 1)) {

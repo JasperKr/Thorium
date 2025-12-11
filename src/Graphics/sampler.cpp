@@ -1,4 +1,5 @@
 #include "sampler.hpp"
+#include "Modules/console.hpp"
 #include <iostream>
 #include <unordered_map>
 
@@ -39,8 +40,7 @@ auto GetOrCreateSampler(GraphicsContext &context,
       vkCreateSampler(context.device, &samplerInfo, nullptr, &vkSampler);
 
   if (result != VK_SUCCESS) {
-    std::cout << "Failed to create sampler: " << Error::Create(result).message
-              << "\n";
+    PrintError("Failed to create sampler: {}\n", Error::Create(result).message);
     return VK_NULL_HANDLE; // Failed to create sampler
   }
 

@@ -5,6 +5,19 @@
 #include <iostream>
 #include <string>
 
+enum class LogLevel : uint8_t {
+  Debug,   // Detailed debug information
+  Info,    // General information about application
+  Warning, // Indications of potential issues
+  Error,   // Serious issues that need attention
+  Fatal    // Critical errors causing application termination
+};
+
+// NOLINTNEXTLINE
+inline LogLevel CurrentLogLevel = LogLevel::Debug;
+
+inline auto SetLogLevel(LogLevel level) -> void { CurrentLogLevel = level; }
+
 enum class ConsoleColor : uint8_t {
   Red,
   Green,
@@ -163,3 +176,136 @@ private:
     return std::string(indentLevel * 2, ' ');
   }
 };
+
+template <typename... Args>
+inline void PrintAlways(const std::string &message, Args &&...args) {
+  std::cout << message;
+  (std::cout << ... << std::forward<Args>(args));
+  std::cout << '\n';
+}
+
+inline void PrintAlways(const std::string &message) {
+  std::cout << message << '\n';
+}
+
+template <typename... Args> // NOLINTNEXTLINE args forwarding
+inline void PrintfAlways(std::string_view format, Args &&...args) {
+  std::cout << std::vformat(format, std::make_format_args(args...)) << '\n';
+}
+
+template <typename... Args>
+inline void PrintDebug(const std::string &message, Args &&...args) {
+  if (LogLevel::Debug >= CurrentLogLevel) {
+    std::cout << ColorText("[DEBUG] ", ConsoleColor::Cyan) << message;
+    (std::cout << ... << std::forward<Args>(args));
+    std::cout << '\n';
+  }
+}
+
+inline void PrintDebug(const std::string &message) {
+  if (LogLevel::Debug >= CurrentLogLevel) {
+    std::cout << ColorText("[DEBUG] ", ConsoleColor::Cyan) << message << '\n';
+  }
+}
+
+template <typename... Args> // NOLINTNEXTLINE args forwarding
+inline void PrintfDebug(std::string_view format, Args &&...args) {
+  if (LogLevel::Debug >= CurrentLogLevel) {
+    std::cout << ColorText("[DEBUG] ", ConsoleColor::Cyan)
+              << std::vformat(format, std::make_format_args(args...)) << '\n';
+  }
+}
+
+template <typename... Args>
+inline void PrintInfo(const std::string &message, Args &&...args) {
+  if (LogLevel::Info >= CurrentLogLevel) {
+    std::cout << ColorText("[INFO] ", ConsoleColor::Green) << message;
+    (std::cout << ... << std::forward<Args>(args));
+    std::cout << '\n';
+  }
+}
+
+inline void PrintInfo(const std::string &message) {
+  if (LogLevel::Info >= CurrentLogLevel) {
+    std::cout << ColorText("[INFO] ", ConsoleColor::Green) << message << '\n';
+  }
+}
+
+template <typename... Args> // NOLINTNEXTLINE args forwarding
+inline void PrintfInfo(std::string_view format, Args &&...args) {
+  if (LogLevel::Info >= CurrentLogLevel) {
+    std::cout << ColorText("[INFO] ", ConsoleColor::Green)
+              << std::vformat(format, std::make_format_args(args...)) << '\n';
+  }
+}
+
+template <typename... Args>
+inline void PrintWarning(const std::string &message, Args &&...args) {
+  if (LogLevel::Warning >= CurrentLogLevel) {
+    std::cout << ColorText("[WARNING] ", ConsoleColor::Yellow) << message;
+    (std::cout << ... << std::forward<Args>(args));
+    std::cout << '\n';
+  }
+}
+
+inline void PrintWarning(const std::string &message) {
+  if (LogLevel::Warning >= CurrentLogLevel) {
+    std::cout << ColorText("[WARNING] ", ConsoleColor::Yellow) << message
+              << '\n';
+  }
+}
+
+template <typename... Args> // NOLINTNEXTLINE args forwarding
+inline void PrintfWarning(std::string_view format, Args &&...args) {
+  if (LogLevel::Warning >= CurrentLogLevel) {
+    std::cout << ColorText("[WARNING] ", ConsoleColor::Yellow)
+              << std::vformat(format, std::make_format_args(args...)) << '\n';
+  }
+}
+
+template <typename... Args>
+inline void PrintError(const std::string &message, Args &&...args) {
+  if (LogLevel::Error >= CurrentLogLevel) {
+    std::cout << ColorText("[ERROR] ", ConsoleColor::Red) << message;
+    (std::cout << ... << std::forward<Args>(args));
+    std::cout << '\n';
+  }
+}
+
+inline void PrintError(const std::string &message) {
+  if (LogLevel::Error >= CurrentLogLevel) {
+    std::cout << ColorText("[ERROR] ", ConsoleColor::Red) << message << '\n';
+  }
+}
+
+template <typename... Args> // NOLINTNEXTLINE args forwarding
+inline void PrintfError(std::string_view format, Args &&...args) {
+  if (LogLevel::Error >= CurrentLogLevel) {
+    std::cout << ColorText("[ERROR] ", ConsoleColor::Red)
+              << std::vformat(format, std::make_format_args(args...)) << '\n';
+  }
+}
+
+template <typename... Args>
+inline void PrintFatal(const std::string &message, Args &&...args) {
+  if (LogLevel::Fatal >= CurrentLogLevel) {
+    std::cout << ColorText("[FATAL] ", ConsoleColor::Magenta) << message;
+    (std::cout << ... << std::forward<Args>(args));
+    std::cout << '\n';
+  }
+}
+
+inline void PrintFatal(const std::string &message) {
+  if (LogLevel::Fatal >= CurrentLogLevel) {
+    std::cout << ColorText("[FATAL] ", ConsoleColor::Magenta) << message
+              << '\n';
+  }
+}
+
+template <typename... Args> // NOLINTNEXTLINE args forwarding
+inline void PrintfFatal(std::string_view format, Args &&...args) {
+  if (LogLevel::Fatal >= CurrentLogLevel) {
+    std::cout << ColorText("[FATAL] ", ConsoleColor::Magenta)
+              << std::vformat(format, std::make_format_args(args...)) << '\n';
+  }
+}

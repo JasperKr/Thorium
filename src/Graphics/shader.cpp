@@ -1,4 +1,5 @@
 #include "shader.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/filesystem.hpp"
 #include "Modules/object.hpp"
@@ -12,8 +13,6 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
-#include <iostream>
-#include <print>
 #include <string>
 #include <vector>
 
@@ -236,269 +235,6 @@ auto SlangStageToString(SlangStage stage) -> std::string {
   }
 }
 
-void printVarLayout(slang::VariableLayoutReflection *varLayout) {
-  if (varLayout->getStage() != SLANG_STAGE_NONE) {
-    std::cout << "semantic: \n";
-    std::cout << "name: ";
-    std::cout << varLayout->getSemanticName() << "\n";
-    std::cout << "index: ";
-    std::cout << varLayout->getSemanticIndex() << "\n";
-  } else {
-    std::cout << "No stage semantic.\n";
-    std::cout << "name: ";
-    std::cout << varLayout->getName() << "\n";
-  }
-}
-
-void printScope(slang::VariableLayoutReflection *scopeVarLayout) {
-  auto *scopeTypeLayout = scopeVarLayout->getTypeLayout();
-  switch (scopeTypeLayout->getKind()) {
-  case slang::TypeReflection::Kind::Struct: {
-    std::print("parameters: \n");
-
-    unsigned int paramCount = scopeTypeLayout->getFieldCount();
-    for (int i = 0; i < paramCount; i++) {
-      std::print("- ");
-
-      auto *param = scopeTypeLayout->getFieldByIndex(i);
-      printVarLayout(param);
-    }
-  } break;
-
-  case slang::TypeReflection::Kind::None:
-  case slang::TypeReflection::Kind::Array:
-  case slang::TypeReflection::Kind::Matrix:
-  case slang::TypeReflection::Kind::Vector:
-  case slang::TypeReflection::Kind::Scalar:
-  case slang::TypeReflection::Kind::ConstantBuffer:
-  case slang::TypeReflection::Kind::Resource:
-  case slang::TypeReflection::Kind::SamplerState:
-  case slang::TypeReflection::Kind::TextureBuffer:
-  case slang::TypeReflection::Kind::ShaderStorageBuffer:
-  case slang::TypeReflection::Kind::ParameterBlock:
-  case slang::TypeReflection::Kind::GenericTypeParameter:
-  case slang::TypeReflection::Kind::Interface:
-  case slang::TypeReflection::Kind::OutputStream:
-  case slang::TypeReflection::Kind::Specialized:
-  case slang::TypeReflection::Kind::Feedback:
-  case slang::TypeReflection::Kind::Pointer:
-  case slang::TypeReflection::Kind::DynamicResource:
-  case slang::TypeReflection::Kind::MeshOutput:
-    std::cout << "Unsupported type layout kind for scope printing.\n";
-    break;
-  }
-}
-
-auto printProgramLayout(slang::ProgramLayout *programLayout) -> void {
-  std::print("global scope: ");
-  printScope(programLayout->getGlobalParamsVarLayout());
-
-  std::print("entry points: ");
-  unsigned int entryPointCount = programLayout->getEntryPointCount();
-  for (int i = 0; i < entryPointCount; ++i) {
-    std::print("- ");
-    const auto *name = programLayout->getEntryPointByIndex(i)->getName();
-    std::cout << (name == nullptr ? "<unnamed>" : name);
-  }
-}
-
-/*
-auto inline BuildDescriptorSetLayoutBindings(
-    slang::ProgramLayout *programLayout, std::vector<ShaderResource> &resources,
-    std::vector<PushConstantResource> &pushConstants) -> Error::Error {
-
-  auto *globalLayout = programLayout->getGlobalParamsVarLayout();
-  auto *typeLayout = globalLayout->getTypeLayout();
-
-  std::cout << "Building descriptor set layout bindings\n";
-  std::cout << "Descriptor set count: " << typeLayout->getDescriptorSetCount()
-            << "\n";
-
-  std::unordered_map<uint64_t, std::string> bindingNames;
-
-  std::cout << "Field count: " << typeLayout->getFieldCount() << "\n";
-
-  for (uint32_t i = 0; i < typeLayout->getFieldCount(); ++i) {
-    auto *fieldLayout = typeLayout->getFieldByIndex(i);
-
-    auto space = fieldLayout->getBindingSpace();
-    auto index = fieldLayout->getBindingIndex();
-
-    auto combined = (static_cast<uint64_t>(space) << 32U) | index;
-
-    bindingNames[combined] = fieldLayout->getName();
-    std::cout << "Found binding: " << fieldLayout->getName() << "\n";
-  }
-
-  auto *entryPoint = programLayout->getEntryPointByIndex(1);
-  for (int i = 0; i < entryPoint->getParameterCount(); ++i) {
-    auto *param = entryPoint->getParameterByIndex(i);
-    std::cout << "Uniform name: " << param->getName() << "\n";
-  }
-
-  for (uint32_t i = 0; i < typeLayout->getDescriptorSetCount(); ++i) {
-    auto count = typeLayout->getDescriptorSetDescriptorRangeCount(i);
-    std::cout << "Descriptor set " << i << " has " << count << " bindings\n";
-
-    for (uint32_t j = 0; j < count; ++j) {
-      auto arraySize =
-          typeLayout->getDescriptorSetDescriptorRangeDescriptorCount(i, j);
-      auto type = typeLayout->getDescriptorSetDescriptorRangeType(i, j);
-      auto category = typeLayout->getDescriptorSetDescriptorRangeCategory(i, j);
-      auto index = typeLayout->getDescriptorSetDescriptorRangeIndexOffset(i, j);
-
-      auto key =
-          (static_cast<uint64_t>(i) << 32U) | static_cast<uint64_t>(index);
-
-      std::string name = "unknown";
-
-      auto nameIter = bindingNames.find(key);
-      if (nameIter != bindingNames.end()) {
-        name = nameIter->second;
-      }
-
-      std::cout << "Binding " << index << ": " << name << "\n";
-
-      VkDescriptorSetLayoutBinding vkBinding{};
-      vkBinding.binding = index;
-      vkBinding.descriptorCount = arraySize;
-      vkBinding.stageFlags = VK_SHADER_STAGE_ALL;
-
-      bool valid = true;
-
-      switch (category) {
-      case slang::ParameterCategory::ConstantBuffer:
-        vkBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        break;
-      case slang::ParameterCategory::ShaderResource: {
-      case slang::ParameterCategory::DescriptorTableSlot:
-        std::cout << "Descriptor table slot encountered in shader reflection\n";
-        std::cout << "Type: " << static_cast<int>(type) << "\n";
-        switch (type) {
-        case slang::BindingType::Texture:
-          vkBinding.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-          break;
-        case slang::BindingType::RawBuffer:
-        case slang::BindingType::TypedBuffer:
-          vkBinding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-          break;
-        case slang::BindingType::Unknown:
-          break;
-        case slang::BindingType::Sampler:
-          vkBinding.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
-          break;
-        case slang::BindingType::ConstantBuffer:
-          vkBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-          break;
-        case slang::BindingType::ParameterBlock:
-          // Handled separately
-          break;
-        case slang::BindingType::CombinedTextureSampler:
-          vkBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-          break;
-        case slang::BindingType::InputRenderTarget:
-          vkBinding.descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT;
-          break;
-        case slang::BindingType::InlineUniformData:
-          // Not supported in Vulkan
-          break;
-        case slang::BindingType::RayTracingAccelerationStructure:
-          vkBinding.descriptorType =
-              VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
-          break;
-        case slang::BindingType::PushConstant: {
-          auto *constantBufferTypeLayout =
-              typeLayout->getBindingRangeLeafTypeLayout(i);
-          auto *elementTypeLayout =
-              constantBufferTypeLayout->getElementTypeLayout();
-          auto elementSize = elementTypeLayout->getSize(
-              slang::ParameterCategory::PushConstantBuffer);
-
-          if (elementSize == 0) {
-            return Error::Create(
-                "Push constant buffer has size 0 in shader reflection");
-          }
-
-          for (uint32_t i = 0; i < constantBufferTypeLayout->getFieldCount();
-               ++i) {
-            auto *field = constantBufferTypeLayout->getFieldByIndex(i);
-            auto offset = field->getOffset();
-            std::cout << "Push constant: " << field->getName() << "\n";
-
-            PushConstantResource resource = {
-                .offset = static_cast<uint32_t>(offset),
-                .size = static_cast<uint32_t>(elementSize),
-                .name = name,
-            };
-
-            pushConstants.emplace_back(resource);
-          }
-
-          continue;
-        }
-        case slang::BindingType::VaryingInput:
-        case slang::BindingType::VaryingOutput:
-        case slang::BindingType::ExistentialValue:
-        case slang::BindingType::MutableFlag:
-        case slang::BindingType::MutableTexture:
-        case slang::BindingType::MutableTypedBuffer:
-        case slang::BindingType::MutableRawBuffer:
-        case slang::BindingType::BaseMask:
-        case slang::BindingType::ExtMask:
-          std::cout << "Unsupported shader resource type in reflection\n";
-          std::cout << "Type: " << static_cast<int>(type) << "\n";
-          valid = false;
-          break;
-        }
-        break;
-      }
-      case slang::ParameterCategory::PushConstantBuffer:
-      case slang::None:
-      case slang::Mixed:
-      case slang::UnorderedAccess:
-      case slang::VaryingInput:
-      case slang::VaryingOutput:
-      case slang::SamplerState:
-      case slang::Uniform:
-      case slang::SpecializationConstant:
-      case slang::RegisterSpace:
-      case slang::GenericResource:
-      case slang::RayPayload:
-      case slang::HitAttributes:
-      case slang::CallablePayload:
-      case slang::ShaderRecord:
-      case slang::ExistentialTypeParam:
-      case slang::ExistentialObjectParam:
-      case slang::SubElementRegisterSpace:
-      case slang::InputAttachmentIndex:
-      case slang::MetalArgumentBufferElement:
-      case slang::MetalAttribute:
-      case slang::MetalPayload:
-        std::cout << "Unsupported descriptor type in shader reflection\n";
-        std::cout << "Category: " << static_cast<int>(category) << "\n";
-        continue;
-      }
-
-      if (!valid) {
-        continue;
-      }
-
-      // setBindingsMap[i].push_back(vkBinding);
-      resources.push_back(ShaderResource{
-          .name = name,
-          .set = i,
-          .binding = static_cast<uint32_t>(index),
-          .stage = VK_SHADER_STAGE_ALL,
-          .type = vkBinding.descriptorType,
-          .count = static_cast<uint32_t>(arraySize),
-      });
-    }
-  }
-
-  return Error::Success();
-}
-*/
-
 static inline auto LoadSlang(GraphicsContext &context,
                              Ref<ShaderModule> &shader) -> Error::Error {
   slang::SessionDesc sessionDesc = {};
@@ -512,10 +248,12 @@ static inline auto LoadSlang(GraphicsContext &context,
   std::vector<const char *> searchPaths = {sourceAndSaveDirectory.c_str(),
                                            shaderDirectory.c_str()};
 
-  std::cout << "Shader directories:\n";
+  std::string directories = "Shader directories:\n";
   for (const auto &path : searchPaths) {
-    std::cout << " - " << path << "\n";
+    directories += " - " + std::string(path) + "\n";
   }
+
+  PrintDebug(directories);
 
   sessionDesc.searchPaths = searchPaths.data();
   sessionDesc.searchPathCount = static_cast<uint32_t>(searchPaths.size());
@@ -530,9 +268,7 @@ static inline auto LoadSlang(GraphicsContext &context,
   }
 
   Slang::ComPtr<slang::IBlob> diagnosticsBlob;
-  std::cout << "Compiling shader: " << shader->moduleName << "\n";
-
-  std::cout << "Loading shader module...\n";
+  PrintDebug("Compiling shader: " + shader->moduleName);
 
   shader->slangModule = session->loadModule(shader->moduleName.c_str(),
                                             diagnosticsBlob.writeRef());
@@ -551,10 +287,8 @@ static inline auto LoadSlang(GraphicsContext &context,
   std::vector<SlangStage> stages;
   stages.reserve(entryPointCount);
 
-  std::cout << "Finding shader entry points...\n";
-
-  std::cout << "Shader entry points:\n";
-  std::cout << " - Count: " << entryPointCount << "\n";
+  PrintDebug("Shader entry points:");
+  PrintDebug(" - Count: " + std::to_string(entryPointCount));
 
   auto allowedEntryPointCount = SlangStages.size();
   for (SlangInt32 i = 0; i < allowedEntryPointCount; i++) {
@@ -572,14 +306,12 @@ static inline auto LoadSlang(GraphicsContext &context,
 
     shader->entryPointToStageIndex[stage] = entryPoints.size();
     entryPoints.emplace_back(entryPoint);
-    std::cout << "Index of entry point: "
-              << shader->entryPointToStageIndex[stage] << "\n";
 
     shader->stages.emplace_back(SlangStageToVkStage(stage));
     stages.emplace_back(stage);
 
-    std::cout << " - " << entryPointName
-              << " (stage: " << SlangStageToString(stage) << ")\n";
+    PrintfDebug(" - {}; index: {}", entryPointName,
+                std::to_string(entryPoints.size() - 1));
   }
 
   std::vector<slang::IComponentType *> componentTypes;
@@ -591,17 +323,10 @@ static inline auto LoadSlang(GraphicsContext &context,
 
   Slang::ComPtr<slang::IComponentType> composedProgram;
   {
-    std::cout << "Composing program...\n";
-    std::cout << " - Component type count: " << componentTypes.size() << "\n";
-    for (const auto &compType : componentTypes) {
-      std::cout << "   - " << compType << "\n";
-    }
-
+    PrintDebug("Composing program...");
     SlangResult result = session->createCompositeComponentType(
         componentTypes.data(), static_cast<SlangInt>(componentTypes.size()),
         composedProgram.writeRef(), diagnosticsBlob.writeRef());
-
-    std::cout << "Created composite component type.\n";
 
     auto err =
         Error::Create(result, diagnosticsBlob, composedProgram.readRef());
@@ -611,7 +336,7 @@ static inline auto LoadSlang(GraphicsContext &context,
   }
 
   {
-    std::cout << "Linking program...\n";
+    PrintDebug("Linking program...");
 
     SlangResult result = composedProgram->link(shader->linkedProgram.writeRef(),
                                                diagnosticsBlob.writeRef());
@@ -623,12 +348,10 @@ static inline auto LoadSlang(GraphicsContext &context,
     }
   }
 
+  PrintDebug("Getting program layout...");
+
   shader->programLayout =
       shader->linkedProgram->getLayout(0, diagnosticsBlob.writeRef());
-  std::cout << shader->programLayout << "\n";
-  std::cout << shader->programLayout->getEntryPointByIndex(1) << "\n";
-  std::cout << shader->programLayout->getEntryPointByIndex(1)->getName()
-            << "\n";
 
   auto err = Error::Create(result, diagnosticsBlob, shader->programLayout);
   if (Error::IsError(err)) {
@@ -638,8 +361,6 @@ static inline auto LoadSlang(GraphicsContext &context,
   Slang::ComPtr<slang::IBlob> spirvCode;
 
   shader->stages.resize(entryPointCount);
-  std::cout << "Getting entry point code"
-            << "\n";
 
   result = shader->linkedProgram->getTargetCode(0, // targetIndex
                                                 spirvCode.writeRef(),
@@ -649,6 +370,8 @@ static inline auto LoadSlang(GraphicsContext &context,
   if (Error::IsError(err)) {
     return err;
   }
+
+  PrintDebug("Creating Vulkan shader module...");
 
   std::vector<uint32_t> data;
   size_t codeSize = spirvCode->getBufferSize();
@@ -676,6 +399,8 @@ static inline auto LoadSlang(GraphicsContext &context,
     return error;
   }
 
+  PrintDebug("Shader module created successfully.");
+
   return Error::Success();
 }
 
@@ -691,12 +416,6 @@ auto ShaderModule::Create(Graphics::GraphicsContext &context,
   if (Error::IsError(error)) {
     return tl::unexpected(error);
   }
-
-  // auto buildResult = BuildDescriptorSetLayoutBindings(
-  //     shader->programLayout, shader->resources, shader->pushConstantResources);
-  // if (Error::IsError(buildResult)) {
-  //   return tl::make_unexpected(buildResult);
-  // }
 
   auto reflectResult =
       ReflectShader(context, shader->programLayout, shader->reflection);

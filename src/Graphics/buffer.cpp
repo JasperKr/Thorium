@@ -49,8 +49,6 @@ auto Graphics::Buffer::SetData(Graphics::GraphicsContext &context,
                                VkDeviceSize offset = 0) const -> Error::Error {
   auto dataSize = data.size();
 
-  std::cout << "Setting buffer data of size " << dataSize << " bytes at offset "
-            << offset << "\n";
   void *mapped = nullptr;
   auto result =
       Error::Create(vmaMapMemory(context.vmaAllocator, memory, &mapped));

@@ -189,7 +189,6 @@ auto FileExists(const std::string &path) -> bool {
 auto AddToSearchPath(const std::string &path, bool appendToPath)
     -> Error::Error {
   if (PHYSFS_mount(path.c_str(), nullptr, appendToPath ? 1 : 0) == 0) {
-    std::cout << "Failed to add path to search path: " << path << "\n";
     return GetError();
   }
   return Error::Success();

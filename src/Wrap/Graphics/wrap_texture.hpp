@@ -1,8 +1,8 @@
 #pragma once
 
 #include "Graphics/texture.hpp"
+#include "Modules/console.hpp"
 #include "Wrap/wrap.hpp"
-#include <iostream>
 #include <lauxlib.h>
 #include <lua.h>
 namespace Graphics::Texture {
@@ -51,7 +51,7 @@ static const luaL_Reg TextureLib[] = {
 };
 
 extern "C" inline auto luaopen_texture(lua_State *state) -> int {
-  std::cout << "Registering Texture Lua type.\n";
+  PrintDebug("Registering Texture Lua type.");
 
   LuaWrap::RegisterLuaType(state, Texture::GetType(),
                            TextureLib); // NOLINT

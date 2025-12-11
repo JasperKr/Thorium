@@ -428,8 +428,6 @@ inline auto GetQuadMesh(GraphicsContext &context, const VkRect2D size,
     return tl::unexpected(setDataError);
   }
 
-  std::cout << "Created quad mesh\n";
-
   return mesh;
 }
 

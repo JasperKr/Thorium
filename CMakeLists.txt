@@ -190,7 +190,6 @@ endif()
 add_executable(Thorium
 # Main source files
     src/main.cpp
-    src/program.cpp
     src/loop.cpp
 
 # Graphics module

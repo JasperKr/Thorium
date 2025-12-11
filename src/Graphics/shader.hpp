@@ -10,7 +10,6 @@
 #include <cstdint>
 #include <string>
 #include <unordered_map>
-#include <variant>
 #include <vector>
 #define VK_NO_PROTOTYPES
 #include "tl/expected.hpp"

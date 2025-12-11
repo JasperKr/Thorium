@@ -1,5 +1,6 @@
 #include "texture.hpp"
 #include "Graphics/graphics.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/filesystem.hpp"
 #include "Modules/imagedata.hpp"
@@ -819,12 +820,10 @@ auto Texture::GetSampler(GraphicsContext &context) -> VkSampler {
     sampler = GetOrCreateSampler(context, samplerDescription);
     samplerDirty = false;
 
-    std::cout << "Created new sampler for texture->\n";
+    PrintDebug("Created new sampler for texture->");
 
     return sampler;
   }
-
-  std::cout << "Reusing existing sampler for texture->\n";
 
   return sampler;
 }

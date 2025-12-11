@@ -1,4 +1,14 @@
-#define VMA_DEBUG_LOG(format, ...) printf(format, ##__VA_ARGS__)
+#include "../Modules/console.hpp"
+
+template <typename... Args> // NOLINTNEXTLINE args forwarding
+inline void PrintfLibrary(std::string_view format, Args &&...args) {
+  if (CurrentLogLevel <= LogLevel::Debug) {
+    std::cout << ColorText("[LIBRARY] ", ConsoleColor::Blue)
+              << std::vformat(format, std::make_format_args(args...)) << '\n';
+  }
+}
+
+#define VMA_DEBUG_LOG(format, ...) PrintfLibrary(format, ##__VA_ARGS__)
 #define VMA_VULKAN_VERSION 1004000
 #define VMA_IMPLEMENTATION
 #define VMA_ASSERT(expr) assert(expr)

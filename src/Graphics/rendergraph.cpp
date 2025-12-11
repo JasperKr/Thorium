@@ -1,4 +1,5 @@
 #include "rendergraph.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/image.hpp"
 #include "graphics.hpp"
@@ -12,7 +13,6 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
-#include <iostream>
 #ifdef WIN32
 // #include <minwindef.h>
 #endif
@@ -327,17 +327,18 @@ auto inline ScheduleNodes(RenderGraph &graph) -> void {
     }
   }
 
-  std::cout << "Scheduled " << graph.compiledPasses.size() << " passes."
-            << "\n";
-  std::cout << "----------------------------" << "\n";
+  PrintDebug("Scheduled {} passes.", graph.compiledPasses.size());
+  PrintDebug("----------------------------");
   // Skip virtual root
+  std::string passOrder;
   for (int i = 1; i < graph.compiledPasses.size(); i++) {
-    std::cout << i << " (" << graph.compiledPasses[i].pass.handle << ")";
+    passOrder += std::to_string(i) + " (" +
+                 std::to_string(graph.compiledPasses[i].pass.handle) + ")";
     if (i != graph.compiledPasses.size() - 1) {
-      std::cout << " -> ";
+      passOrder += " -> ";
     }
   }
-  std::cout << "\n" << "----------------------------" << "\n";
+  PrintDebug("{}\n----------------------------", passOrder);
 }
 
 static inline auto HasReadDependency(const RenderGraph &graph, size_t passIndex)
@@ -547,9 +548,9 @@ struct AllocationInfo {
 
       graph.virtualAllocations.try_emplace(info.handle, allocation);
 
-      std::cout << "Allocated resource " << info.handle
-                << " in new memory block of size " << info.size << " at "
-                << offset << "\n";
+      PrintDebug("Allocated resource {} in existing memory block {} of size {} "
+                 "at {}\n",
+                 info.handle, blockIndex, info.size, offset);
 
       return Error::Success(); // success
     }
@@ -576,9 +577,10 @@ struct AllocationInfo {
         .size = info.size};
 
     graph.virtualAllocations.try_emplace(info.handle, allocation);
-    std::cout << "Allocated resource " << info.handle
-              << " in new memory block of size " << allocationSize << " at "
-              << offset << "\n";
+    PrintDebug("Allocated resource {} in new memory block {} of size {} "
+               "at {}\n",
+               info.handle, graph.memoryBlocks.size() - 1, allocationSize,
+               offset);
 
     return Error::Success(); // success
   }
@@ -747,23 +749,24 @@ auto inline CompileResourceTimeline(RenderGraph &graph) -> void {
     }
   }
 
-  std::cout << "Compiled resource timeline with "
-            << graph.compiledResources.size() << " entries." << "\n";
-  std::cout << "----------------------------" << "\n";
+  PrintDebug("Compiled resource timeline with {} entries.",
+             graph.compiledResources.size());
+  PrintDebug("----------------------------");
 
   auto lastPassHandle = static_cast<ResourceHandle>(-2);
 
   for (const auto &entry : graph.compiledResources) {
     if (entry.passHandle != lastPassHandle) {
-      std::cout << "Pass " << entry.passHandle << ":\n";
+      PrintDebug("Pass {}:", entry.passHandle);
       lastPassHandle = entry.passHandle;
     }
-    std::cout << (entry.type == ResourceTimelineEntryType::Allocate
-                      ? "  Allocate: "
-                      : "  Deallocate: ")
-              << entry.resourceHandle << "\n";
+    PrintDebug("  {}: {}",
+               (entry.type == ResourceTimelineEntryType::Allocate
+                    ? "Allocate"
+                    : "Deallocate"),
+               entry.resourceHandle);
   }
-  std::cout << "----------------------------" << "\n";
+  PrintDebug("----------------------------");
 }
 
 struct AttachmentInfo {
@@ -866,8 +869,8 @@ auto inline GetDescriptorType(const Resource &resource,
   }
 
   if (totalSets == 0) {
-    std::cout << "No descriptor sets needed, skipping descriptor pool creation."
-              << "\n";
+    PrintDebug(
+        "No descriptor sets needed, skipping descriptor pool creation.\n");
     return Error::Success();
   }
 
@@ -912,10 +915,10 @@ auto inline CreatePassDescriptorSetLayouts(GraphicsContext &context,
       continue; // skip attachments
     }
 
-    std::cout << "Pass " << pass.pass.handle
-              << ": Processing resource binding for resource "
-              << binding.resource << " at set " << binding.set << ", binding "
-              << binding.binding << "\n";
+    PrintDebug("Pass {}: Processing resource binding for resource {} at set "
+               "{}, binding {}\n",
+               pass.pass.handle, binding.resource, binding.set,
+               binding.binding);
 
     const auto &resource = graph.resources[binding.resource];
 
@@ -970,20 +973,19 @@ auto inline CreatePassDescriptorSets(GraphicsContext &context,
   std::vector<VkDescriptorSetLayout> layouts;
   layouts.reserve(pass.pass.state.descriptorSetLayouts.size());
 
-  std::cout << "Creating descriptor sets for pass " << pass.pass.handle << "\n";
-  std::cout << "Descriptor set layout count: "
-            << pass.pass.state.descriptorSetLayouts.size() << "\n";
+  PrintDebug("Creating descriptor sets for pass {}", pass.pass.handle);
+  PrintDebug("Descriptor set layout count: {}",
+             pass.pass.state.descriptorSetLayouts.size());
 
   if (pass.pass.state.descriptorSetLayouts.empty()) {
-    std::cout << "Pass " << pass.pass.handle
-              << ": No descriptor set layouts, skipping allocation." << "\n";
+    PrintDebug("Pass {}: No descriptor set layouts, skipping allocation.",
+               pass.pass.handle);
     return Error::Success(); // No descriptor sets needed
   }
 
   for (const auto &setBindingPair : pass.pass.state.descriptorSetLayouts) {
-    std::cout << "Pass " << pass.pass.handle
-              << ": Using descriptor set layout for set "
-              << setBindingPair.first << "\n";
+    PrintDebug("Pass {}: Using descriptor set layout for set {}",
+               pass.pass.handle, setBindingPair.first);
     layouts.emplace_back(setBindingPair.second); // Add all set layouts
   }
 
@@ -1164,22 +1166,21 @@ auto inline ConfigurePassDescriptors(GraphicsContext &context,
       return; // Skip raster attachments
     }
 
-    std::cout << "Setting up color attachment at location " << binding.location
-              << "\n";
-    std::cout << "  Resource lifetime type: "
-              << (resource.lifetime == ResourceLifetime::Transient
-                      ? "Transient"
-                      : "Persistent")
-              << "\n";
+    PrintDebug("Setting up color attachment at location {}", binding.location);
+    PrintDebug("  Resource lifetime type: {}",
+               (resource.lifetime == ResourceLifetime::Transient
+                    ? "Transient"
+                    : "Persistent"));
 
     imageInfo.imageLayout = GetImageBindingLayout(graph, binding);
     imageInfo.imageView = texture->view;
     assert(imageInfo.imageView != VK_NULL_HANDLE &&
            "Texture image view is null in descriptor setup");
     imageInfo.sampler = texture->GetSampler(context);
-    std::cout << "Configured descriptor for texture resource "
-              << resource.handle << " with sampler "
-              << (imageInfo.sampler != VK_NULL_HANDLE ? "set" : "null") << "\n";
+    PrintDebug(
+        "Configured descriptor for texture resource {} with sampler {}\n",
+        resource.handle,
+        (imageInfo.sampler != VK_NULL_HANDLE ? "set" : "null"));
     auto cache = GetSamplerCache();
 
     cache[resource.handle] = imageInfo.sampler;
@@ -1246,9 +1247,9 @@ auto inline CreateGraphLayoutStates(GraphicsContext &context,
 
         compiledPass.resourceLayouts[resource.handle] = layoutState;
 
-        std::cout << "Pass " << compiledPass.pass.handle << ": Resource "
-                  << resource.handle << " layout set to "
-                  << static_cast<uint32_t>(layout) << "\n";
+        PrintDebug("Pass {}: Resource {} layout set to {}",
+                   compiledPass.pass.handle, resource.handle,
+                   static_cast<uint32_t>(layout));
       } else if (resource.type == Type::Buffer) {
         auto layout = VK_IMAGE_LAYOUT_UNDEFINED; // Buffers don't have layouts
 
@@ -1302,11 +1303,10 @@ auto inline CreateGraphResourceTransitions(GraphicsContext &context,
         LayoutState newLayoutState =
             compiledPass.resourceLayouts.at(resource.handle);
 
-        std::cout << "Pass " << compiledPass.pass.handle << ": Resource "
-                  << resource.handle << " old layout: "
-                  << static_cast<uint32_t>(oldLayoutState.layout)
-                  << ", new layout: "
-                  << static_cast<uint32_t>(newLayoutState.layout) << "\n";
+        PrintDebug("Pass {}: Resource {} old layout: {}, new layout: {}",
+                   compiledPass.pass.handle, resource.handle,
+                   static_cast<uint32_t>(oldLayoutState.layout),
+                   static_cast<uint32_t>(newLayoutState.layout));
 
         // If layout has changed, create a transition
         if (oldLayoutState.layout != newLayoutState.layout) {
@@ -1321,9 +1321,9 @@ auto inline CreateGraphResourceTransitions(GraphicsContext &context,
           // Update current layout
           currentLayouts[resource.handle] = newLayoutState;
         } else {
-          std::cout << "Pass " << compiledPass.pass.handle
-                    << ": No layout change for resource " << resource.handle
-                    << ", skipping transition.\n";
+          PrintDebug("Pass {}: No layout change for resource {}, skipping "
+                     "transition.\n",
+                     compiledPass.pass.handle, resource.handle);
         }
       }
     }
@@ -1341,8 +1341,8 @@ auto inline CreateGraphResourceTransitions(GraphicsContext &context,
     LayoutState currentLayoutState = currentLayoutIterator->second;
 
     if (currentLayoutState.layout != desiredLayoutState.layout) {
-      std::cout << "Creating final layout transition for resource "
-                << resourceHandle << "\n";
+      PrintDebug("Creating final layout transition for resource {}",
+                 resourceHandle);
 
       const auto &resource = graph.resources[resourceHandle];
       const auto &texture = std::get<Ref<Texture::Texture>>(resource.info);
@@ -1371,11 +1371,11 @@ auto inline CreateGraphResourceTransitions(GraphicsContext &context,
 auto inline CreateGraphImageBarriers(GraphicsContext &context,
                                      RenderGraph &graph) -> void {
   for (auto &compiledPass : graph.compiledPasses) {
-    std::cout << "Creating image barriers for pass " << compiledPass.pass.handle
-              << "\n";
+    PrintDebug("Creating image barriers for pass {}", compiledPass.pass.handle);
     if (compiledPass.layoutUpdates.empty()) {
-      std::cout << "Pass " << compiledPass.pass.handle
-                << ": No layout updates, skipping image barrier creation.\n";
+      PrintDebug(
+          "Pass {}: No layout updates, skipping image barrier creation.\n",
+          compiledPass.pass.handle);
       continue; // No layout updates needed
     }
 
@@ -1383,13 +1383,12 @@ auto inline CreateGraphImageBarriers(GraphicsContext &context,
       const auto &resource = graph.resources[layoutUpdate.resource];
       const auto &texture = std::get<Ref<Texture::Texture>>(resource.info);
 
-      std::cout << "Pass " << compiledPass.pass.handle
-                << ": Creating image barrier for resource "
-                << layoutUpdate.resource << "\n";
-      std::cout << "  Old Layout: "
-                << static_cast<uint32_t>(layoutUpdate.oldState.layout) << "\n";
-      std::cout << "  New Layout: "
-                << static_cast<uint32_t>(layoutUpdate.newState.layout) << "\n";
+      PrintDebug("Pass {}: Creating image barrier for resource {}",
+                 compiledPass.pass.handle, layoutUpdate.resource);
+      PrintDebug("  Old Layout: {}",
+                 static_cast<uint32_t>(layoutUpdate.oldState.layout));
+      PrintDebug("  New Layout: {}",
+                 static_cast<uint32_t>(layoutUpdate.newState.layout));
 
       VkImageMemoryBarrier barrier = {};
       barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -1545,9 +1544,8 @@ auto inline ApplyPassBarriers(VkCommandBuffer commandBuffer,
   }
 
   renderingCreateInfo.colorAttachmentCount = colorAttachmentCount;
-  std::cout << "Creating graphics pipeline with " << colorAttachmentCount
-            << " color attachments."
-            << "\n";
+  PrintDebug("Creating graphics pipeline with {} color attachments.",
+             colorAttachmentCount);
 
   auto formats = std::vector<VkFormat>(maxLocation + 1, VK_FORMAT_UNDEFINED);
 
@@ -1557,9 +1555,9 @@ auto inline ApplyPassBarriers(VkCommandBuffer commandBuffer,
       const auto &texture = std::get<Ref<Texture::Texture>>(resource.info);
 
       formats[binding.location] = texture->format;
-      std::cout << "  Using format for attachment at location "
-                << binding.location << ": "
-                << static_cast<uint32_t>(formats[binding.location]) << "\n";
+      PrintDebug("  Using format for attachment at location {}: {}",
+                 binding.location,
+                 static_cast<uint32_t>(formats[binding.location]));
     }
   }
 
@@ -1889,11 +1887,11 @@ auto inline ValidateResources(const RenderGraph &graph) -> Error::Error {
       bool isRead = readResources.contains(resource.handle);
 
       if (isWritten && !isRead) {
-        std::cout << "Warning: Transient resource " << resource.handle
-                  << " is written to but never read." << "\n";
+        PrintWarning("Transient resource {} is written to but never read.\n",
+                     resource.handle);
       } else if (!isWritten && isRead) {
-        std::cout << "Warning: Transient resource " << resource.handle
-                  << " is read from but never written." << "\n";
+        PrintWarning("Transient resource {} is read from but never written.\n",
+                     resource.handle);
       }
     }
   }
@@ -1918,8 +1916,8 @@ auto inline AllocateGraphResourceMemory(GraphicsContext &context,
       }
 
       usedResources.insert(resHandle);
-      std::cout << "Resource " << resHandle << " is used in pass "
-                << compiledPass.pass.handle << "\n";
+      PrintDebug("Resource {} is used in pass {}", resHandle,
+                 compiledPass.pass.handle);
     }
   }
 
@@ -1937,7 +1935,7 @@ auto inline AllocateGraphResourceMemory(GraphicsContext &context,
     -> Error::Error {
   // For each resource, calculate cost
 
-  std::cout << "Compiling render graph..." << "\n";
+  PrintDebug("Compiling render graph...");
 
   for (auto &resource : graph.resources) {
     if (resource.type == Type::Texture) {
@@ -1977,15 +1975,15 @@ auto inline AllocateGraphResourceMemory(GraphicsContext &context,
     return error;
   }
 
-  std::cout << "Allocated " << graph.memoryBlocks.size()
-            << " memory blocks for render graph." << "\n";
+  PrintDebug("Allocated {} memory blocks for render graph.",
+             graph.memoryBlocks.size());
 
   error = AllocateGraphResourceMemory(context, graph);
   if (Error::IsError(error)) {
     return error;
   }
 
-  std::cout << "Allocated memory for render graph resources." << "\n";
+  PrintDebug("Allocated memory for render graph resources.");
 
   error = ValidateResources(graph);
   if (Error::IsError(validationResult)) {
@@ -1998,7 +1996,7 @@ auto inline AllocateGraphResourceMemory(GraphicsContext &context,
     return error;
   }
 
-  std::cout << "Created descriptor pool for render graph." << "\n";
+  PrintDebug("Created descriptor pool for render graph.");
 
   error = CreateGraphDescriptorSetLayouts(context, graph);
 
@@ -2006,8 +2004,7 @@ auto inline AllocateGraphResourceMemory(GraphicsContext &context,
     return error;
   }
 
-  std::cout << "Created descriptor set layouts for render graph passes."
-            << "\n";
+  PrintDebug("Created descriptor set layouts for render graph passes.");
 
   error = CreateGraphDescriptorSets(context, graph);
 
@@ -2015,17 +2012,17 @@ auto inline AllocateGraphResourceMemory(GraphicsContext &context,
     return error;
   }
 
-  std::cout << "Allocated descriptor sets for render graph passes." << "\n";
+  PrintDebug("Allocated descriptor sets for render graph passes.");
 
   ConfigureGraphDescriptors(context, graph);
 
-  std::cout << "Configured descriptors for render graph passes." << "\n";
+  PrintDebug("Configured descriptors for render graph passes.");
   error = CreateGraphPipelines(context, graph);
   if (Error::IsError(error)) {
     return error;
   }
 
-  std::cout << "Created pipelines for render graph passes." << "\n";
+  PrintDebug("Created pipelines for render graph passes.");
 
   CreateGraphLayoutStates(context, graph);
 
@@ -2210,8 +2207,8 @@ auto AddTexture(RenderGraph &graph, const TextureDescriptor &descriptor)
   resource.info = texture;
   graph.resources.emplace_back(resource);
 
-  std::cout << "Added texture resource with handle " << resource.handle << "\n";
-  std::cout << "  Usage flags: " << descriptor.usage << "\n";
+  PrintDebug("Added texture resource with handle {}", resource.handle);
+  PrintDebug("  Usage flags: {}", descriptor.usage);
 
   return resource.handle;
 }
@@ -2264,9 +2261,8 @@ auto ImportTexture(RenderGraph &graph,
   graph.initialResourceLayouts[resource.handle] = layoutUpdate.oldState;
   graph.finalResourceLayouts[resource.handle] = layoutUpdate.newState;
 
-  std::cout << "Imported texture resource with handle " << resource.handle
-            << "\n";
-  std::cout << "  Usage flags: " << texture->usage << "\n";
+  PrintDebug("Imported texture resource with handle {}", resource.handle);
+  PrintDebug("  Usage flags: {}", texture->usage);
 
   return resource.handle;
 }

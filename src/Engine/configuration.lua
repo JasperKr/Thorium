@@ -7,4 +7,7 @@ function Thorium.config(config)
   config.window.vsync = true
 
   config.filesystem.identity = "ConfiguredIdentity"
+
+  -- "debug" > "info" > "warning" > "error" > "fatal"
+  config.loglevel = "warning"
 end

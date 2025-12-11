@@ -178,8 +178,6 @@ struct Mesh : Object {
     auto meshData = Ref<Mesh>::Make();
     auto *mesh = meshData.get();
 
-    std::cout << meshData.get() << "\n";
-
     auto vertexFormatIterator = PredefinedVertexFormats.find(format);
 
     if (vertexFormatIterator == PredefinedVertexFormats.end()) {
@@ -297,18 +295,15 @@ struct Mesh : Object {
   }
 
   auto Draw(GraphicsContext &context) const -> Error::Error {
-    std::cout << "Preparing to draw mesh\n";
     auto error = RenderTarget::PrepareDraw(context);
     if (Error::IsError(error)) {
       return error;
     }
 
-    std::cout << "Binding mesh\n";
     RenderData renderData = GetRenderData(context, GetCurrentThreadIndex());
     Bind(renderData.commandBuffers[context.frameIndex]);
     MeshDrawRange range = DrawRange;
 
-    std::cout << "Issuing draw call\n";
     if (IndexData.size() > 0) {
       vkCmdDrawIndexed(renderData.commandBuffers[context.frameIndex],
                        range.Count, 1, range.Offset, 0, 0);

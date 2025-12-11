@@ -1,23 +1,12 @@
 #include "config.hpp"
+#include "Modules/console.hpp"
 #include "Wrap/wrap.hpp"
-#include <iostream>
 
 extern "C" {
 #include <lauxlib.h>
 #include <lua.h>
 #include <lualib.h>
 }
-
-/*
-void SetVsync(bool vsync);
-  auto GetVsync() const -> bool;
-  void SetTitle(const std::string &title);
-  auto GetTitle() const -> std::string;
-  void SetIdentity(const std::string &identity);
-  auto GetIdentity() const -> std::string;
-  void SetSize(uint32_t width, uint32_t height);
-  auto GetSize() const -> WindowSize;
-*/
 
 namespace Config {
 
@@ -29,8 +18,7 @@ inline auto SetVsync(lua_State *state) -> int {
     return luaL_error(state, "Expected boolean for Vsync");
   }
   globalConfig.Vsync = (lua_toboolean(state, 1) != 0);
-  std::cout << "Vsync set to " << (globalConfig.Vsync ? "true" : "false")
-            << "\n";
+  PrintInfo("Vsync set to ", (globalConfig.Vsync ? "true" : "false"));
   return 0;
 }
 
@@ -39,7 +27,7 @@ inline auto SetTitle(lua_State *state) -> int {
     return luaL_error(state, "Expected string for Title");
   }
   globalConfig.Title = lua_tostring(state, 1);
-  std::cout << "Title set to " << globalConfig.Title << "\n";
+  PrintInfo("Title set to ", globalConfig.Title);
   return 0;
 }
 
@@ -48,7 +36,7 @@ inline auto SetIdentity(lua_State *state) -> int {
     return luaL_error(state, "Expected string for Identity");
   }
   globalConfig.Identity = lua_tostring(state, 1);
-  std::cout << "Identity set to " << globalConfig.Identity << "\n";
+  PrintInfo("Identity set to ", globalConfig.Identity);
   return 0;
 }
 
@@ -58,8 +46,36 @@ inline auto SetSize(lua_State *state) -> int {
   }
   globalConfig.Size.width = static_cast<int32_t>(lua_tointeger(state, 1));
   globalConfig.Size.height = static_cast<int32_t>(lua_tointeger(state, 2));
-  std::cout << "Size set to " << globalConfig.Size.width << "x"
-            << globalConfig.Size.height << "\n";
+  PrintfInfo("Size set to {}x{}", globalConfig.Size.width,
+             globalConfig.Size.height);
+  return 0;
+}
+
+inline auto LuaSetLogLevel(lua_State *state) -> int {
+  if (lua_isstring(state, 1) == 0) {
+    return luaL_error(state, "Expected string for LogLevel");
+  }
+  const char *levelStr = lua_tostring(state, 1);
+  if (levelStr == nullptr) {
+    return luaL_error(state, "Invalid string for LogLevel");
+  }
+
+  std::string level(levelStr);
+  if (level == "debug") {
+    SetLogLevel(LogLevel::Debug);
+  } else if (level == "info") {
+    SetLogLevel(LogLevel::Info);
+  } else if (level == "warning") {
+    SetLogLevel(LogLevel::Warning);
+  } else if (level == "error") {
+    SetLogLevel(LogLevel::Error);
+  } else if (level == "fatal") {
+    SetLogLevel(LogLevel::Fatal);
+  } else {
+    return luaL_error(state, "Unknown LogLevel: %s", levelStr);
+  }
+
+  PrintInfo("LogLevel set to ", level);
   return 0;
 }
 
@@ -75,6 +91,9 @@ inline auto SetFunctions(lua_State *state) -> void {
 
   lua_pushcfunction(state, SetSize);
   lua_setfield(state, -2, "_setSize");
+
+  lua_pushcfunction(state, LuaSetLogLevel);
+  lua_setfield(state, -2, "_setLogLevel");
 }
 
 inline auto RemoveFunctions(lua_State *state) -> void {
@@ -89,7 +108,6 @@ inline auto RemoveFunctions(lua_State *state) -> void {
       // NOLINTNEXTLINE
       if (key[0] == '_') {
         keysToRemove.emplace_back(key);
-        std::cout << "Marked for removal: " << key << "\n";
       }
     }
     lua_pop(state, 1); // pop value, keep key
@@ -100,7 +118,6 @@ inline auto RemoveFunctions(lua_State *state) -> void {
     lua_pushstring(state, key.c_str()); // [Thorium, key]
     lua_pushnil(state);                 // [Thorium, key, nil]
     lua_rawset(state, -3);              // Thorium[key] = nil
-    std::cout << "Removed function: " << key << "\n";
   }
 
   lua_pop(state, 1); // pop Thorium table
@@ -138,7 +155,8 @@ auto Configure(lua_State *state)
       },
       filesystem = {
         identity = "MyGame",
-      }
+      },
+      loglevel = "warning",
     }
 
     local function recursiveSetMetatable(t)
@@ -167,6 +185,10 @@ auto Configure(lua_State *state)
     Thorium._setTitle(config.window.title)
     Thorium._setIdentity(config.filesystem.identity)
     Thorium._setSize(config.window.width, config.window.height)
+    print("Want to set log level to: " .. config.loglevel)
+    Thorium._setLogLevel(config.loglevel)
+
+    print("Configuration applied successfully.")
   )lua";
 
   if (luaL_dostring(state, luaScript) != LUA_OK) {

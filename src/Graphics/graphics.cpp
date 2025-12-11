@@ -1,14 +1,12 @@
 #include "graphics.hpp"
-#include "Graphics/texture.hpp"
 #include "Modules/config.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "SDL3/SDL_init.h"
 #include "SDL3/SDL_vulkan.h"
 #include "tl/expected.hpp"
 #include "vulkan/vulkan_core.h"
 #include <cstdint>
-#include <iostream>
-#include <print>
 #include <vector>
 
 namespace Graphics {
@@ -206,8 +204,7 @@ static auto CreateDevice(GraphicsContext &context) -> Error::Error {
       .dynamicRendering = VK_TRUE,
   };
 
-  std::cout << "Enabled Vulkan 1.3 features: synchronization2, dynamicRendering"
-            << "\n";
+  PrintDebug("Enabled Vulkan 1.3 features: synchronization2, dynamicRendering");
 
   // --- Vulkan 1.2 features ---
   VkPhysicalDeviceVulkan12Features features12{
@@ -220,12 +217,11 @@ static auto CreateDevice(GraphicsContext &context) -> Error::Error {
       .bufferDeviceAddress = VK_TRUE,
   };
 
-  std::cout
-      << "Enabled Vulkan 1.2 features: descriptorIndexing, "
-         "shaderSampledImageArrayNonUniformIndexing, "
-         "shaderStorageBufferArrayNonUniformIndexing, runtimeDescriptorArray, "
-         "bufferDeviceAddress"
-      << "\n";
+  PrintDebug(
+      "Enabled Vulkan 1.2 features: descriptorIndexing, "
+      "shaderSampledImageArrayNonUniformIndexing, "
+      "shaderStorageBufferArrayNonUniformIndexing, runtimeDescriptorArray, "
+      "bufferDeviceAddress");
 
   // --- Vulkan 1.1 features ---
   VkPhysicalDeviceVulkan11Features features11{
@@ -265,9 +261,8 @@ static auto CreateDevice(GraphicsContext &context) -> Error::Error {
     return error;
   }
 
-  std::cout << "volk loading vulkan device." << "\n";
+  PrintDebug("Loading Vulkan device with Volk...");
   volkLoadDevice(context.device);
-  std::cout << "Device ptr: " << context.device << "\n";
 
   vkGetDeviceQueue(context.device, context.graphicsQueueFamily, 0,
                    &context.graphicsQueue);
@@ -391,8 +386,8 @@ static auto CreateSwapchain(GraphicsContext &context) -> Error::Error {
   // Initialize swapchain images to COLOR_ATTACHMENT_OPTIMAL layout
   InitializeSwapchainTextures(context);
 
-  std::cout << "Created swapchain with " << context.swapchainInfo.imageCount
-            << " images.\n";
+  PrintInfo("Swapchain has " +
+            std::to_string(context.swapchainInfo.imageCount) + " images.");
 
   return Error::Success();
 }
@@ -563,7 +558,7 @@ static auto CreateDescriptorPool(GraphicsContext &context) -> Error::Error {
 
 auto Initialize(GraphicsContext &context, Config::ApplicationConfig &config)
     -> Error::Error {
-  std::cout << "Initializing Volk..." << "\n";
+  PrintDebug("Initializing Volk...");
   Error::Error error = Error::Create(volkInitialize());
 
   // Initialize SDL for Vulkan
@@ -574,9 +569,9 @@ auto Initialize(GraphicsContext &context, Config::ApplicationConfig &config)
   SDL_Window *window = SDL_CreateWindow(config.Title.c_str(), config.Size.width,
                                         config.Size.height, SDL_WINDOW_VULKAN);
 
-  std::cout << "Size: " << config.Size.width << "x" << config.Size.height
-            << "\n";
-  std::cout << "Title: " << config.Title << "\n";
+  PrintDebug("Created SDL window with title '", config.Title, "' and size ",
+             std::to_string(config.Size.width) + "x" +
+                 std::to_string(config.Size.height));
 
   if (window == nullptr) {
     return Error::Create("Failed to create SDL window.");
@@ -618,7 +613,7 @@ auto Initialize(GraphicsContext &context, Config::ApplicationConfig &config)
     return error;
   }
 
-  std::cout << "volk loading vulkan instance." << "\n";
+  PrintDebug("Loading Vulkan instance with Volk...");
   // Load instance-level Vulkan functions using Volk
   volkLoadInstance(context.instance);
 
@@ -658,37 +653,37 @@ auto Initialize(GraphicsContext &context, Config::ApplicationConfig &config)
   if (Error::IsError(error)) {
     return error;
   }
-  std::cout << "CreateDevice." << "\n";
+  PrintDebug("calling: CreateDevice...");
   error = CreateVmaAllocator(context);
   if (Error::IsError(error)) {
     return error;
   }
-  std::cout << "CreateVmaAllocator." << "\n";
+  PrintDebug("calling: CreateVmaAllocator...");
   error = CreateRenderData(context);
   if (Error::IsError(error)) {
     return error;
   }
-  std::cout << "CreateRenderData." << "\n";
+  PrintDebug("calling: CreateRenderData...");
   error = CreateSwapchain(context);
   if (Error::IsError(error)) {
     return error;
   }
-  std::cout << "CreateSwapchain." << "\n";
+  PrintDebug("calling: CreateSwapchain...");
   error = CreateSemaphores(context);
   if (Error::IsError(error)) {
     return error;
   }
-  std::cout << "CreateSemaphores." << "\n";
+  PrintDebug("calling: CreateSemaphores...");
   error = CreateFences(context);
   if (Error::IsError(error)) {
     return error;
   }
-  std::cout << "CreateFences." << "\n";
+  PrintDebug("calling: CreateFences.");
   error = CreateDescriptorPool(context);
   if (Error::IsError(error)) {
     return error;
   }
-  std::cout << "CreateDescriptorPool." << "\n";
+  PrintDebug("calling: CreateDescriptorPool.");
 
   return Error::Success();
 }
