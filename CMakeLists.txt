@@ -188,10 +188,12 @@ endif()
 # Engine executable
 # -------------------------------
 add_executable(Thorium
+# Main source files
     src/main.cpp
     src/program.cpp
     src/loop.cpp
 
+# Graphics module
     src/Graphics/graphics.cpp
     src/Graphics/texture.cpp
     src/Graphics/buffer.cpp
@@ -202,6 +204,12 @@ add_executable(Thorium
     src/Graphics/rendertarget.cpp
     src/Graphics/reflect.cpp
 
+# Graphics Buffers
+    src/Graphics/Buffers/push.cpp
+    src/Graphics/Buffers/uniform.cpp
+    src/Graphics/Buffers/structured.cpp
+
+# Engine Modules
     src/Modules/filesystem.cpp
     src/Modules/timer.cpp
     src/Modules/errorhandler.cpp
@@ -209,8 +217,10 @@ add_executable(Thorium
     src/Modules/event.cpp
     src/Modules/object.cpp
 
+# Editor
     src/Modules/Editor/imgui.cpp
 
+# Wrappers
     src/Wrap/Graphics/wrap_graphics.cpp
     src/Wrap/Graphics/wrap_texture.cpp
     src/Wrap/Graphics/wrap_rendertarget.cpp
@@ -218,6 +228,7 @@ add_executable(Thorium
     src/Wrap/Modules/wrap_timer.cpp
     src/Wrap/wrap.cpp
 
+# Libraries
     src/Libraries/vma.cpp
     src/Libraries/load_stb.cpp
     src/Libraries/load_volk.cpp

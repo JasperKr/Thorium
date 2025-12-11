@@ -425,10 +425,10 @@ auto BuildGraph(RenderGraph &graph) -> void {
     const auto &resource = graph.resources[resHandle];
 
     if (resource.lifetime == ResourceLifetime::Transient) {
-      return tl::make_unexpected(
-          Error::Create("Render graph validation failed: last pass writes "
-                        "resource " +
-                        std::to_string(resHandle)));
+      return Error::Unexpected(
+          "Render graph validation failed: last pass writes "
+          "resource " +
+          std::to_string(resHandle));
     }
   }
 

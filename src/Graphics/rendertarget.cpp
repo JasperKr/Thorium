@@ -95,8 +95,7 @@ inline auto GetSwapchainRendertarget(const GraphicsContext &context)
 inline auto CreatePipeline(const GraphicsContext &context, const State &state)
     -> tl::expected<VkPipeline, Error::Error> {
   if (state.bindPoint != VK_PIPELINE_BIND_POINT_GRAPHICS) {
-    return tl::make_unexpected(
-        Error::Create("Only graphics pipelines are supported currently"));
+    return Error::Unexpected("Only graphics pipelines are supported currently");
   }
 
   std::cout << "Creating graphics pipeline\n";
@@ -179,16 +178,16 @@ inline auto CreatePipeline(const GraphicsContext &context, const State &state)
       shader->programLayout->getEntryPointByIndex(entryPointIndex);
 
   if (entryPoint == nullptr) {
-    return tl::make_unexpected(Error::Create(
-        "Failed to get fragment entry point from shader program layout"));
+    return Error::Unexpected(
+        "Failed to get fragment entry point from shader program layout");
   }
 
   std::cout << "Fetched entry point reflection.\n";
   auto *outputVariableLayout = entryPoint->getResultVarLayout();
 
   if (outputVariableLayout == nullptr) {
-    return tl::make_unexpected(Error::Create(
-        "Shader has no output variable layout for fragment stage"));
+    return Error::Unexpected(
+        "Shader has no output variable layout for fragment stage");
   }
 
   std::cout << "Determining expected output attachments\n";
@@ -256,9 +255,9 @@ inline auto CreatePipeline(const GraphicsContext &context, const State &state)
   for (uint32_t i = 0; i <= blendAttachments.size(); ++i) {
     if (expectedAttachments.contains(i)) {
       if (i >= blendAttachments.size()) {
-        return tl::make_unexpected(Error::Create(
+        return Error::Unexpected(
             "Missing blend attachment for expected output location " +
-            std::to_string(i)));
+            std::to_string(i));
       }
     }
   }

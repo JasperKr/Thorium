@@ -183,8 +183,8 @@ struct Mesh : Object {
     auto vertexFormatIterator = PredefinedVertexFormats.find(format);
 
     if (vertexFormatIterator == PredefinedVertexFormats.end()) {
-      return tl::make_unexpected(Error::Create(
-          "Unsupported vertex format specified for mesh creation."));
+      return Error::Unexpected(
+          "Unsupported vertex format specified for mesh creation.");
     }
 
     VertexFormat vertexFormat = vertexFormatIterator->second;
