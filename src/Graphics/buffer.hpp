@@ -3,6 +3,7 @@
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "graphics.hpp"
+#include <span>
 #define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
 namespace Graphics {

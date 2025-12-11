@@ -3,6 +3,7 @@
 #include "Graphics/graphics.hpp"
 #include "Graphics/rendergraph.hpp"
 #include "Graphics/shader.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "backends/imgui_impl_sdl3.h"
 #include "backends/imgui_impl_vulkan.h"
@@ -19,7 +20,7 @@
 
 void CheckVk(VkResult err) {
   if (err != VK_SUCCESS) {
-    std::println("Vulkan error: {}", static_cast<int>(err));
+    PrintfError("Vulkan error: {}", static_cast<int>(err));
     abort();
   }
 }

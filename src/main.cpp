@@ -9,7 +9,7 @@ auto main() -> int {
   auto err = MainLoop();
   if (Error::IsError(err)) {
     PrintFatal(
-        ColorText(err.message, ConsoleColor::Yellow) +
+        ColorText(err.message, ConsoleColor::Reset) +
         "\nCode: " + ColorText(std::to_string(err.code), ConsoleColor::Green) +
         "\nTraceback:\n" + ColorText(err.backtrace, ConsoleColor::Cyan) + "\n");
 

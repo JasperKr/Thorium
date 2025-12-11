@@ -38,8 +38,6 @@ uniform float test;
 uniform float3 testColor;
 uniform float4x4 testMatrix;
 
-ConstantBuffer<float4x4> testUBO;
-
 struct PushConstants
 {
     float4x4 model;
@@ -49,8 +47,6 @@ struct PushConstants
 
 [[vk::push_constant]]
 ConstantBuffer<PushConstants> pc;
-
-RWStructuredBuffer<PushConstants> outputBuffer;
 
 [shader("fragment")]
 float4 fragmentMain(FragmentInput input)

@@ -76,7 +76,7 @@ auto LoadLua(lua_State *state) -> Error::Error {
   if (static_cast<int>(luaLoadErr) != LUA_OK) {
     std::string luaErrorMessage = lua_tostring(state, -1);
     lua_pop(state, 1); // Remove error message from stack
-    return Error::Create("Failed to load main Lua script: " + luaErrorMessage);
+    return Error::Create(luaErrorMessage);
   }
 
   // Get Thorium.run function

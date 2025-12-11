@@ -37,12 +37,16 @@ auto GetPipelineLayout(const GraphicsContext &context,
     pushConstantRange.stageFlags = VK_SHADER_STAGE_ALL;
     pushConstantRange.offset = buffer.GetBufferOffset();
     pushConstantRange.size = static_cast<uint32_t>(buffer.GetBufferSize());
+    if (pushConstantRange.size == 0) {
+      return Error::Unexpected(
+          "Push buffer has zero size in shader reflection");
+    }
     pushConstantRanges.emplace_back(pushConstantRange);
   }
 
   PrintDebug("Creating pipeline layout from shader reflection");
 
-  std::vector<VkDescriptorSetLayout> setLayouts;
+  std::vector<VkDescriptorSetLayout> setLayouts{};
 
   auto maxSet = 0U;
   for (const auto &pair : shader->descriptorSetLayouts) {
@@ -97,7 +101,7 @@ inline auto CreatePipeline(const GraphicsContext &context, const State &state)
   auto *shader = state.shader.get();
 
   if (shader == nullptr) {
-    shader = Shader::DefaultShaderModule.get();
+    return Error::Unexpected("Shader module is null in CreatePipeline.");
   }
 
   shaderStages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -159,15 +163,15 @@ inline auto CreatePipeline(const GraphicsContext &context, const State &state)
 
   auto entryPointIndex =
       shader->entryPointToStageIndex.at(SlangStage::SLANG_STAGE_FRAGMENT);
-  PrintDebug("Fragment entry point index: {}", entryPointIndex);
+  PrintfDebug("Fragment entry point index: {}", entryPointIndex);
 
-  PrintDebug("programLayout: {}",
-             static_cast<const void *>(shader->programLayout));
-  PrintDebug("EntryPointByIndex(1): {}",
-             static_cast<const void *>(
-                 shader->programLayout->getEntryPointByIndex(1)));
-  PrintDebug("EntryPointByIndex(1) name: {}",
-             shader->programLayout->getEntryPointByIndex(1)->getName());
+  PrintfDebug("programLayout: {}",
+              static_cast<const void *>(shader->programLayout));
+  PrintfDebug("EntryPointByIndex(1): {}",
+              static_cast<const void *>(
+                  shader->programLayout->getEntryPointByIndex(1)));
+  PrintfDebug("EntryPointByIndex(1) name: {}",
+              shader->programLayout->getEntryPointByIndex(1)->getName());
 
   auto *entryPoint =
       shader->programLayout->getEntryPointByIndex(entryPointIndex);
@@ -244,7 +248,7 @@ inline auto CreatePipeline(const GraphicsContext &context, const State &state)
 
   PrintDebug("Expected attachments:");
   for (const auto &att : expectedAttachments) {
-    PrintDebug(" - {}", att);
+    PrintfDebug(" - {}", att);
   }
 
   for (uint32_t i = 0; i <= blendAttachments.size(); ++i) {
@@ -268,8 +272,8 @@ inline auto CreatePipeline(const GraphicsContext &context, const State &state)
   renderingCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
 
   renderingCreateInfo.colorAttachmentCount = attachmentCount;
-  PrintDebug("Creating graphics pipeline with {} color attachments.",
-             attachmentCount);
+  PrintfDebug("Creating graphics pipeline with {} color attachments.",
+              attachmentCount);
 
   renderingCreateInfo.pColorAttachmentFormats = formats.data();
 
@@ -312,12 +316,13 @@ inline auto CreatePipeline(const GraphicsContext &context, const State &state)
   pipelineInfo.subpass = 0;
   pipelineInfo.pNext = &renderingCreateInfo;
 
-  VkPipeline pipeline = VK_NULL_HANDLE;
+  PrintDebug("Creating graphics pipeline...");
 
+  VkPipeline pipeline = VK_NULL_HANDLE;
   auto error = Error::Create(vkCreateGraphicsPipelines(
       context.device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline));
 
-  PrintDebug("STORING PIPELINE IN CACHE");
+  PrintDebug("storing pipeline in cache");
   PipelineCache[state] = {pipeline, layoutResult.value()};
 
   if (Error::IsError(error)) {
@@ -380,6 +385,8 @@ inline auto SetupDefaultState(GraphicsContext &context) -> State {
       .extent = {context.swapchainInfo.extent.width,
                  context.swapchainInfo.extent.height},
   };
+
+  defaultState.shader = Shader::DefaultShaderModule;
 
   return defaultState;
 }
@@ -452,11 +459,15 @@ auto Flush(GraphicsContext &context) -> tl::expected<bool, Error::Error> {
   const auto &commandBuffer =
       Graphics::GetCommandBuffer(context, GetCurrentThreadIndex());
 
+  PrintDebug("Flushing shader buffers");
+
   auto error =
       currentState.shader->FlushBuffers(context, pipelineResult.value().second);
   if (Error::IsError(error)) {
     return tl::make_unexpected(error);
   }
+
+  PrintDebug("Binding pipeline");
 
   vkCmdBindPipeline(commandBuffer, currentState.bindPoint,
                     pipelineResult.value().first);
@@ -618,7 +629,11 @@ auto ClipScissor(const VkRect2D &scissor) -> void {
 }
 
 auto SetShader(const Ref<Shader::ShaderModule> &shader) -> void {
-  StateStack.back().shader = shader;
+  if (shader.get() == nullptr) {
+    StateStack.back().shader = Shader::DefaultShaderModule;
+  } else {
+    StateStack.back().shader = shader;
+  }
 }
 
 auto SetRenderTargets(const std::vector<Ref<RenderTarget>> &renderTargets)
@@ -664,6 +679,9 @@ auto GetScissor() -> VkRect2D {
 
 auto GetShader() -> Ref<Shader::ShaderModule> {
   auto &currentState = StateStack.back();
+  if (currentState.shader.get() == Shader::DefaultShaderModule.get()) {
+    return Ref<Shader::ShaderModule>(nullptr);
+  }
   return currentState.shader;
 }
 

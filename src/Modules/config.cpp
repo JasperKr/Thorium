@@ -156,7 +156,7 @@ auto Configure(lua_State *state)
       filesystem = {
         identity = "MyGame",
       },
-      loglevel = "warning",
+      loglevel = ""
     }
 
     local function recursiveSetMetatable(t)
@@ -186,7 +186,7 @@ auto Configure(lua_State *state)
     Thorium._setIdentity(config.filesystem.identity)
     Thorium._setSize(config.window.width, config.window.height)
     print("Want to set log level to: " .. config.loglevel)
-    Thorium._setLogLevel(config.loglevel)
+    if config.loglevel ~= "" then Thorium._setLogLevel(config.loglevel) end
 
     print("Configuration applied successfully.")
   )lua";

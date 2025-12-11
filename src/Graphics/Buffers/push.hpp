@@ -16,7 +16,7 @@ struct FlushInfo {
 
 struct PushBuffer {
 public:
-  explicit PushBuffer(BufferInfo layout) : layout(std::move(layout)) {
+  explicit PushBuffer(const BufferInfo &layout) : layout(std::move(layout)) {
     switch (layout.type) {
     case BufferResourceType::Scalar:
       data.resize(std::get<ScalarInfo>(layout.info).size);
@@ -36,14 +36,19 @@ public:
   }
 
   [[nodiscard]] auto GetBufferOffset() const -> size_t { return layout.offset; }
-  [[nodiscard]] auto GetBufferSize() const -> size_t { return layout.size; }
+  auto GetBufferSize() const -> size_t {
+    if (layout.type == BufferResourceType::Struct) {
+      return std::get<StructInfo>(layout.info).size;
+    }
+    return layout.size;
+  }
   [[nodiscard]] auto GetLayout() const -> const BufferInfo & { return layout; }
   auto FlushData(FlushInfo &info) -> void;
 
   template <typename T>
   auto SetData(const std::string &name, const T &value) -> Error::Error {
     if (layout.type != BufferResourceType::Struct) {
-      return Error::Error(
+      return Error::Create(
           "SetData with name only supported for struct push buffers");
     }
 
@@ -57,7 +62,7 @@ public:
     size_t offset = result.value();
 
     if (offset + dataSize > data.size()) {
-      return Error::Error("Data exceeds buffer size");
+      return Error::Create("Data exceeds buffer size");
     }
 
     // NOLINTNEXTLINE
@@ -68,13 +73,13 @@ public:
     if (layout.type != BufferResourceType::Scalar &&
         layout.type != BufferResourceType::Vector &&
         layout.type != BufferResourceType::Matrix) {
-      return Error::Error("SetData without name only supported for scalar, "
-                          "vector, and matrix push buffers");
+      return Error::Create("SetData without name only supported for scalar, "
+                           "vector, and matrix push buffers");
     }
 
     size_t dataSize = sizeof(T);
     if (dataSize > data.size()) {
-      return Error::Error("Data exceeds buffer size");
+      return Error::Create("Data exceeds buffer size");
     }
 
     // NOLINTNEXTLINE

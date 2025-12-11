@@ -75,6 +75,8 @@ auto LoadModule() -> Error::Error {
   DefaultShaderModule = shaderCreationResult.value();
   DefaultShaderModule->expectedVertexFormat = VertexFormats::Default2D;
 
+  PrintAlways("Default shader module loaded successfully.");
+
   return Error::Success();
 }
 
@@ -438,6 +440,18 @@ inline auto CreateShaderDescriptorSets(GraphicsContext &context,
 
         descriptorSetLayoutBindings[bufferInfo.set].emplace_back(layoutBinding);
       }
+    } else if (layout.variant == ResourceVariant::Sampler) {
+      auto &imageInfo = std::get<SamplerInfo>(layout.info);
+
+      auto layoutBinding = VkDescriptorSetLayoutBinding{
+          .binding = imageInfo.binding,
+          .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+          .descriptorCount = 1,
+          .stageFlags = VK_SHADER_STAGE_ALL,
+          .pImmutableSamplers = nullptr,
+      };
+
+      descriptorSetLayoutBindings[imageInfo.set].emplace_back(layoutBinding);
     }
   }
 
@@ -505,13 +519,13 @@ auto ShaderModule::Create(Graphics::GraphicsContext &context,
   return shader;
 }
 
-inline auto ValidateBuffers(const ShaderModule &shader) -> Error::Error {
+inline auto ValidateBuffers(const ShaderModule *shader) -> Error::Error {
   // Loop over shader->reflection.resources, and check if all buffers are
   // set up in shader->uniformBuffers and shader->storageBuffers,
   // this is done outside the shader as the user must manage these
   // resources themselves.
 
-  for (const auto &resource : shader.reflection.resources) {
+  for (const auto &resource : shader->reflection.resources) {
     if (resource.variant != ResourceVariant::Buffer) {
       continue;
     }
@@ -519,12 +533,12 @@ inline auto ValidateBuffers(const ShaderModule &shader) -> Error::Error {
     const auto &bufferInfo = std::get<BufferInfo>(resource.info);
 
     if (bufferInfo.bufferType == BufferType::Uniform) {
-      if (!shader.uniformBuffers.contains(bufferInfo.set)) {
+      if (!shader->uniformBuffers.contains(bufferInfo.set)) {
         return Error::Create("Uniform buffer '" + resource.name +
                              "' not set up in shader.");
       }
     } else if (bufferInfo.bufferType == BufferType::Storage) {
-      if (!shader.storageBuffers.contains(bufferInfo.set)) {
+      if (!shader->storageBuffers.contains(bufferInfo.set)) {
         return Error::Create("Storage buffer '" + resource.name +
                              "' not set up in shader.");
       }
@@ -538,7 +552,7 @@ auto ShaderModule::FlushBuffers(GraphicsContext &context,
                                 VkPipelineLayout layout) -> Error::Error {
   std::vector<VkWriteDescriptorSet> writeDescriptorSets;
 
-  auto validateResult = ValidateBuffers(*this);
+  auto validateResult = ValidateBuffers(this);
   if (Error::IsError(validateResult)) {
     return validateResult;
   }
