@@ -252,11 +252,10 @@ auto Buffer::SetData(GraphicsContext &context, std::span<const uint8_t> data,
   return Error::Success();
 }
 
-auto Buffer::Release() -> Error::Error {
+auto Buffer::Release() -> bool {
   if (released) {
-    return Error::Create("Buffer already released.");
+    return false;
   }
-
   released = true;
 
   ReleasedResource resource;
@@ -265,35 +264,11 @@ auto Buffer::Release() -> Error::Error {
 
   AddReleasedResource(resource);
 
-  return Error::Success();
+  return true;
 }
 
 auto Buffer::Destroy(GraphicsContext &context) const -> void {
   vmaDestroyBuffer(context.vmaAllocator, handle, memory);
 }
 
-auto Buffer::Resize(GraphicsContext &context, VkDeviceSize newSize)
-    -> Error::Error {
-  // Destroy existing buffer
-  vmaDestroyBuffer(context.vmaAllocator, handle, memory);
-  // Create new buffer with new size
-  VkBufferCreateInfo bufferInfo = {};
-  bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-  bufferInfo.size = newSize;
-  bufferInfo.usage = usage;
-  bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-  VmaAllocationCreateInfo allocInfo = {};
-  allocInfo.usage = VMA_MEMORY_USAGE_AUTO; // Let VMA decide
-  allocInfo.requiredFlags = properties;
-
-  VkResult result = vmaCreateBuffer(context.vmaAllocator, &bufferInfo,
-                                    &allocInfo, &handle, &memory, nullptr);
-  if (result != VK_SUCCESS) {
-    return Error::Create(result);
-  }
-
-  size = newSize;
-
-  return Error::Success();
-}
 } // namespace Graphics

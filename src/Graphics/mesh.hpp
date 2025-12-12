@@ -254,17 +254,9 @@ struct Mesh : Object {
     return meshData;
   }
 
-  auto Release() const -> Error::Error {
-    auto result = VertexBuffer->Release();
-    if (Error::IsError(result)) {
-      return result;
-    }
-    result = IndexBuffer->Release();
-    if (Error::IsError(result)) {
-      return result;
-    }
-
-    return Error::Success();
+  auto Release() const -> void {
+    VertexBuffer->Release();
+    IndexBuffer->Release();
   }
 
   [[nodiscard]] auto GetVertexFormat() const -> VertexFormat { return Format; }

@@ -922,9 +922,9 @@ auto Texture::SetPixels(GraphicsContext &context, Image::ImageData &imageData,
   return SetPixels(context, imageData, mipLevel, arrayLayer, source, target);
 }
 
-auto Texture::Release() -> Error::Error {
+auto Texture::Release() -> bool {
   if (released) {
-    return Error::Create("Texture already released.");
+    return false;
   }
 
   ReleasedResource resource;
@@ -935,7 +935,7 @@ auto Texture::Release() -> Error::Error {
 
   released = true;
 
-  return Error::Success();
+  return true;
 }
 
 auto Texture::Destroy(GraphicsContext &context) const -> void {

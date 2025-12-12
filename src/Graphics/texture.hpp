@@ -85,7 +85,7 @@ struct Texture : Object {
   static auto GetType() -> Type const * { return &type; }
 
   // Release the resources for safe automatic destruction later
-  auto Release() -> Error::Error;
+  auto Release() -> bool;
 
   // Destroy the texture immediately, use with caution
   auto Destroy(GraphicsContext &context) const -> void;

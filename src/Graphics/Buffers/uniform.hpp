@@ -2,20 +2,48 @@
 
 #include "Graphics/buffer.hpp"
 #include "Graphics/graphics.hpp"
+#include "Modules/error.hpp"
 #include "Modules/object.hpp"
+#include "vulkan/vulkan_core.h"
 #include <cstdint>
+
+constexpr size_t InitialUniformBufferSize = 64L * 1024; // 64 KB
+
+// 16 MB; allows for doubling in size 8x
+constexpr size_t MaximumUniformBufferSize = 64L * 1024 * 1024;
+
 struct FrameUniformBufferObject {
 public:
   auto SetData(Graphics::GraphicsContext &context,
                const std::span<const uint8_t> &data) -> Error::Error {
-    if (data.size() > size) {
-      oldBuffers.emplace_back(buffer);
-      auto result = buffer->Resize(context, static_cast<uint32_t>(data.size()));
-      size = static_cast<uint32_t>(data.size());
 
-      if (Error::IsError(result)) {
-        return result;
+    if (data.size() > MaximumUniformBufferSize) {
+      return Error::Create(
+          "Tried to set uniform buffer data larger than maximum. (holy shit)");
+    }
+
+    if (data.size() > size) {
+      buffer->Release();
+      while (data.size() > size) {
+        size *= 2;
+        if (size > MaximumUniformBufferSize) {
+          return Error::Create("Uniform buffer exceeded maximum allowed size.");
+        }
       }
+
+      Graphics::BufferCreationInfo info{};
+      info.size = size;
+      info.properties =
+          static_cast<uint32_t>(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) |
+          static_cast<uint32_t>(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) |
+          static_cast<uint32_t>(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+      auto result = Graphics::Buffer::Create(context, info);
+      if (Error::IsError(result)) {
+        return result.error();
+      }
+
+      buffer = result.value();
     }
 
     auto result = buffer->SetData(context, data, offset);
@@ -37,7 +65,6 @@ public:
 
 private:
   Ref<Graphics::Buffer> buffer;
-  std::vector<Ref<Graphics::Buffer>> oldBuffers;
 
   uint32_t size{};
   uint32_t offset{};

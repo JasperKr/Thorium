@@ -33,7 +33,7 @@ struct Buffer : Object {
       -> tl::expected<Ref<Graphics::Buffer>, Error::Error>;
 
   // Release the resources for safe automatic destruction later
-  auto Release() -> Error::Error;
+  auto Release() -> bool;
 
   // Destroy the buffer immediately, use with caution
   auto Destroy(GraphicsContext &context) const -> void;
@@ -56,9 +56,5 @@ struct Buffer : Object {
                                  sizeof(T) * data.size());
     return SetData(context, byteSpan, offset);
   }
-
-  // Resizes the buffer to the new size. Note: This will destroy the existing
-  // buffer and create a new one. Data will be lost. TODO: Implement data copy.
-  auto Resize(GraphicsContext &context, VkDeviceSize newSize) -> Error::Error;
 };
 } // namespace Graphics
