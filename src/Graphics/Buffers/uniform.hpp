@@ -4,6 +4,7 @@
 #include "Graphics/graphics.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
+#include "tl/expected.hpp"
 #include "vulkan/vulkan_core.h"
 #include <cstdint>
 
@@ -15,19 +16,22 @@ constexpr size_t MaximumUniformBufferSize = 64L * 1024 * 1024;
 struct FrameUniformBufferObject {
 public:
   auto SetData(Graphics::GraphicsContext &context,
-               const std::span<const uint8_t> &data) -> Error::Error {
+               const std::span<const uint8_t> &data)
+      -> tl::expected<bool, Error::Error> {
 
     if (data.size() > MaximumUniformBufferSize) {
-      return Error::Create(
+      return Error::Unexpected(
           "Tried to set uniform buffer data larger than maximum. (holy shit)");
     }
 
+    bool resized = false;
     if (data.size() > size) {
       buffer->Release();
       while (data.size() > size) {
         size *= 2;
         if (size > MaximumUniformBufferSize) {
-          return Error::Create("Uniform buffer exceeded maximum allowed size.");
+          return Error::Unexpected(
+              "Uniform buffer exceeded maximum allowed size.");
         }
       }
 
@@ -37,20 +41,27 @@ public:
           static_cast<uint32_t>(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) |
           static_cast<uint32_t>(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) |
           static_cast<uint32_t>(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+      info.usage = static_cast<uint32_t>(VK_BUFFER_USAGE_TRANSFER_DST_BIT) |
+                   static_cast<uint32_t>(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
 
       auto result = Graphics::Buffer::Create(context, info);
       if (Error::IsError(result)) {
-        return result.error();
+        return tl::make_unexpected(result.error());
       }
 
       buffer = result.value();
+      resized = true;
     }
 
     auto result = buffer->SetData(context, data, offset);
 
     offset += static_cast<uint32_t>(data.size());
 
-    return result;
+    if (Error::IsError(result)) {
+      return tl::make_unexpected(result);
+    }
+
+    return resized;
   }
   [[nodiscard]] auto GetOffset() const -> uint32_t { return offset; }
   [[nodiscard]] auto GetSize() const -> uint32_t { return size; }
