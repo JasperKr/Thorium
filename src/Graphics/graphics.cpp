@@ -6,10 +6,73 @@
 #include "SDL3/SDL_vulkan.h"
 #include "tl/expected.hpp"
 #include "vulkan/vulkan_core.h"
+#include <cassert>
 #include <cstdint>
 #include <vector>
 
 namespace Graphics {
+
+// NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
+
+inline VkSemaphore globalTimelineSemaphore = nullptr;
+inline uint64_t currentTimelineValue = 0;
+
+// NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
+
+auto InitializeGlobalTimelineSemaphore(GraphicsContext &context)
+    -> Error::Error {
+
+  VkSemaphoreTypeCreateInfo timelineInfo = {
+      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
+      .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
+      .initialValue = 0,
+  };
+
+  VkSemaphoreCreateInfo semInfo = {
+      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+      .pNext = &timelineInfo,
+  };
+
+  auto result = Error::Create(vkCreateSemaphore(
+      context.device, &semInfo, nullptr, &globalTimelineSemaphore));
+  if (Error::IsError(result)) {
+    return result;
+  }
+
+  return Error::Success();
+}
+
+auto IncrementTimelineSemaphore(GraphicsContext &context)
+    -> tl::expected<uint64_t, Error::Error> {
+  currentTimelineValue++;
+
+  VkSemaphoreSignalInfo signalInfo = {
+      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SIGNAL_INFO,
+      .semaphore = globalTimelineSemaphore,
+      .value = currentTimelineValue,
+  };
+
+  auto result = Error::Create(vkSignalSemaphore(context.device, &signalInfo));
+  if (Error::IsError(result)) {
+    return tl::unexpected(result);
+  }
+
+  return currentTimelineValue;
+}
+
+auto GetCurrentTimelineSemaphoreValue(GraphicsContext &context)
+    -> tl::expected<uint64_t, Error::Error> {
+  uint64_t timelineValue = 0;
+
+  auto result = Error::Create(vkGetSemaphoreCounterValue(
+      context.device, globalTimelineSemaphore, &timelineValue));
+  if (Error::IsError(result)) {
+    return tl::unexpected(result);
+  }
+
+  return timelineValue;
+}
+
 static auto FindSurfaceFormat(GraphicsContext &context)
     -> tl::expected<VkSurfaceFormatKHR, Error::Error> {
   // Surface format finding code here

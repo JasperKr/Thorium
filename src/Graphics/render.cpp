@@ -1,6 +1,8 @@
+#include "Graphics/released.hpp"
 #include "Modules/error.hpp"
 #include "graphics.hpp"
 #include "rendertarget.hpp"
+#include <cstdint>
 #include <vector>
 
 namespace Graphics {
@@ -33,7 +35,8 @@ static void BeginFrame(Graphics::GraphicsContext &context) {
   }
 }
 
-static void EndFrame(Graphics::GraphicsContext &context, uint32_t frameIndex) {
+static auto EndFrame(Graphics::GraphicsContext &context, uint32_t frameIndex)
+    -> Error::Error {
 
   // Wait for all render threads to finish recording
   for (int i = 0; i < context.renderThreadCount; i++) {
@@ -50,6 +53,18 @@ static void EndFrame(Graphics::GraphicsContext &context, uint32_t frameIndex) {
 
     vkEndCommandBuffer(renderData.commandBuffers[frameIndex]);
   }
+
+  // uint64_t currentTimelineValue = GetCurrentTimelineSemaphoreValue(context).value();
+  auto result = Graphics::GetCurrentTimelineSemaphoreValue(context);
+  if (Error::IsError(result)) {
+    return result.error();
+  }
+
+  uint64_t currentTimelineValue = result.value();
+
+  Graphics::ProcessReleasedResources(context, currentTimelineValue);
+
+  return Error::Success();
 }
 
 void TransitionColorToPresent(VkCommandBuffer cmd, VkImage image) {
@@ -227,7 +242,10 @@ auto Present_PostDraw(Graphics::GraphicsContext &context) -> Error::Error {
   }
 
   // End current frame recording
-  EndFrame(context, context.frameIndex);
+  auto endFrameResult = EndFrame(context, context.frameIndex);
+  if (Error::IsError(endFrameResult)) {
+    return endFrameResult;
+  }
 
   auto error = SubmitCommandBuffers(context);
 

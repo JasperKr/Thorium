@@ -1,9 +1,9 @@
 #include "buffer.hpp"
-#include "Modules/console.hpp"
+#include "Graphics/released.hpp"
+#include "Graphics/resource.hpp"
 #include "Modules/error.hpp"
 #include "graphics.hpp"
 #include <cstdint>
-#include <iostream>
 #define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
 
@@ -252,7 +252,23 @@ auto Buffer::SetData(GraphicsContext &context, std::span<const uint8_t> data,
   return Error::Success();
 }
 
-void Buffer::Destroy(GraphicsContext &context) const {
+auto Buffer::Release() -> Error::Error {
+  if (released) {
+    return Error::Create("Buffer already released.");
+  }
+
+  released = true;
+
+  ReleasedResource resource;
+  resource.type = ReleasedResourceType::BUFFER;
+  resource.resource = this;
+
+  AddReleasedResource(resource);
+
+  return Error::Success();
+}
+
+auto Buffer::Destroy(GraphicsContext &context) const -> void {
   vmaDestroyBuffer(context.vmaAllocator, handle, memory);
 }
 

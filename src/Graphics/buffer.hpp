@@ -3,6 +3,7 @@
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "graphics.hpp"
+#include <cstdint>
 #include <span>
 #define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
@@ -24,11 +25,19 @@ struct Buffer : Object {
   VkBufferUsageFlags usage;
   VkMemoryPropertyFlags properties;
 
+  uint64_t lastUsedTimelineValue;
+  bool released;
+
   static auto Create(Graphics::GraphicsContext &context,
                      Graphics::BufferCreationInfo info)
       -> tl::expected<Ref<Graphics::Buffer>, Error::Error>;
 
-  void Destroy(GraphicsContext &context) const;
+  // Release the resources for safe automatic destruction later
+  auto Release() -> Error::Error;
+
+  // Destroy the buffer immediately, use with caution
+  auto Destroy(GraphicsContext &context) const -> void;
+
   auto SetData(GraphicsContext &context, std::span<const uint8_t> data,
                VkDeviceSize offset) const -> Error::Error;
   template <typename T>

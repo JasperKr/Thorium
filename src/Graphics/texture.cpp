@@ -1,5 +1,7 @@
 #include "texture.hpp"
 #include "Graphics/graphics.hpp"
+#include "Graphics/released.hpp"
+#include "Graphics/resource.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/filesystem.hpp"
@@ -10,7 +12,6 @@
 #include "tl/expected.hpp"
 #include <array>
 #include <cstdint>
-#include <iostream>
 
 #define VMA_VULKAN_VERSION 1004000
 #define VK_NO_PROTOTYPES
@@ -409,21 +410,6 @@ auto CreateArray(GraphicsContext &context, TextureCreationInfo info)
   texture->sizeInBytes = memRequirements.size;
 
   return texture;
-}
-
-void Destroy(GraphicsContext &context, Texture *texture) {
-  if (texture->view != VK_NULL_HANDLE) {
-    vkDestroyImageView(context.device, texture->view, nullptr);
-    texture->view = VK_NULL_HANDLE;
-  }
-
-  if (texture->image != VK_NULL_HANDLE) {
-    vmaDestroyImage(context.vmaAllocator, texture->image, texture->memory);
-    texture->image = VK_NULL_HANDLE;
-    texture->memory = VK_NULL_HANDLE;
-  }
-
-  context.runtimeInfo.textureCount--;
 }
 
 auto LoadFromFile(GraphicsContext &context, const char *path,
@@ -934,6 +920,28 @@ auto Texture::SetPixels(GraphicsContext &context, Image::ImageData &imageData,
   source.extent = {.width = size.width, .height = size.height};
   VkOffset2D target = {0, 0};
   return SetPixels(context, imageData, mipLevel, arrayLayer, source, target);
+}
+
+auto Texture::Release() -> Error::Error {
+  if (released) {
+    return Error::Create("Texture already released.");
+  }
+
+  ReleasedResource resource;
+  resource.type = ReleasedResourceType::TEXTURE;
+  resource.resource = this;
+
+  AddReleasedResource(resource);
+
+  released = true;
+
+  return Error::Success();
+}
+
+auto Texture::Destroy(GraphicsContext &context) const -> void {
+  vkDestroyImageView(context.device, view, nullptr);
+  vmaDestroyImage(context.vmaAllocator, image, memory);
+  context.runtimeInfo.textureCount--;
 }
 
 struct VkFormatTextureTypeHash {

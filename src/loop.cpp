@@ -198,6 +198,11 @@ auto MainLoop() -> Error::Error {
 
   PrintDebug("Swapchains filled successfully.");
 
+  auto error = Graphics::InitializeGlobalTimelineSemaphore(context);
+  if (Error::IsError(error)) {
+    return error;
+  }
+
   for (int32_t idx = 0; idx < context.swapchainInfo.imageCount; idx++) {
     // Fill swapchain images initially
     // To make sure all further frames are waiting on vsync properly

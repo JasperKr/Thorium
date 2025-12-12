@@ -5,11 +5,11 @@
 #include "Modules/object.hpp"
 #include "Modules/type.hpp"
 #include "graphics.hpp"
+#include "resource.hpp"
 #include "vulkan/vulkan_core.h"
 #include <cstdint>
 
-namespace Graphics {
-namespace Texture {
+namespace Graphics::Texture {
 
 enum class TextureType : uint8_t {
   DEFAULT, // 2D texture, but we cannot start a variable with a number
@@ -43,6 +43,9 @@ struct Texture : Object {
   size_t mipmapcount;
   size_t arrayLayers;
   VkImageUsageFlags usage;
+
+  bool released;
+  uint64_t lastUsedTimelineValue;
 
   enum TextureType textureType;
 
@@ -80,6 +83,12 @@ struct Texture : Object {
   [[nodiscard]] auto GetFormat() const -> VkFormat { return format; }
 
   static auto GetType() -> Type const * { return &type; }
+
+  // Release the resources for safe automatic destruction later
+  auto Release() -> Error::Error;
+
+  // Destroy the texture immediately, use with caution
+  auto Destroy(GraphicsContext &context) const -> void;
 };
 
 struct TextureCreationInfo {
@@ -103,7 +112,6 @@ auto CreateVolume(GraphicsContext &context, TextureCreationInfo info)
 auto CreateArray(GraphicsContext &context, TextureCreationInfo info)
     -> tl::expected<Ref<Texture>, Error::Error>;
 
-void Destroy(GraphicsContext &context, Texture *texture);
 auto TransitionLayout(GraphicsContext &context, Texture *texture,
                       VkImageLayout oldLayout, VkImageLayout newLayout)
     -> Error::Error;
@@ -139,5 +147,4 @@ auto GetDefaultTexture(GraphicsContext &context, VkFormat format,
                        Graphics::Texture::TextureType textureType)
     -> tl::expected<Ref<Graphics::Texture::Texture>, Error::Error>;
 
-} // namespace Texture
-} // namespace Graphics
+} // namespace Graphics::Texture

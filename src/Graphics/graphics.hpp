@@ -17,6 +17,8 @@
 #define VMA_DYNAMIC_VULKAN_FUNCTIONS 0
 #include <vma/vk_mem_alloc.h>
 
+#include "resource.hpp"
+
 namespace Graphics {
 namespace Shader {} // namespace Shader
 
@@ -130,5 +132,17 @@ auto EndSingleTimeCommands(GraphicsContext &context,
 static thread_local GraphicsContext *g_ctx = nullptr;
 void SetCurrentGraphicsContext(GraphicsContext *ctx);
 auto GetCurrentGraphicsContext() -> GraphicsContext *;
+
+template <GraphicsResource T>
+inline auto RegisterResourceUsage(T &resource, uint64_t timelineValue) -> void {
+  resource.lastUsedTimelineValue =
+      (std::max)(resource.lastUsedTimelineValue, timelineValue);
+}
+auto IncrementTimelineSemaphore(GraphicsContext &context)
+    -> tl::expected<uint64_t, Error::Error>;
+auto GetCurrentTimelineSemaphoreValue(GraphicsContext &context)
+    -> tl::expected<uint64_t, Error::Error>;
+auto InitializeGlobalTimelineSemaphore(GraphicsContext &context)
+    -> Error::Error;
 
 } // namespace Graphics

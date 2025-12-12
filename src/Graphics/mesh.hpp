@@ -254,9 +254,17 @@ struct Mesh : Object {
     return meshData;
   }
 
-  void Destroy(GraphicsContext &context) const {
-    VertexBuffer->Destroy(context);
-    IndexBuffer->Destroy(context);
+  auto Release() const -> Error::Error {
+    auto result = VertexBuffer->Release();
+    if (Error::IsError(result)) {
+      return result;
+    }
+    result = IndexBuffer->Release();
+    if (Error::IsError(result)) {
+      return result;
+    }
+
+    return Error::Success();
   }
 
   [[nodiscard]] auto GetVertexFormat() const -> VertexFormat { return Format; }
@@ -312,6 +320,14 @@ struct Mesh : Object {
                 range.Offset, 0);
     }
 
+    auto timelineResult = Graphics::IncrementTimelineSemaphore(context);
+    if (Error::IsError(timelineResult)) {
+      return timelineResult.error();
+    }
+    uint64_t timelineValue = timelineResult.value();
+    RegisterResourceUsage(*this->VertexBuffer.get(), timelineValue);
+    RegisterResourceUsage(*this->IndexBuffer.get(), timelineValue);
+
     return Error::Success();
   }
 
@@ -334,6 +350,14 @@ struct Mesh : Object {
       vkCmdDraw(renderData.commandBuffers[context.frameIndex], range.Count,
                 instanceCount, range.Offset, 0);
     }
+
+    auto timelineResult = Graphics::IncrementTimelineSemaphore(context);
+    if (Error::IsError(timelineResult)) {
+      return timelineResult.error();
+    }
+    uint64_t timelineValue = timelineResult.value();
+    RegisterResourceUsage(*this->VertexBuffer.get(), timelineValue);
+    RegisterResourceUsage(*this->IndexBuffer.get(), timelineValue);
 
     return Error::Success();
   }
