@@ -46,8 +46,8 @@ inline auto SetSize(lua_State *state) -> int {
   }
   globalConfig.Size.width = static_cast<int32_t>(lua_tointeger(state, 1));
   globalConfig.Size.height = static_cast<int32_t>(lua_tointeger(state, 2));
-  PrintfInfo("Size set to {}x{}", globalConfig.Size.width,
-             globalConfig.Size.height);
+  PrintInfo("Size set to {}x{}", globalConfig.Size.width,
+            globalConfig.Size.height);
   return 0;
 }
 

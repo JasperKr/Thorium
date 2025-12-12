@@ -314,8 +314,8 @@ static inline auto LoadSlang(GraphicsContext &context,
     shader->stages.emplace_back(SlangStageToVkStage(stage));
     stages.emplace_back(stage);
 
-    PrintfDebug(" - {}; index: {}", entryPointName,
-                std::to_string(entryPoints.size() - 1));
+    PrintDebug(" - {}; index: {}", entryPointName,
+               std::to_string(entryPoints.size() - 1));
   }
 
   std::vector<slang::IComponentType *> componentTypes;
@@ -415,8 +415,8 @@ inline auto CreateShaderDescriptorSets(GraphicsContext &context,
 
   PrintAlways("Creating shader descriptor sets...");
 
-  PrintfAlways("Shader PTR: {}", (void *)shader);
-  PrintfAlways("Shader name: {}", shader->name);
+  PrintAlways("Shader PTR: {}", (void *)shader);
+  PrintAlways("Shader name: {}", shader->name);
 
   for (auto &layout : shader->reflection.resources) {
     if (layout.variant == ResourceVariant::Buffer) {

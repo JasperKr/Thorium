@@ -28,7 +28,6 @@ static void BeginFrame(Graphics::GraphicsContext &context) {
 
     VkCommandBufferBeginInfo beginInfo = {};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
     vkBeginCommandBuffer(renderData.commandBuffers[context.frameIndex],
                          &beginInfo);
   }
@@ -162,7 +161,7 @@ auto Present_PreDraw(Graphics::GraphicsContext &context) -> Error::Error {
   Wait for that image’s fence (imagesInFlight[imageIndex]).
   Reset frame fence (inFlightFences[frameIndex]).
   Reset and begin command buffer for frameIndex.
-  Transition acquired image from PRESENT → COLOR_ATTACHMENT_OPTIMAL.
+  Transition acquired image from PRESENT -> COLOR_ATTACHMENT_OPTIMAL.
   Begin rendering
   */
 

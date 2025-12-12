@@ -40,8 +40,7 @@ auto GetOrCreateSampler(GraphicsContext &context,
       vkCreateSampler(context.device, &samplerInfo, nullptr, &vkSampler);
 
   if (result != VK_SUCCESS) {
-    PrintfError("Failed to create sampler: {}\n",
-                Error::Create(result).message);
+    PrintError("Failed to create sampler: {}\n", Error::Create(result).message);
     return VK_NULL_HANDLE; // Failed to create sampler
   }
 

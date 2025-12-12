@@ -163,15 +163,15 @@ inline auto CreatePipeline(const GraphicsContext &context, const State &state)
 
   auto entryPointIndex =
       shader->entryPointToStageIndex.at(SlangStage::SLANG_STAGE_FRAGMENT);
-  PrintfDebug("Fragment entry point index: {}", entryPointIndex);
+  PrintDebug("Fragment entry point index: {}", entryPointIndex);
 
-  PrintfDebug("programLayout: {}",
-              static_cast<const void *>(shader->programLayout));
-  PrintfDebug("EntryPointByIndex(1): {}",
-              static_cast<const void *>(
-                  shader->programLayout->getEntryPointByIndex(1)));
-  PrintfDebug("EntryPointByIndex(1) name: {}",
-              shader->programLayout->getEntryPointByIndex(1)->getName());
+  PrintDebug("programLayout: {}",
+             static_cast<const void *>(shader->programLayout));
+  PrintDebug("EntryPointByIndex(1): {}",
+             static_cast<const void *>(
+                 shader->programLayout->getEntryPointByIndex(1)));
+  PrintDebug("EntryPointByIndex(1) name: {}",
+             shader->programLayout->getEntryPointByIndex(1)->getName());
 
   auto *entryPoint =
       shader->programLayout->getEntryPointByIndex(entryPointIndex);
@@ -248,7 +248,7 @@ inline auto CreatePipeline(const GraphicsContext &context, const State &state)
 
   PrintDebug("Expected attachments:");
   for (const auto &att : expectedAttachments) {
-    PrintfDebug(" - {}", att);
+    PrintDebug(" - {}", att);
   }
 
   for (uint32_t i = 0; i <= blendAttachments.size(); ++i) {
@@ -272,8 +272,8 @@ inline auto CreatePipeline(const GraphicsContext &context, const State &state)
   renderingCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
 
   renderingCreateInfo.colorAttachmentCount = attachmentCount;
-  PrintfDebug("Creating graphics pipeline with {} color attachments.",
-              attachmentCount);
+  PrintDebug("Creating graphics pipeline with {} color attachments.",
+             attachmentCount);
 
   renderingCreateInfo.pColorAttachmentFormats = formats.data();
 

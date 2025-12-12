@@ -14,6 +14,8 @@ struct BufferCreationInfo {
   VkMemoryPropertyFlags properties;
 };
 
+auto FlushBufferUploads(GraphicsContext &context) -> Error::Error;
+
 struct Buffer : Object {
   VkBuffer handle;
   VmaAllocation memory;

@@ -231,7 +231,12 @@ auto MainLoop() -> Error::Error {
       Event::MainLoopRunning = false;
       Event::ExitCode = 1;
 
-      return Error::Create("Error during main loop: " + luaErrorMessage);
+      return Error::Create(luaErrorMessage);
+    }
+
+    auto uploadResult = Graphics::FlushBufferUploads(context);
+    if (Error::IsError(uploadResult)) {
+      return uploadResult;
     }
 
     // returned value nil == continue, non-nil == exit with code

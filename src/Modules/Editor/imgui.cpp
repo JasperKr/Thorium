@@ -20,7 +20,7 @@
 
 void CheckVk(VkResult err) {
   if (err != VK_SUCCESS) {
-    PrintfError("Vulkan error: {}", static_cast<int>(err));
+    PrintError("Vulkan error: {}", static_cast<int>(err));
     abort();
   }
 }
