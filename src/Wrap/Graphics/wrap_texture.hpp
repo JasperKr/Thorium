@@ -26,6 +26,7 @@ auto Wrap_GetMipmapCount(lua_State *state) -> int;
 auto Wrap_GetFormat(lua_State *state) -> int;
 
 auto wrap_NewTexture(lua_State *state) -> int;
+auto Wrap_Release(lua_State *state) -> int;
 
 // NOLINTNEXTLINE
 static const luaL_Reg TextureLib[] = {
@@ -47,6 +48,7 @@ static const luaL_Reg TextureLib[] = {
     {"getDimensions", Wrap_GetDimensions},
     {"getMipmapCount", Wrap_GetMipmapCount},
     {"getFormat", Wrap_GetFormat},
+    {"release", Wrap_Release},
     {nullptr, nullptr} // terminate with nullptr
 };
 

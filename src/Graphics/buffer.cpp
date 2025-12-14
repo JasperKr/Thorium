@@ -1,16 +1,18 @@
 #include "buffer.hpp"
-#include "Graphics/released.hpp"
+#include "Graphics/graphics.hpp"
 #include "Graphics/resource.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "graphics.hpp"
 #include <cstdint>
 #define VK_NO_PROTOTYPES
+#include "array"
 #include "vulkan/vulkan_core.h"
 
 namespace Graphics {
 
-constexpr size_t UploadBuferSize = 16L * 1024L * 1024L;     // MB
-constexpr size_t LargeUploadThreshold = 1L * 1024L * 1024L; // MB
+constexpr size_t UploadBufferSize = static_cast<size_t>(16L * 1024L * 1024L);
+constexpr size_t LargeUploadThreshold = static_cast<size_t>(128L * 1024L);
 
 struct StagingBufferInfo {
   VkBuffer buffer;
@@ -22,6 +24,7 @@ struct StagingBufferInfo {
 
 inline std::array<Ref<Buffer>, FRAMES_IN_FLIGHT> UploadBuffers;
 inline std::array<VkCommandBuffer, FRAMES_IN_FLIGHT> UploadCommandBuffers;
+inline std::array<bool, FRAMES_IN_FLIGHT> UploadCommandBuffersInUse = {};
 
 // we'll use staging buffers until upload buffers are initialized
 inline bool UploadBuffersInitialized = false;
@@ -57,20 +60,84 @@ auto LoadBufferModule(GraphicsContext &context) -> Error::Error {
   allocInfo.commandPool = GetRenderData(context, 0).pool;
   allocInfo.commandBufferCount = FRAMES_IN_FLIGHT;
 
-  vkAllocateCommandBuffers(context.device, &allocInfo,
-                           UploadCommandBuffers.data());
+  result = Error::Create(vkAllocateCommandBuffers(context.device, &allocInfo,
+                                                  UploadCommandBuffers.data()));
 
-  VkCommandBufferBeginInfo beginInfo = {};
-  beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+  if (Error::IsError(result)) {
+    return result;
+  }
 
   moduleInitialized = true;
+
+  return BeginBufferUploads(context);
+}
+
+auto UnloadBufferModule(GraphicsContext &context) -> Error::Error {
+  for (auto &stagingBuffer : StagingBuffers) {
+    vmaDestroyBuffer(context.vmaAllocator, stagingBuffer.buffer,
+                     stagingBuffer.memory);
+  }
+  StagingBuffers.clear();
+
+  for (auto &uploadBuffer : UploadBuffers) {
+    if (uploadBuffer.get() != nullptr) {
+      uploadBuffer->ScheduleDestroy();
+    }
+  }
+
+  if (uploadTimeline != nullptr) {
+    vkDestroySemaphore(context.device, uploadTimeline, nullptr);
+    uploadTimeline = nullptr;
+  }
+
+  moduleInitialized = false;
 
   return Error::Success();
 }
 
+// To be called at the start of each frame that uses uploads
+auto BeginBufferUploads(GraphicsContext &context) -> Error::Error {
+  if (!moduleInitialized) {
+    auto result = LoadBufferModule(context);
+    if (Error::IsError(result)) {
+      return result;
+    }
+  }
+
+  auto *commandBuffer = UploadCommandBuffers.at(context.frameIndex);
+
+  VkCommandBufferBeginInfo beginInfo = {};
+  beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+
+  auto result = Error::Create(vkBeginCommandBuffer(commandBuffer, &beginInfo));
+
+  if (Error::IsError(result)) {
+    return result;
+  }
+
+  UploadBuffersInitialized = true;
+  UploadCommandBuffersInUse.at(context.frameIndex) = true;
+
+  return Error::Success();
+}
+
+// To be called at the end of each frame that uses uploads
 auto FlushBufferUploads(GraphicsContext &context) -> Error::Error {
   // Submit upload command buffers
   auto *commandBuffer = UploadCommandBuffers.at(context.frameIndex);
+
+  if (UploadCommandBuffersInUse.at(context.frameIndex)) {
+    auto result = Error::Create(vkEndCommandBuffer(commandBuffer));
+
+    if (Error::IsError(result)) {
+      return result;
+    }
+
+    UploadCommandBuffersInUse.at(context.frameIndex) = false;
+  } else {
+    PrintWarning(
+        "FlushBufferUploads called without matching BeginBufferUploads!");
+  }
 
   VkTimelineSemaphoreSubmitInfo timelineSubmitInfo = {};
   timelineSubmitInfo.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO;
@@ -119,7 +186,7 @@ auto FlushBufferUploads(GraphicsContext &context) -> Error::Error {
   return Error::Success();
 }
 
-inline auto Upload(Buffer *buffer, GraphicsContext &context,
+inline auto Upload(const Buffer *buffer, GraphicsContext &context,
                    std::span<const uint8_t> data, VkDeviceSize offset = 0)
     -> Error::Error {
   if (!UploadBuffersInitialized || data.size() > LargeUploadThreshold) {
@@ -133,8 +200,9 @@ inline auto Upload(Buffer *buffer, GraphicsContext &context,
     VmaAllocationCreateInfo stagingAllocInfo = {};
     stagingAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
     stagingAllocInfo.flags =
-        VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
-        VMA_ALLOCATION_CREATE_MAPPED_BIT;
+        static_cast<uint32_t>(
+            VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT) |
+        static_cast<uint32_t>(VMA_ALLOCATION_CREATE_MAPPED_BIT);
     VkBuffer stagingBuffer = nullptr;
     VmaAllocation stagingMemory = nullptr;
     VkResult result = vmaCreateBuffer(context.vmaAllocator, &stagingBufferInfo,
@@ -154,11 +222,7 @@ inline auto Upload(Buffer *buffer, GraphicsContext &context,
     std::memcpy(static_cast<uint8_t *>(mapped), data.data(), data.size());
     vmaUnmapMemory(context.vmaAllocator, stagingMemory);
 
-    // Copy from staging buffer to destination buffer
     VkCommandBuffer commandBuffer = UploadCommandBuffers.at(context.frameIndex);
-    VkCommandBufferBeginInfo beginInfo = {};
-    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    vkBeginCommandBuffer(commandBuffer, &beginInfo);
 
     VkBufferCopy copyRegion = {};
     copyRegion.srcOffset = 0;
@@ -172,10 +236,58 @@ inline auto Upload(Buffer *buffer, GraphicsContext &context,
     stagingInfo.timelineValue = ++currentTimelineValue;
 
     StagingBuffers.push_back(stagingInfo);
-
-    vkEndCommandBuffer(commandBuffer);
-
   } else {
+    // Use upload buffer
+    Ref<Buffer> uploadBuffer = UploadBuffers.at(context.frameIndex);
+    if (uploadBuffer.get() == nullptr ||
+        uploadBuffer->sizeInBytes < data.size() + offset) {
+      // Create or resize upload buffer
+      uploadBuffer->ScheduleDestroy();
+
+      size_t newSize = UploadBufferSize;
+      while (newSize < data.size() + offset) {
+        newSize *= 2;
+      }
+
+      Graphics::BufferCreationInfo bufferInfo{};
+      bufferInfo.size = newSize;
+      bufferInfo.usage =
+          static_cast<uint32_t>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+      bufferInfo.properties =
+          static_cast<uint32_t>(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) |
+          static_cast<uint32_t>(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+      auto result = Graphics::Buffer::Create(context, bufferInfo);
+      if (Error::IsError(result)) {
+        return result.error();
+      }
+
+      uploadBuffer = result.value();
+      UploadBuffers.at(context.frameIndex) = uploadBuffer;
+    }
+
+    // Copy data to upload buffer
+    void *mapped = nullptr;
+    auto result = Error::Create(
+        vmaMapMemory(context.vmaAllocator, uploadBuffer->memory, &mapped));
+    if (Error::IsError(result)) {
+      return result;
+    }
+
+    // NOLINTNEXTLINE, because of pointer arithmetic
+    std::memcpy(static_cast<uint8_t *>(mapped) + offset, data.data(),
+                data.size());
+    vmaUnmapMemory(context.vmaAllocator, uploadBuffer->memory);
+
+    // Record copy command
+    VkCommandBuffer commandBuffer = UploadCommandBuffers.at(context.frameIndex);
+
+    VkBufferCopy copyRegion = {};
+    copyRegion.srcOffset = 0;
+    copyRegion.dstOffset = offset;
+    copyRegion.size = data.size();
+    vkCmdCopyBuffer(commandBuffer, uploadBuffer->handle, buffer->handle, 1,
+                    &copyRegion);
   }
 
   return Error::Success();
@@ -225,50 +337,41 @@ auto Buffer::Create(GraphicsContext &context, BufferCreationInfo info)
 }
 
 auto Buffer::SetData(GraphicsContext &context, std::span<const uint8_t> data,
-                     VkDeviceSize offset = 0) const -> Error::Error {
+                     VkDeviceSize offset = 0) -> Error::Error {
+
   auto dataSize = data.size();
 
-  void *mapped = nullptr;
-  auto result =
-      Error::Create(vmaMapMemory(context.vmaAllocator, memory, &mapped));
+  auto result = Upload(this, context, data, offset);
   if (Error::IsError(result)) {
     return result;
   }
 
-  if (dataSize == 0) {
-    dataSize = size;
+  auto timelineValueResult = IncrementTimelineSemaphore(context);
+
+  if (Error::IsError(timelineValueResult)) {
+    return timelineValueResult.error();
   }
 
-  if (offset + dataSize > size) {
-    vmaUnmapMemory(context.vmaAllocator, memory);
-    return Error::Create("Data out of bounds for buffer set data.");
-  }
+  auto timelineValue = timelineValueResult.value();
 
-  // NOLINTNEXTLINE, because of pointer arithmetic
-  std::memcpy(static_cast<uint8_t *>(mapped) + offset, data.data(),
-              dataSize - offset);
-  vmaUnmapMemory(context.vmaAllocator, memory);
+  MarkUse(0, timelineValue); // TODO: Support multiple queues
 
   return Error::Success();
 }
 
-auto Buffer::Release() -> bool {
+auto Buffer::Destroy(GraphicsContext &context) const -> void {
+  vmaDestroyBuffer(context.vmaAllocator, handle, memory);
+}
+
+auto Buffer::ScheduleDestroy() -> bool {
   if (released) {
     return false;
   }
+
+  ReleasedBuffers.emplace_back(this);
   released = true;
 
-  ReleasedResource resource;
-  resource.type = ReleasedResourceType::BUFFER;
-  resource.resource = this;
-
-  AddReleasedResource(resource);
-
   return true;
-}
-
-auto Buffer::Destroy(GraphicsContext &context) const -> void {
-  vmaDestroyBuffer(context.vmaAllocator, handle, memory);
 }
 
 } // namespace Graphics

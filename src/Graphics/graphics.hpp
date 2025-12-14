@@ -1,6 +1,5 @@
 #pragma once
 
-// #include "SDL3/SDL_video.h"
 #include "Modules/config.hpp"
 #include "SDL3/SDL_video.h"
 
@@ -17,27 +16,8 @@
 #define VMA_DYNAMIC_VULKAN_FUNCTIONS 0
 #include <vma/vk_mem_alloc.h>
 
-#include "resource.hpp"
-
 namespace Graphics {
-namespace Shader {} // namespace Shader
-
-/*
-struct BlendMode {
-bool enabled = false;
-VkBlendFactor srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-VkBlendFactor dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-VkBlendOp colorBlendOp = VK_BLEND_OP_ADD;
-VkBlendFactor srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-VkBlendFactor dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-VkBlendOp alphaBlendOp = VK_BLEND_OP_ADD;
-VkColorComponentFlags colorWriteMask =
-    static_cast<uint32_t>(VK_COLOR_COMPONENT_R_BIT) |
-    static_cast<uint32_t>(VK_COLOR_COMPONENT_G_BIT) |
-    static_cast<uint32_t>(VK_COLOR_COMPONENT_B_BIT) |
-    static_cast<uint32_t>(VK_COLOR_COMPONENT_A_BIT);
-};
-*/
+using QueueID = uint32_t;
 
 constexpr VkPipelineColorBlendAttachmentState DefaultBlendMode = {
     .blendEnable = VK_FALSE,
@@ -133,11 +113,6 @@ static thread_local GraphicsContext *g_ctx = nullptr;
 void SetCurrentGraphicsContext(GraphicsContext *ctx);
 auto GetCurrentGraphicsContext() -> GraphicsContext *;
 
-template <GraphicsResource T>
-inline auto RegisterResourceUsage(T &resource, uint64_t timelineValue) -> void {
-  resource.lastUsedTimelineValue =
-      (std::max)(resource.lastUsedTimelineValue, timelineValue);
-}
 auto IncrementTimelineSemaphore(GraphicsContext &context)
     -> tl::expected<uint64_t, Error::Error>;
 auto GetCurrentTimelineSemaphoreValue(GraphicsContext &context)

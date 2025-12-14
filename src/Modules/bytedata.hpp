@@ -14,6 +14,8 @@ public:
 
   explicit ByteData(size_t size) : size(size), data(new uint8_t[size]) {}
 
+  auto ScheduleDestroy() -> bool override { return false; };
+
   ByteData(const uint8_t *src, size_t size)
       : size(size), data(new uint8_t[size]) {
     std::memcpy(data, src, size);
@@ -61,7 +63,7 @@ public:
   auto GetData() -> uint8_t * { return data; }
   [[nodiscard]] auto GetData() const -> const uint8_t * { return data; }
 
-  [[nodiscard]] auto Clone() const -> ByteData { return {*this}; }
+  [[nodiscard]] auto Clone() const -> ByteData { return *this; }
 
 private:
   size_t size = 0;

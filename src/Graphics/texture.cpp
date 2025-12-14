@@ -1,6 +1,5 @@
 #include "texture.hpp"
 #include "Graphics/graphics.hpp"
-#include "Graphics/released.hpp"
 #include "Graphics/resource.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
@@ -441,14 +440,15 @@ auto LoadFromFile(GraphicsContext &context, const char *path,
 
   stbi_image_free(pixels);
 
-  auto texture =
-      Create2D(context, TextureCreationInfo{
-                            .width = static_cast<uint32_t>(texWidth),
-                            .height = static_cast<uint32_t>(texHeight),
-                            .format = VK_FORMAT_R8G8B8A8_UNORM,
-                            .usage = usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-                            .mipmapCount = 1,
-                        });
+  auto texture = Create2D(
+      context, TextureCreationInfo{
+                   .width = static_cast<uint32_t>(texWidth),
+                   .height = static_cast<uint32_t>(texHeight),
+                   .format = VK_FORMAT_R8G8B8A8_UNORM,
+                   .usage = usage | static_cast<uint32_t>(
+                                        VK_IMAGE_USAGE_TRANSFER_DST_BIT),
+                   .mipmapCount = 1,
+               });
 
   if (Error::IsError(texture)) {
     return tl::unexpected(texture.error());
@@ -484,14 +484,15 @@ auto LoadFromMemory(GraphicsContext &context, const unsigned char *data,
 
   stbi_image_free(pixels);
 
-  auto texture =
-      Create2D(context, TextureCreationInfo{
-                            .width = static_cast<uint32_t>(texWidth),
-                            .height = static_cast<uint32_t>(texHeight),
-                            .format = format,
-                            .usage = usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-                            .mipmapCount = 1,
-                        });
+  auto texture = Create2D(
+      context, TextureCreationInfo{
+                   .width = static_cast<uint32_t>(texWidth),
+                   .height = static_cast<uint32_t>(texHeight),
+                   .format = format,
+                   .usage = usage | static_cast<uint32_t>(
+                                        VK_IMAGE_USAGE_TRANSFER_DST_BIT),
+                   .mipmapCount = 1,
+               });
 
   if (Error::IsError(texture)) {
     return tl::unexpected(texture.error());
@@ -510,14 +511,15 @@ auto LoadFromMemory(GraphicsContext &context, const unsigned char *data,
 auto LoadFromMemory(GraphicsContext &context, Image::ImageData &imageData,
                     VkImageUsageFlags usage)
     -> tl::expected<Ref<Texture>, Error::Error> {
-  auto texture =
-      Create2D(context, TextureCreationInfo{
-                            .width = imageData.GetWidth(),
-                            .height = imageData.GetHeight(),
-                            .format = imageData.GetFormat(),
-                            .usage = usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-                            .mipmapCount = 1,
-                        });
+  auto texture = Create2D(
+      context, TextureCreationInfo{
+                   .width = imageData.GetWidth(),
+                   .height = imageData.GetHeight(),
+                   .format = imageData.GetFormat(),
+                   .usage = usage | static_cast<uint32_t>(
+                                        VK_IMAGE_USAGE_TRANSFER_DST_BIT),
+                   .mipmapCount = 1,
+               });
 
   if (Error::IsError(texture)) {
     return tl::unexpected(texture.error());
@@ -557,7 +559,8 @@ auto LoadFromMemory(GraphicsContext &context,
                      .width = width,
                      .height = height,
                      .format = slices[0]->GetFormat(),
-                     .usage = usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+                     .usage = usage | static_cast<uint32_t>(
+                                          VK_IMAGE_USAGE_TRANSFER_DST_BIT),
                      .mipmapCount = 1,
                  });
 
@@ -575,7 +578,8 @@ auto LoadFromMemory(GraphicsContext &context,
                      .height = height,
                      .depth = static_cast<uint32_t>(slices.size()),
                      .format = slices[0]->GetFormat(),
-                     .usage = usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+                     .usage = usage | static_cast<uint32_t>(
+                                          VK_IMAGE_USAGE_TRANSFER_DST_BIT),
                      .mipmapCount = 1,
                  });
 
@@ -593,7 +597,8 @@ auto LoadFromMemory(GraphicsContext &context,
                      .height = height,
                      .depth = static_cast<uint32_t>(slices.size()),
                      .format = slices[0]->GetFormat(),
-                     .usage = usage | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+                     .usage = usage | static_cast<uint32_t>(
+                                          VK_IMAGE_USAGE_TRANSFER_DST_BIT),
                      .mipmapCount = 1,
                  });
 
@@ -922,26 +927,21 @@ auto Texture::SetPixels(GraphicsContext &context, Image::ImageData &imageData,
   return SetPixels(context, imageData, mipLevel, arrayLayer, source, target);
 }
 
-auto Texture::Release() -> bool {
-  if (released) {
-    return false;
-  }
-
-  ReleasedResource resource;
-  resource.type = ReleasedResourceType::TEXTURE;
-  resource.resource = this;
-
-  AddReleasedResource(resource);
-
-  released = true;
-
-  return true;
-}
-
 auto Texture::Destroy(GraphicsContext &context) const -> void {
   vkDestroyImageView(context.device, view, nullptr);
   vmaDestroyImage(context.vmaAllocator, image, memory);
   context.runtimeInfo.textureCount--;
+}
+
+auto Texture::ScheduleDestroy() -> bool {
+  if (released) {
+    return false;
+  }
+
+  ReleasedTextures.emplace_back(this);
+  released = true;
+
+  return true;
 }
 
 struct VkFormatTextureTypeHash {

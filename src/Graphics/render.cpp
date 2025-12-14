@@ -1,8 +1,10 @@
-#include "Graphics/released.hpp"
+#include "Graphics/resource.hpp"
 #include "Modules/error.hpp"
+#include "buffer.hpp"
 #include "graphics.hpp"
 #include "rendertarget.hpp"
 #include <cstdint>
+#include <unordered_map>
 #include <vector>
 
 namespace Graphics {
@@ -61,8 +63,11 @@ static auto EndFrame(Graphics::GraphicsContext &context, uint32_t frameIndex)
   }
 
   uint64_t currentTimelineValue = result.value();
+  std::unordered_map<QueueID, uint64_t> completedTimelineValues = {
+      {0, currentTimelineValue},
+  };
 
-  Graphics::ProcessReleasedResources(context, currentTimelineValue);
+  Graphics::ProcessReleasedResources(context, completedTimelineValues);
 
   return Error::Success();
 }
@@ -280,8 +285,12 @@ auto Present(Graphics::GraphicsContext &context) -> Error::Error {
   if (Error::IsError(validateResult)) {
     return validateResult;
   }
+  auto uploadResult = FlushBufferUploads(context);
+  if (Error::IsError(uploadResult)) {
+    return uploadResult;
+  }
 
-  Error::Error error = Present_PostDraw(context);
+  auto error = Present_PostDraw(context);
   if (Error::IsError(error)) {
     return error;
   }
@@ -292,6 +301,11 @@ auto Present(Graphics::GraphicsContext &context) -> Error::Error {
   }
 
   RenderTarget::SetDirty();
+
+  auto beginResult = BeginBufferUploads(context);
+  if (Error::IsError(beginResult)) {
+    return beginResult;
+  }
 
   return Error::Success();
 }

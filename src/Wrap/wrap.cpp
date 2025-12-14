@@ -5,6 +5,7 @@
 #include <lauxlib.h>
 #include <lua.h>
 
+#include "Modules/console.hpp"
 #include "Modules/object.hpp"
 #include "Wrap/Graphics/wrap_graphics.hpp"
 #include "Wrap/Modules/wrap_event.hpp"
@@ -14,6 +15,7 @@ namespace LuaWrap {
 
 static auto wrap_gc(lua_State *state) -> int {
   Proxy *proxy = ProxyFromLuaObject(state, 1);
+  PrintDebug("Calling __gc for object of type " + proxy->type->GetName());
   if (proxy->object != nullptr) {
     proxy->object->release();
     proxy->object = nullptr;

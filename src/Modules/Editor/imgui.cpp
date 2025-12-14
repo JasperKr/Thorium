@@ -166,19 +166,19 @@ auto RenderImguiDrawLists(VkCommandBuffer commandBuffer,
       indexBuffer = idxBufferResult.value();
     }
 
-    if (vertexBuffer->size < vertexBufferSize) {
-      auto resizeResult = vertexBuffer->Resize(context, vertexBufferSize);
-      if (Error::IsError(resizeResult)) {
-        return resizeResult;
-      }
-    }
+    // if (vertexBuffer->size < vertexBufferSize) {
+    //   auto resizeResult = vertexBuffer->Resize(context, vertexBufferSize);
+    //   if (Error::IsError(resizeResult)) {
+    //     return resizeResult;
+    //   }
+    // }
 
-    if (indexBuffer->size < indexBufferSize) {
-      auto resizeResult = indexBuffer->Resize(context, indexBufferSize);
-      if (Error::IsError(resizeResult)) {
-        return resizeResult;
-      }
-    }
+    // if (indexBuffer->size < indexBufferSize) {
+    //   auto resizeResult = indexBuffer->Resize(context, indexBufferSize);
+    //   if (Error::IsError(resizeResult)) {
+    //     return resizeResult;
+    //   }
+    // }
   }
 
   // Setup render state structure (for callbacks and custom texture bindings)

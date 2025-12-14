@@ -33,6 +33,13 @@ struct Mesh : Object {
 
   MeshDrawRange DrawRange = {.Offset = 0, .Count = 0};
 
+  auto ScheduleDestroy() -> bool override {
+    VertexBuffer->ScheduleDestroy();
+    IndexBuffer->ScheduleDestroy();
+
+    return true;
+  }
+
   static auto VkFormatSize(VkFormat format) -> uint32_t {
     const int floatSize = 4;
     const int intSize = 4;
@@ -255,8 +262,8 @@ struct Mesh : Object {
   }
 
   auto Release() const -> void {
-    VertexBuffer->Release();
-    IndexBuffer->Release();
+    VertexBuffer->ScheduleDestroy();
+    IndexBuffer->ScheduleDestroy();
   }
 
   [[nodiscard]] auto GetVertexFormat() const -> VertexFormat { return Format; }
@@ -317,8 +324,8 @@ struct Mesh : Object {
       return timelineResult.error();
     }
     uint64_t timelineValue = timelineResult.value();
-    RegisterResourceUsage(*this->VertexBuffer.get(), timelineValue);
-    RegisterResourceUsage(*this->IndexBuffer.get(), timelineValue);
+    this->VertexBuffer->MarkUse(0, timelineValue);
+    this->IndexBuffer->MarkUse(0, timelineValue);
 
     return Error::Success();
   }
@@ -348,8 +355,8 @@ struct Mesh : Object {
       return timelineResult.error();
     }
     uint64_t timelineValue = timelineResult.value();
-    RegisterResourceUsage(*this->VertexBuffer.get(), timelineValue);
-    RegisterResourceUsage(*this->IndexBuffer.get(), timelineValue);
+    this->VertexBuffer->MarkUse(0, timelineValue);
+    this->IndexBuffer->MarkUse(0, timelineValue);
 
     return Error::Success();
   }

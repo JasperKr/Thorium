@@ -1,3 +1,4 @@
+#include "Graphics/buffer.hpp"
 #include "Graphics/graphics.hpp"
 #include "Graphics/render.hpp"
 #include "Graphics/rendertarget.hpp"
@@ -65,6 +66,15 @@ function Thorium.run()
 end
 )lua";
 
+constexpr auto loader = R"lua(
+local success, module = xpcall(require, debug.traceback, "main")
+if not success then
+  print(module, 3)
+end
+
+__LOAD_SUCCESS = success
+)lua";
+
 // NOLINTNEXTLINE
 static LuaWrap::LuaRef runCallback;
 
@@ -72,11 +82,26 @@ auto LoadLua(lua_State *state) -> Error::Error {
   // Load src/Engine/main.lua
   PrintDebug("Loading main Lua script...");
 
-  auto luaLoadErr = luaL_dofile(state, "src/Engine/main.lua");
+  auto luaLoadErr = luaL_dostring(state, loader);
   if (static_cast<int>(luaLoadErr) != LUA_OK) {
-    std::string luaErrorMessage = lua_tostring(state, -1);
-    lua_pop(state, 1); // Remove error message from stack
-    return Error::Create(luaErrorMessage);
+    if (lua_isstring(state, -1) != 0) {
+      std::string luaErrorMessage = lua_tostring(state, -1);
+      lua_pop(state, 1); // Remove error message from stack
+      return Error::Create("Failed to load main Lua script: " +
+                           luaErrorMessage);
+    }
+
+    lua_pop(state, 1); // Remove non-string error from stack
+    return Error::Create("Failed to load main Lua script: Unknown error");
+  }
+
+  // Check if module loaded successfully
+  lua_getglobal(state, "__LOAD_SUCCESS");
+  bool loadSuccess = lua_toboolean(state, -1) != 0;
+  lua_pop(state, 1); // Remove __LOAD_SUCCESS from stack
+
+  if (!loadSuccess) {
+    return Error::Create("lua error");
   }
 
   // Get Thorium.run function
@@ -196,12 +221,17 @@ auto MainLoop() -> Error::Error {
     return result;
   }
 
-  PrintDebug("Swapchains filled successfully.");
-
   auto error = Graphics::InitializeGlobalTimelineSemaphore(context);
   if (Error::IsError(error)) {
     return error;
   }
+
+  error = Graphics::LoadBufferModule(context);
+  if (Error::IsError(error)) {
+    return error;
+  }
+
+  PrintDebug("Filling swapchain images...");
 
   for (int32_t idx = 0; idx < context.swapchainInfo.imageCount; idx++) {
     // Fill swapchain images initially
@@ -213,6 +243,8 @@ auto MainLoop() -> Error::Error {
       return err;
     }
   }
+
+  PrintDebug("Swapchains filled successfully.");
 
   auto luaLoadErr = LoadLua(state);
 
@@ -239,11 +271,6 @@ auto MainLoop() -> Error::Error {
       return Error::Create(luaErrorMessage);
     }
 
-    auto uploadResult = Graphics::FlushBufferUploads(context);
-    if (Error::IsError(uploadResult)) {
-      return uploadResult;
-    }
-
     // returned value nil == continue, non-nil == exit with code
     if (lua_isnil(state, -1)) {
       lua_pop(state, 1); // pop nil
@@ -251,9 +278,21 @@ auto MainLoop() -> Error::Error {
       int exitCode = static_cast<int>(lua_tointeger(state, -1));
       lua_pop(state, 1); // pop exit code
       PrintInfo("Exiting main loop with code " + std::to_string(exitCode));
+      lua_close(state);
       Event::ExitCode = exitCode;
       Event::MainLoopRunning = false;
     }
+  }
+
+  vkDeviceWaitIdle(context.device);
+
+  result = FlushBufferUploads(context);
+  if (Error::IsError(result)) {
+    return result;
+  }
+  result = Graphics::UnloadBufferModule(context);
+  if (Error::IsError(result)) {
+    return result;
   }
 
   Graphics::Deinitialize(context);

@@ -25,9 +25,9 @@ public:
     }
 
     bool resized = false;
-    if (data.size() > size) {
+    if (data.size() + offset > size) {
       buffer->Release();
-      while (data.size() > size) {
+      while (data.size() + offset > size) {
         size *= 2;
         if (size > MaximumUniformBufferSize) {
           return Error::Unexpected(

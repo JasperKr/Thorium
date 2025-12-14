@@ -5,6 +5,10 @@ auto Object::getReferenceCount() const -> int { return count.load(); }
 void Object::retain() { count.fetch_add(1); }
 void Object::release() {
   if (count.fetch_sub(1) == 1) {
-    delete this;
+    if (UseDeferredDestruction()) {
+      this->ScheduleDestroy();
+    } else {
+      delete this;
+    }
   }
 }

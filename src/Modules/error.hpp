@@ -284,7 +284,7 @@ inline auto Create(VkResult result) -> Error {
     return Success();
   }
 
-  return Create(VkResultToString(result), result);
+  return Create(VkResultToString(result), result, 1);
 }
 
 const std::unordered_map<SlangResult, std::string> SlangResultToStringMap = {

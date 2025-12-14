@@ -1,4 +1,5 @@
 #include "Graphics/texture.hpp"
+#include "Modules/console.hpp"
 #include "Wrap/wrap.hpp"
 #include "vulkan/vulkan_core.h"
 #include <iostream>
@@ -568,6 +569,13 @@ auto wrap_NewTexture(lua_State *state) -> int {
   texture->release(); // Retained by lua now
 
   return 1;
+}
+
+auto Wrap_Release(lua_State *state) -> int {
+  auto *texture = LuaWrap::FromLuaObject<Texture>(state, 1);
+  texture->ScheduleDestroy();
+  PrintWarning("Got here in Wrap_Release");
+  return 0;
 }
 
 } // namespace Graphics::Texture

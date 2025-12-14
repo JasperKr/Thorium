@@ -1,11 +1,11 @@
 #pragma once
 
 #include "Graphics/sampler.hpp"
+#include "Modules/console.hpp"
 #include "Modules/imagedata.hpp"
 #include "Modules/object.hpp"
 #include "Modules/type.hpp"
 #include "graphics.hpp"
-#include "resource.hpp"
 #include "vulkan/vulkan_core.h"
 #include <cstdint>
 
@@ -29,25 +29,53 @@ enum class WrapMode : uint8_t {
 const static Type type = Type("Texture");
 
 struct Texture : Object {
-  VkExtent3D size;
-  VkFormat format;
-  VkImage image;
-  VkImageView view;
-  VmaAllocation memory;
-  uint64_t sizeInBytes;
+  VkExtent3D size{};
+  VkFormat format = VK_FORMAT_UNDEFINED;
+  VkImage image = VK_NULL_HANDLE;
+  VkImageView view = VK_NULL_HANDLE;
+  VmaAllocation memory = VK_NULL_HANDLE;
+  uint64_t sizeInBytes = 0;
 
-  VkSampler sampler;
-  SamplerDescription samplerDescription;
-  bool samplerDirty;
+  VkSampler sampler = VK_NULL_HANDLE;
+  SamplerDescription samplerDescription{};
+  bool samplerDirty = false;
 
-  size_t mipmapcount;
-  size_t arrayLayers;
-  VkImageUsageFlags usage;
+  size_t mipmapcount{};
+  size_t arrayLayers{1};
+  VkImageUsageFlags usage{};
 
-  bool released;
-  uint64_t lastUsedTimelineValue;
+  bool released = false;
+  std::unordered_map<QueueID, uint64_t> lastUsedTimelineValues;
 
-  enum TextureType textureType;
+  auto GetTimelineValues() const
+      -> const std::unordered_map<QueueID, uint64_t> & {
+    return lastUsedTimelineValues;
+  }
+
+  auto MarkUse(QueueID queueID, uint64_t timelineValue) -> void {
+    lastUsedTimelineValues[queueID] = timelineValue;
+  }
+
+  auto ScheduleDestroy() -> bool override;
+  auto UseDeferredDestruction() const -> bool override { return true; }
+  auto Destroy(GraphicsContext &context) const -> void;
+
+  Texture() = default;
+  Texture(const Texture &) = delete;
+  auto operator=(const Texture &) -> Texture & = delete;
+  Texture(Texture &&) noexcept = delete;
+  auto operator=(Texture &&) noexcept -> Texture & = delete;
+
+  ~Texture() override {
+    if (!released) {
+      auto *context = GetCurrentGraphicsContext();
+      vkQueueWaitIdle(context->graphicsQueue);
+      Destroy(*context);
+      PrintWarning("Texture destroyed without being queued for destruction!");
+    }
+  }
+
+  enum TextureType textureType = TextureType::DEFAULT;
 
   auto SetFilter(VkFilter minFilter, VkFilter magFilter,
                  VkSamplerMipmapMode mipFilter) -> void;
@@ -83,12 +111,6 @@ struct Texture : Object {
   [[nodiscard]] auto GetFormat() const -> VkFormat { return format; }
 
   static auto GetType() -> Type const * { return &type; }
-
-  // Release the resources for safe automatic destruction later
-  auto Release() -> bool;
-
-  // Destroy the texture immediately, use with caution
-  auto Destroy(GraphicsContext &context) const -> void;
 };
 
 struct TextureCreationInfo {

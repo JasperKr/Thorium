@@ -29,6 +29,8 @@ struct RenderTarget : Object {
   int location = -1; // Default to index in the render target array
   int layer = 0;
 
+  auto ScheduleDestroy() -> bool override { return false; };
+
   auto operator==(const RenderTarget &other) const -> bool {
     return blendMode.blendEnable == other.blendMode.blendEnable &&
            blendMode.srcColorBlendFactor ==
