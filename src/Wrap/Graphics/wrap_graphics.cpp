@@ -8,6 +8,7 @@
 #include "Graphics/texture.hpp"
 #include "Graphics/vertexformat.hpp"
 #include "Modules/color.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Wrap/wrap.hpp"
@@ -416,8 +417,14 @@ inline auto GetQuadMesh(GraphicsContext &context, const VkRect2D size,
 
   auto span = Mesh::ToVertexSpan<Format_Default2D>(vertices);
 
+  PrintDebug("Creating quad mesh of size {}x{}", size.extent.width,
+             size.extent.height);
+
   const static auto mesh =
       Mesh::Create(context, VertexFormats::Default2D, span, &indices);
+
+  PrintDebug("Quad mesh created.");
+
   auto setDataError = mesh->get()->VertexBuffer->SetData(context, vertices);
   if (Error::IsError(setDataError)) {
     return tl::unexpected(setDataError);
@@ -435,6 +442,8 @@ auto wrap_Draw(lua_State *state) -> int {
   auto *ctx = GetCurrentGraphicsContext();
 
   Ref<Mesh> mesh;
+
+  PrintDebug("Draw called");
 
   if (LuaWrap::LuaIsType<Texture::Texture>(state, 1)) {
     auto *texture = LuaWrap::FromLuaObject<Texture::Texture>(state, 1);

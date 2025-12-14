@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "buffer.hpp"
@@ -302,6 +303,8 @@ struct Mesh : Object {
   }
 
   auto Draw(GraphicsContext &context) const -> Error::Error {
+    PrintDebug("Draw called");
+
     auto error = RenderTarget::PrepareDraw(context);
     if (Error::IsError(error)) {
       return error;

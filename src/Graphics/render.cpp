@@ -302,11 +302,6 @@ auto Present(Graphics::GraphicsContext &context) -> Error::Error {
 
   RenderTarget::SetDirty();
 
-  auto beginResult = BeginBufferUploads(context);
-  if (Error::IsError(beginResult)) {
-    return beginResult;
-  }
-
   return Error::Success();
 }
 } // namespace Graphics

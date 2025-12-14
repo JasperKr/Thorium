@@ -1,12 +1,19 @@
 #include "push.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "tl/expected.hpp"
 #include <vector>
 
 namespace Graphics {
 auto PushBuffer::FlushData(FlushInfo &info) -> void {
+  auto bufferSize = layout.size;
+
+  if (layout.type == BufferResourceType::Struct) {
+    bufferSize = std::get<StructInfo>(layout.info).size;
+  }
+
   vkCmdPushConstants(info.commandBuffer, info.pipelineLayout, info.stageFlags,
-                     layout.offset, layout.size, data.data());
+                     layout.offset, bufferSize, data.data());
 }
 auto PushBuffer::OffsetOf(const std::string &name) const
     -> tl::expected<size_t, Error::Error> {

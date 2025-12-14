@@ -41,6 +41,10 @@ auto GetPipelineLayout(const GraphicsContext &context,
       return Error::Unexpected(
           "Push buffer has zero size in shader reflection");
     }
+
+    PrintDebug("Adding push constant range: offset {}, size {}",
+               pushConstantRange.offset, pushConstantRange.size);
+
     pushConstantRanges.emplace_back(pushConstantRange);
   }
 
@@ -52,6 +56,8 @@ auto GetPipelineLayout(const GraphicsContext &context,
   for (const auto &pair : shader->descriptorSetLayouts) {
     maxSet = (std::max)(maxSet, pair.first);
   }
+
+  PrintDebug("Max descriptor set index: {}", maxSet);
 
   setLayouts.resize(maxSet + 1);
 
@@ -317,6 +323,7 @@ inline auto CreatePipeline(const GraphicsContext &context, const State &state)
   pipelineInfo.pNext = &renderingCreateInfo;
 
   PrintDebug("Creating graphics pipeline...");
+  PrintDebug("device: {}", static_cast<const void *>(context.device));
 
   VkPipeline pipeline = VK_NULL_HANDLE;
   auto error = Error::Create(vkCreateGraphicsPipelines(

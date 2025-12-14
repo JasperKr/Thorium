@@ -1,3 +1,4 @@
+#include "Graphics/Buffers/uniform.hpp"
 #include "Graphics/buffer.hpp"
 #include "Graphics/graphics.hpp"
 #include "Graphics/render.hpp"
@@ -8,6 +9,7 @@
 #include "Modules/error.hpp"
 #include "Modules/filesystem.hpp"
 #include <cstdint>
+
 #define VK_NO_PROTOTYPES
 #include <vulkan/vulkan.h>
 
@@ -227,6 +229,11 @@ auto MainLoop() -> Error::Error {
   }
 
   error = Graphics::LoadBufferModule(context);
+  if (Error::IsError(error)) {
+    return error;
+  }
+
+  error = InitializeUniformBufferModule(context);
   if (Error::IsError(error)) {
     return error;
   }

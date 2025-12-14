@@ -426,6 +426,8 @@ struct ResourceInfo {
 struct ShaderReflection {
   std::vector<ResourceInfo> resources;
   std::unordered_map<std::string, ResourceInfo> resourceMap;
+  BufferInfo globals;
+  bool hasGlobals{false};
 
   // NOLINTNEXTLINE
   auto ConstructUBOStruct(uint32_t set, uint32_t binding) -> void {
@@ -475,7 +477,7 @@ struct ShaderReflection {
 
     globalUBOStruct.ConstructFieldMap();
 
-    BufferInfo globalUBOInfo{
+    globals = {
         .size = size,
         .set = set,
         .binding = binding,
@@ -485,13 +487,7 @@ struct ShaderReflection {
         .info = globalUBOStruct,
     };
 
-    ResourceInfo globalUBOResource{
-        .name = "GlobalUBO",
-        .variant = ResourceVariant::Buffer,
-        .info = globalUBOInfo,
-    };
-
-    resources.emplace_back(globalUBOResource);
+    hasGlobals = true;
   }
 };
 

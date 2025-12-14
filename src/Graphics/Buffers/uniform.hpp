@@ -6,6 +6,7 @@
 #include "Modules/object.hpp"
 #include "tl/expected.hpp"
 #include "vulkan/vulkan_core.h"
+#include <array>
 #include <cstdint>
 
 constexpr size_t InitialUniformBufferSize = 64L * 1024; // 64 KB
@@ -13,8 +14,30 @@ constexpr size_t InitialUniformBufferSize = 64L * 1024; // 64 KB
 // 16 MB; allows for doubling in size 8x
 constexpr size_t MaximumUniformBufferSize = 64L * 1024 * 1024;
 
+namespace Graphics {
+
 struct FrameUniformBufferObject {
 public:
+  explicit FrameUniformBufferObject(GraphicsContext &context)
+      : size(static_cast<uint32_t>(InitialUniformBufferSize)) {
+
+    BufferCreationInfo info{};
+    info.size = size;
+    info.properties =
+        static_cast<uint32_t>(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) |
+        static_cast<uint32_t>(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) |
+        static_cast<uint32_t>(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    info.usage = static_cast<uint32_t>(VK_BUFFER_USAGE_TRANSFER_DST_BIT) |
+                 static_cast<uint32_t>(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+    auto result = Buffer::Create(context, info);
+    if (Error::IsError(result)) {
+      PrintError("Failed to create frame uniform buffer object.");
+      return;
+    }
+
+    buffer = result.value();
+  }
+
   auto SetData(Graphics::GraphicsContext &context,
                const std::span<const uint8_t> &data)
       -> tl::expected<bool, Error::Error> {
@@ -26,7 +49,9 @@ public:
 
     bool resized = false;
     if (data.size() + offset > size) {
-      buffer->Release();
+      if (buffer.get() != nullptr) {
+        buffer->ScheduleDestroy();
+      }
       while (data.size() + offset > size) {
         size *= 2;
         if (size > MaximumUniformBufferSize) {
@@ -80,3 +105,10 @@ private:
   uint32_t size{};
   uint32_t offset{};
 };
+
+// NOLINTNEXTLINE
+extern thread_local std::vector<FrameUniformBufferObject> ThreadUniformBuffers;
+auto InitializeUniformBufferModule(GraphicsContext &context) -> Error::Error;
+auto GetGlobalUniformBuffer() -> FrameUniformBufferObject &;
+
+} // namespace Graphics

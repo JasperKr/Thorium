@@ -19,7 +19,6 @@ struct BufferCreationInfo {
 };
 
 auto FlushBufferUploads(GraphicsContext &context) -> Error::Error;
-auto BeginBufferUploads(GraphicsContext &context) -> Error::Error;
 auto LoadBufferModule(GraphicsContext &context) -> Error::Error;
 auto UnloadBufferModule(GraphicsContext &context) -> Error::Error;
 

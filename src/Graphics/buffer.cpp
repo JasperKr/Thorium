@@ -23,12 +23,9 @@ struct StagingBufferInfo {
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
 
 inline std::array<Ref<Buffer>, FRAMES_IN_FLIGHT> UploadBuffers;
-inline std::array<VkCommandBuffer, FRAMES_IN_FLIGHT> UploadCommandBuffers;
-inline std::array<bool, FRAMES_IN_FLIGHT> UploadCommandBuffersInUse = {};
+inline std::array<size_t, FRAMES_IN_FLIGHT> UploadBufferOffsets;
 
 // we'll use staging buffers until upload buffers are initialized
-inline bool UploadBuffersInitialized = false;
-// To be deleted
 inline std::vector<StagingBufferInfo> StagingBuffers;
 inline VkSemaphore uploadTimeline = nullptr;
 inline bool moduleInitialized = false;
@@ -54,22 +51,13 @@ auto LoadBufferModule(GraphicsContext &context) -> Error::Error {
     return result;
   }
 
-  VkCommandBufferAllocateInfo allocInfo = {};
-  allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-  allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-  allocInfo.commandPool = GetRenderData(context, 0).pool;
-  allocInfo.commandBufferCount = FRAMES_IN_FLIGHT;
-
-  result = Error::Create(vkAllocateCommandBuffers(context.device, &allocInfo,
-                                                  UploadCommandBuffers.data()));
-
   if (Error::IsError(result)) {
     return result;
   }
 
   moduleInitialized = true;
 
-  return BeginBufferUploads(context);
+  return Error::Success();
 }
 
 auto UnloadBufferModule(GraphicsContext &context) -> Error::Error {
@@ -95,77 +83,11 @@ auto UnloadBufferModule(GraphicsContext &context) -> Error::Error {
   return Error::Success();
 }
 
-// To be called at the start of each frame that uses uploads
-auto BeginBufferUploads(GraphicsContext &context) -> Error::Error {
-  if (!moduleInitialized) {
-    auto result = LoadBufferModule(context);
-    if (Error::IsError(result)) {
-      return result;
-    }
-  }
-
-  auto *commandBuffer = UploadCommandBuffers.at(context.frameIndex);
-
-  VkCommandBufferBeginInfo beginInfo = {};
-  beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-
-  auto result = Error::Create(vkBeginCommandBuffer(commandBuffer, &beginInfo));
-
-  if (Error::IsError(result)) {
-    return result;
-  }
-
-  UploadBuffersInitialized = true;
-  UploadCommandBuffersInUse.at(context.frameIndex) = true;
-
-  return Error::Success();
-}
-
 // To be called at the end of each frame that uses uploads
 auto FlushBufferUploads(GraphicsContext &context) -> Error::Error {
-  // Submit upload command buffers
-  auto *commandBuffer = UploadCommandBuffers.at(context.frameIndex);
-
-  if (UploadCommandBuffersInUse.at(context.frameIndex)) {
-    auto result = Error::Create(vkEndCommandBuffer(commandBuffer));
-
-    if (Error::IsError(result)) {
-      return result;
-    }
-
-    UploadCommandBuffersInUse.at(context.frameIndex) = false;
-  } else {
-    PrintWarning(
-        "FlushBufferUploads called without matching BeginBufferUploads!");
-  }
-
-  VkTimelineSemaphoreSubmitInfo timelineSubmitInfo = {};
-  timelineSubmitInfo.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO;
-  uint64_t signalValue = currentTimelineValue;
-  timelineSubmitInfo.signalSemaphoreValueCount = 1;
-  timelineSubmitInfo.pSignalSemaphoreValues = &signalValue;
-
-  VkSubmitInfo submitInfo = {};
-  submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-  submitInfo.commandBufferCount = 1;
-  submitInfo.pCommandBuffers = &commandBuffer;
-  submitInfo.pNext = &timelineSubmitInfo;
-  submitInfo.signalSemaphoreCount = 1;
-  submitInfo.pSignalSemaphores = &uploadTimeline;
-
-  auto result = Error::Create(
-      vkQueueSubmit(context.graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE));
-  if (Error::IsError(result)) {
-    return result;
-  }
-  result = Error::Create(vkResetCommandBuffer(commandBuffer, 0));
-  if (Error::IsError(result)) {
-    return result;
-  }
-
   // Check staging buffers for completed uploads
   uint64_t completedValue = 0;
-  result = Error::Create(vkGetSemaphoreCounterValue(
+  auto result = Error::Create(vkGetSemaphoreCounterValue(
       context.device, uploadTimeline, &completedValue));
   if (Error::IsError(result)) {
     return result;
@@ -183,13 +105,19 @@ auto FlushBufferUploads(GraphicsContext &context) -> Error::Error {
     }
   }
 
+  // Reset upload buffer offsets for next frame
+  for (auto &offset : UploadBufferOffsets) {
+    offset = 0;
+  }
+
   return Error::Success();
 }
 
 inline auto Upload(const Buffer *buffer, GraphicsContext &context,
                    std::span<const uint8_t> data, VkDeviceSize offset = 0)
     -> Error::Error {
-  if (!UploadBuffersInitialized || data.size() > LargeUploadThreshold) {
+
+  if (data.size() > LargeUploadThreshold) {
     // Use staging buffer
     VkBufferCreateInfo stagingBufferInfo = {};
     stagingBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -222,7 +150,7 @@ inline auto Upload(const Buffer *buffer, GraphicsContext &context,
     std::memcpy(static_cast<uint8_t *>(mapped), data.data(), data.size());
     vmaUnmapMemory(context.vmaAllocator, stagingMemory);
 
-    VkCommandBuffer commandBuffer = UploadCommandBuffers.at(context.frameIndex);
+    auto *commandBuffer = GetCommandBuffer(context, GetCurrentThreadIndex());
 
     VkBufferCopy copyRegion = {};
     copyRegion.srcOffset = 0;
@@ -238,14 +166,17 @@ inline auto Upload(const Buffer *buffer, GraphicsContext &context,
     StagingBuffers.push_back(stagingInfo);
   } else {
     // Use upload buffer
-    Ref<Buffer> uploadBuffer = UploadBuffers.at(context.frameIndex);
+    auto uploadBuffer = UploadBuffers.at(context.frameIndex);
+    size_t &uploadOffset = UploadBufferOffsets.at(context.frameIndex);
     if (uploadBuffer.get() == nullptr ||
-        uploadBuffer->sizeInBytes < data.size() + offset) {
+        uploadBuffer->sizeInBytes < data.size() + uploadOffset) {
       // Create or resize upload buffer
-      uploadBuffer->ScheduleDestroy();
+      if (uploadBuffer.get() != nullptr) {
+        uploadBuffer->ScheduleDestroy();
+      }
 
       size_t newSize = UploadBufferSize;
-      while (newSize < data.size() + offset) {
+      while (newSize < data.size() + uploadOffset) {
         newSize *= 2;
       }
 
@@ -275,12 +206,15 @@ inline auto Upload(const Buffer *buffer, GraphicsContext &context,
     }
 
     // NOLINTNEXTLINE, because of pointer arithmetic
-    std::memcpy(static_cast<uint8_t *>(mapped) + offset, data.data(),
+    std::memcpy(static_cast<uint8_t *>(mapped) + uploadOffset, data.data(),
                 data.size());
     vmaUnmapMemory(context.vmaAllocator, uploadBuffer->memory);
 
     // Record copy command
-    VkCommandBuffer commandBuffer = UploadCommandBuffers.at(context.frameIndex);
+    auto *commandBuffer = GetCommandBuffer(context, GetCurrentThreadIndex());
+
+    VkCommandBufferBeginInfo beginInfo = {};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
     VkBufferCopy copyRegion = {};
     copyRegion.srcOffset = 0;
@@ -288,6 +222,7 @@ inline auto Upload(const Buffer *buffer, GraphicsContext &context,
     copyRegion.size = data.size();
     vkCmdCopyBuffer(commandBuffer, uploadBuffer->handle, buffer->handle, 1,
                     &copyRegion);
+    uploadOffset += data.size();
   }
 
   return Error::Success();

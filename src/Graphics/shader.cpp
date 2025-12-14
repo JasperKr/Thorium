@@ -1,4 +1,5 @@
 #include "shader.hpp"
+#include "Buffers/uniform.hpp"
 #include "Graphics/Buffers/push.hpp"
 #include "Graphics/reflect.hpp"
 #include "Modules/console.hpp"
@@ -455,6 +456,19 @@ inline auto CreateShaderDescriptorSets(GraphicsContext &context,
     }
   }
 
+  if (shader->reflection.hasGlobals) {
+    auto layoutBinding = VkDescriptorSetLayoutBinding{
+        .binding = shader->reflection.globals.binding,
+        .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        .descriptorCount = 1,
+        .stageFlags = VK_SHADER_STAGE_ALL,
+        .pImmutableSamplers = nullptr,
+    };
+
+    descriptorSetLayoutBindings[shader->reflection.globals.set].emplace_back(
+        layoutBinding);
+  }
+
   for (const auto &setBinding : descriptorSetLayoutBindings) {
     uint32_t setIndex = setBinding.first;
     const auto &bindings = setBinding.second;
@@ -578,6 +592,28 @@ auto ShaderModule::FlushBuffers(GraphicsContext &context,
     writeDescriptorSets.emplace_back(descriptorWrite);
   }
 
+  if (reflection.hasGlobals) {
+    VkDescriptorBufferInfo bufferInfo{};
+    auto &buffer = GetGlobalUniformBuffer();
+    bufferInfo.buffer = buffer.GetBuffer().get()->handle;
+    bufferInfo.offset = buffer.GetOffset();
+
+    assert(reflection.globals.size > 0);
+
+    bufferInfo.range = reflection.globals.size;
+
+    VkWriteDescriptorSet descriptorWrite{};
+    descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    descriptorWrite.dstSet = descriptorSets[reflection.globals.set];
+    descriptorWrite.dstBinding = reflection.globals.binding;
+    descriptorWrite.dstArrayElement = 0;
+    descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    descriptorWrite.descriptorCount = 1;
+    descriptorWrite.pBufferInfo = &bufferInfo;
+
+    writeDescriptorSets.emplace_back(descriptorWrite);
+  }
+
   for (auto &bufferPair : storageBuffers) {
     auto &buffer = bufferPair.second;
     VkDescriptorBufferInfo bufferInfo{};
@@ -600,6 +636,8 @@ auto ShaderModule::FlushBuffers(GraphicsContext &context,
   vkUpdateDescriptorSets(context.device,
                          static_cast<uint32_t>(writeDescriptorSets.size()),
                          writeDescriptorSets.data(), 0, nullptr);
+
+  // TODO: bind descriptor sets
 
   for (auto &pushBuffer : pushBuffers) {
     FlushInfo info{
