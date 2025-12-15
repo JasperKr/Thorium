@@ -277,6 +277,7 @@ static auto CreateDevice(GraphicsContext &context) -> Error::Error {
       .shaderSampledImageArrayNonUniformIndexing = VK_TRUE,
       .shaderStorageBufferArrayNonUniformIndexing = VK_TRUE,
       .runtimeDescriptorArray = VK_TRUE,
+      .timelineSemaphore = VK_TRUE,
       .bufferDeviceAddress = VK_TRUE,
   };
 
@@ -615,8 +616,21 @@ static auto CreateDescriptorPool(GraphicsContext &context) -> Error::Error {
   poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
   poolInfo.pPoolSizes = poolSizes.data();
 
-  return Error::Create(vkCreateDescriptorPool(
-      context.device, &poolInfo, nullptr, &context.descriptorPool));
+  for (uint32_t i = 0; i < FRAMES_IN_FLIGHT; i++) {
+    {
+
+      context.descriptorPools.push_back(VK_NULL_HANDLE);
+      auto *pool = &context.descriptorPools.back();
+
+      auto result = Error::Create(
+          vkCreateDescriptorPool(context.device, &poolInfo, nullptr, pool));
+      if (Error::IsError(result)) {
+        return result;
+      }
+    }
+  }
+
+  return Error::Success();
 }
 
 auto Initialize(GraphicsContext &context, Config::ApplicationConfig &config)
@@ -776,7 +790,9 @@ void Deinitialize(GraphicsContext &context) {
     vkDestroyImageView(context.device, imageView, nullptr);
   }
 
-  vkDestroyDescriptorPool(context.device, context.descriptorPool, nullptr);
+  for (VkDescriptorPool pool : context.descriptorPools) {
+    vkDestroyDescriptorPool(context.device, pool, nullptr);
+  }
 
   vkDestroySwapchainKHR(context.device, context.swapchainInfo.swapchain,
                         nullptr);

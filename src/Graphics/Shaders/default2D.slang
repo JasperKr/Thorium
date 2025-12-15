@@ -52,6 +52,6 @@ ConstantBuffer<PushConstants> pc;
 float4 fragmentMain(FragmentInput input)
 {
   float4 texColor = MainTexture.Sample(input.tex_coord);
-    texColor.rgb += testColor * test;
+    texColor.rgb += testColor * test * 0.0;
   return input.color * texColor;
 }

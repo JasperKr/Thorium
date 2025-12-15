@@ -43,8 +43,9 @@ local ssbo = 4
 
 local target = Thorium.graphics.newTexture(32, 32, { usage = sampler + rendertarget })
 local image = Thorium.graphics.newTexture(32, 32, { usage = sampler })
-Thorium.graphics.setRenderTarget(target)
-Thorium.graphics.setViewport(0, 0, 32, 32)
-Thorium.graphics.draw(image)
-Thorium.graphics.setRenderTarget()
-target:release()
+function Thorium.draw()
+  Thorium.graphics.setRenderTarget(target)
+  Thorium.graphics.draw(image)
+  Thorium.graphics.setRenderTarget()
+  Thorium.graphics.draw(target)
+end

@@ -212,6 +212,9 @@ auto Load(GraphicsContext &context) -> Error::Error;
 auto Destroy(GraphicsContext &context) -> void;
 auto PrepareDraw(GraphicsContext &context) -> Error::Error;
 
+auto EndRendering(GraphicsContext &context) -> void;
+auto BeginRendering(GraphicsContext &context) -> void;
+
 auto SetDepthMode(bool enable, bool writeEnable, VkCompareOp compareOp) -> void;
 auto SetCullMode(VkCullModeFlags cullMode) -> void;
 auto SetPolygonMode(VkPolygonMode polygonMode) -> void;

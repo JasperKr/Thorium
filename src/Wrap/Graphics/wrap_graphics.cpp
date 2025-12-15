@@ -139,6 +139,10 @@ auto wrap_SetPolygonMode(lua_State *state) -> int {
 }
 auto wrap_SetViewport(lua_State *state) -> int {
   auto *ctx = GetCurrentGraphicsContext();
+  if (lua_gettop(state) == 0) {
+    RenderTarget::SetViewport({});
+    return 0;
+  }
   VkViewport viewport{};
   viewport.x = static_cast<float>(luaL_checknumber(state, 1));
   viewport.y = static_cast<float>(luaL_checknumber(state, 2));
@@ -420,6 +424,8 @@ inline auto GetQuadMesh(GraphicsContext &context, const VkRect2D size,
   PrintDebug("Creating quad mesh of size {}x{}", size.extent.width,
              size.extent.height);
 
+  RenderTarget::EndRendering(context);
+
   const static auto mesh =
       Mesh::Create(context, VertexFormats::Default2D, span, &indices);
 
@@ -434,6 +440,8 @@ inline auto GetQuadMesh(GraphicsContext &context, const VkRect2D size,
   if (Error::IsError(setDataError)) {
     return tl::unexpected(setDataError);
   }
+
+  RenderTarget::BeginRendering(context);
 
   return mesh;
 }
@@ -456,6 +464,18 @@ auto wrap_Draw(lua_State *state) -> int {
                     Color(1.0F, 1.0F, 1.0F, 1.0F));
     if (Error::IsError(result)) {
       return luaL_error(state, "%s", result.error().ToString().c_str());
+    }
+
+    if (texture != nullptr) {
+      auto shader = RenderTarget::GetShader();
+      if (shader.get() == nullptr) {
+        shader = Shader::DefaultShaderModule;
+      }
+
+      auto sendResult = shader->Send(*ctx, "MainTexture", texture);
+      if (Error::IsError(sendResult)) {
+        return luaL_error(state, "%s", sendResult.ToString().c_str());
+      }
     }
 
     mesh = result.value();

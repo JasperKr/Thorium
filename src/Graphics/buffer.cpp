@@ -217,7 +217,7 @@ inline auto Upload(const Buffer *buffer, GraphicsContext &context,
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
     VkBufferCopy copyRegion = {};
-    copyRegion.srcOffset = 0;
+    copyRegion.srcOffset = uploadOffset;
     copyRegion.dstOffset = offset;
     copyRegion.size = data.size();
     vkCmdCopyBuffer(commandBuffer, uploadBuffer->handle, buffer->handle, 1,

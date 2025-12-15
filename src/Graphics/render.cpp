@@ -210,6 +210,9 @@ auto Present_PreDraw(Graphics::GraphicsContext &context) -> Error::Error {
 
   ResetCommandBuffers(context);
 
+  vkResetDescriptorPool(context.device,
+                        context.descriptorPools.at(context.frameIndex), 0);
+
   BeginFrame(context);
 
   // Ready for new frame

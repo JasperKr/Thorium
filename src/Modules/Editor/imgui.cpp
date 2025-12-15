@@ -337,7 +337,7 @@ auto InitializeImGui(
   init_info.QueueFamily = context.graphicsQueueFamily;
   init_info.Queue = context.graphicsQueue;
   init_info.PipelineCache = VK_NULL_HANDLE;
-  init_info.DescriptorPool = context.descriptorPool;
+  init_info.DescriptorPool = context.descriptorPools.at(context.frameIndex);
   init_info.MinImageCount = context.swapchainInfo.imageCount;
   init_info.ImageCount = context.swapchainInfo.imageCount;
 

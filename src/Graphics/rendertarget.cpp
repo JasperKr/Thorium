@@ -34,7 +34,7 @@ auto GetPipelineLayout(const GraphicsContext &context,
 
   for (const auto &buffer : shader->pushBuffers) {
     VkPushConstantRange pushConstantRange = {};
-    pushConstantRange.stageFlags = VK_SHADER_STAGE_ALL;
+    pushConstantRange.stageFlags = buffer.GetStageFlags();
     pushConstantRange.offset = buffer.GetBufferOffset();
     pushConstantRange.size = static_cast<uint32_t>(buffer.GetBufferSize());
     if (pushConstantRange.size == 0) {
@@ -89,9 +89,168 @@ inline auto GetSwapchainRendertarget(const GraphicsContext &context)
 
   swapchainRendertarget->texture = texture;
   swapchainRendertarget->location = 0;
-  swapchainRendertarget->blendMode = {};
+  swapchainRendertarget->blendMode = DefaultBlendMode;
   swapchainRendertarget->clearValue = {0.0F, 0.0F, 0.0F, 1.0F};
   return swapchainRendertarget;
+}
+
+auto CreateDescriptorSets(GraphicsContext &context,
+                          Shader::ShaderModule *shader) -> Error::Error {
+  std::unordered_map<uint32_t, std::vector<VkDescriptorSetLayoutBinding>>
+      descriptorSetLayoutBindings;
+
+  PrintDebug("Creating descriptor sets...");
+
+  for (auto &layout : shader->reflection.resources) {
+    if (layout.variant == ResourceVariant::Buffer) {
+      auto &bufferInfo = std::get<BufferInfo>(layout.info);
+
+      if (bufferInfo.bufferType == BufferType::Uniform ||
+          bufferInfo.bufferType == BufferType::Storage) {
+        auto layoutBinding = VkDescriptorSetLayoutBinding{
+            .binding = bufferInfo.binding,
+            .descriptorType = bufferInfo.bufferType == BufferType::Uniform
+                                  ? VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
+                                  : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+            .descriptorCount = 1,
+            .stageFlags = VK_SHADER_STAGE_ALL,
+            .pImmutableSamplers = nullptr,
+        };
+
+        descriptorSetLayoutBindings[bufferInfo.set].emplace_back(layoutBinding);
+      }
+    } else if (layout.variant == ResourceVariant::Sampler) {
+      auto &imageInfo = std::get<SamplerInfo>(layout.info);
+
+      auto layoutBinding = VkDescriptorSetLayoutBinding{
+          .binding = imageInfo.binding,
+          .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+          .descriptorCount = 1,
+          .stageFlags = VK_SHADER_STAGE_ALL,
+          .pImmutableSamplers = nullptr,
+      };
+
+      descriptorSetLayoutBindings[imageInfo.set].emplace_back(layoutBinding);
+    }
+  }
+
+  if (shader->reflection.hasGlobals) {
+    auto layoutBinding = VkDescriptorSetLayoutBinding{
+        .binding = shader->reflection.globals.binding,
+        .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        .descriptorCount = 1,
+        .stageFlags = VK_SHADER_STAGE_ALL,
+        .pImmutableSamplers = nullptr,
+    };
+
+    descriptorSetLayoutBindings[shader->reflection.globals.set].emplace_back(
+        layoutBinding);
+  }
+
+  shader->descriptorSets.clear();
+  shader->descriptorSetLayouts.clear();
+
+  for (const auto &setBinding : descriptorSetLayoutBindings) {
+    uint32_t setIndex = setBinding.first;
+    const auto &bindings = setBinding.second;
+    VkDescriptorSetLayoutCreateInfo layoutInfo = {};
+    layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
+    layoutInfo.pBindings = bindings.data();
+
+    VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
+    auto error = Error::Create(vkCreateDescriptorSetLayout(
+        context.device, &layoutInfo, nullptr, &descriptorSetLayout));
+
+    shader->descriptorSetLayouts[setIndex] = descriptorSetLayout;
+
+    if (Error::IsError(error)) {
+      return error;
+    }
+
+    VkDescriptorSetAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    allocInfo.descriptorPool = context.descriptorPools.at(context.frameIndex);
+    allocInfo.descriptorSetCount = 1;
+    allocInfo.pSetLayouts = &descriptorSetLayout;
+
+    error = Error::Create(vkAllocateDescriptorSets(
+        context.device, &allocInfo, &shader->descriptorSets[setIndex]));
+    if (Error::IsError(error)) {
+      return error;
+    }
+  }
+
+  PrintDebug("Buffer descriptor sets created successfully.");
+
+  // loop over all samplers and bind the default texture
+  for (const auto &resource : shader->reflection.resources) {
+    if (resource.variant == ResourceVariant::Sampler) {
+
+      const auto &samplerInfo = std::get<SamplerInfo>(resource.info);
+
+      VkFormat format = VK_FORMAT_R8G8B8A8_UNORM;
+      Texture::TextureType type = Texture::TextureType::DEFAULT;
+
+      if (samplerInfo.shape == SLANG_TEXTURE_3D) {
+        type = Texture::TextureType::VOLUME;
+      } else if (samplerInfo.shape == SLANG_TEXTURE_CUBE) {
+        type = Texture::TextureType::CUBEMAP;
+      } else if (samplerInfo.shape == SLANG_TEXTURE_2D_ARRAY) {
+        type = Texture::TextureType::ARRAY;
+      }
+
+      auto defaultTextureResult =
+          Texture::GetDefaultTexture(context, format, type);
+
+      if (Error::IsError(defaultTextureResult)) {
+        return defaultTextureResult.error();
+      }
+
+      auto defaultTexture = defaultTextureResult.value();
+
+      VkDescriptorImageInfo imageInfo{};
+      imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+      imageInfo.imageView = defaultTexture->view;
+      imageInfo.sampler = defaultTexture->GetSampler(context);
+      VkWriteDescriptorSet descriptorWrite{};
+      descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+      descriptorWrite.dstSet = shader->descriptorSets[samplerInfo.set];
+      descriptorWrite.dstBinding = samplerInfo.binding;
+      descriptorWrite.dstArrayElement = 0;
+      descriptorWrite.descriptorType =
+          VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+      descriptorWrite.descriptorCount = 1;
+      descriptorWrite.pImageInfo = &imageInfo;
+      vkUpdateDescriptorSets(context.device, 1, &descriptorWrite, 0, nullptr);
+    } else if (resource.variant == ResourceVariant::Buffer) {
+      const auto &bufferInfo = std::get<BufferInfo>(resource.info);
+      if (bufferInfo.bufferType == BufferType::Uniform ||
+          bufferInfo.bufferType == BufferType::Storage) {
+        VkDescriptorBufferInfo bufferInfoDesc{};
+        bufferInfoDesc.offset = 0;
+        bufferInfoDesc.range = VK_WHOLE_SIZE;
+        // Buffer would be set during actual execution
+        bufferInfoDesc.buffer = VK_NULL_HANDLE;
+
+        VkWriteDescriptorSet descriptorWrite{};
+        descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descriptorWrite.dstSet = shader->descriptorSets[bufferInfo.set];
+        descriptorWrite.dstBinding = bufferInfo.binding;
+        descriptorWrite.dstArrayElement = 0;
+        descriptorWrite.descriptorType =
+            bufferInfo.bufferType == BufferType::Uniform
+                ? VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
+                : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        descriptorWrite.descriptorCount = 1;
+        descriptorWrite.pBufferInfo = &bufferInfoDesc;
+
+        vkUpdateDescriptorSets(context.device, 1, &descriptorWrite, 0, nullptr);
+      }
+    }
+  }
+
+  return Error::Success();
 }
 
 inline auto CreatePipeline(const GraphicsContext &context, const State &state)
@@ -141,13 +300,6 @@ inline auto CreatePipeline(const GraphicsContext &context, const State &state)
       VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
   inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
   inputAssembly.primitiveRestartEnable = VK_FALSE;
-
-  VkPipelineViewportStateCreateInfo viewportState = {};
-  viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-  viewportState.viewportCount = 1;
-  viewportState.pViewports = &state.viewport;
-  viewportState.scissorCount = 1;
-  viewportState.pScissors = &state.scissor;
 
   VkPipelineRasterizationStateCreateInfo rasterizer = {};
   rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
@@ -226,6 +378,14 @@ inline auto CreatePipeline(const GraphicsContext &context, const State &state)
       renderTargets.size() + 1);
   auto formats =
       std::vector<VkFormat>(renderTargets.size() + 1, VK_FORMAT_UNDEFINED);
+
+  VkPipelineViewportStateCreateInfo viewportState = {};
+  viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+  viewportState.viewportCount = 1;
+
+  viewportState.pViewports = &state.viewport;
+  viewportState.scissorCount = 1;
+  viewportState.pScissors = &state.scissor;
 
   bool hasDepthAttachment = false;
   bool hasStencilAttachment = false;
@@ -381,8 +541,8 @@ inline auto SetupDefaultState(GraphicsContext &context) -> State {
   defaultState.viewport = {
       .x = 0.0F,
       .y = 0.0F,
-      .width = static_cast<float>(context.swapchainInfo.extent.width),
-      .height = static_cast<float>(context.swapchainInfo.extent.height),
+      .width = 0.0F,
+      .height = 0.0F,
       .minDepth = 0.0F,
       .maxDepth = 1.0F,
   };
@@ -457,6 +617,11 @@ auto Flush(GraphicsContext &context) -> tl::expected<bool, Error::Error> {
 
   LastState = currentState;
 
+  auto result = CreateDescriptorSets(context, currentState.shader.get());
+  if (Error::IsError(result)) {
+    return tl::make_unexpected(result);
+  }
+
   PrintDebug("Flushing render target state changes");
   auto pipelineResult = GetPipeline(context, currentState);
   if (Error::IsError(pipelineResult)) {
@@ -497,12 +662,14 @@ inline auto BeginRendering(GraphicsContext &context) -> void {
 
   VkRenderingInfo renderingInfo = {};
   renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-  renderingInfo.renderArea.offset = {
-      .x = static_cast<int32_t>(currentState.viewport.x),
-      .y = static_cast<int32_t>(currentState.viewport.y)};
+
+  auto viewport = GetViewport();
+
+  renderingInfo.renderArea.offset = {.x = static_cast<int32_t>(viewport.x),
+                                     .y = static_cast<int32_t>(viewport.y)};
   renderingInfo.renderArea.extent = {
-      .width = static_cast<uint32_t>(currentState.viewport.width),
-      .height = static_cast<uint32_t>(currentState.viewport.height)};
+      .width = static_cast<uint32_t>(viewport.width),
+      .height = static_cast<uint32_t>(viewport.height)};
   renderingInfo.layerCount = 1;
   renderingInfo.viewMask = 0;
   renderingInfo.flags = 0;
@@ -511,7 +678,23 @@ inline auto BeginRendering(GraphicsContext &context) -> void {
   auto depthAttachment = VkRenderingAttachmentInfo{};
   auto stencilAttachment = VkRenderingAttachmentInfo{};
 
-  for (const auto &rendertarget : currentState.renderTargets) {
+  std::vector<Ref<RenderTarget>> renderTargets = currentState.renderTargets;
+
+  if (currentState.renderTargets.empty() ||
+      currentState.renderTargets[0]->texture.get() == nullptr) {
+    renderTargets.clear();
+    renderTargets.push_back(GetSwapchainRendertarget(context));
+
+    if (!currentState.renderTargets.empty()) {
+      renderTargets.back()->location = currentState.renderTargets[0]->location;
+      renderTargets.back()->blendMode =
+          currentState.renderTargets[0]->blendMode;
+      renderTargets.back()->clearValue =
+          currentState.renderTargets[0]->clearValue;
+    }
+  }
+
+  for (const auto &rendertarget : renderTargets) {
     VkRenderingAttachmentInfo attachmentInfo = {};
     attachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
     attachmentInfo.imageView = rendertarget->texture->view;
@@ -676,6 +859,23 @@ auto GetPolygonMode() -> VkPolygonMode {
 
 auto GetViewport() -> VkViewport {
   auto &currentState = StateStack.back();
+
+  if (currentState.viewport.width == 0.0F &&
+      currentState.viewport.height == 0.0F) {
+    // Default to size of current attachments
+    auto renderTargets = currentState.renderTargets;
+    if (renderTargets.empty() || renderTargets[0]->texture.get() == nullptr) {
+      renderTargets.clear();
+      renderTargets.push_back(
+          GetSwapchainRendertarget(*Graphics::GetCurrentGraphicsContext()));
+    }
+
+    currentState.viewport.width =
+        static_cast<float>(renderTargets[0]->texture->size.width);
+    currentState.viewport.height =
+        static_cast<float>(renderTargets[0]->texture->size.height);
+  }
+
   return currentState.viewport;
 }
 

@@ -2,6 +2,7 @@
 
 #include "Graphics/Buffers/push.hpp"
 #include "Graphics/Buffers/structured.hpp"
+#include "Graphics/texture.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Modules/type.hpp"
@@ -109,22 +110,74 @@ struct ShaderModule : Object {
 
       const auto &bufferInfo = std::get<BufferInfo>(resource.info);
       if (bufferInfo.name == name) {
+        if (descriptorSets[bufferInfo.set] == VK_NULL_HANDLE) {
+          return Error::Success(); // Will be created and set later
+        }
         // NOLINTNEXTLINE
         auto key = bufferInfo.set | ((uint64_t)bufferInfo.binding << 32U);
 
-        if (bufferInfo.bufferType == BufferType::Uniform) {
-          uniformBuffers[key] = buffer;
-        } else if (bufferInfo.bufferType == BufferType::Storage) {
-          storageBuffers[key] = buffer;
-        } else {
-          return Error::Create("Buffer is not uniform or storage: " + name);
-        }
+        VkDescriptorBufferInfo bufferInfo{};
+        bufferInfo.buffer = buffer.GetBuffer().get()->handle;
+        bufferInfo.offset = 0;
+        bufferInfo.range = buffer.GetLayout().size;
+
+        VkWriteDescriptorSet descriptorWrite{};
+        descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descriptorWrite.dstSet = descriptorSets[buffer.layout.set];
+        descriptorWrite.dstBinding = buffer.layout.binding;
+        descriptorWrite.dstArrayElement = 0;
+        descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        descriptorWrite.descriptorCount = 1;
+        descriptorWrite.pBufferInfo = &bufferInfo;
+
+        vkUpdateDescriptorSets(context.device, 1, &descriptorWrite, 0, nullptr);
 
         return Error::Success();
       }
     }
 
     return Error::Create("Buffer not found in shader reflection: " + name);
+  }
+
+  auto Send(GraphicsContext &context, const std::string &name,
+            Graphics::Texture::Texture *texture) -> Error::Error {
+    for (const auto &resource : reflection.resources) {
+      if (resource.variant != ResourceVariant::Sampler) {
+        continue;
+      }
+
+      const auto &samplerInfo = std::get<SamplerInfo>(resource.info);
+      if (resource.name == name) {
+        if (descriptorSets[samplerInfo.set] == VK_NULL_HANDLE) {
+          return Error::Success(); // Will be created and set later
+        }
+
+        // NOLINTNEXTLINE
+        auto key = samplerInfo.set | ((uint64_t)samplerInfo.binding << 32U);
+
+        // Create descriptor set for this texture
+        VkDescriptorImageInfo imageInfo{};
+        imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        imageInfo.imageView = texture->view;
+        imageInfo.sampler = texture->GetSampler(context);
+
+        VkWriteDescriptorSet descriptorWrite{};
+        descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descriptorWrite.dstSet = descriptorSets[samplerInfo.set];
+        descriptorWrite.dstBinding = samplerInfo.binding;
+        descriptorWrite.dstArrayElement = 0;
+        descriptorWrite.descriptorType =
+            VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        descriptorWrite.descriptorCount = 1;
+        descriptorWrite.pImageInfo = &imageInfo;
+
+        vkUpdateDescriptorSets(context.device, 1, &descriptorWrite, 0, nullptr);
+
+        return Error::Success();
+      }
+    }
+
+    return Error::Create("Sampler not found in shader reflection: " + name);
   }
 
   auto FlushBuffers(GraphicsContext &context, VkPipelineLayout layout)

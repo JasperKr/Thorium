@@ -1,5 +1,4 @@
 #include "push.hpp"
-#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "tl/expected.hpp"
 #include <vector>
@@ -12,7 +11,7 @@ auto PushBuffer::FlushData(FlushInfo &info) -> void {
     bufferSize = std::get<StructInfo>(layout.info).size;
   }
 
-  vkCmdPushConstants(info.commandBuffer, info.pipelineLayout, info.stageFlags,
+  vkCmdPushConstants(info.commandBuffer, info.pipelineLayout, stageFlags,
                      layout.offset, bufferSize, data.data());
 }
 auto PushBuffer::OffsetOf(const std::string &name) const

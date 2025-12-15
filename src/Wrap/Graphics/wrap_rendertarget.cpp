@@ -3,6 +3,7 @@
 #include "Graphics/graphics.hpp"
 #include "Graphics/rendertarget.hpp"
 #include "Graphics/texture.hpp"
+#include "Modules/console.hpp"
 #include "Wrap/Graphics/wrap_color.hpp"
 #include "Wrap/wrap.hpp"
 #include "vulkan/vulkan_core.h"
@@ -262,6 +263,8 @@ auto RenderTargetsFromOptions(lua_State *state, int index)
   lua_getfield(state, index, "blendmode");
   if (lua_istable(state, -1) != 0) {
     rendertarget->blendMode = FromLuaState(state);
+  } else {
+    rendertarget->blendMode = DefaultBlendMode;
   }
   lua_pop(state, 1);
 
@@ -304,6 +307,7 @@ auto wrap_SetRenderTargets(lua_State *state) -> int {
 
   if (lua_isuserdata(state, 1) != 0) {
     hasVarargs = true;
+    PrintDebug("has varargs texture");
   } else if (lua_istable(state, 1) != 0) {
     // check if table contains texture field
     lua_getfield(state, 1, "texture");

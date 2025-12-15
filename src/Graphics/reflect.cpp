@@ -405,6 +405,23 @@ auto SetupFromType(slang::VariableLayoutReflection *variableLayout,
     bool isPushConstant =
         (category == slang::ParameterCategory::PushConstantBuffer);
 
+    auto stage = variableLayout->getStage();
+    VkShaderStageFlags stageFlags = VK_SHADER_STAGE_ALL;
+    switch (stage) {
+    case SlangStage::SLANG_STAGE_VERTEX:
+      stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+      break;
+    case SlangStage::SLANG_STAGE_FRAGMENT:
+      stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+      break;
+    case SlangStage::SLANG_STAGE_COMPUTE:
+      stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+      break;
+    default:
+      stageFlags = VK_SHADER_STAGE_ALL; // TODO: Edit this for hardware RT
+      break;
+    }
+
     BufferInfo info{
         .name = variableLayout->getName(),
         .offset = static_cast<uint32_t>(variableLayout->getOffset()),

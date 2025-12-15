@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstddef>
-#include <utility>
 
 #include "Graphics/reflect.hpp"
 #include "Modules/error.hpp"
@@ -11,12 +10,13 @@ namespace Graphics {
 struct FlushInfo {
   VkCommandBuffer commandBuffer;
   VkPipelineLayout pipelineLayout;
-  VkShaderStageFlags stageFlags;
 };
 
 struct PushBuffer {
 public:
-  explicit PushBuffer(const BufferInfo &layout) : layout(std::move(layout)) {
+  explicit PushBuffer(const BufferInfo &layout,
+                      VkShaderStageFlags stage = VK_SHADER_STAGE_ALL)
+      : layout(layout), stageFlags(stage) {
     switch (layout.type) {
     case BufferResourceType::Scalar:
       data.resize(std::get<ScalarInfo>(layout.info).size);
@@ -86,11 +86,14 @@ public:
     std::memcpy(data.data(), &value, dataSize);
   }
 
+  auto GetStageFlags() const -> VkShaderStageFlags { return stageFlags; }
+
 private:
   auto OffsetOf(const std::string &name) const
       -> tl::expected<size_t, Error::Error>;
   BufferInfo layout;
   std::vector<uint8_t> data;
+  VkShaderStageFlags stageFlags{VK_SHADER_STAGE_ALL};
 };
 
 } // namespace Graphics

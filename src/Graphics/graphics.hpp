@@ -74,7 +74,7 @@ struct GraphicsContext {
   SwapchainInfo swapchainInfo;
   SurfaceInfo surfaceInfo;
   VkPhysicalDeviceProperties deviceProperties;
-  VkDescriptorPool descriptorPool;
+  std::vector<VkDescriptorPool> descriptorPools;
 
   std::vector<VkSemaphore> swapchainImageReady;
   std::vector<VkSemaphore> renderingFinished;

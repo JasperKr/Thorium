@@ -370,6 +370,8 @@ struct BufferInfo {
   BufferType bufferType;
   std::variant<StructInfo, ScalarInfo, VectorInfo, MatrixInfo> info;
 
+  VkShaderStageFlags stageFlags = VK_SHADER_STAGE_ALL;
+
   void ToString(IndentedPrinter &printer) const {
     printer *= "BufferInfo";
     printer *= "{";
