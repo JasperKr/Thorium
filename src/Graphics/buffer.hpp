@@ -69,9 +69,11 @@ struct Buffer : Object {
     }
   }
 
+  // Set data into the buffer at the given offset
   auto SetData(GraphicsContext &context, std::span<const uint8_t> data,
                VkDeviceSize offset) -> Error::Error;
-  template <typename T>
+
+  template <typename T> // Set data with span of T
   auto SetData(GraphicsContext &context, std::span<T> data,
                VkDeviceSize offset = 0) -> Error::Error {
     auto byteSpan = // NOLINTNEXTLINE
@@ -79,12 +81,21 @@ struct Buffer : Object {
                                  sizeof(T) * data.size());
     return SetData(context, byteSpan, offset);
   }
-  template <typename T>
+  template <typename T> // Set data with vector of T
   auto SetData(GraphicsContext &context, const std::vector<T> &data,
                VkDeviceSize offset = 0) -> Error::Error {
     auto byteSpan = // NOLINTNEXTLINE
         std::span<const uint8_t>(reinterpret_cast<const uint8_t *>(data.data()),
                                  sizeof(T) * data.size());
+    return SetData(context, byteSpan, offset);
+  }
+
+  template <typename T> // Set data with pointer to array of T
+  auto SetData(GraphicsContext &context, const T **data,
+               VkDeviceSize offset = 0) -> Error::Error {
+    auto byteSpan = // NOLINTNEXTLINE
+        std::span<const uint8_t>(reinterpret_cast<const uint8_t *>(&data),
+                                 sizeof(T));
     return SetData(context, byteSpan, offset);
   }
 };

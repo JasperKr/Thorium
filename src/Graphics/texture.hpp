@@ -46,6 +46,7 @@ struct Texture : Object {
 
   bool released = false;
   std::unordered_map<QueueID, uint64_t> lastUsedTimelineValues;
+  VkImageLayout currentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 
   auto GetTimelineValues() const
       -> const std::unordered_map<QueueID, uint64_t> & {
@@ -111,6 +112,8 @@ struct Texture : Object {
   [[nodiscard]] auto GetFormat() const -> VkFormat { return format; }
 
   static auto GetType() -> Type const * { return &type; }
+  auto TransitionLayout(GraphicsContext &context, VkImageLayout layout) const
+      -> Error::Error;
 };
 
 struct TextureCreationInfo {

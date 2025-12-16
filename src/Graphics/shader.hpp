@@ -2,7 +2,9 @@
 
 #include "Graphics/Buffers/push.hpp"
 #include "Graphics/Buffers/structured.hpp"
+#include "Graphics/Buffers/uniform.hpp"
 #include "Graphics/texture.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Modules/type.hpp"
@@ -31,6 +33,41 @@ struct ShaderExtern {
   }
 };
 
+struct DescriptorWriteInfo {
+  VkStructureType sType;
+  const void *pNext;
+  uint32_t dstSet;
+  uint32_t dstBinding;
+  uint32_t dstArrayElement;
+  uint32_t descriptorCount;
+  VkDescriptorType descriptorType;
+  VkDescriptorImageInfo pImageInfo;
+  VkDescriptorBufferInfo pBufferInfo;
+  VkBufferView pTexelBufferView;
+
+  [[nodiscard]] auto GetWrite(
+      const std::unordered_map<uint32_t, VkDescriptorSet> &descriptorSets) const
+      -> VkWriteDescriptorSet {
+    VkWriteDescriptorSet write{};
+    write.sType = sType;
+    write.pNext = pNext;
+    write.dstSet = descriptorSets.at(dstSet);
+    write.dstBinding = dstBinding;
+    write.dstArrayElement = dstArrayElement;
+    write.descriptorCount = descriptorCount;
+    write.descriptorType = descriptorType;
+    write.pImageInfo = &pImageInfo;
+    write.pBufferInfo = &pBufferInfo;
+    write.pTexelBufferView = &pTexelBufferView;
+    return write;
+  }
+};
+
+struct ImageTransitionInfo {
+  Texture::Texture *texture;
+  VkImageLayout newLayout;
+};
+
 static const Type type = Type("Shader");
 
 struct ShaderModule : Object {
@@ -55,13 +92,14 @@ struct ShaderModule : Object {
 
   ShaderReflection reflection;
   std::vector<PushBuffer> pushBuffers;
-  StructuredBuffer globalUniformBuffer;
 
   std::unordered_map<uint64_t, StructuredBuffer> uniformBuffers;
   std::unordered_map<uint64_t, StructuredBuffer> storageBuffers;
 
   std::unordered_map<uint32_t, VkDescriptorSetLayout> descriptorSetLayouts;
   std::unordered_map<uint32_t, VkDescriptorSet> descriptorSets;
+  std::vector<DescriptorWriteInfo> pendingDescriptorWrites;
+  std::vector<ImageTransitionInfo> pendingImageTransitions;
 
   static auto Create(Graphics::GraphicsContext &context,
                      const std::string &path, const std::string &name)
@@ -77,21 +115,56 @@ struct ShaderModule : Object {
     }
 
     // check global ubo
-    const auto &layout = globalUniformBuffer.GetLayout();
+    const auto &layout = reflection.globals;
     switch (layout.type) {
     case BufferResourceType::Unknown:
+      return Error::Create("Invalid UBO buffer");
     case BufferResourceType::Scalar:
     case BufferResourceType::Vector:
     case BufferResourceType::Matrix:
+      PrintWarning("Sending data to global UBO: {}", layout.name);
       if (layout.name == name) {
-        return globalUniformBuffer.GetBuffer()->SetData(context, value);
+        return GetGlobalUniformBuffer().GetBuffer()->SetData(context, value);
       }
     case BufferResourceType::Struct: {
       auto structInfo = std::get<StructInfo>(layout.info);
       auto fieldIt = structInfo.fieldMap.find(name);
       if (fieldIt != structInfo.fieldMap.end()) {
         const auto &fieldInfo = fieldIt->second;
-        auto buffer = globalUniformBuffer.GetBuffer();
+        auto buffer = GetGlobalUniformBuffer().GetBuffer();
+        return buffer->SetData(context, value, fieldInfo.GetOffset());
+      }
+    }
+    }
+
+    return Error::Create("Push buffer not found: " + name);
+  }
+
+  template <typename T>
+  auto Send(GraphicsContext &context, const std::string &name, T **value)
+      -> Error::Error {
+    for (auto &pushBuffer : pushBuffers) {
+      if (pushBuffer.GetLayout().name == name) {
+        return pushBuffer.SetData(value);
+      }
+    }
+
+    // check global ubo
+    const auto &layout = reflection.globals;
+    switch (layout.type) {
+    case BufferResourceType::Unknown:
+    case BufferResourceType::Scalar:
+    case BufferResourceType::Vector:
+    case BufferResourceType::Matrix:
+      if (layout.name == name) {
+        return GetGlobalUniformBuffer().GetBuffer()->SetData(context, value);
+      }
+    case BufferResourceType::Struct: {
+      auto structInfo = std::get<StructInfo>(layout.info);
+      auto fieldIt = structInfo.fieldMap.find(name);
+      if (fieldIt != structInfo.fieldMap.end()) {
+        const auto &fieldInfo = fieldIt->second;
+        auto buffer = GetGlobalUniformBuffer().GetBuffer();
         return buffer->SetData(context, value, fieldInfo.GetOffset());
       }
     }
@@ -121,16 +194,17 @@ struct ShaderModule : Object {
         bufferInfo.offset = 0;
         bufferInfo.range = buffer.GetLayout().size;
 
-        VkWriteDescriptorSet descriptorWrite{};
+        DescriptorWriteInfo descriptorWrite{};
         descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        descriptorWrite.dstSet = descriptorSets[buffer.layout.set];
+        descriptorWrite.dstSet = buffer.layout.set;
         descriptorWrite.dstBinding = buffer.layout.binding;
         descriptorWrite.dstArrayElement = 0;
         descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         descriptorWrite.descriptorCount = 1;
-        descriptorWrite.pBufferInfo = &bufferInfo;
+        descriptorWrite.pBufferInfo = bufferInfo;
 
-        vkUpdateDescriptorSets(context.device, 1, &descriptorWrite, 0, nullptr);
+        // vkUpdateDescriptorSets(context.device, 1, &descriptorWrite, 0, nullptr);
+        pendingDescriptorWrites.emplace_back(descriptorWrite);
 
         return Error::Success();
       }
@@ -161,17 +235,21 @@ struct ShaderModule : Object {
         imageInfo.imageView = texture->view;
         imageInfo.sampler = texture->GetSampler(context);
 
-        VkWriteDescriptorSet descriptorWrite{};
+        DescriptorWriteInfo descriptorWrite{};
         descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        descriptorWrite.dstSet = descriptorSets[samplerInfo.set];
+        descriptorWrite.dstSet = samplerInfo.set;
         descriptorWrite.dstBinding = samplerInfo.binding;
         descriptorWrite.dstArrayElement = 0;
         descriptorWrite.descriptorType =
             VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         descriptorWrite.descriptorCount = 1;
-        descriptorWrite.pImageInfo = &imageInfo;
+        descriptorWrite.pImageInfo = imageInfo;
 
-        vkUpdateDescriptorSets(context.device, 1, &descriptorWrite, 0, nullptr);
+        // vkUpdateDescriptorSets(context.device, 1, &descriptorWrite, 0, nullptr);
+        pendingDescriptorWrites.emplace_back(descriptorWrite);
+        pendingImageTransitions.push_back(ImageTransitionInfo{
+            .texture = texture,
+            .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
 
         return Error::Success();
       }

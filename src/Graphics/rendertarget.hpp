@@ -231,6 +231,8 @@ auto GetDepthMode() -> std::tuple<bool, bool, VkCompareOp>;
 auto GetCullMode() -> VkCullModeFlags;
 auto GetPolygonMode() -> VkPolygonMode;
 auto GetViewport() -> VkViewport;
+auto GetClippedViewport() -> VkViewport;
+auto GetMaximumAllowedViewport() -> VkViewport;
 auto GetScissor() -> VkRect2D;
 auto GetShader() -> Ref<Shader::ShaderModule>;
 auto GetRenderTargets() -> std::vector<Ref<RenderTarget>>;

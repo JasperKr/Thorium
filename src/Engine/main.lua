@@ -41,8 +41,8 @@ local sampler = 1
 local rendertarget = 2
 local ssbo = 4
 
-local target = Thorium.graphics.newTexture(32, 32, { usage = sampler + rendertarget })
-local image = Thorium.graphics.newTexture(32, 32, { usage = sampler })
+local image = Thorium.graphics.newTexture("leek.png", { usage = sampler })
+local target = Thorium.graphics.newTexture(image:getWidth(), image:getHeight(), { usage = sampler + rendertarget })
 function Thorium.draw()
   Thorium.graphics.setRenderTarget(target)
   Thorium.graphics.draw(image)

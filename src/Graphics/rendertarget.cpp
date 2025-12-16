@@ -9,6 +9,7 @@
 #include "slang/slang.h"
 #include "tl/expected.hpp"
 #include "vulkan/vulkan_core.h"
+#include <algorithm>
 #include <array>
 #include <cassert>
 #include <cstdint>
@@ -383,7 +384,9 @@ inline auto CreatePipeline(const GraphicsContext &context, const State &state)
   viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
   viewportState.viewportCount = 1;
 
-  viewportState.pViewports = &state.viewport;
+  auto viewport = GetMaximumAllowedViewport();
+
+  viewportState.pViewports = &viewport;
   viewportState.scissorCount = 1;
   viewportState.pScissors = &state.scissor;
 
@@ -633,6 +636,9 @@ auto Flush(GraphicsContext &context) -> tl::expected<bool, Error::Error> {
 
   PrintDebug("Flushing shader buffers");
 
+  // Unset current rendering, otherwise vkCmdPipelineBarrier will fail
+  EndRendering(context);
+
   auto error =
       currentState.shader->FlushBuffers(context, pipelineResult.value().second);
   if (Error::IsError(error)) {
@@ -663,7 +669,33 @@ inline auto BeginRendering(GraphicsContext &context) -> void {
   VkRenderingInfo renderingInfo = {};
   renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
 
-  auto viewport = GetViewport();
+  auto viewport = GetClippedViewport();
+
+  std::vector<float> projectionMatrix = {
+      2.0F / viewport.width,
+      0.0F,
+      0.0F,
+      -1.0F,
+      0.0F,
+      -2.0F / viewport.height,
+      0.0F,
+      1.0F,
+      0.0F,
+      0.0F,
+      1.0F,
+      0.0F,
+      0.0F,
+      0.0F,
+      0.0F,
+      1.0F,
+  };
+
+  auto sendErr = currentState.shader->Send(context, "DefaultProjectionMatrix",
+                                           projectionMatrix);
+  if (Error::IsError(sendErr)) {
+    PrintError("Failed to send projection matrix to shader: {}",
+               sendErr.message);
+  }
 
   renderingInfo.renderArea.offset = {.x = static_cast<int32_t>(viewport.x),
                                      .y = static_cast<int32_t>(viewport.y)};
@@ -747,7 +779,6 @@ auto PrepareDraw(GraphicsContext &context) -> Error::Error {
   auto updatedState = flushResult.value();
 
   if (updatedState) {
-    EndRendering(context);
     PrintDebug("Beginning rendering");
     BeginRendering(context);
   }
@@ -829,6 +860,15 @@ auto SetShader(const Ref<Shader::ShaderModule> &shader) -> void {
 auto SetRenderTargets(const std::vector<Ref<RenderTarget>> &renderTargets)
     -> void {
   StateStack.back().renderTargets = renderTargets;
+  SetViewport({
+      // Signal default size
+      .x = 0.0F,
+      .y = 0.0F,
+      .width = 0.0F,
+      .height = 0.0F,
+      .minDepth = 0.0F,
+      .maxDepth = 1.0F,
+  });
 }
 
 auto SetLineWidth(float lineWidth) -> void {
@@ -860,23 +900,50 @@ auto GetPolygonMode() -> VkPolygonMode {
 auto GetViewport() -> VkViewport {
   auto &currentState = StateStack.back();
 
-  if (currentState.viewport.width == 0.0F &&
-      currentState.viewport.height == 0.0F) {
-    // Default to size of current attachments
-    auto renderTargets = currentState.renderTargets;
-    if (renderTargets.empty() || renderTargets[0]->texture.get() == nullptr) {
-      renderTargets.clear();
-      renderTargets.push_back(
-          GetSwapchainRendertarget(*Graphics::GetCurrentGraphicsContext()));
-    }
+  return currentState.viewport;
+}
 
-    currentState.viewport.width =
-        static_cast<float>(renderTargets[0]->texture->size.width);
-    currentState.viewport.height =
-        static_cast<float>(renderTargets[0]->texture->size.height);
+auto GetClippedViewport() -> VkViewport {
+  auto &currentState = StateStack.back();
+  auto viewport = currentState.viewport;
+
+  // Default to size of current attachments
+  auto renderTargets = currentState.renderTargets;
+  if (renderTargets.empty() || renderTargets[0]->texture.get() == nullptr) {
+    renderTargets.emplace_back(
+        GetSwapchainRendertarget(*Graphics::GetCurrentGraphicsContext()));
   }
 
-  return currentState.viewport;
+  auto size = renderTargets[0]->texture->size;
+
+  viewport.width = std::min(viewport.width, static_cast<float>(size.width));
+  viewport.height = std::min(viewport.height, static_cast<float>(size.height));
+
+  if (viewport.width == 0.0F || viewport.height == 0.0F) {
+    viewport.width = static_cast<float>(size.width);
+    viewport.height = static_cast<float>(size.height);
+  }
+
+  return viewport;
+}
+
+auto GetMaximumAllowedViewport() -> VkViewport {
+  auto &currentState = StateStack.back();
+  auto viewport = currentState.viewport;
+
+  // Default to size of current attachments
+  auto renderTargets = currentState.renderTargets;
+  if (renderTargets.empty() || renderTargets[0]->texture.get() == nullptr) {
+    renderTargets.emplace_back(
+        GetSwapchainRendertarget(*Graphics::GetCurrentGraphicsContext()));
+  }
+
+  auto size = renderTargets[0]->texture->size;
+
+  viewport.width = static_cast<float>(size.width);
+  viewport.height = static_cast<float>(size.height);
+
+  return viewport;
 }
 
 auto GetScissor() -> VkRect2D {

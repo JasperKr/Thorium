@@ -505,6 +505,24 @@ auto ShaderModule::FlushBuffers(GraphicsContext &context,
     vkUpdateDescriptorSets(context.device, 1, &descriptorWrite, 0, nullptr);
   }
 
+  std::vector<VkWriteDescriptorSet> writes;
+  writes.reserve(pendingDescriptorWrites.size());
+  for (auto &write : pendingDescriptorWrites) {
+    writes.emplace_back(write.GetWrite(descriptorSets));
+  }
+
+  for (auto &transition : pendingImageTransitions) {
+    auto result =
+        transition.texture->TransitionLayout(context, transition.newLayout);
+    if (Error::IsError(result)) {
+      return result;
+    }
+  }
+
+  vkUpdateDescriptorSets(context.device, static_cast<uint32_t>(writes.size()),
+                         writes.data(), 0, nullptr);
+  pendingDescriptorWrites.clear();
+
   auto *commandBuffer = GetCommandBuffer(context, GetCurrentThreadIndex());
 
   VkPipelineBindPoint bindpoint = VK_PIPELINE_BIND_POINT_GRAPHICS;

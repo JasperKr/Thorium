@@ -16,11 +16,14 @@ struct VertexInput
     float4 Color    : COLOR;
 };
 
+uniform float4x4 DefaultProjectionMatrix;
+
 [shader("vertex")]
 VertexStageOutput vertexMain(VertexInput input)
 {
     VertexStageOutput out;
-    out.sv_position = float4(input.Position, 1.0);
+    out.sv_position = mul(DefaultProjectionMatrix, float4(input.Position, 0.0, 1.0));
+    out.sv_position.y *= -1.0;
     out.color = input.Color;
     out.tex_coord = input.TexCoord;
     return out;

@@ -140,6 +140,10 @@ auto Create2D(GraphicsContext &context, TextureCreationInfo info)
   viewInfo.subresourceRange.levelCount = 1;
   viewInfo.subresourceRange.baseArrayLayer = 0;
   viewInfo.subresourceRange.layerCount = 1;
+  viewInfo.components = {.r = VK_COMPONENT_SWIZZLE_IDENTITY,
+                         .g = VK_COMPONENT_SWIZZLE_IDENTITY,
+                         .b = VK_COMPONENT_SWIZZLE_IDENTITY,
+                         .a = VK_COMPONENT_SWIZZLE_IDENTITY};
 
   error = Error::Create(
       vkCreateImageView(context.device, &viewInfo, nullptr, &texture->view));
@@ -630,8 +634,8 @@ auto LoadFromMemory(GraphicsContext &context,
   return texture;
 }
 
-auto TransitionLayout(GraphicsContext &context, Texture *texture,
-                      VkImageLayout oldLayout, VkImageLayout newLayout)
+auto TransitionLayoutOneTime(GraphicsContext &context, Texture *texture,
+                             VkImageLayout oldLayout, VkImageLayout newLayout)
     -> Error::Error {
   VkCommandBufferAllocateInfo allocInfo = {};
   allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -693,6 +697,93 @@ auto TransitionLayout(GraphicsContext &context, Texture *texture,
   vkQueueWaitIdle(context.graphicsQueue);
   vkFreeCommandBuffers(context.device, GetRenderData(context, 0).pool, 1,
                        &commandBuffer);
+
+  return Error::Success();
+}
+
+auto ImageLayoutToString(VkImageLayout layout) -> const char * {
+  switch (layout) {
+  case VK_IMAGE_LAYOUT_UNDEFINED:
+    return "UNDEFINED";
+  case VK_IMAGE_LAYOUT_GENERAL:
+    return "GENERAL";
+  case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
+    return "COLOR_ATTACHMENT_OPTIMAL";
+  case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:
+    return "DEPTH_STENCIL_ATTACHMENT_OPTIMAL";
+  case VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL:
+    return "DEPTH_STENCIL_READ_ONLY_OPTIMAL";
+  case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
+    return "SHADER_READ_ONLY_OPTIMAL";
+  case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:
+    return "TRANSFER_SRC_OPTIMAL";
+  case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
+    return "TRANSFER_DST_OPTIMAL";
+  default:
+    return "UNKNOWN_LAYOUT";
+  }
+}
+
+auto GetAccessMask(VkImageLayout layout) -> VkAccessFlags {
+  switch (layout) {
+  case VK_IMAGE_LAYOUT_GENERAL:
+    return VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+  case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
+    return VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+  case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:
+    return VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+  case VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL:
+    return VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+  case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
+    return VK_ACCESS_SHADER_READ_BIT;
+  case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:
+    return VK_ACCESS_TRANSFER_READ_BIT;
+  case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
+    return VK_ACCESS_TRANSFER_WRITE_BIT;
+  case VK_IMAGE_LAYOUT_UNDEFINED:
+    return 0;
+  default:
+    PrintWarning("GetAccessMask: Unsupported layout {}",
+                 ImageLayoutToString(layout));
+    return 0;
+  }
+}
+
+auto Texture::TransitionLayout(GraphicsContext &context,
+                               VkImageLayout layout) const -> Error::Error {
+
+  if (layout == currentLayout) {
+    return Error::Success();
+  }
+
+  if (layout == VK_IMAGE_LAYOUT_UNDEFINED) {
+    return Error::Create("Cannot transition to UNDEFINED layout.");
+  }
+
+  auto *commandBuffer = GetCommandBuffer(context, GetCurrentThreadIndex());
+
+  VkImageMemoryBarrier barrier = {};
+  barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+  barrier.oldLayout = currentLayout;
+  barrier.newLayout = layout;
+  barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  barrier.image = image;
+  barrier.subresourceRange.aspectMask = GetAspectFlagsForFormat(format);
+  barrier.subresourceRange.baseMipLevel = 0;
+  barrier.subresourceRange.levelCount = 1;
+  barrier.subresourceRange.baseArrayLayer = 0;
+  barrier.subresourceRange.layerCount = 1;
+
+  VkPipelineStageFlags sourceStage = 0;
+  VkPipelineStageFlags destinationStage = 0;
+
+  // Determine source and destination access masks and pipeline stages
+  barrier.srcAccessMask = GetAccessMask(currentLayout);
+  barrier.dstAccessMask = GetAccessMask(layout);
+
+  vkCmdPipelineBarrier(commandBuffer, sourceStage, destinationStage, 0, 0,
+                       nullptr, 0, nullptr, 1, &barrier);
 
   return Error::Success();
 }
@@ -870,8 +961,8 @@ auto Texture::SetPixels(GraphicsContext &context, Image::ImageData &imageData,
   vmaUnmapMemory(context.vmaAllocator, stagingBufferMemory);
 
   // Transition image layout and copy data from staging buffer
-  error = (TransitionLayout(context, this, VK_IMAGE_LAYOUT_UNDEFINED,
-                            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL));
+  error = (TransitionLayoutOneTime(context, this, VK_IMAGE_LAYOUT_UNDEFINED,
+                                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL));
 
   if (Error::IsError(error)) {
     vmaDestroyBuffer(context.vmaAllocator, stagingBuffer, stagingBufferMemory);
@@ -903,8 +994,11 @@ auto Texture::SetPixels(GraphicsContext &context, Image::ImageData &imageData,
     return error;
   }
 
-  error = (TransitionLayout(context, this, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL));
+  error = (TransitionLayoutOneTime(context, this,
+                                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                                   VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL));
+
+  currentLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
   if (Error::IsError(error)) {
     vmaDestroyBuffer(context.vmaAllocator, stagingBuffer, stagingBufferMemory);
