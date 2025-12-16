@@ -10,27 +10,27 @@ function Thorium.update(dt)
 end
 
 function Thorium.mousemoved(x, y, dx, dy)
-  print("Mouse moved", x, y, dx, dy)
+  -- print("Mouse moved", x, y, dx, dy)
 end
 
 function Thorium.mousepressed(x, y, button, istouch, presses)
-  print("Mouse pressed", x, y, button, istouch, presses)
+  -- print("Mouse pressed", x, y, button, istouch, presses)
 end
 
 function Thorium.keypressed(key, scancode, isrepeat)
-  print("Key pressed: " .. key, scancode, isrepeat)
+  -- print("Key pressed: " .. key, scancode, isrepeat)
 end
 
 function Thorium.keyreleased(key, scancode)
-  print("Key released: " .. key, scancode)
+  -- print("Key released: " .. key, scancode)
 end
 
 function Thorium.textinput(text)
-  print("Text input: " .. text)
+  -- print("Text input: " .. text)
 end
 
 function Thorium.wheelmoved(x, y)
-  print("Wheel moved", x, y)
+  -- print("Wheel moved", x, y)
 end
 
 function Thorium.quit()
