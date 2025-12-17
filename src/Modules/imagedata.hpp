@@ -1,11 +1,11 @@
 #pragma once
 
+#include "Math/vector.hpp"
 #include "Modules/bytedata.hpp"
 #include "Modules/image.hpp"
 #include "Modules/object.hpp"
 #include "Modules/type.hpp"
 #include "color.hpp"
-#include "vector.hpp"
 #include "vulkan/vulkan_core.h"
 #include <cstddef>
 #include <cstdint>
@@ -16,8 +16,8 @@ static const Type type = Type("ImageData");
 
 struct ImageData : Object {
 public:
-  auto SetColor(Uvec2 position, const Color &color) -> void;
-  auto GetColor(Uvec2 position) -> Color &;
+  auto SetColor(Math::Uvec2 position, const Color &color) -> void;
+  auto GetColor(Math::Uvec2 position) -> Color &;
   auto Copy(const ImageData &source) -> void;
   auto GetDataPtr() -> uint8_t * { return data.data(); }
   [[nodiscard]] auto GetSize() const -> size_t { return data.size(); }

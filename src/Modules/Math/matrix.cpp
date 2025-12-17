@@ -1,8 +1,9 @@
 #include "matrix.hpp"
+#include <cmath>
 
 namespace Math {
 
-static auto FromRows(std::initializer_list<float> init) -> Matrix4x4 {
+auto Matrix4x4::FromRows(std::initializer_list<Scalar> init) -> Matrix4x4 {
   return Matrix4x4(init).Transpose();
 }
 
@@ -168,7 +169,7 @@ auto Matrix4x4::Transpose() -> Matrix4x4 {
   for (size_t row = 0; row < Rows; ++row) {
     for (size_t col = 0; col < Cols; ++col) {
       // NOLINTNEXTLINE, clangd thinks row, col are swapped, but that's intentional
-      result.At(col, row) = elements.at((row * Cols) + col);
+      result.At(col, row) = At(row, col);
     }
   }
   return result;
@@ -180,7 +181,7 @@ auto Matrix4x4::operator*(const Matrix4x4 &other) -> Matrix4x4 {
     for (size_t col = 0; col < Cols; ++col) {
       Scalar sum = 0.0F;
       for (size_t k = 0; k < Cols; ++k) {
-        sum += this->At(row, k) * other.At(k, col);
+        sum += At(row, k) * other.At(k, col);
       }
       result.At(row, col) = sum;
     }
@@ -256,8 +257,9 @@ auto Matrix4x4::Scale(Vec3 scale) -> Matrix4x4 {
   return result;
 }
 
-auto Perspective(Scalar left, Scalar right, Scalar bottom, Scalar top,
-                 Scalar nearPlane, Scalar farPlane) -> Matrix4x4 {
+auto Matrix4x4::Perspective(Scalar left, Scalar right, Scalar bottom,
+                            Scalar top, Scalar nearPlane, Scalar farPlane)
+    -> Matrix4x4 {
 
   // NOLINTBEGIN
   Matrix4x4 result = Matrix4x4::FromRows(
@@ -272,18 +274,74 @@ auto Perspective(Scalar left, Scalar right, Scalar bottom, Scalar top,
   return result;
 }
 
-// auto Perspective(Scalar fovRadians, Scalar aspectRatio, Scalar nearPlane,
-//  Scalar farPlane) -> Matrix4x4 {
-// Scalar invTanHalfFov = 1.0F / std::tan(fovRadians / 2.0F);
-// Scalar rangeInv = 1.0F / (nearPlane - farPlane);
+// NOLINTNEXTLINE
+auto Matrix4x4::Perspective(Scalar fovRadians, Scalar aspectRatio,
+                            Scalar nearPlane, Scalar farPlane) -> Matrix4x4 {
+  Scalar invTanHalfFov = 1.0F / std::tan(fovRadians / 2.0F); // NOLINT
+  Scalar rangeInv = 1.0F / (nearPlane - farPlane);
+
+  //NOLINTBEGIN
+  Matrix4x4 result = Matrix4x4::FromRows(
+      {invTanHalfFov / aspectRatio, 0.0F, 0.0F, 0.0F, 0.0F, invTanHalfFov, 0.0F,
+       0.0F, 0.0F, 0.0F, (nearPlane + farPlane) * rangeInv,
+       (2.0F * nearPlane * farPlane) * rangeInv, 0.0F, 0.0F, -1.0F, 0.0F});
+  //NOLINTEND
+
+  return result;
+}
+
+auto Matrix4x4::Orthographic(Scalar left, Scalar right, Scalar bottom,
+                             Scalar top, Scalar nearPlane, Scalar farPlane)
+    -> Matrix4x4 {
+  // NOLINTBEGIN
+  Matrix4x4 result = Matrix4x4::FromRows(
+      {2.0F / (right - left), 0.0F, 0.0F, -(right + left) / (right - left),
+       0.0F, 2.0F / (top - bottom), 0.0F, -(top + bottom) / (top - bottom),
+       0.0F, 0.0F, -2.0F / (farPlane - nearPlane),
+       -(farPlane + nearPlane) / (farPlane - nearPlane), 0.0F, 0.0F, 0.0F,
+       1.0F});
+  // NOLINTEND
+
+  return result;
+}
 
 // NOLINTBEGIN
-// Matrix4x4 result = Matrix4x4::FromRows(
-// }
+auto Matrix4x4::Orthographic(Scalar width, Scalar height, Scalar nearPlane,
+                             Scalar farPlane) -> Matrix4x4 {
+  Scalar left = -width / 2.0F;
+  Scalar right = width / 2.0F;
+  Scalar bottom = -height / 2.0F;
+  Scalar top = height / 2.0F;
 
-auto Orthographic(Scalar left, Scalar right, Scalar bottom, Scalar top,
-                  Scalar nearPlane, Scalar farPlane) -> Matrix4x4;
-auto Orthographic(Scalar width, Scalar height, Scalar nearPlane,
-                  Scalar farPlane) -> Matrix4x4;
+  return Matrix4x4::Orthographic(left, right, bottom, top, nearPlane, farPlane);
+}
+// NOLINTEND
+
+auto Matrix4x4::TranslationMatrix(Vec3 translation) -> Matrix4x4 {
+  Matrix4x4 result;
+  result.At(0, 3) = translation.x;
+  result.At(1, 3) = translation.y;
+  result.At(2, 3) = translation.z;
+  return result;
+}
+auto Matrix4x4::ScaleMatrix(Vec3 scale) -> Matrix4x4 {
+  Matrix4x4 result;
+  result.At(0, 0) = scale.x;
+  result.At(1, 1) = scale.y;
+  result.At(2, 2) = scale.z;
+  return result;
+}
+auto Matrix4x4::RotationMatrix(Quaternion rotation) -> Matrix4x4 {
+  return Matrix4x4(rotation);
+}
+
+// NOLINTNEXTLINE
+auto Matrix4x4::TransformationMatrix(Vec3 translation, Vec3 scale,
+                                     Quaternion rotation) -> Matrix4x4 {
+  Matrix4x4 translationMatrix = Matrix4x4::TranslationMatrix(translation);
+  Matrix4x4 scaleMatrix = Matrix4x4::ScaleMatrix(scale);
+  Matrix4x4 rotationMatrix = Matrix4x4::RotationMatrix(rotation);
+  return translationMatrix * rotationMatrix * scaleMatrix;
+}
 
 } // namespace Math

@@ -112,8 +112,13 @@ struct Texture : Object {
   [[nodiscard]] auto GetFormat() const -> VkFormat { return format; }
 
   static auto GetType() -> Type const * { return &type; }
-  auto TransitionLayout(GraphicsContext &context, VkImageLayout layout) const
-      -> Error::Error;
+  auto TransitionLayout(
+      GraphicsContext &context, VkImageLayout layout,
+      VkPipelineStageFlags sourceStage = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT |
+                                         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+      VkPipelineStageFlags destinationStage =
+          VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT |
+          VK_PIPELINE_STAGE_ALL_COMMANDS_BIT) const -> Error::Error;
 };
 
 struct TextureCreationInfo {

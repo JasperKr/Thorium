@@ -2,6 +2,7 @@
 #include "Graphics/graphics.hpp"
 #include "Graphics/shader.hpp"
 #include "Graphics/texture.hpp"
+#include "Modules/Math/matrix.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/image.hpp"
@@ -386,9 +387,16 @@ inline auto CreatePipeline(const GraphicsContext &context, const State &state)
 
   auto viewport = GetMaximumAllowedViewport();
 
+  auto scissor = GetScissor();
+
+  if (scissor.extent.width == 0 || scissor.extent.height == 0) {
+    scissor.extent.width = static_cast<uint32_t>(viewport.width);
+    scissor.extent.height = static_cast<uint32_t>(viewport.height);
+  }
+
   viewportState.pViewports = &viewport;
   viewportState.scissorCount = 1;
-  viewportState.pScissors = &state.scissor;
+  viewportState.pScissors = &scissor;
 
   bool hasDepthAttachment = false;
   bool hasStencilAttachment = false;
@@ -552,8 +560,7 @@ inline auto SetupDefaultState(GraphicsContext &context) -> State {
 
   defaultState.scissor = {
       .offset = {0, 0},
-      .extent = {context.swapchainInfo.extent.width,
-                 context.swapchainInfo.extent.height},
+      .extent = {0, 0},
   };
 
   defaultState.shader = Shader::DefaultShaderModule;
@@ -671,27 +678,16 @@ inline auto BeginRendering(GraphicsContext &context) -> void {
 
   auto viewport = GetClippedViewport();
 
-  std::vector<float> projectionMatrix = {
-      2.0F / viewport.width,
-      0.0F,
-      0.0F,
-      -1.0F,
-      0.0F,
-      -2.0F / viewport.height,
-      0.0F,
-      1.0F,
-      0.0F,
-      0.0F,
-      1.0F,
-      0.0F,
-      0.0F,
-      0.0F,
-      0.0F,
-      1.0F,
-  };
+  auto translationMatrix = Math::Matrix4x4::TranslationMatrix(
+      {-viewport.width / 2.0F, -viewport.height / 2.0F, 0.0F});
+
+  Math::Matrix4x4 projectionMatrix = Math::Matrix4x4::Orthographic(
+      viewport.width, viewport.height, 0.0F, 1.0F);
+
+  auto viewProjectionMatrix = projectionMatrix * translationMatrix;
 
   auto sendErr = currentState.shader->Send(context, "DefaultProjectionMatrix",
-                                           projectionMatrix);
+                                           viewProjectionMatrix.AsSpan());
   if (Error::IsError(sendErr)) {
     PrintError("Failed to send projection matrix to shader: {}",
                sendErr.message);

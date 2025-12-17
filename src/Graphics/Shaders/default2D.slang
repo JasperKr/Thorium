@@ -23,7 +23,6 @@ VertexStageOutput vertexMain(VertexInput input)
 {
     VertexStageOutput out;
     out.sv_position = mul(DefaultProjectionMatrix, float4(input.Position, 0.0, 1.0));
-    out.sv_position.y *= -1.0;
     out.color = input.Color;
     out.tex_coord = input.TexCoord;
     return out;

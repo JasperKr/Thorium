@@ -160,6 +160,11 @@ auto inline FromLuaState(lua_State *state)
       luaL_error(state, "Invalid alpha blend mode: %s", alphaModeStr);
     }
 
+    blendMode.colorWriteMask = static_cast<uint32_t>(VK_COLOR_COMPONENT_R_BIT) |
+                               static_cast<uint32_t>(VK_COLOR_COMPONENT_G_BIT) |
+                               static_cast<uint32_t>(VK_COLOR_COMPONENT_B_BIT) |
+                               static_cast<uint32_t>(VK_COLOR_COMPONENT_A_BIT);
+
     lua_pop(state, 2); // pop blendmode string and alphamode string
   } else {
     // Detailed blendmode
@@ -224,6 +229,8 @@ auto RenderTargetsFromTexture(lua_State *state, int index)
 
   auto rendertarget = Ref<Graphics::RenderTarget::RenderTarget>::Make();
   rendertarget->texture = Ref<Graphics::Texture::Texture>(texture);
+  rendertarget->blendMode = DefaultBlendMode;
+  rendertarget->clearValue = {0.0F, 0.0F, 0.0F, 1.0F};
 
   return rendertarget;
 }

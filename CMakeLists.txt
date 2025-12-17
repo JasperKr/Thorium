@@ -217,6 +217,11 @@ add_executable(Thorium
     src/Modules/event.cpp
     src/Modules/object.cpp
 
+# Math Modules
+    src/Modules/Math/vector.cpp
+    src/Modules/Math/matrix.cpp
+    src/Modules/Math/quaternion.cpp
+
 # Editor
     src/Modules/Editor/imgui.cpp
 

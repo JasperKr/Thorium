@@ -749,8 +749,10 @@ auto GetAccessMask(VkImageLayout layout) -> VkAccessFlags {
   }
 }
 
-auto Texture::TransitionLayout(GraphicsContext &context,
-                               VkImageLayout layout) const -> Error::Error {
+auto Texture::TransitionLayout(GraphicsContext &context, VkImageLayout layout,
+                               VkPipelineStageFlags sourceStage,
+                               VkPipelineStageFlags destinationStage) const
+    -> Error::Error {
 
   if (layout == currentLayout) {
     return Error::Success();
@@ -775,12 +777,13 @@ auto Texture::TransitionLayout(GraphicsContext &context,
   barrier.subresourceRange.baseArrayLayer = 0;
   barrier.subresourceRange.layerCount = 1;
 
-  VkPipelineStageFlags sourceStage = 0;
-  VkPipelineStageFlags destinationStage = 0;
-
   // Determine source and destination access masks and pipeline stages
   barrier.srcAccessMask = GetAccessMask(currentLayout);
   barrier.dstAccessMask = GetAccessMask(layout);
+
+  if (barrier.dstAccessMask == barrier.srcAccessMask) {
+    return Error::Success();
+  }
 
   vkCmdPipelineBarrier(commandBuffer, sourceStage, destinationStage, 0, 0,
                        nullptr, 0, nullptr, 1, &barrier);

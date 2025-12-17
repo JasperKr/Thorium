@@ -13,6 +13,7 @@
 #include "reflect.hpp"
 #include "slang/slang.h"
 #include <cstdint>
+#include <span>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -106,7 +107,7 @@ struct ShaderModule : Object {
       -> tl::expected<Ref<ShaderModule>, Error::Error>;
 
   template <typename T>
-  auto Send(GraphicsContext &context, const std::string &name, T &value)
+  auto Send(GraphicsContext &context, const std::string &name, const T &value)
       -> Error::Error {
     for (auto &pushBuffer : pushBuffers) {
       if (pushBuffer.GetLayout().name == name) {
@@ -141,8 +142,8 @@ struct ShaderModule : Object {
   }
 
   template <typename T>
-  auto Send(GraphicsContext &context, const std::string &name, T **value)
-      -> Error::Error {
+  auto Send(GraphicsContext &context, const std::string &name,
+            const std::span<T> &value) -> Error::Error {
     for (auto &pushBuffer : pushBuffers) {
       if (pushBuffer.GetLayout().name == name) {
         return pushBuffer.SetData(value);
@@ -170,7 +171,7 @@ struct ShaderModule : Object {
     }
     }
 
-    return Error::Create("Push buffer not found: " + name);
+    return Error::Create("Uniform not found: " + name);
   }
 
   auto Send(GraphicsContext &context, const std::string &name,

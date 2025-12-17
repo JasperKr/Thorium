@@ -46,6 +46,49 @@ public:
   auto FlushData(FlushInfo &info) -> void;
 
   template <typename T>
+  auto SetData(const std::string &name, const std::span<T> &value)
+      -> Error::Error {
+    if (layout.type != BufferResourceType::Struct) {
+      return Error::Create(
+          "SetData with name only supported for struct push buffers");
+    }
+
+    size_t dataSize = sizeof(T) * value.size();
+    auto result = OffsetOf(name);
+
+    if (Error::IsError(result)) {
+      return result.error();
+    }
+
+    size_t offset = result.value();
+
+    if (offset + dataSize > data.size()) {
+      return Error::Create("Data exceeds buffer size");
+    }
+
+    // NOLINTNEXTLINE
+    std::memcpy(data.data() + offset, value.data(), dataSize);
+  }
+
+  template <typename T>
+  auto SetData(const std::span<T> &value) -> Error::Error {
+    if (layout.type != BufferResourceType::Scalar &&
+        layout.type != BufferResourceType::Vector &&
+        layout.type != BufferResourceType::Matrix) {
+      return Error::Create("SetData without name only supported for scalar, "
+                           "vector, and matrix push buffers");
+    }
+
+    size_t dataSize = sizeof(T) * value.size();
+    if (dataSize > data.size()) {
+      return Error::Create("Data exceeds buffer size");
+    }
+
+    std::memcpy(data.data(), value.data(), dataSize);
+    return Error::Success();
+  }
+
+  template <typename T>
   auto SetData(const std::string &name, const T &value) -> Error::Error {
     if (layout.type != BufferResourceType::Struct) {
       return Error::Create(
@@ -82,8 +125,9 @@ public:
       return Error::Create("Data exceeds buffer size");
     }
 
-    // NOLINTNEXTLINE
     std::memcpy(data.data(), &value, dataSize);
+
+    return Error::Success();
   }
 
   auto GetStageFlags() const -> VkShaderStageFlags { return stageFlags; }
