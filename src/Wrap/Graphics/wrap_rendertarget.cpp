@@ -275,8 +275,9 @@ auto RenderTargetsFromOptions(lua_State *state, int index)
   }
   lua_pop(state, 1);
 
-  // clearvalue
-  lua_getfield(state, index, "clearvalue");
+  // loadas:
+  // { r, g, b, a } | "clear" (0,0,0,1) | "load" (default) | "none" (don't care)
+  lua_getfield(state, index, "loadas");
   if (lua_istable(state, -1) != 0) {
     auto color = ColorFromLuaState(state, ColorFormat::List);
 
@@ -284,6 +285,23 @@ auto RenderTargetsFromOptions(lua_State *state, int index)
     rendertarget->clearValue.color.float32[1] = color.g;
     rendertarget->clearValue.color.float32[2] = color.b;
     rendertarget->clearValue.color.float32[3] = color.a;
+
+    rendertarget->loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+  } else if (lua_isstring(state, -1) != 0) {
+    const char *loadasStr = luaL_checkstring(state, -1);
+    if (strcmp(loadasStr, "clear") == 0) {
+      rendertarget->clearValue.color.float32[0] = 0.0F;
+      rendertarget->clearValue.color.float32[1] = 0.0F;
+      rendertarget->clearValue.color.float32[2] = 0.0F;
+      rendertarget->clearValue.color.float32[3] = 1.0F;
+      rendertarget->loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    } else if (strcmp(loadasStr, "load") == 0) {
+      rendertarget->loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+    } else if (strcmp(loadasStr, "none") == 0) {
+      rendertarget->loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    } else {
+      luaL_error(state, "Invalid loadas value: %s", loadasStr);
+    }
   }
   lua_pop(state, 2);
 
@@ -296,7 +314,7 @@ auto RenderTargetsFromOptions(lua_State *state, int index)
 // ( { texture = t, ... }, { ... })
 // Table
 // { texture, texture, ... }
-// { { texture = t, layer = n, location = n, blendmode = {...}, clearvalue = {r,g,b,a} }, ... }
+// { { texture = t, layer = n, location = n, blendmode = {...}, loadas = {r,g,b,a} }, ... }
 //
 // blendmode: { "none"|"alpha"|"add"|"sub"|"mul", "alphamultiply"|"premultiplied" }
 // Or, { srccolor = "", dstcolor = "", srcalpha = "", dstalpha = "", opcolor = "", opalpha = "" }

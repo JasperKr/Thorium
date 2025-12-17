@@ -29,6 +29,8 @@ struct RenderTarget : Object {
   int location = -1; // Default to index in the render target array
   int layer = 0;
 
+  VkAttachmentLoadOp loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+
   auto ScheduleDestroy() -> bool override { return false; };
 
   auto operator==(const RenderTarget &other) const -> bool {
@@ -238,6 +240,9 @@ auto GetShader() -> Ref<Shader::ShaderModule>;
 auto GetRenderTargets() -> std::vector<Ref<RenderTarget>>;
 auto GetLineWidth() -> float;
 auto GetWindingOrder() -> VkFrontFace;
+auto Clear(GraphicsContext &context, std::vector<Color> colors,
+           float depthClearValue = 0.0F, int stencilClearValue = 0)
+    -> Error::Error;
 
 } // namespace RenderTarget
 } // namespace Graphics

@@ -3,6 +3,7 @@
 #include "Graphics/shader.hpp"
 #include "Graphics/texture.hpp"
 #include "Modules/Math/matrix.hpp"
+#include "Modules/color.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/image.hpp"
@@ -365,7 +366,7 @@ inline auto CreatePipeline(const GraphicsContext &context, const State &state)
   if (state.renderTargets.empty() ||
       state.renderTargets[0]->texture.get() == nullptr) {
     renderTargets.clear();
-    renderTargets.push_back(GetSwapchainRendertarget(context));
+    renderTargets.emplace_back(GetSwapchainRendertarget(context));
 
     if (!state.renderTargets.empty()) {
       renderTargets.back()->location = state.renderTargets[0]->location;
@@ -679,7 +680,7 @@ inline auto BeginRendering(GraphicsContext &context) -> void {
   auto viewport = GetClippedViewport();
 
   auto translationMatrix = Math::Matrix4x4::TranslationMatrix(
-      {-viewport.width / 2.0F, -viewport.height / 2.0F, 0.0F});
+      {-viewport.width / 2.0F, -viewport.height / 2.0F, 0.0F}); // NOLINT
 
   Math::Matrix4x4 projectionMatrix = Math::Matrix4x4::Orthographic(
       viewport.width, viewport.height, 0.0F, 1.0F);
@@ -711,7 +712,7 @@ inline auto BeginRendering(GraphicsContext &context) -> void {
   if (currentState.renderTargets.empty() ||
       currentState.renderTargets[0]->texture.get() == nullptr) {
     renderTargets.clear();
-    renderTargets.push_back(GetSwapchainRendertarget(context));
+    renderTargets.emplace_back(GetSwapchainRendertarget(context));
 
     if (!currentState.renderTargets.empty()) {
       renderTargets.back()->location = currentState.renderTargets[0]->location;
@@ -727,7 +728,7 @@ inline auto BeginRendering(GraphicsContext &context) -> void {
     attachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
     attachmentInfo.imageView = rendertarget->texture->view;
     attachmentInfo.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    attachmentInfo.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    attachmentInfo.loadOp = rendertarget->loadOp;
     attachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     attachmentInfo.clearValue = rendertarget->clearValue;
 
@@ -740,7 +741,7 @@ inline auto BeginRendering(GraphicsContext &context) -> void {
       stencilAttachment.imageLayout =
           VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
     } else {
-      colorAttachments.push_back(attachmentInfo);
+      colorAttachments.emplace_back(attachmentInfo);
     }
   }
 
@@ -968,6 +969,82 @@ auto GetLineWidth() -> float {
 auto GetWindingOrder() -> VkFrontFace {
   auto &currentState = StateStack.back();
   return currentState.frontFace;
+}
+
+auto Clear(GraphicsContext &context, std::vector<Color> colors,
+           float depthClearValue, int stencilClearValue, bool clearDepth,
+           bool clearStencil) // NOLINT
+    -> Error::Error {
+  auto &currentState = StateStack.back();
+
+  auto *commandBuffer =
+      Graphics::GetCommandBuffer(context, GetCurrentThreadIndex());
+
+  auto count = currentState.renderTargets.size();
+
+  if (count == 0) {
+    return Error::Create("No render targets to clear.");
+  }
+
+  std::vector<VkClearAttachment> clearAttachments{};
+  std::vector<VkClearRect> clearRects{};
+
+  VkClearRect clearRect = {};
+  auto viewport = GetClippedViewport();
+
+  clearRect.rect.offset = {
+      .x = static_cast<int32_t>(viewport.x),
+      .y = static_cast<int32_t>(viewport.y),
+  };
+  clearRect.rect.extent = {
+      .width = static_cast<uint32_t>(viewport.width),
+      .height = static_cast<uint32_t>(viewport.height),
+  };
+  clearRect.baseArrayLayer = 0;
+  clearRect.layerCount = 1;
+
+  for (uint32_t i = 0; i < count; ++i) {
+    VkClearAttachment clearAttachment = {};
+    auto &rendertarget = currentState.renderTargets[i];
+
+    if (Image::IsDepthTexture(rendertarget->texture->format) ||
+        Image::IsStencilTexture(rendertarget->texture->format)) {
+      clearAttachment.aspectMask = 0;
+      if (Image::IsDepthTexture(rendertarget->texture->format)) {
+        clearAttachment.aspectMask |= VK_IMAGE_ASPECT_DEPTH_BIT;
+      }
+      if (Image::IsStencilTexture(rendertarget->texture->format)) {
+        clearAttachment.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
+      }
+      clearAttachment.clearValue.depthStencil.depth = depthClearValue;
+      clearAttachment.clearValue.depthStencil.stencil = stencilClearValue;
+    } else {
+      clearAttachment.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+      clearAttachment.colorAttachment = i;
+      auto color =
+          colors.size() > i ? colors[i] : Color{0.0F, 0.0F, 0.0F, 1.0F};
+      clearAttachment.clearValue.color.float32[0] = color.r;
+      clearAttachment.clearValue.color.float32[1] = color.g;
+      clearAttachment.clearValue.color.float32[2] = color.b;
+      clearAttachment.clearValue.color.float32[3] = color.a;
+    }
+
+    clearAttachments.emplace_back(clearAttachment);
+    clearRects.emplace_back(clearRect);
+  }
+
+  // TODO: Cache this step and only flush on state changes
+  auto error = PrepareDraw(context);
+  if (Error::IsError(error)) {
+    return error;
+  }
+
+  vkCmdClearAttachments(
+      commandBuffer, static_cast<uint32_t>(clearAttachments.size()),
+      clearAttachments.data(), static_cast<uint32_t>(clearRects.size()),
+      clearRects.data());
+
+  return Error::Success();
 }
 
 } // namespace Graphics::RenderTarget

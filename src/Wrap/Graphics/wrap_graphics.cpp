@@ -137,6 +137,7 @@ auto wrap_SetPolygonMode(lua_State *state) -> int {
   RenderTarget::SetPolygonMode(polygonMode);
   return 0;
 }
+
 auto wrap_SetViewport(lua_State *state) -> int {
   auto *ctx = GetCurrentGraphicsContext();
   if (lua_gettop(state) == 0) {
@@ -155,6 +156,7 @@ auto wrap_SetViewport(lua_State *state) -> int {
   RenderTarget::SetViewport(viewport);
   return 0;
 }
+
 auto wrap_SetScissor(lua_State *state) -> int {
   auto *ctx = GetCurrentGraphicsContext();
   VkRect2D scissor{};
@@ -165,6 +167,7 @@ auto wrap_SetScissor(lua_State *state) -> int {
   RenderTarget::SetScissor(scissor);
   return 0;
 }
+
 auto wrap_ClipScissor(lua_State *state) -> int {
   auto *ctx = GetCurrentGraphicsContext();
   VkRect2D scissor{};
@@ -175,6 +178,7 @@ auto wrap_ClipScissor(lua_State *state) -> int {
   RenderTarget::ClipScissor(scissor);
   return 0;
 }
+
 auto wrap_SetShader(lua_State *state) -> int {
   auto *ctx = GetCurrentGraphicsContext();
   auto *shaderHandle =
@@ -497,5 +501,69 @@ auto wrap_Draw(lua_State *state) -> int {
 
   return 0;
 }
+
+// Clear the current render target with the given color
+// Either: bool (0,0,0,1), bool (depth), bool (stencil)
+// Or: Color (attachment 1), value (depth), value (stencil)
+// Or: {[1..]: Color (attachment), depth=value, stencil=value}
+auto Wrap_Clear(lua_State *state) -> int {
+  auto *ctx = GetCurrentGraphicsContext();
+
+  std::vector<Color> colors;
+  float depthClearValue = 0.0F;
+  int stencilClearValue = 0;
+
+  if (lua_isboolean(state, 1) != 0) {
+    // bool version
+    bool clear = lua_toboolean(state, 1) != 0;
+    if (clear) {
+      colors.emplace_back(0.0F, 0.0F, 0.0F, 1.0F);
+      depthClearValue = 1.0F;
+      stencilClearValue = 0;
+    }
+  } else if (LuaWrap::LuaIsType<Color>(state, 1)) {
+    // Color, depth, stencil version
+    auto *color = LuaWrap::FromLuaObject<Modules::Color>(state, 1);
+    colors.emplace_back(*color);
+
+    if (lua_isnumber(state, 2) != 0) {
+      depthClearValue = static_cast<float>(lua_tonumber(state, 2)); // NOLINT
+    }
+
+    if (lua_isnumber(state, 3) != 0) {
+      stencilClearValue = static_cast<int>(lua_tointeger(state, 3)); // NOLINT
+    }
+  } else if (lua_istable(state, 1) != 0) {
+    // Table version
+    lua_pushnil(state);
+    while (lua_next(state, 1) != 0) {
+      // key at -2, value at -1
+      if (lua_type(state, -2) == LUA_TNUMBER) {
+        // Color entry
+        auto *color = LuaWrap::FromLuaObject<Modules::Color>(state, -1);
+        colors.emplace_back(*color);
+      } else if (lua_type(state, -2) == LUA_TSTRING) {
+        const char *key = lua_tostring(state, -2);
+        if (strcmp(key, "depth") == 0) {
+          depthClearValue =
+              static_cast<float>(lua_tonumber(state, -1)); // NOLINT
+        } else if (strcmp(key, "stencil") == 0) {
+          stencilClearValue =
+              static_cast<int>(lua_tointeger(state, -1)); // NOLINT
+        }
+      }
+      lua_pop(state, 1); // pop value, keep key for next iteration
+    }
+  }
+
+  auto result =
+      RenderTarget::Clear(*ctx, colors, depthClearValue, stencilClearValue,
+                          clearDepth, clearStencil);
+
+  if (Error::IsError(result)) {
+    return luaL_error(state, "%s", result.ToString().c_str());
+  }
+
+  return 0;
 
 } // namespace Graphics
