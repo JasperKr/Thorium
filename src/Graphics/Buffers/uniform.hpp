@@ -6,7 +6,6 @@
 #include "Modules/object.hpp"
 #include "tl/expected.hpp"
 #include "vulkan/vulkan_core.h"
-#include <array>
 #include <cstdint>
 
 constexpr size_t InitialUniformBufferSize = 64L * 1024; // 64 KB

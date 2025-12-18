@@ -1,9 +1,11 @@
 #include "texture.hpp"
+#include "Graphics/buffer.hpp"
 #include "Graphics/graphics.hpp"
 #include "Graphics/resource.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/filesystem.hpp"
+#include "Modules/image.hpp"
 #include "Modules/imagedata.hpp"
 #include "Modules/object.hpp"
 #include "sampler.hpp"
@@ -11,6 +13,7 @@
 #include "tl/expected.hpp"
 #include <array>
 #include <cstdint>
+#include <string>
 
 #define VMA_VULKAN_VERSION 1004000
 #define VK_NO_PROTOTYPES
@@ -634,73 +637,6 @@ auto LoadFromMemory(GraphicsContext &context,
   return texture;
 }
 
-auto TransitionLayoutOneTime(GraphicsContext &context, Texture *texture,
-                             VkImageLayout oldLayout, VkImageLayout newLayout)
-    -> Error::Error {
-  VkCommandBufferAllocateInfo allocInfo = {};
-  allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-  allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-  allocInfo.commandPool = GetRenderData(context, 0).pool;
-  allocInfo.commandBufferCount = 1;
-  VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
-  vkAllocateCommandBuffers(context.device, &allocInfo, &commandBuffer);
-  VkCommandBufferBeginInfo beginInfo = {};
-  beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-  beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-  vkBeginCommandBuffer(commandBuffer, &beginInfo);
-
-  VkImageMemoryBarrier barrier = {};
-  barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-  barrier.oldLayout = oldLayout;
-  barrier.newLayout = newLayout;
-  barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-  barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-  barrier.image = texture->image;
-  barrier.subresourceRange.aspectMask =
-      GetAspectFlagsForFormat(texture->format);
-  barrier.subresourceRange.baseMipLevel = 0;
-  barrier.subresourceRange.levelCount = 1;
-  barrier.subresourceRange.baseArrayLayer = 0;
-  barrier.subresourceRange.layerCount = 1;
-
-  VkPipelineStageFlags sourceStage = 0;
-  VkPipelineStageFlags destinationStage = 0;
-
-  // Determine source and destination access masks and pipeline stages
-  if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED &&
-      newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
-    barrier.srcAccessMask = 0;
-    barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-
-    sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-    destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-  } else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL &&
-             newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
-    barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-    barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-
-    sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-  } else {
-    return Error::Create("Unsupported layout transition.");
-  }
-
-  vkCmdPipelineBarrier(commandBuffer, sourceStage, destinationStage, 0, 0,
-                       nullptr, 0, nullptr, 1, &barrier);
-
-  vkEndCommandBuffer(commandBuffer);
-  VkSubmitInfo submitInfo = {};
-  submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-  submitInfo.commandBufferCount = 1;
-  submitInfo.pCommandBuffers = &commandBuffer;
-  vkQueueSubmit(context.graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
-  vkQueueWaitIdle(context.graphicsQueue);
-  vkFreeCommandBuffers(context.device, GetRenderData(context, 0).pool, 1,
-                       &commandBuffer);
-
-  return Error::Success();
-}
-
 auto ImageLayoutToString(VkImageLayout layout) -> const char * {
   switch (layout) {
   case VK_IMAGE_LAYOUT_UNDEFINED:
@@ -750,22 +686,24 @@ auto GetAccessMask(VkImageLayout layout) -> VkAccessFlags {
 }
 
 auto Texture::TransitionLayout(GraphicsContext &context, VkImageLayout layout,
-                               VkPipelineStageFlags sourceStage,
-                               VkPipelineStageFlags destinationStage) const
-    -> Error::Error {
-
-  if (layout == currentLayout) {
-    return Error::Success();
-  }
+                               VkPipelineStageFlags2 sourceStage, // NOLINT
+                               VkPipelineStageFlags2 destinationStage,
+                               VkAccessFlags2 srcAccessMask, // NOLINT
+                               VkAccessFlags2 dstAccessMask) -> Error::Error {
 
   if (layout == VK_IMAGE_LAYOUT_UNDEFINED) {
     return Error::Create("Cannot transition to UNDEFINED layout.");
   }
 
+  if (currentLayout == layout && sourceStage == destinationStage &&
+      srcAccessMask == dstAccessMask) {
+    return Error::Success();
+  }
+
   auto *commandBuffer = GetCommandBuffer(context, GetCurrentThreadIndex());
 
-  VkImageMemoryBarrier barrier = {};
-  barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+  VkImageMemoryBarrier2 barrier = {};
+  barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
   barrier.oldLayout = currentLayout;
   barrier.newLayout = layout;
   barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
@@ -777,49 +715,19 @@ auto Texture::TransitionLayout(GraphicsContext &context, VkImageLayout layout,
   barrier.subresourceRange.baseArrayLayer = 0;
   barrier.subresourceRange.layerCount = 1;
 
-  // Determine source and destination access masks and pipeline stages
-  barrier.srcAccessMask = GetAccessMask(currentLayout);
-  barrier.dstAccessMask = GetAccessMask(layout);
+  barrier.srcAccessMask = srcAccessMask;
+  barrier.dstAccessMask = dstAccessMask;
 
-  if (barrier.dstAccessMask == barrier.srcAccessMask) {
-    return Error::Success();
-  }
+  barrier.srcStageMask = sourceStage;
+  barrier.dstStageMask = destinationStage;
 
-  vkCmdPipelineBarrier(commandBuffer, sourceStage, destinationStage, 0, 0,
-                       nullptr, 0, nullptr, 1, &barrier);
+  VkDependencyInfo dep{.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+                       .imageMemoryBarrierCount = 1,
+                       .pImageMemoryBarriers = &barrier};
 
-  return Error::Success();
-}
+  vkCmdPipelineBarrier2(commandBuffer, &dep);
 
-auto CopyBufferToImage(GraphicsContext &context, VkBuffer buffer,
-                       Texture *texture, VkBufferImageCopy region)
-    -> Error::Error {
-  VkCommandBufferAllocateInfo allocInfo = {};
-  allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-  allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-  allocInfo.commandPool = GetRenderData(context, 0).pool;
-  allocInfo.commandBufferCount = 1;
-  VkCommandBuffer commandBuffer = nullptr;
-  vkAllocateCommandBuffers(context.device, &allocInfo, &commandBuffer);
-  VkCommandBufferBeginInfo beginInfo = {};
-  beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-  beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-  vkBeginCommandBuffer(commandBuffer, &beginInfo);
-
-  region.imageSubresource.aspectMask = GetAspectFlagsForFormat(texture->format);
-
-  vkCmdCopyBufferToImage(commandBuffer, buffer, texture->image,
-                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-
-  vkEndCommandBuffer(commandBuffer);
-  VkSubmitInfo submitInfo = {};
-  submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-  submitInfo.commandBufferCount = 1;
-  submitInfo.pCommandBuffers = &commandBuffer;
-  vkQueueSubmit(context.graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
-  vkQueueWaitIdle(context.graphicsQueue);
-  vkFreeCommandBuffers(context.device, GetRenderData(context, 0).pool, 1,
-                       &commandBuffer);
+  currentLayout = layout;
 
   return Error::Success();
 }
@@ -941,75 +849,69 @@ auto Texture::SetPixels(GraphicsContext &context, Image::ImageData &imageData,
   }
 
   // Create staging buffer
-  VkBuffer stagingBuffer = nullptr;
-  VmaAllocation stagingBufferMemory = nullptr;
-
-  VkBufferCreateInfo bufferInfo = {};
-  bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-  bufferInfo.size = imageData.GetSize();
-  bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-  bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-  VmaAllocationCreateInfo allocInfo = {};
-  allocInfo.usage = VMA_MEMORY_USAGE_CPU_ONLY;
-
-  Error::Error error = Error::Create(
-      vmaCreateBuffer(context.vmaAllocator, &bufferInfo, &allocInfo,
-                      &stagingBuffer, &stagingBufferMemory, nullptr));
-
-  // Copy pixel data to staging buffer
-  void *data = nullptr;
-  vmaMapMemory(context.vmaAllocator, stagingBufferMemory, &data);
-  memcpy(data, imageData.GetDataPtr(), imageData.GetSize());
-  vmaUnmapMemory(context.vmaAllocator, stagingBufferMemory);
-
-  // Transition image layout and copy data from staging buffer
-  error = (TransitionLayoutOneTime(context, this, VK_IMAGE_LAYOUT_UNDEFINED,
-                                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL));
-
-  if (Error::IsError(error)) {
-    vmaDestroyBuffer(context.vmaAllocator, stagingBuffer, stagingBufferMemory);
-    return error;
-  }
+  BufferCreationInfo bufferCreationInfo = {};
+  bufferCreationInfo.size = imageData.GetSize();
+  bufferCreationInfo.usage =
+      VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+  bufferCreationInfo.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                                  VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+  bufferCreationInfo.IsStagingBuffer = true;
 
   if (imageData.GetWidth() > size.width ||
       imageData.GetHeight() > size.height) {
-    vmaDestroyBuffer(context.vmaAllocator, stagingBuffer, stagingBufferMemory);
     return Error::Create(
         "ImageData dimensions exceed texture dimensions in SetPixels.");
   }
 
+  auto buffer = Buffer::Create(context, bufferCreationInfo);
+
+  auto error = buffer->get()->SetData(context, imageData.GetData());
+  // also sets the buffer usage semaphore value
+
+  if (Error::IsError(error)) {
+    buffer->get()->Destroy(
+        context); // Not used yet so we can destroy immediately
+    return error;
+  }
+
   VkBufferImageCopy region = {};
   region.bufferOffset = 0;
-  region.bufferRowLength = 0;
-  region.bufferImageHeight = 0;
-  region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  region.bufferRowLength = imageData.GetWidth();
+  region.bufferImageHeight = imageData.GetHeight();
+  region.imageSubresource.aspectMask = GetAspectFlagsForFormat(format);
   region.imageSubresource.mipLevel = mipLevel;
   region.imageSubresource.baseArrayLayer = arrayLayer;
   region.imageSubresource.layerCount = 1;
-  region.imageOffset = {.x = 0, .y = 0, .z = 0};
-  region.imageExtent = {.width = size.width, .height = size.height, .depth = 1};
+  region.imageOffset = {.x = target.x, .y = target.y, .z = 0};
+  region.imageExtent = {
+      .width = source.extent.width, .height = source.extent.height, .depth = 1};
 
-  error = (CopyBufferToImage(context, stagingBuffer, this, region));
+  error = UseAsTransferDst(context);
 
   if (Error::IsError(error)) {
-    vmaDestroyBuffer(context.vmaAllocator, stagingBuffer, stagingBufferMemory);
+    buffer->get()->Destroy(
+        context); // Not used yet so we can destroy immediately
     return error;
   }
 
-  error = (TransitionLayoutOneTime(context, this,
-                                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                                   VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL));
+  auto *commandBuffer = GetCommandBuffer(context, GetCurrentThreadIndex());
 
-  currentLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+  vkCmdCopyBufferToImage(commandBuffer, buffer->get()->handle, image,
+                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+
+  error = UseAsSampler(context, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT);
 
   if (Error::IsError(error)) {
-    vmaDestroyBuffer(context.vmaAllocator, stagingBuffer, stagingBufferMemory);
+    buffer->get()->ScheduleDestroy();
     return error;
   }
 
-  // Clean up staging buffer
-  vmaDestroyBuffer(context.vmaAllocator, stagingBuffer, stagingBufferMemory);
+  auto timelineValue = GetCPUTimelineSemaphoreValue(context);
+
+  buffer->get()->MarkUse(0, timelineValue);
+  MarkUse(0, timelineValue);
+
+  buffer->get()->ScheduleDestroy();
 
   return Error::Success();
 }
@@ -1116,4 +1018,151 @@ auto GetDefaultTexture(GraphicsContext &context, VkFormat format,
 
   return texture;
 }
+
+constexpr auto GetAccessFlagsForUsage(TextureUsage usage,
+                                      VkImageLayout currentLayout)
+    -> VkAccessFlags2 {
+  switch (usage) {
+  case TextureUsage::Sampler:
+    return VK_ACCESS_2_SHADER_READ_BIT;
+  case TextureUsage::Storage:
+    return VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT;
+  case TextureUsage::Attachment:
+    if (currentLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL) {
+      return VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
+    } else if (currentLayout ==
+               VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL) {
+      return VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+    }
+  case TextureUsage::TransferSrc:
+    return VK_ACCESS_2_TRANSFER_READ_BIT;
+  case TextureUsage::TransferDst:
+    return VK_ACCESS_2_TRANSFER_WRITE_BIT;
+  case TextureUsage::Unknown:
+    return VK_ACCESS_2_NONE;
+  default:
+    PrintError("GetAccessFlagsForUsage: Unknown texture usage: {}",
+               static_cast<int>(usage));
+    return VK_ACCESS_2_NONE;
+  }
+}
+
+constexpr auto GetRequiredTextureLayout(TextureUsage usage, VkFormat format)
+    -> VkImageLayout {
+
+#ifdef DEBUG
+  assert(
+      usage != TextureUsage::Unknown &&
+      "GetRequiredTextureLayout: TextureUsage::Unknown is not a valid usage.");
+#endif
+
+  switch (usage) {
+  case TextureUsage::Sampler:
+    return VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+  case TextureUsage::Storage:
+    return VK_IMAGE_LAYOUT_GENERAL;
+  case TextureUsage::Attachment:
+    if (Image::IsDepthTexture(format) || Image::IsStencilTexture(format)) {
+      return VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    } else {
+      return VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    }
+  case TextureUsage::TransferSrc:
+    return VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+  case TextureUsage::TransferDst:
+    return VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+  case TextureUsage::Unknown:
+    return VK_IMAGE_LAYOUT_UNDEFINED;
+  default:
+    PrintError("GetRequiredTextureLayout: Unknown texture usage: {}",
+               static_cast<int>(usage));
+    return VK_IMAGE_LAYOUT_UNDEFINED;
+  }
+}
+
+constexpr auto IsStageAllowed(VkPipelineStageFlags2 stage) -> bool {
+  switch (stage) {
+  case (VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT):
+  case (VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT):
+  case (VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT):
+  case (VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT):
+  case (VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT):
+  case (VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT):
+  case (VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT):
+  case (VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT):
+  case (VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT):
+  case (VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT):
+  case (VK_PIPELINE_STAGE_2_TESSELLATION_CONTROL_SHADER_BIT):
+  case (VK_PIPELINE_STAGE_2_TESSELLATION_EVALUATION_SHADER_BIT):
+  case (VK_PIPELINE_STAGE_2_GEOMETRY_SHADER_BIT):
+  case (VK_PIPELINE_STAGE_2_TRANSFER_BIT):
+  case (VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT):
+  case (VK_PIPELINE_STAGE_2_HOST_BIT):
+  case (VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT):
+  case (VK_PIPELINE_STAGE_2_COPY_BIT):
+  case (VK_PIPELINE_STAGE_2_RESOLVE_BIT):
+  case (VK_PIPELINE_STAGE_2_BLIT_BIT):
+  case (VK_PIPELINE_STAGE_2_CLEAR_BIT):
+    return true;
+  default:
+    PrintWarning("IsStageAllowed: Unsupported pipeline stage: {}",
+                 static_cast<uint32_t>(stage));
+    return false;
+  }
+}
+
+auto Texture::UseAs(GraphicsContext &context, TextureUsage newUsage,
+                    VkPipelineStageFlags2 stage) -> Error::Error {
+
+  if (newUsage == TextureUsage::Unknown) {
+    return Error::Create("UseAs: TextureUsage::Unknown is not a valid usage.");
+  }
+
+  if (stage == VK_PIPELINE_STAGE_2_NONE) {
+    return Error::Create(
+        "UseAs: stage must be known when transitioning layouts.");
+  }
+
+  if (!IsStageAllowed(stage)) {
+    return Error::Create(
+        "UseAs: Unsupported pipeline stage for texture usage transition.");
+  }
+
+  auto layout = GetRequiredTextureLayout(newUsage, format);
+
+  VkAccessFlags2 currentAccess =
+      GetAccessFlagsForUsage(lastUsage, currentLayout);
+  VkAccessFlags2 newAccess = GetAccessFlagsForUsage(newUsage, layout);
+
+  auto result = TransitionLayout(context, layout, lastPipelineStage, stage,
+                                 currentAccess, newAccess);
+
+  lastUsage = newUsage;
+  lastPipelineStage = stage;
+  return result;
+}
+
+auto Texture::UseAsAttachment(GraphicsContext &context) -> Error::Error {
+  auto newPipelineStage = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+  return UseAs(context, TextureUsage::Attachment, newPipelineStage);
+}
+
+auto Texture::UseAsSampler(GraphicsContext &context,
+                           VkPipelineStageFlags2 stage) -> Error::Error {
+  return UseAs(context, TextureUsage::Sampler, stage);
+}
+auto Texture::UseAsTransferSrc(GraphicsContext &context) -> Error::Error {
+  return UseAs(context, TextureUsage::TransferSrc,
+               VK_PIPELINE_STAGE_TRANSFER_BIT);
+}
+auto Texture::UseAsTransferDst(GraphicsContext &context) -> Error::Error {
+  return UseAs(context, TextureUsage::TransferDst,
+               VK_PIPELINE_STAGE_TRANSFER_BIT);
+}
+
+auto Texture::UseAsStorage(GraphicsContext &context,
+                           VkPipelineStageFlags2 stage) -> Error::Error {
+  return UseAs(context, TextureUsage::Storage, stage);
+}
+
 } // namespace Graphics::Texture

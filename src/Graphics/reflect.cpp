@@ -190,6 +190,39 @@ auto SetupStruct(slang::TypeLayoutReflection *bufferLayout,
   return Error::Success();
 }
 
+inline auto SlangStageToVkStage(SlangStage stage) {
+  switch (stage) {
+  case SLANG_STAGE_VERTEX:
+    return VK_SHADER_STAGE_VERTEX_BIT;
+  case SLANG_STAGE_HULL:
+    return VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT;
+  case SLANG_STAGE_DOMAIN:
+    return VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT;
+  case SLANG_STAGE_GEOMETRY:
+    return VK_SHADER_STAGE_GEOMETRY_BIT;
+  case SLANG_STAGE_FRAGMENT:
+    return VK_SHADER_STAGE_FRAGMENT_BIT;
+  case SLANG_STAGE_COMPUTE:
+    return VK_SHADER_STAGE_COMPUTE_BIT;
+  case SLANG_STAGE_MESH:
+    return VK_SHADER_STAGE_MESH_BIT_EXT;
+  case SLANG_STAGE_AMPLIFICATION:
+    return VK_SHADER_STAGE_TASK_BIT_EXT;
+  case SLANG_STAGE_RAY_GENERATION:
+    return VK_SHADER_STAGE_RAYGEN_BIT_KHR;
+  case SLANG_STAGE_ANY_HIT:
+    return VK_SHADER_STAGE_ANY_HIT_BIT_KHR;
+  case SLANG_STAGE_CLOSEST_HIT:
+    return VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
+  case SLANG_STAGE_MISS:
+    return VK_SHADER_STAGE_MISS_BIT_KHR;
+  case SLANG_STAGE_CALLABLE:
+    return VK_SHADER_STAGE_CALLABLE_BIT_KHR;
+  default:
+    return VK_SHADER_STAGE_FLAG_BITS_MAX_ENUM;
+  }
+}
+
 auto SetupResource(slang::VariableLayoutReflection *variableLayout,
                    ShaderReflection &reflection) -> Error::Error {
 
@@ -214,7 +247,7 @@ auto SetupResource(slang::VariableLayoutReflection *variableLayout,
 
     ResourceInfo resourceInfo = {
         .name = variableLayout->getName(),
-        // .stage = SlangStage::SLANG_STAGE_FRAGMENT,
+        .stages = SlangStageToVkStage(variableLayout->getStage()),
         .variant = ResourceVariant::Sampler,
         .info = samplerInfo,
     };
@@ -363,6 +396,7 @@ auto SetupResource(slang::VariableLayoutReflection *variableLayout,
 
     ResourceInfo resourceInfo = {
         .name = variableLayout->getName(),
+        .stages = SlangStageToVkStage(variableLayout->getStage()),
         .variant = ResourceVariant::Buffer,
         .info = info,
     };
@@ -405,23 +439,6 @@ auto SetupFromType(slang::VariableLayoutReflection *variableLayout,
     bool isPushConstant =
         (category == slang::ParameterCategory::PushConstantBuffer);
 
-    auto stage = variableLayout->getStage();
-    VkShaderStageFlags stageFlags = VK_SHADER_STAGE_ALL;
-    switch (stage) {
-    case SlangStage::SLANG_STAGE_VERTEX:
-      stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-      break;
-    case SlangStage::SLANG_STAGE_FRAGMENT:
-      stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-      break;
-    case SlangStage::SLANG_STAGE_COMPUTE:
-      stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-      break;
-    default:
-      stageFlags = VK_SHADER_STAGE_ALL; // TODO: Edit this for hardware RT
-      break;
-    }
-
     BufferInfo info{
         .name = variableLayout->getName(),
         .offset = static_cast<uint32_t>(variableLayout->getOffset()),
@@ -439,6 +456,7 @@ auto SetupFromType(slang::VariableLayoutReflection *variableLayout,
 
     ResourceInfo resourceInfo = {
         .name = variableLayout->getName(),
+        .stages = SlangStageToVkStage(variableLayout->getStage()),
         .variant = ResourceVariant::Buffer,
         .info = info,
     };
@@ -465,6 +483,7 @@ auto SetupFromType(slang::VariableLayoutReflection *variableLayout,
 
     ResourceInfo resourceInfo = {
         .name = variableLayout->getName(),
+        .stages = SlangStageToVkStage(variableLayout->getStage()),
         .variant = ResourceVariant::Matrix,
         .info = matrixInfo,
     };
@@ -483,6 +502,7 @@ auto SetupFromType(slang::VariableLayoutReflection *variableLayout,
 
     ResourceInfo resourceInfo = {
         .name = variableLayout->getName(),
+        .stages = SlangStageToVkStage(variableLayout->getStage()),
         .variant = ResourceVariant::Vector,
         .info = vectorInfo,
     };
@@ -500,6 +520,7 @@ auto SetupFromType(slang::VariableLayoutReflection *variableLayout,
 
     ResourceInfo resourceInfo = {
         .name = variableLayout->getName(),
+        .stages = SlangStageToVkStage(variableLayout->getStage()),
         .variant = ResourceVariant::Scalar,
         .info = scalarInfo,
     };

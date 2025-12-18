@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <vector>
 namespace Timer {
-const int DeltaTimeBufferSize = 100;
+const int DeltaTimeBufferSize = 64;
 
 struct TimerFrameInfo {
   std::uint64_t lastTime = 0ULL;

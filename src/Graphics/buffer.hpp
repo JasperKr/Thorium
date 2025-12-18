@@ -13,9 +13,10 @@
 namespace Graphics {
 
 struct BufferCreationInfo {
-  VkDeviceSize size;
-  VkBufferUsageFlags usage;
-  VkMemoryPropertyFlags properties;
+  VkDeviceSize size{};
+  VkBufferUsageFlags usage{};
+  VkMemoryPropertyFlags properties{};
+  bool IsStagingBuffer = false;
 };
 
 auto FlushBufferUploads(GraphicsContext &context) -> Error::Error;
@@ -29,6 +30,7 @@ struct Buffer : Object {
   uint64_t sizeInBytes = 0;
   VkBufferUsageFlags usage = 0;
   VkMemoryPropertyFlags properties = 0;
+  bool isStagingBuffer = false;
 
   Buffer() = default;
   Buffer(const Buffer &) = delete;
@@ -46,7 +48,12 @@ struct Buffer : Object {
   }
 
   auto MarkUse(const QueueID queueID, const uint64_t timelineValue) -> void {
-    lastUsedTimelineValues[queueID] = timelineValue;
+    uint64_t previousValue{};
+    if (lastUsedTimelineValues.contains(queueID)) {
+      previousValue = lastUsedTimelineValues.at(queueID);
+    }
+
+    lastUsedTimelineValues[queueID] = (std::max)(previousValue, timelineValue);
   }
 
   static auto Create(Graphics::GraphicsContext &context,
@@ -62,10 +69,10 @@ struct Buffer : Object {
 
   ~Buffer() override {
     if (!released) {
+      PrintWarning("Buffer destroyed without being queued for destruction!");
       auto *context = GetCurrentGraphicsContext();
       vkQueueWaitIdle(context->graphicsQueue);
       Destroy(*context);
-      PrintWarning("Buffer destroyed without being queued for destruction!");
     }
   }
 

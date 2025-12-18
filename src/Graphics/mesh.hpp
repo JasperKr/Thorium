@@ -305,14 +305,14 @@ struct Mesh : Object {
   auto Draw(GraphicsContext &context) const -> Error::Error {
     PrintDebug("Draw called");
 
+    RenderData renderData = GetRenderData(context, GetCurrentThreadIndex());
+    Bind(renderData.commandBuffers[context.frameIndex]);
+    MeshDrawRange range = DrawRange;
+
     auto error = RenderTarget::PrepareDraw(context);
     if (Error::IsError(error)) {
       return error;
     }
-
-    RenderData renderData = GetRenderData(context, GetCurrentThreadIndex());
-    Bind(renderData.commandBuffers[context.frameIndex]);
-    MeshDrawRange range = DrawRange;
 
     if (IndexData.size() > 0) {
       vkCmdDrawIndexed(renderData.commandBuffers[context.frameIndex],
@@ -322,11 +322,7 @@ struct Mesh : Object {
                 range.Offset, 0);
     }
 
-    auto timelineResult = Graphics::IncrementTimelineSemaphore(context);
-    if (Error::IsError(timelineResult)) {
-      return timelineResult.error();
-    }
-    uint64_t timelineValue = timelineResult.value();
+    auto timelineValue = Graphics::GetCPUTimelineSemaphoreValue(context);
     this->VertexBuffer->MarkUse(0, timelineValue);
     this->IndexBuffer->MarkUse(0, timelineValue);
 
@@ -335,15 +331,16 @@ struct Mesh : Object {
 
   auto DrawInstanced(GraphicsContext &context, uint32_t instanceCount) const
       -> Error::Error {
-    auto error = RenderTarget::PrepareDraw(context);
-    if (Error::IsError(error)) {
-      return error;
-    }
 
     RenderData renderData = GetRenderData(context, GetCurrentThreadIndex());
     Bind(renderData.commandBuffers[context.frameIndex]);
 
     MeshDrawRange range = DrawRange;
+
+    auto error = RenderTarget::PrepareDraw(context);
+    if (Error::IsError(error)) {
+      return error;
+    }
 
     if (IndexData.size() > 0) {
       vkCmdDrawIndexed(renderData.commandBuffers[context.frameIndex],
@@ -353,11 +350,7 @@ struct Mesh : Object {
                 instanceCount, range.Offset, 0);
     }
 
-    auto timelineResult = Graphics::IncrementTimelineSemaphore(context);
-    if (Error::IsError(timelineResult)) {
-      return timelineResult.error();
-    }
-    uint64_t timelineValue = timelineResult.value();
+    auto timelineValue = Graphics::GetCPUTimelineSemaphoreValue(context);
     this->VertexBuffer->MarkUse(0, timelineValue);
     this->IndexBuffer->MarkUse(0, timelineValue);
 

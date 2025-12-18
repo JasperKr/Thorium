@@ -5,6 +5,7 @@
 #include "Modules/error.hpp"
 #include "graphics.hpp"
 #include <cstdint>
+#include <string>
 #define VK_NO_PROTOTYPES
 #include "array"
 #include "vulkan/vulkan_core.h"
@@ -69,7 +70,7 @@ auto UnloadBufferModule(GraphicsContext &context) -> Error::Error {
 
   for (auto &uploadBuffer : UploadBuffers) {
     if (uploadBuffer.get() != nullptr) {
-      uploadBuffer->ScheduleDestroy();
+      uploadBuffer->Destroy(context);
     }
   }
 
@@ -117,12 +118,39 @@ inline auto Upload(const Buffer *buffer, GraphicsContext &context,
                    std::span<const uint8_t> data, VkDeviceSize offset = 0)
     -> Error::Error {
 
+  if (((buffer->usage) & VK_BUFFER_USAGE_TRANSFER_DST_BIT) == 0) {
+    return Error::Create(
+        "Buffer was not created with TRANSFER_DST usage flag for upload.");
+  }
+
+  if (buffer->isStagingBuffer) {
+    // We know this will be a large upload,
+    // no need for upload buffers as it is a one time upload and we won't be interfering with
+    // the GPU reading from the buffer later
+    // So we directly map and write to the buffer memory
+
+    void *mapped = nullptr;
+    auto result = Error::Create(
+        vmaMapMemory(context.vmaAllocator, buffer->memory, &mapped));
+    if (Error::IsError(result)) {
+      return result;
+    }
+
+    // NOLINTNEXTLINE, because of pointer arithmetic
+    std::memcpy(static_cast<uint8_t *>(mapped) + offset, data.data(),
+                data.size());
+    vmaUnmapMemory(context.vmaAllocator, buffer->memory);
+
+    return Error::Success();
+  }
+
   if (data.size() > LargeUploadThreshold) {
     // Use staging buffer
     VkBufferCreateInfo stagingBufferInfo = {};
     stagingBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
     stagingBufferInfo.size = data.size();
-    stagingBufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    stagingBufferInfo.usage =
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
     stagingBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     // See: https://gpuopen-librariesandsdks.github.io/VulkanMemoryAllocator/html/usage_patterns.html
     VmaAllocationCreateInfo stagingAllocInfo = {};
@@ -183,7 +211,8 @@ inline auto Upload(const Buffer *buffer, GraphicsContext &context,
       Graphics::BufferCreationInfo bufferInfo{};
       bufferInfo.size = newSize;
       bufferInfo.usage =
-          static_cast<uint32_t>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+          static_cast<uint32_t>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT) |
+          static_cast<uint32_t>(VK_BUFFER_USAGE_TRANSFER_DST_BIT);
       bufferInfo.properties =
           static_cast<uint32_t>(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) |
           static_cast<uint32_t>(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
@@ -239,6 +268,8 @@ auto Buffer::Create(GraphicsContext &context, BufferCreationInfo info)
 
   auto buffer = Ref<Buffer>::Make();
 
+  buffer->isStagingBuffer = info.IsStagingBuffer;
+
   VkBufferCreateInfo bufferInfo = {};
   bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
   bufferInfo.size = info.size;
@@ -281,13 +312,7 @@ auto Buffer::SetData(GraphicsContext &context, std::span<const uint8_t> data,
     return result;
   }
 
-  auto timelineValueResult = IncrementTimelineSemaphore(context);
-
-  if (Error::IsError(timelineValueResult)) {
-    return timelineValueResult.error();
-  }
-
-  auto timelineValue = timelineValueResult.value();
+  auto timelineValue = GetCPUTimelineSemaphoreValue(context);
 
   MarkUse(0, timelineValue); // TODO: Support multiple queues
 

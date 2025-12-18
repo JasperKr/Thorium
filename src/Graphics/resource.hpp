@@ -3,6 +3,7 @@
 #include "Graphics/buffer.hpp"
 #include "Graphics/graphics.hpp"
 #include "Graphics/texture.hpp"
+#include "Modules/console.hpp"
 #include "Modules/object.hpp"
 #include <cassert>
 #include <cstdint>
@@ -23,7 +24,7 @@ inline auto CanBeDestroyed( // NOLINTNEXTLINE
   for (const auto &[queueID, timelineValue] : resourceTimelineValues) {
     auto iterator = completedTimelineValues.find(queueID);
     if (iterator == completedTimelineValues.end() ||
-        iterator->second < timelineValue) {
+        iterator->second <= timelineValue) {
       return false;
     }
   }
@@ -42,8 +43,6 @@ inline auto ProcessReleasedResources(
                        resource->GetTimelineValues())) {
       resource->Destroy(context);
       ReleasedTextures.erase(ReleasedTextures.begin() + i);
-
-      delete resource.get();
     }
   }
 
@@ -55,8 +54,6 @@ inline auto ProcessReleasedResources(
                        resource->GetTimelineValues())) {
       resource->Destroy(context);
       ReleasedBuffers.erase(ReleasedBuffers.begin() + i);
-
-      delete resource.get();
     }
   }
 }

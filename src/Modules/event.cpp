@@ -2,8 +2,10 @@
 #include "SDL3/SDL_events.h"
 #include <queue>
 
-
 namespace Event {
+
+// NOLINTNEXTLINE
+bool MainLoopRunning = true;
 
 // NOLINTNEXTLINE
 static std::queue<SDL_Event> events;

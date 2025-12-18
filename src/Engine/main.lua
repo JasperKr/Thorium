@@ -43,9 +43,13 @@ local ssbo = 4
 
 local image = Thorium.graphics.newTexture("leek.png", { usage = sampler })
 local target = Thorium.graphics.newTexture(image:getWidth(), image:getHeight(), { usage = sampler + rendertarget })
+
 function Thorium.draw()
   Thorium.graphics.setRenderTarget(target)
   Thorium.graphics.draw(image)
   Thorium.graphics.setRenderTarget()
   Thorium.graphics.draw(target)
+
+  print("DT: " .. Thorium.timer.getDelta(), "AVG DT: " .. Thorium.timer.getAverageDelta(),
+    "FPS: " .. Thorium.timer.getFPS())
 end

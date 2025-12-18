@@ -419,6 +419,7 @@ enum class ResourceVariant : uint8_t {
 
 struct ResourceInfo {
   std::string name;
+  VkShaderStageFlags stages = VK_SHADER_STAGE_ALL;
 
   ResourceVariant variant;
   std::variant<SamplerInfo, ScalarInfo, VectorInfo, MatrixInfo, BufferInfo>

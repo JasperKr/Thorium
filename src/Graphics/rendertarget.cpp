@@ -97,13 +97,10 @@ inline auto GetSwapchainRendertarget(const GraphicsContext &context)
   return swapchainRendertarget;
 }
 
-auto CreateDescriptorSets(GraphicsContext &context,
-                          Shader::ShaderModule *shader) -> Error::Error {
-  std::unordered_map<uint32_t, std::vector<VkDescriptorSetLayoutBinding>>
-      descriptorSetLayoutBindings;
-
-  PrintDebug("Creating descriptor sets...");
-
+auto FillDescriptorSets(
+    GraphicsContext &context, Shader::ShaderModule *shader,
+    std::unordered_map<uint32_t, std::vector<VkDescriptorSetLayoutBinding>>
+        descriptorSetLayoutBindings) -> Error::Error {
   for (auto &layout : shader->reflection.resources) {
     if (layout.variant == ResourceVariant::Buffer) {
       auto &bufferInfo = std::get<BufferInfo>(layout.info);
@@ -150,43 +147,11 @@ auto CreateDescriptorSets(GraphicsContext &context,
         layoutBinding);
   }
 
-  shader->descriptorSets.clear();
-  shader->descriptorSetLayouts.clear();
+  return Error::Success();
+}
 
-  for (const auto &setBinding : descriptorSetLayoutBindings) {
-    uint32_t setIndex = setBinding.first;
-    const auto &bindings = setBinding.second;
-    VkDescriptorSetLayoutCreateInfo layoutInfo = {};
-    layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
-    layoutInfo.pBindings = bindings.data();
-
-    VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
-    auto error = Error::Create(vkCreateDescriptorSetLayout(
-        context.device, &layoutInfo, nullptr, &descriptorSetLayout));
-
-    shader->descriptorSetLayouts[setIndex] = descriptorSetLayout;
-
-    if (Error::IsError(error)) {
-      return error;
-    }
-
-    VkDescriptorSetAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    allocInfo.descriptorPool = context.descriptorPools.at(context.frameIndex);
-    allocInfo.descriptorSetCount = 1;
-    allocInfo.pSetLayouts = &descriptorSetLayout;
-
-    error = Error::Create(vkAllocateDescriptorSets(
-        context.device, &allocInfo, &shader->descriptorSets[setIndex]));
-    if (Error::IsError(error)) {
-      return error;
-    }
-  }
-
-  PrintDebug("Buffer descriptor sets created successfully.");
-
-  // loop over all samplers and bind the default texture
+auto BindDefaultTextures(GraphicsContext &context, Shader::ShaderModule *shader)
+    -> Error::Error {
   for (const auto &resource : shader->reflection.resources) {
     if (resource.variant == ResourceVariant::Sampler) {
 
@@ -251,6 +216,63 @@ auto CreateDescriptorSets(GraphicsContext &context,
         vkUpdateDescriptorSets(context.device, 1, &descriptorWrite, 0, nullptr);
       }
     }
+  }
+
+  return Error::Success();
+}
+
+auto CreateDescriptorSets(GraphicsContext &context,
+                          Shader::ShaderModule *shader) -> Error::Error {
+  std::unordered_map<uint32_t, std::vector<VkDescriptorSetLayoutBinding>>
+      descriptorSetLayoutBindings;
+
+  PrintDebug("Creating descriptor sets...");
+
+  auto fillResult =
+      FillDescriptorSets(context, shader, descriptorSetLayoutBindings);
+  if (Error::IsError(fillResult)) {
+    return fillResult;
+  }
+
+  shader->descriptorSets.clear();
+  shader->descriptorSetLayouts.clear();
+
+  for (const auto &setBinding : descriptorSetLayoutBindings) {
+    uint32_t setIndex = setBinding.first;
+    const auto &bindings = setBinding.second;
+    VkDescriptorSetLayoutCreateInfo layoutInfo = {};
+    layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
+    layoutInfo.pBindings = bindings.data();
+
+    VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
+    auto error = Error::Create(vkCreateDescriptorSetLayout(
+        context.device, &layoutInfo, nullptr, &descriptorSetLayout));
+
+    shader->descriptorSetLayouts[setIndex] = descriptorSetLayout;
+
+    if (Error::IsError(error)) {
+      return error;
+    }
+
+    VkDescriptorSetAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    allocInfo.descriptorPool = context.descriptorPools.at(context.frameIndex);
+    allocInfo.descriptorSetCount = 1;
+    allocInfo.pSetLayouts = &descriptorSetLayout;
+
+    error = Error::Create(vkAllocateDescriptorSets(
+        context.device, &allocInfo, &shader->descriptorSets[setIndex]));
+    if (Error::IsError(error)) {
+      return error;
+    }
+  }
+
+  PrintDebug("Buffer descriptor sets created successfully.");
+
+  auto bindResult = BindDefaultTextures(context, shader);
+  if (Error::IsError(bindResult)) {
+    return bindResult;
   }
 
   return Error::Success();
@@ -619,6 +641,9 @@ auto Reset(GraphicsContext &context) -> void {
   LastState = State();
 }
 
+// NOLINTNEXTLINE, to call vkCmdEndRendering
+static bool BegunRendering = false;
+
 auto Flush(GraphicsContext &context) -> tl::expected<bool, Error::Error> {
 
   auto &currentState = StateStack.back();
@@ -642,8 +667,6 @@ auto Flush(GraphicsContext &context) -> tl::expected<bool, Error::Error> {
   const auto &commandBuffer =
       Graphics::GetCommandBuffer(context, GetCurrentThreadIndex());
 
-  PrintDebug("Flushing shader buffers");
-
   // Unset current rendering, otherwise vkCmdPipelineBarrier will fail
   EndRendering(context);
 
@@ -651,6 +674,16 @@ auto Flush(GraphicsContext &context) -> tl::expected<bool, Error::Error> {
       currentState.shader->FlushBuffers(context, pipelineResult.value().second);
   if (Error::IsError(error)) {
     return tl::make_unexpected(error);
+  }
+
+  // Loop over all attachments
+
+  for (const auto &rendertarget : currentState.renderTargets) {
+    auto result = rendertarget->texture->UseAsAttachment(context);
+
+    if (Error::IsError(result)) {
+      return tl::make_unexpected(result);
+    }
   }
 
   PrintDebug("Binding pipeline");
@@ -667,9 +700,6 @@ auto Destroy(GraphicsContext &context) -> void {
   }
   PipelineCache.clear();
 }
-
-// NOLINTNEXTLINE, to call vkCmdEndRendering
-static bool BegunRendering = false;
 
 inline auto BeginRendering(GraphicsContext &context) -> void {
   auto &currentState = StateStack.back();
@@ -971,9 +1001,7 @@ auto GetWindingOrder() -> VkFrontFace {
   return currentState.frontFace;
 }
 
-auto Clear(GraphicsContext &context, std::vector<Color> colors,
-           float depthClearValue, int stencilClearValue, bool clearDepth,
-           bool clearStencil) // NOLINT
+auto Clear(GraphicsContext &context, const ClearInfo &clearInfo)
     -> Error::Error {
   auto &currentState = StateStack.back();
 
@@ -1010,27 +1038,35 @@ auto Clear(GraphicsContext &context, std::vector<Color> colors,
     if (Image::IsDepthTexture(rendertarget->texture->format) ||
         Image::IsStencilTexture(rendertarget->texture->format)) {
       clearAttachment.aspectMask = 0;
+      bool doClear = false;
       if (Image::IsDepthTexture(rendertarget->texture->format)) {
         clearAttachment.aspectMask |= VK_IMAGE_ASPECT_DEPTH_BIT;
+        doClear = clearInfo.clearDepth;
       }
       if (Image::IsStencilTexture(rendertarget->texture->format)) {
         clearAttachment.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
+        doClear = clearInfo.clearStencil;
       }
-      clearAttachment.clearValue.depthStencil.depth = depthClearValue;
-      clearAttachment.clearValue.depthStencil.stencil = stencilClearValue;
+      clearAttachment.clearValue.depthStencil.depth = clearInfo.depthClearValue;
+      clearAttachment.clearValue.depthStencil.stencil =
+          clearInfo.stencilClearValue;
+      if (doClear) {
+        clearAttachments.emplace_back(clearAttachment);
+        clearRects.emplace_back(clearRect);
+      }
     } else {
       clearAttachment.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
       clearAttachment.colorAttachment = i;
-      auto color =
-          colors.size() > i ? colors[i] : Color{0.0F, 0.0F, 0.0F, 1.0F};
+      auto color = clearInfo.colors.size() > i ? clearInfo.colors[i]
+                                               : Color{0.0F, 0.0F, 0.0F, 1.0F};
       clearAttachment.clearValue.color.float32[0] = color.r;
       clearAttachment.clearValue.color.float32[1] = color.g;
       clearAttachment.clearValue.color.float32[2] = color.b;
       clearAttachment.clearValue.color.float32[3] = color.a;
-    }
 
-    clearAttachments.emplace_back(clearAttachment);
-    clearRects.emplace_back(clearRect);
+      clearAttachments.emplace_back(clearAttachment);
+      clearRects.emplace_back(clearRect);
+    }
   }
 
   // TODO: Cache this step and only flush on state changes

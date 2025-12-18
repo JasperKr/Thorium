@@ -1,4 +1,5 @@
 #include "Graphics/resource.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "buffer.hpp"
 #include "graphics.hpp"
@@ -56,15 +57,17 @@ static auto EndFrame(Graphics::GraphicsContext &context, uint32_t frameIndex)
     vkEndCommandBuffer(renderData.commandBuffers[frameIndex]);
   }
 
-  // uint64_t currentTimelineValue = GetCurrentTimelineSemaphoreValue(context).value();
-  auto result = Graphics::GetCurrentTimelineSemaphoreValue(context);
-  if (Error::IsError(result)) {
-    return result.error();
+  auto currentTimelineResult =
+      Graphics::GetCurrentTimelineSemaphoreValue(context);
+
+  if (Error::IsError(currentTimelineResult)) {
+    return currentTimelineResult.error();
   }
 
-  uint64_t currentTimelineValue = result.value();
+  uint64_t completedValue = currentTimelineResult.value();
+
   std::unordered_map<QueueID, uint64_t> completedTimelineValues = {
-      {0, currentTimelineValue},
+      {GetCurrentThreadIndex(), completedValue},
   };
 
   Graphics::ProcessReleasedResources(context, completedTimelineValues);
@@ -123,34 +126,67 @@ void TransitionPresentToColor(VkCommandBuffer cmd, VkImage image) {
 }
 
 auto SubmitCommandBuffers(Graphics::GraphicsContext &context) -> Error::Error {
-  VkSubmitInfo submitInfo = {};
-  submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-  std::vector<VkPipelineStageFlags> waitStages = {
-      VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
-  submitInfo.waitSemaphoreCount = 1;
-  submitInfo.pWaitSemaphores = &context.swapchainImageReady[context.frameIndex];
-  submitInfo.pWaitDstStageMask = waitStages.data();
+  // --- 1. Submit frame command buffers with binary semaphore ---
+  VkSubmitInfo submitBinary = {};
+  submitBinary.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
-  std::vector<VkCommandBuffer> commandBuffers =
-      std::vector<VkCommandBuffer>(context.renderThreadCount);
+  // Wait for the swapchain image ready semaphore
+  VkPipelineStageFlags waitStage =
+      VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+  submitBinary.waitSemaphoreCount = 1;
+  submitBinary.pWaitSemaphores =
+      &context.swapchainImageReady[context.frameIndex];
+  submitBinary.pWaitDstStageMask = &waitStage;
+
+  // Command buffers
+  std::vector<VkCommandBuffer> commandBuffers(context.renderThreadCount);
   for (int i = 0; i < context.renderThreadCount; i++) {
     Graphics::RenderData renderData = GetRenderData(context, i);
-    commandBuffers.at(i) = renderData.commandBuffers[context.frameIndex];
+    commandBuffers[i] = renderData.commandBuffers[context.frameIndex];
   }
+  submitBinary.commandBufferCount = context.renderThreadCount;
+  submitBinary.pCommandBuffers = commandBuffers.data();
 
-  submitInfo.pCommandBuffers = commandBuffers.data();
-  submitInfo.commandBufferCount = context.renderThreadCount;
-  submitInfo.signalSemaphoreCount = 1;
-  submitInfo.pSignalSemaphores = &context.renderingFinished[context.frameIndex];
+  // Signal the swapchain finished semaphore
+  submitBinary.signalSemaphoreCount = 1;
+  submitBinary.pSignalSemaphores =
+      &context.renderingFinished[context.frameIndex];
 
-  // Submit to graphics queue
+  // Submit
   Error::Error err =
-      Error::Create(vkQueueSubmit(context.graphicsQueue, 1, &submitInfo,
+      Error::Create(vkQueueSubmit(context.graphicsQueue, 1, &submitBinary,
                                   context.inFlightFences[context.frameIndex]));
-
   if (Error::IsError(err)) {
     return err;
   }
+
+  // --- 2. Submit a dummy timeline semaphore signal for resource tracking ---
+  VkSemaphore globalTimelineSemaphore = GetGlobalTimelineSemaphore(context);
+  if (globalTimelineSemaphore != VK_NULL_HANDLE) {
+    uint64_t timelineValue = GetCPUTimelineSemaphoreValue(context);
+
+    VkTimelineSemaphoreSubmitInfo timelineInfo{};
+    timelineInfo.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO;
+    timelineInfo.signalSemaphoreValueCount = 1;
+    timelineInfo.pSignalSemaphoreValues = &timelineValue;
+
+    VkSubmitInfo submitTimeline{};
+    submitTimeline.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitTimeline.pNext = &timelineInfo;
+    submitTimeline.commandBufferCount = 0; // no commands needed
+    submitTimeline.pCommandBuffers = nullptr;
+    submitTimeline.signalSemaphoreCount = 1;
+    submitTimeline.pSignalSemaphores = &globalTimelineSemaphore;
+
+    err = Error::Create(vkQueueSubmit(context.graphicsQueue, 1, &submitTimeline,
+                                      VK_NULL_HANDLE));
+    if (Error::IsError(err)) {
+      return err;
+    }
+  }
+
+  uint64_t &timelineValue = GetCPUTimelineSemaphoreValue(context);
+  timelineValue++;
 
   return Error::Success();
 }

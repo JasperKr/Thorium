@@ -238,21 +238,6 @@ auto MainLoop() -> Error::Error {
     return error;
   }
 
-  PrintDebug("Filling swapchain images...");
-
-  for (int32_t idx = 0; idx < context.swapchainInfo.imageCount; idx++) {
-    // Fill swapchain images initially
-    // To make sure all further frames are waiting on vsync properly
-    // and the timer does not explode due to tiny delta times
-    Error::Error err = Graphics::Present(context);
-
-    if (Error::IsError(err)) {
-      return err;
-    }
-  }
-
-  PrintDebug("Swapchains filled successfully.");
-
   auto luaLoadErr = LoadLua(state);
 
   if (Error::IsError(luaLoadErr)) {

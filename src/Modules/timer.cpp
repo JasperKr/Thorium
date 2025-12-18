@@ -83,6 +83,8 @@ void Step() {
     totalDelta += timerInfo.deltaTimes[i];
   }
 
-  timerInfo.averageDeltaTime = totalDelta / timerInfo.deltaTimeBufferCount;
+  if (timerInfo.deltaTimeBufferIndex == 0) {
+    timerInfo.averageDeltaTime = totalDelta / timerInfo.deltaTimeBufferCount;
+  }
 }
 } // namespace Timer

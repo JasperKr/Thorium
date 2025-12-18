@@ -240,22 +240,22 @@ auto Wrap_GetFormat(lua_State *state) -> int {
   return 1;
 }
 
-enum class TextureUsage : uint8_t {
+enum class LuaTextureUsage : uint8_t {
   Sampled = 1U << 0U,
   RenderTarget = 1U << 1U,
   Storage = 1U << 2U,
 };
 
 static inline auto TextureUsageToVkImageUsage(VkFormat format,
-                                              TextureUsage usage)
+                                              LuaTextureUsage usage)
     -> VkImageUsageFlags {
   VkImageUsageFlags flags = 0;
   if ((static_cast<uint8_t>(usage) &
-       static_cast<uint8_t>(TextureUsage::Sampled)) != 0) {
+       static_cast<uint8_t>(LuaTextureUsage::Sampled)) != 0) {
     flags |= VK_IMAGE_USAGE_SAMPLED_BIT;
   }
   if ((static_cast<uint8_t>(usage) &
-       static_cast<uint8_t>(TextureUsage::RenderTarget)) != 0) {
+       static_cast<uint8_t>(LuaTextureUsage::RenderTarget)) != 0) {
     if (Image::IsDepthTexture(format) || Image::IsStencilTexture(format)) {
       flags |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
     } else {
@@ -263,7 +263,7 @@ static inline auto TextureUsageToVkImageUsage(VkFormat format,
     }
   }
   if ((static_cast<uint8_t>(usage) &
-       static_cast<uint8_t>(TextureUsage::Storage)) != 0) {
+       static_cast<uint8_t>(LuaTextureUsage::Storage)) != 0) {
     flags |= VK_IMAGE_USAGE_STORAGE_BIT;
   }
   return flags;
@@ -277,7 +277,7 @@ struct LuaOptions {
   Graphics::Texture::TextureType type = Graphics::Texture::TextureType::DEFAULT;
   VkFormat format = VK_FORMAT_R8G8B8A8_UNORM;
   bool mipmaps = false;
-  TextureUsage usage = TextureUsage::Sampled;
+  LuaTextureUsage usage = LuaTextureUsage::Sampled;
   uint32_t mipmapCount = 0;
   uint32_t mipmapStart = 0;
   bool linear = true;
@@ -320,7 +320,7 @@ struct LuaOptions {
     lua_getfield(state, index, "usage");
     if (lua_isnumber(state, -1) != 0) {
       int usageInt = static_cast<int>(lua_tointeger(state, -1));
-      this->usage = static_cast<TextureUsage>(usageInt);
+      this->usage = static_cast<LuaTextureUsage>(usageInt);
     }
     lua_pop(state, 1);
 

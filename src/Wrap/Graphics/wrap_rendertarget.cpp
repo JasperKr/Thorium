@@ -279,7 +279,7 @@ auto RenderTargetsFromOptions(lua_State *state, int index)
   // { r, g, b, a } | "clear" (0,0,0,1) | "load" (default) | "none" (don't care)
   lua_getfield(state, index, "loadas");
   if (lua_istable(state, -1) != 0) {
-    auto color = ColorFromLuaState(state, ColorFormat::List);
+    auto color = ColorFromLuaState(state, ColorFormat::List, -1);
 
     rendertarget->clearValue.color.float32[0] = color.r;
     rendertarget->clearValue.color.float32[1] = color.g;

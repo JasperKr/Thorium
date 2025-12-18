@@ -240,8 +240,16 @@ auto GetShader() -> Ref<Shader::ShaderModule>;
 auto GetRenderTargets() -> std::vector<Ref<RenderTarget>>;
 auto GetLineWidth() -> float;
 auto GetWindingOrder() -> VkFrontFace;
-auto Clear(GraphicsContext &context, std::vector<Color> colors,
-           float depthClearValue = 0.0F, int stencilClearValue = 0)
+
+struct ClearInfo {
+  std::vector<Color> colors;
+  float depthClearValue = 1.0F;
+  int stencilClearValue = 0;
+  bool clearDepth = false;
+  bool clearStencil = false;
+};
+
+auto Clear(GraphicsContext &context, const ClearInfo &clearInfo)
     -> Error::Error;
 
 } // namespace RenderTarget

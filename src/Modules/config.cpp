@@ -185,10 +185,7 @@ auto Configure(lua_State *state)
     Thorium._setTitle(config.window.title)
     Thorium._setIdentity(config.filesystem.identity)
     Thorium._setSize(config.window.width, config.window.height)
-    print("Want to set log level to: " .. config.loglevel)
     if config.loglevel ~= "" then Thorium._setLogLevel(config.loglevel) end
-
-    print("Configuration applied successfully.")
   )lua";
 
   if (luaL_dostring(state, luaScript) != LUA_OK) {

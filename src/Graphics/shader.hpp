@@ -66,10 +66,43 @@ struct DescriptorWriteInfo {
 
 struct ImageTransitionInfo {
   Texture::Texture *texture;
-  VkImageLayout newLayout;
+  Texture::TextureUsage newUsage;
+  // Unused for: Attachments, TransferSrc, TransferDst
+  VkPipelineStageFlags2 newStage = VK_PIPELINE_STAGE_2_NONE;
 };
 
 static const Type type = Type("Shader");
+
+constexpr auto
+ShaderStageFlagsToPipelineStageFlags(VkShaderStageFlags shaderStages)
+    -> VkPipelineStageFlags2 {
+  VkPipelineStageFlags2 pipelineStages = 0;
+
+  if (shaderStages == VK_SHADER_STAGE_ALL) {
+    return VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+  }
+
+  if ((shaderStages & VK_SHADER_STAGE_VERTEX_BIT) != 0U) {
+    pipelineStages |= VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT;
+  }
+  if ((shaderStages & VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT) != 0U) {
+    pipelineStages |= VK_PIPELINE_STAGE_2_TESSELLATION_CONTROL_SHADER_BIT;
+  }
+  if ((shaderStages & VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT) != 0U) {
+    pipelineStages |= VK_PIPELINE_STAGE_2_TESSELLATION_EVALUATION_SHADER_BIT;
+  }
+  if ((shaderStages & VK_SHADER_STAGE_GEOMETRY_BIT) != 0U) {
+    pipelineStages |= VK_PIPELINE_STAGE_2_GEOMETRY_SHADER_BIT;
+  }
+  if ((shaderStages & VK_SHADER_STAGE_FRAGMENT_BIT) != 0U) {
+    pipelineStages |= VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+  }
+  if ((shaderStages & VK_SHADER_STAGE_COMPUTE_BIT) != 0U) {
+    pipelineStages |= VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+  }
+
+  return pipelineStages;
+}
 
 struct ShaderModule : Object {
   std::string moduleName;
@@ -223,10 +256,6 @@ struct ShaderModule : Object {
 
       const auto &samplerInfo = std::get<SamplerInfo>(resource.info);
       if (resource.name == name) {
-        if (descriptorSets[samplerInfo.set] == VK_NULL_HANDLE) {
-          return Error::Success(); // Will be created and set later
-        }
-
         // NOLINTNEXTLINE
         auto key = samplerInfo.set | ((uint64_t)samplerInfo.binding << 32U);
 
@@ -246,11 +275,12 @@ struct ShaderModule : Object {
         descriptorWrite.descriptorCount = 1;
         descriptorWrite.pImageInfo = imageInfo;
 
-        // vkUpdateDescriptorSets(context.device, 1, &descriptorWrite, 0, nullptr);
         pendingDescriptorWrites.emplace_back(descriptorWrite);
-        pendingImageTransitions.push_back(ImageTransitionInfo{
+        pendingImageTransitions.emplace_back(ImageTransitionInfo{
             .texture = texture,
-            .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
+            .newUsage = Texture::TextureUsage::Sampler,
+            .newStage = ShaderStageFlagsToPipelineStageFlags(resource.stages),
+        });
 
         return Error::Success();
       }

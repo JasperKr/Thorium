@@ -113,11 +113,11 @@ static thread_local GraphicsContext *g_ctx = nullptr;
 void SetCurrentGraphicsContext(GraphicsContext *ctx);
 auto GetCurrentGraphicsContext() -> GraphicsContext *;
 
-auto IncrementTimelineSemaphore(GraphicsContext &context)
-    -> tl::expected<uint64_t, Error::Error>;
 auto GetCurrentTimelineSemaphoreValue(GraphicsContext &context)
     -> tl::expected<uint64_t, Error::Error>;
 auto InitializeGlobalTimelineSemaphore(GraphicsContext &context)
     -> Error::Error;
+auto GetCPUTimelineSemaphoreValue(GraphicsContext &context) -> uint64_t &;
+auto GetGlobalTimelineSemaphore(GraphicsContext &context) -> VkSemaphore;
 
 } // namespace Graphics

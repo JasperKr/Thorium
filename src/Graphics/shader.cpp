@@ -17,6 +17,7 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <set>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -75,8 +76,6 @@ auto LoadModule() -> Error::Error {
 
   DefaultShaderModule = shaderCreationResult.value();
   DefaultShaderModule->expectedVertexFormat = VertexFormats::Default2D;
-
-  PrintAlways("Default shader module loaded successfully.");
 
   return Error::Success();
 }
@@ -482,10 +481,13 @@ auto ShaderModule::FlushBuffers(GraphicsContext &context,
 
   PrintDebug("Flushing shader buffers...");
 
-  if (reflection.hasGlobals) {
-    // UBO buffer can be resized, we update every frame for now; TODO: optimize
+  static Graphics::Buffer *currentUBOBuffer;
+
+  auto &buffer = GetGlobalUniformBuffer();
+
+  if (reflection.hasGlobals && currentUBOBuffer != buffer.GetBuffer().get()) {
+    // UBO buffer can be resized, we update every frame for now;
     VkDescriptorBufferInfo bufferInfo{};
-    auto &buffer = GetGlobalUniformBuffer();
     bufferInfo.buffer = buffer.GetBuffer().get()->handle;
     bufferInfo.offset = buffer.GetOffset();
 
@@ -503,17 +505,54 @@ auto ShaderModule::FlushBuffers(GraphicsContext &context,
     descriptorWrite.pBufferInfo = &bufferInfo;
 
     vkUpdateDescriptorSets(context.device, 1, &descriptorWrite, 0, nullptr);
+
+    // currentUBOBuffer = buffer.GetBuffer().get();
   }
 
   std::vector<VkWriteDescriptorSet> writes;
-  writes.reserve(pendingDescriptorWrites.size());
-  for (auto &write : pendingDescriptorWrites) {
+  std::set<uint64_t> updatedSets;
+
+  auto writeCount = static_cast<int32_t>(pendingDescriptorWrites.size());
+  writes.reserve(writeCount);
+
+  // Loop over writes in reverse to prioritize later writes
+  for (int32_t i = writeCount - 1; i >= 0; i--) {
+    auto &write = pendingDescriptorWrites.at(i);
+    uint64_t key = write.dstSet;
+    key |= (static_cast<uint64_t>(write.dstBinding) << 32U); // NOLINT
+    if (updatedSets.contains(key)) {
+      continue;
+    }
+    updatedSets.insert(key);
+
     writes.emplace_back(write.GetWrite(descriptorSets));
   }
 
   for (auto &transition : pendingImageTransitions) {
-    auto result =
-        transition.texture->TransitionLayout(context, transition.newLayout);
+    Error::Error result;
+
+    switch (transition.newUsage) {
+    case Texture::TextureUsage::Sampler:
+      result = transition.texture->UseAsSampler(context, transition.newStage);
+      break;
+    case Texture::TextureUsage::Storage:
+      result = transition.texture->UseAsStorage(context, transition.newStage);
+      break;
+    case Texture::TextureUsage::Attachment:
+      result = transition.texture->UseAsAttachment(context);
+      break;
+    case Texture::TextureUsage::TransferSrc:
+      result = transition.texture->UseAsTransferSrc(context);
+      break;
+    case Texture::TextureUsage::TransferDst:
+      result = transition.texture->UseAsTransferDst(context);
+      break;
+    case Texture::TextureUsage::Unknown:
+      result = Error::Create(
+          "Cannot transition image with unknown usage in shader flush.");
+      break;
+    }
+
     if (Error::IsError(result)) {
       return result;
     }

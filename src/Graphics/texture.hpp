@@ -7,6 +7,7 @@
 #include "Modules/type.hpp"
 #include "graphics.hpp"
 #include "vulkan/vulkan_core.h"
+#include <algorithm>
 #include <cstdint>
 
 namespace Graphics::Texture {
@@ -28,6 +29,15 @@ enum class WrapMode : uint8_t {
 
 const static Type type = Type("Texture");
 
+enum class TextureUsage : uint8_t {
+  Sampler,
+  Storage,
+  Attachment,
+  TransferSrc,
+  TransferDst,
+  Unknown,
+};
+
 struct Texture : Object {
   VkExtent3D size{};
   VkFormat format = VK_FORMAT_UNDEFINED;
@@ -47,6 +57,20 @@ struct Texture : Object {
   bool released = false;
   std::unordered_map<QueueID, uint64_t> lastUsedTimelineValues;
   VkImageLayout currentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+  TextureUsage lastUsage = TextureUsage::Unknown;
+  VkPipelineStageFlagBits2 lastPipelineStage =
+      VK_PIPELINE_STAGE_NONE_KHR; // NOLINT
+
+  auto UseAs(GraphicsContext &context, TextureUsage newUsage,
+             VkPipelineStageFlags2 stage) -> Error::Error;
+
+  auto UseAsAttachment(GraphicsContext &context) -> Error::Error;
+  auto UseAsSampler(GraphicsContext &context, VkPipelineStageFlags2 stage)
+      -> Error::Error;
+  auto UseAsTransferSrc(GraphicsContext &context) -> Error::Error;
+  auto UseAsTransferDst(GraphicsContext &context) -> Error::Error;
+  auto UseAsStorage(GraphicsContext &context, VkPipelineStageFlags2 stage)
+      -> Error::Error;
 
   auto GetTimelineValues() const
       -> const std::unordered_map<QueueID, uint64_t> & {
@@ -54,7 +78,12 @@ struct Texture : Object {
   }
 
   auto MarkUse(QueueID queueID, uint64_t timelineValue) -> void {
-    lastUsedTimelineValues[queueID] = timelineValue;
+    uint64_t previousValue{};
+    if (lastUsedTimelineValues.contains(queueID)) {
+      previousValue = lastUsedTimelineValues.at(queueID);
+    }
+
+    lastUsedTimelineValues[queueID] = (std::max)(previousValue, timelineValue);
   }
 
   auto ScheduleDestroy() -> bool override;
@@ -114,11 +143,13 @@ struct Texture : Object {
   static auto GetType() -> Type const * { return &type; }
   auto TransitionLayout(
       GraphicsContext &context, VkImageLayout layout,
-      VkPipelineStageFlags sourceStage = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT |
-                                         VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-      VkPipelineStageFlags destinationStage =
+      VkPipelineStageFlags2 sourceStage = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT |
+                                          VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+      VkPipelineStageFlags2 destinationStage =
           VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT |
-          VK_PIPELINE_STAGE_ALL_COMMANDS_BIT) const -> Error::Error;
+          VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+      VkAccessFlags2 srcAccessMask = VK_ACCESS_NONE, // NOLINT
+      VkAccessFlags2 dstAccessMask = VK_ACCESS_NONE) -> Error::Error;
 };
 
 struct TextureCreationInfo {
@@ -144,9 +175,6 @@ auto CreateArray(GraphicsContext &context, TextureCreationInfo info)
 
 auto TransitionLayout(GraphicsContext &context, Texture *texture,
                       VkImageLayout oldLayout, VkImageLayout newLayout)
-    -> Error::Error;
-auto CopyBufferToImage(GraphicsContext &context, VkBuffer buffer,
-                       Texture *texture, VkBufferImageCopy region)
     -> Error::Error;
 auto CopyImageToBuffer(GraphicsContext &context, Texture *texture,
                        VkBuffer buffer) -> Error::Error;

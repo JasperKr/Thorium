@@ -11,6 +11,7 @@
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
+#include "Wrap/Graphics/wrap_color.hpp"
 #include "Wrap/wrap.hpp"
 #include "tl/expected.hpp"
 #include "vulkan/vulkan_core.h"
@@ -445,8 +446,6 @@ inline auto GetQuadMesh(GraphicsContext &context, const VkRect2D size,
     return tl::unexpected(setDataError);
   }
 
-  RenderTarget::BeginRendering(context);
-
   return mesh;
 }
 
@@ -480,6 +479,8 @@ auto wrap_Draw(lua_State *state) -> int {
       if (Error::IsError(sendResult)) {
         return luaL_error(state, "%s", sendResult.ToString().c_str());
       }
+    } else {
+      return luaL_error(state, "Texture is null.");
     }
 
     mesh = result.value();
@@ -504,34 +505,37 @@ auto wrap_Draw(lua_State *state) -> int {
 
 // Clear the current render target with the given color
 // Either: bool (0,0,0,1), bool (depth), bool (stencil)
-// Or: Color (attachment 1), value (depth), value (stencil)
+// Or: Color (attachment 1, vararg), value (depth), value (stencil)
 // Or: {[1..]: Color (attachment), depth=value, stencil=value}
 auto Wrap_Clear(lua_State *state) -> int {
   auto *ctx = GetCurrentGraphicsContext();
 
-  std::vector<Color> colors;
-  float depthClearValue = 0.0F;
-  int stencilClearValue = 0;
+  RenderTarget::ClearInfo clearInfo{};
 
   if (lua_isboolean(state, 1) != 0) {
     // bool version
     bool clear = lua_toboolean(state, 1) != 0;
     if (clear) {
-      colors.emplace_back(0.0F, 0.0F, 0.0F, 1.0F);
-      depthClearValue = 1.0F;
-      stencilClearValue = 0;
+      clearInfo.colors.emplace_back(0.0F, 0.0F, 0.0F, 1.0F);
     }
-  } else if (LuaWrap::LuaIsType<Color>(state, 1)) {
+
+    clearInfo.clearDepth =
+        lua_isboolean(state, 2) != 0 ? (lua_toboolean(state, 2) != 0) : false;
+    clearInfo.clearStencil =
+        lua_isboolean(state, 3) != 0 ? (lua_toboolean(state, 3) != 0) : false;
+  } else if (lua_isnumber(state, 1) != 0) {
     // Color, depth, stencil version
-    auto *color = LuaWrap::FromLuaObject<Modules::Color>(state, 1);
-    colors.emplace_back(*color);
+    auto color = ColorFromLuaState(state, ColorFormat::VarArg, 1);
+    clearInfo.colors.emplace_back(color);
 
-    if (lua_isnumber(state, 2) != 0) {
-      depthClearValue = static_cast<float>(lua_tonumber(state, 2)); // NOLINT
+    if (lua_isnumber(state, 5) != 0) { // NOLINT
+      clearInfo.depthClearValue =
+          static_cast<float>(lua_tonumber(state, 5)); // NOLINT
     }
 
-    if (lua_isnumber(state, 3) != 0) {
-      stencilClearValue = static_cast<int>(lua_tointeger(state, 3)); // NOLINT
+    if (lua_isnumber(state, 6) != 0) { // NOLINT
+      clearInfo.stencilClearValue =
+          static_cast<int>(lua_tointeger(state, 6)); // NOLINT
     }
   } else if (lua_istable(state, 1) != 0) {
     // Table version
@@ -540,15 +544,15 @@ auto Wrap_Clear(lua_State *state) -> int {
       // key at -2, value at -1
       if (lua_type(state, -2) == LUA_TNUMBER) {
         // Color entry
-        auto *color = LuaWrap::FromLuaObject<Modules::Color>(state, -1);
-        colors.emplace_back(*color);
+        auto color = ColorFromLuaState(state, ColorFormat::List, -1);
+        clearInfo.colors.emplace_back(color);
       } else if (lua_type(state, -2) == LUA_TSTRING) {
         const char *key = lua_tostring(state, -2);
         if (strcmp(key, "depth") == 0) {
-          depthClearValue =
+          clearInfo.depthClearValue =
               static_cast<float>(lua_tonumber(state, -1)); // NOLINT
         } else if (strcmp(key, "stencil") == 0) {
-          stencilClearValue =
+          clearInfo.stencilClearValue =
               static_cast<int>(lua_tointeger(state, -1)); // NOLINT
         }
       }
@@ -556,14 +560,13 @@ auto Wrap_Clear(lua_State *state) -> int {
     }
   }
 
-  auto result =
-      RenderTarget::Clear(*ctx, colors, depthClearValue, stencilClearValue,
-                          clearDepth, clearStencil);
+  auto result = RenderTarget::Clear(*ctx, clearInfo);
 
   if (Error::IsError(result)) {
     return luaL_error(state, "%s", result.ToString().c_str());
   }
 
   return 0;
+}
 
 } // namespace Graphics

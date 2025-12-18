@@ -14,8 +14,8 @@ namespace Graphics {
 
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
 
-inline VkSemaphore globalTimelineSemaphore = nullptr;
-inline uint64_t currentTimelineValue = 0;
+thread_local inline VkSemaphore globalTimelineSemaphore = nullptr;
+thread_local inline uint64_t currentCPUTimelineValue = 1;
 
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
@@ -42,35 +42,26 @@ auto InitializeGlobalTimelineSemaphore(GraphicsContext &context)
   return Error::Success();
 }
 
-auto IncrementTimelineSemaphore(GraphicsContext &context)
-    -> tl::expected<uint64_t, Error::Error> {
-  currentTimelineValue++;
+auto GetGlobalTimelineSemaphore(GraphicsContext &context) -> VkSemaphore {
+  return globalTimelineSemaphore;
+}
 
-  VkSemaphoreSignalInfo signalInfo = {
-      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SIGNAL_INFO,
-      .semaphore = globalTimelineSemaphore,
-      .value = currentTimelineValue,
-  };
-
-  auto result = Error::Create(vkSignalSemaphore(context.device, &signalInfo));
-  if (Error::IsError(result)) {
-    return tl::unexpected(result);
-  }
-
-  return currentTimelineValue;
+auto GetCPUTimelineSemaphoreValue(GraphicsContext &context) -> uint64_t & {
+  return currentCPUTimelineValue;
 }
 
 auto GetCurrentTimelineSemaphoreValue(GraphicsContext &context)
     -> tl::expected<uint64_t, Error::Error> {
-  uint64_t timelineValue = 0;
+  uint64_t completedValue = UINT64_MAX;
 
   auto result = Error::Create(vkGetSemaphoreCounterValue(
-      context.device, globalTimelineSemaphore, &timelineValue));
+      context.device, globalTimelineSemaphore, &completedValue));
+
   if (Error::IsError(result)) {
-    return tl::unexpected(result);
+    return tl::make_unexpected(result);
   }
 
-  return timelineValue;
+  return completedValue;
 }
 
 static auto FindSurfaceFormat(GraphicsContext &context)

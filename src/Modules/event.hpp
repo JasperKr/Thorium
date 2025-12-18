@@ -1,7 +1,7 @@
 #include "SDL3/SDL_events.h"
 namespace Event {
 // NOLINTNEXTLINE
-static bool MainLoopRunning = true;
+extern bool MainLoopRunning;
 // NOLINTNEXTLINE
 static int32_t ExitCode = 0;
 
