@@ -100,7 +100,7 @@ inline auto GetSwapchainRendertarget(const GraphicsContext &context)
 auto FillDescriptorSets(
     GraphicsContext &context, Shader::ShaderModule *shader,
     std::unordered_map<uint32_t, std::vector<VkDescriptorSetLayoutBinding>>
-        descriptorSetLayoutBindings) -> Error::Error {
+        &descriptorSetLayoutBindings) -> Error::Error {
   for (auto &layout : shader->reflection.resources) {
     if (layout.variant == ResourceVariant::Buffer) {
       auto &bufferInfo = std::get<BufferInfo>(layout.info);
@@ -184,6 +184,13 @@ auto BindDefaultTextures(GraphicsContext &context, Shader::ShaderModule *shader)
       VkWriteDescriptorSet descriptorWrite{};
       descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
       descriptorWrite.dstSet = shader->descriptorSets[samplerInfo.set];
+
+      if (descriptorWrite.dstSet == VK_NULL_HANDLE) {
+        return Error::Create(
+            "Descriptor set {} is null when binding default texture.",
+            samplerInfo.set);
+      }
+
       descriptorWrite.dstBinding = samplerInfo.binding;
       descriptorWrite.dstArrayElement = 0;
       descriptorWrite.descriptorType =
@@ -191,30 +198,6 @@ auto BindDefaultTextures(GraphicsContext &context, Shader::ShaderModule *shader)
       descriptorWrite.descriptorCount = 1;
       descriptorWrite.pImageInfo = &imageInfo;
       vkUpdateDescriptorSets(context.device, 1, &descriptorWrite, 0, nullptr);
-    } else if (resource.variant == ResourceVariant::Buffer) {
-      const auto &bufferInfo = std::get<BufferInfo>(resource.info);
-      if (bufferInfo.bufferType == BufferType::Uniform ||
-          bufferInfo.bufferType == BufferType::Storage) {
-        VkDescriptorBufferInfo bufferInfoDesc{};
-        bufferInfoDesc.offset = 0;
-        bufferInfoDesc.range = VK_WHOLE_SIZE;
-        // Buffer would be set during actual execution
-        bufferInfoDesc.buffer = VK_NULL_HANDLE;
-
-        VkWriteDescriptorSet descriptorWrite{};
-        descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        descriptorWrite.dstSet = shader->descriptorSets[bufferInfo.set];
-        descriptorWrite.dstBinding = bufferInfo.binding;
-        descriptorWrite.dstArrayElement = 0;
-        descriptorWrite.descriptorType =
-            bufferInfo.bufferType == BufferType::Uniform
-                ? VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
-                : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-        descriptorWrite.descriptorCount = 1;
-        descriptorWrite.pBufferInfo = &bufferInfoDesc;
-
-        vkUpdateDescriptorSets(context.device, 1, &descriptorWrite, 0, nullptr);
-      }
     }
   }
 
@@ -676,8 +659,11 @@ auto Flush(GraphicsContext &context) -> tl::expected<bool, Error::Error> {
     return tl::make_unexpected(error);
   }
 
-  // Loop over all attachments
+  PrintAlways("Transitioning {} attachments for render target",
+              currentState.renderTargets.size());
 
+  // Loop over all attachments
+  // Swapchain cannot be used as sampler, so we never have to transition it here
   for (const auto &rendertarget : currentState.renderTargets) {
     auto result = rendertarget->texture->UseAsAttachment(context);
 

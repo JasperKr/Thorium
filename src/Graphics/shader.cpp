@@ -557,6 +557,7 @@ auto ShaderModule::FlushBuffers(GraphicsContext &context,
       return result;
     }
   }
+  pendingImageTransitions.clear();
 
   vkUpdateDescriptorSets(context.device, static_cast<uint32_t>(writes.size()),
                          writes.data(), 0, nullptr);

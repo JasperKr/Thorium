@@ -190,7 +190,7 @@ auto SetupStruct(slang::TypeLayoutReflection *bufferLayout,
   return Error::Success();
 }
 
-inline auto SlangStageToVkStage(SlangStage stage) {
+inline auto SlangStageToVkStage(SlangStage stage) -> VkShaderStageFlags {
   switch (stage) {
   case SLANG_STAGE_VERTEX:
     return VK_SHADER_STAGE_VERTEX_BIT;

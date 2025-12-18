@@ -1128,11 +1128,22 @@ auto Texture::UseAs(GraphicsContext &context, TextureUsage newUsage,
         "UseAs: Unsupported pipeline stage for texture usage transition.");
   }
 
+  PrintAlways("Texture::UseAs: Transitioning texture from usage {} to usage {} "
+              "frame id: {}",
+              static_cast<int>(lastUsage), static_cast<int>(newUsage),
+              context.currentFrame);
+
   auto layout = GetRequiredTextureLayout(newUsage, format);
 
   VkAccessFlags2 currentAccess =
       GetAccessFlagsForUsage(lastUsage, currentLayout);
   VkAccessFlags2 newAccess = GetAccessFlagsForUsage(newUsage, layout);
+
+  if (lastUsage == TextureUsage::Unknown) {
+    // First time usage, so we can skip the transition from UNDEFINED
+    currentAccess = 0;
+    lastPipelineStage = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT;
+  }
 
   auto result = TransitionLayout(context, layout, lastPipelineStage, stage,
                                  currentAccess, newAccess);
@@ -1159,7 +1170,6 @@ auto Texture::UseAsTransferDst(GraphicsContext &context) -> Error::Error {
   return UseAs(context, TextureUsage::TransferDst,
                VK_PIPELINE_STAGE_TRANSFER_BIT);
 }
-
 auto Texture::UseAsStorage(GraphicsContext &context,
                            VkPipelineStageFlags2 stage) -> Error::Error {
   return UseAs(context, TextureUsage::Storage, stage);

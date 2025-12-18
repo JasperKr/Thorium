@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <span>
 
 #include "Graphics/reflect.hpp"
 #include "Modules/error.hpp"
