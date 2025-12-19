@@ -3,6 +3,7 @@
 #include "Graphics/graphics.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
+#include "Modules/object.hpp"
 #include "hash.hpp"
 #include "slang/slang.h"
 #include <cstdint>
@@ -73,35 +74,6 @@ enum class MatrixType : uint8_t {
   Matrix4x3,
 };
 
-inline static auto AlignUp(size_t offset, size_t align) -> size_t {
-  return (offset + align - 1) & ~(align - 1);
-}
-
-inline static auto BaseAlignment(uint8_t componentCount) -> size_t {
-  switch (componentCount) {
-  case 2:
-    return 8; // NOLINT
-  case 3:
-  case 4:
-    return 16; // NOLINT
-  default:
-    return 4;
-  }
-}
-
-inline static auto SizeOf(VectorType vectorType) -> size_t {
-  switch (vectorType) {
-  case VectorType::Vector2:
-    return sizeof(float) * 2;
-  case VectorType::Vector3:
-    return sizeof(float) * 3;
-  case VectorType::Vector4:
-    return sizeof(float) * 4;
-  default:
-    return sizeof(float);
-  }
-}
-
 inline auto ToMatrixType(uint8_t rowCount, uint8_t columnCount) -> MatrixType {
   if (rowCount == 2 && columnCount == 2) {
     return MatrixType::Matrix2x2;
@@ -133,6 +105,11 @@ inline auto ToMatrixType(uint8_t rowCount, uint8_t columnCount) -> MatrixType {
 
   return MatrixType::Unknown;
 }
+
+struct ResourceKey {
+  std::string name;
+  ResourceKey *child;
+};
 
 struct ShaderResource {
   std::string name;
@@ -258,22 +235,26 @@ enum class StructFieldVariant : uint8_t {
   Scalar,
   Vector,
   Matrix,
+  Struct,
 };
 
+struct StructInfo;
 struct StructFieldInfo {
   std::string name;
 
   StructFieldVariant variant;
-  std::variant<ScalarInfo, VectorInfo, MatrixInfo> info;
+  std::variant<Ref<ScalarInfo>, Ref<VectorInfo>, Ref<MatrixInfo>,
+               Ref<StructInfo>>
+      info;
 
   [[nodiscard]] auto GetSize() const -> size_t {
     switch (variant) {
     case StructFieldVariant::Scalar:
-      return std::get<ScalarInfo>(info).size;
+      return std::get<Ref<ScalarInfo>>(info)->size;
     case StructFieldVariant::Vector:
-      return std::get<VectorInfo>(info).size;
+      return std::get<Ref<VectorInfo>>(info)->size;
     case StructFieldVariant::Matrix:
-      return std::get<MatrixInfo>(info).size;
+      return std::get<Ref<MatrixInfo>>(info)->size;
     default:
       return 0;
     }
@@ -282,11 +263,11 @@ struct StructFieldInfo {
   [[nodiscard]] auto GetOffset() const -> size_t {
     switch (variant) {
     case StructFieldVariant::Scalar:
-      return std::get<ScalarInfo>(info).offset;
+      return std::get<Ref<ScalarInfo>>(info)->offset;
     case StructFieldVariant::Vector:
-      return std::get<VectorInfo>(info).offset;
+      return std::get<Ref<VectorInfo>>(info)->offset;
     case StructFieldVariant::Matrix:
-      return std::get<MatrixInfo>(info).offset;
+      return std::get<Ref<MatrixInfo>>(info)->offset;
     default:
       return 0;
     }
@@ -305,6 +286,25 @@ struct StructInfo {
     }
   }
 
+  auto Find(const ResourceKey &key) -> const StructFieldInfo * {
+    auto iterator = fieldMap.find(key.name);
+    if (iterator == fieldMap.end()) {
+      return nullptr;
+    }
+
+    if (key.child != nullptr) {
+      if (iterator->second.variant != StructFieldVariant::Struct) {
+        return nullptr;
+      }
+
+      auto childStructInfo = std::get<Ref<StructInfo>>(iterator->second.info);
+
+      return childStructInfo->Find(*key.child);
+    }
+
+    return &iterator->second;
+  }
+
   void ToString(IndentedPrinter &printer) const {
     printer *= "StructInfo";
     printer *= "Size: " + std::to_string(size) + ",";
@@ -319,15 +319,19 @@ struct StructInfo {
       printer.Inline();
       switch (field.variant) {
       case StructFieldVariant::Scalar: {
-        std::get<ScalarInfo>(field.info).ToString(printer);
+        std::get<Ref<ScalarInfo>>(field.info)->ToString(printer);
         break;
       }
       case StructFieldVariant::Vector: {
-        std::get<VectorInfo>(field.info).ToString(printer);
+        std::get<Ref<VectorInfo>>(field.info)->ToString(printer);
         break;
       }
       case StructFieldVariant::Matrix: {
-        std::get<MatrixInfo>(field.info).ToString(printer);
+        std::get<Ref<MatrixInfo>>(field.info)->ToString(printer);
+        break;
+      }
+      case StructFieldVariant::Struct: {
+        std::get<Ref<StructInfo>>(field.info)->ToString(printer);
         break;
       }
       case StructFieldVariant::Unknown:
@@ -368,7 +372,9 @@ struct BufferInfo {
   BufferResourceType type;
   SlangResourceAccess access;
   BufferType bufferType;
-  std::variant<StructInfo, ScalarInfo, VectorInfo, MatrixInfo> info;
+  std::variant<Ref<StructInfo>, Ref<ScalarInfo>, Ref<VectorInfo>,
+               Ref<MatrixInfo>>
+      info;
 
   VkShaderStageFlags stageFlags = VK_SHADER_STAGE_ALL;
 
@@ -387,16 +393,16 @@ struct BufferInfo {
     printer.Inline();
     switch (type) {
     case BufferResourceType::Scalar:
-      std::get<ScalarInfo>(info).ToString(printer);
+      std::get<Ref<ScalarInfo>>(info)->ToString(printer);
       break;
     case BufferResourceType::Vector:
-      std::get<VectorInfo>(info).ToString(printer);
+      std::get<Ref<VectorInfo>>(info)->ToString(printer);
       break;
     case BufferResourceType::Matrix:
-      std::get<MatrixInfo>(info).ToString(printer);
+      std::get<Ref<MatrixInfo>>(info)->ToString(printer);
       break;
     case BufferResourceType::Struct:
-      std::get<StructInfo>(info).ToString(printer);
+      std::get<Ref<StructInfo>>(info)->ToString(printer);
       break;
     default:
       printer *= "Unknown";
@@ -415,6 +421,7 @@ enum class ResourceVariant : uint8_t {
   Vector,
   Matrix,
   Buffer,
+  Struct,
 };
 
 struct ResourceInfo {
@@ -422,19 +429,19 @@ struct ResourceInfo {
   VkShaderStageFlags stages = VK_SHADER_STAGE_ALL;
 
   ResourceVariant variant;
-  std::variant<SamplerInfo, ScalarInfo, VectorInfo, MatrixInfo, BufferInfo>
+  std::variant<Ref<SamplerInfo>, Ref<ScalarInfo>, Ref<VectorInfo>,
+               Ref<MatrixInfo>, Ref<BufferInfo>, Ref<StructInfo>>
       info;
 };
 
 struct ShaderReflection {
   std::vector<ResourceInfo> resources;
-  std::unordered_map<std::string, ResourceInfo> resourceMap;
-  BufferInfo globals;
+  Ref<BufferInfo> globals;
   bool hasGlobals{false};
 
   // NOLINTNEXTLINE
   auto ConstructUBOStruct(uint32_t set, uint32_t binding) -> void {
-    StructInfo globalUBOStruct = {};
+    Ref<StructInfo> globalUBOStruct = Ref<StructInfo>::Make(StructInfo{});
 
     if (resources.size() == 0) {
       return;
@@ -445,42 +452,42 @@ struct ShaderReflection {
     for (int i = static_cast<int>(resources.size()) - 1; i >= 0; i--) {
       const auto &resource = resources[i];
       if (resource.variant == ResourceVariant::Scalar) {
-        auto info = std::get<ScalarInfo>(resource.info);
-        globalUBOStruct.fields.emplace_back(StructFieldInfo{
+        auto info = std::get<Ref<ScalarInfo>>(resource.info);
+        globalUBOStruct->fields.emplace_back(StructFieldInfo{
             .name = resource.name,
             .variant = StructFieldVariant::Scalar,
             .info = info,
         });
         resources.erase(resources.begin() + static_cast<uint32_t>(i));
-        size = (std::max)(size, info.offset + info.size);
+        size = (std::max)(size, info->offset + info->size);
       } else if (resource.variant == ResourceVariant::Vector) {
-        auto info = std::get<VectorInfo>(resource.info);
-        globalUBOStruct.fields.emplace_back(StructFieldInfo{
+        auto info = std::get<Ref<VectorInfo>>(resource.info);
+        globalUBOStruct->fields.emplace_back(StructFieldInfo{
             .name = resource.name,
             .variant = StructFieldVariant::Vector,
             .info = info,
         });
         resources.erase(resources.begin() + static_cast<uint32_t>(i));
-        size = (std::max)(size, info.offset + info.size);
+        size = (std::max)(size, info->offset + info->size);
       } else if (resource.variant == ResourceVariant::Matrix) {
-        auto info = std::get<MatrixInfo>(resource.info);
-        globalUBOStruct.fields.emplace_back(StructFieldInfo{
+        auto info = std::get<Ref<MatrixInfo>>(resource.info);
+        globalUBOStruct->fields.emplace_back(StructFieldInfo{
             .name = resource.name,
             .variant = StructFieldVariant::Matrix,
             .info = info,
         });
         resources.erase(resources.begin() + static_cast<uint32_t>(i));
-        size = (std::max)(size, info.offset + info.size);
+        size = (std::max)(size, info->offset + info->size);
       }
     }
 
-    if (globalUBOStruct.fields.size() == 0) {
+    if (globalUBOStruct->fields.size() == 0) {
       return;
     }
 
-    globalUBOStruct.ConstructFieldMap();
+    globalUBOStruct->ConstructFieldMap();
 
-    globals = {
+    globals = Ref<BufferInfo>::Make(BufferInfo{
         .size = size,
         .set = set,
         .binding = binding,
@@ -488,7 +495,7 @@ struct ShaderReflection {
         .access = SlangResourceAccess::SLANG_RESOURCE_ACCESS_READ,
         .bufferType = BufferType::Uniform,
         .info = globalUBOStruct,
-    };
+    });
 
     hasGlobals = true;
   }

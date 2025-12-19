@@ -21,7 +21,14 @@ auto Wrap_Release(lua_State *state) -> int;
 
 // NOLINTNEXTLINE
 static const luaL_Reg MeshLib[] = {
-    {"release", Wrap_Release}, {nullptr, nullptr} // terminate with nullptr
+    {"setVertices", Wrap_SetVertices},
+    {"setIndices", Wrap_SetIndices},
+    {"setVertexBuffer", Wrap_SetVertexBuffer},
+    {"setIndexBuffer", Wrap_SetIndexBuffer},
+    {"setDrawRange", Wrap_SetDrawRange},
+    {"getDrawRange", Wrap_GetDrawRange},
+    {"release", Wrap_Release},
+    {nullptr, nullptr} // terminate with nullptr
 };
 
 extern "C" inline auto luaopen_mesh(lua_State *state) -> int {

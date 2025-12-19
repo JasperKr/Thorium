@@ -136,15 +136,35 @@ struct ShaderModule : Object {
   std::vector<ImageTransitionInfo> pendingImageTransitions;
 
   static auto Create(Graphics::GraphicsContext &context,
-                     const std::string &path, const std::string &name)
+                     const std::string &modulename, const std::string &name)
       -> tl::expected<Ref<ShaderModule>, Error::Error>;
+
+  auto GetUniformType(const std::string &name) const
+      -> tl::expected<ResourceInfo, Error::Error> {
+    for (const auto &resource : reflection.resources) {
+      if (resource.variant == ResourceVariant::Buffer) {
+
+        const auto &bufferInfo = std::get<BufferInfo>(resource.info);
+        if (bufferInfo.name == name) {
+          return bufferInfo.type;
+        }
+      }
+    }
+
+    return Error::Create("Uniform buffer not found: " + name);
+  }
 
   template <typename T>
   auto Send(GraphicsContext &context, const std::string &name, const T &value)
       -> Error::Error {
+    static_assert(std::is_same_v<T, float> || std::is_same_v<T, uint8_t> ||
+                  std::is_same_v<T, uint16_t> || std::is_same_v<T, uint32_t> ||
+                  std::is_same_v<T, int8_t> || std::is_same_v<T, int16_t> ||
+                  std::is_same_v<T, int32_t>);
+
     for (auto &pushBuffer : pushBuffers) {
       if (pushBuffer.GetLayout().name == name) {
-        return pushBuffer.SetData(value);
+        return pushBuffer.SetData(name, value);
       }
     }
 

@@ -1,6 +1,7 @@
 #include "reflect.hpp"
 #include "Graphics/graphics.hpp"
 #include "Modules/error.hpp"
+#include "Modules/object.hpp"
 #include "slang/slang.h"
 #include "vulkan/vulkan_core.h"
 
@@ -57,16 +58,17 @@ auto FindShaderParameter(slang::ProgramLayout *programLayout,
   return FindShaderParameterResult{};
 }
 
-auto SetupStruct(slang::TypeLayoutReflection *bufferLayout,
+auto SetupStruct(slang::TypeLayoutReflection *bufferLayout, // NOLINT
                  slang::TypeLayoutReflection *typeLayout, BufferInfo &info)
     -> Error::Error {
   switch (bufferLayout->getKind()) {
   case slang::TypeReflection::Kind::Struct: {
     info.type = BufferResourceType::Struct;
-    StructInfo structInfo{
-        .size = static_cast<uint32_t>(bufferLayout->getSize()),
-        .alignment = static_cast<uint32_t>(bufferLayout->getAlignment()),
-    };
+    auto structInfo = Ref<StructInfo>::Make();
+
+    structInfo->size = static_cast<uint32_t>(bufferLayout->getSize());
+    structInfo->alignment = static_cast<uint32_t>(bufferLayout->getAlignment());
+
     auto fieldCount = bufferLayout->getFieldCount();
 
     for (int i = 0; i < fieldCount; ++i) {
@@ -75,11 +77,12 @@ auto SetupStruct(slang::TypeLayoutReflection *bufferLayout,
 
       switch (fieldType->getKind()) {
       case slang::TypeReflection::Kind::Scalar: {
-        ScalarInfo scalarInfo{
-            .size = static_cast<uint32_t>(fieldType->getSize()),
-            .offset = static_cast<uint32_t>(fieldVariableType->getOffset()),
-            .type = FromScalarType(fieldType->getScalarType()),
-        };
+        auto scalarInfo = Ref<ScalarInfo>::Make();
+
+        scalarInfo->size = static_cast<uint32_t>(fieldType->getSize());
+        scalarInfo->offset =
+            static_cast<uint32_t>(fieldVariableType->getOffset());
+        scalarInfo->type = FromScalarType(fieldType->getScalarType());
 
         StructFieldInfo fieldInfo{
             .name = fieldVariableType->getName(),
@@ -87,17 +90,18 @@ auto SetupStruct(slang::TypeLayoutReflection *bufferLayout,
             .info = scalarInfo,
         };
 
-        structInfo.fields.emplace_back(fieldInfo);
+        structInfo->fields.emplace_back(fieldInfo);
 
         break;
       }
       case slang::TypeReflection::Kind::Vector: {
-        VectorInfo vectorInfo{
-            .size = static_cast<uint32_t>(fieldType->getSize()),
-            .offset = static_cast<uint32_t>(fieldVariableType->getOffset()),
-            .scalarType = FromScalarType(fieldType->getScalarType()),
-            .vectorType = ToVectorType(fieldType->getElementCount()),
-        };
+        auto vectorInfo = Ref<VectorInfo>::Make();
+
+        vectorInfo->size = static_cast<uint32_t>(fieldType->getSize());
+        vectorInfo->offset =
+            static_cast<uint32_t>(fieldVariableType->getOffset());
+        vectorInfo->scalarType = FromScalarType(fieldType->getScalarType());
+        vectorInfo->vectorType = ToVectorType(fieldType->getElementCount());
 
         StructFieldInfo fieldInfo{
             .name = fieldVariableType->getName(),
@@ -105,17 +109,18 @@ auto SetupStruct(slang::TypeLayoutReflection *bufferLayout,
             .info = vectorInfo,
         };
 
-        structInfo.fields.emplace_back(fieldInfo);
+        structInfo->fields.emplace_back(fieldInfo);
 
         break;
       }
       case slang::TypeReflection::Kind::Matrix: {
-        MatrixInfo matrixInfo{
-            .size = static_cast<uint32_t>(fieldType->getSize()),
-            .offset = static_cast<uint32_t>(fieldVariableType->getOffset()),
-            .matrixType = ToMatrixType(fieldType->getRowCount(),
-                                       fieldType->getColumnCount()),
-        };
+        auto matrixInfo = Ref<MatrixInfo>::Make();
+
+        matrixInfo->size = static_cast<uint32_t>(fieldType->getSize());
+        matrixInfo->offset =
+            static_cast<uint32_t>(fieldVariableType->getOffset());
+        matrixInfo->matrixType =
+            ToMatrixType(fieldType->getRowCount(), fieldType->getColumnCount());
 
         StructFieldInfo fieldInfo{
             .name = fieldVariableType->getName(),
@@ -123,7 +128,7 @@ auto SetupStruct(slang::TypeLayoutReflection *bufferLayout,
             .info = matrixInfo,
         };
 
-        structInfo.fields.emplace_back(fieldInfo);
+        structInfo->fields.emplace_back(fieldInfo);
 
         break;
       }
@@ -134,7 +139,7 @@ auto SetupStruct(slang::TypeLayoutReflection *bufferLayout,
       }
     }
 
-    structInfo.ConstructFieldMap();
+    structInfo->ConstructFieldMap();
     info.info = structInfo;
 
     break;
@@ -142,12 +147,11 @@ auto SetupStruct(slang::TypeLayoutReflection *bufferLayout,
   case slang::TypeReflection::Kind::Scalar: {
     info.type = BufferResourceType::Scalar;
 
-    ScalarInfo scalarInfo{
-        .size = static_cast<uint32_t>(bufferLayout->getSize()),
-        .offset = static_cast<uint32_t>(
-            typeLayout->getElementVarLayout()->getOffset()),
-        .type = FromScalarType(bufferLayout->getScalarType()),
-    };
+    auto scalarInfo = Ref<ScalarInfo>::Make();
+    scalarInfo->size = static_cast<uint32_t>(bufferLayout->getSize());
+    scalarInfo->offset =
+        static_cast<uint32_t>(typeLayout->getElementVarLayout()->getOffset());
+    scalarInfo->type = FromScalarType(bufferLayout->getScalarType());
 
     info.info = scalarInfo;
 
@@ -156,13 +160,13 @@ auto SetupStruct(slang::TypeLayoutReflection *bufferLayout,
   case slang::TypeReflection::Kind::Vector: {
     info.type = BufferResourceType::Vector;
 
-    VectorInfo vectorInfo{
-        .size = static_cast<uint32_t>(bufferLayout->getSize()),
-        .offset = static_cast<uint32_t>(
-            typeLayout->getElementVarLayout()->getOffset()),
-        .scalarType = FromScalarType(bufferLayout->getScalarType()),
-        .vectorType = ToVectorType(bufferLayout->getElementCount()),
-    };
+    auto vectorInfo = Ref<VectorInfo>::Make();
+
+    vectorInfo->size = static_cast<uint32_t>(bufferLayout->getSize());
+    vectorInfo->offset =
+        static_cast<uint32_t>(typeLayout->getElementVarLayout()->getOffset());
+    vectorInfo->scalarType = FromScalarType(bufferLayout->getScalarType());
+    vectorInfo->vectorType = ToVectorType(bufferLayout->getElementCount());
 
     info.info = vectorInfo;
     break;
@@ -170,13 +174,13 @@ auto SetupStruct(slang::TypeLayoutReflection *bufferLayout,
   case slang::TypeReflection::Kind::Matrix: {
     info.type = BufferResourceType::Matrix;
 
-    MatrixInfo matrixInfo{
-        .size = static_cast<uint32_t>(bufferLayout->getSize()),
-        .offset = static_cast<uint32_t>(
-            typeLayout->getElementVarLayout()->getOffset()),
-        .matrixType = ToMatrixType(bufferLayout->getRowCount(),
-                                   bufferLayout->getColumnCount()),
-    };
+    auto matrixInfo = Ref<MatrixInfo>::Make();
+
+    matrixInfo->size = static_cast<uint32_t>(bufferLayout->getSize());
+    matrixInfo->offset =
+        static_cast<uint32_t>(typeLayout->getElementVarLayout()->getOffset());
+    matrixInfo->matrixType = ToMatrixType(bufferLayout->getRowCount(),
+                                          bufferLayout->getColumnCount());
 
     info.info = matrixInfo;
     break;
@@ -238,12 +242,11 @@ auto SetupResource(slang::VariableLayoutReflection *variableLayout,
       maskedShape == SLANG_TEXTURE_3D || maskedShape == SLANG_TEXTURE_CUBE ||
       maskedShape == SLANG_TEXTURE_BUFFER) {
 
-    SamplerInfo samplerInfo{
-        .set = variableLayout->getBindingSpace(),
-        .binding = variableLayout->getBindingIndex(),
-        .shape = shape,
-        .access = access,
-    };
+    auto samplerInfo = Ref<SamplerInfo>::Make();
+    samplerInfo->set = variableLayout->getBindingSpace();
+    samplerInfo->binding = variableLayout->getBindingIndex();
+    samplerInfo->shape = shape;
+    samplerInfo->access = access;
 
     ResourceInfo resourceInfo = {
         .name = variableLayout->getName(),
@@ -256,24 +259,25 @@ auto SetupResource(slang::VariableLayoutReflection *variableLayout,
   } else if (maskedShape == SLANG_STRUCTURED_BUFFER ||
              maskedShape == SLANG_BYTE_ADDRESS_BUFFER) {
     // SSBO
-    BufferInfo info{
-        .name = variableLayout->getName(),
-        .set = variableLayout->getBindingSpace(),
-        .binding = variableLayout->getBindingIndex(),
-        .access = access,
-        .bufferType = BufferType::Storage,
-    };
+    auto bufferInfo = Ref<BufferInfo>::Make();
+    bufferInfo->name = variableLayout->getName();
+    bufferInfo->set = variableLayout->getBindingSpace();
+    bufferInfo->binding = variableLayout->getBindingIndex();
+    bufferInfo->access = access;
+    bufferInfo->bufferType = BufferType::Storage;
 
     auto *bufferLayout =
         variableLayout->getTypeLayout()->getElementTypeLayout();
 
     switch (bufferLayout->getKind()) {
     case slang::TypeReflection::Kind::Struct: {
-      info.type = BufferResourceType::Struct;
-      StructInfo structInfo{
-          .size = static_cast<uint32_t>(bufferLayout->getSize()),
-          .alignment = static_cast<uint32_t>(bufferLayout->getAlignment()),
-      };
+      bufferInfo->type = BufferResourceType::Struct;
+
+      auto structInfo = Ref<StructInfo>::Make();
+
+      structInfo->size = static_cast<uint32_t>(bufferLayout->getSize());
+      structInfo->alignment =
+          static_cast<uint32_t>(bufferLayout->getAlignment());
       auto fieldCount = bufferLayout->getFieldCount();
 
       for (int i = 0; i < fieldCount; ++i) {
@@ -282,11 +286,12 @@ auto SetupResource(slang::VariableLayoutReflection *variableLayout,
 
         switch (fieldType->getKind()) {
         case slang::TypeReflection::Kind::Scalar: {
-          ScalarInfo scalarInfo{
-              .size = sizeof(float),
-              .offset = static_cast<uint32_t>(fieldVariableType->getOffset()),
-              .type = FromScalarType(fieldType->getScalarType()),
-          };
+          auto scalarInfo = Ref<ScalarInfo>::Make();
+
+          scalarInfo->size = sizeof(float);
+          scalarInfo->offset =
+              static_cast<uint32_t>(fieldVariableType->getOffset());
+          scalarInfo->type = FromScalarType(fieldType->getScalarType());
 
           StructFieldInfo fieldInfo{
               .name = fieldVariableType->getName(),
@@ -294,18 +299,19 @@ auto SetupResource(slang::VariableLayoutReflection *variableLayout,
               .info = scalarInfo,
           };
 
-          structInfo.fields.emplace_back(fieldInfo);
+          structInfo->fields.emplace_back(fieldInfo);
 
           break;
         }
         case slang::TypeReflection::Kind::Vector: {
-          VectorInfo vectorInfo{
-              .size = static_cast<uint32_t>(sizeof(float) *
-                                            fieldType->getElementCount()),
-              .offset = static_cast<uint32_t>(fieldVariableType->getOffset()),
-              .scalarType = FromScalarType(fieldType->getScalarType()),
-              .vectorType = ToVectorType(fieldType->getElementCount()),
-          };
+          auto vectorInfo = Ref<VectorInfo>::Make();
+
+          vectorInfo->size = static_cast<uint32_t>(
+              sizeof(float) * fieldType->getElementCount());
+          vectorInfo->offset =
+              static_cast<uint32_t>(fieldVariableType->getOffset());
+          vectorInfo->scalarType = FromScalarType(fieldType->getScalarType());
+          vectorInfo->vectorType = ToVectorType(fieldType->getElementCount());
 
           StructFieldInfo fieldInfo{
               .name = fieldVariableType->getName(),
@@ -313,19 +319,20 @@ auto SetupResource(slang::VariableLayoutReflection *variableLayout,
               .info = vectorInfo,
           };
 
-          structInfo.fields.emplace_back(fieldInfo);
+          structInfo->fields.emplace_back(fieldInfo);
 
           break;
         }
         case slang::TypeReflection::Kind::Matrix: {
-          MatrixInfo matrixInfo{
-              .size = static_cast<uint32_t>(sizeof(float) *
-                                            fieldType->getRowCount() *
-                                            fieldType->getColumnCount()),
-              .offset = static_cast<uint32_t>(fieldVariableType->getOffset()),
-              .matrixType = ToMatrixType(fieldType->getRowCount(),
-                                         fieldType->getColumnCount()),
-          };
+          auto matrixInfo = Ref<MatrixInfo>::Make();
+
+          matrixInfo->size =
+              static_cast<uint32_t>(sizeof(float) * fieldType->getRowCount() *
+                                    fieldType->getColumnCount());
+          matrixInfo->offset =
+              static_cast<uint32_t>(fieldVariableType->getOffset());
+          matrixInfo->matrixType = ToMatrixType(fieldType->getRowCount(),
+                                                fieldType->getColumnCount());
 
           StructFieldInfo fieldInfo{
               .name = fieldVariableType->getName(),
@@ -333,7 +340,7 @@ auto SetupResource(slang::VariableLayoutReflection *variableLayout,
               .info = matrixInfo,
           };
 
-          structInfo.fields.emplace_back(fieldInfo);
+          structInfo->fields.emplace_back(fieldInfo);
           break;
         }
         default: {
@@ -343,49 +350,52 @@ auto SetupResource(slang::VariableLayoutReflection *variableLayout,
         }
       }
 
-      structInfo.ConstructFieldMap();
-      info.info = structInfo;
+      structInfo->ConstructFieldMap();
+      bufferInfo->info = structInfo;
 
       break;
     }
     case slang::TypeReflection::Kind::Scalar: {
-      info.type = BufferResourceType::Scalar;
-      ScalarInfo scalarInfo{
-          .size = static_cast<uint32_t>(sizeof(float)),
-          .offset = static_cast<uint32_t>(
-              bufferLayout->getElementVarLayout()->getOffset()),
-          .type = FromScalarType(bufferLayout->getScalarType()),
-      };
-      info.info = scalarInfo;
+      bufferInfo->type = BufferResourceType::Scalar;
+
+      auto scalarInfo = Ref<ScalarInfo>::Make();
+
+      scalarInfo->size = static_cast<uint32_t>(sizeof(float)),
+      scalarInfo->offset = static_cast<uint32_t>(
+          bufferLayout->getElementVarLayout()->getOffset()),
+      scalarInfo->type = FromScalarType(bufferLayout->getScalarType()),
+      bufferInfo->info = scalarInfo;
       break;
     }
     case slang::TypeReflection::Kind::Vector: {
-      info.type = BufferResourceType::Vector;
-      VectorInfo vectorInfo{
-          .size = static_cast<uint32_t>(sizeof(float) *
-                                        bufferLayout->getElementCount()),
-          .offset = static_cast<uint32_t>(
-              bufferLayout->getElementVarLayout()->getOffset()),
-          .scalarType = FromScalarType(bufferLayout->getScalarType()),
-          .vectorType = ToVectorType(bufferLayout->getElementCount()),
-      };
+      bufferInfo->type = BufferResourceType::Vector;
 
-      info.info = vectorInfo;
+      auto vectorInfo = Ref<VectorInfo>::Make();
+
+      vectorInfo->size = static_cast<uint32_t>(sizeof(float) *
+                                               bufferLayout->getElementCount());
+      vectorInfo->offset = static_cast<uint32_t>(
+          bufferLayout->getElementVarLayout()->getOffset());
+      vectorInfo->scalarType = FromScalarType(bufferLayout->getScalarType());
+      vectorInfo->vectorType = ToVectorType(bufferLayout->getElementCount());
+
+      bufferInfo->info = vectorInfo;
       break;
     }
     case slang::TypeReflection::Kind::Matrix: {
-      info.type = BufferResourceType::Matrix;
-      MatrixInfo matrixInfo{
-          .size = static_cast<uint32_t>(sizeof(float) *
-                                        bufferLayout->getRowCount() *
-                                        bufferLayout->getColumnCount()),
-          .offset = static_cast<uint32_t>(
-              bufferLayout->getElementVarLayout()->getOffset()),
-          .matrixType = ToMatrixType(bufferLayout->getRowCount(),
-                                     bufferLayout->getColumnCount()),
-      };
+      bufferInfo->type = BufferResourceType::Matrix;
 
-      info.info = matrixInfo;
+      auto matrixInfo = Ref<MatrixInfo>::Make();
+
+      matrixInfo->size =
+          static_cast<uint32_t>(sizeof(float) * bufferLayout->getRowCount() *
+                                bufferLayout->getColumnCount());
+      matrixInfo->offset = static_cast<uint32_t>(
+          bufferLayout->getElementVarLayout()->getOffset());
+      matrixInfo->matrixType = ToMatrixType(bufferLayout->getRowCount(),
+                                            bufferLayout->getColumnCount());
+
+      bufferInfo->info = matrixInfo;
       break;
     }
     default: {
@@ -398,7 +408,7 @@ auto SetupResource(slang::VariableLayoutReflection *variableLayout,
         .name = variableLayout->getName(),
         .stages = SlangStageToVkStage(variableLayout->getStage()),
         .variant = ResourceVariant::Buffer,
-        .info = info,
+        .info = bufferInfo,
     };
 
     reflection.resources.emplace_back(resourceInfo);
@@ -439,17 +449,17 @@ auto SetupFromType(slang::VariableLayoutReflection *variableLayout,
     bool isPushConstant =
         (category == slang::ParameterCategory::PushConstantBuffer);
 
-    BufferInfo info{
-        .name = variableLayout->getName(),
-        .offset = static_cast<uint32_t>(variableLayout->getOffset()),
-        .set = variableLayout->getBindingSpace(),
-        .binding = variableLayout->getBindingIndex(),
-        .access = access,
-        .bufferType =
-            isPushConstant ? BufferType::PushConstant : BufferType::Uniform,
-    };
+    auto bufferInfo = Ref<BufferInfo>::Make();
 
-    auto err = SetupStruct(bufferLayout, typeLayout, info);
+    bufferInfo->name = variableLayout->getName();
+    bufferInfo->offset = static_cast<uint32_t>(variableLayout->getOffset());
+    bufferInfo->set = variableLayout->getBindingSpace();
+    bufferInfo->binding = variableLayout->getBindingIndex();
+    bufferInfo->access = access;
+    bufferInfo->bufferType =
+        isPushConstant ? BufferType::PushConstant : BufferType::Uniform;
+
+    auto err = SetupStruct(bufferLayout, typeLayout, *bufferInfo.get());
     if (Error::IsError(err)) {
       return err;
     }
@@ -458,7 +468,7 @@ auto SetupFromType(slang::VariableLayoutReflection *variableLayout,
         .name = variableLayout->getName(),
         .stages = SlangStageToVkStage(variableLayout->getStage()),
         .variant = ResourceVariant::Buffer,
-        .info = info,
+        .info = bufferInfo,
     };
 
     reflection.resources.emplace_back(resourceInfo);
@@ -474,12 +484,11 @@ auto SetupFromType(slang::VariableLayoutReflection *variableLayout,
   case slang::TypeReflection::Kind::Array:
     break; // Not right now
   case slang::TypeReflection::Kind::Matrix: {
-    MatrixInfo matrixInfo{
-        .size = static_cast<uint32_t>(typeLayout->getSize()),
-        .offset = static_cast<uint32_t>(variableLayout->getOffset()),
-        .matrixType = ToMatrixType(typeLayout->getRowCount(),
-                                   typeLayout->getColumnCount()),
-    };
+    auto matrixInfo = Ref<MatrixInfo>::Make();
+    matrixInfo->size = static_cast<uint32_t>(typeLayout->getSize());
+    matrixInfo->offset = static_cast<uint32_t>(variableLayout->getOffset());
+    matrixInfo->matrixType =
+        ToMatrixType(typeLayout->getRowCount(), typeLayout->getColumnCount());
 
     ResourceInfo resourceInfo = {
         .name = variableLayout->getName(),
@@ -493,12 +502,12 @@ auto SetupFromType(slang::VariableLayoutReflection *variableLayout,
     break;
   }
   case slang::TypeReflection::Kind::Vector: {
-    VectorInfo vectorInfo{
-        .size = static_cast<uint32_t>(typeLayout->getSize()),
-        .offset = static_cast<uint32_t>(variableLayout->getOffset()),
-        .scalarType = FromScalarType(typeLayout->getScalarType()),
-        .vectorType = ToVectorType(typeLayout->getElementCount()),
-    };
+    auto vectorInfo = Ref<VectorInfo>::Make();
+
+    vectorInfo->size = static_cast<uint32_t>(typeLayout->getSize());
+    vectorInfo->offset = static_cast<uint32_t>(variableLayout->getOffset());
+    vectorInfo->scalarType = FromScalarType(typeLayout->getScalarType());
+    vectorInfo->vectorType = ToVectorType(typeLayout->getElementCount());
 
     ResourceInfo resourceInfo = {
         .name = variableLayout->getName(),
@@ -512,11 +521,11 @@ auto SetupFromType(slang::VariableLayoutReflection *variableLayout,
     break;
   }
   case slang::TypeReflection::Kind::Scalar: {
-    ScalarInfo scalarInfo{
-        .size = static_cast<uint32_t>(typeLayout->getSize()),
-        .offset = static_cast<uint32_t>(variableLayout->getOffset()),
-        .type = FromScalarType(typeLayout->getScalarType()),
-    };
+    auto scalarInfo = Ref<ScalarInfo>::Make();
+
+    scalarInfo->size = static_cast<uint32_t>(typeLayout->getSize());
+    scalarInfo->offset = static_cast<uint32_t>(variableLayout->getOffset());
+    scalarInfo->type = FromScalarType(typeLayout->getScalarType());
 
     ResourceInfo resourceInfo = {
         .name = variableLayout->getName(),

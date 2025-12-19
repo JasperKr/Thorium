@@ -1,7 +1,10 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <span>
+#include <type_traits>
+#include <vector>
 
 #include "Graphics/reflect.hpp"
 #include "Modules/error.hpp"
@@ -49,19 +52,29 @@ public:
   template <typename T>
   auto SetData(const std::string &name, const std::span<T> &value)
       -> Error::Error {
+
+    static_assert(std::is_same_v<T, float> || std::is_same_v<T, uint8_t> ||
+                  std::is_same_v<T, uint16_t> || std::is_same_v<T, uint32_t> ||
+                  std::is_same_v<T, int8_t> || std::is_same_v<T, int16_t> ||
+                  std::is_same_v<T, int32_t>);
+
     if (layout.type != BufferResourceType::Struct) {
       return Error::Create(
           "SetData with name only supported for struct push buffers");
     }
 
     size_t dataSize = sizeof(T) * value.size();
-    auto result = OffsetOf(name);
+    auto result = InfoOf(name);
 
     if (Error::IsError(result)) {
       return result.error();
     }
 
-    size_t offset = result.value();
+    size_t offset = result.value().GetOffset();
+
+    if (result.value().GetSize() != dataSize) {
+      return Error::Create("Data size does not match field size");
+    }
 
     if (offset + dataSize > data.size()) {
       return Error::Create("Data exceeds buffer size");
@@ -73,6 +86,11 @@ public:
 
   template <typename T>
   auto SetData(const std::span<T> &value) -> Error::Error {
+    static_assert(std::is_same_v<T, float> || std::is_same_v<T, uint8_t> ||
+                  std::is_same_v<T, uint16_t> || std::is_same_v<T, uint32_t> ||
+                  std::is_same_v<T, int8_t> || std::is_same_v<T, int16_t> ||
+                  std::is_same_v<T, int32_t>);
+
     if (layout.type != BufferResourceType::Scalar &&
         layout.type != BufferResourceType::Vector &&
         layout.type != BufferResourceType::Matrix) {
@@ -81,6 +99,7 @@ public:
     }
 
     size_t dataSize = sizeof(T) * value.size();
+
     if (dataSize > data.size()) {
       return Error::Create("Data exceeds buffer size");
     }
@@ -90,30 +109,32 @@ public:
   }
 
   template <typename T>
-  auto SetData(const std::string &name, const T &value) -> Error::Error {
+  auto SetData(const std::string &name, const std::vector<T> &value)
+      -> Error::Error {
     if (layout.type != BufferResourceType::Struct) {
       return Error::Create(
           "SetData with name only supported for struct push buffers");
     }
 
     size_t dataSize = sizeof(T);
-    auto result = OffsetOf(name);
+    auto result = InfoOf(name);
 
     if (Error::IsError(result)) {
       return result.error();
     }
 
-    size_t offset = result.value();
+    size_t offset = result.value().GetOffset();
 
     if (offset + dataSize > data.size()) {
       return Error::Create("Data exceeds buffer size");
     }
 
     // NOLINTNEXTLINE
-    std::memcpy(data.data() + offset, &value, dataSize);
+    std::memcpy(data.data() + offset, value.data(), dataSize);
   }
 
-  template <typename T> auto SetData(const T &value) -> Error::Error {
+  template <typename T>
+  auto SetData(const std::vector<T> &value) -> Error::Error {
     if (layout.type != BufferResourceType::Scalar &&
         layout.type != BufferResourceType::Vector &&
         layout.type != BufferResourceType::Matrix) {
@@ -126,16 +147,17 @@ public:
       return Error::Create("Data exceeds buffer size");
     }
 
-    std::memcpy(data.data(), &value, dataSize);
+    std::memcpy(data.data(), value.data(), dataSize);
 
     return Error::Success();
   }
 
   auto GetStageFlags() const -> VkShaderStageFlags { return stageFlags; }
 
+  auto InfoOf(const std::string &name) const
+      -> tl::expected<StructFieldInfo, Error::Error>;
+
 private:
-  auto OffsetOf(const std::string &name) const
-      -> tl::expected<size_t, Error::Error>;
   BufferInfo layout;
   std::vector<uint8_t> data;
   VkShaderStageFlags stageFlags{VK_SHADER_STAGE_ALL};

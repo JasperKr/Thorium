@@ -409,11 +409,12 @@ static inline auto LoadSlang(GraphicsContext &context,
 }
 
 auto ShaderModule::Create(Graphics::GraphicsContext &context,
-                          const std::string &path, const std::string &name)
+                          const std::string &modulename,
+                          const std::string &name)
     -> tl::expected<Ref<ShaderModule>, Error::Error> {
   Ref<ShaderModule> shader = Ref<ShaderModule>::Make();
   shader->name = name;
-  shader->moduleName = path;
+  shader->moduleName = modulename;
 
   // Compile Slang to SPIR-V and create shader module
   auto error = LoadSlang(context, shader);

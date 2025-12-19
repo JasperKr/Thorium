@@ -14,8 +14,8 @@ auto PushBuffer::FlushData(FlushInfo &info) -> void {
   vkCmdPushConstants(info.commandBuffer, info.pipelineLayout, stageFlags,
                      layout.offset, bufferSize, data.data());
 }
-auto PushBuffer::OffsetOf(const std::string &name) const
-    -> tl::expected<size_t, Error::Error> {
+auto PushBuffer::InfoOf(const std::string &name) const
+    -> tl::expected<StructFieldInfo, Error::Error> {
   if (layout.type != BufferResourceType::Struct) {
     return Error::Unexpected("OffsetOf only supported for struct push buffers");
   }
@@ -23,22 +23,7 @@ auto PushBuffer::OffsetOf(const std::string &name) const
   const auto &structInfo = std::get<StructInfo>(layout.info);
   for (const auto &field : structInfo.fields) {
     if (field.name == name) {
-      switch (field.variant) {
-      case StructFieldVariant::Scalar: {
-        auto info = std::get<ScalarInfo>(field.info);
-        return info.offset;
-      }
-      case StructFieldVariant::Vector: {
-        auto info = std::get<VectorInfo>(field.info);
-        return info.offset;
-      }
-      case StructFieldVariant::Matrix: {
-        auto info = std::get<MatrixInfo>(field.info);
-        return info.offset;
-      }
-      default:
-        return Error::Unexpected("Unsupported field variant in struct");
-      }
+      return field;
     }
   }
 
