@@ -1,11 +1,9 @@
 #include "buffer.hpp"
 #include "Graphics/graphics.hpp"
 #include "Graphics/resource.hpp"
-#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "graphics.hpp"
 #include <cstdint>
-#include <string>
 #define VK_NO_PROTOTYPES
 #include "array"
 #include "vulkan/vulkan_core.h"
@@ -114,32 +112,57 @@ auto FlushBufferUploads(GraphicsContext &context) -> Error::Error {
   return Error::Success();
 }
 
-inline auto Upload(const Buffer *buffer, GraphicsContext &context,
-                   std::span<const uint8_t> data, VkDeviceSize offset = 0)
-    -> Error::Error {
+auto Buffer::MapMemory(GraphicsContext &context) -> Error::Error {
+  if (persistentMapping) {
+    if (mappedData != nullptr) {
+      return Error::Success();
+    }
 
-  if (((buffer->usage) & VK_BUFFER_USAGE_TRANSFER_DST_BIT) == 0) {
+    return Error::Create("Buffer was created with persistent mapping, but "
+                         "mappedData is null.");
+  }
+
+  auto result = vmaMapMemory(context.vmaAllocator, this->memory, &mappedData);
+  if (result != VK_SUCCESS) {
+    return Error::Create(result);
+  }
+
+  return Error::Success();
+}
+
+auto Buffer::UnmapMemory(GraphicsContext &context) -> void {
+  if (persistentMapping) {
+    return;
+  }
+
+  vmaUnmapMemory(context.vmaAllocator, this->memory);
+  mappedData = nullptr;
+}
+
+auto Buffer::Upload(GraphicsContext &context, std::span<const uint8_t> data,
+                    VkDeviceSize offset) -> Error::Error {
+
+  if (((usage)&VK_BUFFER_USAGE_TRANSFER_DST_BIT) == 0) {
     return Error::Create(
         "Buffer was not created with TRANSFER_DST usage flag for upload.");
   }
 
-  if (buffer->isStagingBuffer) {
+  if (isStagingBuffer) {
     // We know this will be a large upload,
     // no need for upload buffers as it is a one time upload and we won't be interfering with
     // the GPU reading from the buffer later
     // So we directly map and write to the buffer memory
 
-    void *mapped = nullptr;
-    auto result = Error::Create(
-        vmaMapMemory(context.vmaAllocator, buffer->memory, &mapped));
+    auto result = MapMemory(context);
     if (Error::IsError(result)) {
       return result;
     }
 
     // NOLINTNEXTLINE, because of pointer arithmetic
-    std::memcpy(static_cast<uint8_t *>(mapped) + offset, data.data(),
+    std::memcpy(static_cast<uint8_t *>(mappedData) + offset, data.data(),
                 data.size());
-    vmaUnmapMemory(context.vmaAllocator, buffer->memory);
+
+    UnmapMemory(context);
 
     return Error::Success();
   }
@@ -184,8 +207,7 @@ inline auto Upload(const Buffer *buffer, GraphicsContext &context,
     copyRegion.srcOffset = 0;
     copyRegion.dstOffset = offset;
     copyRegion.size = data.size();
-    vkCmdCopyBuffer(commandBuffer, stagingBuffer, buffer->handle, 1,
-                    &copyRegion);
+    vkCmdCopyBuffer(commandBuffer, stagingBuffer, handle, 1, &copyRegion);
     StagingBufferInfo stagingInfo = {};
     stagingInfo.buffer = stagingBuffer;
     stagingInfo.memory = stagingMemory;
@@ -216,6 +238,7 @@ inline auto Upload(const Buffer *buffer, GraphicsContext &context,
       bufferInfo.properties =
           static_cast<uint32_t>(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) |
           static_cast<uint32_t>(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+      bufferInfo.PersistentMapping = true;
 
       auto result = Graphics::Buffer::Create(context, bufferInfo);
       if (Error::IsError(result)) {
@@ -227,17 +250,16 @@ inline auto Upload(const Buffer *buffer, GraphicsContext &context,
     }
 
     // Copy data to upload buffer
-    void *mapped = nullptr;
-    auto result = Error::Create(
-        vmaMapMemory(context.vmaAllocator, uploadBuffer->memory, &mapped));
+    auto result = uploadBuffer->MapMemory(context);
     if (Error::IsError(result)) {
       return result;
     }
 
     // NOLINTNEXTLINE, because of pointer arithmetic
-    std::memcpy(static_cast<uint8_t *>(mapped) + uploadOffset, data.data(),
-                data.size());
-    vmaUnmapMemory(context.vmaAllocator, uploadBuffer->memory);
+    std::memcpy(static_cast<uint8_t *>(uploadBuffer->mappedData) + uploadOffset,
+                data.data(), data.size());
+
+    uploadBuffer->UnmapMemory(context);
 
     // Record copy command
     auto *commandBuffer = GetCommandBuffer(context, GetCurrentThreadIndex());
@@ -249,7 +271,7 @@ inline auto Upload(const Buffer *buffer, GraphicsContext &context,
     copyRegion.srcOffset = uploadOffset;
     copyRegion.dstOffset = offset;
     copyRegion.size = data.size();
-    vkCmdCopyBuffer(commandBuffer, uploadBuffer->handle, buffer->handle, 1,
+    vkCmdCopyBuffer(commandBuffer, uploadBuffer->handle, handle, 1,
                     &copyRegion);
     uploadOffset += data.size();
   }
@@ -269,6 +291,7 @@ auto Buffer::Create(GraphicsContext &context, BufferCreationInfo info)
   auto buffer = Ref<Buffer>::Make();
 
   buffer->isStagingBuffer = info.IsStagingBuffer;
+  buffer->persistentMapping = info.PersistentMapping;
 
   VkBufferCreateInfo bufferInfo = {};
   bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -299,6 +322,15 @@ auto Buffer::Create(GraphicsContext &context, BufferCreationInfo info)
   vmaGetAllocationInfo(context.vmaAllocator, buffer->memory, &memRequirements);
   buffer->sizeInBytes = memRequirements.size;
 
+  if (info.PersistentMapping) {
+    result =
+        vmaMapMemory(context.vmaAllocator, buffer->memory, &buffer->mappedData);
+    if (result != VK_SUCCESS) {
+      buffer->Destroy(context);
+      return tl::unexpected(Error::Create(result));
+    }
+  }
+
   return buffer;
 }
 
@@ -307,7 +339,7 @@ auto Buffer::SetData(GraphicsContext &context, std::span<const uint8_t> data,
 
   auto dataSize = data.size();
 
-  auto result = Upload(this, context, data, offset);
+  auto result = Upload(context, data, offset);
   if (Error::IsError(result)) {
     return result;
   }
@@ -332,6 +364,16 @@ auto Buffer::ScheduleDestroy() -> bool {
   released = true;
 
   return true;
+}
+
+auto Buffer::MarkUse(const QueueID queueID, const uint64_t timelineValue)
+    -> void {
+  uint64_t previousValue{};
+  if (lastUsedTimelineValues.contains(queueID)) {
+    previousValue = lastUsedTimelineValues.at(queueID);
+  }
+
+  lastUsedTimelineValues[queueID] = (std::max)(previousValue, timelineValue);
 }
 
 } // namespace Graphics

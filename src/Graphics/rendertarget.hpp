@@ -80,6 +80,9 @@ struct State {
 
   Ref<Shader::ShaderModule> shader;
 
+  VkPrimitiveTopology primitiveTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+  VertexFormat vertexFormat;
+
   VkPipelineBindPoint bindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
   std::vector<Ref<RenderTarget>> renderTargets;
 
@@ -110,7 +113,8 @@ struct State {
            scissor.extent.width == other.scissor.extent.width &&
            scissor.extent.height == other.scissor.extent.height &&
            shader.get() == other.shader.get() && bindPoint == other.bindPoint &&
-           renderTargetsEqual;
+           renderTargetsEqual && vertexFormat == other.vertexFormat &&
+           primitiveTopology == other.primitiveTopology;
   }
 };
 
@@ -228,6 +232,8 @@ auto SetRenderTargets(const std::vector<Ref<RenderTarget>> &renderTargets)
     -> void;
 auto SetLineWidth(float lineWidth) -> void;
 auto SetWindingOrder(VkFrontFace frontFace) -> void;
+auto SetVertexFormat(const VertexFormat &vertexFormat) -> void;
+auto SetTopology(VkPrimitiveTopology topology) -> void;
 
 auto GetDepthMode() -> std::tuple<bool, bool, VkCompareOp>;
 auto GetCullMode() -> VkCullModeFlags;
@@ -240,6 +246,8 @@ auto GetShader() -> Ref<Shader::ShaderModule>;
 auto GetRenderTargets() -> std::vector<Ref<RenderTarget>>;
 auto GetLineWidth() -> float;
 auto GetWindingOrder() -> VkFrontFace;
+auto GetVertexFormat() -> VertexFormat;
+auto GetTopology() -> VkPrimitiveTopology;
 
 struct ClearInfo {
   std::vector<Color> colors;

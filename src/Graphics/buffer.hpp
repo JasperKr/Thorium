@@ -16,12 +16,20 @@ struct BufferCreationInfo {
   VkDeviceSize size{};
   VkBufferUsageFlags usage{};
   VkMemoryPropertyFlags properties{};
+
+  // Staging buffers are assumed to be used only once and for large uploads
   bool IsStagingBuffer = false;
+
+  // Persistent mapping keeps the buffer mapped to cpu memory for its entire lifetime
+  // Useful for dynamic buffers that are updated frequently, like UBO's
+  bool PersistentMapping = false;
 };
 
 auto FlushBufferUploads(GraphicsContext &context) -> Error::Error;
 auto LoadBufferModule(GraphicsContext &context) -> Error::Error;
 auto UnloadBufferModule(GraphicsContext &context) -> Error::Error;
+
+static const Type bufferType = Type("Buffer");
 
 struct Buffer : Object {
   VkBuffer handle = VK_NULL_HANDLE;
@@ -31,6 +39,8 @@ struct Buffer : Object {
   VkBufferUsageFlags usage = 0;
   VkMemoryPropertyFlags properties = 0;
   bool isStagingBuffer = false;
+  bool persistentMapping = false;
+  void *mappedData = nullptr;
 
   Buffer() = default;
   Buffer(const Buffer &) = delete;
@@ -47,14 +57,7 @@ struct Buffer : Object {
     return lastUsedTimelineValues;
   }
 
-  auto MarkUse(const QueueID queueID, const uint64_t timelineValue) -> void {
-    uint64_t previousValue{};
-    if (lastUsedTimelineValues.contains(queueID)) {
-      previousValue = lastUsedTimelineValues.at(queueID);
-    }
-
-    lastUsedTimelineValues[queueID] = (std::max)(previousValue, timelineValue);
-  }
+  auto MarkUse(QueueID queueID, uint64_t timelineValue) -> void;
 
   static auto Create(Graphics::GraphicsContext &context,
                      Graphics::BufferCreationInfo info)
@@ -105,5 +108,14 @@ struct Buffer : Object {
                                  sizeof(T));
     return SetData(context, byteSpan, offset);
   }
+
+  auto MapMemory(GraphicsContext &context) -> Error::Error;
+  auto UnmapMemory(GraphicsContext &context) -> void;
+
+  static auto GetType() -> Type const * { return &bufferType; }
+
+private:
+  auto Upload(GraphicsContext &context, std::span<const uint8_t> data,
+              VkDeviceSize offset = 0) -> Error::Error;
 };
 } // namespace Graphics

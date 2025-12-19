@@ -422,26 +422,49 @@ inline auto GetQuadMesh(GraphicsContext &context, const VkRect2D size,
   vertices[3].uv[1] = 1.0F;
   vertices[3].color = color.Pack();
 
-  auto vertexFormat = PredefinedVertexFormats.at(VertexFormats::Default2D);
+  VertexFormat vertexFormat({
+      VkVertexInputAttributeDescription{
+          .location = 0,
+          .binding = 0,
+          .format = VK_FORMAT_R32G32_SFLOAT,
+          .offset = offsetof(Format_Default2D, position),
+      },
+      VkVertexInputAttributeDescription{
+          .location = 1,
+          .binding = 0,
+          .format = VK_FORMAT_R32G32_SFLOAT,
+          .offset = offsetof(Format_Default2D, uv),
+      },
+      VkVertexInputAttributeDescription{
+          .location = 2,
+          .binding = 0,
+          .format = VK_FORMAT_R8G8B8A8_UNORM,
+          .offset = offsetof(Format_Default2D, color),
+      },
+  });
 
-  auto span = Mesh::ToVertexSpan<Format_Default2D>(vertices);
+  // NOLINTNEXTLINE; Reinterpret cast is necessary here
+  auto span = std::span<uint8_t>(reinterpret_cast<uint8_t *>(vertices.data()),
+                                 vertexFormat.GetBindings()[0].stride *
+                                     vertices.size());
 
   PrintDebug("Creating quad mesh of size {}x{}", size.extent.width,
              size.extent.height);
 
   RenderTarget::EndRendering(context);
 
-  const static auto mesh =
-      Mesh::Create(context, VertexFormats::Default2D, span, &indices);
+  const static auto mesh = Mesh::Create(context, vertexFormat, span, &indices);
 
   PrintDebug("Quad mesh created.");
 
-  auto setDataError = mesh->get()->VertexBuffer->SetData(context, vertices);
+  auto setDataError = mesh->get()->SetVertices(context, span);
   if (Error::IsError(setDataError)) {
     return tl::unexpected(setDataError);
   }
 
-  setDataError = mesh->get()->IndexBuffer->SetData(context, indices);
+  auto indexSpan = std::span<uint32_t>(indices.data(), indices.size());
+
+  setDataError = mesh->get()->SetIndices(context, indexSpan);
   if (Error::IsError(setDataError)) {
     return tl::unexpected(setDataError);
   }

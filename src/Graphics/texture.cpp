@@ -1128,11 +1128,6 @@ auto Texture::UseAs(GraphicsContext &context, TextureUsage newUsage,
         "UseAs: Unsupported pipeline stage for texture usage transition.");
   }
 
-  PrintAlways("Texture::UseAs: Transitioning texture from usage {} to usage {} "
-              "frame id: {}",
-              static_cast<int>(lastUsage), static_cast<int>(newUsage),
-              context.currentFrame);
-
   auto layout = GetRequiredTextureLayout(newUsage, format);
 
   VkAccessFlags2 currentAccess =

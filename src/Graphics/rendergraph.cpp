@@ -1,4 +1,5 @@
 #include "rendergraph.hpp"
+#include "Graphics/vertexformat.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/image.hpp"
@@ -1452,17 +1453,32 @@ auto inline ApplyPassBarriers(VkCommandBuffer commandBuffer,
   shaderStages[1].module = shader.module;
   shaderStages[1].pName = "main";
 
-  auto vertexformat =
-      Graphics::PredefinedVertexFormats.at(VertexFormats::ImGui);
+  auto vertexformat = VertexFormat({
+      VkVertexInputAttributeDescription{
+          .location = 0,
+          .binding = 0,
+          .format = VK_FORMAT_R32G32B32_SFLOAT,
+          .offset = 0,
+      },
+      VkVertexInputAttributeDescription{
+          .location = 1,
+          .binding = 0,
+          .format = VK_FORMAT_R32G32_SFLOAT,
+          .offset = 12, // NOLINT
+      },
+  });
 
   VkPipelineVertexInputStateCreateInfo vertexInputInfo = {};
   vertexInputInfo.sType =
       VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-  vertexInputInfo.vertexBindingDescriptionCount = vertexformat.Bindings.size();
-  vertexInputInfo.pVertexBindingDescriptions = vertexformat.Bindings.data();
+  vertexInputInfo.vertexBindingDescriptionCount =
+      vertexformat.GetBindings().size();
+  vertexInputInfo.pVertexBindingDescriptions =
+      vertexformat.GetBindings().data();
   vertexInputInfo.vertexAttributeDescriptionCount =
-      vertexformat.Attributes.size();
-  vertexInputInfo.pVertexAttributeDescriptions = vertexformat.Attributes.data();
+      vertexformat.GetAttributes().size();
+  vertexInputInfo.pVertexAttributeDescriptions =
+      vertexformat.GetAttributes().data();
   VkPipelineInputAssemblyStateCreateInfo inputAssembly = {};
 
   inputAssembly.sType =

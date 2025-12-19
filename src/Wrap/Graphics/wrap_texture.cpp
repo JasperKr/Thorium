@@ -1,8 +1,6 @@
 #include "Graphics/texture.hpp"
-#include "Modules/console.hpp"
 #include "Wrap/wrap.hpp"
 #include "vulkan/vulkan_core.h"
-#include <iostream>
 #include <lua.h>
 namespace Graphics::Texture {
 auto inline StringToVkFilter(const char *filterStr) -> VkFilter {
@@ -574,7 +572,6 @@ auto wrap_NewTexture(lua_State *state) -> int {
 auto Wrap_Release(lua_State *state) -> int {
   auto *texture = LuaWrap::FromLuaObject<Texture>(state, 1);
   texture->ScheduleDestroy();
-  PrintWarning("Got here in Wrap_Release");
   return 0;
 }
 

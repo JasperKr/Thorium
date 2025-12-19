@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Wrap/Graphics/wrap_mesh.hpp"
 #include "Wrap/Graphics/wrap_rendertarget.hpp"
 #include "Wrap/Graphics/wrap_texture.hpp"
 #include "Wrap/wrap.hpp"
@@ -65,13 +66,14 @@ static const luaL_Reg GraphicsLib[] = {
     {"getLineWidth", wrap_GetLineWidth},
     {"getWindingOrder", wrap_GetWindingOrder},
     {"newTexture", Texture::wrap_NewTexture},
+    {"newMesh", Graphics::Wrap_NewMesh},
     {"draw", wrap_Draw},
     {nullptr, nullptr},
 };
 
 // nullptr-terminated NOLINTNEXTLINE
-const static lua_CFunction childrenInitFunctions[] = {Texture::luaopen_texture,
-                                                      nullptr};
+const static lua_CFunction childrenInitFunctions[] = {
+    Texture::luaopen_texture, Graphics::luaopen_mesh, nullptr};
 
 extern "C" inline auto luaopen_graphics(lua_State *state) -> int {
   auto module = LuaWrap::LuaModule{

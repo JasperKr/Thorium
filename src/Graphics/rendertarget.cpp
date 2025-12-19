@@ -12,7 +12,6 @@
 #include "tl/expected.hpp"
 #include "vulkan/vulkan_core.h"
 #include <algorithm>
-#include <array>
 #include <cassert>
 #include <cstdint>
 #include <set>
@@ -187,8 +186,7 @@ auto BindDefaultTextures(GraphicsContext &context, Shader::ShaderModule *shader)
 
       if (descriptorWrite.dstSet == VK_NULL_HANDLE) {
         return Error::Create(
-            "Descriptor set {} is null when binding default texture.",
-            samplerInfo.set);
+            "Descriptor set is null when binding default texture.");
       }
 
       descriptorWrite.dstBinding = samplerInfo.binding;
@@ -261,111 +259,105 @@ auto CreateDescriptorSets(GraphicsContext &context,
   return Error::Success();
 }
 
-inline auto CreatePipeline(const GraphicsContext &context, const State &state)
-    -> tl::expected<std::pair<VkPipeline, VkPipelineLayout>, Error::Error> {
-  if (state.bindPoint != VK_PIPELINE_BIND_POINT_GRAPHICS) {
-    return Error::Unexpected("Only graphics pipelines are supported currently");
+inline auto GetShaderStages(const State &state)
+    -> tl::expected<std::vector<VkPipelineShaderStageCreateInfo>,
+                    Error::Error> {
+
+  static std::unordered_map<Shader::ShaderModule *,
+                            std::vector<VkPipelineShaderStageCreateInfo>>
+      shaderStageCache;
+
+  if (shaderStageCache.contains(state.shader.get())) {
+    return shaderStageCache[state.shader.get()];
   }
 
-  PrintDebug("Creating graphics pipeline");
-
-  std::array<VkPipelineShaderStageCreateInfo, 2> shaderStages = {};
+  std::vector<VkPipelineShaderStageCreateInfo> shaderStages{};
 
   auto *shader = state.shader.get();
 
   if (shader == nullptr) {
-    return Error::Unexpected("Shader module is null in CreatePipeline.");
+    return Error::Unexpected("Shader module is null in GetShaderStages.");
   }
 
-  shaderStages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-  shaderStages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
-  shaderStages[0].module = shader->module;
-  shaderStages[0].pName = "vertexMain";
+  VkPipelineShaderStageCreateInfo vertexStageInfo = {};
+  vertexStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+  vertexStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
+  vertexStageInfo.module = shader->module;
+  vertexStageInfo.pName = "vertexMain";
 
-  shaderStages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-  shaderStages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-  shaderStages[1].module = shader->module;
-  shaderStages[1].pName = "fragmentMain";
+  shaderStages.emplace_back(vertexStageInfo);
 
-  PrintDebug("Setting up vertex input state");
+  VkPipelineShaderStageCreateInfo fragmentStageInfo = {};
+  fragmentStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+  fragmentStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+  fragmentStageInfo.module = shader->module;
+  fragmentStageInfo.pName = "fragmentMain";
 
-  auto vertexformat =
-      Graphics::PredefinedVertexFormats.at(shader->GetExpectedVertexFormat());
+  shaderStages.emplace_back(fragmentStageInfo);
+
+  shaderStageCache[state.shader.get()] = shaderStages;
+
+  return shaderStages;
+}
+
+inline auto GetVertexInputState(State &state)
+    -> VkPipelineVertexInputStateCreateInfo {
+
+  static std::unordered_map<VertexFormat, VkPipelineVertexInputStateCreateInfo,
+                            VertexFormatHash>
+      vertexInputStateCache;
+
+  if (vertexInputStateCache.contains(state.vertexFormat)) {
+    return vertexInputStateCache[state.vertexFormat];
+  }
 
   VkPipelineVertexInputStateCreateInfo vertexInputInfo = {};
   vertexInputInfo.sType =
       VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-  vertexInputInfo.vertexBindingDescriptionCount = vertexformat.Bindings.size();
-  vertexInputInfo.pVertexBindingDescriptions = vertexformat.Bindings.data();
+  vertexInputInfo.vertexBindingDescriptionCount =
+      state.vertexFormat.GetBindings().size();
+  vertexInputInfo.pVertexBindingDescriptions =
+      state.vertexFormat.GetBindings().data();
   vertexInputInfo.vertexAttributeDescriptionCount =
-      vertexformat.Attributes.size();
-  vertexInputInfo.pVertexAttributeDescriptions = vertexformat.Attributes.data();
-  VkPipelineInputAssemblyStateCreateInfo inputAssembly = {};
+      state.vertexFormat.GetAttributes().size();
+  vertexInputInfo.pVertexAttributeDescriptions =
+      state.vertexFormat.GetAttributes().data();
 
-  PrintDebug("Setting up input assembly state");
+  vertexInputStateCache[state.vertexFormat] = vertexInputInfo;
+
+  return vertexInputInfo;
+}
+
+auto inline GetInputAssemblyState(const State &state)
+    -> VkPipelineInputAssemblyStateCreateInfo {
+  VkPipelineInputAssemblyStateCreateInfo inputAssembly = {};
 
   inputAssembly.sType =
       VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-  inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+  inputAssembly.topology = state.primitiveTopology;
   inputAssembly.primitiveRestartEnable = VK_FALSE;
 
+  return inputAssembly;
+}
+
+auto inline GetRasterizationState(const State &state)
+    -> VkPipelineRasterizationStateCreateInfo {
   VkPipelineRasterizationStateCreateInfo rasterizer = {};
   rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
   rasterizer.depthClampEnable = VK_FALSE;
   rasterizer.rasterizerDiscardEnable = VK_FALSE;
-  rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
-  rasterizer.lineWidth = 1.0F;
-  rasterizer.cullMode = VK_CULL_MODE_NONE;
-  rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
+  rasterizer.polygonMode = state.polygonMode;
+  rasterizer.lineWidth = state.lineWidth;
+  rasterizer.cullMode = state.cullMode;
+  rasterizer.frontFace = state.frontFace;
   rasterizer.depthBiasEnable = VK_FALSE;
 
-  VkPipelineMultisampleStateCreateInfo multisampling = {};
-  multisampling.sType =
-      VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-  multisampling.sampleShadingEnable = VK_FALSE;
-  multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+  return rasterizer;
+}
 
-  PrintDebug("Determining expected output attachments");
-
-  auto entryPointIndex =
-      shader->entryPointToStageIndex.at(SlangStage::SLANG_STAGE_FRAGMENT);
-  PrintDebug("Fragment entry point index: {}", entryPointIndex);
-
-  PrintDebug("programLayout: {}",
-             static_cast<const void *>(shader->programLayout));
-  PrintDebug("EntryPointByIndex(1): {}",
-             static_cast<const void *>(
-                 shader->programLayout->getEntryPointByIndex(1)));
-  PrintDebug("EntryPointByIndex(1) name: {}",
-             shader->programLayout->getEntryPointByIndex(1)->getName());
-
-  auto *entryPoint =
-      shader->programLayout->getEntryPointByIndex(entryPointIndex);
-
-  if (entryPoint == nullptr) {
-    return Error::Unexpected(
-        "Failed to get fragment entry point from shader program layout");
-  }
-
-  PrintDebug("Fetched entry point reflection.");
-  auto *outputVariableLayout = entryPoint->getResultVarLayout();
-
-  if (outputVariableLayout == nullptr) {
-    return Error::Unexpected(
-        "Shader has no output variable layout for fragment stage");
-  }
-
-  PrintDebug("Determining expected output attachments");
-
-  std::set<uint32_t> expectedAttachments = {};
-  for (uint32_t i = 0;
-       i < outputVariableLayout->getTypeLayout()->getFieldCount(); ++i) {
-    auto *outVar = outputVariableLayout->getTypeLayout()->getFieldByIndex(i);
-    if (strcmp(outVar->getSemanticName(), "SV_Target") == 0) {
-      expectedAttachments.insert(outVar->getSemanticIndex());
-    }
-  }
-
+auto inline GetRenderRendertargetsOrSwapchain(const GraphicsContext &context,
+                                              const State &state)
+    -> std::vector<Ref<RenderTarget>> {
   std::vector<Ref<RenderTarget>> renderTargets = state.renderTargets;
 
   if (state.renderTargets.empty() ||
@@ -380,34 +372,55 @@ inline auto CreatePipeline(const GraphicsContext &context, const State &state)
     }
   }
 
-  uint32_t attachmentCount = 0;
+  return renderTargets;
+}
+
+auto inline GetColorBlendAttachmentState(const GraphicsContext &context,
+                                         const State &state)
+    -> tl::expected<std::vector<VkPipelineColorBlendAttachmentState>,
+                    Error::Error> {
+
+  // Get Shader Output Reflection //
+
+  auto *shader = state.shader.get();
+
+  auto entryPointIndex =
+      shader->entryPointToStageIndex.at(SlangStage::SLANG_STAGE_FRAGMENT);
+
+  auto *entryPoint =
+      shader->programLayout->getEntryPointByIndex(entryPointIndex);
+
+  if (entryPoint == nullptr) {
+    return Error::Unexpected(
+        "Failed to get fragment entry point from shader program layout");
+  }
+
+  auto *outputVariableLayout = entryPoint->getResultVarLayout();
+
+  if (outputVariableLayout == nullptr) {
+    return Error::Unexpected(
+        "Shader has no output variable layout for fragment stage");
+  }
+
+  // Determine Expected Output Attachments //
+
+  std::set<uint32_t> expectedAttachments = {};
+  for (uint32_t i = 0;
+       i < outputVariableLayout->getTypeLayout()->getFieldCount(); ++i) {
+    auto *outVar = outputVariableLayout->getTypeLayout()->getFieldByIndex(i);
+    if (strcmp(outVar->getSemanticName(), "SV_Target") == 0) {
+      expectedAttachments.insert(outVar->getSemanticIndex());
+    }
+  }
+
+  // Get Actual Set Render Targets //
+
+  auto renderTargets = GetRenderRendertargetsOrSwapchain(context, state);
+
   auto idx = 0;
   auto blendAttachments = std::vector<VkPipelineColorBlendAttachmentState>(
       renderTargets.size() + 1);
-  auto formats =
-      std::vector<VkFormat>(renderTargets.size() + 1, VK_FORMAT_UNDEFINED);
 
-  VkPipelineViewportStateCreateInfo viewportState = {};
-  viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-  viewportState.viewportCount = 1;
-
-  auto viewport = GetMaximumAllowedViewport();
-
-  auto scissor = GetScissor();
-
-  if (scissor.extent.width == 0 || scissor.extent.height == 0) {
-    scissor.extent.width = static_cast<uint32_t>(viewport.width);
-    scissor.extent.height = static_cast<uint32_t>(viewport.height);
-  }
-
-  viewportState.pViewports = &viewport;
-  viewportState.scissorCount = 1;
-  viewportState.pScissors = &scissor;
-
-  bool hasDepthAttachment = false;
-  bool hasStencilAttachment = false;
-
-  // Loop over attachments and use GetPassAttachmentInfo to fetch blend modes
   for (const auto &rendertarget : renderTargets) {
     int location = rendertarget->location;
     if (location == -1) {
@@ -416,22 +429,7 @@ inline auto CreatePipeline(const GraphicsContext &context, const State &state)
     idx++;
 
     blendAttachments.resize(location + 1);
-    formats.resize(location + 1);
-
-    attachmentCount++;
     blendAttachments[location] = rendertarget->blendMode;
-    formats[location] = rendertarget->texture->format;
-
-    if (Image::IsDepthTexture(rendertarget->texture->format)) {
-      hasDepthAttachment = true;
-    } else if (Image::IsStencilTexture(rendertarget->texture->format)) {
-      hasStencilAttachment = true;
-    }
-  }
-
-  PrintDebug("Expected attachments:");
-  for (const auto &att : expectedAttachments) {
-    PrintDebug(" - {}", att);
   }
 
   for (uint32_t i = 0; i <= blendAttachments.size(); ++i) {
@@ -444,35 +442,152 @@ inline auto CreatePipeline(const GraphicsContext &context, const State &state)
     }
   }
 
-  VkPipelineColorBlendStateCreateInfo colorBlending = {};
-  colorBlending.sType =
-      VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-  colorBlending.logicOpEnable = VK_FALSE;
-  colorBlending.attachmentCount = attachmentCount;
-  colorBlending.pAttachments = blendAttachments.data();
+  return blendAttachments;
+}
 
-  VkPipelineRenderingCreateInfo renderingCreateInfo = {};
-  renderingCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
+auto inline GetDepthStencilState(const State &state)
+    -> VkPipelineDepthStencilStateCreateInfo {
+  VkPipelineDepthStencilStateCreateInfo depthStencil = {};
+  depthStencil.sType =
+      VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+  depthStencil.depthTestEnable = static_cast<VkBool32>(state.depthTestEnable);
+  depthStencil.depthWriteEnable = static_cast<VkBool32>(state.depthWriteEnable);
+  depthStencil.depthCompareOp = state.depthCompareOp;
+  depthStencil.depthBoundsTestEnable = VK_FALSE;
+  depthStencil.stencilTestEnable =
+      static_cast<VkBool32>(state.stencilTestEnable);
 
-  renderingCreateInfo.colorAttachmentCount = attachmentCount;
-  PrintDebug("Creating graphics pipeline with {} color attachments.",
-             attachmentCount);
+  return depthStencil;
+}
 
-  renderingCreateInfo.pColorAttachmentFormats = formats.data();
+auto inline GetRenderFormatInfo(const GraphicsContext &context,
+                                const State &state) -> std::vector<VkFormat> {
+  auto renderTargets = GetRenderRendertargetsOrSwapchain(context, state);
+
+  auto idx = 0;
+  auto formats =
+      std::vector<VkFormat>(renderTargets.size() + 1, VK_FORMAT_UNDEFINED);
+
+  for (const auto &rendertarget : renderTargets) {
+    int location = rendertarget->location;
+    if (location == -1) {
+      location = idx;
+    }
+    idx++;
+
+    formats.resize(location + 1);
+    formats[location] = rendertarget->texture->format;
+  }
+
+  return formats;
+}
+
+inline auto CreatePipeline(const GraphicsContext &context, State &state)
+    -> tl::expected<std::pair<VkPipeline, VkPipelineLayout>, Error::Error> {
+  if (state.bindPoint != VK_PIPELINE_BIND_POINT_GRAPHICS) {
+    return Error::Unexpected("Only graphics pipelines are supported.");
+  }
+
+  PrintDebug("Creating graphics pipeline");
+
+  auto shaderStagesResult = GetShaderStages(state);
+  if (Error::IsError(shaderStagesResult)) {
+    return tl::make_unexpected(shaderStagesResult.error());
+  }
+
+  auto shaderStages = shaderStagesResult.value();
+
+  auto vertexInputInfo = GetVertexInputState(state);
+  auto inputAssembly = GetInputAssemblyState(state);
+  auto rasterizer = GetRasterizationState(state);
+
+  /// Viewport and Scissor ///
+
+  VkPipelineViewportStateCreateInfo viewportState = {};
+  viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+  viewportState.viewportCount = 1;
+
+  auto viewport = GetMaximumAllowedViewport();
+  auto scissor = GetScissor();
+
+  if (scissor.extent.width == 0 || scissor.extent.height == 0) {
+    scissor.extent.width = static_cast<uint32_t>(viewport.width);
+    scissor.extent.height = static_cast<uint32_t>(viewport.height);
+  }
+
+  viewportState.pViewports = &viewport;
+  viewportState.scissorCount = 1;
+  viewportState.pScissors = &scissor;
+
+  /// Multisampling ///
+
+  VkPipelineMultisampleStateCreateInfo multisampling = {};
+  multisampling.sType =
+      VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+  multisampling.sampleShadingEnable = VK_FALSE;
+  multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+
+  /// Dynamic State ///
 
   VkPipelineDynamicStateCreateInfo dynamicState = {};
   dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
   dynamicState.dynamicStateCount = 0;
   dynamicState.pDynamicStates = nullptr;
 
-  VkPipelineDepthStencilStateCreateInfo depthStencil = {};
-  depthStencil.sType =
+  /// Depth and Stencil ///
+
+  VkPipelineDepthStencilStateCreateInfo depthStencilState = {};
+  depthStencilState.sType =
       VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-  depthStencil.depthTestEnable = VK_FALSE;
-  depthStencil.depthWriteEnable = VK_FALSE;
-  depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
-  depthStencil.depthBoundsTestEnable = VK_FALSE;
-  depthStencil.stencilTestEnable = VK_FALSE;
+  depthStencilState.depthTestEnable =
+      static_cast<VkBool32>(state.depthTestEnable);
+  depthStencilState.depthWriteEnable =
+      static_cast<VkBool32>(state.depthWriteEnable);
+  depthStencilState.depthCompareOp = state.depthCompareOp;
+  depthStencilState.depthBoundsTestEnable = VK_FALSE;
+  depthStencilState.stencilTestEnable =
+      static_cast<VkBool32>(state.stencilTestEnable);
+
+  /// Attachment Formats ///
+
+  auto renderTargets = GetRenderRendertargetsOrSwapchain(context, state);
+
+  auto idx = 0;
+  auto formats =
+      std::vector<VkFormat>(renderTargets.size() + 1, VK_FORMAT_UNDEFINED);
+
+  for (const auto &rendertarget : renderTargets) {
+    int location = rendertarget->location;
+    if (location == -1) {
+      location = idx;
+    }
+    idx++;
+
+    formats.resize(location + 1);
+    formats[location] = rendertarget->texture->format;
+  }
+
+  /// Color Attachments ///
+
+  VkPipelineRenderingCreateInfo renderingCreateInfo = {};
+  renderingCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
+  renderingCreateInfo.colorAttachmentCount = formats.size();
+  renderingCreateInfo.pColorAttachmentFormats = formats.data();
+
+  auto colorBlendingResult = GetColorBlendAttachmentState(context, state);
+
+  if (Error::IsError(colorBlendingResult)) {
+    return tl::make_unexpected(colorBlendingResult.error());
+  }
+
+  auto blendAttachments = colorBlendingResult.value();
+
+  VkPipelineColorBlendStateCreateInfo colorBlending = {};
+  colorBlending.sType =
+      VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+  colorBlending.logicOpEnable = VK_FALSE;
+  colorBlending.attachmentCount = blendAttachments.size();
+  colorBlending.pAttachments = blendAttachments.data();
 
   VkGraphicsPipelineCreateInfo pipelineInfo = {};
   pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -484,10 +599,10 @@ inline auto CreatePipeline(const GraphicsContext &context, const State &state)
   pipelineInfo.pRasterizationState = &rasterizer;
   pipelineInfo.pMultisampleState = &multisampling;
   pipelineInfo.pColorBlendState = &colorBlending;
-  pipelineInfo.pDepthStencilState = &depthStencil;
+  pipelineInfo.pDepthStencilState = &depthStencilState;
   pipelineInfo.pDynamicState = &dynamicState;
 
-  PrintDebug("Getting pipeline layout");
+  auto *shader = state.shader.get();
 
   auto layoutResult = GetPipelineLayout(context, shader);
   if (Error::IsError(layoutResult)) {
@@ -500,13 +615,11 @@ inline auto CreatePipeline(const GraphicsContext &context, const State &state)
   pipelineInfo.pNext = &renderingCreateInfo;
 
   PrintDebug("Creating graphics pipeline...");
-  PrintDebug("device: {}", static_cast<const void *>(context.device));
 
   VkPipeline pipeline = VK_NULL_HANDLE;
   auto error = Error::Create(vkCreateGraphicsPipelines(
       context.device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline));
 
-  PrintDebug("storing pipeline in cache");
   PipelineCache[state] = {pipeline, layoutResult.value()};
 
   if (Error::IsError(error)) {
@@ -517,7 +630,7 @@ inline auto CreatePipeline(const GraphicsContext &context, const State &state)
                                                  layoutResult.value());
 }
 
-inline auto GetPipeline(const GraphicsContext &context, const State &state)
+inline auto GetPipeline(const GraphicsContext &context, State &state)
     -> tl::expected<std::pair<VkPipeline, VkPipelineLayout>, Error::Error> {
 
   PrintDebug("Getting pipeline from cache");
@@ -658,9 +771,6 @@ auto Flush(GraphicsContext &context) -> tl::expected<bool, Error::Error> {
   if (Error::IsError(error)) {
     return tl::make_unexpected(error);
   }
-
-  PrintAlways("Transitioning {} attachments for render target",
-              currentState.renderTargets.size());
 
   // Loop over all attachments
   // Swapchain cannot be used as sampler, so we never have to transition it here
@@ -892,6 +1002,14 @@ auto SetWindingOrder(VkFrontFace frontFace) -> void {
   StateStack.back().frontFace = frontFace;
 }
 
+auto SetVertexFormat(const VertexFormat &vertexFormat) -> void {
+  StateStack.back().vertexFormat = vertexFormat;
+}
+
+auto SetTopology(VkPrimitiveTopology topology) -> void {
+  StateStack.back().primitiveTopology = topology;
+}
+
 // Getters //
 
 auto GetDepthMode() -> std::tuple<bool, bool, VkCompareOp> {
@@ -985,6 +1103,16 @@ auto GetLineWidth() -> float {
 auto GetWindingOrder() -> VkFrontFace {
   auto &currentState = StateStack.back();
   return currentState.frontFace;
+}
+
+auto GetVertexFormat() -> VertexFormat {
+  auto &currentState = StateStack.back();
+  return currentState.vertexFormat;
+}
+
+auto GetTopology() -> VkPrimitiveTopology {
+  auto &currentState = StateStack.back();
+  return currentState.primitiveTopology;
 }
 
 auto Clear(GraphicsContext &context, const ClearInfo &clearInfo)

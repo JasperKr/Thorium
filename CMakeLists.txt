@@ -203,6 +203,7 @@ add_executable(Thorium
     src/Graphics/rendertarget.cpp
     src/Graphics/reflect.cpp
     src/Graphics/resource.cpp
+    src/Graphics/mesh.cpp
 
 # Graphics Buffers
     src/Graphics/Buffers/push.cpp
@@ -229,6 +230,7 @@ add_executable(Thorium
     src/Wrap/Graphics/wrap_graphics.cpp
     src/Wrap/Graphics/wrap_texture.cpp
     src/Wrap/Graphics/wrap_rendertarget.cpp
+    src/Wrap/Graphics/wrap_mesh.cpp
     src/Wrap/Modules/wrap_event.cpp
     src/Wrap/Modules/wrap_timer.cpp
     src/Wrap/wrap.cpp

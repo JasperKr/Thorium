@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 namespace Hash {
 
@@ -17,7 +18,7 @@ struct Hasher {
     return *this;
   }
 
-  auto get() const -> size_t { return value; }
+  [[nodiscard]] auto get() const -> size_t { return value; }
 };
 
 } // namespace Hash
