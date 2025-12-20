@@ -146,6 +146,7 @@ elseif(UNIX)
             make -C ${LUAJIT_SRC}/src
         INSTALL_COMMAND ""
         BUILD_IN_SOURCE 1
+        BUILD_BYPRODUCTS ${LUAJIT_SRC}/src/libluajit.so
     )
 
     add_library(LuaJIT::LuaJIT SHARED IMPORTED)
