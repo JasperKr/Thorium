@@ -4,3 +4,11 @@ include/
 .VSCodeCounter/
 bin/
 lib/
+vgcore.*
+*.lib
+*.dll
+*.exe
+*.obj
+*.o
+*.so
+*.dylib
