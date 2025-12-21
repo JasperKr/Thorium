@@ -276,7 +276,7 @@ static auto CreateDevice(GraphicsContext &context) -> Error::Error {
       "Enabled Vulkan 1.2 features: descriptorIndexing, "
       "shaderSampledImageArrayNonUniformIndexing, "
       "shaderStorageBufferArrayNonUniformIndexing, runtimeDescriptorArray, "
-      "bufferDeviceAddress");
+      "timelineSemaphore, bufferDeviceAddress");
 
   // --- Vulkan 1.1 features ---
   VkPhysicalDeviceVulkan11Features features11{

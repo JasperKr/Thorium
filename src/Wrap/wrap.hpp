@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Modules/console.hpp"
 #include "Modules/type.hpp"
 #include <Modules/object.hpp>
 extern "C" {
@@ -61,13 +62,31 @@ template <typename T>
 inline auto FromLuaObject(lua_State *state, int index) -> T * {
   // Check if userdata
   if (lua_isuserdata(state, index) == 0) {
+    PrintWarning("FromLuaObject: not userdata at index {}", index);
     return nullptr;
   }
 
   // NOLINTNEXTLINE
   auto *proxy = static_cast<Proxy *>(lua_touserdata(state, index));
-  if (proxy == nullptr || proxy->object == nullptr ||
-      proxy->type != T::GetType()) {
+  if (proxy == nullptr) {
+    PrintWarning("FromLuaObject: proxy is null at index {}", index);
+    return nullptr;
+  }
+
+  if (proxy->object == nullptr || proxy->type == nullptr) {
+    PrintWarning("FromLuaObject: proxy invalid at index {}", index);
+    return nullptr;
+  }
+
+  // Do not compare type addresses, they may differ since the types are
+  // Defined inline, so addresses are different for each translation unit
+  if (proxy->type->GetName() != T::GetType()->GetName()) {
+    auto proxyTypeName = proxy->type->GetName();
+    auto expectedTypeName = T::GetType()->GetName();
+
+    PrintWarning(
+        "FromLuaObject: type mismatch at index {}, expected: {} got: {}", index,
+        expectedTypeName, proxyTypeName);
     return nullptr;
   }
 
@@ -93,7 +112,7 @@ inline auto LuaIsType(lua_State *state, int index) -> bool {
     return false;
   }
 
-  return proxy->type == T::GetType();
+  return proxy->type->GetName() == T::GetType()->GetName();
 }
 
 } // namespace LuaWrap

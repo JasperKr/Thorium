@@ -2,6 +2,7 @@
 
 #include "Wrap/Graphics/wrap_mesh.hpp"
 #include "Wrap/Graphics/wrap_rendertarget.hpp"
+#include "Wrap/Graphics/wrap_shader.hpp"
 #include "Wrap/Graphics/wrap_texture.hpp"
 #include "Wrap/wrap.hpp"
 extern "C" {
@@ -73,7 +74,11 @@ static const luaL_Reg GraphicsLib[] = {
 
 // nullptr-terminated NOLINTNEXTLINE
 const static lua_CFunction childrenInitFunctions[] = {
-    Texture::luaopen_texture, Graphics::luaopen_mesh, nullptr};
+    Texture::luaopen_texture,
+    Graphics::luaopen_mesh,
+    Graphics::Shader::luaopen_shader,
+    nullptr,
+};
 
 extern "C" inline auto luaopen_graphics(lua_State *state) -> int {
   auto module = LuaWrap::LuaModule{

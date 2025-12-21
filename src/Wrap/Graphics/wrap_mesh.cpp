@@ -9,7 +9,16 @@ namespace Graphics {
 // Bytedata, [offset], [range]
 auto Wrap_SetVertices(lua_State *state) -> int {
   auto *mesh = LuaWrap::FromLuaObject<Mesh>(state, 1);
+
+  if (mesh == nullptr) {
+    return luaL_error(state, "Expected Mesh as first argument");
+  }
+
   auto *data = LuaWrap::FromLuaObject<Data::ByteData>(state, 2);
+
+  if (data == nullptr) {
+    return luaL_error(state, "Expected ByteData as second argument");
+  }
 
   auto offset = 0L;
   if (lua_gettop(state) >= 3) {
@@ -47,7 +56,16 @@ auto Wrap_SetVertices(lua_State *state) -> int {
 }
 auto Wrap_SetIndices(lua_State *state) -> int {
   auto *mesh = LuaWrap::FromLuaObject<Mesh>(state, 1);
+
+  if (mesh == nullptr) {
+    return luaL_error(state, "Expected Mesh as first argument");
+  }
+
   auto *data = LuaWrap::FromLuaObject<Data::ByteData>(state, 2);
+
+  if (data == nullptr) {
+    return luaL_error(state, "Expected ByteData as second argument");
+  }
 
   auto offset = 0L;
   if (lua_gettop(state) >= 3) {
@@ -88,6 +106,11 @@ auto Wrap_SetIndices(lua_State *state) -> int {
 
 auto Wrap_SetVertexBuffer(lua_State *state) -> int {
   auto *mesh = LuaWrap::FromLuaObject<Mesh>(state, 1);
+
+  if (mesh == nullptr) {
+    return luaL_error(state, "Expected Mesh as first argument");
+  }
+
   auto *buffer = LuaWrap::FromLuaObject<Buffer>(state, 2);
 
   mesh->SetVertexBuffer(Ref<Buffer>(buffer));
@@ -96,6 +119,11 @@ auto Wrap_SetVertexBuffer(lua_State *state) -> int {
 }
 auto Wrap_SetIndexBuffer(lua_State *state) -> int {
   auto *mesh = LuaWrap::FromLuaObject<Mesh>(state, 1);
+
+  if (mesh == nullptr) {
+    return luaL_error(state, "Expected Mesh as first argument");
+  }
+
   auto *buffer = LuaWrap::FromLuaObject<Buffer>(state, 2);
 
   mesh->SetIndexBuffer(Ref<Buffer>(buffer));
@@ -105,6 +133,11 @@ auto Wrap_SetIndexBuffer(lua_State *state) -> int {
 
 auto Wrap_SetDrawRange(lua_State *state) -> int {
   auto *mesh = LuaWrap::FromLuaObject<Mesh>(state, 1);
+
+  if (mesh == nullptr) {
+    return luaL_error(state, "Expected Mesh as first argument");
+  }
+
   auto offset = static_cast<uint32_t>(luaL_checkinteger(state, 2));
   auto count = static_cast<uint32_t>(luaL_checkinteger(state, 3));
 
@@ -114,6 +147,11 @@ auto Wrap_SetDrawRange(lua_State *state) -> int {
 }
 auto Wrap_GetDrawRange(lua_State *state) -> int {
   auto *mesh = LuaWrap::FromLuaObject<Mesh>(state, 1);
+
+  if (mesh == nullptr) {
+    return luaL_error(state, "Expected Mesh as first argument");
+  }
+
   auto range = mesh->GetDrawRange();
 
   lua_pushinteger(state, static_cast<lua_Integer>(range.Offset));
@@ -163,6 +201,11 @@ auto Wrap_NewMesh(lua_State *state) -> int {
 
 auto Wrap_Release(lua_State *state) -> int {
   auto *mesh = LuaWrap::FromLuaObject<Mesh>(state, 1);
+
+  if (mesh == nullptr) {
+    return luaL_error(state, "Expected Mesh as first argument");
+  }
+
   mesh->ScheduleDestroy();
   return 0;
 }

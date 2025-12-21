@@ -232,6 +232,7 @@ add_executable(Thorium
     src/Wrap/Graphics/wrap_texture.cpp
     src/Wrap/Graphics/wrap_rendertarget.cpp
     src/Wrap/Graphics/wrap_mesh.cpp
+    src/Wrap/Graphics/wrap_shader.cpp
     src/Wrap/Modules/wrap_event.cpp
     src/Wrap/Modules/wrap_timer.cpp
     src/Wrap/wrap.cpp
@@ -249,10 +250,12 @@ target_compile_definitions(Thorium PRIVATE
 )
 
 # Copy LuaJIT DLL after build
-add_custom_command(TARGET Thorium POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${LUAJIT_SRC}/src/lua51.dll"
-        $<TARGET_FILE_DIR:Thorium>)
+if (WIN32)
+    add_custom_command(TARGET Thorium POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${LUAJIT_SRC}/src/lua51.dll"
+            $<TARGET_FILE_DIR:Thorium>)
+endif()
 
 # Include paths
 target_include_directories(Thorium

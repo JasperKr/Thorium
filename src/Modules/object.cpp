@@ -1,4 +1,5 @@
 #include "object.hpp"
+#include "Modules/console.hpp"
 
 Object::~Object() = default;
 auto Object::getReferenceCount() const -> int { return count.load(); }
@@ -7,7 +8,9 @@ void Object::release() {
   if (count.fetch_sub(1) == 1) {
     if (UseDeferredDestruction()) {
       this->ScheduleDestroy();
+      PrintWarning("Object scheduled for deferred destruction!");
     } else {
+      PrintWarning("Object destroyed!");
       delete this;
     }
   }

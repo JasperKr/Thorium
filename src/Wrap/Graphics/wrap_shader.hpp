@@ -5,7 +5,8 @@
 #include "Wrap/wrap.hpp"
 #include <lauxlib.h>
 #include <lua.h>
-namespace Graphics {
+
+namespace Graphics::Shader {
 
 auto Wrap_Send(lua_State *state) -> int;
 auto Wrap_HasUniform(lua_State *state) -> int;
@@ -31,5 +32,4 @@ extern "C" inline auto luaopen_shader(lua_State *state) -> int {
 
   return 1;
 }
-
-} // namespace Graphics
+} // namespace Graphics::Shader

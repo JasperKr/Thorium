@@ -142,7 +142,7 @@ auto wrap_SetPolygonMode(lua_State *state) -> int {
 auto wrap_SetViewport(lua_State *state) -> int {
   auto *ctx = GetCurrentGraphicsContext();
   if (lua_gettop(state) == 0) {
-    RenderTarget::SetViewport({});
+    RenderTarget::SetViewport(nullptr);
     return 0;
   }
   VkViewport viewport{};
@@ -154,18 +154,24 @@ auto wrap_SetViewport(lua_State *state) -> int {
       static_cast<float>(luaL_optnumber(state, 5, 0.0)); // NOLINT
   viewport.maxDepth =
       static_cast<float>(luaL_optnumber(state, 6, 1.0)); // NOLINT
-  RenderTarget::SetViewport(viewport);
+  RenderTarget::SetViewport(&viewport);
   return 0;
 }
 
 auto wrap_SetScissor(lua_State *state) -> int {
   auto *ctx = GetCurrentGraphicsContext();
+
+  if (lua_gettop(state) == 0) {
+    RenderTarget::SetScissor(nullptr);
+    return 0;
+  }
+
   VkRect2D scissor{};
   scissor.offset.x = static_cast<int32_t>(luaL_checkinteger(state, 1));
   scissor.offset.y = static_cast<int32_t>(luaL_checkinteger(state, 2));
   scissor.extent.width = static_cast<uint32_t>(luaL_checkinteger(state, 3));
   scissor.extent.height = static_cast<uint32_t>(luaL_checkinteger(state, 4));
-  RenderTarget::SetScissor(scissor);
+  RenderTarget::SetScissor(&scissor);
   return 0;
 }
 

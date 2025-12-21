@@ -54,7 +54,7 @@ public:
     std::memcpy(data.data(), byteData.GetData(), byteData.GetSize());
   }
 
-  static auto GetType() -> const Type * { return &type; }
+  static auto GetType() -> Type const * { return &type; }
 
   auto ScheduleDestroy() -> bool override { return false; };
 

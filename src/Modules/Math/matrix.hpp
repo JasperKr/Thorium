@@ -22,7 +22,12 @@ struct Matrix4x4 {
     }
   }
 
-  auto AsSpan() -> std::span<Scalar> { return {elements}; }
+  auto AsSpan() -> std::span<const Scalar> { return {elements}; }
+  auto AsByteSpan()
+      -> std::span<const uint8_t> { // NOLINTNEXTLINE reinterpret cast
+    return {reinterpret_cast<const uint8_t *>(elements.data()),
+            sizeof(Scalar) * Size};
+  }
 
   static auto FromRows(std::initializer_list<Scalar> init) -> Matrix4x4;
 

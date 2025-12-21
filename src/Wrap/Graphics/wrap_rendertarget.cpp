@@ -224,7 +224,8 @@ auto RenderTargetsFromTexture(lua_State *state, int index)
       LuaWrap::FromLuaObject<Graphics::Texture::Texture>(state, index);
 
   if (texture == nullptr) {
-    luaL_error(state, "Expected Texture as argument %d", index);
+    auto *ctx = Graphics::GetCurrentGraphicsContext();
+    texture = GetSwapchainTextures()[ctx->swapchainImageIndex].get();
   }
 
   auto rendertarget = Ref<Graphics::RenderTarget::RenderTarget>::Make();
@@ -244,12 +245,19 @@ auto RenderTargetsFromOptions(lua_State *state, int index)
 
   // texture
   lua_getfield(state, index, "texture");
-  auto *texture = LuaWrap::FromLuaObject<Graphics::Texture::Texture>(state, -1);
-  if (texture == nullptr) {
-    luaL_error(state, "Expected Texture in rendertarget options");
+  if (lua_isnoneornil(state, -1) != 0) {
+    auto *context = Graphics::GetCurrentGraphicsContext();
+    rendertarget->texture =
+        GetSwapchainTextures()[context->swapchainImageIndex];
+  } else {
+    auto *texture =
+        LuaWrap::FromLuaObject<Graphics::Texture::Texture>(state, -1);
+    if (texture == nullptr) {
+      PrintError("Expected Texture as rendertarget texture");
+      return {};
+    }
+    rendertarget->texture = Ref<Graphics::Texture::Texture>(texture);
   }
-  rendertarget->texture = Ref<Graphics::Texture::Texture>(texture);
-
   lua_pop(state, 1);
 
   // layer
@@ -303,9 +311,51 @@ auto RenderTargetsFromOptions(lua_State *state, int index)
       luaL_error(state, "Invalid loadas value: %s", loadasStr);
     }
   }
+
   lua_pop(state, 2);
 
   return rendertarget;
+}
+
+auto IsOptionsTable(lua_State *state, int index) -> bool {
+  luaL_checktype(state, index, LUA_TTABLE);
+
+  lua_getfield(state, index, "texture");
+  if (lua_isnoneornil(state, -1) == 0) {
+    lua_pop(state, 1);
+    return true;
+  }
+  lua_pop(state, 1);
+
+  lua_getfield(state, index, "loadas");
+  if (lua_isnoneornil(state, -1) == 0) {
+    lua_pop(state, 1);
+    return true;
+  }
+  lua_pop(state, 1);
+
+  lua_getfield(state, index, "blendmode");
+  if (lua_isnoneornil(state, -1) == 0) {
+    lua_pop(state, 1);
+    return true;
+  }
+  lua_pop(state, 1);
+
+  lua_getfield(state, index, "layer");
+  if (lua_isnoneornil(state, -1) == 0) {
+    lua_pop(state, 1);
+    return true;
+  }
+  lua_pop(state, 1);
+
+  lua_getfield(state, index, "location");
+  if (lua_isnoneornil(state, -1) == 0) {
+    lua_pop(state, 1);
+    return true;
+  }
+  lua_pop(state, 1);
+
+  return false;
 }
 
 // Variants:
@@ -332,14 +382,8 @@ auto wrap_SetRenderTargets(lua_State *state) -> int {
 
   if (lua_isuserdata(state, 1) != 0) {
     hasVarargs = true;
-    PrintDebug("has varargs texture");
   } else if (lua_istable(state, 1) != 0) {
-    // check if table contains texture field
-    lua_getfield(state, 1, "texture");
-    if (lua_isuserdata(state, -1) != 0) {
-      hasVarargs = true;
-    }
-    lua_pop(state, 1);
+    hasVarargs = IsOptionsTable(state, 1);
   }
 
   if (hasVarargs) {

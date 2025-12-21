@@ -3,6 +3,7 @@
 #include "Graphics/Buffers/push.hpp"
 #include "Graphics/Buffers/structured.hpp"
 #include "Graphics/Buffers/uniform.hpp"
+#include "Graphics/buffer.hpp"
 #include "Graphics/texture.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
@@ -16,6 +17,7 @@
 #include <span>
 #include <string>
 #include <unordered_map>
+#include <variant>
 #include <vector>
 #define VK_NO_PROTOTYPES
 #include "tl/expected.hpp"
@@ -142,96 +144,61 @@ struct ShaderModule : Object {
   auto GetUniformType(const std::string &name) const
       -> tl::expected<ResourceInfo, Error::Error> {
     for (const auto &resource : reflection.resources) {
-      if (resource.variant == ResourceVariant::Buffer) {
+      if (std::holds_alternative<BufferInfo>(resource.info)) {
 
         const auto &bufferInfo = std::get<BufferInfo>(resource.info);
         if (bufferInfo.name == name) {
-          return bufferInfo.type;
+          return resource;
         }
       }
     }
 
-    return Error::Create("Uniform buffer not found: " + name);
+    return Error::Unexpected("Uniform buffer not found: " + name);
   }
 
-  template <typename T>
-  auto Send(GraphicsContext &context, const std::string &name, const T &value)
-      -> Error::Error {
-    static_assert(std::is_same_v<T, float> || std::is_same_v<T, uint8_t> ||
-                  std::is_same_v<T, uint16_t> || std::is_same_v<T, uint32_t> ||
-                  std::is_same_v<T, int8_t> || std::is_same_v<T, int16_t> ||
-                  std::is_same_v<T, int32_t>);
-
+  auto Send(GraphicsContext &context, const std::string &name,
+            const std::span<const uint8_t> data) -> Error::Error {
     for (auto &pushBuffer : pushBuffers) {
       if (pushBuffer.GetLayout().name == name) {
-        return pushBuffer.SetData(name, value);
+        return pushBuffer.SetData(name, data);
       }
     }
 
     // check global ubo
     const auto &layout = reflection.globals;
-    switch (layout.type) {
-    case BufferResourceType::Unknown:
-      return Error::Create("Invalid UBO buffer");
-    case BufferResourceType::Scalar:
-    case BufferResourceType::Vector:
-    case BufferResourceType::Matrix:
+    if (std::holds_alternative<ScalarInfo>(layout.info) ||
+        std::holds_alternative<VectorInfo>(layout.info) ||
+        std::holds_alternative<MatrixInfo>(layout.info)) {
       PrintWarning("Sending data to global UBO: {}", layout.name);
       if (layout.name == name) {
-        return GetGlobalUniformBuffer().GetBuffer()->SetData(context, value);
+        return GetGlobalUniformBuffer().GetBuffer()->SetData(context, data);
       }
-    case BufferResourceType::Struct: {
+    } else if (std::holds_alternative<StructInfo>(layout.info)) {
       auto structInfo = std::get<StructInfo>(layout.info);
-      auto fieldIt = structInfo.fieldMap.find(name);
-      if (fieldIt != structInfo.fieldMap.end()) {
-        const auto &fieldInfo = fieldIt->second;
+
+      ResourceInfo *field = nullptr;
+
+      for (auto &currentField : structInfo.fields) {
+        if (currentField.name == name) {
+          field = &currentField;
+          break;
+        }
+      }
+
+      if (field != nullptr) {
         auto buffer = GetGlobalUniformBuffer().GetBuffer();
-        return buffer->SetData(context, value, fieldInfo.GetOffset());
+        return buffer->SetData(context, data, field->offset);
       }
-    }
-    }
-
-    return Error::Create("Push buffer not found: " + name);
-  }
-
-  template <typename T>
-  auto Send(GraphicsContext &context, const std::string &name,
-            const std::span<T> &value) -> Error::Error {
-    for (auto &pushBuffer : pushBuffers) {
-      if (pushBuffer.GetLayout().name == name) {
-        return pushBuffer.SetData(value);
-      }
-    }
-
-    // check global ubo
-    const auto &layout = reflection.globals;
-    switch (layout.type) {
-    case BufferResourceType::Unknown:
-    case BufferResourceType::Scalar:
-    case BufferResourceType::Vector:
-    case BufferResourceType::Matrix:
-      if (layout.name == name) {
-        return GetGlobalUniformBuffer().GetBuffer()->SetData(context, value);
-      }
-    case BufferResourceType::Struct: {
-      auto structInfo = std::get<StructInfo>(layout.info);
-      auto fieldIt = structInfo.fieldMap.find(name);
-      if (fieldIt != structInfo.fieldMap.end()) {
-        const auto &fieldInfo = fieldIt->second;
-        auto buffer = GetGlobalUniformBuffer().GetBuffer();
-        return buffer->SetData(context, value, fieldInfo.GetOffset());
-      }
-    }
     }
 
     return Error::Create("Uniform not found: " + name);
   }
 
-  auto Send(GraphicsContext &context, const std::string &name,
-            StructuredBuffer &buffer) -> Error::Error {
+  auto Send(GraphicsContext &context, const std::string &name, Buffer *buffer)
+      -> Error::Error {
 
     for (const auto &resource : reflection.resources) {
-      if (resource.variant != ResourceVariant::Buffer) {
+      if (!std::holds_alternative<BufferInfo>(resource.info)) {
         continue;
       }
 
@@ -243,19 +210,19 @@ struct ShaderModule : Object {
         // NOLINTNEXTLINE
         auto key = bufferInfo.set | ((uint64_t)bufferInfo.binding << 32U);
 
-        VkDescriptorBufferInfo bufferInfo{};
-        bufferInfo.buffer = buffer.GetBuffer().get()->handle;
-        bufferInfo.offset = 0;
-        bufferInfo.range = buffer.GetLayout().size;
+        VkDescriptorBufferInfo vkBufferInfo{};
+        vkBufferInfo.buffer = buffer->handle;
+        vkBufferInfo.offset = 0;
+        vkBufferInfo.range = buffer->size;
 
         DescriptorWriteInfo descriptorWrite{};
         descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        descriptorWrite.dstSet = buffer.layout.set;
-        descriptorWrite.dstBinding = buffer.layout.binding;
+        descriptorWrite.dstSet = bufferInfo.set;
+        descriptorWrite.dstBinding = bufferInfo.binding;
         descriptorWrite.dstArrayElement = 0;
         descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         descriptorWrite.descriptorCount = 1;
-        descriptorWrite.pBufferInfo = bufferInfo;
+        descriptorWrite.pBufferInfo = vkBufferInfo;
 
         // vkUpdateDescriptorSets(context.device, 1, &descriptorWrite, 0, nullptr);
         pendingDescriptorWrites.emplace_back(descriptorWrite);
@@ -270,7 +237,7 @@ struct ShaderModule : Object {
   auto Send(GraphicsContext &context, const std::string &name,
             Graphics::Texture::Texture *texture) -> Error::Error {
     for (const auto &resource : reflection.resources) {
-      if (resource.variant != ResourceVariant::Sampler) {
+      if (!std::holds_alternative<SamplerInfo>(resource.info)) {
         continue;
       }
 
@@ -312,7 +279,7 @@ struct ShaderModule : Object {
   auto FlushBuffers(GraphicsContext &context, VkPipelineLayout layout)
       -> Error::Error;
 
-  void Destroy(VkDevice device);
+  void Destroy(VkDevice &device);
   void ReloadMaybe(Graphics::GraphicsContext &context);
 
   [[nodiscard]] auto GetExpectedVertexFormat() const -> VertexFormats {

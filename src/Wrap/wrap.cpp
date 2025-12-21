@@ -76,7 +76,7 @@ static auto wrap_release(lua_State *state) -> int {
     lua_pushnil(state);                        // [storage, key, nil]
     lua_settable(state, -3);                   // storage[key] = nil  [storage]
 
-    lua_pop(state, -1); // []
+    lua_pop(state, 1); // []
   }
 
   // Success if object is now null
@@ -98,6 +98,25 @@ auto SetStackToTable(lua_State *state, const char *key) -> void {
 
 auto LoadStorageTable(lua_State *state, const char *key) -> void {
   lua_getfield(state, LUA_REGISTRYINDEX, key);
+}
+
+auto LoadOrCreateStorageTable(lua_State *state, const char *key) -> void {
+  lua_getfield(state, LUA_REGISTRYINDEX, key); // [storage]
+
+  if (!lua_istable(state, -1)) {
+    // Create storage table
+    lua_newtable(state);
+    lua_replace(state, -2); // replace nil in registry with new table
+
+    // Create metatable with weak values
+    lua_newtable(state);
+    lua_pushstring(state, "v");
+    lua_setfield(state, -2, "__mode");
+    lua_setmetatable(state, -2); // new table .mt = mt, popped mt
+
+    // we now only have storage and new table
+    lua_setfield(state, LUA_REGISTRYINDEX, key);
+  }
 }
 
 auto RegisterLuaModule(lua_State *state, const LuaModule &module) -> void {
@@ -169,27 +188,9 @@ auto RegisterLuaType(lua_State *state, const Type *type,
   }
 
   // Make sure permanent object storage table exists with weak values
-  LoadStorageTable(state, "ThoriumObjectStorage"); // [storage]
+  LoadOrCreateStorageTable(state, "ThoriumObjectStorage"); // [storage]
 
-  if (!lua_istable(state, -1)) {
-    // Remove non-table value
-    lua_pop(state, 1); // []
-
-    lua_newtable(state);      // [object storage]
-    lua_pushvalue(state, -1); // [object storage]
-
-    lua_newtable(state);        // [object storage, mt]
-    lua_pushstring(state, "v"); // [object storage, mt, "v"]
-    lua_setfield(
-        state, -2,
-        "__mode");    // mt.__mode = "v" [object storage, mt] make weak values
-    lua_setmetatable( // [object storage]
-        state, -2);   // set metatable for object storage
-    lua_setfield(state, LUA_REGISTRYINDEX,
-                 "ThoriumObjectStorage"); // [storage]
-  } else {
-    lua_pop(state, 1); // Remove table value
-  }
+  lua_pop(state, 1); // Remove storage table from stack []
 
   const auto *name = type->GetName().c_str();
 
@@ -240,8 +241,8 @@ auto SetupLuaType(lua_State *state, const Type *type, Object *object) -> void {
 
   if (!hasGC) {
     // Add GC function
-    lua_pushcfunction(state, wrap_gc); // [mt, wrap__gc]
-    lua_setfield(state, -2, "__gc");   // mt.__gc = wrap__gc [mt]
+    lua_pushcfunction(state, wrap_gc); // [userdata, mt, wrap__gc]
+    lua_setfield(state, -2, "__gc");   // mt.__gc = wrap__gc [userdata, mt]
   }
 
   lua_setmetatable(state, -2); // Set metatable for userdata, [userdata]
@@ -256,7 +257,7 @@ auto PushLuaType(lua_State *state, const Type *type, Object *object) -> void {
   // fetch permanent object storage table
   LoadStorageTable(state, "ThoriumObjectStorage"); // [storage]
 
-  if (lua_isnil(state, -1) != 0) {
+  if (lua_isnoneornil(state, -1)) {
     lua_pop(state, 1); // Remove nil [empty]
 
     SetupLuaType(state, type, object); // [userdata]

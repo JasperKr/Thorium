@@ -1,5 +1,4 @@
 #include "Graphics/resource.hpp"
-#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "buffer.hpp"
 #include "graphics.hpp"
@@ -340,6 +339,10 @@ auto Present(Graphics::GraphicsContext &context) -> Error::Error {
   }
 
   RenderTarget::SetDirty();
+  error = RenderTarget::BeginFrame(context);
+  if (Error::IsError(error)) {
+    return error;
+  }
 
   return Error::Success();
 }

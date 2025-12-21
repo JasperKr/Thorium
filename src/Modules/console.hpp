@@ -14,6 +14,7 @@ enum class LogLevel : uint8_t {
 };
 
 #ifdef NDEBUG
+// NOLINTNEXTLINE
 inline LogLevel CurrentLogLevel = LogLevel::Warning;
 #else
 // NOLINTNEXTLINE
@@ -23,14 +24,15 @@ inline LogLevel CurrentLogLevel = LogLevel::Debug;
 inline auto SetLogLevel(LogLevel level) -> void { CurrentLogLevel = level; }
 
 enum class ConsoleColor : uint8_t {
-  Red,
-  Green,
-  Blue,
-  Yellow,
-  Cyan,
-  Magenta,
-  White,
-  Reset
+  Red,         // errors
+  Green,       // info
+  Blue,        // library messages
+  Yellow,      // warnings
+  Cyan,        // debug
+  Magenta,     // fatal
+  BrightWhite, // always
+  White,       // general
+  Reset        // reset to default
 };
 
 auto inline GetColorCode(ConsoleColor color) -> std::string {
@@ -47,6 +49,8 @@ auto inline GetColorCode(ConsoleColor color) -> std::string {
     return "\033[36m";
   case ConsoleColor::Magenta:
     return "\033[35m";
+  case ConsoleColor::BrightWhite:
+    return "\033[97m";
   case ConsoleColor::White:
     return "\033[37m";
   default:
@@ -182,12 +186,14 @@ private:
 };
 
 inline void PrintAlways(const std::string &message) {
-  std::cout << message << '\n';
+  std::cout << ColorText("[ALWAYS] ", ConsoleColor::BrightWhite) << message
+            << '\n';
 }
 
 template <typename... Args> // NOLINTNEXTLINE args forwarding
 inline void PrintAlways(std::string_view format, Args &&...args) {
-  std::cout << std::vformat(format, std::make_format_args(args...)) << '\n';
+  std::cout << ColorText("[ALWAYS] ", ConsoleColor::BrightWhite)
+            << std::vformat(format, std::make_format_args(args...)) << '\n';
 }
 
 inline void PrintDebug(const std::string &message) {

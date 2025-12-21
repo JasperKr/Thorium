@@ -2,6 +2,7 @@
 
 #include "Graphics/graphics.hpp"
 #include "Graphics/texture.hpp"
+#include "Modules/console.hpp"
 #include "Modules/object.hpp"
 #include "Modules/type.hpp"
 #include "shader.hpp"
@@ -75,8 +76,11 @@ struct State {
   bool stencilTestEnable = false;
   VkPolygonMode polygonMode = VK_POLYGON_MODE_FILL;
   float lineWidth = 1.0F;
-  VkViewport viewport = {};
-  VkRect2D scissor = {};
+  VkViewport viewport;
+  VkRect2D scissor;
+
+  bool hasViewport = false;
+  bool hasScissor = false;
 
   Ref<Shader::ShaderModule> shader;
 
@@ -87,16 +91,42 @@ struct State {
   std::vector<Ref<RenderTarget>> renderTargets;
 
   auto operator==(const State &other) const -> bool {
-    bool renderTargetsEqual = true;
     if (renderTargets.size() != other.renderTargets.size()) {
-      renderTargetsEqual = false;
-    } else {
-      for (size_t i = 0; i < renderTargets.size(); ++i) {
-        if (renderTargets[i].get() != other.renderTargets[i].get()) {
-          renderTargetsEqual = false;
-          break;
-        }
+      return false;
+    }
+
+    for (size_t i = 0; i < renderTargets.size(); ++i) {
+      if (renderTargets[i].get() == nullptr ||
+          other.renderTargets[i].get() == nullptr) {
+        PrintWarning(
+            "Comparing render targets with null textures in state equality");
+        return false;
       }
+
+      if (*renderTargets[i].get() != *other.renderTargets[i].get()) {
+        return false;
+      }
+    }
+
+    if (hasScissor != other.hasScissor) {
+      return false;
+    }
+
+    if (scissor.offset.x != other.scissor.offset.x ||
+        scissor.offset.y != other.scissor.offset.y ||
+        scissor.extent.width != other.scissor.extent.width ||
+        scissor.extent.height != other.scissor.extent.height) {
+      return false;
+    }
+
+    if (hasViewport != other.hasViewport) {
+      return false;
+    }
+
+    if (viewport.x != other.viewport.x || viewport.y != other.viewport.y ||
+        viewport.width != other.viewport.width ||
+        viewport.height != other.viewport.height) {
+      return false;
     }
 
     return cullMode == other.cullMode && frontFace == other.frontFace &&
@@ -105,15 +135,8 @@ struct State {
            depthCompareOp == other.depthCompareOp &&
            stencilTestEnable == other.stencilTestEnable &&
            polygonMode == other.polygonMode && lineWidth == other.lineWidth &&
-           viewport.x == other.viewport.x && viewport.y == other.viewport.y &&
-           viewport.width == other.viewport.width &&
-           viewport.height == other.viewport.height &&
-           scissor.offset.x == other.scissor.offset.x &&
-           scissor.offset.y == other.scissor.offset.y &&
-           scissor.extent.width == other.scissor.extent.width &&
-           scissor.extent.height == other.scissor.extent.height &&
            shader.get() == other.shader.get() && bindPoint == other.bindPoint &&
-           renderTargetsEqual && vertexFormat == other.vertexFormat &&
+           vertexFormat == other.vertexFormat &&
            primitiveTopology == other.primitiveTopology;
   }
 };
@@ -203,12 +226,13 @@ struct StateHash {
   }
 };
 
-inline static std::unordered_map<State, std::pair<VkPipeline, VkPipelineLayout>,
-                                 StateHash> // NOLINTNEXTLINE Pipeline cache
-    PipelineCache = {};
+extern std::unordered_map<State, std::pair<VkPipeline, VkPipelineLayout>,
+                          StateHash> // NOLINTNEXTLINE Pipeline cache
+    PipelineCache;
 
 auto SetDirty() -> void;
 auto FinalizeFrame(GraphicsContext &context) -> Error::Error;
+auto BeginFrame(GraphicsContext &context) -> Error::Error;
 
 auto Push(GraphicsContext &context) -> void;
 auto Pop(GraphicsContext &context) -> Error::Error;
@@ -224,8 +248,8 @@ auto BeginRendering(GraphicsContext &context) -> void;
 auto SetDepthMode(bool enable, bool writeEnable, VkCompareOp compareOp) -> void;
 auto SetCullMode(VkCullModeFlags cullMode) -> void;
 auto SetPolygonMode(VkPolygonMode polygonMode) -> void;
-auto SetViewport(const VkViewport &viewport) -> void;
-auto SetScissor(const VkRect2D &scissor) -> void;
+auto SetViewport(const VkViewport *viewport) -> void;
+auto SetScissor(const VkRect2D *scissor) -> void;
 auto ClipScissor(const VkRect2D &scissor) -> void;
 auto SetShader(const Ref<Shader::ShaderModule> &shader) -> void;
 auto SetRenderTargets(const std::vector<Ref<RenderTarget>> &renderTargets)

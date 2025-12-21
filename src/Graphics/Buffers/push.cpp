@@ -1,4 +1,5 @@
 #include "push.hpp"
+#include "Graphics/reflect.hpp"
 #include "Modules/error.hpp"
 #include "tl/expected.hpp"
 #include <vector>
@@ -7,7 +8,7 @@ namespace Graphics {
 auto PushBuffer::FlushData(FlushInfo &info) -> void {
   auto bufferSize = layout.size;
 
-  if (layout.type == BufferResourceType::Struct) {
+  if (layout.IsStruct()) {
     bufferSize = std::get<StructInfo>(layout.info).size;
   }
 
@@ -15,8 +16,8 @@ auto PushBuffer::FlushData(FlushInfo &info) -> void {
                      layout.offset, bufferSize, data.data());
 }
 auto PushBuffer::InfoOf(const std::string &name) const
-    -> tl::expected<StructFieldInfo, Error::Error> {
-  if (layout.type != BufferResourceType::Struct) {
+    -> tl::expected<ResourceInfo, Error::Error> {
+  if (!layout.IsStruct()) {
     return Error::Unexpected("OffsetOf only supported for struct push buffers");
   }
 

@@ -23,6 +23,11 @@ static inline auto ReadNumberFromTable(lua_State *state,
 
 static inline auto ColorFromLuaState(lua_State *state, ColorFormat format,
                                      int startIndex) -> Color {
+
+  if (startIndex < 0) {
+    startIndex = lua_gettop(state) + startIndex + 1;
+  }
+
   switch (format) {
   case ColorFormat::List: {
     // Expecting a table at startIndex

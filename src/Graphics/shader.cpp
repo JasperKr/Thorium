@@ -430,7 +430,7 @@ auto ShaderModule::Create(Graphics::GraphicsContext &context,
   }
 
   for (auto &layout : shader->reflection.resources) {
-    if (layout.variant == ResourceVariant::Buffer) {
+    if (layout.IsBuffer()) {
       auto &bufferInfo = std::get<BufferInfo>(layout.info);
 
       if (bufferInfo.bufferType == BufferType::PushConstant) {
@@ -451,7 +451,7 @@ inline auto ValidateBuffers(const ShaderModule *shader) -> Error::Error {
   // resources themselves.
 
   for (const auto &resource : shader->reflection.resources) {
-    if (resource.variant != ResourceVariant::Buffer) {
+    if (!resource.IsBuffer()) {
       continue;
     }
 
@@ -604,6 +604,17 @@ auto ShaderModule::FlushBuffers(GraphicsContext &context,
   }
 
   return Error::Success();
+}
+
+void ShaderModule::Destroy(VkDevice &device) {
+  for (auto &pair : descriptorSetLayouts) {
+    vkDestroyDescriptorSetLayout(device, pair.second, nullptr);
+  }
+
+  if (module != VK_NULL_HANDLE) {
+    vkDestroyShaderModule(device, module, nullptr);
+    module = VK_NULL_HANDLE;
+  }
 }
 
 } // namespace Graphics::Shader
