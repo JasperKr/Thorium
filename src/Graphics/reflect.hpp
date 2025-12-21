@@ -4,6 +4,7 @@
 #include "Modules/error.hpp"
 #include "slang/slang.h"
 #include <cstdint>
+#include <forward_list>
 #include <string>
 #include <sys/types.h>
 #include <variant>
@@ -102,10 +103,7 @@ inline auto ToMatrixType(uint8_t rowCount, uint8_t columnCount) -> MatrixType {
   return MatrixType::Unknown;
 }
 
-struct ResourceKey {
-  std::string name;
-  ResourceKey *child;
-};
+using ResourceKey = std::forward_list<std::string>;
 
 struct SamplerInfo {
   uint32_t set;
@@ -154,7 +152,8 @@ struct StructInfo {
   uint32_t size;
   uint32_t alignment;
 
-  auto Find(const ResourceKey &key) -> ResourceInfo *;
+  auto ResolvePath(ResourceKey::const_iterator iterator,
+                   ResourceKey::const_iterator end) -> ResourceInfo *;
 };
 
 enum class BufferType : uint8_t {
@@ -198,6 +197,10 @@ struct BufferInfo {
   }
 
   std::variant<StructInfo, ScalarInfo, VectorInfo, MatrixInfo> info;
+
+  [[nodiscard]] auto ResolvePath(ResourceKey::const_iterator iterator,
+                                 ResourceKey::const_iterator end)
+      -> ResourceInfo *;
 };
 
 struct ResourceInfo {
@@ -255,6 +258,9 @@ struct ResourceInfo {
 
     return 0;
   }
+  [[nodiscard]] auto ResolvePath(ResourceKey::const_iterator iterator,
+                                 ResourceKey::const_iterator end)
+      -> ResourceInfo *;
 
   std::variant<SamplerInfo, ScalarInfo, VectorInfo, MatrixInfo, BufferInfo,
                StructInfo>

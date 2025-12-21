@@ -504,7 +504,7 @@ auto wrap_Draw(lua_State *state) -> int {
         shader = Shader::DefaultShaderModule;
       }
 
-      auto sendResult = shader->Send(*ctx, "MainTexture", texture);
+      auto sendResult = shader->Send(*ctx, {"MainTexture"}, texture);
       if (Error::IsError(sendResult)) {
         return luaL_error(state, "%s", sendResult.ToString().c_str());
       }

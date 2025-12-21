@@ -16,7 +16,7 @@ auto Wrap_SetIndexBuffer(lua_State *state) -> int;
 auto Wrap_SetDrawRange(lua_State *state) -> int;
 auto Wrap_GetDrawRange(lua_State *state) -> int;
 
-auto Wrap_NewMesh(lua_State *state) -> int;
+auto wrap_NewMesh(lua_State *state) -> int;
 auto Wrap_Release(lua_State *state) -> int;
 
 // NOLINTNEXTLINE

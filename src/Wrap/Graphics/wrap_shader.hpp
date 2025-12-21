@@ -12,7 +12,7 @@ auto Wrap_Send(lua_State *state) -> int;
 auto Wrap_HasUniform(lua_State *state) -> int;
 auto Wrap_GetUniforms(lua_State *state) -> int;
 
-auto Wrap_NewShader(lua_State *state) -> int;
+auto wrap_NewShader(lua_State *state) -> int;
 auto Wrap_Release(lua_State *state) -> int;
 
 // NOLINTNEXTLINE

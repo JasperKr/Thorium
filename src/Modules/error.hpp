@@ -155,7 +155,7 @@ inline auto GetStackTrace(uint32_t level = 0) -> std::string {
 
   std::string trace;
   // for (int i = 0; i < frames; i++) {
-  // NOLINTNEXTLINE
+  //   // NOLINTNEXTLINE
   //   trace += std::string(symbols[i]) + "\n";
   // }
 

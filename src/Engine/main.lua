@@ -44,8 +44,11 @@ local ssbo = 4
 local image = Thorium.graphics.newTexture("leek.png", { usage = sampler })
 print(image:getFilter())
 local target = Thorium.graphics.newTexture(image:getWidth(), image:getHeight(), { usage = sampler + rendertarget })
+local shader = Thorium.graphics.newShader("default2D")
 
 function Thorium.draw()
+  Thorium.graphics.setShader(shader)
+  shader:send("test", Thorium.timer.getTime())
   Thorium.graphics.setRenderTarget(target)
   Thorium.graphics.draw(image)
   Thorium.graphics.setRenderTarget({ loadas = { 1, 0, 0, 1 } })

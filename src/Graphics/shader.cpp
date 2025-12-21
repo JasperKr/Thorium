@@ -434,7 +434,7 @@ auto ShaderModule::Create(Graphics::GraphicsContext &context,
       auto &bufferInfo = std::get<BufferInfo>(layout.info);
 
       if (bufferInfo.bufferType == BufferType::PushConstant) {
-        auto result = PushBuffer(bufferInfo);
+        auto result = PushBuffer(layout);
 
         shader->pushBuffers.emplace_back(result);
       }
@@ -471,6 +471,137 @@ inline auto ValidateBuffers(const ShaderModule *shader) -> Error::Error {
   }
 
   return Error::Success();
+}
+
+void append(ResourceKey &dest, const ResourceKey &src) {
+  auto iterator = dest.before_begin();
+  for (auto &&data : dest) {
+    iterator++;
+  }
+  dest.insert_after(iterator, src.begin(), src.end());
+}
+
+auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
+                        const std::span<const uint8_t> data) -> Error::Error {
+  for (auto &pushBuffer : pushBuffers) {
+    PrintDebug("Checking push buffer {} for key...",
+               pushBuffer.GetLayout().name);
+    if (pushBuffer.ContainsUniform(key.begin(), key.end())) {
+      return pushBuffer.SetData(key, data);
+    }
+  }
+
+  // check global ubo
+  PrintDebug("Checking global UBO for key...");
+  ResourceKey globalsKey = {"Globals"};
+  append(globalsKey, key);
+
+  auto *info =
+      reflection.globals.ResolvePath(globalsKey.begin(), globalsKey.end());
+  if (info == nullptr) {
+    return Error::Create("Uniform not found.");
+  }
+
+  PrintWarning("Sending data to global UBO at offset {}", info->offset);
+
+  return GetGlobalUniformBuffer().GetBuffer()->SetData(context, data,
+                                                       info->offset);
+}
+
+auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
+                        Buffer *buffer) -> Error::Error {
+
+  for (const auto &resource : reflection.resources) {
+    if (!std::holds_alternative<BufferInfo>(resource.info)) {
+      continue;
+    }
+
+    const auto &bufferInfo = std::get<BufferInfo>(resource.info);
+    if (bufferInfo.name == *key.begin()) {
+      if (descriptorSets[bufferInfo.set] == VK_NULL_HANDLE) {
+        return Error::Success(); // Will be created and set later
+      }
+      // NOLINTNEXTLINE
+      auto key = bufferInfo.set | ((uint64_t)bufferInfo.binding << 32U);
+
+      VkDescriptorBufferInfo vkBufferInfo{};
+      vkBufferInfo.buffer = buffer->handle;
+      vkBufferInfo.offset = 0;
+      vkBufferInfo.range = buffer->size;
+
+      DescriptorWriteInfo descriptorWrite{};
+      descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+      descriptorWrite.dstSet = bufferInfo.set;
+      descriptorWrite.dstBinding = bufferInfo.binding;
+      descriptorWrite.dstArrayElement = 0;
+      descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+      descriptorWrite.descriptorCount = 1;
+      descriptorWrite.pBufferInfo = vkBufferInfo;
+
+      // vkUpdateDescriptorSets(context.device, 1, &descriptorWrite, 0, nullptr);
+      pendingDescriptorWrites.emplace_back(descriptorWrite);
+
+      return Error::Success();
+    }
+  }
+
+  return Error::Create("Buffer not found in shader reflection: " + name);
+}
+
+auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
+                        Graphics::Texture::Texture *texture) -> Error::Error {
+  for (const auto &resource : reflection.resources) {
+    if (!std::holds_alternative<SamplerInfo>(resource.info)) {
+      continue;
+    }
+
+    const auto &samplerInfo = std::get<SamplerInfo>(resource.info);
+    if (resource.name == *key.begin()) {
+      // NOLINTNEXTLINE
+      auto key = samplerInfo.set | ((uint64_t)samplerInfo.binding << 32U);
+
+      // Create descriptor set for this texture
+      VkDescriptorImageInfo imageInfo{};
+      imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+      imageInfo.imageView = texture->view;
+      imageInfo.sampler = texture->GetSampler(context);
+
+      DescriptorWriteInfo descriptorWrite{};
+      descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+      descriptorWrite.dstSet = samplerInfo.set;
+      descriptorWrite.dstBinding = samplerInfo.binding;
+      descriptorWrite.dstArrayElement = 0;
+      descriptorWrite.descriptorType =
+          VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+      descriptorWrite.descriptorCount = 1;
+      descriptorWrite.pImageInfo = imageInfo;
+
+      pendingDescriptorWrites.emplace_back(descriptorWrite);
+      pendingImageTransitions.emplace_back(ImageTransitionInfo{
+          .texture = texture,
+          .newUsage = Texture::TextureUsage::Sampler,
+          .newStage = ShaderStageFlagsToPipelineStageFlags(resource.stages),
+      });
+
+      return Error::Success();
+    }
+  }
+
+  return Error::Create("Sampler not found in shader reflection: " + name);
+}
+
+auto ShaderModule::hash() const -> size_t {
+  Hash::Hasher hasher;
+  hasher.add(std::hash<std::string>()(moduleName));
+  for (const auto &stage : stages) {
+    hasher.add(static_cast<uint32_t>(stage));
+  }
+  for (const auto &externVar : externs) {
+    hasher.add(std::hash<std::string>()(externVar.name));
+    hasher.add(std::hash<std::string>()(externVar.value));
+  }
+
+  return hasher.get();
 }
 
 auto ShaderModule::FlushBuffers(GraphicsContext &context,

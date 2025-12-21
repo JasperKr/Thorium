@@ -805,7 +805,9 @@ inline auto BeginRendering(GraphicsContext &context) -> void {
 
   auto viewProjectionMatrix = projectionMatrix * translationMatrix;
 
-  auto sendErr = currentState.shader->Send(context, "DefaultProjectionMatrix",
+  PrintDebug("Sending projection matrix to shader");
+
+  auto sendErr = currentState.shader->Send(context, {"DefaultProjectionMatrix"},
                                            viewProjectionMatrix.AsByteSpan());
   if (Error::IsError(sendErr)) {
     PrintError("Failed to send projection matrix to shader: {}",
@@ -849,6 +851,8 @@ inline auto BeginRendering(GraphicsContext &context) -> void {
   renderingInfo.pColorAttachments = colorAttachments.data();
   renderingInfo.pDepthAttachment = nullptr;
   renderingInfo.pStencilAttachment = nullptr;
+
+  PrintDebug("Beginning rendering pass");
 
   vkCmdBeginRendering(
       Graphics::GetCommandBuffer(context, GetCurrentThreadIndex()),

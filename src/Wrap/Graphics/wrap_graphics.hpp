@@ -67,7 +67,8 @@ static const luaL_Reg GraphicsLib[] = {
     {"getLineWidth", wrap_GetLineWidth},
     {"getWindingOrder", wrap_GetWindingOrder},
     {"newTexture", Texture::wrap_NewTexture},
-    {"newMesh", Graphics::Wrap_NewMesh},
+    {"newMesh", Graphics::wrap_NewMesh},
+    {"newShader", Graphics::Shader::wrap_NewShader},
     {"draw", wrap_Draw},
     {nullptr, nullptr},
 };

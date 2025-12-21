@@ -1,14 +1,19 @@
 #include "reflect.hpp"
 #include "Graphics/graphics.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "slang/slang.h"
 #include "vulkan/vulkan_core.h"
 
-auto StructInfo::Find(const ResourceKey &key) -> ResourceInfo * {
+// Resolve path for struct fields is exclusive to the struct resource info
+// Since structs are nameless and their name is only described by the parent resource info
+auto StructInfo::ResolvePath(ResourceKey::const_iterator iterator,
+                             ResourceKey::const_iterator end)
+    -> ResourceInfo * {
   ResourceInfo *field = nullptr;
 
   for (auto &currentField : fields) {
-    if (currentField.name == key.name) {
+    if (currentField.name == *iterator) {
       field = &currentField;
       break;
     }
@@ -18,70 +23,49 @@ auto StructInfo::Find(const ResourceKey &key) -> ResourceInfo * {
     return nullptr;
   }
 
-  if (key.child != nullptr) {
+  if (std::next(iterator) != end) {
     if (!std::holds_alternative<StructInfo>(field->info)) {
-      return nullptr;
+      return field;
     }
 
-    auto &childStructInfo = std::get<StructInfo>(field->info);
-
-    return childStructInfo.Find(*key.child);
+    return field->ResolvePath(std::next(iterator), end);
   }
 
   return field;
 }
 
-struct FindShaderParameterResult {
-  bool found = false;
-  slang::TypeLayoutReflection *typeLayout = nullptr;
-};
-
-auto FindShaderParameter(slang::ProgramLayout *programLayout,
-                         const std::string &parameterName)
-    -> FindShaderParameterResult {
-  auto parameterCount = programLayout->getParameterCount();
-
-  /// Search parameters ///
-  for (int i = 0; i < parameterCount; ++i) {
-    auto *param = programLayout->getParameterByIndex(i);
-    const auto *paramName = param->getName();
-
-    if (paramName != nullptr && parameterName == paramName) {
-      FindShaderParameterResult result{};
-      result.found = true;
-      result.typeLayout = param->getTypeLayout();
-      return result;
-    }
+auto ResourceInfo::ResolvePath(ResourceKey::const_iterator iterator,
+                               ResourceKey::const_iterator end)
+    -> ResourceInfo * {
+  if (iterator == end || *iterator != name) {
+    return nullptr;
   }
 
-  // Search Global variables //
-  auto *globalParamsLayout = programLayout->getGlobalParamsVarLayout();
-  auto *globalParamsTypeLayout = globalParamsLayout->getTypeLayout();
-
-  // If there is only 1 item, it's not a struct
-  const auto *name = globalParamsTypeLayout->getName();
-  if (name != nullptr && parameterName == name) {
-    FindShaderParameterResult result{};
-    result.found = true;
-    result.typeLayout = globalParamsTypeLayout;
-    return result;
+  if (std::next(iterator) == end) {
+    return this;
   }
 
-  // Otherwise, search fields
-  auto fieldCount = globalParamsTypeLayout->getFieldCount();
-  for (int i = 0; i < fieldCount; ++i) {
-    auto *field = globalParamsTypeLayout->getFieldByIndex(i);
-    const auto *fieldName = field->getName();
-
-    if (fieldName != nullptr && parameterName == fieldName) {
-      FindShaderParameterResult result{};
-      result.found = true;
-      result.typeLayout = field->getTypeLayout();
-      return result;
-    }
+  if (!std::holds_alternative<StructInfo>(info)) {
+    return nullptr;
   }
 
-  return FindShaderParameterResult{};
+  auto &structInfo = std::get<StructInfo>(info);
+  return structInfo.ResolvePath(std::next(iterator), end);
+}
+
+auto BufferInfo::ResolvePath(ResourceKey::const_iterator iterator,
+                             ResourceKey::const_iterator end)
+    -> ResourceInfo * {
+  if (std::next(iterator) == end) {
+    return nullptr;
+  }
+
+  if (!std::holds_alternative<StructInfo>(info)) {
+    return nullptr;
+  }
+
+  auto &structInfo = std::get<StructInfo>(info);
+  return structInfo.ResolvePath(std::next(iterator), end);
 }
 
 auto SetupStruct(slang::TypeLayoutReflection *bufferLayout, // NOLINT

@@ -1,6 +1,7 @@
 
 #include "Wrap/Graphics/wrap_shader.hpp"
 #include "Graphics/buffer.hpp"
+#include "Graphics/reflect.hpp"
 #include "Graphics/shader.hpp"
 #include "Wrap/wrap.hpp"
 #include <lauxlib.h>
@@ -9,7 +10,7 @@ namespace Graphics::Shader {
 
 // TODO: Add externs input support
 // Modulename, {name=value, ...}
-auto Wrap_NewShader(lua_State *state) -> int {
+auto wrap_NewShader(lua_State *state) -> int {
   auto *ctx = Graphics::GetCurrentGraphicsContext();
 
   const auto *type = Graphics::Shader::ShaderModule::GetType();
@@ -33,13 +34,31 @@ auto Wrap_NewShader(lua_State *state) -> int {
                                                        shaderDebugName);
 
   if (Error::IsError(result)) {
-    return luaL_error(state, "%s", result.error().ToString().c_str());
+    return luaL_error(state, "%s", result.error().message.c_str());
   }
 
   LuaWrap::PushLuaType(state, type, result.value().get());
   result.value()->release(); // Retained by lua now
 
   return 1;
+}
+
+// linked list of strings as key and a count of valid entries
+inline auto LoadKey(lua_State *state, int index)
+    -> std::pair<ResourceKey, int32_t> {
+  auto count = lua_gettop(state);
+  ResourceKey root;
+  auto iterator = root.before_begin();
+
+  for (int i = index; i <= count; ++i) {
+    if (lua_isstring(state, i) != 0) {
+      iterator = root.insert_after(iterator, luaL_checkstring(state, i));
+    } else {
+      return std::make_pair(root, i - index);
+    }
+  }
+
+  return std::make_pair(root, count);
 }
 
 auto Wrap_Send(lua_State *state) -> int {
@@ -49,22 +68,25 @@ auto Wrap_Send(lua_State *state) -> int {
     return 1;
   }
 
-  const char *uniformName = luaL_checkstring(state, 2);
+  auto [key, keyCount] = LoadKey(state, 2);
+  if (keyCount == 0) {
+    return luaL_error(state, "Invalid uniform name.");
+  }
 
   if (LuaWrap::LuaIsType<Graphics::Texture::Texture>(state, 3)) {
     auto *texture =
         LuaWrap::FromLuaObject<Graphics::Texture::Texture>(state, 3);
-    auto result = shader->Send(*Graphics::GetCurrentGraphicsContext(),
-                               uniformName, texture);
+    auto result =
+        shader->Send(*Graphics::GetCurrentGraphicsContext(), key, texture);
     if (Error::IsError(result)) {
-      return luaL_error(state, "%s", result.ToString().c_str());
+      return luaL_error(state, "%s", result.message.c_str());
     }
   } else if (LuaWrap::LuaIsType<Graphics::Buffer>(state, 3)) {
     auto *buffer = LuaWrap::FromLuaObject<Graphics::Buffer>(state, 3);
-    auto result = shader->Send(*Graphics::GetCurrentGraphicsContext(),
-                               uniformName, buffer);
+    auto result =
+        shader->Send(*Graphics::GetCurrentGraphicsContext(), key, buffer);
     if (Error::IsError(result)) {
-      return luaL_error(state, "%s", result.ToString().c_str());
+      return luaL_error(state, "%s", result.message.c_str());
     }
   } else if (lua_isnumber(state, 3) != 0) {
     auto varargsCount = lua_gettop(state) - 2;
@@ -80,9 +102,9 @@ auto Wrap_Send(lua_State *state) -> int {
         sizeof(float) * static_cast<size_t>(varargsCount));
 
     auto result =
-        shader->Send(*Graphics::GetCurrentGraphicsContext(), uniformName, span);
+        shader->Send(*Graphics::GetCurrentGraphicsContext(), key, span);
     if (Error::IsError(result)) {
-      return luaL_error(state, "%s", result.ToString().c_str());
+      return luaL_error(state, "%s", result.message.c_str());
     }
   } else {
     return luaL_error(state, "Unsupported uniform type.");

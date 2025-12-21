@@ -1,33 +1,45 @@
 #include "push.hpp"
 #include "Graphics/reflect.hpp"
-#include "Modules/error.hpp"
-#include "tl/expected.hpp"
 #include <vector>
 
 namespace Graphics {
 auto PushBuffer::FlushData(FlushInfo &info) -> void {
-  auto bufferSize = layout.size;
+  auto &bufferInfo = std::get<BufferInfo>(layout.info);
+  auto bufferSize = bufferInfo.size;
 
-  if (layout.IsStruct()) {
-    bufferSize = std::get<StructInfo>(layout.info).size;
+  if (bufferInfo.IsStruct()) {
+    bufferSize = std::get<StructInfo>(bufferInfo.info).size;
   }
 
   vkCmdPushConstants(info.commandBuffer, info.pipelineLayout, stageFlags,
-                     layout.offset, bufferSize, data.data());
+                     bufferInfo.offset, bufferSize, data.data());
 }
-auto PushBuffer::InfoOf(const std::string &name) const
-    -> tl::expected<ResourceInfo, Error::Error> {
-  if (!layout.IsStruct()) {
-    return Error::Unexpected("OffsetOf only supported for struct push buffers");
+
+auto PushBuffer::ContainsUniform(ResourceKey::const_iterator iterator,
+                                 ResourceKey::const_iterator end) -> bool {
+  // TODO: Probably broken
+  if (std::next(iterator) == end) {
+    return *iterator == layout.name;
   }
 
-  const auto &structInfo = std::get<StructInfo>(layout.info);
-  for (const auto &field : structInfo.fields) {
-    if (field.name == name) {
-      return field;
+  auto &bufferInfo = std::get<BufferInfo>(layout.info);
+
+  return bufferInfo.ResolvePath(std::next(iterator), end) != nullptr;
+}
+
+auto PushBuffer::GetUniform(ResourceKey::const_iterator iterator,
+                            ResourceKey::const_iterator end) -> ResourceInfo * {
+  // TODO: Probably broken
+  if (std::next(iterator) == end) {
+    if (*iterator == layout.name) {
+      return &layout;
     }
+
+    return nullptr;
   }
 
-  return Error::Unexpected("Field name not found in struct");
+  auto &bufferInfo = std::get<BufferInfo>(layout.info);
+
+  return bufferInfo.ResolvePath(std::next(iterator), end);
 }
 } // namespace Graphics

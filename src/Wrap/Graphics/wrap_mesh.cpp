@@ -160,10 +160,10 @@ auto Wrap_GetDrawRange(lua_State *state) -> int {
   return 2;
 }
 
-auto Wrap_NewMesh(lua_State *state) -> int {
+auto wrap_NewMesh(lua_State *state) -> int {
   // TODO: Rework meshes to allow for custom vertex formats //
 
-  return luaL_error(state, "Wrap_NewMesh not implemented.");
+  return luaL_error(state, "wrap_NewMesh not implemented.");
 
   // auto *ctx = Graphics::GetCurrentGraphicsContext();
   // auto vertexFormat =

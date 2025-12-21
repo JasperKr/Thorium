@@ -6,8 +6,8 @@
 #include <vector>
 
 #include "Graphics/reflect.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
-#include "tl/expected.hpp"
 
 namespace Graphics {
 struct FlushInfo {
@@ -17,47 +17,57 @@ struct FlushInfo {
 
 struct PushBuffer {
 public:
-  explicit PushBuffer(const BufferInfo &layout,
+  explicit PushBuffer(const ResourceInfo &layout,
                       VkShaderStageFlags stage = VK_SHADER_STAGE_ALL)
       : layout(layout), stageFlags(stage) {
-    if (std::holds_alternative<ScalarInfo>(layout.info)) {
-      data.resize(std::get<ScalarInfo>(layout.info).size);
-    } else if (std::holds_alternative<VectorInfo>(layout.info)) {
-      data.resize(std::get<VectorInfo>(layout.info).size);
-    } else if (std::holds_alternative<MatrixInfo>(layout.info)) {
-      data.resize(std::get<MatrixInfo>(layout.info).size);
-    } else if (std::holds_alternative<StructInfo>(layout.info)) {
-      data.resize(std::get<StructInfo>(layout.info).size);
+
+    if (!layout.IsBuffer()) {
+      PrintError("PushBuffer layout must be a buffer.");
+      return;
+    }
+
+    const auto &bufferInfo = std::get<BufferInfo>(layout.info);
+
+    if (std::holds_alternative<ScalarInfo>(bufferInfo.info)) {
+      data.resize(std::get<ScalarInfo>(bufferInfo.info).size);
+    } else if (std::holds_alternative<VectorInfo>(bufferInfo.info)) {
+      data.resize(std::get<VectorInfo>(bufferInfo.info).size);
+    } else if (std::holds_alternative<MatrixInfo>(bufferInfo.info)) {
+      data.resize(std::get<MatrixInfo>(bufferInfo.info).size);
+    } else if (std::holds_alternative<StructInfo>(bufferInfo.info)) {
+      data.resize(std::get<StructInfo>(bufferInfo.info).size);
     }
   }
 
   [[nodiscard]] auto GetBufferOffset() const -> size_t { return layout.offset; }
   [[nodiscard]] auto GetBufferSize() const -> size_t {
-    if (std::holds_alternative<StructInfo>(layout.info)) {
-      return std::get<StructInfo>(layout.info).size;
+    const auto &bufferInfo = std::get<BufferInfo>(layout.info);
+    if (std::holds_alternative<StructInfo>(bufferInfo.info)) {
+      return std::get<StructInfo>(bufferInfo.info).size;
     }
-    return layout.size;
+    return bufferInfo.size;
   }
-  [[nodiscard]] auto GetLayout() const -> const BufferInfo & { return layout; }
+  [[nodiscard]] auto GetLayout() const -> const ResourceInfo & {
+    return layout;
+  }
   auto FlushData(FlushInfo &info) -> void;
 
-  auto SetData(const std::string &name, const std::span<const uint8_t> &values)
+  auto SetData(const ResourceKey &key, const std::span<const uint8_t> &values)
       -> Error::Error {
 
     if (!std::holds_alternative<StructInfo>(layout.info)) {
       return Error::Create(
-          "SetData with name only supported for struct push buffers");
+          "SetData with key only supported for struct push buffers");
     }
 
-    auto result = InfoOf(name);
-
-    if (Error::IsError(result)) {
-      return result.error();
+    auto *result = GetUniform(key.begin(), key.end());
+    if (result == nullptr) {
+      return Error::Create("Uniform not found in push buffer.");
     }
 
-    size_t offset = result.value().offset;
+    size_t offset = result->offset;
 
-    if (result.value().GetSize() != values.size()) {
+    if (result->GetSize() != values.size()) {
       return Error::Create("Data size does not match field size");
     }
 
@@ -90,11 +100,13 @@ public:
     return stageFlags;
   }
 
-  auto InfoOf(const std::string &name) const
-      -> tl::expected<ResourceInfo, Error::Error>;
+  auto ContainsUniform(ResourceKey::const_iterator iterator,
+                       ResourceKey::const_iterator end) -> bool;
+  auto GetUniform(ResourceKey::const_iterator iterator,
+                  ResourceKey::const_iterator end) -> ResourceInfo *;
 
 private:
-  BufferInfo layout;
+  ResourceInfo layout;
   std::vector<uint8_t> data;
   VkShaderStageFlags stageFlags{VK_SHADER_STAGE_ALL};
 };
