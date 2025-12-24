@@ -502,10 +502,10 @@ auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
     return Error::Create("Uniform not found.");
   }
 
-  PrintWarning("Sending data to global UBO at offset {}", info->offset);
+  GetGlobalUniformBuffer(context.frameIndex)
+      .SetData(context, data, info->GetOffset());
 
-  return GetGlobalUniformBuffer().GetBuffer()->SetData(context, data,
-                                                       info->offset);
+  return Error::Success();
 }
 
 auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
@@ -615,17 +615,24 @@ auto ShaderModule::FlushBuffers(GraphicsContext &context,
 
   static Graphics::Buffer *currentUBOBuffer;
 
-  auto &buffer = GetGlobalUniformBuffer();
+  auto &buffer = GetGlobalUniformBuffer(context.frameIndex);
+  auto uboFlushResult = buffer.Flush(context);
 
-  if (reflection.hasGlobals && currentUBOBuffer != buffer.GetBuffer().get()) {
+  if (Error::IsError(uboFlushResult)) {
+    return uboFlushResult.error();
+  }
+
+  {
     // UBO buffer can be resized, we update every frame for now;
     VkDescriptorBufferInfo bufferInfo{};
     bufferInfo.buffer = buffer.GetBuffer().get()->handle;
     bufferInfo.offset = buffer.GetOffset();
+    PrintAlways("Flushing with offset {} and size {}.", buffer.GetOffset(),
+                buffer.GetLastFlushSize());
 
     assert(reflection.globals.size > 0);
 
-    bufferInfo.range = reflection.globals.size;
+    bufferInfo.range = buffer.GetLastFlushSize();
 
     VkWriteDescriptorSet descriptorWrite{};
     descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;

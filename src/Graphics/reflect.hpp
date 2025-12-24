@@ -233,7 +233,30 @@ struct ResourceInfo {
   template <typename T> [[nodiscard]] constexpr auto Is() const -> bool {
     return std::holds_alternative<T>(info);
   }
-  [[nodiscard]] auto GetOffset() const -> uint32_t { return offset; }
+  [[nodiscard]] auto GetOffset() const -> uint32_t {
+    if (IsBuffer()) {
+      const auto &bufferInfo = std::get<BufferInfo>(info);
+      return bufferInfo.offset;
+    }
+    if (IsStruct()) {
+      const auto &structInfo = std::get<StructInfo>(info);
+      return structInfo.fields[0].offset; // First field offset
+    }
+    if (IsScalar()) {
+      const auto &scalarInfo = std::get<ScalarInfo>(info);
+      return scalarInfo.offset;
+    }
+    if (IsVector()) {
+      const auto &vectorInfo = std::get<VectorInfo>(info);
+      return vectorInfo.offset;
+    }
+    if (IsMatrix()) {
+      const auto &matrixInfo = std::get<MatrixInfo>(info);
+      return matrixInfo.offset;
+    }
+
+    return offset;
+  }
   [[nodiscard]] constexpr auto GetSize() const -> uint32_t {
     if (IsBuffer()) {
       const auto &bufferInfo = std::get<BufferInfo>(info);

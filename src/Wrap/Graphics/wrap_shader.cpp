@@ -3,6 +3,7 @@
 #include "Graphics/buffer.hpp"
 #include "Graphics/reflect.hpp"
 #include "Graphics/shader.hpp"
+#include "Modules/bytedata.hpp"
 #include "Wrap/wrap.hpp"
 #include <lauxlib.h>
 #include <lua.h>
@@ -106,7 +107,37 @@ auto Wrap_Send(lua_State *state) -> int {
     if (Error::IsError(result)) {
       return luaL_error(state, "%s", result.message.c_str());
     }
+  } else if (lua_istable(state, 3) != 0) {
+    std::vector<float> data;
+    uint64_t tableLength = lua_objlen(state, 3);
+    data.resize(sizeof(float) * static_cast<size_t>(tableLength));
+
+    for (uint64_t i = 0; i < tableLength; ++i) {
+      lua_rawgeti(state, 3, static_cast<int>(i + 1));
+      data.emplace_back(lua_tonumber(state, -1));
+      lua_pop(state, 1);
+    }
+
+    auto span = std::span<uint8_t>( // NOLINTNEXTLINE reinterpret cast
+        reinterpret_cast<uint8_t *>(data.data()),
+        sizeof(float) * static_cast<size_t>(tableLength));
+
+    auto result =
+        shader->Send(*Graphics::GetCurrentGraphicsContext(), key, span);
+    if (Error::IsError(result)) {
+      return luaL_error(state, "%s", result.message.c_str());
+    }
+  } else if (LuaWrap::LuaIsType<Data::ByteData>(state, 3)) {
+    auto *byteData = LuaWrap::FromLuaObject<Data::ByteData>(state, 3);
+    auto span = byteData->GetDataSpan();
+
+    auto result =
+        shader->Send(*Graphics::GetCurrentGraphicsContext(), key, span);
+    if (Error::IsError(result)) {
+      return luaL_error(state, "%s", result.message.c_str());
+    }
   } else {
+
     return luaL_error(state, "Unsupported uniform type.");
   }
 

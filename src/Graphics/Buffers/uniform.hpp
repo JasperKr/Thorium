@@ -2,6 +2,7 @@
 
 #include "Graphics/buffer.hpp"
 #include "Graphics/graphics.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "tl/expected.hpp"
@@ -37,21 +38,32 @@ public:
     buffer = result.value();
   }
 
-  auto SetData(Graphics::GraphicsContext &context,
-               const std::span<const uint8_t> &data)
-      -> tl::expected<bool, Error::Error> {
+  void SetData(Graphics::GraphicsContext &context,
+               const std::span<const uint8_t> &data, uint32_t atOffset) {
+    if (atOffset + data.size() > localData.size()) {
+      localData.resize(atOffset + data.size());
+    }
 
-    if (data.size() > MaximumUniformBufferSize) {
+    PrintAlways("Staging {} bytes to uniform buffer at offset {}.", data.size(),
+                atOffset);
+
+    // NOLINTNEXTLINE, pointer arithmetic
+    memcpy(localData.data() + atOffset, data.data(), data.size());
+  }
+
+  auto Flush(Graphics::GraphicsContext &context)
+      -> tl::expected<bool, Error::Error> {
+    if (localData.size() > MaximumUniformBufferSize) {
       return Error::Unexpected(
           "Tried to set uniform buffer data larger than maximum. (holy shit)");
     }
 
     bool resized = false;
-    if (data.size() + offset > size) {
+    if (localData.size() + offset > size) {
       if (buffer.get() != nullptr) {
         buffer->ScheduleDestroy();
       }
-      while (data.size() + offset > size) {
+      while (localData.size() + offset > size) {
         size *= 2;
         if (size > MaximumUniformBufferSize) {
           return Error::Unexpected(
@@ -77,9 +89,14 @@ public:
       resized = true;
     }
 
-    auto result = buffer->SetData(context, data, offset);
+    PrintWarning("Flushing {} bytes to uniform buffer at offset {}.",
+                 localData.size(), offset);
+    auto result = buffer->SetData(context, localData, offset);
 
-    offset += static_cast<uint32_t>(data.size());
+    offset += static_cast<uint32_t>(localData.size());
+
+    lastFlushSize = static_cast<uint32_t>(localData.size());
+    localData.clear();
 
     if (Error::IsError(result)) {
       return tl::make_unexpected(result);
@@ -87,8 +104,12 @@ public:
 
     return resized;
   }
+
   [[nodiscard]] auto GetOffset() const -> uint32_t { return offset; }
   [[nodiscard]] auto GetSize() const -> uint32_t { return size; }
+  [[nodiscard]] auto GetLastFlushSize() const -> uint32_t {
+    return lastFlushSize;
+  }
   [[nodiscard]] auto GetBuffer() const -> Ref<Graphics::Buffer> {
     return buffer;
   }
@@ -100,14 +121,16 @@ public:
 
 private:
   Ref<Graphics::Buffer> buffer;
+  std::vector<uint8_t> localData;
 
   uint32_t size{};
+  uint32_t lastFlushSize{};
   uint32_t offset{};
 };
 
-// NOLINTNEXTLINE
-extern thread_local std::vector<FrameUniformBufferObject> ThreadUniformBuffers;
+extern thread_local std::vector<std::vector<FrameUniformBufferObject>>
+    ThreadUniformBuffers; // NOLINT
 auto InitializeUniformBufferModule(GraphicsContext &context) -> Error::Error;
-auto GetGlobalUniformBuffer() -> FrameUniformBufferObject &;
+auto GetGlobalUniformBuffer(uint32_t frameIndex) -> FrameUniformBufferObject &;
 
 } // namespace Graphics

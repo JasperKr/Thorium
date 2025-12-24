@@ -1,3 +1,4 @@
+#include "Graphics/Buffers/uniform.hpp"
 #include "Graphics/resource.hpp"
 #include "Modules/error.hpp"
 #include "buffer.hpp"
@@ -342,6 +343,12 @@ auto Present(Graphics::GraphicsContext &context) -> Error::Error {
   error = RenderTarget::BeginFrame(context);
   if (Error::IsError(error)) {
     return error;
+  }
+
+  auto result = GetGlobalUniformBuffer(context.frameIndex).NewFrame(context);
+
+  if (Error::IsError(result)) {
+    return result;
   }
 
   return Error::Success();
