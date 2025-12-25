@@ -482,19 +482,20 @@ void append(ResourceKey &dest, const ResourceKey &src) {
 }
 
 auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
-                        const std::span<const uint8_t> data) -> Error::Error {
+                        const std::span<const uint8_t> &data) -> Error::Error {
   for (auto &pushBuffer : pushBuffers) {
-    PrintDebug("Checking push buffer {} for key...",
-               pushBuffer.GetLayout().name);
+    PrintDebug("Checking push buffer {} for key: {}...",
+               pushBuffer.GetLayout().name, ResourceKeyToString(key));
     if (pushBuffer.ContainsUniform(key.begin(), key.end())) {
       return pushBuffer.SetData(key, data);
     }
   }
 
   // check global ubo
-  PrintDebug("Checking global UBO for key...");
   ResourceKey globalsKey = {"Globals"};
   append(globalsKey, key);
+  PrintDebug("Checking global UBO for key: {}...",
+             ResourceKeyToString(globalsKey));
 
   auto *info =
       reflection.globals.ResolvePath(globalsKey.begin(), globalsKey.end());
@@ -502,8 +503,13 @@ auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
     return Error::Create("Uniform not found.");
   }
 
-  GetGlobalUniformBuffer(context.frameIndex)
-      .SetData(context, data, info->GetOffset());
+  size_t offset = info->GetOffset();
+  if (offset + data.size() > globalUniforms.size()) {
+    globalUniforms.resize(offset + data.size());
+  }
+
+  // NOLINTNEXTLINE, pointer arithmetic
+  memcpy(globalUniforms.data() + offset, data.data(), data.size());
 
   return Error::Success();
 }
@@ -611,11 +617,10 @@ auto ShaderModule::FlushBuffers(GraphicsContext &context,
     return validateResult;
   }
 
-  PrintDebug("Flushing shader buffers...");
-
   static Graphics::Buffer *currentUBOBuffer;
 
   auto &buffer = GetGlobalUniformBuffer(context.frameIndex);
+  buffer.SetData(context, globalUniforms, 0);
   auto uboFlushResult = buffer.Flush(context);
 
   if (Error::IsError(uboFlushResult)) {
@@ -625,10 +630,13 @@ auto ShaderModule::FlushBuffers(GraphicsContext &context,
   {
     // UBO buffer can be resized, we update every frame for now;
     VkDescriptorBufferInfo bufferInfo{};
+
+    PrintAlways("Flushing global UBO of size {} bytes, Offset: {}.",
+                buffer.GetLastFlushSize(),
+                buffer.GetOffset() - buffer.GetLastFlushSize());
+
     bufferInfo.buffer = buffer.GetBuffer().get()->handle;
-    bufferInfo.offset = buffer.GetOffset();
-    PrintAlways("Flushing with offset {} and size {}.", buffer.GetOffset(),
-                buffer.GetLastFlushSize());
+    bufferInfo.offset = buffer.GetOffset() - buffer.GetLastFlushSize();
 
     assert(reflection.globals.size > 0);
 

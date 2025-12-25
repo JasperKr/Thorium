@@ -44,9 +44,6 @@ public:
       localData.resize(atOffset + data.size());
     }
 
-    PrintAlways("Staging {} bytes to uniform buffer at offset {}.", data.size(),
-                atOffset);
-
     // NOLINTNEXTLINE, pointer arithmetic
     memcpy(localData.data() + atOffset, data.data(), data.size());
   }
@@ -89,8 +86,6 @@ public:
       resized = true;
     }
 
-    PrintWarning("Flushing {} bytes to uniform buffer at offset {}.",
-                 localData.size(), offset);
     auto result = buffer->SetData(context, localData, offset);
 
     offset += static_cast<uint32_t>(localData.size());

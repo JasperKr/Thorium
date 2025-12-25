@@ -5,6 +5,8 @@
 #include "Graphics/shader.hpp"
 #include "Modules/bytedata.hpp"
 #include "Wrap/wrap.hpp"
+#include <bit>
+#include <cstdint>
 #include <lauxlib.h>
 #include <lua.h>
 namespace Graphics::Shader {
@@ -52,7 +54,7 @@ inline auto LoadKey(lua_State *state, int index)
   auto iterator = root.before_begin();
 
   for (int i = index; i <= count; ++i) {
-    if (lua_isstring(state, i) != 0) {
+    if (lua_type(state, i) == LUA_TSTRING) {
       iterator = root.insert_after(iterator, luaL_checkstring(state, i));
     } else {
       return std::make_pair(root, i - index);
@@ -74,61 +76,67 @@ auto Wrap_Send(lua_State *state) -> int {
     return luaL_error(state, "Invalid uniform name.");
   }
 
-  if (LuaWrap::LuaIsType<Graphics::Texture::Texture>(state, 3)) {
+  // Base index of 1; + 1 for shader object; + keyCount for key parts
+  auto valueOffset = 2 + keyCount;
+
+  if (LuaWrap::LuaIsType<Graphics::Texture::Texture>(state, valueOffset)) {
     auto *texture =
-        LuaWrap::FromLuaObject<Graphics::Texture::Texture>(state, 3);
+        LuaWrap::FromLuaObject<Graphics::Texture::Texture>(state, valueOffset);
     auto result =
         shader->Send(*Graphics::GetCurrentGraphicsContext(), key, texture);
     if (Error::IsError(result)) {
       return luaL_error(state, "%s", result.message.c_str());
     }
-  } else if (LuaWrap::LuaIsType<Graphics::Buffer>(state, 3)) {
-    auto *buffer = LuaWrap::FromLuaObject<Graphics::Buffer>(state, 3);
+  } else if (LuaWrap::LuaIsType<Graphics::Buffer>(state, valueOffset)) {
+    auto *buffer = LuaWrap::FromLuaObject<Graphics::Buffer>(state, valueOffset);
     auto result =
         shader->Send(*Graphics::GetCurrentGraphicsContext(), key, buffer);
     if (Error::IsError(result)) {
       return luaL_error(state, "%s", result.message.c_str());
     }
-  } else if (lua_isnumber(state, 3) != 0) {
-    auto varargsCount = lua_gettop(state) - 2;
-    std::vector<float> data;
+  } else if (lua_type(state, valueOffset) == LUA_TNUMBER) {
+    auto varargsCount = lua_gettop(state) - valueOffset + 1;
+    std::vector<uint32_t> data{};
 
-    data.resize(sizeof(float) * static_cast<size_t>(varargsCount));
+    data.reserve(sizeof(uint32_t) * static_cast<size_t>(varargsCount));
     for (int i = 0; i < varargsCount; ++i) {
-      data.emplace_back(lua_tonumber(state, 3 + i));
+      auto value = static_cast<float>(lua_tonumber(state, valueOffset + i));
+      data.emplace_back(std::bit_cast<uint32_t>(value));
     }
 
     auto span = std::span<uint8_t>( // NOLINTNEXTLINE reinterpret cast
         reinterpret_cast<uint8_t *>(data.data()),
-        sizeof(float) * static_cast<size_t>(varargsCount));
+        sizeof(uint32_t) * static_cast<size_t>(varargsCount));
 
     auto result =
         shader->Send(*Graphics::GetCurrentGraphicsContext(), key, span);
     if (Error::IsError(result)) {
       return luaL_error(state, "%s", result.message.c_str());
     }
-  } else if (lua_istable(state, 3) != 0) {
-    std::vector<float> data;
-    uint64_t tableLength = lua_objlen(state, 3);
-    data.resize(sizeof(float) * static_cast<size_t>(tableLength));
+  } else if (lua_type(state, valueOffset) == LUA_TTABLE) {
+    std::vector<uint32_t> data;
+    uint64_t tableLength = lua_objlen(state, valueOffset);
+    data.reserve(sizeof(uint32_t) * static_cast<size_t>(tableLength));
 
     for (uint64_t i = 0; i < tableLength; ++i) {
-      lua_rawgeti(state, 3, static_cast<int>(i + 1));
-      data.emplace_back(lua_tonumber(state, -1));
+      lua_rawgeti(state, valueOffset, static_cast<int>(i + 1));
+      auto value = static_cast<float>(lua_tonumber(state, -1));
+
+      data.emplace_back(std::bit_cast<uint32_t>(value));
       lua_pop(state, 1);
     }
 
     auto span = std::span<uint8_t>( // NOLINTNEXTLINE reinterpret cast
         reinterpret_cast<uint8_t *>(data.data()),
-        sizeof(float) * static_cast<size_t>(tableLength));
+        sizeof(uint32_t) * static_cast<size_t>(tableLength));
 
     auto result =
         shader->Send(*Graphics::GetCurrentGraphicsContext(), key, span);
     if (Error::IsError(result)) {
       return luaL_error(state, "%s", result.message.c_str());
     }
-  } else if (LuaWrap::LuaIsType<Data::ByteData>(state, 3)) {
-    auto *byteData = LuaWrap::FromLuaObject<Data::ByteData>(state, 3);
+  } else if (LuaWrap::LuaIsType<Data::ByteData>(state, valueOffset)) {
+    auto *byteData = LuaWrap::FromLuaObject<Data::ByteData>(state, valueOffset);
     auto span = byteData->GetDataSpan();
 
     auto result =

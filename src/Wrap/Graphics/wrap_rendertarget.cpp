@@ -73,25 +73,7 @@ auto inline ConvertStringToBlendFactor(const char *string) -> VkBlendFactor {
   if (strcmp(string, "oneminusdstalpha") == 0) {
     return VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
   }
-  if (strcmp(string, "constantcolor") == 0) {
-    return VK_BLEND_FACTOR_CONSTANT_COLOR;
-  }
-  if (strcmp(string, "oneminusconstantcolor") == 0) {
-    return VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_COLOR;
-  }
-  if (strcmp(string, "constantalpha") == 0) {
-    return VK_BLEND_FACTOR_CONSTANT_ALPHA;
-  }
-  if (strcmp(string, "oneminusconstantalpha") == 0) {
-    return VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_ALPHA;
-  }
-  if (strcmp(string, "srcalphasat") == 0) {
-    return VK_BLEND_FACTOR_SRC_ALPHA_SATURATE;
-  }
-
-  {
-    return VK_BLEND_FACTOR_ONE; // Default
-  }
+  return VK_BLEND_FACTOR_ONE; // Default
 }
 
 // blendmode: { blendmode = "none"|"alpha"|"add"|"sub"|"mul", alphamode = "alphamultiply"|"premultiplied", mask = int }

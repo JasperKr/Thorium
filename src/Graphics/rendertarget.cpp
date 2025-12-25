@@ -734,18 +734,12 @@ static bool BegunRendering = false;
 auto Flush(GraphicsContext &context) -> tl::expected<bool, Error::Error> {
 
   auto &currentState = StateStack.back();
-  if (currentState == LastState && !Dirty) {
-    return false; // No state change
-  }
-
-  LastState = currentState;
 
   auto result = CreateDescriptorSets(context, currentState.shader.get());
   if (Error::IsError(result)) {
     return tl::make_unexpected(result);
   }
 
-  PrintDebug("Flushing render target state changes");
   auto pipelineResult = GetPipeline(context, currentState);
   if (Error::IsError(pipelineResult)) {
     return tl::make_unexpected(pipelineResult.error());

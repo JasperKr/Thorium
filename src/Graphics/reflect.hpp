@@ -105,6 +105,17 @@ inline auto ToMatrixType(uint8_t rowCount, uint8_t columnCount) -> MatrixType {
 
 using ResourceKey = std::forward_list<std::string>;
 
+static inline auto ResourceKeyToString(const ResourceKey &key) -> std::string {
+  std::string result;
+  for (const auto &part : key) {
+    if (!result.empty()) {
+      result += ".";
+    }
+    result += part;
+  }
+  return result;
+}
+
 struct SamplerInfo {
   uint32_t set;
   uint32_t binding;

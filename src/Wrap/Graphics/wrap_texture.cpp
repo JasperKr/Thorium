@@ -222,6 +222,56 @@ auto Wrap_GetLodRange(lua_State *state) -> int {
   return 2;
 }
 
+inline auto StringToCompareOp(const char *compareOpStr) -> VkCompareOp {
+  if (strcmp(compareOpStr, "never") == 0) {
+    return VK_COMPARE_OP_NEVER;
+  }
+  if (strcmp(compareOpStr, "less") == 0) {
+    return VK_COMPARE_OP_LESS;
+  }
+  if (strcmp(compareOpStr, "equal") == 0) {
+    return VK_COMPARE_OP_EQUAL;
+  }
+  if (strcmp(compareOpStr, "lequal") == 0) {
+    return VK_COMPARE_OP_LESS_OR_EQUAL;
+  }
+  if (strcmp(compareOpStr, "greater") == 0) {
+    return VK_COMPARE_OP_GREATER;
+  }
+  if (strcmp(compareOpStr, "notequal") == 0) {
+    return VK_COMPARE_OP_NOT_EQUAL;
+  }
+  if (strcmp(compareOpStr, "gequal") == 0) {
+    return VK_COMPARE_OP_GREATER_OR_EQUAL;
+  }
+  if (strcmp(compareOpStr, "always") == 0) {
+    return VK_COMPARE_OP_ALWAYS;
+  }
+  return VK_COMPARE_OP_ALWAYS; // Default
+}
+
+inline auto CompareOpToString(VkCompareOp compareOp) -> const char * {
+  switch (compareOp) {
+  case VK_COMPARE_OP_NEVER:
+    return "never";
+  case VK_COMPARE_OP_LESS:
+    return "less";
+  case VK_COMPARE_OP_EQUAL:
+    return "equal";
+  case VK_COMPARE_OP_LESS_OR_EQUAL:
+    return "lequal";
+  case VK_COMPARE_OP_GREATER:
+    return "greater";
+  case VK_COMPARE_OP_NOT_EQUAL:
+    return "notequal";
+  case VK_COMPARE_OP_GREATER_OR_EQUAL:
+    return "gequal";
+  case VK_COMPARE_OP_ALWAYS:
+  default:
+    return "always";
+  }
+}
+
 auto Wrap_SetDepthCompare(lua_State *state) -> int {
   auto *texture = LuaWrap::FromLuaObject<Texture>(state, 1);
 
@@ -229,9 +279,13 @@ auto Wrap_SetDepthCompare(lua_State *state) -> int {
     return luaL_error(state, "Expected Texture as first argument");
   }
 
-  auto enable = lua_toboolean(state, 2) == 1;
-  auto compareOp = static_cast<VkCompareOp>(luaL_checkinteger(state, 3));
+  if (lua_isnoneornil(state, 2) != 0) {
+    texture->SetDepthCompare(false, VK_COMPARE_OP_ALWAYS);
+    return 0;
+  }
 
+  auto compareOp = StringToCompareOp(luaL_checkstring(state, 2));
+  auto enable = compareOp != VK_COMPARE_OP_ALWAYS;
   texture->SetDepthCompare(enable, compareOp);
 
   return 0;
@@ -248,9 +302,8 @@ auto Wrap_GetDepthCompare(lua_State *state) -> int {
   VkCompareOp compareOp = VK_COMPARE_OP_ALWAYS;
   std::tie(enable, compareOp) = texture->GetDepthCompare();
 
-  lua_pushboolean(state, enable ? 1 : 0);
-  lua_pushinteger(state, static_cast<lua_Integer>(compareOp));
-  return 2;
+  lua_pushstring(state, CompareOpToString(compareOp));
+  return 1;
 }
 
 auto Wrap_GetWidth(lua_State *state) -> int {

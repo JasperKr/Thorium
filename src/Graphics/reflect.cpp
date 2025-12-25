@@ -37,14 +37,17 @@ auto StructInfo::ResolvePath(ResourceKey::const_iterator iterator,
 auto ResourceInfo::ResolvePath(ResourceKey::const_iterator iterator,
                                ResourceKey::const_iterator end)
     -> ResourceInfo * {
+  // Last element and name does not match, return nullptr
   if (iterator == end || *iterator != name) {
     return nullptr;
   }
 
+  // Last element, and name matches, return this
   if (std::next(iterator) == end) {
     return this;
   }
 
+  // Not a struct, cannot resolve further
   if (!std::holds_alternative<StructInfo>(info)) {
     return nullptr;
   }

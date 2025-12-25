@@ -133,12 +133,14 @@ struct ShaderModule : Object {
   std::vector<DescriptorWriteInfo> pendingDescriptorWrites;
   std::vector<ImageTransitionInfo> pendingImageTransitions;
 
+  std::vector<uint8_t> globalUniforms;
+
   static auto Create(Graphics::GraphicsContext &context,
                      const std::string &modulename, const std::string &name)
       -> tl::expected<Ref<ShaderModule>, Error::Error>;
 
   auto Send(GraphicsContext &context, const ResourceKey &key,
-            std::span<const uint8_t> data) -> Error::Error;
+            const std::span<const uint8_t> &data) -> Error::Error;
 
   auto Send(GraphicsContext &context, const ResourceKey &key, Buffer *buffer)
       -> Error::Error;
