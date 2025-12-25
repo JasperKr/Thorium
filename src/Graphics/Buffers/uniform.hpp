@@ -6,6 +6,7 @@
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "tl/expected.hpp"
+#define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
 #include <cstdint>
 

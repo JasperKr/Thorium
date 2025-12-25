@@ -1,13 +1,26 @@
 #include "Graphics/buffer.hpp"
 #include "Graphics/mesh.hpp"
+#include "Graphics/vertexformat.hpp"
 #include "Modules/bytedata.hpp"
+#include "Modules/color.hpp"
+#include "Modules/error.hpp"
 #include "Wrap/wrap.hpp"
+#include <cstddef>
+#include <cstdint>
+extern "C" {
+#include <lauxlib.h>
 #include <lua.h>
+#include <lualib.h>
+}
+#include <unordered_map>
+#include <vector>
+#define VK_NO_PROTOTYPES
+#include <vulkan/vulkan_core.h>
 
 namespace Graphics {
 
 // Bytedata, [offset], [range]
-auto Wrap_SetVertices(lua_State *state) -> int {
+auto wrap_SetVertices(lua_State *state) -> int {
   auto *mesh = LuaWrap::FromLuaObject<Mesh>(state, 1);
 
   if (mesh == nullptr) {
@@ -54,7 +67,7 @@ auto Wrap_SetVertices(lua_State *state) -> int {
 
   return 0;
 }
-auto Wrap_SetIndices(lua_State *state) -> int {
+auto wrap_SetIndices(lua_State *state) -> int {
   auto *mesh = LuaWrap::FromLuaObject<Mesh>(state, 1);
 
   if (mesh == nullptr) {
@@ -104,7 +117,7 @@ auto Wrap_SetIndices(lua_State *state) -> int {
   return 0;
 }
 
-auto Wrap_SetVertexBuffer(lua_State *state) -> int {
+auto wrap_SetVertexBuffer(lua_State *state) -> int {
   auto *mesh = LuaWrap::FromLuaObject<Mesh>(state, 1);
 
   if (mesh == nullptr) {
@@ -117,7 +130,7 @@ auto Wrap_SetVertexBuffer(lua_State *state) -> int {
 
   return 0;
 }
-auto Wrap_SetIndexBuffer(lua_State *state) -> int {
+auto wrap_SetIndexBuffer(lua_State *state) -> int {
   auto *mesh = LuaWrap::FromLuaObject<Mesh>(state, 1);
 
   if (mesh == nullptr) {
@@ -131,7 +144,7 @@ auto Wrap_SetIndexBuffer(lua_State *state) -> int {
   return 0;
 }
 
-auto Wrap_SetDrawRange(lua_State *state) -> int {
+auto wrap_SetDrawRange(lua_State *state) -> int {
   auto *mesh = LuaWrap::FromLuaObject<Mesh>(state, 1);
 
   if (mesh == nullptr) {
@@ -145,7 +158,7 @@ auto Wrap_SetDrawRange(lua_State *state) -> int {
 
   return 0;
 }
-auto Wrap_GetDrawRange(lua_State *state) -> int {
+auto wrap_GetDrawRange(lua_State *state) -> int {
   auto *mesh = LuaWrap::FromLuaObject<Mesh>(state, 1);
 
   if (mesh == nullptr) {
@@ -160,46 +173,383 @@ auto Wrap_GetDrawRange(lua_State *state) -> int {
   return 2;
 }
 
-auto wrap_NewMesh(lua_State *state) -> int {
-  // TODO: Rework meshes to allow for custom vertex formats //
+// Vertex formats are laid out as:
+/*
+{
+  { name = "name", format = "float", location = 0 },
+  { name = "name", format = "uint32", location = 1 },
+}
+*/
+inline auto VertexFormatFromLua(lua_State *state, int index) -> VertexFormat {
+  luaL_checktype(state, index, LUA_TTABLE);
 
-  return luaL_error(state, "wrap_NewMesh not implemented.");
+  std::vector<VertexComponent> attributes;
 
-  // auto *ctx = Graphics::GetCurrentGraphicsContext();
-  // auto vertexFormat =
-  //     static_cast<VertexFormats>(luaL_checkinteger(state, 1));
-  // auto *vertexData = LuaWrap::FromLuaObject<Data::ByteData>(state, 2);
+  // loop over list-like table
+  lua_pushnil(state);                   // first key, [table, nil]
+  while (lua_next(state, index) != 0) { // [table, key, value]
+    // now at -1 is value, -2 is key
+    luaL_checktype(state, -1, LUA_TTABLE);
 
-  // std::vector<uint32_t> *indexData = nullptr;
-  // if (lua_gettop(state) >= 3 && !lua_isnil(state, 3)) {
-  //   auto *indexDataObj = LuaWrap::FromLuaObject<Data::ByteData>(state, 3);
-  //   size_t indexCount = indexDataObj->GetSize() / sizeof(uint32_t);
-  //   indexData = new std::vector<uint32_t>(indexCount);
-  //   // NOLINTNEXTLINE; Reinterpret cast is necessary here
-  //   std::memcpy(indexData->data(), indexDataObj->GetData(),
-  //               indexDataObj->GetSize());
-  // }
+    // Name
+    lua_getfield(state, -1, "name");
+    const char *name = luaL_checkstring(state, -1);
+    lua_pop(state, 1); // pop name
 
-  // std::span<uint8_t> vertexSpan = // NOLINTNEXTLINE, pointer arithmetic
-  //     std::span<uint8_t>(vertexData->GetData(),
-  //                        static_cast<size_t>(vertexData->GetSize()));
+    // Format
+    lua_getfield(state, -1, "format");
+    const char *formatStr = luaL_checkstring(state, -1);
+    auto dataFormat = Format::VertexFormatStringToVkFormat(formatStr);
+    lua_pop(state, 1); // pop format
 
-  // auto result =
-  //     Mesh::Create(*ctx, vertexFormat, vertexSpan, indexData);
+    // Location
+    lua_getfield(state, -1, "location");
+    int location = static_cast<int>(luaL_checkinteger(state, -1));
+    lua_pop(state, 1); // pop location
 
-  // if (indexData != nullptr) {
-  //   delete indexData;
-  // }
+    attributes.emplace_back(VertexComponent{
+        .name = std::string(name),
+        .location = static_cast<uint32_t>(location),
+        .binding = 0,
+        .format = dataFormat,
+        .offset = 0,
+    });
 
-  // if (Error::IsError(result)) {
-  //   return luaL_error(state, "%s", result.error().ToString().c_str());
-  // }
+    lua_pop(state, 1); // pop value, keep key for next iteration
+  }
+  lua_pop(state, 1); // pop key
 
-  // LuaWrap::ToLuaObject<Mesh>(state, result.value());
-  // return 1;
+  return VertexFormat(attributes);
 }
 
-auto Wrap_Release(lua_State *state) -> int {
+struct ReadInfo {
+  int size;
+  int count;
+  std::function<void(lua_State *, int, std::span<uint8_t>)> read;
+};
+
+const inline auto readF32 = [](lua_State *state, int index,
+                               std::span<uint8_t> data) -> void {
+  auto value = static_cast<float>(luaL_checknumber(state, index));
+  std::memcpy(data.data(), &value, sizeof(float));
+};
+
+const inline auto readU32 = [](lua_State *state, int index,
+                               std::span<uint8_t> data) -> void {
+  auto value = static_cast<uint32_t>(luaL_checkinteger(state, index));
+  std::memcpy(data.data(), &value, sizeof(uint32_t));
+};
+
+const inline auto readI32 = [](lua_State *state, int index,
+                               std::span<uint8_t> data) -> void {
+  auto value = static_cast<int32_t>(luaL_checkinteger(state, index));
+  std::memcpy(data.data(), &value, sizeof(int32_t));
+};
+
+const inline auto readF16 = [](lua_State *state, int index,
+                               std::span<uint8_t> data) -> void {
+  auto value = static_cast<float>(luaL_checknumber(state, index));
+  numeric::float16_t half{value};
+  std::memcpy(data.data(), &half, sizeof(numeric::float16_t));
+};
+
+const inline auto readU16 = [](lua_State *state, int index,
+                               std::span<uint8_t> data) -> void {
+  auto value = static_cast<uint16_t>(luaL_checkinteger(state, index));
+  std::memcpy(data.data(), &value, sizeof(uint16_t));
+};
+
+const inline auto readI16 = [](lua_State *state, int index,
+                               std::span<uint8_t> data) -> void {
+  auto value = static_cast<int16_t>(luaL_checkinteger(state, index));
+  std::memcpy(data.data(), &value, sizeof(int16_t));
+};
+
+const inline auto readU8 = [](lua_State *state, int index,
+                              std::span<uint8_t> data) -> void {
+  auto value = static_cast<uint8_t>(luaL_checkinteger(state, index));
+  std::memcpy(data.data(), &value, sizeof(uint8_t));
+};
+
+const inline auto readI8 = [](lua_State *state, int index,
+                              std::span<uint8_t> data) -> void {
+  auto value = static_cast<int8_t>(luaL_checkinteger(state, index));
+  std::memcpy(data.data(), &value, sizeof(int8_t));
+};
+
+constexpr double SnormMax16 = 32767.0;
+constexpr double SnormMin16 = -32768.0;
+
+constexpr double UnormMax16 = 65535.0;
+constexpr double UnormMin16 = 0.0;
+
+constexpr double SnormMax8 = 127.0;
+constexpr double SnormMin8 = -128.0;
+
+constexpr double UnormMax8 = 255.0;
+constexpr double UnormMin8 = 0.0;
+
+const inline auto readSnorm16 = [](lua_State *state, int index,
+                                   std::span<uint8_t> data) -> void {
+  auto value = static_cast<float>(luaL_checknumber(state, index));
+  value = std::clamp(value, -1.0F, 1.0F);
+  auto snorm = static_cast<int16_t>(std::round(value * SnormMax16));
+  std::memcpy(data.data(), &snorm, sizeof(int16_t));
+};
+
+const inline auto readUnorm16 = [](lua_State *state, int index,
+                                   std::span<uint8_t> data) -> void {
+  auto value = static_cast<float>(luaL_checknumber(state, index));
+  value = std::clamp(value, 0.0F, 1.0F);
+  auto unorm = static_cast<uint16_t>(std::round(value * UnormMax16));
+  std::memcpy(data.data(), &unorm, sizeof(uint16_t));
+};
+
+const inline auto readSnorm8 = [](lua_State *state, int index,
+                                  std::span<uint8_t> data) -> void {
+  auto value = static_cast<float>(luaL_checknumber(state, index));
+  value = std::clamp(value, -1.0F, 1.0F);
+  auto snorm = static_cast<int8_t>(std::round(value * SnormMax8));
+  std::memcpy(data.data(), &snorm, sizeof(int8_t));
+};
+
+const inline auto readUnorm8 = [](lua_State *state, int index,
+                                  std::span<uint8_t> data) -> void {
+  auto value = static_cast<float>(luaL_checknumber(state, index));
+  value = std::clamp(value, 0.0F, 1.0F);
+  auto unorm = static_cast<uint8_t>(std::round(value * UnormMax8));
+  std::memcpy(data.data(), &unorm, sizeof(uint8_t));
+};
+
+const std::unordered_map<VkFormat, ReadInfo> formatReadInfo = {
+    /// Float 32-bit ///
+    {VK_FORMAT_R32_SFLOAT, {.size = 4, .count = 1, .read = readF32}},
+    {VK_FORMAT_R32G32_SFLOAT, {.size = 4, .count = 2, .read = readF32}},
+    {VK_FORMAT_R32G32B32_SFLOAT, {.size = 4, .count = 3, .read = readF32}},
+    {VK_FORMAT_R32G32B32A32_SFLOAT, {.size = 4, .count = 4, .read = readF32}},
+
+    /// Unsigned Int 32-bit ///
+    {VK_FORMAT_R32_UINT, {.size = 4, .count = 1, .read = readU32}},
+    {VK_FORMAT_R32G32_UINT, {.size = 4, .count = 2, .read = readU32}},
+    {VK_FORMAT_R32G32B32_UINT, {.size = 4, .count = 3, .read = readU32}},
+    {VK_FORMAT_R32G32B32A32_UINT, {.size = 4, .count = 4, .read = readU32}},
+
+    /// Signed Int 32-bit ///
+    {VK_FORMAT_R32_SINT, {.size = 4, .count = 1, .read = readI32}},
+    {VK_FORMAT_R32G32_SINT, {.size = 4, .count = 2, .read = readI32}},
+    {VK_FORMAT_R32G32B32_SINT, {.size = 4, .count = 3, .read = readI32}},
+    {VK_FORMAT_R32G32B32A32_SINT, {.size = 4, .count = 4, .read = readI32}},
+
+    /// Float 16-bit ///
+    {VK_FORMAT_R16_SFLOAT, {.size = 2, .count = 1, .read = readF16}},
+    {VK_FORMAT_R16G16_SFLOAT, {.size = 2, .count = 2, .read = readF16}},
+    {VK_FORMAT_R16G16B16_SFLOAT, {.size = 2, .count = 3, .read = readF16}},
+    {VK_FORMAT_R16G16B16A16_SFLOAT, {.size = 2, .count = 4, .read = readF16}},
+
+    /// Unsigned Int 16-bit ///
+    {VK_FORMAT_R16_UINT, {.size = 2, .count = 1, .read = readU16}},
+    {VK_FORMAT_R16G16_UINT, {.size = 2, .count = 2, .read = readU16}},
+    {VK_FORMAT_R16G16B16_UINT, {.size = 2, .count = 3, .read = readU16}},
+    {VK_FORMAT_R16G16B16A16_UINT, {.size = 2, .count = 4, .read = readU16}},
+
+    /// Signed Int 16-bit ///
+    {VK_FORMAT_R16_SINT, {.size = 2, .count = 1, .read = readI16}},
+    {VK_FORMAT_R16G16_SINT, {.size = 2, .count = 2, .read = readI16}},
+    {VK_FORMAT_R16G16B16_SINT, {.size = 2, .count = 3, .read = readI16}},
+    {VK_FORMAT_R16G16B16A16_SINT, {.size = 2, .count = 4, .read = readI16}},
+
+    /// Unsigned Int 8-bit ///
+    {VK_FORMAT_R8_UINT, {.size = 1, .count = 1, .read = readU8}},
+    {VK_FORMAT_R8G8_UINT, {.size = 1, .count = 2, .read = readU8}},
+    {VK_FORMAT_R8G8B8_UINT, {.size = 1, .count = 3, .read = readU8}},
+    {VK_FORMAT_R8G8B8A8_UINT, {.size = 1, .count = 4, .read = readU8}},
+
+    /// Signed Int 8-bit ///
+    {VK_FORMAT_R8_SINT, {.size = 1, .count = 1, .read = readI8}},
+    {VK_FORMAT_R8G8_SINT, {.size = 1, .count = 2, .read = readI8}},
+    {VK_FORMAT_R8G8B8_SINT, {.size = 1, .count = 3, .read = readI8}},
+    {VK_FORMAT_R8G8B8A8_SINT, {.size = 1, .count = 4, .read = readI8}},
+
+    /// Snorm 16-bit ///
+    {VK_FORMAT_R16_SNORM, {.size = 2, .count = 1, .read = readSnorm16}},
+    {VK_FORMAT_R16G16_SNORM, {.size = 2, .count = 2, .read = readSnorm16}},
+    {VK_FORMAT_R16G16B16_SNORM, {.size = 2, .count = 3, .read = readSnorm16}},
+    {VK_FORMAT_R16G16B16A16_SNORM,
+     {.size = 2, .count = 4, .read = readSnorm16}},
+
+    /// Unorm 16-bit ///
+    {VK_FORMAT_R16_UNORM, {.size = 2, .count = 1, .read = readUnorm16}},
+    {VK_FORMAT_R16G16_UNORM, {.size = 2, .count = 2, .read = readUnorm16}},
+    {VK_FORMAT_R16G16B16_UNORM, {.size = 2, .count = 3, .read = readUnorm16}},
+    {VK_FORMAT_R16G16B16A16_UNORM,
+     {.size = 2, .count = 4, .read = readUnorm16}},
+
+    /// Snorm 8-bit ///
+    {VK_FORMAT_R8_SNORM, {.size = 1, .count = 1, .read = readSnorm8}},
+    {VK_FORMAT_R8G8_SNORM, {.size = 1, .count = 2, .read = readSnorm8}},
+    {VK_FORMAT_R8G8B8_SNORM, {.size = 1, .count = 3, .read = readSnorm8}},
+    {VK_FORMAT_R8G8B8A8_SNORM, {.size = 1, .count = 4, .read = readSnorm8}},
+
+    /// Unorm 8-bit ///
+    {VK_FORMAT_R8_UNORM, {.size = 1, .count = 1, .read = readUnorm8}},
+    {VK_FORMAT_R8G8_UNORM, {.size = 1, .count = 2, .read = readUnorm8}},
+    {VK_FORMAT_R8G8B8_UNORM, {.size = 1, .count = 3, .read = readUnorm8}},
+    {VK_FORMAT_R8G8B8A8_UNORM, {.size = 1, .count = 4, .read = readUnorm8}},
+
+    /// TODO: Add packed formats ///
+    // Like rg11b10, rgb9e5, etc.
+    // Could be very useful for color packing or other specialized uses
+};
+
+auto inline ReadVertex(lua_State *state, int index, VertexFormat &format,
+                       std::span<uint8_t> destination, size_t &writeOffset)
+    -> void {
+  for (const auto &attribute : format.GetAttributes()) {
+    auto iterator = formatReadInfo.find(attribute.format);
+    if (iterator == formatReadInfo.end()) {
+      luaL_error(state, "Unsupported vertex attribute format for reading.");
+    }
+
+    const auto &readInfo = iterator->second;
+    auto readSize = static_cast<size_t>(readInfo.size);
+
+    for (int i = 0; i < readInfo.count; ++i) {
+      auto localWriteOffset = writeOffset + (i * readSize);
+      readInfo.read(state, index,
+                    destination.subspan(localWriteOffset, readSize));
+    }
+
+    writeOffset += readInfo.count * readSize;
+  }
+}
+
+// "triangles" | "strip" | "lines" | "linestrip" | "points"
+inline auto PrimitiveTopologyFromLua(lua_State *state, int index)
+    -> VkPrimitiveTopology {
+  const char *topologyStr = luaL_checkstring(state, index);
+
+  if (std::strcmp(topologyStr, "triangles") == 0) {
+    return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+  }
+  if (std::strcmp(topologyStr, "strip") == 0) {
+    return VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;
+  }
+  if (std::strcmp(topologyStr, "lines") == 0) {
+    return VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
+  }
+  if (std::strcmp(topologyStr, "linestrip") == 0) {
+    return VK_PRIMITIVE_TOPOLOGY_LINE_STRIP;
+  }
+  if (std::strcmp(topologyStr, "points") == 0) {
+    return VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
+  }
+  luaL_error(state, "Unknown primitive topology string: %s", topologyStr);
+  return VK_PRIMITIVE_TOPOLOGY_MAX_ENUM;
+}
+
+// new mesh
+// vertexFormat, vertex count, [topology], [index count]
+// vertexFormat, bytedata(vertices), [topology], [bytedata(indices)]
+// vertexFormat, table(vertices), [topology], [table(indices)]
+auto wrap_NewMesh(lua_State *state) -> int {
+  auto *ctx = Graphics::GetCurrentGraphicsContext();
+
+  if (ctx == nullptr) {
+    return luaL_error(state, "No current GraphicsContext.");
+  }
+
+  auto vertexFormat = VertexFormatFromLua(state, 1);
+
+  std::span<uint8_t> vertexData;
+  std::vector<uint32_t> *indexData = nullptr;
+  std::vector<uint32_t> indexDataStorage;
+  VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+
+  // Vertex data
+  if (lua_type(state, 2) == LUA_TUSERDATA) {
+    auto *byteData = LuaWrap::FromLuaObject<Data::ByteData>(state, 2);
+    if (byteData == nullptr) {
+      return luaL_error(state, "Expected ByteData as second argument");
+    }
+
+    vertexData = byteData->GetDataSpan();
+  } else if (lua_type(state, 2) == LUA_TTABLE) {
+    luaL_checktype(state, 2, LUA_TTABLE);
+
+    size_t vertexCount = lua_objlen(state, 2);
+    size_t stride = vertexFormat.GetStride(0);
+    size_t writeOffset = 0;
+
+    std::vector<uint8_t> vertexStorage;
+    vertexStorage.resize(vertexCount * stride);
+    vertexData = std::span<uint8_t>(vertexStorage.data(), vertexStorage.size());
+
+    for (int i = 0; i < vertexCount; ++i) {
+      lua_rawgeti(state, 2, i + 1); // [table, vertex]
+      luaL_checktype(state, -1, LUA_TTABLE);
+
+      ReadVertex(state, -1, vertexFormat, vertexData, writeOffset);
+
+      lua_pop(state, 1); // pop vertex table
+    }
+  } else {
+    return luaL_error(state, "Expected ByteData or table as second argument");
+  }
+
+  // Topology
+  if (lua_gettop(state) >= 3) {
+    topology = PrimitiveTopologyFromLua(state, 3);
+  }
+
+  // Index data
+  if (lua_gettop(state) >= 4) {
+    if (lua_type(state, 4) == LUA_TUSERDATA) {
+      auto *byteData = LuaWrap::FromLuaObject<Data::ByteData>(state, 4);
+      if (byteData == nullptr) {
+        return luaL_error(state, "Expected ByteData as fourth argument");
+      }
+
+      auto span = byteData->GetDataSpan();
+      indexDataStorage.resize(span.size() / sizeof(uint32_t));
+      std::memcpy(indexDataStorage.data(), span.data(), span.size());
+      indexData = &indexDataStorage;
+      ;
+    } else if (lua_type(state, 4) == LUA_TTABLE) {
+      luaL_checktype(state, 4, LUA_TTABLE);
+
+      size_t indexCount = lua_objlen(state, 4);
+      indexDataStorage.resize(indexCount);
+
+      for (int i = 0; i < indexCount; ++i) {
+        lua_rawgeti(state, 4, i + 1); // [table, index]
+        indexDataStorage[i] =
+            static_cast<uint32_t>(luaL_checkinteger(state, -1));
+        lua_pop(state, 1); // pop index
+      }
+      indexData = &indexDataStorage;
+    } else {
+      return luaL_error(state, "Expected ByteData or table as fourth argument");
+    }
+  }
+
+  auto meshResult = Mesh::Create(*ctx, vertexFormat, vertexData, indexData);
+
+  if (Error::IsError(meshResult)) {
+    return luaL_error(state, "%s", meshResult.error().message.c_str());
+  }
+
+  auto mesh = meshResult.value();
+  auto setTopologyResult = mesh->SetTopology(topology);
+
+  if (Error::IsError(setTopologyResult)) {
+    return luaL_error(state, "%s", setTopologyResult.ToString().c_str());
+  }
+
+  LuaWrap::PushLuaType(state, Graphics::Mesh::GetType(), mesh.get());
+  return 1;
+}
+
+auto wrap_Release(lua_State *state) -> int {
   auto *mesh = LuaWrap::FromLuaObject<Mesh>(state, 1);
 
   if (mesh == nullptr) {

@@ -3,24 +3,27 @@
 #include "Graphics/shader.hpp"
 #include "Modules/console.hpp"
 #include "Wrap/wrap.hpp"
+extern "C" {
 #include <lauxlib.h>
 #include <lua.h>
+#include <lualib.h>
+}
 
 namespace Graphics::Shader {
 
-auto Wrap_Send(lua_State *state) -> int;
-auto Wrap_HasUniform(lua_State *state) -> int;
-auto Wrap_GetUniforms(lua_State *state) -> int;
+auto wrap_Send(lua_State *state) -> int;
+auto wrap_HasUniform(lua_State *state) -> int;
+auto wrap_GetUniforms(lua_State *state) -> int;
 
 auto wrap_NewShader(lua_State *state) -> int;
-auto Wrap_Release(lua_State *state) -> int;
+auto wrap_Release(lua_State *state) -> int;
 
 // NOLINTNEXTLINE
 static const luaL_Reg ShaderLib[] = {
-    {"send", Wrap_Send},
-    {"hasUniform", Wrap_HasUniform},
-    {"getUniforms", Wrap_GetUniforms},
-    {"release", Wrap_Release},
+    {"send", wrap_Send},
+    {"hasUniform", wrap_HasUniform},
+    {"getUniforms", wrap_GetUniforms},
+    {"release", wrap_Release},
     {nullptr, nullptr} // terminate with nullptr
 };
 

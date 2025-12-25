@@ -2,8 +2,11 @@
 
 #include "Modules/color.hpp"
 #include <cstdint>
+extern "C" {
 #include <lauxlib.h>
 #include <lua.h>
+#include <lualib.h>
+}
 
 enum ColorFormat : uint8_t {
   List,

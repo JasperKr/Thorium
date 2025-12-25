@@ -1,5 +1,6 @@
 #include "Wrap/Graphics/wrap_graphics.hpp"
 
+#include "Graphics/format.hpp"
 #include "Graphics/graphics.hpp"
 #include "Graphics/mesh.hpp"
 #include "Graphics/render.hpp"
@@ -14,6 +15,7 @@
 #include "Wrap/Graphics/wrap_color.hpp"
 #include "Wrap/wrap.hpp"
 #include "tl/expected.hpp"
+#define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
 #include <cstdint>
 #include <cstring>
@@ -392,60 +394,66 @@ auto wrap_GetWindingOrder(lua_State *state) -> int {
   return 1;
 }
 
+struct FormatDefault2D {
+  float position[2]; // NOLINT
+  float texCoord[2]; // NOLINT
+  uint32_t color;
+};
+
 inline auto GetQuadMesh(GraphicsContext &context, const VkRect2D size,
                         Color color) -> tl::expected<Ref<Mesh>, Error::Error> {
-  // Create a quad mesh covering the given size
-  static std::vector<Format_Default2D> vertices = {};
+  // Create a quad mesh covering the given size NOLINTNEXTLINE
+  static std::vector<FormatDefault2D> vertices = {};
   static std::vector<uint32_t> indices = {0, 1, 2, 2, 3, 0};
 
   vertices.resize(4);
 
   vertices[0].position[0] = static_cast<float>(size.offset.x);
   vertices[0].position[1] = static_cast<float>(size.offset.y);
-  vertices[0].uv[0] = 0.0F;
-  vertices[0].uv[1] = 0.0F;
+  vertices[0].texCoord[0] = 0.0F;
+  vertices[0].texCoord[1] = 0.0F;
   vertices[0].color = color.Pack();
 
   vertices[1].position[0] =
       static_cast<float>(size.offset.x + size.extent.width);
   vertices[1].position[1] = static_cast<float>(size.offset.y);
-  vertices[1].uv[0] = 1.0F;
-  vertices[1].uv[1] = 0.0F;
+  vertices[1].texCoord[0] = 1.0F;
+  vertices[1].texCoord[1] = 0.0F;
   vertices[1].color = color.Pack();
 
   vertices[2].position[0] =
       static_cast<float>(size.offset.x + size.extent.width);
   vertices[2].position[1] =
       static_cast<float>(size.offset.y + size.extent.height);
-  vertices[2].uv[0] = 1.0F;
-  vertices[2].uv[1] = 1.0F;
+  vertices[2].texCoord[0] = 1.0F;
+  vertices[2].texCoord[1] = 1.0F;
   vertices[2].color = color.Pack();
 
   vertices[3].position[0] = static_cast<float>(size.offset.x);
   vertices[3].position[1] =
       static_cast<float>(size.offset.y + size.extent.height);
-  vertices[3].uv[0] = 0.0F;
-  vertices[3].uv[1] = 1.0F;
+  vertices[3].texCoord[0] = 0.0F;
+  vertices[3].texCoord[1] = 1.0F;
   vertices[3].color = color.Pack();
 
   VertexFormat vertexFormat({
-      VkVertexInputAttributeDescription{
+      VertexComponent{
+          .name = "Position",
           .location = 0,
           .binding = 0,
           .format = VK_FORMAT_R32G32_SFLOAT,
-          .offset = offsetof(Format_Default2D, position),
       },
-      VkVertexInputAttributeDescription{
+      VertexComponent{
+          .name = "TexCoord",
           .location = 1,
           .binding = 0,
           .format = VK_FORMAT_R32G32_SFLOAT,
-          .offset = offsetof(Format_Default2D, uv),
       },
-      VkVertexInputAttributeDescription{
+      VertexComponent{
+          .name = "Color",
           .location = 2,
           .binding = 0,
           .format = VK_FORMAT_R8G8B8A8_UNORM,
-          .offset = offsetof(Format_Default2D, color),
       },
   });
 
@@ -536,7 +544,7 @@ auto wrap_Draw(lua_State *state) -> int {
 // Either: bool (0,0,0,1), bool (depth), bool (stencil)
 // Or: Color (attachment 1, vararg), value (depth), value (stencil)
 // Or: {[1..]: Color (attachment), depth=value, stencil=value}
-auto Wrap_Clear(lua_State *state) -> int {
+auto wrap_Clear(lua_State *state) -> int {
   auto *ctx = GetCurrentGraphicsContext();
 
   RenderTarget::ClearInfo clearInfo{};

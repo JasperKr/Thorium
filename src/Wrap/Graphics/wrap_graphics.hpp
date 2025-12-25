@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Wrap/Graphics/wrap_buffer.hpp"
 #include "Wrap/Graphics/wrap_mesh.hpp"
 #include "Wrap/Graphics/wrap_rendertarget.hpp"
 #include "Wrap/Graphics/wrap_shader.hpp"
@@ -69,6 +70,7 @@ static const luaL_Reg GraphicsLib[] = {
     {"newTexture", Texture::wrap_NewTexture},
     {"newMesh", Graphics::wrap_NewMesh},
     {"newShader", Graphics::Shader::wrap_NewShader},
+    {"newBuffer", Graphics::StructuredBuffer::wrap_NewBuffer},
     {"draw", wrap_Draw},
     {nullptr, nullptr},
 };
@@ -78,6 +80,7 @@ const static lua_CFunction childrenInitFunctions[] = {
     Texture::luaopen_texture,
     Graphics::luaopen_mesh,
     Graphics::Shader::luaopen_shader,
+    Graphics::StructuredBuffer::luaopen_buffer,
     nullptr,
 };
 

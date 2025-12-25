@@ -1,11 +1,12 @@
 #pragma once
 
+#include "../Graphics/format.hpp"
 #include "Math/vector.hpp"
 #include "Modules/bytedata.hpp"
-#include "Modules/image.hpp"
 #include "Modules/object.hpp"
 #include "Modules/type.hpp"
 #include "color.hpp"
+#define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
 #include <cstddef>
 #include <cstdint>
@@ -26,16 +27,17 @@ public:
   [[nodiscard]] auto GetHeight() const -> uint32_t { return height; }
   [[nodiscard]] auto GetFormat() const -> VkFormat { return format; }
   [[nodiscard]] auto GetChannelCount() const -> uint32_t {
-    return Image::GetFormatChannelCount(format);
+    return Graphics::Format::GetChannelCount(format);
   }
   [[nodiscard]] auto GetFormatSize() const -> size_t {
-    return Image::GetFormatSize(format);
+    return Graphics::Format::GetSize(format);
   }
 
   // NOLINTNEXTLINE
   ImageData(uint32_t width, uint32_t height, VkFormat format)
       : width(width), height(height), format(format),
-        data(static_cast<size_t>(width * height * Image::GetFormatSize(format)),
+        data(static_cast<size_t>(width * height *
+                                 Graphics::Format::GetSize(format)),
              0) {}
   // NOLINTNEXTLINE
   ImageData(uint32_t width, uint32_t height, const uint8_t *srcData,

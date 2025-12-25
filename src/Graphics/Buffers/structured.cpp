@@ -1,41 +1,24 @@
 #include "structured.hpp"
 
-#include <cstdint>
-
 #include "Graphics/buffer.hpp"
+#include "Graphics/bufferformat.hpp"
 #include "Graphics/graphics.hpp"
-#include "Graphics/reflect.hpp"
 #include "Modules/error.hpp"
+#include "Modules/object.hpp"
 #include "tl/expected.hpp"
+#define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
 
-namespace Graphics {
+namespace Graphics::StructuredBuffer {
 
-auto CreateStructuredBuffer(GraphicsContext &context, size_t elementCount,
-                            const BufferInfo &layout)
-    -> tl::expected<StructuredBuffer, Error::Error> {
-
-  VkMemoryPropertyFlags memoryFlags =
-      static_cast<uint32_t>(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) |
-      static_cast<uint32_t>(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) |
-      static_cast<uint32_t>(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-
-  VkBufferUsageFlags usageFlags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-
-  // If the buffer is writable, we may want readback as well
-  if (layout.access == SLANG_RESOURCE_ACCESS_READ_WRITE ||
-      layout.access == SLANG_RESOURCE_ACCESS_WRITE) {
-    usageFlags |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-  }
-
-  // If the buffer is readable, we may want to upload data to it
-  if (layout.access == SLANG_RESOURCE_ACCESS_READ_WRITE ||
-      layout.access == SLANG_RESOURCE_ACCESS_READ) {
-    usageFlags |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-  }
+auto CreateStructuredBuffer(GraphicsContext &context, BufferFormat &format,
+                            size_t elementCount,
+                            VkMemoryPropertyFlags memoryFlags,
+                            VkBufferUsageFlags usageFlags)
+    -> tl::expected<Ref<StructuredBuffer>, Error::Error> {
 
   Graphics::BufferCreationInfo bufferCreateInfo{
-      .size = layout.size * elementCount,
+      .size = format.GetSize() * elementCount,
       .usage = usageFlags,
       .properties = memoryFlags,
   };
@@ -46,14 +29,14 @@ auto CreateStructuredBuffer(GraphicsContext &context, size_t elementCount,
     return tl::unexpected(result.error());
   }
 
-  StructuredBuffer structuredBuffer = {
-      .elementCount = elementCount,
-      .elementStride = layout.size,
-      .layout = layout,
-      .buffer = result.value(),
-  };
+  auto buffer = Ref<StructuredBuffer>::Make();
 
-  return structuredBuffer;
+  buffer->format = format;
+  buffer->elementCount = elementCount;
+  buffer->elementStride = format.GetSize();
+  buffer->buffer = result.value();
+
+  return buffer;
 }
 
-} // namespace Graphics
+} // namespace Graphics::StructuredBuffer

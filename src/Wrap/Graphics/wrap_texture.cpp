@@ -1,9 +1,16 @@
+#include "Graphics/format.hpp"
 #include "Graphics/texture.hpp"
 #include "Modules/console.hpp"
+#include "Modules/image.hpp"
 #include "Wrap/wrap.hpp"
+
+#define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
+extern "C" {
 #include <lauxlib.h>
 #include <lua.h>
+#include <lualib.h>
+}
 namespace Graphics::Texture {
 auto inline StringToVkFilter(const char *filterStr) -> VkFilter {
   if (strcmp(filterStr, "nearest") == 0) {
@@ -15,7 +22,7 @@ auto inline StringToVkFilter(const char *filterStr) -> VkFilter {
   return VK_FILTER_LINEAR; // Default
 }
 
-auto Wrap_SetFilter(lua_State *state) -> int {
+auto wrap_SetFilter(lua_State *state) -> int {
   auto *texture = LuaWrap::FromLuaObject<Texture>(state, 1);
 
   if (texture == nullptr) {
@@ -38,7 +45,7 @@ auto Wrap_SetFilter(lua_State *state) -> int {
   return 0;
 }
 
-auto Wrap_GetFilter(lua_State *state) -> int {
+auto wrap_GetFilter(lua_State *state) -> int {
   PrintWarning("Getting texture filter");
   PrintWarning("Texture type ptr: {}", (void *)Texture::GetType());
   auto *texture = LuaWrap::FromLuaObject<Texture>(state, 1);
@@ -66,7 +73,7 @@ auto Wrap_GetFilter(lua_State *state) -> int {
   return 3;
 }
 
-auto Wrap_SetAnisotropy(lua_State *state) -> int {
+auto wrap_SetAnisotropy(lua_State *state) -> int {
   auto *texture = LuaWrap::FromLuaObject<Texture>(state, 1);
 
   if (texture == nullptr) {
@@ -80,7 +87,7 @@ auto Wrap_SetAnisotropy(lua_State *state) -> int {
   return 0;
 }
 
-auto Wrap_GetAnisotropy(lua_State *state) -> int {
+auto wrap_GetAnisotropy(lua_State *state) -> int {
   auto *texture = LuaWrap::FromLuaObject<Texture>(state, 1);
 
   if (texture == nullptr) {
@@ -107,7 +114,7 @@ auto inline StringToAddressMode(const char *addressModeStr)
   return VK_SAMPLER_ADDRESS_MODE_REPEAT; // Default
 }
 
-auto Wrap_SetWrapmode(lua_State *state) -> int {
+auto wrap_SetWrapmode(lua_State *state) -> int {
   auto *texture = LuaWrap::FromLuaObject<Texture>(state, 1);
 
   if (texture == nullptr) {
@@ -141,7 +148,7 @@ auto inline AddressModeToString(VkSamplerAddressMode addressMode) -> const
   }
 }
 
-auto Wrap_GetWrapmode(lua_State *state) -> int {
+auto wrap_GetWrapmode(lua_State *state) -> int {
   auto *texture = LuaWrap::FromLuaObject<Texture>(state, 1);
 
   if (texture == nullptr) {
@@ -164,7 +171,7 @@ auto Wrap_GetWrapmode(lua_State *state) -> int {
   return 3;
 }
 
-auto Wrap_SetLodBias(lua_State *state) -> int {
+auto wrap_SetLodBias(lua_State *state) -> int {
   auto *texture = LuaWrap::FromLuaObject<Texture>(state, 1);
 
   if (texture == nullptr) {
@@ -178,7 +185,7 @@ auto Wrap_SetLodBias(lua_State *state) -> int {
   return 0;
 }
 
-auto Wrap_GetLodBias(lua_State *state) -> int {
+auto wrap_GetLodBias(lua_State *state) -> int {
   auto *texture = LuaWrap::FromLuaObject<Texture>(state, 1);
 
   if (texture == nullptr) {
@@ -191,7 +198,7 @@ auto Wrap_GetLodBias(lua_State *state) -> int {
   return 1;
 }
 
-auto Wrap_SetLodRange(lua_State *state) -> int {
+auto wrap_SetLodRange(lua_State *state) -> int {
   auto *texture = LuaWrap::FromLuaObject<Texture>(state, 1);
 
   if (texture == nullptr) {
@@ -206,7 +213,7 @@ auto Wrap_SetLodRange(lua_State *state) -> int {
   return 0;
 }
 
-auto Wrap_GetLodRange(lua_State *state) -> int {
+auto wrap_GetLodRange(lua_State *state) -> int {
   auto *texture = LuaWrap::FromLuaObject<Texture>(state, 1);
 
   if (texture == nullptr) {
@@ -272,7 +279,7 @@ inline auto CompareOpToString(VkCompareOp compareOp) -> const char * {
   }
 }
 
-auto Wrap_SetDepthCompare(lua_State *state) -> int {
+auto wrap_SetDepthCompare(lua_State *state) -> int {
   auto *texture = LuaWrap::FromLuaObject<Texture>(state, 1);
 
   if (texture == nullptr) {
@@ -291,7 +298,7 @@ auto Wrap_SetDepthCompare(lua_State *state) -> int {
   return 0;
 }
 
-auto Wrap_GetDepthCompare(lua_State *state) -> int {
+auto wrap_GetDepthCompare(lua_State *state) -> int {
   auto *texture = LuaWrap::FromLuaObject<Texture>(state, 1);
 
   if (texture == nullptr) {
@@ -306,7 +313,7 @@ auto Wrap_GetDepthCompare(lua_State *state) -> int {
   return 1;
 }
 
-auto Wrap_GetWidth(lua_State *state) -> int {
+auto wrap_GetWidth(lua_State *state) -> int {
   auto *texture = LuaWrap::FromLuaObject<Texture>(state, 1);
 
   if (texture == nullptr) {
@@ -319,7 +326,7 @@ auto Wrap_GetWidth(lua_State *state) -> int {
   return 1;
 }
 
-auto Wrap_GetHeight(lua_State *state) -> int {
+auto wrap_GetHeight(lua_State *state) -> int {
   auto *texture = LuaWrap::FromLuaObject<Texture>(state, 1);
 
   if (texture == nullptr) {
@@ -332,7 +339,7 @@ auto Wrap_GetHeight(lua_State *state) -> int {
   return 1;
 }
 
-auto Wrap_GetDepth(lua_State *state) -> int {
+auto wrap_GetDepth(lua_State *state) -> int {
   auto *texture = LuaWrap::FromLuaObject<Texture>(state, 1);
 
   if (texture == nullptr) {
@@ -345,7 +352,7 @@ auto Wrap_GetDepth(lua_State *state) -> int {
   return 1;
 }
 
-auto Wrap_GetDimensions(lua_State *state) -> int {
+auto wrap_GetDimensions(lua_State *state) -> int {
   auto *texture = LuaWrap::FromLuaObject<Texture>(state, 1);
 
   if (texture == nullptr) {
@@ -359,7 +366,7 @@ auto Wrap_GetDimensions(lua_State *state) -> int {
   return 2;
 }
 
-auto Wrap_GetMipmapCount(lua_State *state) -> int {
+auto wrap_GetMipmapCount(lua_State *state) -> int {
   auto *texture = LuaWrap::FromLuaObject<Texture>(state, 1);
 
   if (texture == nullptr) {
@@ -372,7 +379,7 @@ auto Wrap_GetMipmapCount(lua_State *state) -> int {
   return 1;
 }
 
-auto Wrap_GetFormat(lua_State *state) -> int {
+auto wrap_GetFormat(lua_State *state) -> int {
   auto *texture = LuaWrap::FromLuaObject<Texture>(state, 1);
 
   if (texture == nullptr) {
@@ -381,7 +388,7 @@ auto Wrap_GetFormat(lua_State *state) -> int {
 
   VkFormat format = texture->GetFormat();
 
-  lua_pushstring(state, Image::FormatToString(format).c_str());
+  lua_pushstring(state, Format::ImageFormatToString(format).c_str());
   return 1;
 }
 
@@ -450,7 +457,7 @@ struct LuaOptions {
     lua_getfield(state, index, "format");
     if (lua_isstring(state, -1) != 0) {
       const char *formatStr = luaL_checkstring(state, -1);
-      this->format = Image::StringToFormat(std::string(formatStr));
+      this->format = Format::StringToImageFormat(std::string(formatStr));
     }
     lua_pop(state, 1);
 
@@ -719,7 +726,7 @@ auto wrap_NewTexture(lua_State *state) -> int {
   return 1;
 }
 
-auto Wrap_Release(lua_State *state) -> int {
+auto wrap_Release(lua_State *state) -> int {
   auto *texture = LuaWrap::FromLuaObject<Texture>(state, 1);
 
   if (texture == nullptr) {

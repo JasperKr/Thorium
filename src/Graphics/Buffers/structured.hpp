@@ -3,26 +3,97 @@
 #include <cstddef>
 
 #include "Graphics/buffer.hpp"
+#include "Graphics/bufferformat.hpp"
 #include "Graphics/graphics.hpp"
 #include "Graphics/reflect.hpp"
 #include "Modules/error.hpp"
+#include "Modules/type.hpp"
 #include "tl/expected.hpp"
 
-namespace Graphics {
-struct StructuredBuffer {
-  auto GetBuffer() const -> Ref<Buffer> { return buffer; }
-  auto GetElementCount() const -> size_t { return elementCount; }
-  auto GetElementStride() const -> size_t { return elementStride; }
-  auto GetLayout() const -> const BufferInfo & { return layout; }
+namespace Graphics::StructuredBuffer {
 
+const Type type = Type("Buffer");
+
+struct StructuredBuffer : Object {
+  [[nodiscard]] auto GetBuffer() const -> Ref<Buffer> { return buffer; }
+  [[nodiscard]] auto GetElementCount() const -> size_t { return elementCount; }
+  [[nodiscard]] auto GetElementStride() const -> size_t {
+    return elementStride;
+  }
+  [[nodiscard]] auto GetFormat() const -> BufferFormat const & {
+    return format;
+  }
+
+  // NOLINTNEXTLINE
+  void Clear(GraphicsContext &context, uint32_t value, VkDeviceSize offset = 0,
+             VkDeviceSize size = VK_WHOLE_SIZE) {
+    buffer->Clear(context, value, offset, size);
+  }
+
+  auto IsCompatible(BufferInfo &layout) const -> Error::Error {
+    for (const auto &component : format.GetComponents()) {
+      auto *field =
+          layout.ResolvePath(component.name.begin(), component.name.end());
+      if (field == nullptr) {
+        return Error::Error(
+            "StructuredBuffer: Incompatible buffer layout (missing component " +
+            ResourceKeyToString(component.name) + ").");
+      }
+
+      if (field->GetOffset() != component.offset) {
+        return Error::Error(
+            "StructuredBuffer: Incompatible buffer layout (component " +
+            ResourceKeyToString(component.name) +
+            " has incorrect offset, expected: " +
+            std::to_string(component.offset) + ").");
+      }
+
+      if (field->GetSize() != Graphics::Format::GetSize(component.format)) {
+        return Error::Error(
+            "StructuredBuffer: Incompatible buffer layout (component " +
+            ResourceKeyToString(component.name) +
+            " has incorrect size, expected: " +
+            std::to_string(Graphics::Format::GetSize(component.format)) + ").");
+      }
+    }
+
+    if (layout.size != elementStride) {
+      return Error::Error(
+          "StructuredBuffer: Incompatible buffer layout size; expected " +
+          std::to_string(elementStride) + ", got " +
+          std::to_string(layout.size) + ".");
+    }
+
+    return Error::Success();
+  }
+
+  [[nodiscard]] auto UseDeferredDestruction() const -> bool override {
+    return true;
+  }
+
+  auto ScheduleDestroy() -> bool override {
+    buffer->ScheduleDestroy();
+    return true;
+  }
+
+  static auto GetType() -> Type const * { return &type; }
+
+  [[nodiscard]] auto GetSize() const -> size_t {
+    return elementCount * elementStride;
+  }
+
+  [[nodiscard]] auto GetStride() const -> size_t { return elementStride; }
+
+  BufferFormat format;
   size_t elementCount;
   size_t elementStride;
-  BufferInfo layout;
   Ref<Buffer> buffer;
 };
 
-auto CreateStructuredBuffer(GraphicsContext &context, size_t elementCount,
-                            const BufferInfo &layout)
-    -> tl::expected<StructuredBuffer, Error::Error>;
+auto CreateStructuredBuffer(GraphicsContext &context, BufferFormat &format,
+                            size_t elementCount,
+                            VkMemoryPropertyFlags memoryFlags,
+                            VkBufferUsageFlags usageFlags)
+    -> tl::expected<Ref<StructuredBuffer>, Error::Error>;
 
-} // namespace Graphics
+} // namespace Graphics::StructuredBuffer

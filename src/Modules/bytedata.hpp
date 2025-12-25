@@ -63,7 +63,7 @@ public:
   [[nodiscard]] auto GetSize() const -> size_t { return size; }
   auto GetData() -> uint8_t * { return data; }
   [[nodiscard]] auto GetData() const -> const uint8_t * { return data; }
-  [[nodiscard]] auto GetDataSpan() const -> std::span<const uint8_t> {
+  [[nodiscard]] auto GetDataSpan() const -> std::span<uint8_t> {
     return {data, size};
   }
 

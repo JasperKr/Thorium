@@ -2,8 +2,11 @@
 
 #include <cstdint>
 #include <iostream>
+extern "C" {
 #include <lauxlib.h>
 #include <lua.h>
+#include <lualib.h>
+}
 
 #include "Modules/object.hpp"
 #include "Wrap/Graphics/wrap_graphics.hpp"

@@ -1,6 +1,7 @@
 #include "buffer.hpp"
 #include "Graphics/graphics.hpp"
 #include "Graphics/resource.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "graphics.hpp"
 #include <cstdint>
@@ -139,13 +140,16 @@ auto Buffer::UnmapMemory(GraphicsContext &context) -> void {
   mappedData = nullptr;
 }
 
-auto Buffer::Upload(GraphicsContext &context, std::span<const uint8_t> data,
-                    VkDeviceSize offset) -> Error::Error {
+auto Buffer::Upload(GraphicsContext &context,
+                    std::span<const uint8_t> data, // NOLINTNEXTLINE
+                    VkDeviceSize offset, VkDeviceSize size) -> Error::Error {
 
   if (((usage)&VK_BUFFER_USAGE_TRANSFER_DST_BIT) == 0) {
     return Error::Create(
         "Buffer was not created with TRANSFER_DST usage flag for upload.");
   }
+
+  auto uploadSize = size == VK_WHOLE_SIZE ? data.size() : size;
 
   if (isStagingBuffer) {
     // We know this will be a large upload,
@@ -160,18 +164,18 @@ auto Buffer::Upload(GraphicsContext &context, std::span<const uint8_t> data,
 
     // NOLINTNEXTLINE, because of pointer arithmetic
     std::memcpy(static_cast<uint8_t *>(mappedData) + offset, data.data(),
-                data.size());
+                uploadSize);
 
     UnmapMemory(context);
 
     return Error::Success();
   }
 
-  if (data.size() > LargeUploadThreshold) {
+  if (uploadSize > LargeUploadThreshold) {
     // Use staging buffer
     VkBufferCreateInfo stagingBufferInfo = {};
     stagingBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    stagingBufferInfo.size = data.size();
+    stagingBufferInfo.size = uploadSize;
     stagingBufferInfo.usage =
         VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
     stagingBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
@@ -198,7 +202,7 @@ auto Buffer::Upload(GraphicsContext &context, std::span<const uint8_t> data,
       return Error::Create(result);
     }
 
-    std::memcpy(static_cast<uint8_t *>(mapped), data.data(), data.size());
+    std::memcpy(static_cast<uint8_t *>(mapped), data.data(), uploadSize);
     vmaUnmapMemory(context.vmaAllocator, stagingMemory);
 
     auto *commandBuffer = GetCommandBuffer(context, GetCurrentThreadIndex());
@@ -206,7 +210,7 @@ auto Buffer::Upload(GraphicsContext &context, std::span<const uint8_t> data,
     VkBufferCopy copyRegion = {};
     copyRegion.srcOffset = 0;
     copyRegion.dstOffset = offset;
-    copyRegion.size = data.size();
+    copyRegion.size = uploadSize;
     vkCmdCopyBuffer(commandBuffer, stagingBuffer, handle, 1, &copyRegion);
     StagingBufferInfo stagingInfo = {};
     stagingInfo.buffer = stagingBuffer;
@@ -219,14 +223,14 @@ auto Buffer::Upload(GraphicsContext &context, std::span<const uint8_t> data,
     auto uploadBuffer = UploadBuffers.at(context.frameIndex);
     size_t &uploadOffset = UploadBufferOffsets.at(context.frameIndex);
     if (uploadBuffer.get() == nullptr ||
-        uploadBuffer->sizeInBytes < data.size() + uploadOffset) {
+        uploadBuffer->sizeInBytes < uploadSize + uploadOffset) {
       // Create or resize upload buffer
       if (uploadBuffer.get() != nullptr) {
         uploadBuffer->ScheduleDestroy();
       }
 
       size_t newSize = UploadBufferSize;
-      while (newSize < data.size() + uploadOffset) {
+      while (newSize < uploadSize + uploadOffset) {
         newSize *= 2;
       }
 
@@ -257,7 +261,7 @@ auto Buffer::Upload(GraphicsContext &context, std::span<const uint8_t> data,
 
     // NOLINTNEXTLINE, because of pointer arithmetic
     std::memcpy(static_cast<uint8_t *>(uploadBuffer->mappedData) + uploadOffset,
-                data.data(), data.size());
+                data.data(), uploadSize);
 
     uploadBuffer->UnmapMemory(context);
 
@@ -270,10 +274,10 @@ auto Buffer::Upload(GraphicsContext &context, std::span<const uint8_t> data,
     VkBufferCopy copyRegion = {};
     copyRegion.srcOffset = uploadOffset;
     copyRegion.dstOffset = offset;
-    copyRegion.size = data.size();
+    copyRegion.size = uploadSize;
     vkCmdCopyBuffer(commandBuffer, uploadBuffer->handle, handle, 1,
                     &copyRegion);
-    uploadOffset += data.size();
+    uploadOffset += uploadSize;
   }
 
   return Error::Success();
@@ -287,6 +291,17 @@ auto Buffer::Create(GraphicsContext &context, BufferCreationInfo info)
       return tl::unexpected(result);
     }
   }
+
+  if (info.size == 0) {
+    return tl::unexpected(Error::Create("Cannot create buffer with size 0."));
+  }
+
+  if (info.size == VK_WHOLE_SIZE) {
+    return tl::unexpected(
+        Error::Create("Cannot create buffer with size VK_WHOLE_SIZE."));
+  }
+
+  PrintAlways("Creating buffer of size {}", info.size);
 
   auto buffer = Ref<Buffer>::Make();
 
@@ -334,12 +349,12 @@ auto Buffer::Create(GraphicsContext &context, BufferCreationInfo info)
   return buffer;
 }
 
-auto Buffer::SetData(GraphicsContext &context, std::span<const uint8_t> data,
-                     VkDeviceSize offset = 0) -> Error::Error {
+auto Buffer::SetData(GraphicsContext &context,
+                     std::span<const uint8_t> data, // NOLINTNEXTLINE
+                     VkDeviceSize offset = 0, VkDeviceSize size = VK_WHOLE_SIZE)
+    -> Error::Error {
 
-  auto dataSize = data.size();
-
-  auto result = Upload(context, data, offset);
+  auto result = Upload(context, data, offset, size);
   if (Error::IsError(result)) {
     return result;
   }
@@ -374,6 +389,14 @@ auto Buffer::MarkUse(const QueueID queueID, const uint64_t timelineValue)
   }
 
   lastUsedTimelineValues[queueID] = (std::max)(previousValue, timelineValue);
+}
+
+// NOLINTNEXTLINE
+void Buffer::Clear(GraphicsContext &context, uint32_t value,
+                   VkDeviceSize offset, VkDeviceSize size) {
+  auto *commandBuffer = GetCommandBuffer(context, GetCurrentThreadIndex());
+
+  vkCmdFillBuffer(commandBuffer, handle, offset, size, value);
 }
 
 } // namespace Graphics

@@ -1,8 +1,8 @@
 #include "reflect.hpp"
 #include "Graphics/graphics.hpp"
-#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "slang/slang.h"
+#define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
 
 // Resolve path for struct fields is exclusive to the struct resource info

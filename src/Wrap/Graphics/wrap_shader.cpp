@@ -1,14 +1,17 @@
 
 #include "Wrap/Graphics/wrap_shader.hpp"
 #include "Graphics/buffer.hpp"
-#include "Graphics/reflect.hpp"
 #include "Graphics/shader.hpp"
 #include "Modules/bytedata.hpp"
+#include "Wrap/Graphics/wrap_reflection.hpp"
 #include "Wrap/wrap.hpp"
 #include <bit>
 #include <cstdint>
+extern "C" {
 #include <lauxlib.h>
 #include <lua.h>
+#include <lualib.h>
+}
 namespace Graphics::Shader {
 
 // TODO: Add externs input support
@@ -46,32 +49,14 @@ auto wrap_NewShader(lua_State *state) -> int {
   return 1;
 }
 
-// linked list of strings as key and a count of valid entries
-inline auto LoadKey(lua_State *state, int index)
-    -> std::pair<ResourceKey, int32_t> {
-  auto count = lua_gettop(state);
-  ResourceKey root;
-  auto iterator = root.before_begin();
-
-  for (int i = index; i <= count; ++i) {
-    if (lua_type(state, i) == LUA_TSTRING) {
-      iterator = root.insert_after(iterator, luaL_checkstring(state, i));
-    } else {
-      return std::make_pair(root, i - index);
-    }
-  }
-
-  return std::make_pair(root, count);
-}
-
-auto Wrap_Send(lua_State *state) -> int {
+auto wrap_Send(lua_State *state) -> int {
   auto *shader = LuaWrap::FromLuaObject<Shader::ShaderModule>(state, 1);
   if (shader == nullptr) {
     lua_pushboolean(state, 0);
     return 1;
   }
 
-  auto [key, keyCount] = LoadKey(state, 2);
+  auto [key, keyCount] = ResourceKeyFromLua(state, 2);
   if (keyCount == 0) {
     return luaL_error(state, "Invalid uniform name.");
   }
@@ -152,7 +137,7 @@ auto Wrap_Send(lua_State *state) -> int {
   return 0;
 }
 
-auto Wrap_Release(lua_State *state) -> int {
+auto wrap_Release(lua_State *state) -> int {
   auto *shader = LuaWrap::FromLuaObject<Shader::ShaderModule>(state, 1);
   if (shader == nullptr) {
     lua_pushboolean(state, 0);
@@ -163,7 +148,7 @@ auto Wrap_Release(lua_State *state) -> int {
   return 0;
 }
 
-auto Wrap_HasUniform(lua_State *state) -> int {
+auto wrap_HasUniform(lua_State *state) -> int {
   auto *shader = LuaWrap::FromLuaObject<Shader::ShaderModule>(state, 1);
 
   if (shader == nullptr) {
@@ -176,7 +161,7 @@ auto Wrap_HasUniform(lua_State *state) -> int {
   lua_pushboolean(state, 0);
   return 1;
 }
-auto Wrap_GetUniforms(lua_State *state) -> int {
+auto wrap_GetUniforms(lua_State *state) -> int {
   auto *shader = LuaWrap::FromLuaObject<Shader::ShaderModule>(state, 1);
   if (shader == nullptr) {
     lua_pushboolean(state, 0);

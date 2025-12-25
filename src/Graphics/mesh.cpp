@@ -25,12 +25,9 @@ auto Mesh::ScheduleDestroy() -> bool {
   return true;
 }
 
-static auto VertexFormatSize(VertexFormat &format) -> uint32_t {
-  uint32_t size = 0;
-  for (const auto &Attribute : format.GetAttributes()) {
-    size += VkFormatSize(Attribute.format);
-  }
-  return size;
+static auto VertexFormatSize(VertexFormat &format, uint32_t binding)
+    -> uint32_t {
+  return format.GetBindings().at(binding).stride;
 }
 
 auto Mesh::UploadVertices(GraphicsContext &context,
@@ -52,9 +49,9 @@ auto Mesh::Create(GraphicsContext &context, VertexFormat vertexFormat,
   auto meshData = Ref<Mesh>::Make();
   auto *mesh = meshData.get();
 
-  assert(vertexData.size() % VertexFormatSize(vertexFormat) == 0);
+  assert(vertexData.size() % VertexFormatSize(vertexFormat, 0) == 0);
 
-  mesh->VertexCount = vertexData.size() / VertexFormatSize(vertexFormat);
+  mesh->VertexCount = vertexData.size() / VertexFormatSize(vertexFormat, 0);
 
   bool hasIndices = indexData != nullptr;
   mesh->IndexCount = hasIndices ? static_cast<uint32_t>(indexData->size()) : 0;
@@ -236,14 +233,10 @@ auto Mesh::SetIndexBuffer(const Ref<Buffer> &buffer) -> void {
 }
 
 // Disallow: Fan, Geometry, Patch
-constexpr std::array<VkPrimitiveTopology, 7> validTopologies = {
-    VK_PRIMITIVE_TOPOLOGY_POINT_LIST,
-    VK_PRIMITIVE_TOPOLOGY_LINE_LIST,
-    VK_PRIMITIVE_TOPOLOGY_LINE_STRIP,
-    VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+constexpr std::array<VkPrimitiveTopology, 5> validTopologies = {
+    VK_PRIMITIVE_TOPOLOGY_POINT_LIST,     VK_PRIMITIVE_TOPOLOGY_LINE_LIST,
+    VK_PRIMITIVE_TOPOLOGY_LINE_STRIP,     VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
     VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,
-    VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN,
-    VK_PRIMITIVE_TOPOLOGY_LINE_LIST_WITH_ADJACENCY,
 };
 
 auto Mesh::SetTopology(VkPrimitiveTopology topology) -> Error::Error {
@@ -257,6 +250,35 @@ auto Mesh::SetTopology(VkPrimitiveTopology topology) -> Error::Error {
 
   if (!isValid) {
     return Error::Create("Invalid primitive topology for Mesh.");
+  }
+
+  switch (topology) {
+  case VK_PRIMITIVE_TOPOLOGY_LINE_LIST:
+    if (VertexCount % 2 != 0) {
+      return Error::Create(
+          "Line List topology requires an even number of vertices.");
+    }
+    break;
+  case VK_PRIMITIVE_TOPOLOGY_LINE_STRIP:
+    if (VertexCount < 2) {
+      return Error::Create("Line Strip topology requires at least 2 vertices.");
+    }
+    break;
+  case VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST:
+    if (VertexCount % 3 != 0) {
+      return Error::Create("Triangle List topology requires vertex count to be "
+                           "a multiple of 3.");
+    }
+    break;
+  case VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP:
+    if (VertexCount < 3) {
+      return Error::Create(
+          "Triangle Strip topology requires at least 3 vertices.");
+    }
+    break;
+  case VK_PRIMITIVE_TOPOLOGY_POINT_LIST:
+  default:
+    break;
   }
 
   Topology = topology;

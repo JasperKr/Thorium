@@ -3,31 +3,34 @@
 #include "Graphics/mesh.hpp"
 #include "Modules/console.hpp"
 #include "Wrap/wrap.hpp"
+extern "C" {
 #include <lauxlib.h>
 #include <lua.h>
+#include <lualib.h>
+}
 namespace Graphics {
 
-auto Wrap_SetVertices(lua_State *state) -> int;
-auto Wrap_SetIndices(lua_State *state) -> int;
+auto wrap_SetVertices(lua_State *state) -> int;
+auto wrap_SetIndices(lua_State *state) -> int;
 
-auto Wrap_SetVertexBuffer(lua_State *state) -> int;
-auto Wrap_SetIndexBuffer(lua_State *state) -> int;
+auto wrap_SetVertexBuffer(lua_State *state) -> int;
+auto wrap_SetIndexBuffer(lua_State *state) -> int;
 
-auto Wrap_SetDrawRange(lua_State *state) -> int;
-auto Wrap_GetDrawRange(lua_State *state) -> int;
+auto wrap_SetDrawRange(lua_State *state) -> int;
+auto wrap_GetDrawRange(lua_State *state) -> int;
 
 auto wrap_NewMesh(lua_State *state) -> int;
-auto Wrap_Release(lua_State *state) -> int;
+auto wrap_Release(lua_State *state) -> int;
 
 // NOLINTNEXTLINE
 static const luaL_Reg MeshLib[] = {
-    {"setVertices", Wrap_SetVertices},
-    {"setIndices", Wrap_SetIndices},
-    {"setVertexBuffer", Wrap_SetVertexBuffer},
-    {"setIndexBuffer", Wrap_SetIndexBuffer},
-    {"setDrawRange", Wrap_SetDrawRange},
-    {"getDrawRange", Wrap_GetDrawRange},
-    {"release", Wrap_Release},
+    {"setVertices", wrap_SetVertices},
+    {"setIndices", wrap_SetIndices},
+    {"setVertexBuffer", wrap_SetVertexBuffer},
+    {"setIndexBuffer", wrap_SetIndexBuffer},
+    {"setDrawRange", wrap_SetDrawRange},
+    {"getDrawRange", wrap_GetDrawRange},
+    {"release", wrap_Release},
     {nullptr, nullptr} // terminate with nullptr
 };
 

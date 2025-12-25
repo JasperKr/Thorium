@@ -1454,13 +1454,13 @@ auto inline ApplyPassBarriers(VkCommandBuffer commandBuffer,
   shaderStages[1].pName = "main";
 
   auto vertexformat = VertexFormat({
-      VkVertexInputAttributeDescription{
+      VertexComponent{
           .location = 0,
           .binding = 0,
           .format = VK_FORMAT_R32G32B32_SFLOAT,
           .offset = 0,
       },
-      VkVertexInputAttributeDescription{
+      VertexComponent{
           .location = 1,
           .binding = 0,
           .format = VK_FORMAT_R32G32_SFLOAT,
@@ -1476,9 +1476,9 @@ auto inline ApplyPassBarriers(VkCommandBuffer commandBuffer,
   vertexInputInfo.pVertexBindingDescriptions =
       vertexformat.GetBindings().data();
   vertexInputInfo.vertexAttributeDescriptionCount =
-      vertexformat.GetAttributes().size();
+      vertexformat.GetVkAttributes().size();
   vertexInputInfo.pVertexAttributeDescriptions =
-      vertexformat.GetAttributes().data();
+      vertexformat.GetVkAttributes().data();
   VkPipelineInputAssemblyStateCreateInfo inputAssembly = {};
 
   inputAssembly.sType =
@@ -1727,7 +1727,7 @@ auto inline ApplyPassBarriers(VkCommandBuffer commandBuffer,
         // Heuristic size (not actual alloc size)
         auto texels = Image::GetTexelCount(tex->size, tex->mipmapcount);
         texels *= tex->arrayLayers;
-        allocationInfo.size = texels * Image::GetFormatSize(tex->format);
+        allocationInfo.size = texels * Format::GetSize(tex->format);
 
         allocationInfo.alignment = QueryMemoryAlignmentOfTexture(context, tex);
       } else {
@@ -1958,7 +1958,7 @@ auto inline AllocateGraphResourceMemory(GraphicsContext &context,
       auto &texture = std::get<Ref<Texture::Texture>>(resource.info);
       resource.cost =
           Image::GetTexelCount(texture->size, texture->mipmapcount) *
-          Image::GetFormatSize(texture->format);
+          Format::GetSize(texture->format);
 
       resource.cost *= texture->arrayLayers;
     } else if (resource.type == Type::Buffer) {

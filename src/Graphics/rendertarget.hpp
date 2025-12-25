@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <unordered_map>
+#define VK_NO_PROTOTYPES
 #include <vulkan/vulkan_core.h>
 
 namespace Graphics {

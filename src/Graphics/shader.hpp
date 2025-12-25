@@ -119,14 +119,15 @@ struct ShaderModule : Object {
   Slang::ComPtr<slang::IModule> slangModule = nullptr;
   Slang::ComPtr<slang::IComponentType> linkedProgram;
 
-  VertexFormats expectedVertexFormat = VertexFormats::Unknown;
   std::unordered_map<SlangStage, size_t> entryPointToStageIndex;
 
   ShaderReflection reflection;
   std::vector<PushBuffer> pushBuffers;
 
-  std::unordered_map<uint64_t, StructuredBuffer> uniformBuffers;
-  std::unordered_map<uint64_t, StructuredBuffer> storageBuffers;
+  std::unordered_map<uint64_t, Ref<StructuredBuffer::StructuredBuffer>>
+      uniformBuffers;
+  std::unordered_map<uint64_t, Ref<StructuredBuffer::StructuredBuffer>>
+      storageBuffers;
 
   std::unordered_map<uint32_t, VkDescriptorSetLayout> descriptorSetLayouts;
   std::unordered_map<uint32_t, VkDescriptorSet> descriptorSets;
@@ -153,10 +154,6 @@ struct ShaderModule : Object {
 
   void Destroy(VkDevice &device);
   void ReloadMaybe(Graphics::GraphicsContext &context);
-
-  [[nodiscard]] auto GetExpectedVertexFormat() const -> VertexFormats {
-    return expectedVertexFormat;
-  }
 
   auto operator==(const ShaderModule &other) const -> bool {
     return externs == other.externs && moduleName == other.moduleName &&

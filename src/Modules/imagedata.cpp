@@ -1,5 +1,6 @@
 #include "imagedata.hpp"
 #include "Modules/color.hpp"
+#define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
 #include <cstdint>
 #include <cstring>
@@ -311,7 +312,7 @@ static const std::unordered_map<VkFormat, FormatFunctions> formatFunctionMap = {
       }}}};
 
 namespace Image {
-auto ImageData::SetColor(Uvec2 position, const Color &color) -> void {
+auto ImageData::SetColor(Math::Uvec2 position, const Color &color) -> void {
   size_t index = (static_cast<size_t>(position.y) * static_cast<size_t>(width) +
                   static_cast<size_t>(position.x)) *
                  GetFormatSize();
@@ -324,7 +325,7 @@ auto ImageData::SetColor(Uvec2 position, const Color &color) -> void {
   }
 }
 
-auto ImageData::GetColor(Uvec2 position) -> Color & {
+auto ImageData::GetColor(Math::Uvec2 position) -> Color & {
   size_t index = (static_cast<size_t>(position.y) * static_cast<size_t>(width) +
                   static_cast<size_t>(position.x)) *
                  GetFormatSize();

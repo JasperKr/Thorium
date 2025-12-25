@@ -199,3 +199,89 @@ function Thorium.graphics.drawInstanced(mesh, instanceCount) end
 --- @param depth number The depth value to clear to (0-1).
 --- @param stencil number The stencil value to clear to (0-255).
 function Thorium.graphics.clear(r, g, b, a, depth, stencil) end
+
+---@alias Thorium.PrimitiveTopology
+---| "points" # Points.
+---| "lines" # Lines.
+---| "linestrip" # Line strip.
+---| "triangles" # Triangles.
+---| "strip" # Triangle strip.
+
+---@alias Thorium.VertexComponentFormat
+---| "float"
+---| "floatvec2"
+---| "floatvec3"
+---| "floatvec4"
+---
+---| "half"
+---| "halfvec2"
+---| "halfvec3"
+---| "halfvec4"
+---
+---| "uint8"
+---| "uint8vec2"
+---| "uint8vec3"
+---| "uint8vec4"
+---
+---| "uint16"
+---| "uint16vec2"
+---| "uint16vec3"
+---| "uint16vec4"
+---
+---| "uint32"
+---| "uint32vec2"
+---| "uint32vec3"
+---| "uint32vec4"
+---
+---| "int8"
+---| "int8vec2"
+---| "int8vec3"
+---| "int8vec4"
+---
+---| "int16"
+---| "int16vec2"
+---| "int16vec3"
+---| "int16vec4"
+---
+---| "int32"
+---| "int32vec2"
+---| "int32vec3"
+---| "int32vec4"
+---
+---| "unorm8"
+---| "unorm8vec2"
+---| "unorm8vec3"
+---| "unorm8vec4"
+---
+---| "unorm16"
+---| "unorm16vec2"
+---| "unorm16vec3"
+---| "unorm16vec4"
+---
+---| "snorm8"
+---| "snorm8vec2"
+---| "snorm8vec3"
+---| "snorm8vec4"
+---
+---| "snorm16"
+---| "snorm16vec2"
+---| "snorm16vec3"
+---| "snorm16vec4"
+
+--- An object defining a vertex attribute.
+---@alias Thorium.VertexAttribute
+---| {name: string, format: Thorium.VertexComponentFormat, location: integer}
+
+--- An object defining a vertex format.
+---@alias Thorium.VertexFormat
+---| Thorium.VertexAttribute[] An array of vertex attributes defining the vertex format.
+
+--- Creates a mesh.
+--- @overload fun(vertexFormat: Thorium.VertexFormat, vertices: table, topology?: Thorium.PrimitiveTopology, indices?: table): Thorium.Mesh
+--- @overload fun(vertexFormat: Thorium.VertexFormat, vertices: integer, topology?: Thorium.PrimitiveTopology, indices?: integer): Thorium.Mesh
+--- @param vertexFormat Thorium.VertexFormat The vertex format of the mesh.
+--- @param vertices Thorium.Bytedata The vertex data of the mesh.
+--- @param topology Thorium.PrimitiveTopology? The primitive topology of the mesh. Defaults to "triangles".
+--- @param indices Thorium.Bytedata? The index data of the mesh.
+--- @return Thorium.Mesh mesh The created mesh.
+function Thorium.graphics.newMesh(vertexFormat, vertices, topology, indices) end

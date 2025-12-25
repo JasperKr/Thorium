@@ -6,6 +6,8 @@
 #include "Modules/object.hpp"
 #include "Modules/type.hpp"
 #include "graphics.hpp"
+
+#define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
 #include <algorithm>
 #include <cstdint>

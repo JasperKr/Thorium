@@ -13,6 +13,7 @@
 #include "slang/slang-com-ptr.h"
 #include "slang/slang.h"
 #include "tl/expected.hpp"
+#define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
 #include <cassert>
 #include <cstddef>
@@ -75,7 +76,6 @@ auto LoadModule() -> Error::Error {
   }
 
   DefaultShaderModule = shaderCreationResult.value();
-  DefaultShaderModule->expectedVertexFormat = VertexFormats::Default2D;
 
   return Error::Success();
 }
@@ -630,10 +630,6 @@ auto ShaderModule::FlushBuffers(GraphicsContext &context,
   {
     // UBO buffer can be resized, we update every frame for now;
     VkDescriptorBufferInfo bufferInfo{};
-
-    PrintAlways("Flushing global UBO of size {} bytes, Offset: {}.",
-                buffer.GetLastFlushSize(),
-                buffer.GetOffset() - buffer.GetLastFlushSize());
 
     bufferInfo.buffer = buffer.GetBuffer().get()->handle;
     bufferInfo.offset = buffer.GetOffset() - buffer.GetLastFlushSize();

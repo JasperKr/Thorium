@@ -10,6 +10,7 @@
 #include "Modules/object.hpp"
 #include "slang/slang.h"
 #include "tl/expected.hpp"
+#define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
 #include <algorithm>
 #include <array>
@@ -342,7 +343,7 @@ inline auto GetVertexInputState(State &state)
   vertexInputInfo.vertexAttributeDescriptionCount =
       state.vertexFormat.GetAttributes().size();
   vertexInputInfo.pVertexAttributeDescriptions =
-      state.vertexFormat.GetAttributes().data();
+      state.vertexFormat.GetVkAttributes().data();
 
   vertexInputStateCache[state.vertexFormat] = vertexInputInfo;
 
@@ -751,6 +752,25 @@ auto Flush(GraphicsContext &context) -> tl::expected<bool, Error::Error> {
   // Unset current rendering, otherwise vkCmdPipelineBarrier will fail
   EndRendering(context);
 
+  auto viewport = GetClippedViewport();
+
+  auto translationMatrix = Math::Matrix4x4::TranslationMatrix(
+      {-viewport.width / 2.0F, -viewport.height / 2.0F, 0.0F}); // NOLINT
+
+  Math::Matrix4x4 projectionMatrix = Math::Matrix4x4::Orthographic(
+      viewport.width, viewport.height, 0.0F, 1.0F);
+
+  auto viewProjectionMatrix = projectionMatrix * translationMatrix;
+
+  PrintDebug("Sending projection matrix to shader");
+
+  auto sendErr = currentState.shader->Send(context, {"DefaultProjectionMatrix"},
+                                           viewProjectionMatrix.AsByteSpan());
+  if (Error::IsError(sendErr)) {
+    PrintError("Failed to send projection matrix to shader: {}",
+               sendErr.message);
+  }
+
   auto error =
       currentState.shader->FlushBuffers(context, pipelineResult.value().second);
   if (Error::IsError(error)) {
@@ -790,23 +810,6 @@ inline auto BeginRendering(GraphicsContext &context) -> void {
 
   auto viewport = GetClippedViewport();
   auto scissor = GetScissor();
-
-  auto translationMatrix = Math::Matrix4x4::TranslationMatrix(
-      {-viewport.width / 2.0F, -viewport.height / 2.0F, 0.0F}); // NOLINT
-
-  Math::Matrix4x4 projectionMatrix = Math::Matrix4x4::Orthographic(
-      viewport.width, viewport.height, 0.0F, 1.0F);
-
-  auto viewProjectionMatrix = projectionMatrix * translationMatrix;
-
-  PrintDebug("Sending projection matrix to shader");
-
-  auto sendErr = currentState.shader->Send(context, {"DefaultProjectionMatrix"},
-                                           viewProjectionMatrix.AsByteSpan());
-  if (Error::IsError(sendErr)) {
-    PrintError("Failed to send projection matrix to shader: {}",
-               sendErr.message);
-  }
 
   renderingInfo.renderArea.offset = {.x = 0, .y = 0};
   renderingInfo.renderArea.extent = GetRenderExtent(context, currentState);
