@@ -24,6 +24,8 @@ public:
 
     BufferCreationInfo info{};
     info.size = size;
+    info.PersistentMapping = true;
+    info.IsStagingBuffer = true;
     info.properties =
         static_cast<uint32_t>(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) |
         static_cast<uint32_t>(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) |
@@ -71,6 +73,8 @@ public:
 
       Graphics::BufferCreationInfo info{};
       info.size = size;
+      info.PersistentMapping = true;
+      info.IsStagingBuffer = true;
       info.properties =
           static_cast<uint32_t>(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) |
           static_cast<uint32_t>(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) |
