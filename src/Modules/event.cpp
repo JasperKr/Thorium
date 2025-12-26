@@ -50,15 +50,15 @@ auto Pull() -> void {
   }
 }
 
-auto Pop() -> SDL_Event * {
+auto Pop() -> std::optional<SDL_Event> {
   if (events.empty()) {
-    return nullptr;
+    return std::nullopt;
   }
 
-  SDL_Event &event = events.front();
+  SDL_Event event = events.front();
   events.pop();
 
-  return &event;
+  return event;
 }
 
 auto Quit() -> void { MainLoopRunning = false; }

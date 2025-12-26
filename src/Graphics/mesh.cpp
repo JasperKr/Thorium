@@ -31,18 +31,24 @@ static auto VertexFormatSize(VertexFormat &format, uint32_t binding)
 }
 
 auto Mesh::UploadVertices(GraphicsContext &context,
-                          std::span<uint8_t> &vertices, uint64_t offset)
+                          const std::span<uint8_t> &vertices, uint64_t offset)
     -> Error::Error {
   return VertexBuffer->SetData(context, vertices, offset);
 }
 
-auto Mesh::UploadIndices(GraphicsContext &context, std::span<uint32_t> &indices,
-                         uint64_t offset) -> Error::Error {
-  return IndexBuffer->SetData(context, indices, offset);
+auto Mesh::UploadIndices(GraphicsContext &context,
+                         const std::span<uint32_t> &indices, uint64_t offset)
+    -> Error::Error {
+
+  auto uint8Span = // NOLINTNEXTLINE
+      std::span<uint8_t>(reinterpret_cast<uint8_t *>(indices.data()),
+                         indices.size() * sizeof(uint32_t));
+
+  return IndexBuffer->SetData(context, uint8Span, offset);
 }
 
 auto Mesh::Create(GraphicsContext &context, VertexFormat vertexFormat,
-                  std::span<uint8_t> &vertexData,
+                  const std::span<uint8_t> &vertexData,
                   std::vector<uint32_t> *indexData)
     -> tl::expected<Ref<Mesh>, Error::Error> {
 
@@ -99,8 +105,6 @@ auto Mesh::Create(GraphicsContext &context, VertexFormat vertexFormat,
   mesh->DrawRange.Offset = 0;
   mesh->DrawRange.Count =
       mesh->IndexCount > 0 ? mesh->IndexCount : vertexData.size();
-
-  auto vertexSpan = std::span<uint8_t>(vertexData.data(), vertexData.size());
 
   Error::Error error = mesh->UploadVertices(context, vertexData, 0);
 
@@ -216,12 +220,14 @@ auto Mesh::DrawInstanced(GraphicsContext &context, uint32_t instanceCount) const
   return Error::Success();
 }
 
-auto Mesh::SetVertices(GraphicsContext &context, std::span<uint8_t> &vertexData,
-                       uint64_t offset) -> Error::Error {
+auto Mesh::SetVertices(GraphicsContext &context,
+                       const std::span<uint8_t> &vertexData, uint64_t offset)
+    -> Error::Error {
   return UploadVertices(context, vertexData, offset);
 }
-auto Mesh::SetIndices(GraphicsContext &context, std::span<uint32_t> &indexData,
-                      uint64_t offset) -> Error::Error {
+auto Mesh::SetIndices(GraphicsContext &context,
+                      const std::span<uint32_t> &indexData, uint64_t offset)
+    -> Error::Error {
   return UploadIndices(context, indexData, offset);
 }
 
@@ -252,26 +258,28 @@ auto Mesh::SetTopology(VkPrimitiveTopology topology) -> Error::Error {
     return Error::Create("Invalid primitive topology for Mesh.");
   }
 
+  auto count = IndexCount > 0 ? IndexCount : VertexCount;
+
   switch (topology) {
   case VK_PRIMITIVE_TOPOLOGY_LINE_LIST:
-    if (VertexCount % 2 != 0) {
+    if (count % 2 != 0) {
       return Error::Create(
           "Line List topology requires an even number of vertices.");
     }
     break;
   case VK_PRIMITIVE_TOPOLOGY_LINE_STRIP:
-    if (VertexCount < 2) {
+    if (count < 2) {
       return Error::Create("Line Strip topology requires at least 2 vertices.");
     }
     break;
   case VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST:
-    if (VertexCount % 3 != 0) {
+    if (count % 3 != 0) {
       return Error::Create("Triangle List topology requires vertex count to be "
                            "a multiple of 3.");
     }
     break;
   case VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP:
-    if (VertexCount < 3) {
+    if (count < 3) {
       return Error::Create(
           "Triangle Strip topology requires at least 3 vertices.");
     }

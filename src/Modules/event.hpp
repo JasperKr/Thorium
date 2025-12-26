@@ -1,4 +1,5 @@
 #include "SDL3/SDL_events.h"
+#include <optional>
 namespace Event {
 // NOLINTNEXTLINE
 extern bool MainLoopRunning;
@@ -14,5 +15,5 @@ auto OnTextEditEvent(const SDL_TextEditingEvent &textEditEvent) -> void;
 auto OnTextInputEvent(const SDL_TextInputEvent &textInputEvent) -> void;
 
 auto Pull() -> void;
-auto Pop() -> SDL_Event *;
+auto Pop() -> std::optional<SDL_Event>;
 } // namespace Event

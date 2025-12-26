@@ -149,6 +149,9 @@ struct ShaderModule : Object {
   auto Send(GraphicsContext &context, const ResourceKey &key,
             Graphics::Texture::Texture *texture) -> Error::Error;
 
+  auto GetUniform(const ResourceKey &key) const
+      -> tl::expected<const ResourceInfo, Error::Error>;
+
   auto FlushBuffers(GraphicsContext &context, VkPipelineLayout layout)
       -> Error::Error;
 

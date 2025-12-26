@@ -481,6 +481,37 @@ void append(ResourceKey &dest, const ResourceKey &src) {
   dest.insert_after(iterator, src.begin(), src.end());
 }
 
+auto ShaderModule::GetUniform(const ResourceKey &key) const
+    -> tl::expected<const ResourceInfo, Error::Error> {
+  for (const auto &pushBuffer : pushBuffers) {
+    PrintDebug("Checking push buffer {} for key: {}...",
+               pushBuffer.GetLayout().name, ResourceKeyToString(key));
+    if (pushBuffer.ContainsUniform(key.begin(), key.end())) {
+      const auto *const info =
+          pushBuffer.GetLayout().ResolvePath(key.begin(), key.end());
+      if (info == nullptr) {
+        return tl::unexpected(
+            Error::Create("Uniform not found in push buffer."));
+      }
+      return *info;
+    }
+  }
+
+  // check global ubo
+  ResourceKey globalsKey = {"Globals"};
+  append(globalsKey, key);
+  PrintDebug("Checking global UBO for key: {}...",
+             ResourceKeyToString(globalsKey));
+
+  const auto *info =
+      reflection.globals.ResolvePath(globalsKey.begin(), globalsKey.end());
+  if (info == nullptr) {
+    return tl::unexpected(Error::Create("Uniform not found."));
+  }
+
+  return *info;
+}
+
 auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
                         const std::span<const uint8_t> &data) -> Error::Error {
   for (auto &pushBuffer : pushBuffers) {
@@ -497,7 +528,7 @@ auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
   PrintDebug("Checking global UBO for key: {}...",
              ResourceKeyToString(globalsKey));
 
-  auto *info =
+  const auto *info =
       reflection.globals.ResolvePath(globalsKey.begin(), globalsKey.end());
   if (info == nullptr) {
     return Error::Create("Uniform not found.");

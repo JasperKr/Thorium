@@ -6,6 +6,7 @@
 #include "Modules/object.hpp"
 #include "Modules/type.hpp"
 #include "color.hpp"
+#include <cassert>
 #define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
 #include <cstddef>
@@ -22,7 +23,17 @@ public:
   auto Copy(const ImageData &source) -> void;
   auto GetDataPtr() -> uint8_t * { return data.data(); }
   [[nodiscard]] auto GetSize() const -> size_t { return data.size(); }
-  auto GetData() -> const std::vector<uint8_t> & { return data; }
+  auto GetData() -> std::vector<uint8_t> & { return data; }
+  auto GetSpan(size_t offset = 0, size_t range = 0) -> std::span<uint8_t> {
+    if (range == 0) {
+      range = data.size() - offset;
+    }
+
+    assert(offset + range <= data.size());
+
+    // NOLINTNEXTLINE, pointer arithmetic
+    return {data.data() + offset, range};
+  }
   [[nodiscard]] auto GetWidth() const -> uint32_t { return width; }
   [[nodiscard]] auto GetHeight() const -> uint32_t { return height; }
   [[nodiscard]] auto GetFormat() const -> VkFormat { return format; }

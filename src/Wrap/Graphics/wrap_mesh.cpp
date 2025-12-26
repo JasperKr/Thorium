@@ -15,6 +15,7 @@ extern "C" {
 #include <unordered_map>
 #include <vector>
 #define VK_NO_PROTOTYPES
+#include <cmath>
 #include <vulkan/vulkan_core.h>
 
 namespace Graphics {
@@ -180,10 +181,14 @@ auto wrap_GetDrawRange(lua_State *state) -> int {
   { name = "name", format = "uint32", location = 1 },
 }
 */
-inline auto VertexFormatFromLua(lua_State *state, int index) -> VertexFormat {
+inline auto VertexFormatFromLua(lua_State *state, int index,
+                                VertexFormat &format) -> int {
   luaL_checktype(state, index, LUA_TTABLE);
 
   std::vector<VertexComponent> attributes;
+
+  // Copy table to top of stack
+  lua_pushvalue(state, index);
 
   // loop over list-like table
   lua_pushnil(state);                   // first key, [table, nil]
@@ -193,17 +198,26 @@ inline auto VertexFormatFromLua(lua_State *state, int index) -> VertexFormat {
 
     // Name
     lua_getfield(state, -1, "name");
+    if (lua_isstring(state, -1) == 0) {
+      return luaL_error(state, "Vertex attribute missing name field.");
+    }
     const char *name = luaL_checkstring(state, -1);
     lua_pop(state, 1); // pop name
 
     // Format
     lua_getfield(state, -1, "format");
+    if (lua_isstring(state, -1) == 0) {
+      return luaL_error(state, "Vertex attribute missing format field.");
+    }
     const char *formatStr = luaL_checkstring(state, -1);
     auto dataFormat = Format::VertexFormatStringToVkFormat(formatStr);
     lua_pop(state, 1); // pop format
 
     // Location
     lua_getfield(state, -1, "location");
+    if (lua_isnumber(state, -1) == 0) {
+      return luaL_error(state, "Vertex attribute missing location field.");
+    }
     int location = static_cast<int>(luaL_checkinteger(state, -1));
     lua_pop(state, 1); // pop location
 
@@ -217,9 +231,11 @@ inline auto VertexFormatFromLua(lua_State *state, int index) -> VertexFormat {
 
     lua_pop(state, 1); // pop value, keep key for next iteration
   }
-  lua_pop(state, 1); // pop key
+  lua_pop(state, 1); // pop key and table copy
 
-  return VertexFormat(attributes);
+  format = VertexFormat(attributes);
+
+  return 0;
 }
 
 struct ReadInfo {
@@ -403,11 +419,19 @@ const std::unordered_map<VkFormat, ReadInfo> formatReadInfo = {
 
 auto inline ReadVertex(lua_State *state, int index, VertexFormat &format,
                        std::span<uint8_t> destination, size_t &writeOffset)
-    -> void {
+    -> int {
+
+  if (index < 0) {
+    index = lua_gettop(state) + index + 1;
+  }
+
+  auto offset = 1;
+
   for (const auto &attribute : format.GetAttributes()) {
     auto iterator = formatReadInfo.find(attribute.format);
     if (iterator == formatReadInfo.end()) {
-      luaL_error(state, "Unsupported vertex attribute format for reading.");
+      return luaL_error(state,
+                        "Unsupported vertex attribute format for reading.");
     }
 
     const auto &readInfo = iterator->second;
@@ -415,12 +439,15 @@ auto inline ReadVertex(lua_State *state, int index, VertexFormat &format,
 
     for (int i = 0; i < readInfo.count; ++i) {
       auto localWriteOffset = writeOffset + (i * readSize);
-      readInfo.read(state, index,
-                    destination.subspan(localWriteOffset, readSize));
+      lua_rawgeti(state, index, offset++);
+      readInfo.read(state, -1, destination.subspan(localWriteOffset, readSize));
+      lua_pop(state, 1); // pop value
     }
 
     writeOffset += readInfo.count * readSize;
   }
+
+  return 0;
 }
 
 // "triangles" | "strip" | "lines" | "linestrip" | "points"
@@ -451,6 +478,7 @@ inline auto PrimitiveTopologyFromLua(lua_State *state, int index)
 // vertexFormat, vertex count, [topology], [index count]
 // vertexFormat, bytedata(vertices), [topology], [bytedata(indices)]
 // vertexFormat, table(vertices), [topology], [table(indices)]
+// NOLINTNEXTLINE
 auto wrap_NewMesh(lua_State *state) -> int {
   auto *ctx = Graphics::GetCurrentGraphicsContext();
 
@@ -458,10 +486,14 @@ auto wrap_NewMesh(lua_State *state) -> int {
     return luaL_error(state, "No current GraphicsContext.");
   }
 
-  auto vertexFormat = VertexFormatFromLua(state, 1);
+  VertexFormat vertexFormat;
+  auto result = VertexFormatFromLua(state, 1, vertexFormat);
+  if (result != 0) {
+    return result;
+  }
 
   std::span<uint8_t> vertexData;
-  std::vector<uint32_t> *indexData = nullptr;
+  std::vector<uint8_t> vertexStorage;
   std::vector<uint32_t> indexDataStorage;
   VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 
@@ -474,13 +506,10 @@ auto wrap_NewMesh(lua_State *state) -> int {
 
     vertexData = byteData->GetDataSpan();
   } else if (lua_type(state, 2) == LUA_TTABLE) {
-    luaL_checktype(state, 2, LUA_TTABLE);
-
     size_t vertexCount = lua_objlen(state, 2);
     size_t stride = vertexFormat.GetStride(0);
     size_t writeOffset = 0;
 
-    std::vector<uint8_t> vertexStorage;
     vertexStorage.resize(vertexCount * stride);
     vertexData = std::span<uint8_t>(vertexStorage.data(), vertexStorage.size());
 
@@ -492,6 +521,12 @@ auto wrap_NewMesh(lua_State *state) -> int {
 
       lua_pop(state, 1); // pop vertex table
     }
+
+    for (int i = 0; i < vertexStorage.size() / sizeof(float); ++i) {
+      float value = NAN; // NOLINTNEXTLINE
+      std::memcpy(&value, vertexStorage.data() + (i * sizeof(float)),
+                  sizeof(float));
+    }
   } else {
     return luaL_error(state, "Expected ByteData or table as second argument");
   }
@@ -501,8 +536,11 @@ auto wrap_NewMesh(lua_State *state) -> int {
     topology = PrimitiveTopologyFromLua(state, 3);
   }
 
+  bool hasIndexData = false;
+
   // Index data
   if (lua_gettop(state) >= 4) {
+    hasIndexData = true;
     if (lua_type(state, 4) == LUA_TUSERDATA) {
       auto *byteData = LuaWrap::FromLuaObject<Data::ByteData>(state, 4);
       if (byteData == nullptr) {
@@ -512,27 +550,34 @@ auto wrap_NewMesh(lua_State *state) -> int {
       auto span = byteData->GetDataSpan();
       indexDataStorage.resize(span.size() / sizeof(uint32_t));
       std::memcpy(indexDataStorage.data(), span.data(), span.size());
-      indexData = &indexDataStorage;
-      ;
     } else if (lua_type(state, 4) == LUA_TTABLE) {
       luaL_checktype(state, 4, LUA_TTABLE);
 
       size_t indexCount = lua_objlen(state, 4);
-      indexDataStorage.resize(indexCount);
+      indexDataStorage.reserve(indexCount);
 
       for (int i = 0; i < indexCount; ++i) {
-        lua_rawgeti(state, 4, i + 1); // [table, index]
-        indexDataStorage[i] =
-            static_cast<uint32_t>(luaL_checkinteger(state, -1));
+        lua_rawgeti(state, 4, i + 1);                  // [table, index]
+        auto value = luaL_checkinteger(state, -1) - 1; // Lua to C index
+        if (value < 0) {
+          return luaL_error(state, "Index values must be 1 or greater.");
+        }
+        indexDataStorage.emplace_back(static_cast<uint32_t>(value));
         lua_pop(state, 1); // pop index
       }
-      indexData = &indexDataStorage;
     } else {
       return luaL_error(state, "Expected ByteData or table as fourth argument");
     }
   }
 
-  auto meshResult = Mesh::Create(*ctx, vertexFormat, vertexData, indexData);
+  tl::expected<Ref<Mesh>, Error::Error> meshResult;
+
+  if (!hasIndexData) {
+    meshResult = Mesh::Create(*ctx, vertexFormat, vertexData, nullptr);
+  } else {
+    meshResult =
+        Mesh::Create(*ctx, vertexFormat, vertexData, &indexDataStorage);
+  }
 
   if (Error::IsError(meshResult)) {
     return luaL_error(state, "%s", meshResult.error().message.c_str());

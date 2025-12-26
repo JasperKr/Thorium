@@ -13,4 +13,7 @@ cmake -G Ninja -DCMAKE_CXX_COMPILER=clang++ -B build \
 
 cmake --build build
 
-./build/Thorium
+# if second argument is "run", run the built executable
+if [ "$2" == "run" ]; then
+  ./build/Thorium
+fi

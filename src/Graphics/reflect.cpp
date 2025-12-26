@@ -8,11 +8,11 @@
 // Resolve path for struct fields is exclusive to the struct resource info
 // Since structs are nameless and their name is only described by the parent resource info
 auto StructInfo::ResolvePath(ResourceKey::const_iterator iterator,
-                             ResourceKey::const_iterator end)
-    -> ResourceInfo * {
-  ResourceInfo *field = nullptr;
+                             ResourceKey::const_iterator end) const
+    -> const ResourceInfo * {
+  const ResourceInfo *field = nullptr;
 
-  for (auto &currentField : fields) {
+  for (const auto &currentField : fields) {
     if (currentField.name == *iterator) {
       field = &currentField;
       break;
@@ -35,8 +35,8 @@ auto StructInfo::ResolvePath(ResourceKey::const_iterator iterator,
 }
 
 auto ResourceInfo::ResolvePath(ResourceKey::const_iterator iterator,
-                               ResourceKey::const_iterator end)
-    -> ResourceInfo * {
+                               ResourceKey::const_iterator end) const
+    -> const ResourceInfo * {
   // Last element and name does not match, return nullptr
   if (iterator == end || *iterator != name) {
     return nullptr;
@@ -52,13 +52,13 @@ auto ResourceInfo::ResolvePath(ResourceKey::const_iterator iterator,
     return nullptr;
   }
 
-  auto &structInfo = std::get<StructInfo>(info);
+  const auto &structInfo = std::get<StructInfo>(info);
   return structInfo.ResolvePath(std::next(iterator), end);
 }
 
 auto BufferInfo::ResolvePath(ResourceKey::const_iterator iterator,
-                             ResourceKey::const_iterator end)
-    -> ResourceInfo * {
+                             ResourceKey::const_iterator end) const
+    -> const ResourceInfo * {
   if (std::next(iterator) == end) {
     return nullptr;
   }
@@ -67,7 +67,7 @@ auto BufferInfo::ResolvePath(ResourceKey::const_iterator iterator,
     return nullptr;
   }
 
-  auto &structInfo = std::get<StructInfo>(info);
+  const auto &structInfo = std::get<StructInfo>(info);
   return structInfo.ResolvePath(std::next(iterator), end);
 }
 

@@ -163,8 +163,9 @@ struct StructInfo {
   uint32_t size;
   uint32_t alignment;
 
-  auto ResolvePath(ResourceKey::const_iterator iterator,
-                   ResourceKey::const_iterator end) -> ResourceInfo *;
+  [[nodiscard]] auto ResolvePath(ResourceKey::const_iterator iterator,
+                                 ResourceKey::const_iterator end) const
+      -> const ResourceInfo *;
 };
 
 enum class BufferType : uint8_t {
@@ -210,8 +211,8 @@ struct BufferInfo {
   std::variant<StructInfo, ScalarInfo, VectorInfo, MatrixInfo> info;
 
   [[nodiscard]] auto ResolvePath(ResourceKey::const_iterator iterator,
-                                 ResourceKey::const_iterator end)
-      -> ResourceInfo *;
+                                 ResourceKey::const_iterator end) const
+      -> const ResourceInfo *;
 };
 
 struct ResourceInfo {
@@ -293,12 +294,34 @@ struct ResourceInfo {
     return 0;
   }
   [[nodiscard]] auto ResolvePath(ResourceKey::const_iterator iterator,
-                                 ResourceKey::const_iterator end)
-      -> ResourceInfo *;
+                                 ResourceKey::const_iterator end) const
+      -> const ResourceInfo *;
 
   std::variant<SamplerInfo, ScalarInfo, VectorInfo, MatrixInfo, BufferInfo,
                StructInfo>
       info;
+
+  [[nodiscard]] auto GetTypename() const -> std::string {
+    if (IsBuffer()) {
+      return "Buffer";
+    }
+    if (IsSampler()) {
+      return "Sampler";
+    }
+    if (IsStruct()) {
+      return "Struct";
+    }
+    if (IsScalar()) {
+      return "Scalar";
+    }
+    if (IsVector()) {
+      return "Vector";
+    }
+    if (IsMatrix()) {
+      return "Matrix";
+    }
+    return "Unknown";
+  }
 };
 
 struct ShaderReflection {

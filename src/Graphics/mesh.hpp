@@ -25,7 +25,7 @@ struct Mesh : Object {
   auto ScheduleDestroy() -> bool override;
 
   static auto Create(GraphicsContext &context, VertexFormat vertexFormat,
-                     std::span<uint8_t> &vertexData,
+                     const std::span<uint8_t> &vertexData,
                      std::vector<uint32_t> *indexData)
       -> tl::expected<Ref<Mesh>, Error::Error>;
 
@@ -49,10 +49,12 @@ struct Mesh : Object {
   auto DrawInstanced(GraphicsContext &context, uint32_t instanceCount) const
       -> Error::Error;
 
-  auto SetVertices(GraphicsContext &context, std::span<uint8_t> &vertexData,
-                   uint64_t offset = 0) -> Error::Error;
-  auto SetIndices(GraphicsContext &context, std::span<uint32_t> &indexData,
-                  uint64_t offset = 0) -> Error::Error;
+  auto SetVertices(GraphicsContext &context,
+                   const std::span<uint8_t> &vertexData, uint64_t offset = 0)
+      -> Error::Error;
+  auto SetIndices(GraphicsContext &context,
+                  const std::span<uint32_t> &indexData, uint64_t offset = 0)
+      -> Error::Error;
 
   auto SetVertexBuffer(const Ref<Buffer> &buffer) -> void;
   auto SetIndexBuffer(const Ref<Buffer> &buffer) -> void;
@@ -60,10 +62,12 @@ struct Mesh : Object {
   static auto GetType() -> Type const * { return &meshType; }
 
 private:
-  auto UploadVertices(GraphicsContext &context, std::span<uint8_t> &vertices,
-                      uint64_t offset) -> Error::Error;
-  auto UploadIndices(GraphicsContext &context, std::span<uint32_t> &indices,
-                     uint64_t offset) -> Error::Error;
+  auto UploadVertices(GraphicsContext &context,
+                      const std::span<uint8_t> &vertices, uint64_t offset)
+      -> Error::Error;
+  auto UploadIndices(GraphicsContext &context,
+                     const std::span<uint32_t> &indices, uint64_t offset)
+      -> Error::Error;
 
   void Bind(VkCommandBuffer cmdBuffer) const;
 

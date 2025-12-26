@@ -488,8 +488,6 @@ inline auto CreatePipeline(const GraphicsContext &context, State &state)
   }
 
   PrintDebug("Creating graphics pipeline");
-  PrintWarning("Rendertarget count starting out: {}",
-               state.renderTargets.size());
 
   auto shaderStagesResult = GetShaderStages(state);
   if (Error::IsError(shaderStagesResult)) {
@@ -620,9 +618,6 @@ inline auto CreatePipeline(const GraphicsContext &context, State &state)
   auto error = Error::Create(vkCreateGraphicsPipelines(
       context.device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline));
 
-  PrintWarning("Rendertarget count after creation: {}",
-               state.renderTargets.size());
-
   PipelineCache[state] = {pipeline, layoutResult.value()};
 
   if (Error::IsError(error)) {
@@ -713,7 +708,7 @@ auto Push(GraphicsContext &context) -> void {
 }
 
 auto Pop(GraphicsContext &context) -> Error::Error {
-  if (StateStack.size() <= 1) {
+  if (StateStack.size() <= 1 || StateStack.empty()) {
     return Error::Create("More pops than pushes.");
   }
 

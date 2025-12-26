@@ -62,8 +62,14 @@ auto LoadBufferModule(GraphicsContext &context) -> Error::Error {
 
 auto UnloadBufferModule(GraphicsContext &context) -> Error::Error {
   for (auto &stagingBuffer : StagingBuffers) {
-    vmaDestroyBuffer(context.vmaAllocator, stagingBuffer.buffer,
-                     stagingBuffer.memory);
+    if (stagingBuffer.buffer != VK_NULL_HANDLE) {
+      if (stagingBuffer.memory != VK_NULL_HANDLE) {
+        vmaUnmapMemory(context.vmaAllocator, stagingBuffer.memory);
+      }
+
+      vmaDestroyBuffer(context.vmaAllocator, stagingBuffer.buffer,
+                       stagingBuffer.memory);
+    }
   }
   StagingBuffers.clear();
 
@@ -97,6 +103,9 @@ auto FlushBufferUploads(GraphicsContext &context) -> Error::Error {
   while (stagingBufferIterator != StagingBuffers.end()) {
     if (stagingBufferIterator->timelineValue <= completedValue) {
       // Upload completed, destroy staging buffer
+      if (stagingBufferIterator->memory != VK_NULL_HANDLE) {
+        vmaUnmapMemory(context.vmaAllocator, stagingBufferIterator->memory);
+      }
       vmaDestroyBuffer(context.vmaAllocator, stagingBufferIterator->buffer,
                        stagingBufferIterator->memory);
       stagingBufferIterator = StagingBuffers.erase(stagingBufferIterator);
@@ -123,9 +132,10 @@ auto Buffer::MapMemory(GraphicsContext &context) -> Error::Error {
                          "mappedData is null.");
   }
 
-  auto result = vmaMapMemory(context.vmaAllocator, this->memory, &mappedData);
-  if (result != VK_SUCCESS) {
-    return Error::Create(result);
+  auto result = Error::Create(
+      vmaMapMemory(context.vmaAllocator, this->memory, &mappedData));
+  if (Error::IsError(result)) {
+    return result;
   }
 
   return Error::Success();
@@ -301,8 +311,6 @@ auto Buffer::Create(GraphicsContext &context, BufferCreationInfo info)
         Error::Create("Cannot create buffer with size VK_WHOLE_SIZE."));
   }
 
-  PrintAlways("Creating buffer of size {}", info.size);
-
   auto buffer = Ref<Buffer>::Make();
 
   buffer->isStagingBuffer = info.IsStagingBuffer;
@@ -333,11 +341,15 @@ auto Buffer::Create(GraphicsContext &context, BufferCreationInfo info)
   buffer->usage = info.usage;
   buffer->properties = info.properties;
 
+  PrintDebug("Buffer created with handle {}", (void *)buffer->handle);
+
   VmaAllocationInfo memRequirements;
   vmaGetAllocationInfo(context.vmaAllocator, buffer->memory, &memRequirements);
   buffer->sizeInBytes = memRequirements.size;
 
   if (info.PersistentMapping) {
+    PrintDebug("Persistently mapping buffer memory.");
+
     result =
         vmaMapMemory(context.vmaAllocator, buffer->memory, &buffer->mappedData);
     if (result != VK_SUCCESS) {
@@ -346,13 +358,14 @@ auto Buffer::Create(GraphicsContext &context, BufferCreationInfo info)
     }
   }
 
+  PrintDebug("Buffer size in bytes: {}", buffer->sizeInBytes);
+
   return buffer;
 }
 
 auto Buffer::SetData(GraphicsContext &context,
-                     std::span<const uint8_t> data, // NOLINTNEXTLINE
-                     VkDeviceSize offset = 0, VkDeviceSize size = VK_WHOLE_SIZE)
-    -> Error::Error {
+                     const std::span<uint8_t> &data, // NOLINTNEXTLINE
+                     VkDeviceSize offset, VkDeviceSize size) -> Error::Error {
 
   auto result = Upload(context, data, offset, size);
   if (Error::IsError(result)) {
@@ -367,6 +380,9 @@ auto Buffer::SetData(GraphicsContext &context,
 }
 
 auto Buffer::Destroy(GraphicsContext &context) const -> void {
+  if (persistentMapping && mappedData != nullptr) {
+    vmaUnmapMemory(context.vmaAllocator, memory);
+  }
   vmaDestroyBuffer(context.vmaAllocator, handle, memory);
 }
 

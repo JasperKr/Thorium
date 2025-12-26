@@ -1,6 +1,7 @@
 
 #include "Wrap/Graphics/wrap_shader.hpp"
 #include "Graphics/buffer.hpp"
+#include "Graphics/reflect.hpp"
 #include "Graphics/shader.hpp"
 #include "Modules/bytedata.hpp"
 #include "Wrap/Graphics/wrap_reflection.hpp"
@@ -130,8 +131,15 @@ auto wrap_Send(lua_State *state) -> int {
       return luaL_error(state, "%s", result.message.c_str());
     }
   } else {
+    const auto resourceInfo = shader->GetUniform(key);
+    if (Error::IsError(resourceInfo)) {
+      return luaL_error(state, "%s", resourceInfo.error().message.c_str());
+    }
 
-    return luaL_error(state, "Unsupported uniform type.");
+    return luaL_error(state, "Unable to send uniform `%s`: expected %s, got %s",
+                      ResourceKeyToString(key).c_str(),
+                      resourceInfo->GetTypename().c_str(),
+                      luaL_typename(state, valueOffset));
   }
 
   return 0;

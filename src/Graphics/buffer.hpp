@@ -80,34 +80,9 @@ struct Buffer : Object {
   }
 
   // Set data into the buffer at the given offset
-  auto SetData(GraphicsContext &context, std::span<const uint8_t> data,
-               VkDeviceSize offset, VkDeviceSize size) -> Error::Error;
-
-  template <typename T> // Set data with span of T
-  auto SetData(GraphicsContext &context, std::span<T> data, // NOLINTNEXTLINE
+  auto SetData(GraphicsContext &context, const std::span<uint8_t> &data,
                VkDeviceSize offset = 0, VkDeviceSize size = VK_WHOLE_SIZE)
-      -> Error::Error {
-
-    auto uploadSize = size == VK_WHOLE_SIZE ? sizeof(T) * data.size() : size;
-
-    auto byteSpan = // NOLINTNEXTLINE
-        std::span<const uint8_t>(reinterpret_cast<const uint8_t *>(data.data()),
-                                 uploadSize);
-    return SetData(context, byteSpan, offset, size);
-  }
-  template <typename T> // Set data with vector of T
-  auto SetData(GraphicsContext &context,
-               const std::vector<T> &data, // NOLINTNEXTLINE
-               VkDeviceSize offset = 0, VkDeviceSize size = VK_WHOLE_SIZE)
-      -> Error::Error {
-
-    auto uploadSize = size == VK_WHOLE_SIZE ? sizeof(T) * data.size() : size;
-
-    auto byteSpan = // NOLINTNEXTLINE
-        std::span<const uint8_t>(reinterpret_cast<const uint8_t *>(data.data()),
-                                 uploadSize);
-    return SetData(context, byteSpan, offset, size);
-  }
+      -> Error::Error;
 
   auto MapMemory(GraphicsContext &context) -> Error::Error;
   auto UnmapMemory(GraphicsContext &context) -> void;

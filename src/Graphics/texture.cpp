@@ -863,16 +863,24 @@ auto Texture::SetPixels(GraphicsContext &context, Image::ImageData &imageData,
         "ImageData dimensions exceed texture dimensions in SetPixels.");
   }
 
-  auto buffer = Buffer::Create(context, bufferCreationInfo);
+  auto bufferResult = Buffer::Create(context, bufferCreationInfo);
 
-  auto error = buffer->get()->SetData(context, imageData.GetData());
+  if (Error::IsError(bufferResult)) {
+    return bufferResult.error();
+  }
+
+  auto buffer = bufferResult.value();
+
+  auto error = buffer->SetData(context, imageData.GetSpan());
   // also sets the buffer usage semaphore value
 
   if (Error::IsError(error)) {
-    buffer->get()->Destroy(
-        context); // Not used yet so we can destroy immediately
+    buffer->Destroy(context); // Not used yet so we can destroy immediately
     return error;
   }
+
+  PrintDebug("Copying buffer to texture-> mipLevel {}, arrayLayer {}", mipLevel,
+             arrayLayer);
 
   VkBufferImageCopy region = {};
   region.bufferOffset = 0;
@@ -889,29 +897,28 @@ auto Texture::SetPixels(GraphicsContext &context, Image::ImageData &imageData,
   error = UseAsTransferDst(context);
 
   if (Error::IsError(error)) {
-    buffer->get()->Destroy(
-        context); // Not used yet so we can destroy immediately
+    buffer->Destroy(context); // Not used yet so we can destroy immediately
     return error;
   }
 
   auto *commandBuffer = GetCommandBuffer(context, GetCurrentThreadIndex());
 
-  vkCmdCopyBufferToImage(commandBuffer, buffer->get()->handle, image,
+  vkCmdCopyBufferToImage(commandBuffer, buffer->handle, image,
                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
   error = UseAsSampler(context, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT);
 
   if (Error::IsError(error)) {
-    buffer->get()->ScheduleDestroy();
+    buffer->ScheduleDestroy();
     return error;
   }
 
   auto timelineValue = GetCPUTimelineSemaphoreValue(context);
 
-  buffer->get()->MarkUse(0, timelineValue);
+  buffer->MarkUse(0, timelineValue);
   MarkUse(0, timelineValue);
 
-  buffer->get()->ScheduleDestroy();
+  buffer->ScheduleDestroy();
 
   return Error::Success();
 }

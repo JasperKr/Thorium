@@ -8,7 +8,6 @@
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/filesystem.hpp"
-#include <cstdint>
 
 #define VK_NO_PROTOTYPES
 #include <vulkan/vulkan.h>
@@ -112,7 +111,7 @@ auto LoadLua(lua_State *state) -> Error::Error {
 
   if (!lua_isfunction(state, -1)) {
     // If Thorium.run is not defined, load default
-    PrintWarning("Thorium.run not found, loading default run function...");
+    PrintDebug("Thorium.run not found, loading default run function...");
     lua_pop(state, 2); // Remove non-function and Thorium table from stack
     if (luaL_dostring(state, defaultRunFunction) != LUA_OK) {
       std::string luaErrorMessage = lua_tostring(state, -1);

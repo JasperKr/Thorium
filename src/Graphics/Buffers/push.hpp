@@ -60,7 +60,7 @@ public:
           "SetData with key only supported for struct push buffers");
     }
 
-    auto *result = GetUniform(key.begin(), key.end());
+    const auto *result = GetUniform(key.begin(), key.end());
     if (result == nullptr) {
       return Error::Create("Uniform not found in push buffer.");
     }
@@ -100,10 +100,12 @@ public:
     return stageFlags;
   }
 
-  auto ContainsUniform(ResourceKey::const_iterator iterator,
-                       ResourceKey::const_iterator end) -> bool;
-  auto GetUniform(ResourceKey::const_iterator iterator,
-                  ResourceKey::const_iterator end) -> ResourceInfo *;
+  [[nodiscard]] auto ContainsUniform(ResourceKey::const_iterator iterator,
+                                     ResourceKey::const_iterator end) const
+      -> bool;
+  [[nodiscard]] auto GetUniform(ResourceKey::const_iterator iterator,
+                                ResourceKey::const_iterator end) const
+      -> const ResourceInfo *;
 
 private:
   ResourceInfo layout;

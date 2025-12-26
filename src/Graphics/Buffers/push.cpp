@@ -16,19 +16,21 @@ auto PushBuffer::FlushData(FlushInfo &info) -> void {
 }
 
 auto PushBuffer::ContainsUniform(ResourceKey::const_iterator iterator,
-                                 ResourceKey::const_iterator end) -> bool {
+                                 ResourceKey::const_iterator end) const
+    -> bool {
   // TODO: Probably broken
   if (std::next(iterator) == end) {
     return *iterator == layout.name;
   }
 
-  auto &bufferInfo = std::get<BufferInfo>(layout.info);
+  const auto &bufferInfo = std::get<BufferInfo>(layout.info);
 
   return bufferInfo.ResolvePath(std::next(iterator), end) != nullptr;
 }
 
 auto PushBuffer::GetUniform(ResourceKey::const_iterator iterator,
-                            ResourceKey::const_iterator end) -> ResourceInfo * {
+                            ResourceKey::const_iterator end) const
+    -> const ResourceInfo * {
   // TODO: Probably broken
   if (std::next(iterator) == end) {
     if (*iterator == layout.name) {
@@ -38,7 +40,7 @@ auto PushBuffer::GetUniform(ResourceKey::const_iterator iterator,
     return nullptr;
   }
 
-  auto &bufferInfo = std::get<BufferInfo>(layout.info);
+  const auto &bufferInfo = std::get<BufferInfo>(layout.info);
 
   return bufferInfo.ResolvePath(std::next(iterator), end);
 }

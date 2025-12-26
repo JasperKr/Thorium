@@ -717,9 +717,6 @@ auto wrap_NewTexture(lua_State *state) -> int {
   }
   auto texture = result.value();
 
-  PrintWarning("Created texture; type ptr: {}",
-               (void *)Graphics::Texture::Texture::GetType());
-
   LuaWrap::PushLuaType(state, type, texture.get());
   texture->release(); // Retained by lua now
 

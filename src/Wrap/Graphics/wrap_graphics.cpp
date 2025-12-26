@@ -1,6 +1,5 @@
 #include "Wrap/Graphics/wrap_graphics.hpp"
 
-#include "Graphics/format.hpp"
 #include "Graphics/graphics.hpp"
 #include "Graphics/mesh.hpp"
 #include "Graphics/render.hpp"
@@ -9,12 +8,12 @@
 #include "Graphics/texture.hpp"
 #include "Graphics/vertexformat.hpp"
 #include "Modules/color.hpp"
-#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Wrap/Graphics/wrap_color.hpp"
 #include "Wrap/wrap.hpp"
 #include "tl/expected.hpp"
+#include <cassert>
 #define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
 #include <cstdint>
@@ -462,14 +461,11 @@ inline auto GetQuadMesh(GraphicsContext &context, const VkRect2D size,
                                  vertexFormat.GetBindings()[0].stride *
                                      vertices.size());
 
-  PrintDebug("Creating quad mesh of size {}x{}", size.extent.width,
-             size.extent.height);
+  assert(sizeof(FormatDefault2D) == vertexFormat.GetBindings()[0].stride);
 
   RenderTarget::EndRendering(context);
 
   const static auto mesh = Mesh::Create(context, vertexFormat, span, &indices);
-
-  PrintDebug("Quad mesh created.");
 
   auto setDataError = mesh->get()->SetVertices(context, span);
   if (Error::IsError(setDataError)) {
@@ -486,12 +482,11 @@ inline auto GetQuadMesh(GraphicsContext &context, const VkRect2D size,
   return mesh;
 }
 
+// texture | mesh
 auto wrap_Draw(lua_State *state) -> int {
   auto *ctx = GetCurrentGraphicsContext();
 
   Ref<Mesh> mesh;
-
-  PrintDebug("Draw called");
 
   if (LuaWrap::LuaIsType<Texture::Texture>(state, 1)) {
     auto *texture = LuaWrap::FromLuaObject<Texture::Texture>(state, 1);
@@ -532,6 +527,34 @@ auto wrap_Draw(lua_State *state) -> int {
   }
 
   auto drawResult = mesh->Draw(*ctx);
+
+  if (Error::IsError(drawResult)) {
+    return luaL_error(state, "%s", drawResult.ToString().c_str());
+  }
+
+  return 0;
+}
+
+// mesh, instanceCount
+auto wrap_DrawInstanced(lua_State *state) -> int {
+  auto *ctx = GetCurrentGraphicsContext();
+
+  Ref<Mesh> mesh;
+
+  if (LuaWrap::LuaIsType<Mesh>(state, 1)) {
+    mesh = Ref<Mesh>(LuaWrap::FromLuaObject<Mesh>(state, 1));
+  } else {
+    return luaL_error(state,
+                      "Invalid argument to drawInstanced; expected Mesh.");
+  }
+
+  if (mesh.get() == nullptr) {
+    return luaL_error(state, "Mesh is null.");
+  }
+
+  auto instanceCount = static_cast<uint32_t>(luaL_checkinteger(state, 2));
+
+  auto drawResult = mesh->DrawInstanced(*ctx, instanceCount);
 
   if (Error::IsError(drawResult)) {
     return luaL_error(state, "%s", drawResult.ToString().c_str());
