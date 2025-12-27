@@ -67,6 +67,11 @@ public:
     return {data, size};
   }
 
+  template <typename T> constexpr auto GetDataSpan() -> std::span<T> {
+    // NOLINTNEXTLINE
+    return {reinterpret_cast<T *>(data), size / sizeof(T)};
+  }
+
   [[nodiscard]] auto Clone() const -> ByteData { return *this; }
 
 private:

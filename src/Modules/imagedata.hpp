@@ -3,36 +3,27 @@
 #include "../Graphics/format.hpp"
 #include "Math/vector.hpp"
 #include "Modules/bytedata.hpp"
-#include "Modules/object.hpp"
+#include "Modules/error.hpp"
 #include "Modules/type.hpp"
 #include "color.hpp"
+#include "tl/expected.hpp"
 #include <cassert>
 #define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
 #include <cstddef>
 #include <cstdint>
-#include <vector>
 namespace Image {
 
 static const Type type = Type("ImageData");
 
-struct ImageData : Object {
+struct ImageData : Data::ByteData {
 public:
   auto SetColor(Math::Uvec2 position, const Color &color) -> void;
   auto GetColor(Math::Uvec2 position) -> Color &;
   auto Copy(const ImageData &source) -> void;
-  auto GetDataPtr() -> uint8_t * { return data.data(); }
-  [[nodiscard]] auto GetSize() const -> size_t { return data.size(); }
-  auto GetData() -> std::vector<uint8_t> & { return data; }
-  auto GetSpan(size_t offset = 0, size_t range = 0) -> std::span<uint8_t> {
-    if (range == 0) {
-      range = data.size() - offset;
-    }
-
-    assert(offset + range <= data.size());
-
-    // NOLINTNEXTLINE, pointer arithmetic
-    return {data.data() + offset, range};
+  auto GetDataPtr() -> uint8_t * { return Data::ByteData::GetData(); }
+  [[nodiscard]] auto GetSize() const -> size_t {
+    return Data::ByteData::GetSize();
   }
   [[nodiscard]] auto GetWidth() const -> uint32_t { return width; }
   [[nodiscard]] auto GetHeight() const -> uint32_t { return height; }
@@ -45,27 +36,23 @@ public:
   }
 
   // NOLINTNEXTLINE
-  ImageData(uint32_t width, uint32_t height, VkFormat format)
-      : width(width), height(height), format(format),
-        data(static_cast<size_t>(width * height *
-                                 Graphics::Format::GetSize(format)),
-             0) {}
-  // NOLINTNEXTLINE
-  ImageData(uint32_t width, uint32_t height, const uint8_t *srcData,
-            size_t dataSize)
-      : width(width), height(height), format(VK_FORMAT_R8G8B8A8_UNORM),
-        data(srcData, srcData + dataSize) {} // NOLINT
-  // NOLINTNEXTLINE
-  ImageData(uint32_t width, uint32_t height,
-            const std::vector<uint8_t> &srcData)
-      : width(width), height(height), format(VK_FORMAT_R8G8B8A8_UNORM),
-        data(srcData) {} // NOLINT
-                         // NOLINTNEXTLINE
-  ImageData(uint32_t width, uint32_t height, Data::ByteData &byteData)
-      : width(width), height(height), format(VK_FORMAT_R8G8B8A8_UNORM),
-        data(byteData.GetSize()) {
-    std::memcpy(data.data(), byteData.GetData(), byteData.GetSize());
+  ImageData(uint32_t width, uint32_t height, Data::ByteData &byteData,
+            VkFormat format)
+      : Data::ByteData(byteData), width(width), height(height), format(format) {
   }
+
+  // TODO: Refactor to return Ref, so we can refcount for lua
+  static auto Create(uint32_t width, uint32_t height, VkFormat format)
+      -> tl::expected<ImageData, Error::Error>;
+  static auto Create(uint32_t width, uint32_t height,
+                     const std::span<uint8_t> &srcData, VkFormat format)
+      -> tl::expected<ImageData, Error::Error>;
+  static auto Create(uint32_t width, uint32_t height, Data::ByteData &byteData,
+                     VkFormat format) -> tl::expected<ImageData, Error::Error>;
+  static auto Create(const std::string &filepath)
+      -> tl::expected<ImageData, Error::Error>;
+  static auto Create(const Data::ByteData &byteData)
+      -> tl::expected<ImageData, Error::Error>;
 
   static auto GetType() -> Type const * { return &type; }
 
@@ -75,7 +62,6 @@ private:
   uint32_t width;
   uint32_t height;
   VkFormat format;
-  std::vector<uint8_t> data;
 };
 
 } // namespace Image

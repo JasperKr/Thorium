@@ -471,15 +471,15 @@ auto LoadFromFile(GraphicsContext &context, const char *path,
 }
 
 // texture 2D From byte array
-auto LoadFromMemory(GraphicsContext &context, const unsigned char *data,
-                    size_t dataSize, VkFormat format, VkImageUsageFlags usage)
+auto LoadFromMemory(GraphicsContext &context, const std::span<uint8_t> &data,
+                    VkFormat format, VkImageUsageFlags usage)
     -> tl::expected<Ref<Texture>, Error::Error> {
   int texWidth = 0;
   int texHeight = 0;
   int texChannels = 0;
-  stbi_uc *pixels =
-      stbi_load_from_memory(data, static_cast<int>(dataSize), &texWidth,
-                            &texHeight, &texChannels, STBI_rgb_alpha);
+  stbi_uc *pixels = stbi_load_from_memory(
+      data.data(), static_cast<int>(data.size()), &texWidth, &texHeight,
+      &texChannels, STBI_rgb_alpha);
   if (pixels == nullptr) {
     return tl::unexpected(
         Error::Create("Failed to load texture image from memory."));
@@ -871,7 +871,7 @@ auto Texture::SetPixels(GraphicsContext &context, Image::ImageData &imageData,
 
   auto buffer = bufferResult.value();
 
-  auto error = buffer->SetData(context, imageData.GetSpan());
+  auto error = buffer->SetData(context, imageData.GetDataSpan());
   // also sets the buffer usage semaphore value
 
   if (Error::IsError(error)) {
@@ -1057,7 +1057,7 @@ constexpr auto GetAccessFlagsForUsage(TextureUsage usage,
 constexpr auto GetRequiredTextureLayout(TextureUsage usage, VkFormat format)
     -> VkImageLayout {
 
-#ifdef DEBUG
+#ifndef NDEBUG
   assert(
       usage != TextureUsage::Unknown &&
       "GetRequiredTextureLayout: TextureUsage::Unknown is not a valid usage.");

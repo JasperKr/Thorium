@@ -1,6 +1,10 @@
 #include "imagedata.hpp"
+#include "Modules/bytedata.hpp"
 #include "Modules/color.hpp"
+#include "Modules/error.hpp"
+#include "Modules/filesystem.hpp"
 #define VK_NO_PROTOTYPES
+#include "stb/stb_image.h"
 #include "vulkan/vulkan_core.h"
 #include <cstdint>
 #include <cstring>
@@ -319,7 +323,7 @@ auto ImageData::SetColor(Math::Uvec2 position, const Color &color) -> void {
   auto funcIterator = formatFunctionMap.find(format);
   if (funcIterator != formatFunctionMap.end()) {
     const FormatFunctions &functions = funcIterator->second;
-    functions.set(color, &data[index]);
+    functions.set(color, &GetData()[index]);
   } else {
     // Unsupported format, handle error as needed
   }
@@ -333,12 +337,131 @@ auto ImageData::GetColor(Math::Uvec2 position) -> Color & {
   static Color outColor; // NOLINT
   if (funcIterator != formatFunctionMap.end()) {
     const FormatFunctions &functions = funcIterator->second;
-    functions.get(&data[index], outColor);
+    functions.get(&GetData()[index], outColor);
     return outColor;
   }
 
   // Unsupported format, handle error as needed
   return outColor; // return default color
+}
+
+auto Create(uint32_t width, uint32_t height, VkFormat format)
+    -> tl::expected<ImageData, Error::Error> {
+  size_t dataSize = static_cast<size_t>(width) * static_cast<size_t>(height) *
+                    Graphics::Format::GetSize(format);
+  auto byteData = Data::ByteData(dataSize);
+  ImageData imageData(width, height, byteData, format);
+
+  return imageData;
+}
+
+auto Create(uint32_t width, uint32_t height, const std::span<uint8_t> &srcData,
+            VkFormat format) -> tl::expected<ImageData, Error::Error> {
+  size_t dataSize = static_cast<size_t>(width) * static_cast<size_t>(height) *
+                    Graphics::Format::GetSize(format);
+  if (srcData.size() != dataSize) {
+    return tl::unexpected(
+        Error::Create("Source data size does not match image dimensions."));
+  }
+
+  auto byteData = Data::ByteData(dataSize);
+  std::memcpy(byteData.GetData(), srcData.data(), dataSize);
+  ImageData imageData(width, height, byteData, format);
+
+  return imageData;
+}
+auto Create(uint32_t width, uint32_t height, Data::ByteData &byteData,
+            VkFormat format) -> tl::expected<ImageData, Error::Error> {
+  size_t dataSize = static_cast<size_t>(width) * static_cast<size_t>(height) *
+                    Graphics::Format::GetSize(format);
+  if (byteData.GetSize() != dataSize) {
+    return tl::unexpected(
+        Error::Create("ByteData size does not match image dimensions."));
+  }
+
+  ImageData imageData(width, height, byteData, format);
+  return imageData;
+}
+
+auto ImageData::Create(const std::string &filepath)
+    -> tl::expected<ImageData, Error::Error> {
+
+  auto fileLoadResult = Filesystem::ReadFile(filepath);
+
+  if (Error::IsError(fileLoadResult)) {
+    return tl::unexpected(fileLoadResult.error());
+  }
+
+  auto filedata = fileLoadResult.value();
+
+  auto bytedata = Data::ByteData(filedata.size());
+  std::memcpy(bytedata.GetData(), filedata.data(), filedata.size());
+
+  return Create(bytedata);
+}
+
+auto ImageData::Create(const Data::ByteData &byteData)
+    -> tl::expected<ImageData, Error::Error> {
+  // Allowed formats: jpeg, png, tga, bmp, psd, gif, hdr, pic, ppm
+
+  int texWidth = 0;
+  int texHeight = 0;
+  int texChannels = 0;
+
+  // check for LDR formats, supported by default stbi_load
+  if (stbi_is_hdr_from_memory(byteData.GetData(),
+                              static_cast<int>(byteData.GetSize())) == 0) {
+    stbi_uc *pixels = stbi_load_from_memory(
+        byteData.GetData(), static_cast<int>(byteData.GetSize()), &texWidth,
+        &texHeight, &texChannels, STBI_rgb_alpha);
+    if (pixels == nullptr) {
+      return tl::unexpected(Error::Create("Failed to load image."));
+    }
+
+    const auto span = std::span<uint8_t>(
+        pixels, static_cast<size_t>(texWidth) * static_cast<size_t>(texHeight) *
+                    texChannels);
+
+    auto imageData = Image::ImageData::Create(texWidth, texHeight, span,
+                                              VK_FORMAT_R8G8B8A8_UNORM);
+
+    stbi_image_free(pixels);
+
+    if (Error::IsError(imageData)) {
+      return tl::unexpected(imageData.error());
+    }
+
+    return imageData.value();
+  }
+
+  if (stbi_is_hdr_from_memory(byteData.GetData(),
+                              static_cast<int>(byteData.GetSize())) != 0) {
+    float *pixels = stbi_loadf_from_memory(
+        byteData.GetData(), static_cast<int>(byteData.GetSize()), &texWidth,
+        &texHeight, &texChannels, STBI_rgb_alpha); // force 4 channels
+    if (pixels == nullptr) {
+      return tl::unexpected(Error::Create("Failed to load image."));
+    }
+
+    // NOLINTNEXTLINE, reinterpret cast is safe here
+    const auto span = std::span<uint8_t>(reinterpret_cast<uint8_t *>(pixels),
+                                         static_cast<size_t>(texWidth) *
+                                             static_cast<size_t>(texHeight) *
+                                             texChannels * sizeof(float));
+
+    auto imageData = Image::ImageData::Create(texWidth, texHeight, span,
+                                              VK_FORMAT_R32G32B32A32_SFLOAT);
+
+    stbi_image_free(pixels);
+
+    if (Error::IsError(imageData)) {
+      return tl::unexpected(imageData.error());
+    }
+
+    return imageData.value();
+  }
+
+  return Error::Unexpected("Unsupported image format.");
 }
 
 } // namespace Image

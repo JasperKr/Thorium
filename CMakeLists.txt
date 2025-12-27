@@ -236,6 +236,8 @@ add_executable(Thorium
     src/Wrap/Graphics/wrap_buffer.cpp
     src/Wrap/Modules/wrap_event.cpp
     src/Wrap/Modules/wrap_timer.cpp
+    src/Wrap/Modules/wrap_bytedata.cpp
+    src/Wrap/Modules/wrap_data.cpp
     src/Wrap/wrap.cpp
 
 # Libraries

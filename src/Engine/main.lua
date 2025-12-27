@@ -65,6 +65,13 @@ local indices = {
 }
 
 local mesh = Thorium.graphics.newMesh(vertexFormat, vertices, "triangles", indices)
+local data = Thorium.data.newImagedata(512, 512, "rgba16f")
+for x = 0, 512 - 1 do
+  for y = 0, 512 - 1 do
+    data:setHalf(y * 512 + x, (x / 512) * (y / 512))
+  end
+end
+local texture = Thorium.graphics.newTexture(data, { usage = sampler })
 
 function Thorium.draw()
   Thorium.graphics.setShader(shader)
@@ -72,7 +79,7 @@ function Thorium.draw()
   shader:send("test", i)
   shader:send("testColor", { 1, 0, 0 })
   shader:send("testMatrix", { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 })
-  Thorium.graphics.drawInstanced(mesh, 1000)
+  Thorium.graphics.draw(texture)
   Thorium.graphics.setRenderTarget({ loadas = { 1, 0, 0, 1 } })
   Thorium.graphics.draw(target)
 end

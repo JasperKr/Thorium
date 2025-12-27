@@ -6,6 +6,7 @@
 #include "Modules/object.hpp"
 #include "Modules/type.hpp"
 #include "graphics.hpp"
+#include <span>
 
 #define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
@@ -187,7 +188,7 @@ auto LoadFromFile(GraphicsContext &context, const char *path,
     -> tl::expected<Ref<Texture>, Error::Error>;
 
 // texture 2D From byte array
-auto LoadFromMemory(GraphicsContext &context, const unsigned char *data,
+auto LoadFromMemory(GraphicsContext &context, const std::span<uint8_t> &data,
                     size_t dataSize, VkFormat format,
                     VkImageUsageFlags usage = 0)
     -> tl::expected<Ref<Texture>, Error::Error>;

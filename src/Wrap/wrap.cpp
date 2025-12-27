@@ -1,4 +1,6 @@
 #include "wrap.hpp"
+#include "Modules/console.hpp"
+#include "Wrap/Modules/wrap_data.hpp"
 
 #include <cstdint>
 #include <iostream>
@@ -177,9 +179,33 @@ auto RegisterLuaModule(lua_State *state, const LuaModule &module) -> void {
   lua_pop(state, 1); // []
 
   // Sanity check Thorium[modulename][first function] exists
-  lua_getglobal(state, "Thorium");                 // [Thorium]
-  lua_getfield(state, -1, module.Name.c_str());    // [Thorium, module]
+  lua_getglobal(state, "Thorium"); // [Thorium]
+  if (lua_isnil(state, -1)) {
+    std::cerr << "Error registering module " << module.Name
+              << ": Thorium table not found." << "\n";
+    lua_pop(state, 1); // []
+    return;
+  }
+  lua_getfield(state, -1, module.Name.c_str()); // [Thorium, module]
+  if (lua_isnil(state, -1)) {
+    std::cerr << "Error registering module " << module.Name
+              << ": module table not found." << "\n";
+    lua_pop(state, 2); // []
+    return;
+  }
+  if (module.Functions->name == nullptr) {
+    PrintWarning("Module {} has no functions to verify during registration.",
+                 module.Name);
+    lua_pop(state, 2); // []
+    return;
+  }
   lua_getfield(state, -1, module.Functions->name); // [Thorium, module, func]
+  if (lua_isnil(state, -1)) {
+    std::cerr << "Error registering module " << module.Name << ": function "
+              << module.Functions->name << " not found." << "\n";
+    lua_pop(state, 3); // []
+    return;
+  }
 }
 
 auto RegisterLuaType(lua_State *state, const Type *type,
@@ -261,17 +287,21 @@ auto PushLuaType(lua_State *state, const Type *type, Object *object) -> void {
   LoadStorageTable(state, "ThoriumObjectStorage"); // [storage]
 
   if (lua_isnoneornil(state, -1)) {
+    // No storage table
+
     lua_pop(state, 1); // Remove nil [empty]
 
     SetupLuaType(state, type, object); // [userdata]
     return;
   }
 
+  // Check if object already has a userdata
   auto key = (uintptr_t)(object);            // NOLINT
   lua_pushlightuserdata(state, (void *)key); // [storage, key] NOLINT
   lua_gettable(state, -2);                   // [storage, value]
 
   if (lua_type(state, -1) != LUA_TUSERDATA) {
+    // No existing userdata
     lua_pop(state, 1); // Remove nil [storage]
 
     // Create new userdata
@@ -292,6 +322,7 @@ static const luaL_Reg ThoriumModules[] = {
     {"graphics", Graphics::luaopen_graphics},
     {"event", Event::luaopen_event},
     {"timer", Timer::luaopen_timer},
+    {"data", Data::luaopen_data},
     {nullptr, nullptr},
 };
 
