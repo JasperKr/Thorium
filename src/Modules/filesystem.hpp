@@ -33,8 +33,11 @@ auto ListFiles(const std::string &path) -> Result<std::vector<std::string>>;
 auto GetErrorCode() -> uint32_t;
 auto GetError() -> Error;
 
+auto SetSourceDirectory(const std::string &path) -> Error;
+
 auto GetSaveDirectory() -> std::string;
 auto GetSourceDirectory() -> std::string;
+auto GetSourceBaseDirectory() -> std::string;
 
 #ifdef CreateDirectory
 #undef CreateDirectory

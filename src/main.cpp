@@ -2,11 +2,20 @@
 #include "Modules/errorhandler.hpp"
 #include "loop.hpp"
 #include <string>
+#include <vector>
 
 #include "Modules/event.hpp"
 
-auto main() -> int {
-  auto err = MainLoop();
+auto main(int argCount, char **argValues) -> int {
+  std::vector<std::string> args;
+  args.reserve(argCount);
+
+  // Skip the first argument (program name)
+  for (int i = 1; i < argCount; ++i) {
+    args.emplace_back(argValues[i]); // NOLINT
+  }
+
+  auto err = MainLoop(args);
   if (Error::IsError(err)) {
     PrintFatal(
         ColorText(err.message, ConsoleColor::Reset) +

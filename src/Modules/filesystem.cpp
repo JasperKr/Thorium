@@ -1,8 +1,6 @@
 #include "filesystem.hpp"
 #include "../external/physfs/src/physfs.h"
 #include "error.hpp"
-#include "tl/expected.hpp"
-#include <iostream>
 #include <span>
 #include <string>
 #include <string_view>
@@ -200,7 +198,7 @@ auto RemoveFromSearchPath(const std::string &path) -> Error {
 auto GetRealPath(const std::string &path) -> Result<std::string> {
   const char *realPath = PHYSFS_getRealDir(path.c_str());
   if (realPath == nullptr) {
-    return Error::Unexpected("Failed to get real path");
+    return Error::Unexpected("Failed to get real path of: " + path);
   }
 
   return std::string(realPath);
@@ -263,6 +261,20 @@ auto GetError() -> Error {
                        static_cast<int32_t>(GetErrorCode()));
 }
 
+inline auto GetSourceDirectoryStorage() -> std::string & {
+  static std::string sourceDirectory;
+  return sourceDirectory;
+}
+
+auto SetSourceDirectory(const std::string &path) -> Error {
+  if (GetSourceDirectoryStorage().empty()) {
+    GetSourceDirectoryStorage() = path;
+    return Error::Success();
+  }
+
+  return Error::Create("Source directory already set");
+}
+
 auto GetSaveDirectory() -> std::string {
   static const auto *identity =
       PHYSFS_getPrefDir("Thorium", GetConfig().identity.c_str());
@@ -270,7 +282,9 @@ auto GetSaveDirectory() -> std::string {
   return identity != nullptr ? std::string(identity) : std::string();
 }
 
-auto GetSourceDirectory() -> std::string {
+auto GetSourceDirectory() -> std::string { return GetSourceDirectoryStorage(); }
+
+auto GetSourceBaseDirectory() -> std::string {
   static const auto *sourceDir = PHYSFS_getBaseDir();
 
   return sourceDir != nullptr ? std::string(sourceDir) : std::string();
@@ -320,10 +334,7 @@ auto Directory(const std::string &path) -> std::string {
   return path.substr(0, slashPos + 1);
 }
 
-// Sanitizes a path by replacing backslashes with forward slashes
-// and removing redundant slashes
-// C:\path\to\\file.txt -> C:/path/to/file.txt
-auto Sanitize(const std::string &path) -> std::string {
+inline auto SanitizeSlashes(const std::string &path) -> std::string {
   std::string sanitized;
   sanitized.reserve(path.size());
 
@@ -337,6 +348,60 @@ auto Sanitize(const std::string &path) -> std::string {
     } else {
       sanitized += character;
       lastWasSlash = false;
+    }
+  }
+
+  return sanitized;
+}
+
+// Sanitizes a path by replacing backslashes with forward slashes
+// and removing redundant slashes and applying .. with preceding directories
+// C:\path\to\\file.txt -> C:/path/to/file.txt
+auto Sanitize(const std::string &path) -> std::string {
+  auto sanitized = SanitizeSlashes(path);
+  // Handle .. in paths
+
+  std::vector<std::string> parts;
+  size_t start = 0;
+  size_t end = sanitized.find('/');
+
+  // Loop through each part of the path
+  while (end != std::string::npos) {
+    std::string part = sanitized.substr(start, end - start);
+    if (part == "..") { // Remove previous part if ..
+      if (!parts.empty()) {
+        // if previous part is also .., keep it
+        if (parts.back() == "..") {
+          parts.push_back(part);
+        } else {
+          parts.pop_back();
+        }
+      }
+    } else if (part != "." || start == 0) { // remove ./ parts if not at start
+      parts.push_back(part);
+    }
+    start = end + 1;
+    end = sanitized.find('/', start);
+  }
+
+  std::string lastPart = sanitized.substr(start);
+  if (lastPart == "..") {
+    if (!parts.empty()) {
+      if (parts.back() == "..") {
+        parts.push_back(lastPart);
+      } else {
+        parts.pop_back();
+      }
+    }
+  } else if (lastPart != ".") {
+    parts.push_back(lastPart);
+  }
+
+  sanitized.clear();
+  for (size_t i = 0; i < parts.size(); ++i) {
+    sanitized += parts[i];
+    if (i < parts.size() - 1) {
+      sanitized += '/';
     }
   }
 

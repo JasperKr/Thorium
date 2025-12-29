@@ -8,6 +8,10 @@
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/filesystem.hpp"
+#include <algorithm>
+#include <filesystem>
+#include <string>
+#include <vector>
 
 #define VK_NO_PROTOTYPES
 #include <vulkan/vulkan.h>
@@ -67,42 +71,53 @@ function Thorium.run()
 end
 )lua";
 
-constexpr auto loader = R"lua(
-local success, module = xpcall(require, debug.traceback, "main")
-if not success then
-  print(module, 3)
-end
-
-__LOAD_SUCCESS = success
-)lua";
-
 // NOLINTNEXTLINE
 static LuaWrap::LuaRef runCallback;
 
-auto LoadLua(lua_State *state) -> Error {
+auto LoadLua(lua_State *state, const std::vector<std::string> &launchArgs)
+    -> Error {
   // Load src/Engine/main.lua
   PrintDebug("Loading main Lua script...");
+  if (launchArgs.empty()) {
+    return Error::Create("No launch arguments provided for Lua script.");
+  }
 
-  auto luaLoadErr = luaL_dostring(state, loader);
-  if (static_cast<int>(luaLoadErr) != LUA_OK) {
+  lua_getglobal(state, "package");
+  lua_getfield(state, -1, "path");
+  std::string currentPath = lua_tostring(state, -1);
+  lua_pop(state, 1); // remove original path
+  std::string newPath =
+      Path::Join(Filesystem::GetSourceDirectory(), std::string("?.lua;")) +
+      currentPath;
+  lua_pushstring(state, newPath.c_str());
+  lua_setfield(state, -2, "path");
+  lua_pop(state, 1); // remove package table
+
+  auto luaLoadErr =
+      luaL_loadfile(state, Path::Join(Filesystem::GetSourceDirectory(),
+                                      std::string("main.lua"))
+                               .c_str());
+
+  if (luaLoadErr != LUA_OK) {
     if (lua_isstring(state, -1) != 0) {
       std::string luaErrorMessage = lua_tostring(state, -1);
       lua_pop(state, 1); // Remove error message from stack
-      return Error::Create("Failed to load main Lua script: " +
-                           luaErrorMessage);
+      return Error::Create(luaErrorMessage);
     }
 
     lua_pop(state, 1); // Remove non-string error from stack
     return Error::Create("Failed to load main Lua script: Unknown error");
   }
 
-  // Check if module loaded successfully
-  lua_getglobal(state, "__LOAD_SUCCESS");
-  bool loadSuccess = lua_toboolean(state, -1) != 0;
-  lua_pop(state, 1); // Remove __LOAD_SUCCESS from stack
+  for (const auto &arg : launchArgs) {
+    lua_pushstring(state, arg.c_str());
+  }
 
-  if (!loadSuccess) {
-    return Error::Create("lua error");
+  // Call the loaded chunk
+  if (lua_pcall(state, static_cast<int>(launchArgs.size()), 0, 0) != LUA_OK) {
+    std::string luaErrorMessage = lua_tostring(state, -1);
+    lua_pop(state, 1); // Remove error message from stack
+    return Error::Create(luaErrorMessage);
   }
 
   // Get Thorium.run function
@@ -147,7 +162,7 @@ auto LoadLua(lua_State *state) -> Error {
   return Error::Success();
 }
 
-auto MainLoop() -> Error {
+auto MainLoop(const std::vector<std::string> &arguments) -> Error {
   Graphics::GetCurrentThreadIndex() = 0;
   Error::SetupTraceback();
 
@@ -170,6 +185,26 @@ auto MainLoop() -> Error {
 
   auto config = configResult.value();
 
+#if defined(__linux__)
+  std::filesystem::path exeDir =
+      std::filesystem::read_symlink("/proc/self/exe").parent_path();
+#elif defined(_WIN32)
+  char buffer[MAX_PATH];
+  GetModuleFileNameA(NULL, buffer, MAX_PATH);
+  std::filesystem::path exeDir = std::filesystem::path(buffer).parent_path();
+#else
+  std::filesystem::path exeDir = std::filesystem::current_path();
+#endif
+
+  if (arguments.size() == 0) {
+    return Error::Create("No Lua script specified to run.");
+  }
+
+  auto sourceDirectory = Path::Sanitize(exeDir.string() + "/" + arguments[0]);
+  sourceDirectory = Path::Directory(sourceDirectory);
+
+  PrintAlways("Setting source directory to: " + sourceDirectory);
+
   Filesystem::GetConfig().identity = config.Identity;
   Error fsInitErr = Filesystem::Init(".");
 
@@ -177,14 +212,21 @@ auto MainLoop() -> Error {
     return fsInitErr;
   }
 
-  PrintInfo("Save directory: " + Filesystem::GetSaveDirectory());
+  auto sourceSetError = Filesystem::SetSourceDirectory(sourceDirectory);
+
+  if (Error::IsError(sourceSetError)) {
+    return sourceSetError;
+  }
+
+  PrintAlways("Save directory: " + Filesystem::GetSaveDirectory());
 
   Error fsMntErr = Filesystem::Mount(".", "/", true);
   if (Error::IsError(fsMntErr)) {
     return fsMntErr;
   }
 
-  PrintInfo("Source directory: " + Filesystem::GetSourceDirectory());
+  PrintAlways("Source directory: " + Filesystem::GetSourceDirectory());
+  PrintAlways("Base source directory: " + Filesystem::GetSourceBaseDirectory());
 
   Graphics::GraphicsContext context = {};
   context.renderThreadCount = 1;
@@ -237,7 +279,7 @@ auto MainLoop() -> Error {
     return error;
   }
 
-  auto luaLoadErr = LoadLua(state);
+  auto luaLoadErr = LoadLua(state, arguments);
 
   if (Error::IsError(luaLoadErr)) {
     return luaLoadErr;

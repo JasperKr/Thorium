@@ -89,3 +89,6 @@ function Thorium.draw()
   Thorium.graphics.setRenderTarget({ loadas = { 0, 0, 0, 1 } })
   Thorium.graphics.draw(target)
 end
+
+print(...)
+print(select("#", ...))

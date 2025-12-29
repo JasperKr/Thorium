@@ -15,5 +15,5 @@ cmake --build build
 
 # if second argument is "run", run the built executable
 if [ "$2" == "run" ]; then
-  ./build/Thorium ../src/Engine/main.lua
+  ./build/Thorium ../tests/main.lua
 fi
