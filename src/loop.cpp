@@ -79,7 +79,7 @@ __LOAD_SUCCESS = success
 // NOLINTNEXTLINE
 static LuaWrap::LuaRef runCallback;
 
-auto LoadLua(lua_State *state) -> Error::Error {
+auto LoadLua(lua_State *state) -> Error {
   // Load src/Engine/main.lua
   PrintDebug("Loading main Lua script...");
 
@@ -147,7 +147,7 @@ auto LoadLua(lua_State *state) -> Error::Error {
   return Error::Success();
 }
 
-auto MainLoop() -> Error::Error {
+auto MainLoop() -> Error {
   Graphics::GetCurrentThreadIndex() = 0;
   Error::SetupTraceback();
 
@@ -171,7 +171,7 @@ auto MainLoop() -> Error::Error {
   auto config = configResult.value();
 
   Filesystem::GetConfig().identity = config.Identity;
-  Error::Error fsInitErr = Filesystem::Init(".");
+  Error fsInitErr = Filesystem::Init(".");
 
   if (Error::IsError(fsInitErr)) {
     return fsInitErr;
@@ -179,7 +179,7 @@ auto MainLoop() -> Error::Error {
 
   PrintInfo("Save directory: " + Filesystem::GetSaveDirectory());
 
-  Error::Error fsMntErr = Filesystem::Mount(".", "/", true);
+  Error fsMntErr = Filesystem::Mount(".", "/", true);
   if (Error::IsError(fsMntErr)) {
     return fsMntErr;
   }

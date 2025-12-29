@@ -8,7 +8,7 @@ namespace Graphics {
 thread_local std::vector<std::vector<FrameUniformBufferObject>>
     ThreadUniformBuffers{}; // NOLINT
 
-auto InitializeUniformBufferModule(GraphicsContext &context) -> Error::Error {
+auto InitializeUniformBufferModule(GraphicsContext &context) -> Error {
   for (uint32_t i = 0; i < context.renderThreadCount; i++) {
     ThreadUniformBuffers.emplace_back();
     for (uint32_t j = 0; j < FRAMES_IN_FLIGHT; j++) {

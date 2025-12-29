@@ -97,7 +97,7 @@ auto RenderImguiDrawLists(VkCommandBuffer commandBuffer,
                           Graphics::GraphicsContext &context,
                           Graphics::Rendergraph::RenderGraph &graph,
                           Graphics::Rendergraph::CompiledPass &currentPass)
-    -> Error::Error {
+    -> Error {
   ImDrawData *draw_data = ImGui::GetDrawData();
 
   // Avoid rendering when minimized, scale coordinates for retina displays
@@ -285,7 +285,7 @@ auto InitializeImGui(
     Graphics::Rendergraph::RenderGraph &graph,
     Graphics::Rendergraph::ResourceHandle lastResourceHandle, // NOLINT
     Graphics::Rendergraph::ResourceHandle writeResourceHandle,
-    Context &editorContext) -> Error::Error {
+    Context &editorContext) -> Error {
   // Initialize ImGui context
 
   /// =============================== ///

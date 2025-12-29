@@ -25,9 +25,9 @@ struct BufferCreationInfo {
   bool PersistentMapping = false;
 };
 
-auto FlushBufferUploads(GraphicsContext &context) -> Error::Error;
-auto LoadBufferModule(GraphicsContext &context) -> Error::Error;
-auto UnloadBufferModule(GraphicsContext &context) -> Error::Error;
+auto FlushBufferUploads(GraphicsContext &context) -> Error;
+auto LoadBufferModule(GraphicsContext &context) -> Error;
+auto UnloadBufferModule(GraphicsContext &context) -> Error;
 
 static const Type bufferType = Type("Buffer");
 
@@ -61,7 +61,7 @@ struct Buffer : Object {
 
   static auto Create(Graphics::GraphicsContext &context,
                      Graphics::BufferCreationInfo info)
-      -> tl::expected<Ref<Graphics::Buffer>, Error::Error>;
+      -> Result<Ref<Graphics::Buffer>>;
 
   // Release the resources for safe automatic destruction later
   auto ScheduleDestroy() -> bool override;
@@ -82,9 +82,9 @@ struct Buffer : Object {
   // Set data into the buffer at the given offset
   auto SetData(GraphicsContext &context, const std::span<uint8_t> &data,
                VkDeviceSize offset = 0, VkDeviceSize size = VK_WHOLE_SIZE)
-      -> Error::Error;
+      -> Error;
 
-  auto MapMemory(GraphicsContext &context) -> Error::Error;
+  auto MapMemory(GraphicsContext &context) -> Error;
   auto UnmapMemory(GraphicsContext &context) -> void;
 
   // NOLINTNEXTLINE
@@ -96,6 +96,6 @@ struct Buffer : Object {
 private:
   auto Upload(GraphicsContext &context, std::span<const uint8_t> data,
               VkDeviceSize offset = 0, VkDeviceSize size = VK_WHOLE_SIZE)
-      -> Error::Error;
+      -> Error;
 };
 } // namespace Graphics

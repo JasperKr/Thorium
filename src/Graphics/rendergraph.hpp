@@ -341,7 +341,7 @@ auto AddRenderPass(RenderGraph &graph, const RenderPassDescriptor &descriptor)
     -> ResourceHandle;
 
 [[nodiscard]] auto Compile(GraphicsContext &context, RenderGraph &graph)
-    -> Error::Error;
+    -> Error;
 
 auto Execute(GraphicsContext &context, RenderGraph &graph,
              VkCommandBuffer commandBuffer) -> void;

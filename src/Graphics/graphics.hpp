@@ -92,7 +92,7 @@ struct GraphicsContext {
 };
 
 auto Initialize(GraphicsContext &context, Config::ApplicationConfig &config)
-    -> Error::Error;
+    -> Error;
 auto GetRenderData(GraphicsContext &context, uint32_t threadIndex)
     -> RenderData;
 auto GetCommandBuffer(GraphicsContext &context, uint32_t threadIndex)
@@ -115,9 +115,8 @@ void SetCurrentGraphicsContext(GraphicsContext *ctx);
 auto GetCurrentGraphicsContext() -> GraphicsContext *;
 
 auto GetCurrentTimelineSemaphoreValue(GraphicsContext &context)
-    -> tl::expected<uint64_t, Error::Error>;
-auto InitializeGlobalTimelineSemaphore(GraphicsContext &context)
-    -> Error::Error;
+    -> Result<uint64_t>;
+auto InitializeGlobalTimelineSemaphore(GraphicsContext &context) -> Error;
 auto GetCPUTimelineSemaphoreValue(GraphicsContext &context) -> uint64_t &;
 auto GetGlobalTimelineSemaphore(GraphicsContext &context) -> VkSemaphore;
 

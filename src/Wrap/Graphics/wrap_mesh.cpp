@@ -570,7 +570,7 @@ auto wrap_NewMesh(lua_State *state) -> int {
     }
   }
 
-  tl::expected<Ref<Mesh>, Error::Error> meshResult;
+  Result<Ref<Mesh>> meshResult;
 
   if (!hasIndexData) {
     meshResult = Mesh::Create(*ctx, vertexFormat, vertexData, nullptr);

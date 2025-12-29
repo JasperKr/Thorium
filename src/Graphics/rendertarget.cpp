@@ -65,7 +65,7 @@ auto GetSwapchainTextures() -> std::vector<Ref<Graphics::Texture::Texture>> & {
 
 auto GetPipelineLayout(const GraphicsContext &context,
                        const Shader::ShaderModule *shader)
-    -> tl::expected<VkPipelineLayout, Error::Error> {
+    -> Result<VkPipelineLayout> {
   auto pushConstantRanges = std::vector<VkPushConstantRange>{};
 
   for (const auto &buffer : shader->pushBuffers) {
@@ -112,7 +112,7 @@ auto GetPipelineLayout(const GraphicsContext &context,
       context.device, &pipelineLayoutInfo, nullptr, &pipelineLayout));
 
   if (Error::IsError(error)) {
-    return tl::make_unexpected(error);
+    return error.AsUnexpected();
   }
 
   return pipelineLayout;
@@ -121,7 +121,7 @@ auto GetPipelineLayout(const GraphicsContext &context,
 auto FillDescriptorSets(
     GraphicsContext &context, Shader::ShaderModule *shader,
     std::unordered_map<uint32_t, std::vector<VkDescriptorSetLayoutBinding>>
-        &descriptorSetLayoutBindings) -> Error::Error {
+        &descriptorSetLayoutBindings) -> Error {
   for (auto &layout : shader->reflection.resources) {
     if (layout.IsBuffer()) {
       auto &bufferInfo = std::get<BufferInfo>(layout.info);
@@ -172,7 +172,7 @@ auto FillDescriptorSets(
 }
 
 auto BindDefaultTextures(GraphicsContext &context, Shader::ShaderModule *shader)
-    -> Error::Error {
+    -> Error {
   for (const auto &resource : shader->reflection.resources) {
     if (resource.IsSampler()) {
 
@@ -225,7 +225,7 @@ auto BindDefaultTextures(GraphicsContext &context, Shader::ShaderModule *shader)
 }
 
 auto CreateDescriptorSets(GraphicsContext &context,
-                          Shader::ShaderModule *shader) -> Error::Error {
+                          Shader::ShaderModule *shader) -> Error {
   std::unordered_map<uint32_t, std::vector<VkDescriptorSetLayoutBinding>>
       descriptorSetLayoutBindings;
 
@@ -282,8 +282,7 @@ auto CreateDescriptorSets(GraphicsContext &context,
 }
 
 inline auto GetShaderStages(const State &state)
-    -> tl::expected<std::vector<VkPipelineShaderStageCreateInfo>,
-                    Error::Error> {
+    -> Result<std::vector<VkPipelineShaderStageCreateInfo>> {
 
   static std::unordered_map<Shader::ShaderModule *,
                             std::vector<VkPipelineShaderStageCreateInfo>>
@@ -379,8 +378,7 @@ auto inline GetRasterizationState(const State &state)
 
 auto inline GetColorBlendAttachmentState(const GraphicsContext &context,
                                          const State &state)
-    -> tl::expected<std::vector<VkPipelineColorBlendAttachmentState>,
-                    Error::Error> {
+    -> Result<std::vector<VkPipelineColorBlendAttachmentState>> {
 
   // Get Shader Output Reflection //
 
@@ -482,7 +480,7 @@ auto inline GetRenderFormatInfo(const GraphicsContext &context,
 }
 
 inline auto CreatePipeline(const GraphicsContext &context, State &state)
-    -> tl::expected<std::pair<VkPipeline, VkPipelineLayout>, Error::Error> {
+    -> Result<std::pair<VkPipeline, VkPipelineLayout>> {
   if (state.bindPoint != VK_PIPELINE_BIND_POINT_GRAPHICS) {
     return Error::Unexpected("Only graphics pipelines are supported.");
   }
@@ -491,7 +489,7 @@ inline auto CreatePipeline(const GraphicsContext &context, State &state)
 
   auto shaderStagesResult = GetShaderStages(state);
   if (Error::IsError(shaderStagesResult)) {
-    return tl::make_unexpected(shaderStagesResult.error());
+    return shaderStagesResult.error().AsUnexpected();
   }
 
   auto shaderStages = shaderStagesResult.value();
@@ -575,7 +573,7 @@ inline auto CreatePipeline(const GraphicsContext &context, State &state)
   auto colorBlendingResult = GetColorBlendAttachmentState(context, state);
 
   if (Error::IsError(colorBlendingResult)) {
-    return tl::make_unexpected(colorBlendingResult.error());
+    return colorBlendingResult.error().AsUnexpected();
   }
 
   auto blendAttachments = colorBlendingResult.value();
@@ -604,7 +602,7 @@ inline auto CreatePipeline(const GraphicsContext &context, State &state)
 
   auto layoutResult = GetPipelineLayout(context, shader);
   if (Error::IsError(layoutResult)) {
-    return tl::make_unexpected(layoutResult.error());
+    return layoutResult.error().AsUnexpected();
   }
 
   pipelineInfo.layout = layoutResult.value();
@@ -621,7 +619,7 @@ inline auto CreatePipeline(const GraphicsContext &context, State &state)
   PipelineCache[state] = {pipeline, layoutResult.value()};
 
   if (Error::IsError(error)) {
-    return tl::make_unexpected(error);
+    return error.AsUnexpected();
   }
 
   return std::pair<VkPipeline, VkPipelineLayout>(pipeline,
@@ -629,7 +627,7 @@ inline auto CreatePipeline(const GraphicsContext &context, State &state)
 }
 
 inline auto GetPipeline(const GraphicsContext &context, State &state)
-    -> tl::expected<std::pair<VkPipeline, VkPipelineLayout>, Error::Error> {
+    -> Result<std::pair<VkPipeline, VkPipelineLayout>> {
 
   PrintDebug("Getting pipeline from cache");
 
@@ -646,7 +644,7 @@ inline auto GetPipeline(const GraphicsContext &context, State &state)
   auto result = CreatePipeline(context, state);
 
   if (Error::IsError(result)) {
-    return tl::make_unexpected(result.error());
+    return result.error().AsUnexpected();
   }
 
   return result.value();
@@ -674,7 +672,7 @@ inline auto SetupDefaultState(GraphicsContext &context) -> State {
   return defaultState;
 }
 
-auto Load(GraphicsContext &context) -> Error::Error {
+auto Load(GraphicsContext &context) -> Error {
   assert(StateStack.size() == 0 &&
          "RenderTarget state stack is not empty on Load.");
 
@@ -707,7 +705,7 @@ auto Push(GraphicsContext &context) -> void {
   }
 }
 
-auto Pop(GraphicsContext &context) -> Error::Error {
+auto Pop(GraphicsContext &context) -> Error {
   if (StateStack.size() <= 1 || StateStack.empty()) {
     return Error::Create("More pops than pushes.");
   }
@@ -727,18 +725,18 @@ auto Reset(GraphicsContext &context) -> void {
 // NOLINTNEXTLINE, to call vkCmdEndRendering
 static bool BegunRendering = false;
 
-auto Flush(GraphicsContext &context) -> tl::expected<bool, Error::Error> {
+auto Flush(GraphicsContext &context) -> Result<bool> {
 
   auto &currentState = StateStack.back();
 
   auto result = CreateDescriptorSets(context, currentState.shader.get());
   if (Error::IsError(result)) {
-    return tl::make_unexpected(result);
+    return result.AsUnexpected();
   }
 
   auto pipelineResult = GetPipeline(context, currentState);
   if (Error::IsError(pipelineResult)) {
-    return tl::make_unexpected(pipelineResult.error());
+    return pipelineResult.error().AsUnexpected();
   }
 
   const auto &commandBuffer =
@@ -771,7 +769,7 @@ auto Flush(GraphicsContext &context) -> tl::expected<bool, Error::Error> {
   auto error =
       currentState.shader->FlushBuffers(context, pipelineResult.value().second);
   if (Error::IsError(error)) {
-    return tl::make_unexpected(error);
+    return error.AsUnexpected();
   }
 
   // Loop over all attachments
@@ -780,7 +778,7 @@ auto Flush(GraphicsContext &context) -> tl::expected<bool, Error::Error> {
     auto result = rendertarget->texture->UseAsAttachment(context);
 
     if (Error::IsError(result)) {
-      return tl::make_unexpected(result);
+      return result.AsUnexpected();
     }
   }
 
@@ -868,7 +866,7 @@ auto EndRendering(GraphicsContext &context) -> void {
   }
 }
 
-auto PrepareDraw(GraphicsContext &context) -> Error::Error {
+auto PrepareDraw(GraphicsContext &context) -> Error {
   auto flushResult = Flush(context);
 
   if (Error::IsError(flushResult)) {
@@ -897,7 +895,7 @@ auto IsSwapchainTexture(const Graphics::Texture::Texture &texture) -> bool {
   return false;
 }
 
-auto FinalizeFrame(GraphicsContext &context) -> Error::Error {
+auto FinalizeFrame(GraphicsContext &context) -> Error {
   if (StateStack.size() != 1) {
     return Error::Create("More pushes than pops.");
   }
@@ -913,7 +911,7 @@ auto FinalizeFrame(GraphicsContext &context) -> Error::Error {
   return Error::Success();
 }
 
-auto BeginFrame(GraphicsContext &context) -> Error::Error {
+auto BeginFrame(GraphicsContext &context) -> Error {
   // Setup stack with new swapchain texture
 
   StateStack.clear();
@@ -1140,8 +1138,7 @@ auto GetTopology() -> VkPrimitiveTopology {
   return currentState.primitiveTopology;
 }
 
-auto Clear(GraphicsContext &context, const ClearInfo &clearInfo)
-    -> Error::Error {
+auto Clear(GraphicsContext &context, const ClearInfo &clearInfo) -> Error {
   auto &currentState = StateStack.back();
 
   auto *commandBuffer =

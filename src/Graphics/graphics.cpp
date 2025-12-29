@@ -19,8 +19,7 @@ thread_local inline uint64_t currentCPUTimelineValue = 1;
 
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
-auto InitializeGlobalTimelineSemaphore(GraphicsContext &context)
-    -> Error::Error {
+auto InitializeGlobalTimelineSemaphore(GraphicsContext &context) -> Error {
 
   VkSemaphoreTypeCreateInfo timelineInfo = {
       .sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
@@ -51,21 +50,21 @@ auto GetCPUTimelineSemaphoreValue(GraphicsContext &context) -> uint64_t & {
 }
 
 auto GetCurrentTimelineSemaphoreValue(GraphicsContext &context)
-    -> tl::expected<uint64_t, Error::Error> {
+    -> Result<uint64_t> {
   uint64_t completedValue = UINT64_MAX;
 
   auto result = Error::Create(vkGetSemaphoreCounterValue(
       context.device, globalTimelineSemaphore, &completedValue));
 
   if (Error::IsError(result)) {
-    return tl::make_unexpected(result);
+    return result.AsUnexpected();
   }
 
   return completedValue;
 }
 
 static auto FindSurfaceFormat(GraphicsContext &context)
-    -> tl::expected<VkSurfaceFormatKHR, Error::Error> {
+    -> Result<VkSurfaceFormatKHR> {
   // Surface format finding code here
 
   uint32_t formatCount = 0;
@@ -73,7 +72,7 @@ static auto FindSurfaceFormat(GraphicsContext &context)
   vkGetPhysicalDeviceSurfaceFormatsKHR(context.physicalDevice, context.surface,
                                        &formatCount, nullptr);
   if (formatCount == 0) {
-    return tl::unexpected(Error::Create("No surface formats found", -1));
+    return Error::Unexpected("No surface formats found", -1);
   }
 
   std::vector<VkSurfaceFormatKHR> formats(formatCount);
@@ -99,7 +98,7 @@ static auto FindSurfaceFormat(GraphicsContext &context)
     }
   }
 
-  return tl::unexpected(Error::Create("No suitable surface format found", -2));
+  return Error::Unexpected("No suitable surface format found", -2);
 }
 
 // Prefer:
@@ -113,9 +112,9 @@ static const std::vector<VkPresentModeKHR> PresentModeScores = {
     VK_PRESENT_MODE_FIFO_RELAXED_KHR,
 };
 
-static auto FindPhysicalDevice(GraphicsContext &context) -> Error::Error {
+static auto FindPhysicalDevice(GraphicsContext &context) -> Error {
   uint32_t gpuCount = 0;
-  Error::Error error = Error::Create(
+  Error error = Error::Create(
       vkEnumeratePhysicalDevices(context.instance, &gpuCount, nullptr));
 
   if (gpuCount == 0) {
@@ -170,7 +169,7 @@ static auto FindPhysicalDevice(GraphicsContext &context) -> Error::Error {
   return Error::Success();
 }
 
-static auto FindQueueFamilies(GraphicsContext &context) -> Error::Error {
+static auto FindQueueFamilies(GraphicsContext &context) -> Error {
   uint32_t queueFamilyCount = 0;
   vkGetPhysicalDeviceQueueFamilyProperties(context.physicalDevice,
                                            &queueFamilyCount, nullptr);
@@ -209,14 +208,13 @@ static auto FindQueueFamilies(GraphicsContext &context) -> Error::Error {
 }
 
 static auto FindPresentMode(GraphicsContext &context)
-    -> tl::expected<VkPresentModeKHR, Error::Error> {
+    -> Result<VkPresentModeKHR> {
   uint32_t presentModeCount = 0;
   vkGetPhysicalDeviceSurfacePresentModesKHR(
       context.physicalDevice, context.surface, &presentModeCount, nullptr);
 
   if (presentModeCount == 0) {
-    return tl::unexpected(
-        Error::Create("No present modes found for surface.", -1));
+    return Error::Unexpected("No present modes found for surface.", -1);
   }
 
   std::vector<VkPresentModeKHR> presentModes(presentModeCount);
@@ -232,11 +230,10 @@ static auto FindPresentMode(GraphicsContext &context)
     }
   }
 
-  return tl::unexpected(
-      Error::Create("No suitable present mode found for surface.", -2));
+  return Error::Unexpected("No suitable present mode found for surface.", -2);
 }
 
-static auto CreateDevice(GraphicsContext &context) -> Error::Error {
+static auto CreateDevice(GraphicsContext &context) -> Error {
   float queuePriority = 1.0F;
   VkDeviceQueueCreateInfo queueCreateInfo{};
   queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
@@ -310,7 +307,7 @@ static auto CreateDevice(GraphicsContext &context) -> Error::Error {
       static_cast<uint32_t>(deviceExtensions.size());
   createInfo.ppEnabledExtensionNames = deviceExtensions.data();
 
-  Error::Error error = Error::Create(vkCreateDevice(
+  Error error = Error::Create(vkCreateDevice(
       context.physicalDevice, &createInfo, nullptr, &context.device));
 
   if (Error::IsError(error)) {
@@ -352,7 +349,7 @@ static void InitializeSwapchainTextures(GraphicsContext &context) {
   EndSingleTimeCommands(context, commandBuffer);
 }
 
-static auto CreateSwapchain(GraphicsContext &context) -> Error::Error {
+static auto CreateSwapchain(GraphicsContext &context) -> Error {
   VkSwapchainCreateInfoKHR swapchainInfo = {};
   swapchainInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
   swapchainInfo.surface = context.surface;
@@ -389,7 +386,7 @@ static auto CreateSwapchain(GraphicsContext &context) -> Error::Error {
 
   VkSwapchainKHR swapchain = VK_NULL_HANDLE;
 
-  Error::Error error = Error::Create(vkCreateSwapchainKHR(
+  Error error = Error::Create(vkCreateSwapchainKHR(
       context.device, &swapchainInfo, nullptr, &swapchain));
 
   if (Error::IsError(error)) {
@@ -448,7 +445,7 @@ static auto CreateSwapchain(GraphicsContext &context) -> Error::Error {
   return Error::Success();
 }
 
-static auto CreateRenderData(GraphicsContext &context) -> Error::Error {
+static auto CreateRenderData(GraphicsContext &context) -> Error {
   context.renderData = std::vector<RenderData>(context.renderThreadCount);
 
   for (RenderData &renderData : context.renderData) {
@@ -460,8 +457,8 @@ static auto CreateRenderData(GraphicsContext &context) -> Error::Error {
         static_cast<uint32_t>(VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT) |
         static_cast<uint32_t>(VK_COMMAND_POOL_CREATE_TRANSIENT_BIT);
 
-    Error::Error error = Error::Create(vkCreateCommandPool(
-        context.device, &poolInfo, nullptr, &renderData.pool));
+    Error error = Error::Create(vkCreateCommandPool(context.device, &poolInfo,
+                                                    nullptr, &renderData.pool));
 
     if (Error::IsError(error)) {
       return error;
@@ -498,7 +495,7 @@ auto GetCommandBuffer(GraphicsContext &context, uint32_t threadIndex)
   return renderData.commandBuffers.at(context.frameIndex);
 }
 
-static auto CreateSemaphores(GraphicsContext &context) -> Error::Error {
+static auto CreateSemaphores(GraphicsContext &context) -> Error {
   VkSemaphoreCreateInfo semaphoreInfo = {};
   semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
@@ -506,7 +503,7 @@ static auto CreateSemaphores(GraphicsContext &context) -> Error::Error {
   context.renderingFinished = std::vector<VkSemaphore>(MAX_SWAPCHAIN_IMAGES);
 
   for (int i = 0; i < MAX_SWAPCHAIN_IMAGES; i++) {
-    Error::Error error =
+    Error error =
         Error::Create(vkCreateSemaphore(context.device, &semaphoreInfo, nullptr,
                                         &context.swapchainImageReady.at(i)));
 
@@ -516,7 +513,7 @@ static auto CreateSemaphores(GraphicsContext &context) -> Error::Error {
   }
 
   for (int i = 0; i < MAX_SWAPCHAIN_IMAGES; i++) {
-    Error::Error error =
+    Error error =
         Error::Create(vkCreateSemaphore(context.device, &semaphoreInfo, nullptr,
                                         &context.renderingFinished.at(i)));
 
@@ -528,7 +525,7 @@ static auto CreateSemaphores(GraphicsContext &context) -> Error::Error {
   return Error::Success();
 }
 
-static auto CreateFences(GraphicsContext &context) -> Error::Error {
+static auto CreateFences(GraphicsContext &context) -> Error {
   VkFenceCreateInfo fenceInfo = {};
   fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
   fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
@@ -536,7 +533,7 @@ static auto CreateFences(GraphicsContext &context) -> Error::Error {
   context.inFlightFences = std::vector<VkFence>(FRAMES_IN_FLIGHT);
 
   for (int i = 0; i < FRAMES_IN_FLIGHT; i++) {
-    Error::Error error = Error::Create(vkCreateFence(
+    Error error = Error::Create(vkCreateFence(
         context.device, &fenceInfo, nullptr, &context.inFlightFences.at(i)));
   }
 
@@ -554,7 +551,7 @@ static auto CreateFences(GraphicsContext &context) -> Error::Error {
   return Error::Success();
 }
 
-static auto CreateVmaAllocator(GraphicsContext &context) -> Error::Error {
+static auto CreateVmaAllocator(GraphicsContext &context) -> Error {
   VmaAllocatorCreateInfo allocatorInfo = {0};
   allocatorInfo.physicalDevice = context.physicalDevice;
   allocatorInfo.device = context.device;
@@ -563,7 +560,7 @@ static auto CreateVmaAllocator(GraphicsContext &context) -> Error::Error {
   allocatorInfo.pAllocationCallbacks = nullptr;
 
   VmaVulkanFunctions vulkanFunctions;
-  Error::Error error = Error::Create(
+  Error error = Error::Create(
       vmaImportVulkanFunctionsFromVolk(&allocatorInfo, &vulkanFunctions));
 
   allocatorInfo.pVulkanFunctions = &vulkanFunctions;
@@ -578,7 +575,7 @@ static auto CreateVmaAllocator(GraphicsContext &context) -> Error::Error {
   return Error::Success();
 }
 
-static auto CreateDescriptorPool(GraphicsContext &context) -> Error::Error {
+static auto CreateDescriptorPool(GraphicsContext &context) -> Error {
   constexpr uint32_t poolSize = 4096;
 
   std::vector<VkDescriptorPoolSize> poolSizes = {
@@ -626,9 +623,9 @@ static auto CreateDescriptorPool(GraphicsContext &context) -> Error::Error {
 }
 
 auto Initialize(GraphicsContext &context, Config::ApplicationConfig &config)
-    -> Error::Error {
+    -> Error {
   PrintDebug("Initializing Volk...");
-  Error::Error error = Error::Create(volkInitialize());
+  Error error = Error::Create(volkInitialize());
 
   // Initialize SDL for Vulkan
   if (!SDL_Init(SDL_INIT_VIDEO)) {

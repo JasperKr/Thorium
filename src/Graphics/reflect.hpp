@@ -391,4 +391,4 @@ struct ShaderReflection {
 
 auto ReflectShader(Graphics::GraphicsContext &context,
                    slang::ProgramLayout *programLayout,
-                   ShaderReflection &outReflection) -> Error::Error;
+                   ShaderReflection &outReflection) -> Error;

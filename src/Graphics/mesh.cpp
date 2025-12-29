@@ -32,13 +32,13 @@ static auto VertexFormatSize(VertexFormat &format, uint32_t binding)
 
 auto Mesh::UploadVertices(GraphicsContext &context,
                           const std::span<uint8_t> &vertices, uint64_t offset)
-    -> Error::Error {
+    -> Error {
   return VertexBuffer->SetData(context, vertices, offset);
 }
 
 auto Mesh::UploadIndices(GraphicsContext &context,
                          const std::span<uint32_t> &indices, uint64_t offset)
-    -> Error::Error {
+    -> Error {
 
   auto uint8Span = // NOLINTNEXTLINE
       std::span<uint8_t>(reinterpret_cast<uint8_t *>(indices.data()),
@@ -49,8 +49,7 @@ auto Mesh::UploadIndices(GraphicsContext &context,
 
 auto Mesh::Create(GraphicsContext &context, VertexFormat vertexFormat,
                   const std::span<uint8_t> &vertexData,
-                  std::vector<uint32_t> *indexData)
-    -> tl::expected<Ref<Mesh>, Error::Error> {
+                  std::vector<uint32_t> *indexData) -> Result<Ref<Mesh>> {
 
   auto meshData = Ref<Mesh>::Make();
   auto *mesh = meshData.get();
@@ -82,7 +81,7 @@ auto Mesh::Create(GraphicsContext &context, VertexFormat vertexFormat,
   auto bufferResult = Buffer::Create(context, vboCreationInfo);
 
   if (Error::IsError(bufferResult)) {
-    return tl::unexpected<Error::Error>(bufferResult.error());
+    return bufferResult.error().AsUnexpected();
   }
 
   mesh->VertexBuffer = bufferResult.value();
@@ -97,7 +96,7 @@ auto Mesh::Create(GraphicsContext &context, VertexFormat vertexFormat,
   bufferResult = Buffer::Create(context, iboCreationInfo);
 
   if (Error::IsError(bufferResult)) {
-    return tl::unexpected<Error::Error>(bufferResult.error());
+    return bufferResult.error().AsUnexpected();
   }
 
   mesh->IndexBuffer = bufferResult.value();
@@ -106,10 +105,10 @@ auto Mesh::Create(GraphicsContext &context, VertexFormat vertexFormat,
   mesh->DrawRange.Count =
       mesh->IndexCount > 0 ? mesh->IndexCount : vertexData.size();
 
-  Error::Error error = mesh->UploadVertices(context, vertexData, 0);
+  Error error = mesh->UploadVertices(context, vertexData, 0);
 
   if (Error::IsError(error)) {
-    return tl::unexpected<Error::Error>(error);
+    return error.AsUnexpected();
   }
 
   if (hasIndices) {
@@ -118,7 +117,7 @@ auto Mesh::Create(GraphicsContext &context, VertexFormat vertexFormat,
     error = mesh->UploadIndices(context, indexSpan, 0);
 
     if (Error::IsError(error)) {
-      return tl::unexpected<Error::Error>(error);
+      return error.AsUnexpected();
     }
   }
 
@@ -159,7 +158,7 @@ void Mesh::Bind(VkCommandBuffer cmdBuffer) const {
   }
 }
 
-auto Mesh::Draw(GraphicsContext &context) const -> Error::Error {
+auto Mesh::Draw(GraphicsContext &context) const -> Error {
   PrintDebug("Draw called");
 
   RenderData renderData = GetRenderData(context, GetCurrentThreadIndex());
@@ -190,7 +189,7 @@ auto Mesh::Draw(GraphicsContext &context) const -> Error::Error {
 }
 
 auto Mesh::DrawInstanced(GraphicsContext &context, uint32_t instanceCount) const
-    -> Error::Error {
+    -> Error {
 
   RenderData renderData = GetRenderData(context, GetCurrentThreadIndex());
   Bind(renderData.commandBuffers[context.frameIndex]);
@@ -222,12 +221,12 @@ auto Mesh::DrawInstanced(GraphicsContext &context, uint32_t instanceCount) const
 
 auto Mesh::SetVertices(GraphicsContext &context,
                        const std::span<uint8_t> &vertexData, uint64_t offset)
-    -> Error::Error {
+    -> Error {
   return UploadVertices(context, vertexData, offset);
 }
 auto Mesh::SetIndices(GraphicsContext &context,
                       const std::span<uint32_t> &indexData, uint64_t offset)
-    -> Error::Error {
+    -> Error {
   return UploadIndices(context, indexData, offset);
 }
 
@@ -245,7 +244,7 @@ constexpr std::array<VkPrimitiveTopology, 5> validTopologies = {
     VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP,
 };
 
-auto Mesh::SetTopology(VkPrimitiveTopology topology) -> Error::Error {
+auto Mesh::SetTopology(VkPrimitiveTopology topology) -> Error {
   bool isValid = false;
   for (const auto &validTopology : validTopologies) {
     if (topology == validTopology) {

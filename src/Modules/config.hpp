@@ -8,7 +8,6 @@ extern "C" {
 }
 
 #include "Modules/error.hpp"
-#include "tl/expected.hpp"
 
 const int DefaultWidth = 800;
 const int DefaultHeight = 600;
@@ -27,7 +26,6 @@ struct ApplicationConfig {
   WindowSize Size = {.width = DefaultWidth, .height = DefaultHeight};
 };
 
-auto Configure(lua_State *state)
-    -> tl::expected<ApplicationConfig, Error::Error>;
+auto Configure(lua_State *state) -> Result<ApplicationConfig>;
 
 } // namespace Config

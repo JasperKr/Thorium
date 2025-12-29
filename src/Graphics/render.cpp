@@ -39,7 +39,7 @@ static void StartRecording(Graphics::GraphicsContext &context) {
 }
 
 static auto EndRecording(Graphics::GraphicsContext &context,
-                         uint32_t frameIndex) -> Error::Error {
+                         uint32_t frameIndex) -> Error {
 
   // Wait for all render threads to finish recording
   for (int i = 0; i < context.renderThreadCount; i++) {
@@ -125,8 +125,7 @@ void TransitionPresentToColor(VkCommandBuffer cmd, VkImage image) {
                        nullptr, 0, nullptr, 1, &barrier);
 }
 
-auto AquireNextSwapchainImage(Graphics::GraphicsContext &context)
-    -> Error::Error {
+auto AquireNextSwapchainImage(Graphics::GraphicsContext &context) -> Error {
 
   if (context.imagesInFlight[context.frameIndex] != VK_NULL_HANDLE) {
     vkWaitForFences(context.device, 1,
@@ -140,7 +139,7 @@ auto AquireNextSwapchainImage(Graphics::GraphicsContext &context)
       &context.swapchainImageIndex));
 }
 
-auto PrepareRecording(Graphics::GraphicsContext &context) -> Error::Error {
+auto PrepareRecording(Graphics::GraphicsContext &context) -> Error {
   ResetCommandBuffers(context);
 
   vkResetDescriptorPool(context.device,
@@ -155,7 +154,7 @@ auto PrepareRecording(Graphics::GraphicsContext &context) -> Error::Error {
   return Error::Success();
 }
 
-auto WaitOnFrame(Graphics::GraphicsContext &context) -> Error::Error {
+auto WaitOnFrame(Graphics::GraphicsContext &context) -> Error {
   // Wait on swapchainImageReady semaphore
   vkWaitForFences(context.device, 1,
                   &context.inFlightFences[context.frameIndex], VK_TRUE,
@@ -172,7 +171,7 @@ auto WaitOnFrame(Graphics::GraphicsContext &context) -> Error::Error {
   return Error::Success();
 }
 
-auto SubmitCommandBuffers(Graphics::GraphicsContext &context) -> Error::Error {
+auto SubmitCommandBuffers(Graphics::GraphicsContext &context) -> Error {
   VkSubmitInfo submitInfo = {};
   submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
@@ -235,7 +234,7 @@ auto SubmitCommandBuffers(Graphics::GraphicsContext &context) -> Error::Error {
   return Error::Success();
 }
 
-auto PresentFrame(Graphics::GraphicsContext &context) -> Error::Error {
+auto PresentFrame(Graphics::GraphicsContext &context) -> Error {
   VkPresentInfoKHR presentInfo = {};
   presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
   presentInfo.waitSemaphoreCount = 1;
@@ -246,7 +245,7 @@ auto PresentFrame(Graphics::GraphicsContext &context) -> Error::Error {
   presentInfo.pImageIndices = &context.swapchainImageIndex;
 
   // Present the image
-  Error::Error err =
+  Error err =
       Error::Create(vkQueuePresentKHR(context.graphicsQueue, &presentInfo));
 
   if (Error::IsError(err)) {
@@ -256,7 +255,7 @@ auto PresentFrame(Graphics::GraphicsContext &context) -> Error::Error {
   return Error::Success();
 }
 
-auto InitializeGraphics(Graphics::GraphicsContext &context) -> Error::Error {
+auto InitializeGraphics(Graphics::GraphicsContext &context) -> Error {
   auto error = AquireNextSwapchainImage(context);
   if (Error::IsError(error)) {
     return error;
@@ -273,7 +272,7 @@ auto InitializeGraphics(Graphics::GraphicsContext &context) -> Error::Error {
   return Error::Success();
 }
 
-auto Present(Graphics::GraphicsContext &context) -> Error::Error {
+auto Present(Graphics::GraphicsContext &context) -> Error {
   auto validateResult = RenderTarget::FinalizeFrame(context);
   if (Error::IsError(validateResult)) {
     return validateResult;

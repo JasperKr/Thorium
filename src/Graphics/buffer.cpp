@@ -33,7 +33,7 @@ inline uint64_t currentTimelineValue = 0;
 
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
-auto LoadBufferModule(GraphicsContext &context) -> Error::Error {
+auto LoadBufferModule(GraphicsContext &context) -> Error {
   VkSemaphoreTypeCreateInfo timelineInfo = {
       .sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
       .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
@@ -60,7 +60,7 @@ auto LoadBufferModule(GraphicsContext &context) -> Error::Error {
   return Error::Success();
 }
 
-auto UnloadBufferModule(GraphicsContext &context) -> Error::Error {
+auto UnloadBufferModule(GraphicsContext &context) -> Error {
   for (auto &stagingBuffer : StagingBuffers) {
     if (stagingBuffer.buffer != VK_NULL_HANDLE) {
       if (stagingBuffer.memory != VK_NULL_HANDLE) {
@@ -90,7 +90,7 @@ auto UnloadBufferModule(GraphicsContext &context) -> Error::Error {
 }
 
 // To be called at the end of each frame that uses uploads
-auto FlushBufferUploads(GraphicsContext &context) -> Error::Error {
+auto FlushBufferUploads(GraphicsContext &context) -> Error {
   // Check staging buffers for completed uploads
   uint64_t completedValue = 0;
   auto result = Error::Create(vkGetSemaphoreCounterValue(
@@ -122,7 +122,7 @@ auto FlushBufferUploads(GraphicsContext &context) -> Error::Error {
   return Error::Success();
 }
 
-auto Buffer::MapMemory(GraphicsContext &context) -> Error::Error {
+auto Buffer::MapMemory(GraphicsContext &context) -> Error {
   if (persistentMapping) {
     if (mappedData != nullptr) {
       return Error::Success();
@@ -152,7 +152,7 @@ auto Buffer::UnmapMemory(GraphicsContext &context) -> void {
 
 auto Buffer::Upload(GraphicsContext &context,
                     std::span<const uint8_t> data, // NOLINTNEXTLINE
-                    VkDeviceSize offset, VkDeviceSize size) -> Error::Error {
+                    VkDeviceSize offset, VkDeviceSize size) -> Error {
 
   if (((usage)&VK_BUFFER_USAGE_TRANSFER_DST_BIT) == 0) {
     return Error::Create(
@@ -294,21 +294,20 @@ auto Buffer::Upload(GraphicsContext &context,
 }
 
 auto Buffer::Create(GraphicsContext &context, BufferCreationInfo info)
-    -> tl::expected<Ref<Buffer>, Error::Error> {
+    -> Result<Ref<Buffer>> {
   if (!moduleInitialized) {
     auto result = LoadBufferModule(context);
     if (Error::IsError(result)) {
-      return tl::unexpected(result);
+      return result.AsUnexpected();
     }
   }
 
   if (info.size == 0) {
-    return tl::unexpected(Error::Create("Cannot create buffer with size 0."));
+    return Error::Unexpected("Cannot create buffer with size 0.");
   }
 
   if (info.size == VK_WHOLE_SIZE) {
-    return tl::unexpected(
-        Error::Create("Cannot create buffer with size VK_WHOLE_SIZE."));
+    return Error::Unexpected("Cannot create buffer with size VK_WHOLE_SIZE.");
   }
 
   auto buffer = Ref<Buffer>::Make();
@@ -334,7 +333,7 @@ auto Buffer::Create(GraphicsContext &context, BufferCreationInfo info)
                       &buffer->handle, &buffer->memory, nullptr);
 
   if (result != VK_SUCCESS) {
-    return tl::unexpected(Error::Create(result));
+    return Error::Unexpected(result);
   }
 
   buffer->size = info.size;
@@ -354,7 +353,7 @@ auto Buffer::Create(GraphicsContext &context, BufferCreationInfo info)
         vmaMapMemory(context.vmaAllocator, buffer->memory, &buffer->mappedData);
     if (result != VK_SUCCESS) {
       buffer->Destroy(context);
-      return tl::unexpected(Error::Create(result));
+      return Error::Unexpected(result);
     }
   }
 
@@ -365,7 +364,7 @@ auto Buffer::Create(GraphicsContext &context, BufferCreationInfo info)
 
 auto Buffer::SetData(GraphicsContext &context,
                      const std::span<uint8_t> &data, // NOLINTNEXTLINE
-                     VkDeviceSize offset, VkDeviceSize size) -> Error::Error {
+                     VkDeviceSize offset, VkDeviceSize size) -> Error {
 
   auto result = Upload(context, data, offset, size);
   if (Error::IsError(result)) {

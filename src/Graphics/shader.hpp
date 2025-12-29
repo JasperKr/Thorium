@@ -138,22 +138,20 @@ struct ShaderModule : Object {
 
   static auto Create(Graphics::GraphicsContext &context,
                      const std::string &modulename, const std::string &name)
-      -> tl::expected<Ref<ShaderModule>, Error::Error>;
+      -> Result<Ref<ShaderModule>>;
 
   auto Send(GraphicsContext &context, const ResourceKey &key,
-            const std::span<const uint8_t> &data) -> Error::Error;
+            const std::span<const uint8_t> &data) -> Error;
 
   auto Send(GraphicsContext &context, const ResourceKey &key, Buffer *buffer)
-      -> Error::Error;
+      -> Error;
 
   auto Send(GraphicsContext &context, const ResourceKey &key,
-            Graphics::Texture::Texture *texture) -> Error::Error;
+            Graphics::Texture::Texture *texture) -> Error;
 
-  auto GetUniform(const ResourceKey &key) const
-      -> tl::expected<const ResourceInfo, Error::Error>;
+  auto GetUniform(const ResourceKey &key) const -> Result<const ResourceInfo>;
 
-  auto FlushBuffers(GraphicsContext &context, VkPipelineLayout layout)
-      -> Error::Error;
+  auto FlushBuffers(GraphicsContext &context, VkPipelineLayout layout) -> Error;
 
   void Destroy(VkDevice &device);
   void ReloadMaybe(Graphics::GraphicsContext &context);
@@ -170,7 +168,7 @@ struct ShaderModule : Object {
 
 extern Ref<ShaderModule> DefaultShaderModule; // NOLINT
 
-auto LoadModule() -> Error::Error;
+auto LoadModule() -> Error;
 void UnloadModule();
 
 auto AddGlobalShaderExtern(const ShaderExtern &externVar) -> void;

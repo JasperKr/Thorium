@@ -11,33 +11,27 @@ struct Config {
 
 auto GetConfig() -> Config &;
 
-auto Init(const std::string &orgDir) -> Error::Error;
-auto Deinit() -> Error::Error;
-auto ReadFile(const std::string &path)
-    -> tl::expected<std::vector<unsigned char>, Error::Error>;
-auto ReadTextFile(const std::string &path)
-    -> tl::expected<std::string, Error::Error>;
+auto Init(const std::string &orgDir) -> Error;
+auto Deinit() -> Error;
+auto ReadFile(const std::string &path) -> Result<std::vector<unsigned char>>;
+auto ReadTextFile(const std::string &path) -> Result<std::string>;
 auto AppendFile(const std::string &path, std::span<const uint8_t> data)
-    -> Error::Error;
-auto AppendFile(const std::string &path, std::string_view data) -> Error::Error;
-auto WriteFile(const std::string &path, std::span<const uint8_t> data)
-    -> Error::Error;
-auto WriteFile(const std::string &path, std::string_view data) -> Error::Error;
+    -> Error;
+auto AppendFile(const std::string &path, std::string_view data) -> Error;
+auto WriteFile(const std::string &path, std::span<const uint8_t> data) -> Error;
+auto WriteFile(const std::string &path, std::string_view data) -> Error;
 auto FileExists(const std::string &path) -> bool;
 auto GetFileModTime(const std::string &path) -> uint64_t;
-auto AddToSearchPath(const std::string &path, bool appendToPath)
-    -> Error::Error;
-auto RemoveFromSearchPath(const std::string &path) -> Error::Error;
+auto AddToSearchPath(const std::string &path, bool appendToPath) -> Error;
+auto RemoveFromSearchPath(const std::string &path) -> Error;
 auto Mount(const std::string &path, const std::string &mountPoint,
-           bool appendToPath) -> Error::Error;
-auto Unmount(const std::string &path) -> Error::Error;
-auto GetRealPath(const std::string &path)
-    -> tl::expected<std::string, Error::Error>;
-auto ListFiles(const std::string &path)
-    -> tl::expected<std::vector<std::string>, Error::Error>;
+           bool appendToPath) -> Error;
+auto Unmount(const std::string &path) -> Error;
+auto GetRealPath(const std::string &path) -> Result<std::string>;
+auto ListFiles(const std::string &path) -> Result<std::vector<std::string>>;
 
 auto GetErrorCode() -> uint32_t;
-auto GetError() -> Error::Error;
+auto GetError() -> Error;
 
 auto GetSaveDirectory() -> std::string;
 auto GetSourceDirectory() -> std::string;
@@ -46,7 +40,7 @@ auto GetSourceDirectory() -> std::string;
 #undef CreateDirectory
 #endif
 
-auto CreateDirectory(const std::string &path) -> Error::Error;
+auto CreateDirectory(const std::string &path) -> Error;
 
 } // namespace Filesystem
 

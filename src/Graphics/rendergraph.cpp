@@ -416,7 +416,7 @@ auto BuildGraph(RenderGraph &graph) -> void {
 }
 
 [[nodiscard]] auto inline ValidateCompiledGraph(const RenderGraph &graph)
-    -> tl::expected<bool, Error::Error> {
+    -> Result<bool> {
   // For now just check if the last pass does not write any resources
   // It can write persistent resources since they live beyond the graph
   // execution (e.g. swapchain images, or other long-lived targets)
@@ -492,7 +492,7 @@ auto inline CalculateResourceLifetimes(RenderGraph &graph) -> void {
 
 [[nodiscard]] auto inline ReserveBlock(GraphicsContext &context,
                                        RenderGraph &graph, uint32_t size = 0)
-    -> Error::Error {
+    -> Error {
   MemoryBlock block = {};
   block.size = size == 0 ? graph.memoryBlockSize : size;
   block.offset = 0;
@@ -500,7 +500,7 @@ auto inline CalculateResourceLifetimes(RenderGraph &graph) -> void {
   VmaVirtualBlockCreateInfo blockCreateInfo = {};
   blockCreateInfo.size = block.size;
 
-  Error::Error error = Error::Create(
+  Error error = Error::Create(
       vmaCreateVirtualBlock(&blockCreateInfo, &block.virtualBlock));
 
   if (Error::IsError(error)) {
@@ -524,7 +524,7 @@ struct AllocationInfo {
 [[nodiscard]] auto inline AllocateResourceInBlocks(GraphicsContext &context,
                                                    RenderGraph &graph,
                                                    AllocationInfo info)
-    -> Error::Error {
+    -> Error {
 
   VmaVirtualAllocationCreateInfo allocInfo{};
   allocInfo.size = info.size;
@@ -843,7 +843,7 @@ auto inline GetDescriptorType(const Resource &resource,
 
 [[nodiscard]] auto inline CreateGraphDescriptorPool(GraphicsContext &context,
                                                     RenderGraph &graph)
-    -> Error::Error {
+    -> Error {
   std::unordered_map<VkDescriptorType, uint32_t> descriptorTypeCounts;
 
   uint32_t totalSets = 0;
@@ -906,7 +906,7 @@ auto inline GetDescriptorType(const Resource &resource,
 
 auto inline CreatePassDescriptorSetLayouts(GraphicsContext &context,
                                            RenderGraph &graph,
-                                           CompiledPass &pass) -> Error::Error {
+                                           CompiledPass &pass) -> Error {
 
   std::unordered_map<uint32_t, std::vector<VkDescriptorSetLayoutBinding>>
       setBindings;
@@ -956,8 +956,7 @@ auto inline CreatePassDescriptorSetLayouts(GraphicsContext &context,
 }
 
 auto inline CreateGraphDescriptorSetLayouts(GraphicsContext &context,
-                                            RenderGraph &graph)
-    -> Error::Error {
+                                            RenderGraph &graph) -> Error {
   for (auto &compiledPass : graph.compiledPasses) {
     auto error = CreatePassDescriptorSetLayouts(context, graph, compiledPass);
     if (Error::IsError(error)) {
@@ -970,7 +969,7 @@ auto inline CreateGraphDescriptorSetLayouts(GraphicsContext &context,
 
 auto inline CreatePassDescriptorSets(GraphicsContext &context,
                                      RenderGraph &graph, CompiledPass &pass)
-    -> Error::Error {
+    -> Error {
   std::vector<VkDescriptorSetLayout> layouts;
   layouts.reserve(pass.pass.state.descriptorSetLayouts.size());
 
@@ -1015,7 +1014,7 @@ auto inline CreatePassDescriptorSets(GraphicsContext &context,
 }
 
 auto inline CreateGraphDescriptorSets(GraphicsContext &context,
-                                      RenderGraph &graph) -> Error::Error {
+                                      RenderGraph &graph) -> Error {
   for (auto &compiledPass : graph.compiledPasses) {
     auto error = CreatePassDescriptorSets(context, graph, compiledPass);
     if (Error::IsError(error)) {
@@ -1432,7 +1431,7 @@ auto inline ApplyPassBarriers(VkCommandBuffer commandBuffer,
 [[nodiscard]] auto inline CreateGraphicsPipeline(GraphicsContext &context,
                                                  RenderGraph &graph,
                                                  CompiledPass &compiledPass)
-    -> Error::Error {
+    -> Error {
 
   if (compiledPass.pass.state.bindPoint != VK_PIPELINE_BIND_POINT_GRAPHICS) {
     return Error::Create(
@@ -1624,7 +1623,7 @@ auto inline ApplyPassBarriers(VkCommandBuffer commandBuffer,
 [[nodiscard]] auto inline CreateComputePipeline(GraphicsContext &context,
                                                 RenderGraph &graph,
                                                 CompiledPass &compiledPass)
-    -> Error::Error {
+    -> Error {
   if (compiledPass.pass.state.bindPoint != VK_PIPELINE_BIND_POINT_COMPUTE) {
     return Error::Create("Cannot create compute pipeline for non-compute pass");
   }
@@ -1653,8 +1652,7 @@ auto inline ApplyPassBarriers(VkCommandBuffer commandBuffer,
 }
 
 [[nodiscard]] auto inline CreateGraphPipelines(GraphicsContext &context,
-                                               RenderGraph &graph)
-    -> Error::Error {
+                                               RenderGraph &graph) -> Error {
   for (size_t passIndex = 1; passIndex < graph.compiledPasses.size();
        passIndex++) {
 
@@ -1706,8 +1704,7 @@ auto inline ApplyPassBarriers(VkCommandBuffer commandBuffer,
 }
 
 [[nodiscard]] auto inline BuildVirtualMemory(GraphicsContext &context,
-                                             RenderGraph &graph)
-    -> Error::Error {
+                                             RenderGraph &graph) -> Error {
   // Loop over compiled resource timeline and allocate/deallocate as needed
 
   graph.virtualAllocations.clear();
@@ -1749,8 +1746,7 @@ auto inline ApplyPassBarriers(VkCommandBuffer commandBuffer,
 }
 
 [[nodiscard]] auto inline AllocateBlockMemory(GraphicsContext &context,
-                                              RenderGraph &graph)
-    -> Error::Error {
+                                              RenderGraph &graph) -> Error {
   // For each memory block, allocate a VkDeviceMemory
 
   for (auto &block : graph.memoryBlocks) {
@@ -1777,8 +1773,7 @@ auto inline ApplyPassBarriers(VkCommandBuffer commandBuffer,
 }
 
 auto inline AllocateResourceMemory(GraphicsContext &context, RenderGraph &graph,
-                                   const ResourceHandle handle)
-    -> Error::Error {
+                                   const ResourceHandle handle) -> Error {
   auto allocationIterator = graph.virtualAllocations.find(handle);
   bool found = allocationIterator != graph.virtualAllocations.end();
 
@@ -1865,7 +1860,7 @@ auto inline AllocateResourceMemory(GraphicsContext &context, RenderGraph &graph,
   return Error::Success();
 }
 
-auto inline ValidateResources(const RenderGraph &graph) -> Error::Error {
+auto inline ValidateResources(const RenderGraph &graph) -> Error {
   for (const auto &resource : graph.resources) {
     if (resource.type == Type::Texture) {
       const auto &texture = std::get<Ref<Texture::Texture>>(resource.info);
@@ -1918,7 +1913,7 @@ auto inline ValidateResources(const RenderGraph &graph) -> Error::Error {
 [[nodiscard]]
 
 auto inline AllocateGraphResourceMemory(GraphicsContext &context,
-                                        RenderGraph &graph) -> Error::Error {
+                                        RenderGraph &graph) -> Error {
   std::unordered_set<ResourceHandle> usedResources;
 
   for (const auto &compiledPass : graph.compiledPasses) {
@@ -1948,7 +1943,7 @@ auto inline AllocateGraphResourceMemory(GraphicsContext &context,
 }
 
 [[nodiscard]] auto Compile(GraphicsContext &context, RenderGraph &graph)
-    -> Error::Error {
+    -> Error {
   // For each resource, calculate cost
 
   PrintDebug("Compiling render graph...");

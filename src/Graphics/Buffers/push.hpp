@@ -53,7 +53,7 @@ public:
   auto FlushData(FlushInfo &info) -> void;
 
   auto SetData(const ResourceKey &key, const std::span<const uint8_t> &values)
-      -> Error::Error {
+      -> Error {
 
     if (!std::holds_alternative<StructInfo>(layout.info)) {
       return Error::Create(
@@ -81,7 +81,7 @@ public:
     return Error::Success();
   }
 
-  auto SetData(const std::span<const uint8_t> &values) -> Error::Error {
+  auto SetData(const std::span<const uint8_t> &values) -> Error {
     if (!layout.IsScalar() && !layout.IsVector() && !layout.IsMatrix()) {
       return Error::Create("SetData without name only supported for scalar, "
                            "vector, and matrix push buffers");

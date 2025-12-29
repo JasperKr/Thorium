@@ -65,15 +65,15 @@ struct Texture : Object {
       VK_PIPELINE_STAGE_NONE_KHR; // NOLINT
 
   auto UseAs(GraphicsContext &context, TextureUsage newUsage,
-             VkPipelineStageFlags2 stage) -> Error::Error;
+             VkPipelineStageFlags2 stage) -> Error;
 
-  auto UseAsAttachment(GraphicsContext &context) -> Error::Error;
+  auto UseAsAttachment(GraphicsContext &context) -> Error;
   auto UseAsSampler(GraphicsContext &context, VkPipelineStageFlags2 stage)
-      -> Error::Error;
-  auto UseAsTransferSrc(GraphicsContext &context) -> Error::Error;
-  auto UseAsTransferDst(GraphicsContext &context) -> Error::Error;
+      -> Error;
+  auto UseAsTransferSrc(GraphicsContext &context) -> Error;
+  auto UseAsTransferDst(GraphicsContext &context) -> Error;
   auto UseAsStorage(GraphicsContext &context, VkPipelineStageFlags2 stage)
-      -> Error::Error;
+      -> Error;
 
   auto GetTimelineValues() const
       -> const std::unordered_map<QueueID, uint64_t> & {
@@ -137,10 +137,9 @@ struct Texture : Object {
   auto GetSampler(GraphicsContext &context) -> VkSampler;
   auto SetPixels(GraphicsContext &context, Image::ImageData &imageData,
                  uint32_t mipLevel, uint32_t arrayLayer, VkRect2D source,
-                 VkOffset2D target) -> Error::Error;
+                 VkOffset2D target) -> Error;
   auto SetPixels(GraphicsContext &context, Image::ImageData &imageData,
-                 uint32_t mipLevel = 0, uint32_t arrayLayer = 0)
-      -> Error::Error;
+                 uint32_t mipLevel = 0, uint32_t arrayLayer = 0) -> Error;
   [[nodiscard]] auto GetMipmapCount() const -> size_t { return mipmapcount; }
   [[nodiscard]] auto GetFormat() const -> VkFormat { return format; }
 
@@ -153,7 +152,7 @@ struct Texture : Object {
           VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT |
           VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
       VkAccessFlags2 srcAccessMask = VK_ACCESS_NONE, // NOLINT
-      VkAccessFlags2 dstAccessMask = VK_ACCESS_NONE) -> Error::Error;
+      VkAccessFlags2 dstAccessMask = VK_ACCESS_NONE) -> Error;
 };
 
 struct TextureCreationInfo {
@@ -166,47 +165,43 @@ struct TextureCreationInfo {
 };
 
 auto Create2D(GraphicsContext &context, TextureCreationInfo info)
-    -> tl::expected<Ref<Texture>, Error::Error>;
+    -> Result<Ref<Texture>>;
 auto FromSwapchainTexture(GraphicsContext &context, VkImage swapchainImage,
                           VkFormat format, uint32_t width, uint32_t height)
-    -> tl::expected<Ref<Texture>, Error::Error>;
+    -> Result<Ref<Texture>>;
 auto CreateCubeMap(GraphicsContext &context, TextureCreationInfo info)
-    -> tl::expected<Ref<Texture>, Error::Error>;
+    -> Result<Ref<Texture>>;
 auto CreateVolume(GraphicsContext &context, TextureCreationInfo info)
-    -> tl::expected<Ref<Texture>, Error::Error>;
+    -> Result<Ref<Texture>>;
 auto CreateArray(GraphicsContext &context, TextureCreationInfo info)
-    -> tl::expected<Ref<Texture>, Error::Error>;
+    -> Result<Ref<Texture>>;
 
 auto TransitionLayout(GraphicsContext &context, Texture *texture,
                       VkImageLayout oldLayout, VkImageLayout newLayout)
-    -> Error::Error;
+    -> Error;
 auto CopyImageToBuffer(GraphicsContext &context, Texture *texture,
-                       VkBuffer buffer) -> Error::Error;
-auto GenerateMipmaps(GraphicsContext &context, Texture *texture)
-    -> Error::Error;
+                       VkBuffer buffer) -> Error;
+auto GenerateMipmaps(GraphicsContext &context, Texture *texture) -> Error;
 auto LoadFromFile(GraphicsContext &context, const char *path,
-                  VkImageUsageFlags usage = 0)
-    -> tl::expected<Ref<Texture>, Error::Error>;
+                  VkImageUsageFlags usage = 0) -> Result<Ref<Texture>>;
 
 // texture 2D From byte array
 auto LoadFromMemory(GraphicsContext &context, const std::span<uint8_t> &data,
                     size_t dataSize, VkFormat format,
-                    VkImageUsageFlags usage = 0)
-    -> tl::expected<Ref<Texture>, Error::Error>;
+                    VkImageUsageFlags usage = 0) -> Result<Ref<Texture>>;
 
 // texture 2D From ImageData
 auto LoadFromMemory(GraphicsContext &context, Image::ImageData &imageData,
-                    VkImageUsageFlags usage = 0)
-    -> tl::expected<Ref<Texture>, Error::Error>;
+                    VkImageUsageFlags usage = 0) -> Result<Ref<Texture>>;
 
 // texture 3D/Array/Cubemap From array of ImageData slices
 auto LoadFromMemory(GraphicsContext &context,
                     const std::vector<Image::ImageData *> &slices,
                     TextureType type, VkImageUsageFlags usage = 0)
-    -> tl::expected<Ref<Texture>, Error::Error>;
+    -> Result<Ref<Texture>>;
 
 auto GetDefaultTexture(GraphicsContext &context, VkFormat format,
                        Graphics::Texture::TextureType textureType)
-    -> tl::expected<Ref<Graphics::Texture::Texture>, Error::Error>;
+    -> Result<Ref<Graphics::Texture::Texture>>;
 
 } // namespace Graphics::Texture

@@ -49,19 +49,15 @@ public:
 
   // TODO: Refactor to return Ref, so we can refcount for lua
   static auto Create(uint32_t width, uint32_t height, VkFormat format)
-      -> tl::expected<Ref<ImageData>, Error::Error>;
+      -> Result<Ref<ImageData>>;
   static auto Create(uint32_t width, uint32_t height,
                      const std::span<uint8_t> &srcData, VkFormat format)
-      -> tl::expected<Ref<ImageData>, Error::Error>;
+      -> Result<Ref<ImageData>>;
   static auto Create(uint32_t width, uint32_t height, Data::ByteData &byteData,
-                     VkFormat format)
-      -> tl::expected<Ref<ImageData>, Error::Error>;
-  static auto Create(const std::string &filepath)
-      -> tl::expected<Ref<ImageData>, Error::Error>;
-  static auto Create(const Data::ByteData &byteData)
-      -> tl::expected<Ref<ImageData>, Error::Error>;
-  static auto Create(const std::span<uint8_t> &data)
-      -> tl::expected<Ref<ImageData>, Error::Error>;
+                     VkFormat format) -> Result<Ref<ImageData>>;
+  static auto Create(const std::string &filepath) -> Result<Ref<ImageData>>;
+  static auto Create(const Data::ByteData &byteData) -> Result<Ref<ImageData>>;
+  static auto Create(const std::span<uint8_t> &data) -> Result<Ref<ImageData>>;
 
   static auto GetType() -> Type const * { return &type; }
 

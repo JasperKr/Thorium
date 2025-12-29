@@ -15,7 +15,7 @@ auto CreateStructuredBuffer(GraphicsContext &context, BufferFormat &format,
                             size_t elementCount,
                             VkMemoryPropertyFlags memoryFlags,
                             VkBufferUsageFlags usageFlags)
-    -> tl::expected<Ref<StructuredBuffer>, Error::Error> {
+    -> Result<Ref<StructuredBuffer>> {
 
   Graphics::BufferCreationInfo bufferCreateInfo{
       .size = format.GetSize() * elementCount,
@@ -26,7 +26,7 @@ auto CreateStructuredBuffer(GraphicsContext &context, BufferFormat &format,
   auto result = Buffer::Create(context, bufferCreateInfo);
 
   if (Error::IsError(result)) {
-    return tl::unexpected(result.error());
+    return result.error().AsUnexpected();
   }
 
   auto buffer = Ref<StructuredBuffer>::Make();

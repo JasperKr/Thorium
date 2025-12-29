@@ -25,7 +25,7 @@
 namespace Graphics::Texture {
 
 auto StartSingleUseCommandBuffer(GraphicsContext &context)
-    -> tl::expected<VkCommandBuffer, Error::Error> {
+    -> Result<VkCommandBuffer> {
   VkCommandBufferAllocateInfo allocInfo = {};
   allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
   allocInfo.commandPool = GetRenderData(context, 0).pool;
@@ -34,18 +34,18 @@ auto StartSingleUseCommandBuffer(GraphicsContext &context)
 
   VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
 
-  Error::Error error = Error::Create(
+  Error error = Error::Create(
       vkAllocateCommandBuffers(context.device, &allocInfo, &commandBuffer));
 
   if (Error::IsError(error)) {
-    return tl::unexpected(error);
+    return error.AsUnexpected();
   }
 
   return commandBuffer;
 }
 
 auto EndSingleUseCommandBuffer(GraphicsContext &context,
-                               VkCommandBuffer commandBuffer) -> Error::Error {
+                               VkCommandBuffer commandBuffer) -> Error {
   vkEndCommandBuffer(commandBuffer);
 
   VkSubmitInfo submitInfo = {};
@@ -53,7 +53,7 @@ auto EndSingleUseCommandBuffer(GraphicsContext &context,
   submitInfo.commandBufferCount = 1;
   submitInfo.pCommandBuffers = &commandBuffer;
 
-  Error::Error error = Error::Create(
+  Error error = Error::Create(
       vkQueueSubmit(context.graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE));
 
   if (Error::IsError(error)) {
@@ -93,7 +93,7 @@ auto GetAspectFlagsForFormat(VkFormat format) -> VkImageAspectFlagBits {
 }
 
 auto Create2D(GraphicsContext &context, TextureCreationInfo info)
-    -> tl::expected<Ref<Texture>, Error::Error> {
+    -> Result<Ref<Texture>> {
 
   Ref<Texture> texture = Ref<Texture>::Make();
 
@@ -130,7 +130,7 @@ auto Create2D(GraphicsContext &context, TextureCreationInfo info)
                                    &texture->image, &texture->memory, nullptr));
 
   if (Error::IsError(error)) {
-    return tl::unexpected(error);
+    return error.AsUnexpected();
   }
 
   context.runtimeInfo.textureCount++;
@@ -154,7 +154,7 @@ auto Create2D(GraphicsContext &context, TextureCreationInfo info)
       vkCreateImageView(context.device, &viewInfo, nullptr, &texture->view));
 
   if (Error::IsError(error)) {
-    return tl::unexpected(error);
+    return error.AsUnexpected();
   }
 
   VmaAllocationInfo memRequirements;
@@ -166,7 +166,7 @@ auto Create2D(GraphicsContext &context, TextureCreationInfo info)
 
 auto FromSwapchainTexture(GraphicsContext &context, VkImage swapchainImage,
                           VkFormat format, uint32_t width, uint32_t height)
-    -> tl::expected<Ref<Texture>, Error::Error> {
+    -> Result<Ref<Texture>> {
 
   Ref<Texture> texture = Ref<Texture>::Make();
 
@@ -184,7 +184,7 @@ auto FromSwapchainTexture(GraphicsContext &context, VkImage swapchainImage,
       context.physicalDevice, context.surface, &surfaceCapabilities));
 
   if (Error::IsError(error)) {
-    return tl::unexpected(error);
+    return error.AsUnexpected();
   }
 
   texture->usage = surfaceCapabilities.supportedUsageFlags;
@@ -204,18 +204,18 @@ auto FromSwapchainTexture(GraphicsContext &context, VkImage swapchainImage,
       vkCreateImageView(context.device, &viewInfo, nullptr, &texture->view));
 
   if (Error::IsError(error)) {
-    return tl::unexpected(error);
+    return error.AsUnexpected();
   }
 
   return texture;
 }
 
 auto CreateCubeMap(GraphicsContext &context, TextureCreationInfo info)
-    -> tl::expected<Ref<Texture>, Error::Error> {
+    -> Result<Ref<Texture>> {
 
   if (info.width != info.height) {
-    return tl::unexpected(
-        Error::Create("Cube map textures must have equal width and height."));
+    return Error::Unexpected(
+        "Cube map textures must have equal width and height.");
   }
   const int CubeFaceCount = 6;
 
@@ -249,12 +249,12 @@ auto CreateCubeMap(GraphicsContext &context, TextureCreationInfo info)
   allocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
   allocInfo.requiredFlags = 0;
   allocInfo.preferredFlags = 0;
-  Error::Error error =
+  Error error =
       Error::Create(vmaCreateImage(context.vmaAllocator, &imageInfo, &allocInfo,
                                    &texture->image, &texture->memory, nullptr));
 
   if (Error::IsError(error)) {
-    return tl::unexpected(error);
+    return error.AsUnexpected();
   }
 
   context.runtimeInfo.textureCount++;
@@ -274,7 +274,7 @@ auto CreateCubeMap(GraphicsContext &context, TextureCreationInfo info)
       vkCreateImageView(context.device, &viewInfo, nullptr, &texture->view));
 
   if (Error::IsError(error)) {
-    return tl::unexpected(error);
+    return error.AsUnexpected();
   }
 
   VmaAllocationInfo memRequirements;
@@ -285,7 +285,7 @@ auto CreateCubeMap(GraphicsContext &context, TextureCreationInfo info)
 }
 
 auto CreateVolume(GraphicsContext &context, TextureCreationInfo info)
-    -> tl::expected<Ref<Texture>, Error::Error> {
+    -> Result<Ref<Texture>> {
 
   Ref<Texture> texture = Ref<Texture>::Make();
 
@@ -317,12 +317,12 @@ auto CreateVolume(GraphicsContext &context, TextureCreationInfo info)
   allocInfo.requiredFlags = 0;
   allocInfo.preferredFlags = 0;
 
-  Error::Error error =
+  Error error =
       Error::Create(vmaCreateImage(context.vmaAllocator, &imageInfo, &allocInfo,
                                    &texture->image, &texture->memory, nullptr));
 
   if (Error::IsError(error)) {
-    return tl::unexpected(error);
+    return error.AsUnexpected();
   }
 
   context.runtimeInfo.textureCount++;
@@ -342,7 +342,7 @@ auto CreateVolume(GraphicsContext &context, TextureCreationInfo info)
       vkCreateImageView(context.device, &viewInfo, nullptr, &texture->view));
 
   if (Error::IsError(error)) {
-    return tl::unexpected(error);
+    return error.AsUnexpected();
   }
 
   VmaAllocationInfo memRequirements;
@@ -353,7 +353,7 @@ auto CreateVolume(GraphicsContext &context, TextureCreationInfo info)
 }
 
 auto CreateArray(GraphicsContext &context, TextureCreationInfo info)
-    -> tl::expected<Ref<Texture>, Error::Error> {
+    -> Result<Ref<Texture>> {
 
   Ref<Texture> texture = Ref<Texture>::Make();
 
@@ -385,12 +385,12 @@ auto CreateArray(GraphicsContext &context, TextureCreationInfo info)
   allocInfo.requiredFlags = 0;
   allocInfo.preferredFlags = 0;
 
-  Error::Error error =
+  Error error =
       Error::Create(vmaCreateImage(context.vmaAllocator, &imageInfo, &allocInfo,
                                    &texture->image, &texture->memory, nullptr));
 
   if (Error::IsError(error)) {
-    return tl::unexpected(error);
+    return error.AsUnexpected();
   }
 
   context.runtimeInfo.textureCount++;
@@ -410,7 +410,7 @@ auto CreateArray(GraphicsContext &context, TextureCreationInfo info)
       vkCreateImageView(context.device, &viewInfo, nullptr, &texture->view));
 
   if (Error::IsError(error)) {
-    return tl::unexpected(error);
+    return error.AsUnexpected();
   }
 
   VmaAllocationInfo memRequirements;
@@ -421,12 +421,11 @@ auto CreateArray(GraphicsContext &context, TextureCreationInfo info)
 }
 
 auto LoadFromFile(GraphicsContext &context, const char *path,
-                  VkImageUsageFlags usage)
-    -> tl::expected<Ref<Texture>, Error::Error> {
+                  VkImageUsageFlags usage) -> Result<Ref<Texture>> {
   auto fileLoadResult = Filesystem::ReadFile(path);
 
   if (Error::IsError(fileLoadResult)) {
-    return tl::unexpected(fileLoadResult.error());
+    return fileLoadResult.error().AsUnexpected();
   }
 
   auto filedata = fileLoadResult.value();
@@ -438,7 +437,7 @@ auto LoadFromFile(GraphicsContext &context, const char *path,
   auto imageDataResult = Image::ImageData::Create(dataSpan);
 
   if (Error::IsError(imageDataResult)) {
-    return tl::unexpected(imageDataResult.error());
+    return imageDataResult.error().AsUnexpected();
   }
 
   auto imageData = imageDataResult.value();
@@ -458,13 +457,13 @@ auto LoadFromFile(GraphicsContext &context, const char *path,
                });
 
   if (Error::IsError(texture)) {
-    return tl::unexpected(texture.error());
+    return texture.error().AsUnexpected();
   }
 
   auto result = texture.value()->SetPixels(context, *imageData);
 
   if (Error::IsError(result)) {
-    return tl::unexpected(result);
+    return result.AsUnexpected();
   }
 
   return texture;
@@ -472,13 +471,12 @@ auto LoadFromFile(GraphicsContext &context, const char *path,
 
 // texture 2D From byte array
 auto LoadFromMemory(GraphicsContext &context, const std::span<uint8_t> &data,
-                    VkImageUsageFlags usage)
-    -> tl::expected<Ref<Texture>, Error::Error> {
+                    VkImageUsageFlags usage) -> Result<Ref<Texture>> {
 
   auto imageDataResult = Image::ImageData::Create(data);
 
   if (Error::IsError(imageDataResult)) {
-    return tl::unexpected(imageDataResult.error());
+    return imageDataResult.error().AsUnexpected();
   }
 
   auto imageData = imageDataResult.value();
@@ -494,13 +492,13 @@ auto LoadFromMemory(GraphicsContext &context, const std::span<uint8_t> &data,
                });
 
   if (Error::IsError(texture)) {
-    return tl::unexpected(texture.error());
+    return texture.error().AsUnexpected();
   }
 
   auto result = texture.value()->SetPixels(context, *imageData);
 
   if (Error::IsError(result)) {
-    return tl::unexpected(result);
+    return result.AsUnexpected();
   }
 
   return texture;
@@ -508,8 +506,7 @@ auto LoadFromMemory(GraphicsContext &context, const std::span<uint8_t> &data,
 
 // texture 2D From ImageData
 auto LoadFromMemory(GraphicsContext &context, Image::ImageData &imageData,
-                    VkImageUsageFlags usage)
-    -> tl::expected<Ref<Texture>, Error::Error> {
+                    VkImageUsageFlags usage) -> Result<Ref<Texture>> {
   auto texture = Create2D(
       context, TextureCreationInfo{
                    .width = imageData.GetWidth(),
@@ -521,12 +518,12 @@ auto LoadFromMemory(GraphicsContext &context, Image::ImageData &imageData,
                });
 
   if (Error::IsError(texture)) {
-    return tl::unexpected(texture.error());
+    return texture.error().AsUnexpected();
   }
 
   auto result = texture.value()->SetPixels(context, imageData, 0, 0);
   if (Error::IsError(result)) {
-    return tl::unexpected(result);
+    return result.AsUnexpected();
   }
 
   return texture;
@@ -536,9 +533,9 @@ auto LoadFromMemory(GraphicsContext &context, Image::ImageData &imageData,
 auto LoadFromMemory(GraphicsContext &context,
                     const std::vector<Image::ImageData *> &slices,
                     TextureType type, VkImageUsageFlags usage)
-    -> tl::expected<Ref<Texture>, Error::Error> {
+    -> Result<Ref<Texture>> {
   if (slices.empty()) {
-    return tl::unexpected(Error::Create("No image slices provided."));
+    return Error::Unexpected("No image slices provided.");
   }
 
   uint32_t width = slices[0]->GetWidth();
@@ -549,8 +546,7 @@ auto LoadFromMemory(GraphicsContext &context,
   switch (type) {
   case TextureType::CUBEMAP: {
     if (slices.size() != 6) { // NOLINT
-      return tl::unexpected(
-          Error::Create("Cubemap textures require 6 image slices."));
+      return Error::Unexpected("Cubemap textures require 6 image slices.");
     }
 
     auto cubeMapTexture = CreateCubeMap(
@@ -564,7 +560,7 @@ auto LoadFromMemory(GraphicsContext &context,
                  });
 
     if (Error::IsError(cubeMapTexture)) {
-      return tl::unexpected(cubeMapTexture.error());
+      return cubeMapTexture.error().AsUnexpected();
     }
 
     texture = cubeMapTexture.value();
@@ -583,7 +579,7 @@ auto LoadFromMemory(GraphicsContext &context,
                  });
 
     if (Error::IsError(arrayTexture)) {
-      return tl::unexpected(arrayTexture.error());
+      return arrayTexture.error().AsUnexpected();
     }
 
     texture = arrayTexture.value();
@@ -602,15 +598,15 @@ auto LoadFromMemory(GraphicsContext &context,
                  });
 
     if (Error::IsError(volumeTexture)) {
-      return tl::unexpected(volumeTexture.error());
+      return volumeTexture.error().AsUnexpected();
     }
 
     texture = volumeTexture.value();
     break;
   }
   default:
-    return tl::unexpected(
-        Error::Create("Unsupported texture type for multiple image slices."));
+    return Error::Unexpected(
+        "Unsupported texture type for multiple image slices.");
   }
 
   for (size_t i = 0; i < slices.size(); ++i) {
@@ -622,7 +618,7 @@ auto LoadFromMemory(GraphicsContext &context,
                            },
                            VkOffset2D{0, 0});
     if (Error::IsError(result)) {
-      return tl::unexpected(result);
+      return result.AsUnexpected();
     }
   }
 
@@ -681,7 +677,7 @@ auto Texture::TransitionLayout(GraphicsContext &context, VkImageLayout layout,
                                VkPipelineStageFlags2 sourceStage, // NOLINT
                                VkPipelineStageFlags2 destinationStage,
                                VkAccessFlags2 srcAccessMask, // NOLINT
-                               VkAccessFlags2 dstAccessMask) -> Error::Error {
+                               VkAccessFlags2 dstAccessMask) -> Error {
 
   if (layout == VK_IMAGE_LAYOUT_UNDEFINED) {
     return Error::Create("Cannot transition to UNDEFINED layout.");
@@ -816,7 +812,7 @@ auto Texture::GetSampler(GraphicsContext &context) -> VkSampler {
 auto Texture::SetPixels(GraphicsContext &context, Image::ImageData &imageData,
                         uint32_t mipLevel, uint32_t arrayLayer, // NOLINT
                         VkRect2D source,                        // NOLINT
-                        VkOffset2D target) -> Error::Error {
+                        VkOffset2D target) -> Error {
   if (source.extent.width > size.width || source.extent.height > size.height) {
     return Error::Create(
         "ImageData dimensions exceed texture dimensions in SetPixels.");
@@ -918,7 +914,7 @@ auto Texture::SetPixels(GraphicsContext &context, Image::ImageData &imageData,
 auto Texture::SetPixels(GraphicsContext &context, Image::ImageData &imageData,
                         uint32_t mipLevel,
                         uint32_t arrayLayer) // NOLINT
-    -> Error::Error {
+    -> Error {
   VkRect2D source = {};
   source.offset = {.x = 0, .y = 0};
   source.extent = {.width = size.width, .height = size.height};
@@ -953,7 +949,7 @@ struct VkFormatTextureTypeHash {
 
 auto GetDefaultTexture(GraphicsContext &context, VkFormat format,
                        Graphics::Texture::TextureType textureType)
-    -> tl::expected<Ref<Graphics::Texture::Texture>, Error::Error> {
+    -> Result<Ref<Graphics::Texture::Texture>> {
   static std::unordered_map<std::pair<VkFormat, TextureType>, Ref<Texture>,
                             VkFormatTextureTypeHash>
       textureCache;
@@ -977,7 +973,7 @@ auto GetDefaultTexture(GraphicsContext &context, VkFormat format,
   texInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
   texInfo.mipmapCount = 1;
 
-  tl::expected<Ref<Texture>, Error::Error> result;
+  Result<Ref<Texture>> result;
   switch (textureType) {
   case TextureType::DEFAULT:
     result = Graphics::Texture::Create2D(context, texInfo);
@@ -992,8 +988,7 @@ auto GetDefaultTexture(GraphicsContext &context, VkFormat format,
     result = Graphics::Texture::CreateArray(context, texInfo);
     break;
   default:
-    return tl::unexpected(
-        Error::Create("Unsupported texture type for default texture->"));
+    return Error::Unexpected("Unsupported texture type for default texture");
   }
 
   if (Error::IsError(result)) {
@@ -1005,7 +1000,7 @@ auto GetDefaultTexture(GraphicsContext &context, VkFormat format,
   auto imageDataResult = Image::ImageData::Create(1, 1, format);
 
   if (Error::IsError(imageDataResult)) {
-    return tl::unexpected(imageDataResult.error());
+    return imageDataResult.error().AsUnexpected();
   }
 
   auto imageData = imageDataResult.value();
@@ -1015,7 +1010,7 @@ auto GetDefaultTexture(GraphicsContext &context, VkFormat format,
   auto setPixelsResult = texture->SetPixels(context, *imageData);
 
   if (Error::IsError(setPixelsResult)) {
-    return tl::unexpected(setPixelsResult);
+    return setPixelsResult.AsUnexpected();
   }
 
   textureCache[key] = texture;
@@ -1116,7 +1111,7 @@ constexpr auto IsStageAllowed(VkPipelineStageFlags2 stage) -> bool {
 }
 
 auto Texture::UseAs(GraphicsContext &context, TextureUsage newUsage,
-                    VkPipelineStageFlags2 stage) -> Error::Error {
+                    VkPipelineStageFlags2 stage) -> Error {
 
   if (newUsage == TextureUsage::Unknown) {
     return Error::Create("UseAs: TextureUsage::Unknown is not a valid usage.");
@@ -1152,25 +1147,25 @@ auto Texture::UseAs(GraphicsContext &context, TextureUsage newUsage,
   return result;
 }
 
-auto Texture::UseAsAttachment(GraphicsContext &context) -> Error::Error {
+auto Texture::UseAsAttachment(GraphicsContext &context) -> Error {
   auto newPipelineStage = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
   return UseAs(context, TextureUsage::Attachment, newPipelineStage);
 }
 
 auto Texture::UseAsSampler(GraphicsContext &context,
-                           VkPipelineStageFlags2 stage) -> Error::Error {
+                           VkPipelineStageFlags2 stage) -> Error {
   return UseAs(context, TextureUsage::Sampler, stage);
 }
-auto Texture::UseAsTransferSrc(GraphicsContext &context) -> Error::Error {
+auto Texture::UseAsTransferSrc(GraphicsContext &context) -> Error {
   return UseAs(context, TextureUsage::TransferSrc,
                VK_PIPELINE_STAGE_TRANSFER_BIT);
 }
-auto Texture::UseAsTransferDst(GraphicsContext &context) -> Error::Error {
+auto Texture::UseAsTransferDst(GraphicsContext &context) -> Error {
   return UseAs(context, TextureUsage::TransferDst,
                VK_PIPELINE_STAGE_TRANSFER_BIT);
 }
 auto Texture::UseAsStorage(GraphicsContext &context,
-                           VkPipelineStageFlags2 stage) -> Error::Error {
+                           VkPipelineStageFlags2 stage) -> Error {
   return UseAs(context, TextureUsage::Storage, stage);
 }
 

@@ -30,18 +30,18 @@ struct StructuredBuffer : Object {
     buffer->Clear(context, value, offset, size);
   }
 
-  auto IsCompatible(BufferInfo &layout) const -> Error::Error {
+  auto IsCompatible(BufferInfo &layout) const -> Error {
     for (const auto &component : format.GetComponents()) {
       auto *field =
           layout.ResolvePath(component.name.begin(), component.name.end());
       if (field == nullptr) {
-        return Error::Error(
+        return Error(
             "StructuredBuffer: Incompatible buffer layout (missing component " +
             ResourceKeyToString(component.name) + ").");
       }
 
       if (field->GetOffset() != component.offset) {
-        return Error::Error(
+        return Error(
             "StructuredBuffer: Incompatible buffer layout (component " +
             ResourceKeyToString(component.name) +
             " has incorrect offset, expected: " +
@@ -49,7 +49,7 @@ struct StructuredBuffer : Object {
       }
 
       if (field->GetSize() != Graphics::Format::GetSize(component.format)) {
-        return Error::Error(
+        return Error(
             "StructuredBuffer: Incompatible buffer layout (component " +
             ResourceKeyToString(component.name) +
             " has incorrect size, expected: " +
@@ -58,7 +58,7 @@ struct StructuredBuffer : Object {
     }
 
     if (layout.size != elementStride) {
-      return Error::Error(
+      return Error(
           "StructuredBuffer: Incompatible buffer layout size; expected " +
           std::to_string(elementStride) + ", got " +
           std::to_string(layout.size) + ".");
@@ -94,6 +94,6 @@ auto CreateStructuredBuffer(GraphicsContext &context, BufferFormat &format,
                             size_t elementCount,
                             VkMemoryPropertyFlags memoryFlags,
                             VkBufferUsageFlags usageFlags)
-    -> tl::expected<Ref<StructuredBuffer>, Error::Error>;
+    -> Result<Ref<StructuredBuffer>>;
 
 } // namespace Graphics::StructuredBuffer

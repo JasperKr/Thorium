@@ -3,11 +3,11 @@
 #include "Graphics/graphics.hpp"
 #include "Graphics/rendertarget.hpp"
 #include "Graphics/texture.hpp"
-#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Wrap/Graphics/wrap_color.hpp"
 #include "Wrap/wrap.hpp"
 #include "tl/expected.hpp"
+#include <string>
 #define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
 #include <cstring>
@@ -79,10 +79,11 @@ auto inline ConvertStringToBlendFactor(const char *string) -> VkBlendFactor {
   return VK_BLEND_FACTOR_ONE; // Default
 }
 
-// blendmode: { blendmode = "none"|"alpha"|"add"|"sub"|"mul", alphamode = "alphamultiply"|"premultiplied", mask = int }
-// Or, { srccolor = "", dstcolor = "", srcalpha = "", dstalpha = "", opcolor = "", opalpha = "", mask = int }
+// blendmode: { blendmode = "none"|"alpha"|"add"|"sub"|"mul", alphamode = "alphamultiply"|"premultiplied", mask = "" }
+// Or, { srccolor = "", dstcolor = "", srcalpha = "", dstalpha = "", opcolor = "", opalpha = "", mask = "" }
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 auto inline FromLuaState(lua_State *state)
-    -> VkPipelineColorBlendAttachmentState {
+    -> Result<VkPipelineColorBlendAttachmentState> {
   // blend mode from lua top of stack
   VkPipelineColorBlendAttachmentState blendMode = {};
 
@@ -93,7 +94,8 @@ auto inline FromLuaState(lua_State *state)
     lua_getfield(state, -2, "alphamode"); // get alphamode field
 
     if (lua_isstring(state, -1) == 0) {
-      luaL_error(state, "Expected string as second argument for blendmode");
+      return Error::Unexpected(
+          "Expected string as second argument for blendmode");
     }
     // [stuff, blendmode table, blendmode string, alphamode string]
 
@@ -133,7 +135,7 @@ auto inline FromLuaState(lua_State *state)
       blendMode.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
       blendMode.alphaBlendOp = VK_BLEND_OP_ADD;
     } else {
-      luaL_error(state, "Invalid blend mode: %s", modeStr);
+      return Error::Unexpected("Invalid blend mode: " + std::string(modeStr));
     }
 
     const char *alphaModeStr = luaL_checkstring(state, -1);
@@ -142,13 +144,9 @@ auto inline FromLuaState(lua_State *state)
     } else if (strcmp(alphaModeStr, "premultiplied") == 0) {
       blendMode.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
     } else {
-      luaL_error(state, "Invalid alpha blend mode: %s", alphaModeStr);
+      return Error::Unexpected("Invalid alpha blend mode: " +
+                               std::string(alphaModeStr));
     }
-
-    blendMode.colorWriteMask = static_cast<uint32_t>(VK_COLOR_COMPONENT_R_BIT) |
-                               static_cast<uint32_t>(VK_COLOR_COMPONENT_G_BIT) |
-                               static_cast<uint32_t>(VK_COLOR_COMPONENT_B_BIT) |
-                               static_cast<uint32_t>(VK_COLOR_COMPONENT_A_BIT);
 
     lua_pop(state, 2); // pop blendmode string and alphamode string
   } else {
@@ -188,8 +186,52 @@ auto inline FromLuaState(lua_State *state)
 
   // color write mask
   lua_getfield(state, -1, "mask");
-  if (lua_isnumber(state, -1) != 0) {
-    blendMode.colorWriteMask = static_cast<uint32_t>(lua_tointeger(state, -1));
+  if (lua_type(state, -1) == LUA_TSTRING) {
+    constexpr uint32_t MaxMaskLength = 5; // 4 chars + null terminator
+    const char *maskStr = luaL_checkstring(state, -1);
+
+    if (strlen(maskStr) >= MaxMaskLength) {
+      return Error::Unexpected("Blend mask string too long: " +
+                               std::string(maskStr));
+    }
+
+    blendMode.colorWriteMask = 0;
+    for (size_t i = 0; i < strlen(maskStr); i++) {
+      auto character = maskStr[i]; // NOLINT
+      switch (character) {
+      case 'r':
+        if ((blendMode.colorWriteMask & VK_COLOR_COMPONENT_R_BIT) != 0) {
+          return Error::Unexpected("Duplicate 'r' in blend mask: " +
+                                   std::string(maskStr));
+        }
+        blendMode.colorWriteMask |= VK_COLOR_COMPONENT_R_BIT;
+        break;
+      case 'g':
+        if ((blendMode.colorWriteMask & VK_COLOR_COMPONENT_G_BIT) != 0) {
+          return Error::Unexpected("Duplicate 'g' in blend mask: " +
+                                   std::string(maskStr));
+        }
+        blendMode.colorWriteMask |= VK_COLOR_COMPONENT_G_BIT;
+        break;
+      case 'b':
+        if ((blendMode.colorWriteMask & VK_COLOR_COMPONENT_B_BIT) != 0) {
+          return Error::Unexpected("Duplicate 'b' in blend mask: " +
+                                   std::string(maskStr));
+        }
+        blendMode.colorWriteMask |= VK_COLOR_COMPONENT_B_BIT;
+        break;
+      case 'a':
+        if ((blendMode.colorWriteMask & VK_COLOR_COMPONENT_A_BIT) != 0) {
+          return Error::Unexpected("Duplicate 'a' in blend mask: " +
+                                   std::string(maskStr));
+        }
+        blendMode.colorWriteMask |= VK_COLOR_COMPONENT_A_BIT;
+        break;
+      default:
+        return Error::Unexpected("Invalid character in blend mask: " +
+                                 std::string(1, character));
+      }
+    }
   } else {
     blendMode.colorWriteMask = static_cast<uint32_t>(VK_COLOR_COMPONENT_R_BIT) |
                                static_cast<uint32_t>(VK_COLOR_COMPONENT_G_BIT) |
@@ -217,12 +259,13 @@ auto RenderTargetsFromTexture(lua_State *state, int index)
   rendertarget->texture = Ref<Graphics::Texture::Texture>(texture);
   rendertarget->blendMode = DefaultBlendMode;
   rendertarget->clearValue = {0.0F, 0.0F, 0.0F, 1.0F};
+  rendertarget->loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
 
   return rendertarget;
 }
 
 auto RenderTargetsFromOptions(lua_State *state, int index)
-    -> tl::expected<Ref<Graphics::RenderTarget::RenderTarget>, Error::Error> {
+    -> Result<Ref<Graphics::RenderTarget::RenderTarget>> {
 
   luaL_checktype(state, index, LUA_TTABLE);
 
@@ -276,7 +319,11 @@ auto RenderTargetsFromOptions(lua_State *state, int index)
   // blendmode
   lua_getfield(state, index, "blendmode");
   if (lua_istable(state, -1) != 0) {
-    rendertarget->blendMode = FromLuaState(state);
+    auto blendModeResult = FromLuaState(state);
+    if (Error::IsError(blendModeResult)) {
+      return blendModeResult.error().AsUnexpected();
+    }
+    rendertarget->blendMode = blendModeResult.value();
   } else {
     rendertarget->blendMode = DefaultBlendMode;
   }
@@ -368,6 +415,9 @@ auto IsOptionsTable(lua_State *state, int index) -> bool {
 //
 // blendmode: { "none"|"alpha"|"add"|"sub"|"mul", "alphamultiply"|"premultiplied" }
 // Or, { srccolor = "", dstcolor = "", srcalpha = "", dstalpha = "", opcolor = "", opalpha = "" }
+//
+// TODO: add support for settings parameter for last argument in varargs texture without settings mode
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 auto wrap_SetRenderTargets(lua_State *state) -> int {
   auto *ctx = Graphics::GetCurrentGraphicsContext();
   std::vector<Ref<Graphics::RenderTarget::RenderTarget>> renderTargets;

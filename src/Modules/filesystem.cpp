@@ -16,7 +16,7 @@ auto GetConfig() -> Config & {
   return config;
 }
 
-auto Init(const std::string &orgDir) -> Error::Error {
+auto Init(const std::string &orgDir) -> Error {
   if (PHYSFS_isInit() != 0) {
     return Error::Create("Filesystem already initialized");
   }
@@ -31,7 +31,7 @@ auto Init(const std::string &orgDir) -> Error::Error {
   return Error::Success();
 }
 
-auto Deinit() -> Error::Error {
+auto Deinit() -> Error {
   if (PHYSFS_isInit() == 0) {
     return Error::Create("Filesystem not initialized");
   }
@@ -40,17 +40,16 @@ auto Deinit() -> Error::Error {
   return Error::Success();
 }
 
-auto ReadFile(const std::string &path)
-    -> tl::expected<std::vector<unsigned char>, Error::Error> {
+auto ReadFile(const std::string &path) -> Result<std::vector<unsigned char>> {
   PHYSFS_File *file = PHYSFS_openRead(path.c_str());
   if (file == nullptr) {
-    return tl::unexpected(Error::Create("Failed to open file: " + path));
+    return Error::Unexpected("Failed to open file: " + path);
   }
 
   const PHYSFS_sint64 len = PHYSFS_fileLength(file);
   if (len <= 0) {
     PHYSFS_close(file);
-    return tl::unexpected(Error::Create("Invalid file length"));
+    return Error::Unexpected("Invalid file length");
   }
 
   std::vector<unsigned char> data((size_t)len);
@@ -59,27 +58,26 @@ auto ReadFile(const std::string &path)
   int error = PHYSFS_close(file);
 
   if (error == PHYSFS_ERR_ERROR) {
-    return tl::unexpected(Error::Create("Failed to close file"));
+    return Error::Unexpected("Failed to close file");
   }
 
   if (read != len) {
-    return tl::unexpected(Error::Create("Failed to read entire file"));
+    return Error::Unexpected("Failed to read entire file");
   }
 
   return data;
 }
 
-auto ReadTextFile(const std::string &path)
-    -> tl::expected<std::string, Error::Error> {
+auto ReadTextFile(const std::string &path) -> Result<std::string> {
   PHYSFS_File *file = PHYSFS_openRead(path.c_str());
   if (file == nullptr) {
-    return tl::unexpected(Error::Create("Failed to open file: " + path));
+    return Error::Unexpected("Failed to open file: " + path);
   }
 
   const PHYSFS_sint64 len = PHYSFS_fileLength(file);
   if (len <= 0) {
     PHYSFS_close(file);
-    return tl::unexpected(Error::Create("Invalid file length"));
+    return Error::Unexpected("Invalid file length");
   }
 
   std::string data((size_t)len, '\0');
@@ -88,18 +86,18 @@ auto ReadTextFile(const std::string &path)
   int error = PHYSFS_close(file);
 
   if (error == PHYSFS_ERR_ERROR) {
-    return tl::unexpected(Error::Create("Failed to close file"));
+    return Error::Unexpected("Failed to close file");
   }
 
   if (read != len) {
-    return tl::unexpected(Error::Create("Failed to read entire file"));
+    return Error::Unexpected("Failed to read entire file");
   }
 
   return data;
 }
 
 auto AppendFile(const std::string &path, std::span<const uint8_t> data)
-    -> Error::Error {
+    -> Error {
   PHYSFS_File *file = PHYSFS_openAppend(path.c_str());
   if (file == nullptr) {
     return Error::Create("Failed to open file for appending");
@@ -119,8 +117,7 @@ auto AppendFile(const std::string &path, std::span<const uint8_t> data)
   return Error::Success();
 }
 
-auto AppendFile(const std::string &path, std::string_view data)
-    -> Error::Error {
+auto AppendFile(const std::string &path, std::string_view data) -> Error {
   PHYSFS_File *file = PHYSFS_openAppend(path.c_str());
   if (file == nullptr) {
     return Error::Create("Failed to open file for appending");
@@ -141,7 +138,7 @@ auto AppendFile(const std::string &path, std::string_view data)
 }
 
 auto WriteFile(const std::string &path, std::span<const uint8_t> data)
-    -> Error::Error {
+    -> Error {
   PHYSFS_File *file = PHYSFS_openWrite(path.c_str());
   if (file == nullptr) {
     return Error::Create("Failed to open file for writing");
@@ -161,7 +158,7 @@ auto WriteFile(const std::string &path, std::span<const uint8_t> data)
   return Error::Success();
 }
 
-auto WriteFile(const std::string &path, std::string_view data) -> Error::Error {
+auto WriteFile(const std::string &path, std::string_view data) -> Error {
 
   PHYSFS_File *file = PHYSFS_openWrite(path.c_str());
   if (file == nullptr) {
@@ -186,36 +183,33 @@ auto FileExists(const std::string &path) -> bool {
   return PHYSFS_exists(path.c_str()) != 0;
 }
 
-auto AddToSearchPath(const std::string &path, bool appendToPath)
-    -> Error::Error {
+auto AddToSearchPath(const std::string &path, bool appendToPath) -> Error {
   if (PHYSFS_mount(path.c_str(), nullptr, appendToPath ? 1 : 0) == 0) {
     return GetError();
   }
   return Error::Success();
 }
 
-auto RemoveFromSearchPath(const std::string &path) -> Error::Error {
+auto RemoveFromSearchPath(const std::string &path) -> Error {
   if (PHYSFS_unmount(path.c_str()) == 0) {
     return Error::Create("Failed to remove path from search path");
   }
   return Error::Success();
 }
 
-auto GetRealPath(const std::string &path)
-    -> tl::expected<std::string, Error::Error> {
+auto GetRealPath(const std::string &path) -> Result<std::string> {
   const char *realPath = PHYSFS_getRealDir(path.c_str());
   if (realPath == nullptr) {
-    return tl::unexpected(Error::Create("Failed to get real path"));
+    return Error::Unexpected("Failed to get real path");
   }
 
   return std::string(realPath);
 }
 
-auto ListFiles(const std::string &path)
-    -> tl::expected<std::vector<std::string>, Error::Error> {
+auto ListFiles(const std::string &path) -> Result<std::vector<std::string>> {
   auto *fileList = PHYSFS_enumerateFiles(path.c_str());
   if (fileList == nullptr) {
-    return tl::unexpected(Error::Create("Failed to list files"));
+    return Error::Unexpected("Failed to list files");
   }
 
   std::vector<std::string> files;
@@ -230,12 +224,12 @@ auto ListFiles(const std::string &path)
 }
 
 /*
-Error::Error Mount(std::string path, const char *mountPoint, bool appendToPath);
-Error::Error Unmount(std::string path);
+Error Mount(std::string path, const char *mountPoint, bool appendToPath);
+Error Unmount(std::string path);
 */
 
 auto Mount(const std::string &path, const std::string &mountPoint,
-           bool appendToPath) -> Error::Error {
+           bool appendToPath) -> Error {
   if (PHYSFS_mount(path.c_str(), mountPoint.c_str(), appendToPath ? 1 : 0) ==
       0) {
     return Error::Create("Failed to mount path");
@@ -243,7 +237,7 @@ auto Mount(const std::string &path, const std::string &mountPoint,
   return Error::Success();
 }
 
-auto Unmount(const std::string &path) -> Error::Error {
+auto Unmount(const std::string &path) -> Error {
   if (PHYSFS_unmount(path.c_str()) == 0) {
     return Error::Create("Failed to unmount path");
   }
@@ -263,7 +257,7 @@ auto GetErrorString() -> const char * {
 }
 auto GetErrorCode() -> uint32_t { return PHYSFS_getLastErrorCode(); }
 
-auto GetError() -> Error::Error {
+auto GetError() -> Error {
   return Error::Create("Filesystem error occurred: " +
                            std::string(GetErrorString()),
                        static_cast<int32_t>(GetErrorCode()));
@@ -286,7 +280,7 @@ auto GetSourceDirectory() -> std::string {
 #undef CreateDirectory
 #endif
 
-auto CreateDirectory(const std::string &path) -> Error::Error {
+auto CreateDirectory(const std::string &path) -> Error {
   if (PHYSFS_mkdir(path.c_str()) == 0) {
     return Error::Create("Failed to create directory: " + path);
   }

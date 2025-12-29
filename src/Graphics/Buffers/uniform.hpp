@@ -51,8 +51,7 @@ public:
     memcpy(localData.data() + atOffset, data.data(), data.size());
   }
 
-  auto Flush(Graphics::GraphicsContext &context)
-      -> tl::expected<bool, Error::Error> {
+  auto Flush(Graphics::GraphicsContext &context) -> Result<bool> {
     if (localData.size() > MaximumUniformBufferSize) {
       return Error::Unexpected(
           "Tried to set uniform buffer data larger than maximum. (holy shit)");
@@ -84,7 +83,7 @@ public:
 
       auto result = Graphics::Buffer::Create(context, info);
       if (Error::IsError(result)) {
-        return tl::make_unexpected(result.error());
+        return result.error().AsUnexpected();
       }
 
       buffer = result.value();
@@ -107,7 +106,7 @@ public:
     localData.clear();
 
     if (Error::IsError(result)) {
-      return tl::make_unexpected(result);
+      return result.AsUnexpected();
     }
 
     return resized;
@@ -121,8 +120,7 @@ public:
   [[nodiscard]] auto GetBuffer() const -> Ref<Graphics::Buffer> {
     return buffer;
   }
-  [[nodiscard]] auto NewFrame(Graphics::GraphicsContext &context)
-      -> Error::Error {
+  [[nodiscard]] auto NewFrame(Graphics::GraphicsContext &context) -> Error {
     offset = 0;
     return Error::Success();
   }
@@ -138,7 +136,7 @@ private:
 
 extern thread_local std::vector<std::vector<FrameUniformBufferObject>>
     ThreadUniformBuffers; // NOLINT
-auto InitializeUniformBufferModule(GraphicsContext &context) -> Error::Error;
+auto InitializeUniformBufferModule(GraphicsContext &context) -> Error;
 auto GetGlobalUniformBuffer(uint32_t frameIndex) -> FrameUniformBufferObject &;
 
 } // namespace Graphics

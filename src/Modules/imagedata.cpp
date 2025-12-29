@@ -349,7 +349,7 @@ auto ImageData::GetColor(Math::Uvec2 position) -> Color & {
 }
 
 auto ImageData::Create(uint32_t width, uint32_t height, VkFormat format)
-    -> tl::expected<Ref<ImageData>, Error::Error> {
+    -> Result<Ref<ImageData>> {
   size_t dataSize = static_cast<size_t>(width) * static_cast<size_t>(height) *
                     Graphics::Format::GetSize(format);
   auto byteData = Data::ByteData(dataSize);
@@ -359,15 +359,7 @@ auto ImageData::Create(uint32_t width, uint32_t height, VkFormat format)
 
 auto ImageData::Create(uint32_t width, uint32_t height,
                        const std::span<uint8_t> &srcData, VkFormat format)
-    -> tl::expected<Ref<ImageData>, Error::Error> {
-  // size_t dataSize = static_cast<size_t>(width) * static_cast<size_t>(height) *
-  //                   Graphics::Format::GetSize(format);
-  // if (srcData.size() != dataSize) {
-  //   return tl::unexpected(Error::Create(
-  //       "Source data size does not match image dimensions: " +
-  //       std::to_string(srcData.size()) + " != " + std::to_string(dataSize)));
-  // }
-
+    -> Result<Ref<ImageData>> {
   auto imgdata = Ref<ImageData>::Make(width, height, format);
   std::memcpy(imgdata->GetData(), srcData.data(), srcData.size());
   return imgdata;
@@ -375,24 +367,22 @@ auto ImageData::Create(uint32_t width, uint32_t height,
 
 auto ImageData::Create(uint32_t width, uint32_t height,
                        Data::ByteData &byteData, VkFormat format)
-    -> tl::expected<Ref<ImageData>, Error::Error> {
+    -> Result<Ref<ImageData>> {
   size_t dataSize = static_cast<size_t>(width) * static_cast<size_t>(height) *
                     Graphics::Format::GetSize(format);
   if (byteData.GetSize() != dataSize) {
-    return tl::unexpected(
-        Error::Create("ByteData size does not match image dimensions."));
+    return Error::Unexpected("ByteData size does not match image dimensions.");
   }
 
   return Ref<ImageData>::Make(width, height, byteData, format);
 }
 
-auto ImageData::Create(const std::string &filepath)
-    -> tl::expected<Ref<ImageData>, Error::Error> {
+auto ImageData::Create(const std::string &filepath) -> Result<Ref<ImageData>> {
 
   auto fileLoadResult = Filesystem::ReadFile(filepath);
 
   if (Error::IsError(fileLoadResult)) {
-    return tl::unexpected(fileLoadResult.error());
+    return fileLoadResult.error().AsUnexpected();
   }
 
   auto filedata = fileLoadResult.value();
@@ -404,7 +394,7 @@ auto ImageData::Create(const std::string &filepath)
 }
 
 auto ImageData::Create(const std::span<uint8_t> &data)
-    -> tl::expected<Ref<ImageData>, Error::Error> {
+    -> Result<Ref<ImageData>> {
   // Allowed formats: jpeg, png, tga, bmp, psd, gif, hdr, pic, ppm
 
   int texWidth = 0;
@@ -425,7 +415,7 @@ auto ImageData::Create(const std::span<uint8_t> &data)
                 std::to_string(texChannels) + " channels.");
 
     if (pixels == nullptr) {
-      return tl::unexpected(Error::Create("Failed to load image."));
+      return Error::Unexpected("Failed to load image.");
     }
 
     auto span =
@@ -458,7 +448,7 @@ auto ImageData::Create(const std::span<uint8_t> &data)
     stbi_image_free(pixels);
 
     if (Error::IsError(imageData)) {
-      return tl::unexpected(imageData.error());
+      return imageData.error().AsUnexpected();
     }
 
     return imageData.value();
@@ -470,7 +460,7 @@ auto ImageData::Create(const std::span<uint8_t> &data)
         data.data(), static_cast<int>(data.size()), &texWidth, &texHeight,
         &texChannels, STBI_rgb_alpha); // force 4 channels
     if (pixels == nullptr) {
-      return tl::unexpected(Error::Create("Failed to load image."));
+      return Error::Unexpected("Failed to load image.");
     }
 
     // NOLINTNEXTLINE, reinterpret cast is safe here
@@ -485,7 +475,7 @@ auto ImageData::Create(const std::span<uint8_t> &data)
     stbi_image_free(pixels);
 
     if (Error::IsError(imageData)) {
-      return tl::unexpected(imageData.error());
+      return imageData.error().AsUnexpected();
     }
 
     return imageData.value();
@@ -495,7 +485,7 @@ auto ImageData::Create(const std::span<uint8_t> &data)
 }
 
 auto ImageData::Create(const Data::ByteData &byteData)
-    -> tl::expected<Ref<ImageData>, Error::Error> {
+    -> Result<Ref<ImageData>> {
   return Create(byteData.GetDataSpan());
 }
 

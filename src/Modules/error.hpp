@@ -9,7 +9,6 @@
 #include <iostream>
 #include <sstream>
 #include <unordered_map>
-#include <vector>
 
 #if defined(LOG_ERRORS)
 #endif
@@ -19,6 +18,7 @@
 #include <vulkan/vulkan.h>
 
 #if __has_include(<stacktrace>) && not defined(__unix__)
+#include <vector>
 #define STD_STACKTRACE_SUPPORTED 1
 #include <stacktrace>
 #endif
@@ -33,29 +33,6 @@
 #include <execinfo.h>
 #endif
 #endif
-
-namespace Error {
-struct [[nodiscard]] Error {
-  std::string message;
-  int32_t code = -1;
-  std::string backtrace;
-
-  [[nodiscard]] auto ToString() const {
-    std::ostringstream oss;
-    oss << "Error: " << message << " (code " << code << ")\n";
-    oss << "Backtrace:\n" << backtrace;
-    return oss.str();
-  }
-};
-
-inline auto SetupTraceback() -> void {
-#ifndef STD_STACKTRACE_SUPPORTED
-#if defined(_WIN32)
-  SymSetOptions(SYMOPT_DEFERRED_LOADS | SYMOPT_UNDNAME | SYMOPT_LOAD_LINES);
-  SymInitialize(GetCurrentProcess(), nullptr, TRUE);
-#endif
-#endif
-}
 
 inline auto CleanupTracebackLine(const std::string &line) -> std::string {
   // Cut off each line at +0x
@@ -198,44 +175,6 @@ inline auto GetStackTrace(uint32_t level = 0) -> std::string {
   return "Unable to get stack trace on this platform.";
 }
 
-inline auto Create(const std::string &message, int32_t code = -1, // NOLINT
-                   uint32_t level = 0U) -> Error {
-  Error err = Error{
-      .message = message, .code = code, .backtrace = GetStackTrace(level)};
-#if defined(LOG_ERRORS)
-  if (code != 0) {
-    std::cerr << "Error: " << message << "\n"
-              << "Code: " << code << "\n"
-              << "Backtrace:\n"
-              << err.backtrace << "\n";
-  }
-#endif
-  return err;
-}
-
-inline auto Create(const char *message, int32_t code = -1) -> Error {
-  return Create(std::string(message), code, 1);
-}
-
-static const Error SuccessErr =
-    Error{.message = "", .code = 0, .backtrace = ""};
-
-inline auto Success() -> Error { return SuccessErr; }
-
-inline auto IsError(const Error &error) -> bool { return error.code < 0; }
-inline auto IsError(const tl::expected<void, Error> &expected) -> bool {
-  return !expected.has_value();
-}
-template <typename T>
-inline auto IsError(const tl::expected<T, Error> &expected) -> bool {
-  return !expected.has_value();
-}
-inline auto IsError(const SlangResult result) -> bool {
-  return SLANG_FAILED(result);
-}
-
-inline auto IsSuccess(const Error &error) -> bool { return error.code >= 0; }
-
 inline auto VkResultToString(int32_t result) -> std::string {
   switch (result) {
   case VK_SUCCESS:
@@ -279,14 +218,6 @@ inline auto VkResultToString(int32_t result) -> std::string {
   }
 }
 
-inline auto Create(VkResult result) -> Error {
-  if (result == VK_SUCCESS) {
-    return Success();
-  }
-
-  return Create(VkResultToString(result), result, 1);
-}
-
 const std::unordered_map<SlangResult, std::string> SlangResultToStringMap = {
     {SLANG_OK, "SLANG_OK"},                                 // NOLINT
     {SLANG_FAIL, "SLANG_FAIL"},                             // NOLINT
@@ -297,89 +228,165 @@ const std::unordered_map<SlangResult, std::string> SlangResultToStringMap = {
     {SLANG_E_NOT_FOUND, "SLANG_E_NOT_FOUND"},               // NOLINT
 };
 
-// NOLINTNEXTLINE
-inline auto Create(SlangResult result, uint32_t level = 0) -> Error {
-  if (SLANG_SUCCEEDED(result)) {
-    return Success();
+struct [[nodiscard]] Error {
+  std::string message;
+  int32_t code = -1;
+  std::string backtrace;
+
+  [[nodiscard]] auto ToString() const {
+    std::ostringstream oss;
+    oss << "Error: " << message << " (code " << code << ")\n";
+    oss << "Backtrace:\n" << backtrace;
+    return oss.str();
   }
 
-  auto len = strlen(slang::getLastInternalErrorMessage());
-  if (len > 0) {
-    return Create(slang::getLastInternalErrorMessage(),
-                  static_cast<int32_t>(result), level + 1);
+  static auto SetupTraceback() -> void {
+#ifndef STD_STACKTRACE_SUPPORTED
+#if defined(_WIN32)
+    SymSetOptions(SYMOPT_DEFERRED_LOADS | SYMOPT_UNDNAME | SYMOPT_LOAD_LINES);
+    SymInitialize(GetCurrentProcess(), nullptr, TRUE);
+#endif
+#endif
   }
 
-  /*
-  Severity | Facility | Code
-  ---------|----------|-----
-  31       |    30-16 | 15-0
-
-  Severity - 1 fail, 0 is success - as SlangResult is signed 32 bits, means
-  negative number indicates failure. Facility is where the error originated
-  from. Code is the code specific to the facility.
-
-  Result codes have the following styles,
-  1) SLANG_name
-  2) SLANG_s_f_name
-  3) SLANG_s_name
-
-  where s is S for success, E for error
-  f is the short version of the facility name
-
-  Style 1 is reserved for SLANG_OK and SLANG_FAIL as they are so commonly used.
-
-  It is acceptable to expand 'f' to a longer name to differentiate a name or
-  drop if unique without it. ie for a facility 'DRIVER' it might make sense to
-  have an error of the form SLANG_E_DRIVER_OUT_OF_MEMORY
-  */
-
-  // Check if the result is in the predefined map
-  auto errStrIterator = SlangResultToStringMap.find(result);
-  if (errStrIterator != SlangResultToStringMap.end()) {
-    return Create(errStrIterator->second, static_cast<int32_t>(result),
-                  level + 1);
+  static auto Create(const std::string &message, int32_t code = -1, // NOLINT
+                     uint32_t level = 0U) -> Error {
+    Error err = Error{
+        .message = message, .code = code, .backtrace = GetStackTrace(level)};
+#if defined(LOG_ERRORS)
+    if (code != 0) {
+      std::cerr << "Error: " << message << "\n"
+                << "Code: " << code << "\n"
+                << "Backtrace:\n"
+                << err.backtrace << "\n";
+    }
+#endif
+    return err;
   }
 
-  auto errorBit = (static_cast<uint32_t>(result) >> 31U) & 0x1U; // NOLINT
-  auto facilityBits = SLANG_GET_RESULT_FACILITY(result);         // NOLINT
-  auto codeBits = SLANG_GET_RESULT_CODE(result);                 // NOLINT
+  static auto Create(const char *message, int32_t code = -1) -> Error {
+    return Create(std::string(message), code, 1);
+  }
 
-  std::ostringstream oss;
-  oss << "SlangResult Error - Severity: "
-      << (errorBit == 1U ? "Error" : "Success")
-      << ", Facility: " << facilityBits << ", Code: " << codeBits;
-  return Create(oss.str(), static_cast<int32_t>(result), level + 1);
-}
+  static auto Success() -> Error {
+    return {.message = "", .code = 0, .backtrace = ""};
+  }
 
-inline auto Create(Slang::ComPtr<slang::IBlob> &diagnosticsBlob,
-                   uint32_t level = 0) -> Error {
-  if (diagnosticsBlob.readRef() == nullptr) {
-    return Success();
+  static auto IsError(const Error &error) -> bool { return error.code < 0; }
+  [[nodiscard]] auto IsError() const -> bool { return code < 0; }
+  static auto IsError(const tl::expected<void, Error> &expected) -> bool {
+    return !expected.has_value();
+  }
+  template <typename T>
+  static auto IsError(const tl::expected<T, Error> &expected) -> bool {
+    return !expected.has_value();
+  }
+  static auto IsError(const SlangResult result) -> bool {
+    return SLANG_FAILED(result);
+  }
+  static auto IsSuccess(const Error &error) -> bool { return error.code >= 0; }
+  [[nodiscard]] auto IsSuccess() const -> bool { return code >= 0; }
+
+  static auto Create(VkResult result) -> Error {
+    if (result == VK_SUCCESS) {
+      return Success();
+    }
+
+    return Create(VkResultToString(result), result, 1);
   }
 
   // NOLINTNEXTLINE
-  return Create((const char *)diagnosticsBlob->getBufferPointer(), -1,
-                level + 1);
-}
+  static auto Create(SlangResult result, uint32_t level = 0) -> Error {
+    if (SLANG_SUCCEEDED(result)) {
+      return Success();
+    }
 
-inline auto Unexpected(const std::string &message, int32_t code = -1) {
-  return tl::unexpected<Error>(Create(message, code, 1));
-}
+    auto len = strlen(slang::getLastInternalErrorMessage());
+    if (len > 0) {
+      return Create(slang::getLastInternalErrorMessage(),
+                    static_cast<int32_t>(result), level + 1);
+    }
 
-template <typename T>
-inline auto Create(SlangResult result,
-                   Slang::ComPtr<slang::IBlob> diagnosticsBlob,
-                   T *output = nullptr) -> Error {
-  if (diagnosticsBlob != nullptr && diagnosticsBlob.readRef() != nullptr) {
-    return Create(diagnosticsBlob);
-  }
-  if (IsError(result)) {
-    return Create(result, 1);
-  }
-  if (output == nullptr) {
-    return Create("Output pointer is null", -1, 1);
-  }
-  return Success();
-}
+    /*
+    Severity | Facility | Code
+    ---------|----------|-----
+    31       |    30-16 | 15-0
 
-} // namespace Error
+    Severity - 1 fail, 0 is success - as SlangResult is signed 32 bits, means
+    negative number indicates failure. Facility is where the error originated
+    from. Code is the code specific to the facility.
+
+    Result codes have the following styles,
+    1) SLANG_name
+    2) SLANG_s_f_name
+    3) SLANG_s_name
+
+    where s is S for success, E for error
+    f is the short version of the facility name
+
+    Style 1 is reserved for SLANG_OK and SLANG_FAIL as they are so commonly used.
+
+    It is acceptable to expand 'f' to a longer name to differentiate a name or
+    drop if unique without it. ie for a facility 'DRIVER' it might make sense to
+    have an error of the form SLANG_E_DRIVER_OUT_OF_MEMORY
+    */
+
+    // Check if the result is in the predefined map
+    auto errStrIterator = SlangResultToStringMap.find(result);
+    if (errStrIterator != SlangResultToStringMap.end()) {
+      return Create(errStrIterator->second, static_cast<int32_t>(result),
+                    level + 1);
+    }
+
+    auto errorBit = (static_cast<uint32_t>(result) >> 31U) & 0x1U; // NOLINT
+    auto facilityBits = SLANG_GET_RESULT_FACILITY(result);         // NOLINT
+    auto codeBits = SLANG_GET_RESULT_CODE(result);                 // NOLINT
+
+    std::ostringstream oss;
+    oss << "SlangResult Error - Severity: "
+        << (errorBit == 1U ? "Error" : "Success")
+        << ", Facility: " << facilityBits << ", Code: " << codeBits;
+    return Create(oss.str(), static_cast<int32_t>(result), level + 1);
+  }
+
+  static auto Create(Slang::ComPtr<slang::IBlob> &diagnosticsBlob,
+                     uint32_t level = 0) -> Error {
+    if (diagnosticsBlob.readRef() == nullptr) {
+      return Success();
+    }
+
+    // NOLINTNEXTLINE
+    return Create((const char *)diagnosticsBlob->getBufferPointer(), -1,
+                  level + 1);
+  }
+
+  static auto Unexpected(const std::string &message, int32_t code = -1) {
+    return tl::unexpected<Error>(Create(message, code, 1));
+  }
+
+  static auto Unexpected(VkResult result) {
+    return tl::unexpected<Error>(Create(result));
+  }
+
+  template <typename T>
+  static auto Create(SlangResult result,
+                     Slang::ComPtr<slang::IBlob> diagnosticsBlob,
+                     T *output = nullptr) -> Error {
+    if (diagnosticsBlob != nullptr && diagnosticsBlob.readRef() != nullptr) {
+      return Create(diagnosticsBlob);
+    }
+    if (IsError(result)) {
+      return Create(result, 1);
+    }
+    if (output == nullptr) {
+      return Create("Output pointer is null", -1, 1);
+    }
+    return Success();
+  }
+
+  [[nodiscard]] auto AsUnexpected() const -> tl::unexpected<Error> {
+    return tl::unexpected<Error>(*this);
+  }
+};
+
+template <typename T> using Result = tl::expected<T, Error>;

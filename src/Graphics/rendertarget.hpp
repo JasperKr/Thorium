@@ -231,16 +231,16 @@ extern std::unordered_map<State, std::pair<VkPipeline, VkPipelineLayout>,
     PipelineCache;
 
 auto SetDirty() -> void;
-auto FinalizeFrame(GraphicsContext &context) -> Error::Error;
-auto BeginFrame(GraphicsContext &context) -> Error::Error;
+auto FinalizeFrame(GraphicsContext &context) -> Error;
+auto BeginFrame(GraphicsContext &context) -> Error;
 
 auto Push(GraphicsContext &context) -> void;
-auto Pop(GraphicsContext &context) -> Error::Error;
+auto Pop(GraphicsContext &context) -> Error;
 auto Reset(GraphicsContext &context) -> void;
-auto Flush(GraphicsContext &context) -> tl::expected<bool, Error::Error>;
-auto Load(GraphicsContext &context) -> Error::Error;
+auto Flush(GraphicsContext &context) -> Result<bool>;
+auto Load(GraphicsContext &context) -> Error;
 auto Destroy(GraphicsContext &context) -> void;
-auto PrepareDraw(GraphicsContext &context) -> Error::Error;
+auto PrepareDraw(GraphicsContext &context) -> Error;
 
 auto EndRendering(GraphicsContext &context) -> void;
 auto BeginRendering(GraphicsContext &context) -> void;
@@ -281,8 +281,7 @@ struct ClearInfo {
   bool clearStencil = false;
 };
 
-auto Clear(GraphicsContext &context, const ClearInfo &clearInfo)
-    -> Error::Error;
+auto Clear(GraphicsContext &context, const ClearInfo &clearInfo) -> Error;
 
 } // namespace RenderTarget
 } // namespace Graphics

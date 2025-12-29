@@ -55,7 +55,7 @@ static slang::TargetDesc SpvTargetDesc = {
 const std::string SpirvDirectory = "shaders/spirv/";
 Ref<ShaderModule> DefaultShaderModule = {}; // NOLINT
 
-auto LoadModule() -> Error::Error {
+auto LoadModule() -> Error {
   auto err = Filesystem::CreateDirectory(SpirvDirectory);
 
   if (Error::IsError(err)) {
@@ -240,7 +240,7 @@ auto SlangStageToString(SlangStage stage) -> std::string {
 }
 
 static inline auto LoadSlang(GraphicsContext &context,
-                             Ref<ShaderModule> &shader) -> Error::Error {
+                             Ref<ShaderModule> &shader) -> Error {
   slang::SessionDesc sessionDesc = {};
   sessionDesc.allowGLSLSyntax = false;
   sessionDesc.defaultMatrixLayoutMode =
@@ -396,7 +396,7 @@ static inline auto LoadSlang(GraphicsContext &context,
   moduleCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
   moduleCreateInfo.codeSize = data.size() * sizeof(uint32_t);
   moduleCreateInfo.pCode = data.data();
-  Error::Error error = Error::Create(vkCreateShaderModule(
+  Error error = Error::Create(vkCreateShaderModule(
       context.device, &moduleCreateInfo, nullptr, &shader->module));
 
   if (Error::IsError(error)) {
@@ -411,7 +411,7 @@ static inline auto LoadSlang(GraphicsContext &context,
 auto ShaderModule::Create(Graphics::GraphicsContext &context,
                           const std::string &modulename,
                           const std::string &name)
-    -> tl::expected<Ref<ShaderModule>, Error::Error> {
+    -> Result<Ref<ShaderModule>> {
   Ref<ShaderModule> shader = Ref<ShaderModule>::Make();
   shader->name = name;
   shader->moduleName = modulename;
@@ -419,14 +419,14 @@ auto ShaderModule::Create(Graphics::GraphicsContext &context,
   // Compile Slang to SPIR-V and create shader module
   auto error = LoadSlang(context, shader);
   if (Error::IsError(error)) {
-    return tl::unexpected(error);
+    return error.AsUnexpected();
   }
 
   auto reflectResult =
       ReflectShader(context, shader->programLayout, shader->reflection);
 
   if (Error::IsError(reflectResult)) {
-    return tl::unexpected(reflectResult);
+    return reflectResult.AsUnexpected();
   }
 
   for (auto &layout : shader->reflection.resources) {
@@ -444,7 +444,7 @@ auto ShaderModule::Create(Graphics::GraphicsContext &context,
   return shader;
 }
 
-inline auto ValidateBuffers(const ShaderModule *shader) -> Error::Error {
+inline auto ValidateBuffers(const ShaderModule *shader) -> Error {
   // Loop over shader->reflection.resources, and check if all buffers are
   // set up in shader->uniformBuffers and shader->storageBuffers,
   // this is done outside the shader as the user must manage these
@@ -482,7 +482,7 @@ void append(ResourceKey &dest, const ResourceKey &src) {
 }
 
 auto ShaderModule::GetUniform(const ResourceKey &key) const
-    -> tl::expected<const ResourceInfo, Error::Error> {
+    -> Result<const ResourceInfo> {
   for (const auto &pushBuffer : pushBuffers) {
     PrintDebug("Checking push buffer {} for key: {}...",
                pushBuffer.GetLayout().name, ResourceKeyToString(key));
@@ -490,8 +490,7 @@ auto ShaderModule::GetUniform(const ResourceKey &key) const
       const auto *const info =
           pushBuffer.GetLayout().ResolvePath(key.begin(), key.end());
       if (info == nullptr) {
-        return tl::unexpected(
-            Error::Create("Uniform not found in push buffer."));
+        return Error::Unexpected("Uniform not found in push buffer.");
       }
       return *info;
     }
@@ -506,14 +505,14 @@ auto ShaderModule::GetUniform(const ResourceKey &key) const
   const auto *info =
       reflection.globals.ResolvePath(globalsKey.begin(), globalsKey.end());
   if (info == nullptr) {
-    return tl::unexpected(Error::Create("Uniform not found."));
+    return Error::Unexpected("Uniform not found.");
   }
 
   return *info;
 }
 
 auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
-                        const std::span<const uint8_t> &data) -> Error::Error {
+                        const std::span<const uint8_t> &data) -> Error {
   for (auto &pushBuffer : pushBuffers) {
     PrintDebug("Checking push buffer {} for key: {}...",
                pushBuffer.GetLayout().name, ResourceKeyToString(key));
@@ -546,7 +545,7 @@ auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
 }
 
 auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
-                        Buffer *buffer) -> Error::Error {
+                        Buffer *buffer) -> Error {
 
   for (const auto &resource : reflection.resources) {
     if (!std::holds_alternative<BufferInfo>(resource.info)) {
@@ -586,7 +585,7 @@ auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
 }
 
 auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
-                        Graphics::Texture::Texture *texture) -> Error::Error {
+                        Graphics::Texture::Texture *texture) -> Error {
   for (const auto &resource : reflection.resources) {
     if (!std::holds_alternative<SamplerInfo>(resource.info)) {
       continue;
@@ -642,7 +641,7 @@ auto ShaderModule::hash() const -> size_t {
 }
 
 auto ShaderModule::FlushBuffers(GraphicsContext &context,
-                                VkPipelineLayout layout) -> Error::Error {
+                                VkPipelineLayout layout) -> Error {
   auto validateResult = ValidateBuffers(this);
   if (Error::IsError(validateResult)) {
     return validateResult;
@@ -705,7 +704,7 @@ auto ShaderModule::FlushBuffers(GraphicsContext &context,
   }
 
   for (auto &transition : pendingImageTransitions) {
-    Error::Error result;
+    Error result;
 
     switch (transition.newUsage) {
     case Texture::TextureUsage::Sampler:

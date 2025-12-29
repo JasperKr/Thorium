@@ -400,7 +400,7 @@ struct FormatDefault2D {
 };
 
 inline auto GetQuadMesh(GraphicsContext &context, const VkRect2D size,
-                        Color color) -> tl::expected<Ref<Mesh>, Error::Error> {
+                        Color color) -> Result<Ref<Mesh>> {
   // Create a quad mesh covering the given size NOLINTNEXTLINE
   static std::vector<FormatDefault2D> vertices = {};
   static std::vector<uint32_t> indices = {0, 1, 2, 2, 3, 0};
@@ -469,14 +469,14 @@ inline auto GetQuadMesh(GraphicsContext &context, const VkRect2D size,
 
   auto setDataError = mesh->get()->SetVertices(context, span);
   if (Error::IsError(setDataError)) {
-    return tl::unexpected(setDataError);
+    return setDataError.AsUnexpected();
   }
 
   auto indexSpan = std::span<uint32_t>(indices.data(), indices.size());
 
   setDataError = mesh->get()->SetIndices(context, indexSpan);
   if (Error::IsError(setDataError)) {
-    return tl::unexpected(setDataError);
+    return setDataError.AsUnexpected();
   }
 
   return mesh;

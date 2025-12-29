@@ -10,5 +10,5 @@ auto InitializeImGui(
     Graphics::Rendergraph::RenderGraph &graph,
     Graphics::Rendergraph::ResourceHandle lastResourceHandle, // NOLINT
     Graphics::Rendergraph::ResourceHandle writeResourceHandle,
-    Context &editorContext) -> Error::Error;
+    Context &editorContext) -> Error;
 } // namespace Editor

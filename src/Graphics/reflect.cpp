@@ -73,7 +73,7 @@ auto BufferInfo::ResolvePath(ResourceKey::const_iterator iterator,
 
 auto SetupStruct(slang::TypeLayoutReflection *bufferLayout, // NOLINT
                  slang::TypeLayoutReflection *typeLayout, BufferInfo &info)
-    -> Error::Error {
+    -> Error {
   switch (bufferLayout->getKind()) {
   case slang::TypeReflection::Kind::Struct: {
     auto structInfo = StructInfo{};
@@ -226,7 +226,7 @@ inline auto SlangStageToVkStage(SlangStage stage) -> VkShaderStageFlags {
 }
 
 auto SetupResource(slang::VariableLayoutReflection *variableLayout,
-                   ShaderReflection &reflection) -> Error::Error {
+                   ShaderReflection &reflection) -> Error {
 
   auto *typeLayout = variableLayout->getTypeLayout();
   auto kind = typeLayout->getKind();
@@ -399,7 +399,7 @@ auto SetupResource(slang::VariableLayoutReflection *variableLayout,
 }
 
 auto SetupFromType(slang::VariableLayoutReflection *variableLayout,
-                   ShaderReflection &reflection) -> Error::Error {
+                   ShaderReflection &reflection) -> Error {
   auto *typeLayout = variableLayout->getTypeLayout();
   auto kind = typeLayout->getKind();
 
@@ -518,7 +518,7 @@ auto SetupFromType(slang::VariableLayoutReflection *variableLayout,
 
 auto ReflectGlobals(Graphics::GraphicsContext &context,
                     slang::ProgramLayout *programLayout,
-                    ShaderReflection &reflection) -> Error::Error {
+                    ShaderReflection &reflection) -> Error {
   VkDescriptorSetLayoutBinding binding = {};
 
   auto *scopeTypeLayout =
@@ -548,7 +548,7 @@ auto ReflectGlobals(Graphics::GraphicsContext &context,
 
 auto ReflectShader(Graphics::GraphicsContext &context,
                    slang::ProgramLayout *programLayout,
-                   ShaderReflection &outReflection) -> Error::Error {
+                   ShaderReflection &outReflection) -> Error {
 
   /// Search parameters ///
   auto parameterCount = programLayout->getParameterCount();

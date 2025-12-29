@@ -123,8 +123,7 @@ inline auto RemoveFunctions(lua_State *state) -> void {
   lua_pop(state, 1); // pop Thorium table
 }
 
-auto Configure(lua_State *state)
-    -> tl::expected<ApplicationConfig, Error::Error> {
+auto Configure(lua_State *state) -> Result<ApplicationConfig> {
 
   LuaWrap::SetStackToTable(state, "Thorium"); // [Thorium]
 
@@ -191,9 +190,9 @@ auto Configure(lua_State *state)
   if (luaL_dostring(state, luaScript) != LUA_OK) {
     const char *errorMsg = lua_tostring(state, -1);
     lua_pop(state, 1); // Pop error message
-    return tl::unexpected(Error::Error{
-        .message = std::string("Lua error: ") +
-                   ((errorMsg != nullptr) ? errorMsg : "Unknown error")});
+    return Error::Unexpected(
+        std::string("Lua error: ") +
+        ((errorMsg != nullptr) ? errorMsg : "Unknown error"));
   }
 
   // Stack is clean here
