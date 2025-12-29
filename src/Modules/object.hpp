@@ -80,6 +80,8 @@ public:
 
   auto operator->() const -> T * { return ptr; }
   auto get() const -> T * { return ptr; }
+  auto operator*() const -> T & { return *ptr; }
+  [[nodiscard]] auto isValid() const -> bool { return ptr != nullptr; }
 
   template <typename... Args> static auto Make(Args &&...args) -> Ref<T> {
     return Ref<T>(new T(std::forward<Args>(args)...));

@@ -29,20 +29,36 @@ auto wrap_NewImagedata(lua_State *state) -> int {
       format = Graphics::Format::StringToImageFormat(formatStr);
     }
 
-    auto imagedata = Image::ImageData::Create(
+    auto imagedataResult = Image::ImageData::Create(
         static_cast<uint32_t>(width), static_cast<uint32_t>(height), format);
 
-    LuaWrap::PushLuaType(state, Image::ImageData::GetType(), imagedata);
+    if (Error::IsError(imagedataResult)) {
+      return luaL_error(state, "Failed to create ImageData: %s",
+                        imagedataResult.error().message.c_str());
+    }
+
+    auto imagedata = imagedataResult.value();
+
+    LuaWrap::PushLuaType(state, Image::ImageData::GetType(), imagedata.get());
     imagedata->release(); // Release C++ reference, Lua now owns it
   } else if (lua_isstring(state, 1) != 0) {
     const auto *filepath = luaL_checkstring(state, 1);
-    auto imagedata = Image::ImageData::Create(filepath);
+    auto imagedataResult = Image::ImageData::Create(filepath);
 
-    LuaWrap::PushLuaType(state, Image::ImageData::GetType(), imagedata);
+    if (Error::IsError(imagedataResult)) {
+      return luaL_error(state, "Failed to create ImageData from file: %s",
+                        imagedataResult.error().message.c_str());
+    }
+
+    auto imagedata = imagedataResult.value();
+
+    LuaWrap::PushLuaType(state, Image::ImageData::GetType(), imagedata.get());
     imagedata->release(); // Release C++ reference, Lua now owns it
   } else {
     return luaL_error(state, "Invalid arguments to Imagedata constructor.");
   }
+
+  return 1;
 }
 
 } // namespace Image

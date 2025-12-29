@@ -4,8 +4,10 @@
 #include "Graphics/rendertarget.hpp"
 #include "Graphics/texture.hpp"
 #include "Modules/console.hpp"
+#include "Modules/error.hpp"
 #include "Wrap/Graphics/wrap_color.hpp"
 #include "Wrap/wrap.hpp"
+#include "tl/expected.hpp"
 #define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
 #include <cstring>
@@ -220,11 +222,26 @@ auto RenderTargetsFromTexture(lua_State *state, int index)
 }
 
 auto RenderTargetsFromOptions(lua_State *state, int index)
-    -> Ref<Graphics::RenderTarget::RenderTarget> {
+    -> tl::expected<Ref<Graphics::RenderTarget::RenderTarget>, Error::Error> {
 
   luaL_checktype(state, index, LUA_TTABLE);
 
   auto rendertarget = Ref<Graphics::RenderTarget::RenderTarget>::Make();
+
+  // check if element table[1] is a texture, if so, error,
+  // as we expect it to be a named field
+
+  lua_rawgeti(state, index, 1);
+  if (lua_isnoneornil(state, -1) == 0) {
+    if (LuaWrap::LuaIsType<Graphics::Texture::Texture>(state, -1)) {
+      return Error::Unexpected("Expected named field 'texture' in options "
+                               "table, got texture at index 1.");
+    }
+
+    return Error::Unexpected(
+        "Expected named fields in render target options table");
+  }
+  lua_pop(state, 1);
 
   // texture
   lua_getfield(state, index, "texture");
@@ -236,8 +253,7 @@ auto RenderTargetsFromOptions(lua_State *state, int index)
     auto *texture =
         LuaWrap::FromLuaObject<Graphics::Texture::Texture>(state, -1);
     if (texture == nullptr) {
-      PrintError("Expected Texture as rendertarget texture");
-      return {};
+      return Error::Unexpected("Invalid texture in render target options");
     }
     rendertarget->texture = Ref<Graphics::Texture::Texture>(texture);
   }
@@ -291,7 +307,8 @@ auto RenderTargetsFromOptions(lua_State *state, int index)
     } else if (strcmp(loadasStr, "none") == 0) {
       rendertarget->loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     } else {
-      luaL_error(state, "Invalid loadas value: %s", loadasStr);
+      return Error::Unexpected(std::string("Invalid loadas mode: ") +
+                               loadasStr);
     }
   }
 
@@ -375,12 +392,27 @@ auto wrap_SetRenderTargets(lua_State *state) -> int {
     // loop over arguments and get info
     int nArgs = lua_gettop(state);
 
+    auto isOptionsVarargs = lua_istable(state, 1) != 0;
+
     for (int i = 1; i <= nArgs; ++i) {
       // if table, treat as render target options
       if (lua_istable(state, i) != 0) {
-        auto renderTarget = RenderTargetsFromOptions(state, i);
-        renderTargets.emplace_back(renderTarget);
+        if (!isOptionsVarargs) {
+          return luaL_error(
+              state, "Expected Texture as argument %d to setRenderTargets", i);
+        }
+
+        auto renderTargetResult = RenderTargetsFromOptions(state, i);
+        if (Error::IsError(renderTargetResult)) {
+          return luaL_error(state, renderTargetResult.error().message.c_str());
+        }
+        renderTargets.emplace_back(renderTargetResult.value());
         continue;
+      }
+
+      if (isOptionsVarargs) {
+        return luaL_error(
+            state, "Expected table of render target options as argument %d", i);
       }
 
       // else, treat as texture
@@ -398,8 +430,12 @@ auto wrap_SetRenderTargets(lua_State *state) -> int {
 
       // if table, treat as render target options
       if (lua_istable(state, -1) != 0) {
-        auto renderTarget = RenderTargetsFromOptions(state, -1);
-        renderTargets.emplace_back(renderTarget);
+        auto renderTargetResult = RenderTargetsFromOptions(state, -1);
+        if (Error::IsError(renderTargetResult)) {
+          return luaL_error(state, "Error parsing render target options: %s",
+                            renderTargetResult.error().message.c_str());
+        }
+        renderTargets.emplace_back(renderTargetResult.value());
         lua_pop(state, 1);
         continue;
       }

@@ -139,7 +139,8 @@ struct Texture : Object {
                  uint32_t mipLevel, uint32_t arrayLayer, VkRect2D source,
                  VkOffset2D target) -> Error::Error;
   auto SetPixels(GraphicsContext &context, Image::ImageData &imageData,
-                 uint32_t mipLevel, uint32_t arrayLayer) -> Error::Error;
+                 uint32_t mipLevel = 0, uint32_t arrayLayer = 0)
+      -> Error::Error;
   [[nodiscard]] auto GetMipmapCount() const -> size_t { return mipmapcount; }
   [[nodiscard]] auto GetFormat() const -> VkFormat { return format; }
 

@@ -501,10 +501,10 @@ static auto CreateSemaphores(GraphicsContext &context) -> Error::Error {
   VkSemaphoreCreateInfo semaphoreInfo = {};
   semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
-  context.swapchainImageReady = std::vector<VkSemaphore>(FRAMES_IN_FLIGHT);
-  context.renderingFinished = std::vector<VkSemaphore>(FRAMES_IN_FLIGHT);
+  context.swapchainImageReady = std::vector<VkSemaphore>(MAX_SWAPCHAIN_IMAGES);
+  context.renderingFinished = std::vector<VkSemaphore>(MAX_SWAPCHAIN_IMAGES);
 
-  for (int i = 0; i < FRAMES_IN_FLIGHT; i++) {
+  for (int i = 0; i < MAX_SWAPCHAIN_IMAGES; i++) {
     Error::Error error =
         Error::Create(vkCreateSemaphore(context.device, &semaphoreInfo, nullptr,
                                         &context.swapchainImageReady.at(i)));
@@ -514,7 +514,7 @@ static auto CreateSemaphores(GraphicsContext &context) -> Error::Error {
     }
   }
 
-  for (int i = 0; i < FRAMES_IN_FLIGHT; i++) {
+  for (int i = 0; i < MAX_SWAPCHAIN_IMAGES; i++) {
     Error::Error error =
         Error::Create(vkCreateSemaphore(context.device, &semaphoreInfo, nullptr,
                                         &context.renderingFinished.at(i)));

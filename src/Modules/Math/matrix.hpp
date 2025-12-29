@@ -4,6 +4,7 @@
 #include "vector.hpp"
 #include <array>
 #include <span>
+#include <string>
 
 namespace Math {
 
@@ -67,6 +68,8 @@ struct Matrix4x4 {
   static auto RotationMatrix(Quaternion rotation) -> Matrix4x4;
   static auto TransformationMatrix(Vec3 translation, Vec3 scale,
                                    Quaternion rotation) -> Matrix4x4;
+
+  [[nodiscard]] auto ToString() const -> std::string;
 };
 
 } // namespace Math

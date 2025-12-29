@@ -1,6 +1,7 @@
 #include "wrap_bytedata.hpp"
 #include "Modules/bytedata.hpp"
 #include "Modules/color.hpp"
+#include "Modules/console.hpp"
 #include "Modules/imagedata.hpp"
 #include "Wrap/wrap.hpp"
 #include <cstdint>
@@ -99,6 +100,8 @@ constexpr auto SetFloatFromLuaData(lua_State *state) -> int {
 
     auto value = static_cast<T>(luaL_checknumber(state, 3));
     std::memcpy(&span[offset], &value, sizeof(T));
+  } else {
+    return luaL_error(state, "Invalid value to set.");
   }
 
   return 0;

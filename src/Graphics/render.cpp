@@ -21,7 +21,7 @@ static void ResetCommandBuffers(Graphics::GraphicsContext &context) {
   }
 }
 
-static void BeginFrame(Graphics::GraphicsContext &context) {
+static void StartRecording(Graphics::GraphicsContext &context) {
   // Begin command buffer, so recording can start
 
   for (int i = 0; i < context.renderThreadCount; i++) {
@@ -38,8 +38,8 @@ static void BeginFrame(Graphics::GraphicsContext &context) {
   }
 }
 
-static auto EndFrame(Graphics::GraphicsContext &context, uint32_t frameIndex)
-    -> Error::Error {
+static auto EndRecording(Graphics::GraphicsContext &context,
+                         uint32_t frameIndex) -> Error::Error {
 
   // Wait for all render threads to finish recording
   for (int i = 0; i < context.renderThreadCount; i++) {
@@ -125,18 +125,63 @@ void TransitionPresentToColor(VkCommandBuffer cmd, VkImage image) {
                        nullptr, 0, nullptr, 1, &barrier);
 }
 
+auto AquireNextSwapchainImage(Graphics::GraphicsContext &context)
+    -> Error::Error {
+
+  if (context.imagesInFlight[context.frameIndex] != VK_NULL_HANDLE) {
+    vkWaitForFences(context.device, 1,
+                    &context.imagesInFlight[context.frameIndex], VK_TRUE,
+                    UINT64_MAX);
+  }
+
+  return Error::Create(vkAcquireNextImageKHR(
+      context.device, context.swapchainInfo.swapchain, UINT64_MAX,
+      context.swapchainImageReady[context.frameIndex], VK_NULL_HANDLE,
+      &context.swapchainImageIndex));
+}
+
+auto PrepareRecording(Graphics::GraphicsContext &context) -> Error::Error {
+  ResetCommandBuffers(context);
+
+  vkResetDescriptorPool(context.device,
+                        context.descriptorPools.at(context.frameIndex), 0);
+
+  StartRecording(context);
+
+  TransitionPresentToColor(
+      GetCommandBuffer(context, 0),
+      context.swapchainInfo.images[context.swapchainImageIndex]);
+
+  return Error::Success();
+}
+
+auto WaitOnFrame(Graphics::GraphicsContext &context) -> Error::Error {
+  // Wait on swapchainImageReady semaphore
+  vkWaitForFences(context.device, 1,
+                  &context.inFlightFences[context.frameIndex], VK_TRUE,
+                  UINT64_MAX);
+  vkResetFences(context.device, 1, &context.inFlightFences[context.frameIndex]);
+
+  // Wait for in-flight fence for this frame
+  // if (context.imagesInFlight[context.swapchainImageIndex] != VK_NULL_HANDLE) {
+  //   vkWaitForFences(context.device, 1,
+  //                   &context.imagesInFlight[context.swapchainImageIndex],
+  //                   VK_TRUE, UINT64_MAX);
+  // }
+
+  return Error::Success();
+}
+
 auto SubmitCommandBuffers(Graphics::GraphicsContext &context) -> Error::Error {
-  // --- 1. Submit frame command buffers with binary semaphore ---
-  VkSubmitInfo submitBinary = {};
-  submitBinary.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+  VkSubmitInfo submitInfo = {};
+  submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
   // Wait for the swapchain image ready semaphore
   VkPipelineStageFlags waitStage =
       VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-  submitBinary.waitSemaphoreCount = 1;
-  submitBinary.pWaitSemaphores =
-      &context.swapchainImageReady[context.frameIndex];
-  submitBinary.pWaitDstStageMask = &waitStage;
+  submitInfo.waitSemaphoreCount = 1;
+  submitInfo.pWaitSemaphores = &context.swapchainImageReady[context.frameIndex];
+  submitInfo.pWaitDstStageMask = &waitStage;
 
   // Command buffers
   std::vector<VkCommandBuffer> commandBuffers(context.renderThreadCount);
@@ -144,23 +189,22 @@ auto SubmitCommandBuffers(Graphics::GraphicsContext &context) -> Error::Error {
     Graphics::RenderData renderData = GetRenderData(context, i);
     commandBuffers[i] = renderData.commandBuffers[context.frameIndex];
   }
-  submitBinary.commandBufferCount = context.renderThreadCount;
-  submitBinary.pCommandBuffers = commandBuffers.data();
+  submitInfo.commandBufferCount = context.renderThreadCount;
+  submitInfo.pCommandBuffers = commandBuffers.data();
 
   // Signal the swapchain finished semaphore
-  submitBinary.signalSemaphoreCount = 1;
-  submitBinary.pSignalSemaphores =
-      &context.renderingFinished[context.frameIndex];
+  submitInfo.signalSemaphoreCount = 1;
+  submitInfo.pSignalSemaphores =
+      &context.renderingFinished.at(context.swapchainImageIndex);
 
   // Submit
-  Error::Error err =
-      Error::Create(vkQueueSubmit(context.graphicsQueue, 1, &submitBinary,
+  auto err =
+      Error::Create(vkQueueSubmit(context.graphicsQueue, 1, &submitInfo,
                                   context.inFlightFences[context.frameIndex]));
   if (Error::IsError(err)) {
     return err;
   }
 
-  // --- 2. Submit a dummy timeline semaphore signal for resource tracking ---
   VkSemaphore globalTimelineSemaphore = GetGlobalTimelineSemaphore(context);
   if (globalTimelineSemaphore != VK_NULL_HANDLE) {
     uint64_t timelineValue = GetCPUTimelineSemaphoreValue(context);
@@ -195,7 +239,8 @@ auto PresentFrame(Graphics::GraphicsContext &context) -> Error::Error {
   VkPresentInfoKHR presentInfo = {};
   presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
   presentInfo.waitSemaphoreCount = 1;
-  presentInfo.pWaitSemaphores = &context.renderingFinished[context.frameIndex];
+  presentInfo.pWaitSemaphores =
+      &context.renderingFinished.at(context.swapchainImageIndex);
   presentInfo.swapchainCount = 1;
   presentInfo.pSwapchains = &context.swapchainInfo.swapchain;
   presentInfo.pImageIndices = &context.swapchainImageIndex;
@@ -211,110 +256,19 @@ auto PresentFrame(Graphics::GraphicsContext &context) -> Error::Error {
   return Error::Success();
 }
 
-auto Present_PreDraw(Graphics::GraphicsContext &context) -> Error::Error {
-  /*
-  Acquire swapchain image → imageIndex.
-  Wait for that image’s fence (imagesInFlight[imageIndex]).
-  Reset frame fence (inFlightFences[frameIndex]).
-  Reset and begin command buffer for frameIndex.
-  Transition acquired image from PRESENT -> COLOR_ATTACHMENT_OPTIMAL.
-  Begin rendering
-  */
-
-  // Wait on swapchainImageReady semaphore
-  vkWaitForFences(context.device, 1,
-                  &context.inFlightFences[context.frameIndex], VK_TRUE,
-                  UINT64_MAX);
-  vkResetFences(context.device, 1, &context.inFlightFences[context.frameIndex]);
-
-  // Aquire next image
-  Error::Error err = Error::Create(vkAcquireNextImageKHR(
-      context.device, context.swapchainInfo.swapchain, UINT64_MAX,
-      context.swapchainImageReady[context.frameIndex], VK_NULL_HANDLE,
-      &context.swapchainImageIndex));
-
-  if (Error::IsError(err)) {
-    return err;
+auto InitializeGraphics(Graphics::GraphicsContext &context) -> Error::Error {
+  auto error = AquireNextSwapchainImage(context);
+  if (Error::IsError(error)) {
+    return error;
   }
 
-  // Wait for in-flight fence for this frame
-  if (context.imagesInFlight[context.swapchainImageIndex] != VK_NULL_HANDLE) {
-    vkWaitForFences(context.device, 1,
-                    &context.imagesInFlight[context.swapchainImageIndex],
-                    VK_TRUE, UINT64_MAX);
-  }
+  StartRecording(context);
 
-  ResetCommandBuffers(context);
-
-  vkResetDescriptorPool(context.device,
-                        context.descriptorPools.at(context.frameIndex), 0);
-
-  BeginFrame(context);
-
-  // Ready for new frame
-  // Convert from PRESENT_SRC_KHR -> COLOR_ATTACHMENT_OPTIMAL
   TransitionPresentToColor(
       GetCommandBuffer(context, 0),
       context.swapchainInfo.images[context.swapchainImageIndex]);
 
-  return Error::Success();
-}
-
-auto Present_PostDraw(Graphics::GraphicsContext &context) -> Error::Error {
-  /*
-  end rendering.
-  Transition image from COLOR_ATTACHMENT_OPTIMAL → PRESENT_SRC_KHR.
-  End command buffer.
-  Submit command buffer with inFlightFences[frameIndex] and semaphores.
-  Present.
-  Set imagesInFlight[imageIndex] = inFlightFences[frameIndex].
-  Increment frameIndex = (frameIndex + 1) % MAX_FRAMES_IN_FLIGHT.
-  */
-
-  // End rendering
-  // vkCmdEndRendering(GetCommandBuffer(context, 0));
-
-  // Convert from COLOR_ATTACHMENT_OPTIMAL state to PRESENT_SRC_KHR
-  TransitionColorToPresent(
-      GetCommandBuffer(context, 0),
-      context.swapchainInfo.images[context.swapchainImageIndex]);
-
-  assert(context.frameIndex < FRAMES_IN_FLIGHT);
-
-  if (context.swapchainImageIndex >= context.swapchainInfo.imageCount) {
-    return Error::Create("Acquired image index is out of bounds.");
-  }
-
-  // End current frame recording
-  auto endFrameResult = EndFrame(context, context.frameIndex);
-  if (Error::IsError(endFrameResult)) {
-    return endFrameResult;
-  }
-
-  auto error = SubmitCommandBuffers(context);
-
-  if (Error::IsError(error)) {
-    return error;
-  }
-
-  error = PresentFrame(context);
-
-  if (Error::IsError(error)) {
-    return error;
-  }
-
-  context.currentFrame = context.currentFrame + 1;
-  context.frameIndex = context.currentFrame % Graphics::FRAMES_IN_FLIGHT;
-
-  return Error::Success();
-}
-
-auto InitializeGraphics(Graphics::GraphicsContext &context) -> Error::Error {
-  auto error = Present_PreDraw(context);
-
-  if (Error::IsError(error)) {
-    return error;
-  }
+  vkResetFences(context.device, 1, &context.inFlightFences[context.frameIndex]);
 
   return Error::Success();
 }
@@ -329,12 +283,45 @@ auto Present(Graphics::GraphicsContext &context) -> Error::Error {
     return uploadResult;
   }
 
-  auto error = Present_PostDraw(context);
+  TransitionColorToPresent(
+      GetCommandBuffer(context, 0),
+      context.swapchainInfo.images[context.swapchainImageIndex]);
+
+  // Draw of this frame is done, end recording
+  auto endResult = EndRecording(context, context.frameIndex);
+  if (Error::IsError(endResult)) {
+    return endResult;
+  }
+
+  // Submit command buffers
+  auto submitResult = SubmitCommandBuffers(context);
+  if (Error::IsError(submitResult)) {
+    return submitResult;
+  }
+
+  // Present the frame
+  auto presentResult = PresentFrame(context);
+  if (Error::IsError(presentResult)) {
+    return presentResult;
+  }
+
+  // Prepare for next frame
+  context.currentFrame++;
+  context.frameIndex = context.currentFrame % FRAMES_IN_FLIGHT;
+
+  auto error = AquireNextSwapchainImage(context);
   if (Error::IsError(error)) {
     return error;
   }
 
-  error = Present_PreDraw(context);
+  // Wait on frame fences, so we can use the command buffers
+  auto waitResult = WaitOnFrame(context);
+  if (Error::IsError(waitResult)) {
+    return waitResult;
+  }
+
+  error = PrepareRecording(context);
+
   if (Error::IsError(error)) {
     return error;
   }

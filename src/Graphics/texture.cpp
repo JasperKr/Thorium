@@ -1,7 +1,10 @@
 #include "texture.hpp"
 #include "Graphics/buffer.hpp"
+#include "Graphics/format.hpp"
 #include "Graphics/graphics.hpp"
 #include "Graphics/resource.hpp"
+#include "Modules/Math/vector.hpp"
+#include "Modules/color.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/filesystem.hpp"
@@ -11,7 +14,6 @@
 #include "sampler.hpp"
 #include "stb/stb_image.h"
 #include "tl/expected.hpp"
-#include <array>
 #include <cstdint>
 #include <string>
 
@@ -421,10 +423,6 @@ auto CreateArray(GraphicsContext &context, TextureCreationInfo info)
 auto LoadFromFile(GraphicsContext &context, const char *path,
                   VkImageUsageFlags usage)
     -> tl::expected<Ref<Texture>, Error::Error> {
-  int texWidth = 0;
-  int texHeight = 0;
-  int texChannels = 0;
-
   auto fileLoadResult = Filesystem::ReadFile(path);
 
   if (Error::IsError(fileLoadResult)) {
@@ -432,26 +430,28 @@ auto LoadFromFile(GraphicsContext &context, const char *path,
   }
 
   auto filedata = fileLoadResult.value();
+  PrintAlways("Loaded file " + std::string(path) + " of size " +
+              std::to_string(filedata.size()) + " bytes.");
+  auto dataSpan =
+      std::span<uint8_t>(filedata.data(), static_cast<size_t>(filedata.size()));
 
-  stbi_uc *pixels = stbi_load_from_memory(
-      filedata.data(), static_cast<int>(filedata.size()), &texWidth, &texHeight,
-      &texChannels, STBI_rgb_alpha);
-  if (pixels == nullptr) {
-    return tl::unexpected(
-        Error::Create("Failed to load texture image from file."));
+  auto imageDataResult = Image::ImageData::Create(dataSpan);
+
+  if (Error::IsError(imageDataResult)) {
+    return tl::unexpected(imageDataResult.error());
   }
 
-  int imageSize = (texWidth * texHeight * 4);
+  auto imageData = imageDataResult.value();
 
-  auto imageData = Image::ImageData(texWidth, texHeight, pixels, imageSize);
-
-  stbi_image_free(pixels);
+  PrintAlways("Width: " + std::to_string(imageData->GetWidth()) + " Height: " +
+              std::to_string(imageData->GetHeight()) + " Format: " +
+              Format::ImageFormatToString(imageData->GetFormat()));
 
   auto texture = Create2D(
       context, TextureCreationInfo{
-                   .width = static_cast<uint32_t>(texWidth),
-                   .height = static_cast<uint32_t>(texHeight),
-                   .format = VK_FORMAT_R8G8B8A8_UNORM,
+                   .width = imageData->GetWidth(),
+                   .height = imageData->GetHeight(),
+                   .format = imageData->GetFormat(),
                    .usage = usage | static_cast<uint32_t>(
                                         VK_IMAGE_USAGE_TRANSFER_DST_BIT),
                    .mipmapCount = 1,
@@ -461,7 +461,7 @@ auto LoadFromFile(GraphicsContext &context, const char *path,
     return tl::unexpected(texture.error());
   }
 
-  auto result = texture.value()->SetPixels(context, imageData, 0, 0);
+  auto result = texture.value()->SetPixels(context, *imageData);
 
   if (Error::IsError(result)) {
     return tl::unexpected(result);
@@ -472,30 +472,22 @@ auto LoadFromFile(GraphicsContext &context, const char *path,
 
 // texture 2D From byte array
 auto LoadFromMemory(GraphicsContext &context, const std::span<uint8_t> &data,
-                    VkFormat format, VkImageUsageFlags usage)
+                    VkImageUsageFlags usage)
     -> tl::expected<Ref<Texture>, Error::Error> {
-  int texWidth = 0;
-  int texHeight = 0;
-  int texChannels = 0;
-  stbi_uc *pixels = stbi_load_from_memory(
-      data.data(), static_cast<int>(data.size()), &texWidth, &texHeight,
-      &texChannels, STBI_rgb_alpha);
-  if (pixels == nullptr) {
-    return tl::unexpected(
-        Error::Create("Failed to load texture image from memory."));
+
+  auto imageDataResult = Image::ImageData::Create(data);
+
+  if (Error::IsError(imageDataResult)) {
+    return tl::unexpected(imageDataResult.error());
   }
 
-  int imageSize = (texWidth * texHeight * 4);
-
-  auto imageData = Image::ImageData(texWidth, texHeight, pixels, imageSize);
-
-  stbi_image_free(pixels);
+  auto imageData = imageDataResult.value();
 
   auto texture = Create2D(
       context, TextureCreationInfo{
-                   .width = static_cast<uint32_t>(texWidth),
-                   .height = static_cast<uint32_t>(texHeight),
-                   .format = format,
+                   .width = imageData->GetWidth(),
+                   .height = imageData->GetHeight(),
+                   .format = imageData->GetFormat(),
                    .usage = usage | static_cast<uint32_t>(
                                         VK_IMAGE_USAGE_TRANSFER_DST_BIT),
                    .mipmapCount = 1,
@@ -505,7 +497,7 @@ auto LoadFromMemory(GraphicsContext &context, const std::span<uint8_t> &data,
     return tl::unexpected(texture.error());
   }
 
-  auto result = texture.value()->SetPixels(context, imageData, 0, 0);
+  auto result = texture.value()->SetPixels(context, *imageData);
 
   if (Error::IsError(result)) {
     return tl::unexpected(result);
@@ -924,7 +916,8 @@ auto Texture::SetPixels(GraphicsContext &context, Image::ImageData &imageData,
 }
 
 auto Texture::SetPixels(GraphicsContext &context, Image::ImageData &imageData,
-                        uint32_t mipLevel, uint32_t arrayLayer) // NOLINT
+                        uint32_t mipLevel,
+                        uint32_t arrayLayer) // NOLINT
     -> Error::Error {
   VkRect2D source = {};
   source.offset = {.x = 0, .y = 0};
@@ -1009,13 +1002,17 @@ auto GetDefaultTexture(GraphicsContext &context, VkFormat format,
 
   auto &texture = result.value();
 
-  // Fill texture with 1x1 of opaque white pixel data
-  std::array<uint8_t, 4> whitePixel = {UINT8_MAX, UINT8_MAX, UINT8_MAX,
-                                       UINT8_MAX};
+  auto imageDataResult = Image::ImageData::Create(1, 1, format);
 
-  Image::ImageData imageData(1, 1, whitePixel.data(), whitePixel.size());
+  if (Error::IsError(imageDataResult)) {
+    return tl::unexpected(imageDataResult.error());
+  }
 
-  auto setPixelsResult = texture->SetPixels(context, imageData, 0, 0);
+  auto imageData = imageDataResult.value();
+  imageData->SetColor(Math::Uvec2{0, 0},
+                      Color(UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX));
+
+  auto setPixelsResult = texture->SetPixels(context, *imageData);
 
   if (Error::IsError(setPixelsResult)) {
     return tl::unexpected(setPixelsResult);

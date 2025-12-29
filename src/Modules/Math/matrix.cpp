@@ -348,4 +348,19 @@ auto Matrix4x4::TransformationMatrix(Vec3 translation, Vec3 scale,
   return translationMatrix * rotationMatrix * scaleMatrix;
 }
 
+auto Matrix4x4::ToString() const -> std::string {
+  std::string result;
+  for (size_t row = 0; row < Rows; ++row) {
+    result += "| ";
+    for (size_t col = 0; col < Cols; ++col) {
+      result += std::to_string(At(row, col)) + " ";
+    }
+    result += "|";
+    if (row < Rows - 1) {
+      result += "\n";
+    }
+  }
+  return result;
+}
+
 } // namespace Math

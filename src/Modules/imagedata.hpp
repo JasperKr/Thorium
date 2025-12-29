@@ -8,9 +8,10 @@
 #include "color.hpp"
 #include "tl/expected.hpp"
 #include <cassert>
+#include <cstddef>
+#include <span>
 #define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
-#include <cstddef>
 #include <cstdint>
 namespace Image {
 
@@ -40,19 +41,27 @@ public:
             VkFormat format)
       : Data::ByteData(byteData), width(width), height(height), format(format) {
   }
+  // NOLINTNEXTLINE
+  ImageData(uint32_t width, uint32_t height, VkFormat format)
+      : Data::ByteData(static_cast<size_t>(width * height *
+                                           Graphics::Format::GetSize(format))),
+        width(width), height(height), format(format) {}
 
   // TODO: Refactor to return Ref, so we can refcount for lua
   static auto Create(uint32_t width, uint32_t height, VkFormat format)
-      -> tl::expected<ImageData, Error::Error>;
+      -> tl::expected<Ref<ImageData>, Error::Error>;
   static auto Create(uint32_t width, uint32_t height,
                      const std::span<uint8_t> &srcData, VkFormat format)
-      -> tl::expected<ImageData, Error::Error>;
+      -> tl::expected<Ref<ImageData>, Error::Error>;
   static auto Create(uint32_t width, uint32_t height, Data::ByteData &byteData,
-                     VkFormat format) -> tl::expected<ImageData, Error::Error>;
+                     VkFormat format)
+      -> tl::expected<Ref<ImageData>, Error::Error>;
   static auto Create(const std::string &filepath)
-      -> tl::expected<ImageData, Error::Error>;
+      -> tl::expected<Ref<ImageData>, Error::Error>;
   static auto Create(const Data::ByteData &byteData)
-      -> tl::expected<ImageData, Error::Error>;
+      -> tl::expected<Ref<ImageData>, Error::Error>;
+  static auto Create(const std::span<uint8_t> &data)
+      -> tl::expected<Ref<ImageData>, Error::Error>;
 
   static auto GetType() -> Type const * { return &type; }
 

@@ -218,6 +218,7 @@ add_executable(Thorium
     src/Modules/config.cpp
     src/Modules/event.cpp
     src/Modules/object.cpp
+    src/Modules/imagedata.cpp
 
 # Math Modules
     src/Modules/Math/vector.cpp
@@ -236,8 +237,9 @@ add_executable(Thorium
     src/Wrap/Graphics/wrap_buffer.cpp
     src/Wrap/Modules/wrap_event.cpp
     src/Wrap/Modules/wrap_timer.cpp
-    src/Wrap/Modules/wrap_bytedata.cpp
     src/Wrap/Modules/wrap_data.cpp
+    src/Wrap/Modules/wrap_bytedata.cpp
+    src/Wrap/Modules/wrap_imagedata.cpp
     src/Wrap/wrap.cpp
 
 # Libraries

@@ -1,12 +1,17 @@
 local i = 0
+local lastTime = 0
 
 function Thorium.update(dt)
-  if i > 100 then
-    print("Dt: " .. dt, "FPS: " .. Thorium.timer.getFPS())
-    i = 0
-  end
+  -- if i > 100 then
+  print("Dt: " .. dt, "FPS: " .. Thorium.timer.getFPS())
+  -- i = 0
+  -- end
 
   i = i + 1
+
+  local currentTime = Thorium.timer.getTime()
+  Thorium.timer.sleep(0.1 - (currentTime - lastTime))
+  lastTime = Thorium.timer.getTime()
 end
 
 function Thorium.mousemoved(x, y, dx, dy)
@@ -43,7 +48,7 @@ local ssbo = 4
 
 local image = Thorium.graphics.newTexture("leek.png", { usage = sampler })
 -- print(image:getFilter())
-local target = Thorium.graphics.newTexture(1920, 1080, { usage = sampler + rendertarget })
+local target = Thorium.graphics.newTexture(612, 512, { usage = sampler + rendertarget })
 local shader = Thorium.graphics.newShader("default2D")
 
 local vertexFormat = {
@@ -66,20 +71,26 @@ local indices = {
 
 local mesh = Thorium.graphics.newMesh(vertexFormat, vertices, "triangles", indices)
 local data = Thorium.data.newImagedata(512, 512, "rgba16f")
-for x = 0, 512 - 1 do
-  for y = 0, 512 - 1 do
-    data:setHalf(y * 512 + x, (x / 512) * (y / 512))
+for y = 0, 512 - 1 do
+  for x = 0, 512 - 1 do
+    -- size of half = 2, 4 components
+    local offset = (y * 512 + x) * 2 * 4
+    local grayscale = (x / 512) * (y / 512)
+    data:setHalf(offset, grayscale)
+    data:setHalf(offset + 2, grayscale)
+    data:setHalf(offset + 4, grayscale)
+    data:setHalf(offset + 6, 1.0)
   end
 end
 local texture = Thorium.graphics.newTexture(data, { usage = sampler })
 
 function Thorium.draw()
   Thorium.graphics.setShader(shader)
-  Thorium.graphics.setRenderTarget(target)
+  Thorium.graphics.setRenderTarget({ texture = target, loadas = { 1, 1, 0, 1 } })
   shader:send("test", i)
   shader:send("testColor", { 1, 0, 0 })
   shader:send("testMatrix", { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 })
   Thorium.graphics.draw(texture)
-  Thorium.graphics.setRenderTarget({ loadas = { 1, 0, 0, 1 } })
+  Thorium.graphics.setRenderTarget({ loadas = { 0, 0, 0, 1 } })
   Thorium.graphics.draw(target)
 end

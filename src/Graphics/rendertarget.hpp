@@ -104,7 +104,7 @@ struct State {
         return false;
       }
 
-      if (*renderTargets[i].get() != *other.renderTargets[i].get()) {
+      if (*renderTargets[i] != *other.renderTargets[i]) {
         return false;
       }
     }
@@ -215,8 +215,7 @@ struct StateHash {
     AddToHash(hash, std::hash<int32_t>()(state.scissor.offset.y));
     AddToHash(hash, std::hash<uint32_t>()(state.scissor.extent.width));
     AddToHash(hash, std::hash<uint32_t>()(state.scissor.extent.height));
-    AddToHash(hash,
-              state.shader.get() == nullptr ? 0 : state.shader.get()->hash());
+    AddToHash(hash, state.shader.get() == nullptr ? 0 : state.shader->hash());
     AddToHash(hash, std::hash<VkPipelineBindPoint>()(state.bindPoint));
 
     for (const auto &renderTarget : state.renderTargets) {

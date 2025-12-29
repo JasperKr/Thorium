@@ -91,7 +91,7 @@ auto AddRenderPass(RenderGraph &graph, const RenderPassDescriptor &descriptor)
          "Resource bindings size must match resources size");
   assert((pass.shader.get() != nullptr) && "shader must be set.");
 
-  auto &shader = *pass.shader.get();
+  auto &shader = *pass.shader;
   assert(shader.module != VK_NULL_HANDLE && "Shader module must be present");
 
   graph.passes.emplace_back(pass);
@@ -1441,7 +1441,7 @@ auto inline ApplyPassBarriers(VkCommandBuffer commandBuffer,
 
   std::array<VkPipelineShaderStageCreateInfo, 2> shaderStages = {};
 
-  auto &shader = *compiledPass.pass.shader.get();
+  auto &shader = *compiledPass.pass.shader;
 
   shaderStages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
   shaderStages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
@@ -1629,7 +1629,7 @@ auto inline ApplyPassBarriers(VkCommandBuffer commandBuffer,
     return Error::Create("Cannot create compute pipeline for non-compute pass");
   }
 
-  auto &shaderModule = *compiledPass.pass.shader.get();
+  auto &shaderModule = *compiledPass.pass.shader;
 
   VkPipelineShaderStageCreateInfo shaderStage = {};
   shaderStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;

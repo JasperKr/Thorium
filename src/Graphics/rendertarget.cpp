@@ -757,6 +757,8 @@ auto Flush(GraphicsContext &context) -> tl::expected<bool, Error::Error> {
 
   auto viewProjectionMatrix = projectionMatrix * translationMatrix;
 
+  // PrintAlways("ViewProjection Matrix: \n{}\n", viewProjectionMatrix.ToString());
+
   PrintDebug("Sending projection matrix to shader");
 
   auto sendErr = currentState.shader->Send(context, {"DefaultProjectionMatrix"},
@@ -901,7 +903,7 @@ auto FinalizeFrame(GraphicsContext &context) -> Error::Error {
   }
   if (StateStack.back().renderTargets.size() != 0) {
     for (const auto &rendertarget : StateStack.back().renderTargets) {
-      if (!IsSwapchainTexture(*rendertarget->texture.get())) {
+      if (!IsSwapchainTexture(*rendertarget->texture)) {
         return Error::Create(
             "Non-swapchain render targets remain bound at end of frame.");
       }

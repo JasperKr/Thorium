@@ -19,7 +19,7 @@ struct Color {
       : r(red), g(green), b(blue), a(alpha) {}
 
   // NOLINTNEXTLINE
-  Color(uint8_t red, uint8_t green, uint8_t blue, uint8_t alpha = 255)
+  Color(int red, int green, int blue, int alpha = 255)
       : r(static_cast<float>(red) / uint8_max_as_float),
         g(static_cast<float>(green) / uint8_max_as_float),
         b(static_cast<float>(blue) / uint8_max_as_float),
