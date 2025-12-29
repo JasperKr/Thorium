@@ -92,10 +92,18 @@ public:
     }
 
     auto result = buffer->SetData(context, localData, offset);
+    auto initialOffset = offset;
 
     offset += static_cast<uint32_t>(localData.size());
 
-    lastFlushSize = static_cast<uint32_t>(localData.size());
+    auto alignment =
+        context.deviceProperties.limits.minUniformBufferOffsetAlignment;
+
+    // Align offset to minUniformBufferOffsetAlignment
+    offset = (offset + alignment - 1) & ~(alignment - 1);
+
+    lastFlushSize =
+        offset - initialOffset; // Use the difference as flushed size
     localData.clear();
 
     if (Error::IsError(result)) {

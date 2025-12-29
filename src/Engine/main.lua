@@ -1,5 +1,4 @@
 local i = 0
-local lastTime = 0
 
 function Thorium.update(dt)
   -- if i > 100 then
@@ -8,10 +7,6 @@ function Thorium.update(dt)
   -- end
 
   i = i + 1
-
-  local currentTime = Thorium.timer.getTime()
-  Thorium.timer.sleep(0.1 - (currentTime - lastTime))
-  lastTime = Thorium.timer.getTime()
 end
 
 function Thorium.mousemoved(x, y, dx, dy)

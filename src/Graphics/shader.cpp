@@ -660,9 +660,11 @@ auto ShaderModule::FlushBuffers(GraphicsContext &context,
 
   {
     // UBO buffer can be resized, we update every frame for now;
+    // TODO: dynamic UBO offsets using VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC
+    // and only update size when a draw requires more space.
     VkDescriptorBufferInfo bufferInfo{};
 
-    bufferInfo.buffer = buffer.GetBuffer().get()->handle;
+    bufferInfo.buffer = buffer.GetBuffer()->handle;
     bufferInfo.offset = buffer.GetOffset() - buffer.GetLastFlushSize();
 
     assert(reflection.globals.size > 0);

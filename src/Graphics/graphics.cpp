@@ -157,6 +157,7 @@ static auto FindPhysicalDevice(GraphicsContext &context) -> Error::Error {
     if (score > bestGpuScore) {
       bestGpuScore = score;
       bestGpuIndex = static_cast<int>(i);
+      context.deviceProperties = deviceProperties;
     }
   }
 
