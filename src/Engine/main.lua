@@ -45,6 +45,20 @@ local image = Thorium.graphics.newTexture("leek.png", { usage = sampler })
 -- print(image:getFilter())
 local target = Thorium.graphics.newTexture(612, 512, { usage = sampler + rendertarget })
 local shader = Thorium.graphics.newShader("default2D")
+local compute = Thorium.graphics.newShader("testCS");
+local inputBuffer = Thorium.graphics.newBuffer("uint32", 1024, { usage = ssbo })
+local outputBuffer = Thorium.graphics.newBuffer("uint32", 1024, { usage = ssbo })
+
+inputBuffer:clear()
+inputBuffer:setData({ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 })
+
+compute:send("Input", inputBuffer)
+compute:send("Output", outputBuffer)
+
+print(compute:getThreadgroupSize())
+print(compute:getWaveSize())
+
+Thorium.graphics.dispatch(compute, 1, 1, 1)
 
 local vertexFormat = {
   { name = "position", format = "floatvec2",  location = 0 },

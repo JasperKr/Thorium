@@ -1,5 +1,4 @@
 #include "rendergraph.hpp"
-#include "Graphics/vertexformat.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/image.hpp"
@@ -14,10 +13,6 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
-#ifdef WIN32
-// #include <minwindef.h>
-#endif
-#include <array>
 #include <queue>
 #include <unordered_set>
 
@@ -904,127 +899,6 @@ auto inline GetDescriptorType(const Resource &resource,
   return Error::Success();
 }
 
-auto inline CreatePassDescriptorSetLayouts(GraphicsContext &context,
-                                           RenderGraph &graph,
-                                           CompiledPass &pass) -> Error {
-
-  std::unordered_map<uint32_t, std::vector<VkDescriptorSetLayoutBinding>>
-      setBindings;
-
-  for (auto &binding : pass.pass.resourceBindings) {
-    if (binding.type == BindingType::Attachment) {
-      continue; // skip attachments
-    }
-
-    PrintDebug("Pass {}: Processing resource binding for resource {} at set "
-               "{}, binding {}\n",
-               pass.pass.handle, binding.resource, binding.set,
-               binding.binding);
-
-    const auto &resource = graph.resources[binding.resource];
-
-    VkDescriptorSetLayoutBinding layoutBinding{};
-    layoutBinding.binding = binding.binding; // binding in the set
-    layoutBinding.descriptorType = GetDescriptorType(resource, binding);
-    layoutBinding.descriptorCount = 1;              // not an array
-    layoutBinding.stageFlags = VK_SHADER_STAGE_ALL; // adjust as needed
-    layoutBinding.pImmutableSamplers = nullptr;
-
-    setBindings[binding.set].push_back(layoutBinding); // add to the correct set
-  }
-
-  // Create descriptor set layouts
-  for (const auto &setBindingPair : setBindings) {
-    VkDescriptorSetLayoutCreateInfo layoutInfo{};
-    layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    layoutInfo.bindingCount =
-        static_cast<uint32_t>(setBindingPair.second.size());
-    layoutInfo.pBindings = setBindingPair.second.data();
-
-    VkDescriptorSetLayout descriptorSetLayout = nullptr;
-    VkResult result = vkCreateDescriptorSetLayout(
-        context.device, &layoutInfo, nullptr, &descriptorSetLayout);
-    if (result != VK_SUCCESS) {
-      return Error::Create(result);
-    }
-
-    pass.pass.state.descriptorSetLayouts[setBindingPair.first] =
-        descriptorSetLayout;
-  }
-
-  return Error::Success();
-}
-
-auto inline CreateGraphDescriptorSetLayouts(GraphicsContext &context,
-                                            RenderGraph &graph) -> Error {
-  for (auto &compiledPass : graph.compiledPasses) {
-    auto error = CreatePassDescriptorSetLayouts(context, graph, compiledPass);
-    if (Error::IsError(error)) {
-      return error;
-    }
-  }
-
-  return Error::Success();
-}
-
-auto inline CreatePassDescriptorSets(GraphicsContext &context,
-                                     RenderGraph &graph, CompiledPass &pass)
-    -> Error {
-  std::vector<VkDescriptorSetLayout> layouts;
-  layouts.reserve(pass.pass.state.descriptorSetLayouts.size());
-
-  PrintDebug("Creating descriptor sets for pass {}", pass.pass.handle);
-  PrintDebug("Descriptor set layout count: {}",
-             pass.pass.state.descriptorSetLayouts.size());
-
-  if (pass.pass.state.descriptorSetLayouts.empty()) {
-    PrintDebug("Pass {}: No descriptor set layouts, skipping allocation.",
-               pass.pass.handle);
-    return Error::Success(); // No descriptor sets needed
-  }
-
-  for (const auto &setBindingPair : pass.pass.state.descriptorSetLayouts) {
-    PrintDebug("Pass {}: Using descriptor set layout for set {}",
-               pass.pass.handle, setBindingPair.first);
-    layouts.emplace_back(setBindingPair.second); // Add all set layouts
-  }
-
-  VkDescriptorSetAllocateInfo allocInfo{};
-  allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-  allocInfo.descriptorPool = graph.descriptorPool;
-  allocInfo.descriptorSetCount = static_cast<uint32_t>(layouts.size());
-  allocInfo.pSetLayouts = layouts.data();
-
-  std::vector<VkDescriptorSet> descriptorSets(layouts.size());
-
-  VkResult result = vkAllocateDescriptorSets(context.device, &allocInfo,
-                                             descriptorSets.data());
-  if (result != VK_SUCCESS) {
-    return Error::Create(result);
-  }
-
-  // Map allocated sets back to their set numbers
-  size_t idx = 0;
-  for (const auto &setBindingPair : pass.pass.state.descriptorSetLayouts) {
-    uint32_t setNumber = setBindingPair.first;
-    pass.pass.state.descriptorSets[setNumber] = descriptorSets[idx++];
-  }
-
-  return Error::Success();
-}
-
-auto inline CreateGraphDescriptorSets(GraphicsContext &context,
-                                      RenderGraph &graph) -> Error {
-  for (auto &compiledPass : graph.compiledPasses) {
-    auto error = CreatePassDescriptorSets(context, graph, compiledPass);
-    if (Error::IsError(error)) {
-      return error;
-    }
-  }
-
-  return Error::Success();
-}
-
 // Determine the appropriate image layout for a resource binding; NOLINTNEXTLINE
 auto inline GetImageBindingLayout(const RenderGraph &graph,
                                   const ResourceBinding &binding)
@@ -1148,75 +1022,6 @@ auto inline GetBufferAccessFlags(const RenderGraph &graph,
   }
 
   return 0; // Fallback
-}
-
-auto inline ConfigurePassDescriptors(GraphicsContext &context,
-                                     RenderGraph &graph, CompiledPass &pass,
-                                     const ResourceBinding &binding) -> void {
-  // For each pass, configure descriptors for read/write resources
-  const auto &resHandle = binding.resource;
-  auto &resource = graph.resources[resHandle];
-
-  VkDescriptorImageInfo imageInfo = {};
-  VkDescriptorBufferInfo bufferInfo = {};
-
-  if (resource.type == Type::Texture) {
-    auto &texture = std::get<Ref<Texture::Texture>>(resource.info);
-    if (binding.type == BindingType::Attachment) {
-      return; // Skip raster attachments
-    }
-
-    PrintDebug("Setting up color attachment at location {}", binding.location);
-    PrintDebug("  Resource lifetime type: {}",
-               (resource.lifetime == ResourceLifetime::Transient
-                    ? "Transient"
-                    : "Persistent"));
-
-    imageInfo.imageLayout = GetImageBindingLayout(graph, binding);
-    imageInfo.imageView = texture->view;
-    assert(imageInfo.imageView != VK_NULL_HANDLE &&
-           "Texture image view is null in descriptor setup");
-    imageInfo.sampler = texture->GetSampler(context);
-    PrintDebug(
-        "Configured descriptor for texture resource {} with sampler {}\n",
-        resource.handle,
-        (imageInfo.sampler != VK_NULL_HANDLE ? "set" : "null"));
-    auto cache = GetSamplerCache();
-
-    cache[resource.handle] = imageInfo.sampler;
-
-  } else if (resource.type == Type::Buffer) {
-    const auto &buffer = std::get<Ref<Buffer>>(resource.info);
-
-    bufferInfo.offset = 0;
-    bufferInfo.range = buffer->sizeInBytes;
-    // Buffer would be set during actual execution
-    bufferInfo.buffer = VK_NULL_HANDLE;
-  }
-
-  VkWriteDescriptorSet writeDesc = {};
-  writeDesc.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-  writeDesc.dstBinding = binding.binding;
-  writeDesc.dstArrayElement = 0;
-  writeDesc.descriptorCount = 1;
-  writeDesc.descriptorType = GetDescriptorType(resource, binding);
-  writeDesc.pImageInfo = resource.type == Type::Texture ? &imageInfo : nullptr;
-  writeDesc.pBufferInfo = resource.type == Type::Buffer ? &bufferInfo : nullptr;
-  writeDesc.dstSet = pass.pass.state.descriptorSets.at(binding.set);
-
-  vkUpdateDescriptorSets(context.device, 1, &writeDesc, 0, nullptr);
-
-  pass.pass.state.descriptorWrites.emplace_back(writeDesc);
-}
-
-auto inline ConfigureGraphDescriptors(GraphicsContext &context,
-                                      RenderGraph &graph) -> void {
-  // For each compiled pass, configure descriptors
-  for (auto &compiledPass : graph.compiledPasses) {
-    for (const auto &binding : compiledPass.pass.resourceBindings) {
-      ConfigurePassDescriptors(context, graph, compiledPass, binding);
-    }
-  }
 }
 
 // Configure layouts for all passes in the graph
@@ -1368,47 +1173,22 @@ auto inline CreateGraphResourceTransitions(GraphicsContext &context,
   }
 }
 
-auto inline CreateGraphImageBarriers(GraphicsContext &context,
-                                     RenderGraph &graph) -> void {
-  for (auto &compiledPass : graph.compiledPasses) {
-    PrintDebug("Creating image barriers for pass {}", compiledPass.pass.handle);
-    if (compiledPass.layoutUpdates.empty()) {
-      PrintDebug(
-          "Pass {}: No layout updates, skipping image barrier creation.\n",
-          compiledPass.pass.handle);
-      continue; // No layout updates needed
-    }
+auto inline TransitionImageLayouts(GraphicsContext &context, RenderGraph &graph,
+                                   CompiledPass &compiledPass) -> Error {
+  for (const auto &layoutUpdate : compiledPass.layoutUpdates) {
+    const auto &resource = graph.resources[layoutUpdate.resource];
+    const auto &texture = std::get<Ref<Texture::Texture>>(resource.info);
 
-    for (const auto &layoutUpdate : compiledPass.layoutUpdates) {
-      const auto &resource = graph.resources[layoutUpdate.resource];
-      const auto &texture = std::get<Ref<Texture::Texture>>(resource.info);
-
-      PrintDebug("Pass {}: Creating image barrier for resource {}",
-                 compiledPass.pass.handle, layoutUpdate.resource);
-      PrintDebug("  Old Layout: {}",
-                 static_cast<uint32_t>(layoutUpdate.oldState.layout));
-      PrintDebug("  New Layout: {}",
-                 static_cast<uint32_t>(layoutUpdate.newState.layout));
-
-      VkImageMemoryBarrier barrier = {};
-      barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-      barrier.oldLayout = layoutUpdate.oldState.layout;
-      barrier.newLayout = layoutUpdate.newState.layout;
-      barrier.srcAccessMask = layoutUpdate.oldState.access;
-      barrier.dstAccessMask = layoutUpdate.newState.access;
-      barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-      barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-      barrier.image = texture->image;
-      barrier.subresourceRange.aspectMask =
-          Image::GetTextureAspectFlags(texture->format);
-      barrier.subresourceRange.baseMipLevel = 0;
-      barrier.subresourceRange.levelCount = texture->mipmapcount;
-      barrier.subresourceRange.baseArrayLayer = 0;
-      barrier.subresourceRange.layerCount = texture->arrayLayers;
-
-      compiledPass.imageBarriers.emplace_back(barrier);
+    auto result = texture->TransitionLayout(
+        context, layoutUpdate.newState.layout, layoutUpdate.oldState.stages,
+        layoutUpdate.newState.stages, layoutUpdate.oldState.access,
+        layoutUpdate.newState.access);
+    if (Error::IsError(result)) {
+      return result;
     }
   }
+
+  return Error::Success();
 }
 
 auto inline ApplyPassBarriers(VkCommandBuffer commandBuffer,
@@ -1426,281 +1206,6 @@ auto inline ApplyPassBarriers(VkCommandBuffer commandBuffer,
                        static_cast<uint32_t>(compiledPass.imageBarriers.size()),
                        compiledPass.imageBarriers.data() // image barriers
   );
-}
-
-[[nodiscard]] auto inline CreateGraphicsPipeline(GraphicsContext &context,
-                                                 RenderGraph &graph,
-                                                 CompiledPass &compiledPass)
-    -> Error {
-
-  if (compiledPass.pass.state.bindPoint != VK_PIPELINE_BIND_POINT_GRAPHICS) {
-    return Error::Create(
-        "Cannot create graphics pipeline for non-graphics pass");
-  }
-
-  std::array<VkPipelineShaderStageCreateInfo, 2> shaderStages = {};
-
-  auto &shader = *compiledPass.pass.shader;
-
-  shaderStages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-  shaderStages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
-  shaderStages[0].module = shader.module;
-  shaderStages[0].pName = "main";
-
-  shaderStages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-  shaderStages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-  shaderStages[1].module = shader.module;
-  shaderStages[1].pName = "main";
-
-  auto vertexformat = VertexFormat({
-      VertexComponent{
-          .location = 0,
-          .binding = 0,
-          .format = VK_FORMAT_R32G32B32_SFLOAT,
-          .offset = 0,
-      },
-      VertexComponent{
-          .location = 1,
-          .binding = 0,
-          .format = VK_FORMAT_R32G32_SFLOAT,
-          .offset = 12, // NOLINT
-      },
-  });
-
-  VkPipelineVertexInputStateCreateInfo vertexInputInfo = {};
-  vertexInputInfo.sType =
-      VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-  vertexInputInfo.vertexBindingDescriptionCount =
-      vertexformat.GetBindings().size();
-  vertexInputInfo.pVertexBindingDescriptions =
-      vertexformat.GetBindings().data();
-  vertexInputInfo.vertexAttributeDescriptionCount =
-      vertexformat.GetVkAttributes().size();
-  vertexInputInfo.pVertexAttributeDescriptions =
-      vertexformat.GetVkAttributes().data();
-  VkPipelineInputAssemblyStateCreateInfo inputAssembly = {};
-
-  inputAssembly.sType =
-      VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-  inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-  inputAssembly.primitiveRestartEnable = VK_FALSE;
-
-  VkPipelineViewportStateCreateInfo viewportState = {};
-  viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-  viewportState.viewportCount = 1;
-  viewportState.pViewports = &compiledPass.pass.state.viewport;
-  viewportState.scissorCount = 1;
-  viewportState.pScissors = &compiledPass.pass.state.scissor;
-
-  VkPipelineRasterizationStateCreateInfo rasterizer = {};
-  rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-  rasterizer.depthClampEnable = VK_FALSE;
-  rasterizer.rasterizerDiscardEnable = VK_FALSE;
-  rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
-  rasterizer.lineWidth = 1.0F;
-  rasterizer.cullMode = VK_CULL_MODE_NONE;
-  rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
-  rasterizer.depthBiasEnable = VK_FALSE;
-
-  VkPipelineMultisampleStateCreateInfo multisampling = {};
-  multisampling.sType =
-      VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-  multisampling.sampleShadingEnable = VK_FALSE;
-  multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-
-  std::vector<VkPipelineColorBlendAttachmentState> blendAttachments{};
-  uint32_t blendModeCount = 0;
-
-  // Loop over attachments and use GetPassAttachmentInfo to fetch blend modes
-  for (const auto &binding : compiledPass.pass.resourceBindings) {
-    if (binding.type == BindingType::Attachment) {
-      // Allocate blend attachment
-      AttachmentInfo attachInfo =
-          GetPassAttachmentInfo(compiledPass.pass, binding);
-
-      blendAttachments.resize(binding.location + 1);
-      blendModeCount++;
-      blendAttachments[binding.location] = attachInfo.blendMode;
-    }
-  }
-
-  VkPipelineColorBlendStateCreateInfo colorBlending = {};
-  colorBlending.sType =
-      VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-  colorBlending.logicOpEnable = VK_FALSE;
-  colorBlending.attachmentCount = blendModeCount;
-  colorBlending.pAttachments = blendAttachments.data();
-
-  VkPipelineRenderingCreateInfo renderingCreateInfo = {};
-  renderingCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
-
-  // Count color attachments
-  uint32_t colorAttachmentCount = 0;
-  bool hasDepthAttachment = false;
-  bool hasStencilAttachment = false;
-  uint32_t maxLocation = 0;
-
-  for (const auto &binding : compiledPass.pass.resourceBindings) {
-    if (binding.type == BindingType::Attachment) {
-      auto &resource = graph.resources[binding.resource];
-      if (resource.type == Type::Texture) {
-        const auto &texture = std::get<Ref<Texture::Texture>>(resource.info);
-        if (Image::IsDepthTexture(texture->format)) {
-          hasDepthAttachment = true;
-        } else if (Image::IsStencilTexture(texture->format)) {
-          hasStencilAttachment = true;
-        } else {
-          colorAttachmentCount++;
-          maxLocation =
-              (std::max)(maxLocation, static_cast<uint32_t>(binding.location));
-        }
-      }
-    }
-  }
-
-  renderingCreateInfo.colorAttachmentCount = colorAttachmentCount;
-  PrintDebug("Creating graphics pipeline with {} color attachments.",
-             colorAttachmentCount);
-
-  auto formats = std::vector<VkFormat>(maxLocation + 1, VK_FORMAT_UNDEFINED);
-
-  for (const auto &binding : compiledPass.pass.resourceBindings) {
-    if (binding.type == BindingType::Attachment) {
-      auto &resource = graph.resources[binding.resource];
-      const auto &texture = std::get<Ref<Texture::Texture>>(resource.info);
-
-      formats[binding.location] = texture->format;
-      PrintDebug("  Using format for attachment at location {}: {}",
-                 binding.location,
-                 static_cast<uint32_t>(formats[binding.location]));
-    }
-  }
-
-  renderingCreateInfo.pColorAttachmentFormats = formats.data();
-
-  VkPipelineDynamicStateCreateInfo dynamicState = {};
-  dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-  dynamicState.dynamicStateCount = 0;
-  dynamicState.pDynamicStates = nullptr;
-
-  VkPipelineDepthStencilStateCreateInfo depthStencil = {};
-  depthStencil.sType =
-      VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-  depthStencil.depthTestEnable = VK_FALSE;
-  depthStencil.depthWriteEnable = VK_FALSE;
-  depthStencil.depthCompareOp = VK_COMPARE_OP_LESS;
-  depthStencil.depthBoundsTestEnable = VK_FALSE;
-  depthStencil.stencilTestEnable = VK_FALSE;
-
-  VkGraphicsPipelineCreateInfo pipelineInfo = {};
-  pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-  pipelineInfo.stageCount = static_cast<uint32_t>(shaderStages.size());
-  pipelineInfo.pStages = shaderStages.data();
-  pipelineInfo.pVertexInputState = &vertexInputInfo;
-  pipelineInfo.pInputAssemblyState = &inputAssembly;
-  pipelineInfo.pViewportState = &viewportState;
-  pipelineInfo.pRasterizationState = &rasterizer;
-  pipelineInfo.pMultisampleState = &multisampling;
-  pipelineInfo.pColorBlendState = &colorBlending;
-  pipelineInfo.pDepthStencilState = &depthStencil;
-  pipelineInfo.pDynamicState = &dynamicState;
-  pipelineInfo.layout = compiledPass.pass.state.pipelineLayout;
-  pipelineInfo.renderPass = VK_NULL_HANDLE; // Not needed
-  pipelineInfo.subpass = 0;
-  pipelineInfo.pNext = &renderingCreateInfo;
-
-  auto error = Error::Create(vkCreateGraphicsPipelines(
-      context.device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr,
-      &compiledPass.pass.state.pipeline));
-
-  if (Error::IsError(error)) {
-    return error;
-  }
-
-  return Error::Success();
-}
-
-[[nodiscard]] auto inline CreateComputePipeline(GraphicsContext &context,
-                                                RenderGraph &graph,
-                                                CompiledPass &compiledPass)
-    -> Error {
-  if (compiledPass.pass.state.bindPoint != VK_PIPELINE_BIND_POINT_COMPUTE) {
-    return Error::Create("Cannot create compute pipeline for non-compute pass");
-  }
-
-  auto &shaderModule = *compiledPass.pass.shader;
-
-  VkPipelineShaderStageCreateInfo shaderStage = {};
-  shaderStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-  shaderStage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-  shaderStage.module = shaderModule.module;
-  shaderStage.pName = "main";
-
-  VkComputePipelineCreateInfo pipelineInfo = {};
-  pipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-  pipelineInfo.stage = shaderStage;
-  pipelineInfo.layout = compiledPass.pass.state.pipelineLayout;
-  auto error = Error::Create(
-      vkCreateComputePipelines(context.device, VK_NULL_HANDLE, 1, &pipelineInfo,
-                               nullptr, &compiledPass.pass.state.pipeline));
-
-  if (Error::IsError(error)) {
-    return error;
-  }
-
-  return Error::Success();
-}
-
-[[nodiscard]] auto inline CreateGraphPipelines(GraphicsContext &context,
-                                               RenderGraph &graph) -> Error {
-  for (size_t passIndex = 1; passIndex < graph.compiledPasses.size();
-       passIndex++) {
-
-    auto descriptorSetLayouts = std::vector<VkDescriptorSetLayout>{};
-
-    for (const auto &setLayoutPair :
-         graph.compiledPasses[passIndex].pass.state.descriptorSetLayouts) {
-      descriptorSetLayouts.push_back(setLayoutPair.second);
-    }
-
-    auto &compiledPass = graph.compiledPasses[passIndex];
-
-    VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
-    pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pipelineLayoutInfo.setLayoutCount =
-        static_cast<uint32_t>(descriptorSetLayouts.size());
-    pipelineLayoutInfo.pSetLayouts = descriptorSetLayouts.data();
-    pipelineLayoutInfo.pushConstantRangeCount = 0;
-    pipelineLayoutInfo.pPushConstantRanges = nullptr;
-    VkPipelineLayout pipelineLayout = nullptr;
-    auto error = Error::Create(vkCreatePipelineLayout(
-        context.device, &pipelineLayoutInfo, nullptr, &pipelineLayout));
-
-    if (Error::IsError(error)) {
-      return error;
-    }
-
-    compiledPass.pass.state.pipelineLayout = pipelineLayout;
-    if (compiledPass.pass.state.bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS) {
-      auto error = CreateGraphicsPipeline(context, graph, compiledPass);
-
-      if (Error::IsError(error)) {
-        return error;
-      }
-
-    } else if (compiledPass.pass.state.bindPoint ==
-               VK_PIPELINE_BIND_POINT_COMPUTE) {
-      auto error = CreateComputePipeline(context, graph, compiledPass);
-
-      if (Error::IsError(error)) {
-        return error;
-      }
-    } else {
-      return Error::Create("Unsupported pipeline bind point");
-    }
-  }
-
-  return Error::Success();
 }
 
 [[nodiscard]] auto inline BuildVirtualMemory(GraphicsContext &context,
@@ -2009,37 +1514,9 @@ auto inline AllocateGraphResourceMemory(GraphicsContext &context,
 
   PrintDebug("Created descriptor pool for render graph.");
 
-  error = CreateGraphDescriptorSetLayouts(context, graph);
-
-  if (Error::IsError(error)) {
-    return error;
-  }
-
-  PrintDebug("Created descriptor set layouts for render graph passes.");
-
-  error = CreateGraphDescriptorSets(context, graph);
-
-  if (Error::IsError(error)) {
-    return error;
-  }
-
-  PrintDebug("Allocated descriptor sets for render graph passes.");
-
-  ConfigureGraphDescriptors(context, graph);
-
-  PrintDebug("Configured descriptors for render graph passes.");
-  error = CreateGraphPipelines(context, graph);
-  if (Error::IsError(error)) {
-    return error;
-  }
-
-  PrintDebug("Created pipelines for render graph passes.");
-
   CreateGraphLayoutStates(context, graph);
 
   CreateGraphResourceTransitions(context, graph);
-
-  CreateGraphImageBarriers(context, graph);
 
   return Error::Success();
 }
@@ -2121,13 +1598,17 @@ auto BeginPassRendering(GraphicsContext &context, RenderGraph &graph,
 }
 
 auto Execute(GraphicsContext &context, RenderGraph &graph,
-             VkCommandBuffer commandBuffer) -> void {
+             VkCommandBuffer commandBuffer) -> Error {
   // For each compiled pass, record commands
   for (size_t passIndex = 1; passIndex < graph.compiledPasses.size();
        passIndex++) {
     auto &compiledPass = graph.compiledPasses[passIndex];
 
-    ApplyPassBarriers(commandBuffer, compiledPass);
+    auto transitionResult =
+        TransitionImageLayouts(context, graph, compiledPass);
+    if (Error::IsError(transitionResult)) {
+      return transitionResult;
+    }
 
     if (compiledPass.pass.state.bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS) {
       BeginPassRendering(context, graph, commandBuffer, compiledPass);
@@ -2136,41 +1617,10 @@ auto Execute(GraphicsContext &context, RenderGraph &graph,
              VK_PIPELINE_BIND_POINT_COMPUTE);
     }
 
-    // Todo, loop over all samplers, and check against the sampler cache to
-    // see if we have created a new sampler and need to bind the new one
-
-    /*
-    auto cache = GetSamplerCache();
-    auto samplerIterator = cache.find(resource.handle);
-    if (imageInfo.sampler != samplerIterator->second ||
-        samplerIterator == cache.end()) {
-      cache[resource.handle] = imageInfo.sampler;
-    }
-    */
-
-    // Bind pipeline
-    vkCmdBindPipeline(commandBuffer, compiledPass.pass.state.bindPoint,
-                      compiledPass.pass.state.pipeline);
-
-    if (compiledPass.pass.state.descriptorSets.size() > 0) {
-      std::vector<VkDescriptorSet> descriptorSets;
-      descriptorSets.reserve(compiledPass.pass.state.descriptorSets.size());
-
-      for (const auto &setPair : compiledPass.pass.state.descriptorSets) {
-        descriptorSets.emplace_back(setPair.second);
-      }
-
-      vkCmdBindDescriptorSets(commandBuffer, compiledPass.pass.state.bindPoint,
-                              compiledPass.pass.state.pipelineLayout, 0,
-                              descriptorSets.size(), descriptorSets.data(), 0,
-                              nullptr);
-    }
-
-    compiledPass.pass.executeFunction(commandBuffer, context, graph,
-                                      compiledPass);
-
-    if (compiledPass.pass.state.bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS) {
-      vkCmdEndRendering(commandBuffer);
+    auto executeResult = compiledPass.pass.executeFunction(
+        commandBuffer, context, graph, compiledPass);
+    if (Error::IsError(executeResult)) {
+      return executeResult;
     }
   }
 
@@ -2184,6 +1634,8 @@ auto Execute(GraphicsContext &context, RenderGraph &graph,
                          1, &barrier                         // image barriers
     );
   }
+
+  return Error::Success();
 }
 
 auto AddTexture(RenderGraph &graph, const TextureDescriptor &descriptor)

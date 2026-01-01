@@ -40,8 +40,11 @@ auto wrap_GetShader(lua_State *state) -> int;
 auto wrap_GetRenderTargets(lua_State *state) -> int;
 auto wrap_GetLineWidth(lua_State *state) -> int;
 auto wrap_GetWindingOrder(lua_State *state) -> int;
+
 auto wrap_Draw(lua_State *state) -> int;
-auto wrap_DrawInstanced(lua_State *state) -> int;
+auto wrap_Dispatch(lua_State *state) -> int;
+auto wrap_DispatchIndirect(lua_State *state) -> int;
+auto wrap_DrawIndirect(lua_State *state) -> int;
 
 // NOLINTNEXTLINE
 static const luaL_Reg GraphicsLib[] = {
@@ -73,7 +76,9 @@ static const luaL_Reg GraphicsLib[] = {
     {"newShader", Graphics::Shader::wrap_NewShader},
     {"newBuffer", Graphics::StructuredBuffer::wrap_NewBuffer},
     {"draw", wrap_Draw},
-    {"drawInstanced", wrap_DrawInstanced},
+    {"dispatch", wrap_Dispatch},
+    {"dispatchIndirect", wrap_DispatchIndirect},
+    {"drawIndirect", wrap_DrawIndirect},
     {nullptr, nullptr},
 };
 

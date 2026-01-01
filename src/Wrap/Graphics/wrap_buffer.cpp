@@ -1,3 +1,4 @@
+#include "Modules/console.hpp"
 #include "Wrap/Graphics/wrap_reflection.hpp"
 #include "Wrap/wrap.hpp"
 extern "C" {
@@ -216,6 +217,26 @@ inline auto BufferFormatFromLua(lua_State *state, int index)
     -> Graphics::BufferFormat {
   std::vector<Graphics::BufferComponent> components;
 
+  if (lua_type(state, index) == LUA_TSTRING) {
+    // Single component format
+    const char *formatStr = luaL_checkstring(state, index);
+    auto vkFormat = Graphics::Format::VertexFormatStringToVkFormat(formatStr);
+    if (vkFormat == VK_FORMAT_UNDEFINED) {
+      luaL_error(state, "Invalid format string: %s", formatStr);
+    }
+
+    components.emplace_back(
+        Graphics::BufferComponent{.name = {"default"}, .format = vkFormat});
+
+    Graphics::BufferFormat format(components);
+
+    if (format.GetSize() == 0) {
+      luaL_error(state, "Buffer format has zero size.");
+    }
+
+    return format;
+  }
+
   luaL_checktype(state, index, LUA_TTABLE);
 
   size_t tableSize = lua_objlen(state, index);
@@ -236,12 +257,16 @@ inline auto BufferFormatFromLua(lua_State *state, int index)
     }
 
     components.emplace_back(
-        Graphics::BufferComponent{.name = key, .offset = vkFormat});
+        Graphics::BufferComponent{.name = key, .format = vkFormat});
 
     lua_pop(state, 1); // pop component table
   }
 
   Graphics::BufferFormat format(components);
+
+  if (format.GetSize() == 0) {
+    luaL_error(state, "Buffer format has zero size.");
+  }
 
   return format;
 }
@@ -262,7 +287,7 @@ inline auto ConditionalFlag(lua_State *state, VkBufferUsageFlags flag) {
 //
 // format: { { name = ..., format = ... } }
 // element count: integer
-// settings: { usage: integer, cpupersistent: boolean }
+// settings: { usages, cpupersistent: boolean }
 auto wrap_NewBuffer(lua_State *state) -> int {
   auto *ctx = GetCurrentGraphicsContext();
 
@@ -272,6 +297,9 @@ auto wrap_NewBuffer(lua_State *state) -> int {
 
   auto format = BufferFormatFromLua(state, 1);
   auto elementCount = static_cast<size_t>(luaL_checkinteger(state, 2));
+
+  PrintAlways("Creating StructuredBuffer with element count: {}", elementCount);
+
   VkMemoryPropertyFlags memoryFlags = 0;
   VkBufferUsageFlags usageFlags = 0;
 
@@ -294,6 +322,31 @@ auto wrap_NewBuffer(lua_State *state) -> int {
     memoryFlags |=
         ConditionalFlag(state, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
                                    VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+    lua_getfield(state, 3, "gpuonly");
+    if (lua_toboolean(state, -1) != 0) {
+      lua_pop(state, 1); // pop boolean
+
+      if ((memoryFlags &
+           (static_cast<uint32_t>(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) |
+            VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)) != 0U) {
+        return luaL_error(state,
+                          "Buffer cannot be both cpu persistent and gpu only.");
+      }
+
+      memoryFlags |= VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    } else {
+      lua_pop(state, 1); // pop boolean
+    }
+  }
+
+  if (usageFlags == 0) {
+    usageFlags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+  }
+
+  if ((memoryFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) == 0U) {
+    usageFlags |=
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT; // allow data upload if not gpu only
   }
 
   auto result = Graphics::StructuredBuffer::CreateStructuredBuffer(

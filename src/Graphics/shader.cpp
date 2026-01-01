@@ -2,6 +2,7 @@
 #include "Buffers/uniform.hpp"
 #include "Graphics/Buffers/push.hpp"
 #include "Graphics/reflect.hpp"
+#include "Modules/Math/vector.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/filesystem.hpp"
@@ -13,6 +14,8 @@
 #include "slang/slang-com-ptr.h"
 #include "slang/slang.h"
 #include "tl/expected.hpp"
+#include <array>
+#include <span>
 #define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
 #include <cassert>
@@ -360,6 +363,60 @@ static inline auto LoadSlang(GraphicsContext &context,
   auto err = Error::Create(result, diagnosticsBlob, shader->programLayout);
   if (Error::IsError(err)) {
     return err;
+  }
+
+  if (shader->stages.empty()) {
+    return Error::Create("No valid entry points found in shader.");
+  }
+
+  if (shader->stages.at(0) == VK_SHADER_STAGE_COMPUTE_BIT) {
+    if (entryPointCount != 1) {
+      return Error::Create("Compute shader must have exactly one entry point.");
+    }
+
+    auto *entrypointReflection = shader->programLayout->getEntryPointByIndex(0);
+
+    std::array<SlangUInt, 3> out_workgroupSize = {1, 1, 1};
+    SlangUInt out_waveSize = 0;
+
+    entrypointReflection->getComputeThreadGroupSize(3,
+                                                    out_workgroupSize.data());
+    entrypointReflection->getComputeWaveSize(&out_waveSize);
+
+    PrintAlways("Compute shader threadgroup size: ({}, {}, {})",
+                out_workgroupSize[0], out_workgroupSize[1],
+                out_workgroupSize[2]);
+    PrintAlways("Compute shader wave size: {}", out_waveSize);
+
+    shader->threadgroupSize =
+        Math::Uvec3{static_cast<uint32_t>(out_workgroupSize[0]),
+                    static_cast<uint32_t>(out_workgroupSize[1]),
+                    static_cast<uint32_t>(out_workgroupSize[2])};
+    shader->waveSize = static_cast<uint32_t>(out_waveSize);
+
+    auto invocationlimit =
+        context.deviceProperties.limits.maxComputeWorkGroupInvocations;
+
+    Math::Uvec3 sizelimit{
+        context.deviceProperties.limits.maxComputeWorkGroupSize[0],
+        context.deviceProperties.limits.maxComputeWorkGroupSize[1],
+        context.deviceProperties.limits.maxComputeWorkGroupSize[2],
+    };
+
+    if (out_workgroupSize[0] * out_workgroupSize[1] * out_workgroupSize[2] >
+        invocationlimit) {
+      return Error::Create("Compute shader threadgroup size exceeds device "
+                           "limit of " +
+                           std::to_string(invocationlimit) + " invocations.");
+    }
+
+    for (SlangUInt i = 0; i < 3; i++) {
+      if (shader->threadgroupSize[i] > sizelimit[i]) {
+        return Error::Create("Compute shader threadgroup size in dimension " +
+                             std::to_string(i) + " exceeds device limit of " +
+                             std::to_string(sizelimit[i]) + ".");
+      }
+    }
   }
 
   Slang::ComPtr<slang::IBlob> spirvCode;
@@ -779,6 +836,17 @@ auto ShaderModule::FlushBuffers(GraphicsContext &context,
 
   return Error::Success();
 }
+
+auto ShaderModule::GetThreadgroupSize() const -> Result<Math::Uvec3> {
+  if (threadgroupSize.x == 0 || threadgroupSize.y == 0 ||
+      threadgroupSize.z == 0) {
+    return Error::Unexpected(
+        "Shader is not a compute shader or threadgroup size not set.");
+  }
+  return threadgroupSize;
+}
+
+auto ShaderModule::GetWaveSize() const -> uint32_t { return waveSize; }
 
 void ShaderModule::Destroy(VkDevice &device) {
   for (auto &pair : descriptorSetLayouts) {

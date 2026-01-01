@@ -45,9 +45,6 @@ struct ResourceUsageLifetime {
 
 struct ImportedTexture {
   Ref<Graphics::Texture::Texture> texture;
-
-  VkImageLayout initialLayout;
-  VkImageLayout finalLayout;
 };
 
 struct ImportedBuffer {
@@ -98,18 +95,7 @@ struct Resource {
   std::variant<Ref<Texture::Texture>, Ref<Buffer>> info;
 };
 
-// struct DescriptorSetUpdate {
-//   std::string name;
-//   ResourceHandle newResource;
-// };
-
 struct PassState {
-  VkPipeline pipeline = VK_NULL_HANDLE;
-  VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
-
-  std::unordered_map<uint32_t, VkDescriptorSetLayout> descriptorSetLayouts;
-  std::unordered_map<uint32_t, VkDescriptorSet> descriptorSets;
-
   VkViewport viewport = {};
   VkRect2D scissor = {};
 
@@ -117,9 +103,6 @@ struct PassState {
   VkPipelineBindPoint bindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
 
   std::vector<VkPipelineColorBlendAttachmentState> blendModes;
-  VkSubpassDescription subpassDescription = {};
-
-  std::vector<VkWriteDescriptorSet> descriptorWrites;
 };
 
 struct RenderPass {
@@ -171,9 +154,9 @@ struct RenderPass {
 
   Ref<Shader::ShaderModule> shader;
 
-  std::function<void(VkCommandBuffer cmd, GraphicsContext &context,
-                     struct RenderGraph &graph,
-                     struct CompiledPass &currentPass)>
+  std::function<Error(VkCommandBuffer cmd, GraphicsContext &context,
+                      struct RenderGraph &graph,
+                      struct CompiledPass &currentPass)>
       executeFunction;
 };
 
@@ -288,10 +271,6 @@ struct TextureDescriptor {
 
   // Vulkan usage flags (required)
   VkImageUsageFlags usage = 0;
-
-  // Optional: views/layouts if you want custom behavior
-  VkImageLayout initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-  VkImageLayout finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 };
 
 struct BufferDescriptor {
@@ -332,8 +311,8 @@ struct RenderPassDescriptor {
 
   Ref<Graphics::Shader::ShaderModule> shader;
 
-  std::function<void(VkCommandBuffer cmd, GraphicsContext &context,
-                     struct RenderGraph &graph, CompiledPass &currentPass)>
+  std::function<Error(VkCommandBuffer cmd, GraphicsContext &context,
+                      struct RenderGraph &graph, CompiledPass &currentPass)>
       executeFunction;
 };
 
@@ -344,6 +323,6 @@ auto AddRenderPass(RenderGraph &graph, const RenderPassDescriptor &descriptor)
     -> Error;
 
 auto Execute(GraphicsContext &context, RenderGraph &graph,
-             VkCommandBuffer commandBuffer) -> void;
+             VkCommandBuffer commandBuffer) -> Error;
 
 } // namespace Graphics::Rendergraph

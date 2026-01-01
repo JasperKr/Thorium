@@ -801,7 +801,7 @@ auto Texture::GetSampler(GraphicsContext &context) -> VkSampler {
     sampler = GetOrCreateSampler(context, samplerDescription);
     samplerDirty = false;
 
-    PrintDebug("Created new sampler for texture->");
+    PrintDebug("Created new sampler for texture");
 
     return sampler;
   }

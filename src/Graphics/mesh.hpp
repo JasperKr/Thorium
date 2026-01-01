@@ -4,7 +4,6 @@
 #include "Modules/object.hpp"
 #include "buffer.hpp"
 #include "graphics.hpp"
-#include "tl/expected.hpp"
 #include <cstdint>
 #include <span>
 #include <vector>
@@ -44,10 +43,6 @@ struct Mesh : Object {
   auto SetTopology(VkPrimitiveTopology topology) -> Error;
   [[nodiscard]] auto GetTopology() const -> VkPrimitiveTopology;
 
-  auto Draw(GraphicsContext &context) const -> Error;
-  auto DrawInstanced(GraphicsContext &context, uint32_t instanceCount) const
-      -> Error;
-
   auto SetVertices(GraphicsContext &context,
                    const std::span<uint8_t> &vertexData, uint64_t offset = 0)
       -> Error;
@@ -57,6 +52,9 @@ struct Mesh : Object {
 
   auto SetVertexBuffer(const Ref<Buffer> &buffer) -> void;
   auto SetIndexBuffer(const Ref<Buffer> &buffer) -> void;
+
+  [[nodiscard]] auto GetVertexBuffer() const -> Ref<Buffer>;
+  [[nodiscard]] auto GetIndexBuffer() const -> Ref<Buffer>;
 
   static auto GetType() -> Type const * { return &meshType; }
 

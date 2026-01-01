@@ -178,5 +178,38 @@ auto wrap_GetUniforms(lua_State *state) -> int {
 
   return 0;
 }
+auto wrap_GetThreadgroupSize(lua_State *state) -> int {
+  auto *shader = LuaWrap::FromLuaObject<Shader::ShaderModule>(state, 1);
+  if (shader == nullptr) {
+    lua_pushboolean(state, 0);
+    return 1;
+  }
+
+  auto threadgroupSizeResult = shader->GetThreadgroupSize();
+  if (Error::IsError(threadgroupSizeResult)) {
+    return luaL_error(state, "%s",
+                      threadgroupSizeResult.error().message.c_str());
+  }
+
+  auto threadgroupSize = threadgroupSizeResult.value();
+
+  lua_pushinteger(state, static_cast<lua_Integer>(threadgroupSize.x));
+  lua_pushinteger(state, static_cast<lua_Integer>(threadgroupSize.y));
+  lua_pushinteger(state, static_cast<lua_Integer>(threadgroupSize.z));
+  return 3;
+}
+
+auto wrap_GetWaveSize(lua_State *state) -> int {
+  auto *shader = LuaWrap::FromLuaObject<Shader::ShaderModule>(state, 1);
+  if (shader == nullptr) {
+    lua_pushboolean(state, 0);
+    return 1;
+  }
+
+  auto waveSize = shader->GetWaveSize();
+
+  lua_pushinteger(state, static_cast<lua_Integer>(waveSize));
+  return 1;
+}
 
 } // namespace Graphics::Shader

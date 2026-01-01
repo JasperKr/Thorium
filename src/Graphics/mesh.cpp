@@ -1,12 +1,10 @@
 #include "mesh.hpp"
 #include <sys/types.h>
 
-#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "buffer.hpp"
 #include "graphics.hpp"
-#include "rendertarget.hpp"
 #include "tl/expected.hpp"
 #include <cstdint>
 #include <span>
@@ -148,77 +146,6 @@ void Mesh::SetDrawRange(MeshDrawRange range) {
   return DrawRange;
 }
 
-void Mesh::Bind(VkCommandBuffer cmdBuffer) const {
-  std::vector<VkBuffer> vertexBuffers = {VertexBuffer->handle};
-  std::vector<VkDeviceSize> offsets = {0};
-  vkCmdBindVertexBuffers(cmdBuffer, 0, 1, vertexBuffers.data(), offsets.data());
-  if (IndexCount > 0) {
-    vkCmdBindIndexBuffer(cmdBuffer, IndexBuffer->handle, 0,
-                         VK_INDEX_TYPE_UINT32);
-  }
-}
-
-auto Mesh::Draw(GraphicsContext &context) const -> Error {
-  PrintDebug("Draw called");
-
-  RenderData renderData = GetRenderData(context, GetCurrentThreadIndex());
-  Bind(renderData.commandBuffers[context.frameIndex]);
-  MeshDrawRange range = DrawRange;
-
-  RenderTarget::SetVertexFormat(Format);
-  RenderTarget::SetTopology(Topology);
-
-  auto error = RenderTarget::PrepareDraw(context);
-  if (Error::IsError(error)) {
-    return error;
-  }
-
-  if (IndexCount > 0) {
-    vkCmdDrawIndexed(renderData.commandBuffers[context.frameIndex], range.Count,
-                     1, range.Offset, 0, 0);
-  } else {
-    vkCmdDraw(renderData.commandBuffers[context.frameIndex], range.Count, 1,
-              range.Offset, 0);
-  }
-
-  auto timelineValue = Graphics::GetCPUTimelineSemaphoreValue(context);
-  this->VertexBuffer->MarkUse(0, timelineValue);
-  this->IndexBuffer->MarkUse(0, timelineValue);
-
-  return Error::Success();
-}
-
-auto Mesh::DrawInstanced(GraphicsContext &context, uint32_t instanceCount) const
-    -> Error {
-
-  RenderData renderData = GetRenderData(context, GetCurrentThreadIndex());
-  Bind(renderData.commandBuffers[context.frameIndex]);
-
-  MeshDrawRange range = DrawRange;
-
-  RenderTarget::SetVertexFormat(Format);
-  RenderTarget::SetTopology(Topology);
-
-  auto error = RenderTarget::PrepareDraw(context);
-  if (Error::IsError(error)) {
-    return error;
-  }
-
-  if (IndexCount > 0) {
-    vkCmdDrawIndexed(renderData.commandBuffers[context.frameIndex], range.Count,
-                     instanceCount, range.Offset, 0, 0);
-  } else {
-    vkCmdDraw(renderData.commandBuffers[context.frameIndex], range.Count,
-              instanceCount, range.Offset, 0);
-  }
-
-  auto timelineValue = Graphics::GetCPUTimelineSemaphoreValue(context);
-  this->VertexBuffer->MarkUse(0, timelineValue);
-  this->IndexBuffer->MarkUse(0, timelineValue);
-
-  return Error::Success();
-}
-
 auto Mesh::SetVertices(GraphicsContext &context,
                        const std::span<uint8_t> &vertexData, uint64_t offset)
     -> Error {
@@ -236,6 +163,8 @@ auto Mesh::SetVertexBuffer(const Ref<Buffer> &buffer) -> void {
 auto Mesh::SetIndexBuffer(const Ref<Buffer> &buffer) -> void {
   IndexBuffer = buffer;
 }
+auto Mesh::GetVertexBuffer() const -> Ref<Buffer> { return VertexBuffer; }
+auto Mesh::GetIndexBuffer() const -> Ref<Buffer> { return IndexBuffer; }
 
 // Disallow: Fan, Geometry, Patch
 constexpr std::array<VkPrimitiveTopology, 5> validTopologies = {

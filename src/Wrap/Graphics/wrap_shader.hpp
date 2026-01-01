@@ -14,6 +14,8 @@ namespace Graphics::Shader {
 auto wrap_Send(lua_State *state) -> int;
 auto wrap_HasUniform(lua_State *state) -> int;
 auto wrap_GetUniforms(lua_State *state) -> int;
+auto wrap_GetThreadgroupSize(lua_State *state) -> int;
+auto wrap_GetWaveSize(lua_State *state) -> int;
 
 auto wrap_NewShader(lua_State *state) -> int;
 auto wrap_Release(lua_State *state) -> int;
@@ -23,6 +25,8 @@ static const luaL_Reg ShaderLib[] = {
     {"send", wrap_Send},
     {"hasUniform", wrap_HasUniform},
     {"getUniforms", wrap_GetUniforms},
+    {"getThreadgroupSize", wrap_GetThreadgroupSize},
+    {"getWaveSize", wrap_GetWaveSize},
     {"release", wrap_Release},
     {nullptr, nullptr} // terminate with nullptr
 };

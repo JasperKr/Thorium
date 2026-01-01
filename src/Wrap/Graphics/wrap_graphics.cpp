@@ -1,5 +1,6 @@
 #include "Wrap/Graphics/wrap_graphics.hpp"
 
+#include "Graphics/draw.hpp"
 #include "Graphics/graphics.hpp"
 #include "Graphics/mesh.hpp"
 #include "Graphics/render.hpp"
@@ -526,7 +527,13 @@ auto wrap_Draw(lua_State *state) -> int {
     return luaL_error(state, "Mesh is null.");
   }
 
-  auto drawResult = mesh->Draw(*ctx);
+  auto instanceCount = 1U;
+
+  if (lua_gettop(state) >= 2) {
+    instanceCount = static_cast<uint32_t>(luaL_checkinteger(state, 2));
+  }
+
+  auto drawResult = Draw(*ctx, *mesh, instanceCount);
 
   if (Error::IsError(drawResult)) {
     return luaL_error(state, "%s", drawResult.ToString().c_str());
@@ -535,8 +542,54 @@ auto wrap_Draw(lua_State *state) -> int {
   return 0;
 }
 
-// mesh, instanceCount
-auto wrap_DrawInstanced(lua_State *state) -> int {
+/*
+{"dispatch", wrap_Dispatch},
+{"dispatchIndirect", wrap_DispatchIndirect},
+{"drawIndirect", wrap_DrawIndirect},
+*/
+
+auto wrap_Dispatch(lua_State *state) -> int {
+  auto *ctx = GetCurrentGraphicsContext();
+
+  auto *shaderHandle =
+      LuaWrap::FromLuaObject<Graphics::Shader::ShaderModule>(state, 1);
+  Ref<Shader::ShaderModule> shader(shaderHandle);
+
+  Math::Uvec3 threadgroups{1, 1, 1};
+  threadgroups.x = static_cast<uint32_t>(luaL_checkinteger(state, 2));
+  threadgroups.y = static_cast<uint32_t>(luaL_checkinteger(state, 3));
+  threadgroups.z = static_cast<uint32_t>(luaL_checkinteger(state, 4));
+
+  auto dispatchResult = Dispatch(*ctx, *shader, threadgroups);
+
+  if (Error::IsError(dispatchResult)) {
+    return luaL_error(state, "%s", dispatchResult.ToString().c_str());
+  }
+
+  return 0;
+}
+
+auto wrap_DispatchIndirect(lua_State *state) -> int {
+  auto *ctx = GetCurrentGraphicsContext();
+
+  auto *shaderHandle =
+      LuaWrap::FromLuaObject<Graphics::Shader::ShaderModule>(state, 1);
+  Ref<Shader::ShaderModule> shader(shaderHandle);
+
+  auto *bufferHandle = LuaWrap::FromLuaObject<Graphics::Buffer>(state, 2);
+  Ref<Buffer> indirectBuffer(bufferHandle);
+
+  auto offset = static_cast<VkDeviceSize>(luaL_optinteger(state, 3, 0));
+  auto dispatchResult = DispatchIndirect(*ctx, *shader, indirectBuffer, offset);
+
+  if (Error::IsError(dispatchResult)) {
+    return luaL_error(state, "%s", dispatchResult.ToString().c_str());
+  }
+
+  return 0;
+}
+
+auto wrap_DrawIndirect(lua_State *state) -> int {
   auto *ctx = GetCurrentGraphicsContext();
 
   Ref<Mesh> mesh;
@@ -544,17 +597,19 @@ auto wrap_DrawInstanced(lua_State *state) -> int {
   if (LuaWrap::LuaIsType<Mesh>(state, 1)) {
     mesh = Ref<Mesh>(LuaWrap::FromLuaObject<Mesh>(state, 1));
   } else {
-    return luaL_error(state,
-                      "Invalid argument to drawInstanced; expected Mesh.");
+    return luaL_error(state, "Invalid argument to drawIndirect.");
   }
 
   if (mesh.get() == nullptr) {
     return luaL_error(state, "Mesh is null.");
   }
 
-  auto instanceCount = static_cast<uint32_t>(luaL_checkinteger(state, 2));
+  auto *bufferHandle = LuaWrap::FromLuaObject<Graphics::Buffer>(state, 2);
+  Ref<Buffer> indirectBuffer(bufferHandle);
 
-  auto drawResult = mesh->DrawInstanced(*ctx, instanceCount);
+  auto offset = static_cast<VkDeviceSize>(luaL_optinteger(state, 3, 0));
+  auto count = static_cast<uint32_t>(luaL_optinteger(state, 4, 1));
+  auto drawResult = DrawIndirect(*ctx, *mesh, indirectBuffer, offset, count);
 
   if (Error::IsError(drawResult)) {
     return luaL_error(state, "%s", drawResult.ToString().c_str());

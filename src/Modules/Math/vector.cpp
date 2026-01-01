@@ -1,8 +1,125 @@
 #include "vector.hpp"
+#include "Modules/Math/math.hpp"
 #include <cmath>
 #include <cstdint>
+#include <stdexcept>
 
 namespace Math {
+// Index operator overloads for all vector types
+
+// Vec3
+auto Vec3::operator[](uint32_t index) const -> Scalar {
+  switch (index) {
+  case 0:
+    return x;
+  case 1:
+    return y;
+  case 2:
+    return z;
+  default:
+    throw std::out_of_range("Vec3 index out of range");
+  }
+}
+
+// Vec4
+auto Vec4::operator[](uint32_t index) const -> Scalar {
+  switch (index) {
+  case 0:
+    return x;
+  case 1:
+    return y;
+  case 2:
+    return z;
+  case 3:
+    return w;
+  default:
+    throw std::out_of_range("Vec4 index out of range");
+  }
+}
+
+// Uvec2
+auto Uvec2::operator[](uint32_t index) const -> uint32_t {
+  switch (index) {
+  case 0:
+    return x;
+  case 1:
+    return y;
+  default:
+    throw std::out_of_range("Uvec2 index out of range");
+  }
+}
+
+// Uvec3
+auto Uvec3::operator[](uint32_t index) const -> uint32_t {
+  switch (index) {
+  case 0:
+    return x;
+  case 1:
+    return y;
+  case 2:
+    return z;
+  default:
+    throw std::out_of_range("Uvec3 index out of range");
+  }
+}
+
+// Uvec4
+auto Uvec4::operator[](uint32_t index) const -> uint32_t {
+  switch (index) {
+  case 0:
+    return x;
+  case 1:
+    return y;
+  case 2:
+    return z;
+  case 3:
+    return w;
+  default:
+    throw std::out_of_range("Uvec4 index out of range");
+  }
+}
+
+// Ivec2
+auto Ivec2::operator[](uint32_t index) const -> int32_t {
+  switch (index) {
+  case 0:
+    return x;
+  case 1:
+    return y;
+  default:
+    throw std::out_of_range("Ivec2 index out of range");
+  }
+}
+
+// Ivec3
+auto Ivec3::operator[](uint32_t index) const -> int32_t {
+  switch (index) {
+  case 0:
+    return x;
+  case 1:
+    return y;
+  case 2:
+    return z;
+  default:
+    throw std::out_of_range("Ivec3 index out of range");
+  }
+}
+
+// Ivec4
+auto Ivec4::operator[](uint32_t index) const -> int32_t {
+  switch (index) {
+  case 0:
+    return x;
+  case 1:
+    return y;
+  case 2:
+    return z;
+  case 3:
+    return w;
+  default:
+    throw std::out_of_range("Ivec4 index out of range");
+  }
+}
 
 static constexpr Scalar Epsilon = 1e-6F;
 
@@ -127,6 +244,16 @@ Vec2::Vec2(const Uvec3 &vec3)
     : x(static_cast<Scalar>(vec3.x)), y(static_cast<Scalar>(vec3.y)) {}
 Vec2::Vec2(const Uvec4 &vec4)
     : x(static_cast<Scalar>(vec4.x)), y(static_cast<Scalar>(vec4.y)) {}
+auto Vec2::operator[](uint32_t index) const -> Scalar {
+  switch (index) {
+  case 0:
+    return x;
+  case 1:
+    return y;
+  default:
+    throw std::out_of_range("Vec2 index out of range");
+  }
+}
 
 ///// Vec3 /////
 

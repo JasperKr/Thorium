@@ -44,6 +44,8 @@ struct Vec2 {
   auto operator==(const Vec2 &other) const -> bool;
   auto operator!=(const Vec2 &other) const -> bool;
 
+  auto operator[](uint32_t index) const -> Scalar;
+
   [[nodiscard]] auto Length() const -> Scalar;
   [[nodiscard]] auto Inverse() const -> Vec2;
   [[nodiscard]] auto Normalize() const -> Vec2;
@@ -96,6 +98,8 @@ struct Vec3 {
 
   auto operator==(const Vec3 &other) const -> bool;
   auto operator!=(const Vec3 &other) const -> bool;
+
+  auto operator[](uint32_t index) const -> Scalar;
 
   [[nodiscard]] auto Length() const -> Scalar;
   [[nodiscard]] auto Inverse() const -> Vec3;
@@ -152,6 +156,8 @@ struct Vec4 {
   auto operator==(const Vec4 &other) const -> bool;
   auto operator!=(const Vec4 &other) const -> bool;
 
+  auto operator[](uint32_t index) const -> Scalar;
+
   [[nodiscard]] auto Length() const -> Scalar;
   [[nodiscard]] auto Inverse() const -> Vec4;
   [[nodiscard]] auto Normalize() const -> Vec4;
@@ -205,6 +211,8 @@ struct Uvec2 {
   auto operator==(const Uvec2 &other) const -> bool;
   auto operator!=(const Uvec2 &other) const -> bool;
 
+  auto operator[](uint32_t index) const -> uint32_t;
+
   Uvec2(uint32_t x_val, uint32_t y_val) : x(x_val), y(y_val) {}
   Uvec2() = default;
   explicit Uvec2(const Uvec3 &vec3);
@@ -242,6 +250,8 @@ struct Uvec3 {
 
   auto operator==(const Uvec3 &other) const -> bool;
   auto operator!=(const Uvec3 &other) const -> bool;
+
+  auto operator[](uint32_t index) const -> uint32_t;
 
   Uvec3(uint32_t x_val, uint32_t y_val, uint32_t z_val)
       : x(x_val), y(y_val), z(z_val) {}
@@ -283,6 +293,8 @@ struct Uvec4 {
   auto operator==(const Uvec4 &other) const -> bool;
   auto operator!=(const Uvec4 &other) const -> bool;
 
+  auto operator[](uint32_t index) const -> uint32_t;
+
   Uvec4(uint32_t x_val, uint32_t y_val, uint32_t z_val, uint32_t w_val)
       : x(x_val), y(y_val), z(z_val), w(w_val) {}
   Uvec4() = default;
@@ -321,6 +333,8 @@ struct Ivec2 {
   auto operator==(const Ivec2 &other) const -> bool;
   auto operator!=(const Ivec2 &other) const -> bool;
 
+  auto operator[](uint32_t index) const -> int32_t;
+
   Ivec2(int32_t x_val, int32_t y_val) : x(x_val), y(y_val) {}
   Ivec2() = default;
   explicit Ivec2(const Ivec3 &vec3);
@@ -358,6 +372,8 @@ struct Ivec3 {
 
   auto operator==(const Ivec3 &other) const -> bool;
   auto operator!=(const Ivec3 &other) const -> bool;
+
+  auto operator[](uint32_t index) const -> int32_t;
 
   Ivec3(int32_t x_val, int32_t y_val, int32_t z_val)
       : x(x_val), y(y_val), z(z_val) {}
@@ -398,6 +414,8 @@ struct Ivec4 {
 
   auto operator==(const Ivec4 &other) const -> bool;
   auto operator!=(const Ivec4 &other) const -> bool;
+
+  auto operator[](uint32_t index) const -> int32_t;
 
   Ivec4(int32_t x_val, int32_t y_val, int32_t z_val, int32_t w_val)
       : x(x_val), y(y_val), z(z_val), w(w_val) {}

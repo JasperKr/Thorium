@@ -1,6 +1,7 @@
 #include "Graphics/Buffers/uniform.hpp"
 #include "Graphics/buffer.hpp"
 #include "Graphics/graphics.hpp"
+#include "Graphics/info.hpp"
 #include "Graphics/render.hpp"
 #include "Graphics/rendertarget.hpp"
 #include "Graphics/shader.hpp"
@@ -8,7 +9,6 @@
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/filesystem.hpp"
-#include <algorithm>
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -203,8 +203,6 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
   auto sourceDirectory = Path::Sanitize(exeDir.string() + "/" + arguments[0]);
   sourceDirectory = Path::Directory(sourceDirectory);
 
-  PrintAlways("Setting source directory to: " + sourceDirectory);
-
   Filesystem::GetConfig().identity = config.Identity;
   Error fsInitErr = Filesystem::Init(".");
 
@@ -218,15 +216,10 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
     return sourceSetError;
   }
 
-  PrintAlways("Save directory: " + Filesystem::GetSaveDirectory());
-
   Error fsMntErr = Filesystem::Mount(".", "/", true);
   if (Error::IsError(fsMntErr)) {
     return fsMntErr;
   }
-
-  PrintAlways("Source directory: " + Filesystem::GetSourceDirectory());
-  PrintAlways("Base source directory: " + Filesystem::GetSourceBaseDirectory());
 
   Graphics::GraphicsContext context = {};
   context.renderThreadCount = 1;
@@ -239,6 +232,7 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
   }
 
   PrintDebug("Graphics initialized successfully.");
+  PrintAlways(Graphics::Info::GetGpuInfoString(context.physicalDevice));
 
   Graphics::SetCurrentGraphicsContext(&context);
 

@@ -4,6 +4,7 @@
 #include "Graphics/Buffers/structured.hpp"
 #include "Graphics/buffer.hpp"
 #include "Graphics/texture.hpp"
+#include "Modules/Math/vector.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Modules/type.hpp"
@@ -16,7 +17,6 @@
 #include <unordered_map>
 #include <vector>
 #define VK_NO_PROTOTYPES
-#include "tl/expected.hpp"
 #include "vulkan/vulkan_core.h"
 
 #include "vertexformat.hpp"
@@ -136,6 +136,9 @@ struct ShaderModule : Object {
 
   std::vector<uint8_t> globalUniforms;
 
+  Math::Uvec3 threadgroupSize{1, 1, 1};
+  uint32_t waveSize = 0;
+
   static auto Create(Graphics::GraphicsContext &context,
                      const std::string &modulename, const std::string &name)
       -> Result<Ref<ShaderModule>>;
@@ -152,6 +155,9 @@ struct ShaderModule : Object {
   auto GetUniform(const ResourceKey &key) const -> Result<const ResourceInfo>;
 
   auto FlushBuffers(GraphicsContext &context, VkPipelineLayout layout) -> Error;
+
+  auto GetThreadgroupSize() const -> Result<Math::Uvec3>;
+  auto GetWaveSize() const -> uint32_t;
 
   void Destroy(VkDevice &device);
   void ReloadMaybe(Graphics::GraphicsContext &context);

@@ -59,7 +59,7 @@ constexpr auto SetIntFromLuaData(lua_State *state) -> int {
       return luaL_error(state, "Offset out of bounds.");
     }
 
-    auto value = static_cast<T>(luaL_checkinteger(state, 2));
+    auto value = static_cast<T>(luaL_checkinteger(state, 3));
     std::memcpy(&span[offset], &value, sizeof(T));
   }
 
