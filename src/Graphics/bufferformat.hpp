@@ -24,10 +24,25 @@ struct BufferFormat {
       : Components(std::move(components)) {
     // calculate offsets
     size_t currentOffset = 0;
+    size_t totalChannels = 0;
     for (auto &component : Components) {
       component.offset = static_cast<uint32_t>(currentOffset);
       currentOffset += Graphics::Format::GetSize(component.format);
+      totalChannels += Graphics::Format::GetChannelCount(component.format);
     }
+    FormatsAtOffsets.resize(totalChannels, VK_FORMAT_UNDEFINED);
+
+    auto index = 0;
+    for (const auto &component : Components) {
+      size_t formatSize = Graphics::Format::GetSize(component.format);
+      size_t channelCount = Graphics::Format::GetChannelCount(component.format);
+
+      for (size_t i = 0; i < channelCount; i++) {
+        FormatsAtOffsets[index++] = component.format;
+      }
+    }
+
+    assert(index == FormatsAtOffsets.size());
   }
 
   BufferFormat() = default;
@@ -89,8 +104,19 @@ public:
     return hasher.get();
   }
 
+  // Query the format at a given component offset
+  // Useful for writing one component at a time
+  // for example:
+  // vec4, uvec4, float, uint will give:
+  // vec4, vec4, vec4, vec4, uvec4, uvec4, uvec4, uvec4, float, uint
+  [[nodiscard]] auto FormatAt(size_t componentOffset) const -> VkFormat {
+    componentOffset %= FormatsAtOffsets.size();
+    return Components[componentOffset].format;
+  }
+
 private:
   std::vector<BufferComponent> Components;
+  std::vector<VkFormat> FormatsAtOffsets;
 };
 
 struct BufferFormatHash {

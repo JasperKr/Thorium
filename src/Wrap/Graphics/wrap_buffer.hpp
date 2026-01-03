@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Graphics/Buffers/structured.hpp"
 #include "Graphics/buffer.hpp"
 #include "Modules/console.hpp"
 #include "Wrap/wrap.hpp"
@@ -35,8 +36,9 @@ static const luaL_Reg BufferLib[] = {
 extern "C" inline auto luaopen_buffer(lua_State *state) -> int {
   PrintDebug("Registering Buffer Lua type.");
 
-  LuaWrap::RegisterLuaType(state, Buffer::GetType(),
-                           BufferLib); // NOLINT
+  LuaWrap::RegisterLuaType(
+      state, Graphics::StructuredBuffer::StructuredBuffer::GetType(),
+      BufferLib); // NOLINT
 
   return 1;
 }

@@ -9,3 +9,4 @@ Thorium.event = {}
 Thorium.keyboard = {}
 Thorium.mouse = {}
 Thorium.data = {}
+Thorium.filesystem = {}

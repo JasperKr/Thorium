@@ -1,3 +1,4 @@
+#include "SDL3/SDL_keyboard.h"
 #include "SDL3/SDL_keycode.h"
 #include <cstdint>
 #include <string>
@@ -515,5 +516,55 @@ static const std::unordered_map<uint32_t, std::string> ScancodeToString =
   Register(vec, SDL_SCANCODE_SLEEP, "sleep");
   return vec;
 }();
+
+static const std::unordered_map<std::string, SDL_Keycode> StringToKeycode =
+    []() -> std::unordered_map<std::string, SDL_Keycode> {
+  std::unordered_map<std::string, SDL_Keycode> map;
+  for (const auto &pair : KeycodeToString) {
+    map[pair.second] = static_cast<SDL_Keycode>(pair.first);
+  }
+  return map;
+}();
+
+static const std::unordered_map<std::string, uint32_t> StringToScancode =
+    []() -> std::unordered_map<std::string, uint32_t> {
+  std::unordered_map<std::string, uint32_t> map;
+  for (const auto &pair : ScancodeToString) {
+    map[pair.second] = pair.first;
+  }
+  return map;
+}();
+
+inline auto IsDown(SDL_Keycode key) -> bool {
+  const bool *state = SDL_GetKeyboardState(nullptr);
+  SDL_Keymod mod = SDL_GetModState();
+
+  // NOLINTNEXTLINE Pointer arithmetic on bool *
+  return state[SDL_GetScancodeFromKey(key, &mod)];
+}
+
+inline auto IsDown(const std::string &keyName) -> bool {
+  auto iterator = StringToKeycode.find(keyName);
+  if (iterator == StringToKeycode.end()) {
+    return false;
+  }
+
+  return IsDown(iterator->second);
+}
+
+inline auto IsScancodeDown(SDL_Scancode scancode) -> bool {
+  const bool *state = SDL_GetKeyboardState(nullptr);
+  // NOLINTNEXTLINE Pointer arithmetic on bool *
+  return state[scancode];
+}
+
+inline auto IsScancodeDown(const std::string &scancodeName) -> bool {
+  auto iterator = StringToScancode.find(scancodeName);
+  if (iterator == StringToScancode.end()) {
+    return false;
+  }
+
+  return IsScancodeDown(static_cast<SDL_Scancode>(iterator->second));
+}
 
 } // namespace Keyboard

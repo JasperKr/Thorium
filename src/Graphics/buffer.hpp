@@ -29,7 +29,7 @@ auto FlushBufferUploads(GraphicsContext &context) -> Error;
 auto LoadBufferModule(GraphicsContext &context) -> Error;
 auto UnloadBufferModule(GraphicsContext &context) -> Error;
 
-static const Type bufferType = Type("Buffer");
+static const Type bufferType = Type("Internal Buffer");
 
 struct Buffer : Object {
   VkBuffer handle = VK_NULL_HANDLE;
@@ -41,6 +41,10 @@ struct Buffer : Object {
   bool isStagingBuffer = false;
   bool persistentMapping = false;
   void *mappedData = nullptr;
+
+  VkAccessFlags2 unsynchronisedWriteBits{};
+  VkAccessFlags2 unsynchronisedReadBits{};
+  VkPipelineStageFlags2 unsynchronisedReadStages{};
 
   Buffer() = default;
   Buffer(const Buffer &) = delete;
@@ -93,9 +97,26 @@ struct Buffer : Object {
 
   static auto GetType() -> Type const * { return &bufferType; }
 
+  // Range: [min, max]
+  auto SynchroniseRead(GraphicsContext &context,
+                       VkAccessFlags2 dstAccess = VK_ACCESS_2_TRANSFER_READ_BIT,
+                       VkPipelineStageFlags2 dstStage =
+                           VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT) -> Error;
+
 private:
   auto Upload(GraphicsContext &context, std::span<const uint8_t> data,
               VkDeviceSize offset = 0, VkDeviceSize size = VK_WHOLE_SIZE)
       -> Error;
+
+  // Range: [min, max]
+  auto SynchroniseWrite(GraphicsContext &context) -> Error;
+
+  auto RegisterUpload() -> void;
+  auto UploadLarge(GraphicsContext &context,
+                   std::span<const uint8_t> data, // NOLINTNEXTLINE
+                   VkDeviceSize offset, VkDeviceSize size) const -> Error;
+  auto UploadRing(GraphicsContext &context,
+                  std::span<const uint8_t> data, // NOLINTNEXTLINE
+                  VkDeviceSize offset, VkDeviceSize size) const -> Error;
 };
 } // namespace Graphics

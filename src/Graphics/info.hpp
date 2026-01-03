@@ -16,11 +16,12 @@ inline auto GetAMDShaderCorePropertiesString(VkPhysicalDevice phys)
   VkPhysicalDeviceShaderCorePropertiesAMD amdProps{
       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_CORE_PROPERTIES_AMD};
 
-  VkPhysicalDeviceProperties2 props2{
-      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
-  props2.pNext = &amdProps;
+  VkPhysicalDeviceProperties2 props{
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
+  };
+  props.pNext = &amdProps;
 
-  vkGetPhysicalDeviceProperties2(phys, &props2);
+  vkGetPhysicalDeviceProperties2(phys, &props);
 
   std::ostringstream stream;
   stream << "VkPhysicalDeviceShaderCorePropertiesAMD\n";
@@ -64,24 +65,29 @@ inline auto GetGpuVendorString(uint32_t vendorID) -> std::string {
 }
 
 inline auto GetGpuInfo(VkPhysicalDevice phys) -> GpuInfo {
-  VkPhysicalDeviceProperties props{};
-  vkGetPhysicalDeviceProperties(phys, &props);
+  VkPhysicalDeviceProperties2 props{
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
+  };
+  vkGetPhysicalDeviceProperties2(phys, &props);
 
   GpuInfo info{};
-  info.vendorID = props.vendorID;
-  info.deviceID = props.deviceID;
-  info.deviceName = std::string(static_cast<const char *>(props.deviceName));
+  info.vendorID = props.properties.vendorID;
+  info.deviceID = props.properties.deviceID;
+  info.deviceName =
+      std::string(static_cast<const char *>(props.properties.deviceName));
 
   return info;
 }
 
 inline auto GetGpuDriverVersionString(VkPhysicalDevice phys) -> std::string {
-  VkPhysicalDeviceProperties props{};
-  vkGetPhysicalDeviceProperties(phys, &props);
+  VkPhysicalDeviceProperties2 props{
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
+  };
+  vkGetPhysicalDeviceProperties2(phys, &props);
 
-  uint32_t major = VK_VERSION_MAJOR(props.driverVersion);
-  uint32_t minor = VK_VERSION_MINOR(props.driverVersion);
-  uint32_t patch = VK_VERSION_PATCH(props.driverVersion);
+  uint32_t major = VK_VERSION_MAJOR(props.properties.driverVersion);
+  uint32_t minor = VK_VERSION_MINOR(props.properties.driverVersion);
+  uint32_t patch = VK_VERSION_PATCH(props.properties.driverVersion);
 
   std::ostringstream stream;
   stream << major << "." << minor << "." << patch;
@@ -90,12 +96,14 @@ inline auto GetGpuDriverVersionString(VkPhysicalDevice phys) -> std::string {
 }
 
 inline auto GetGpuApiVersionString(VkPhysicalDevice phys) -> std::string {
-  VkPhysicalDeviceProperties props{};
-  vkGetPhysicalDeviceProperties(phys, &props);
+  VkPhysicalDeviceProperties2 props{
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
+  };
+  vkGetPhysicalDeviceProperties2(phys, &props);
 
-  uint32_t major = VK_VERSION_MAJOR(props.apiVersion);
-  uint32_t minor = VK_VERSION_MINOR(props.apiVersion);
-  uint32_t patch = VK_VERSION_PATCH(props.apiVersion);
+  uint32_t major = VK_VERSION_MAJOR(props.properties.apiVersion);
+  uint32_t minor = VK_VERSION_MINOR(props.properties.apiVersion);
+  uint32_t patch = VK_VERSION_PATCH(props.properties.apiVersion);
 
   std::ostringstream stream;
   stream << major << "." << minor << "." << patch;

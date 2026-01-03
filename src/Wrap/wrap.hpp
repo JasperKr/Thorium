@@ -104,8 +104,7 @@ inline auto LuaType(lua_State *state, int index) -> Type const * {
   return proxy->type;
 }
 
-template <typename T>
-inline auto LuaIsType(lua_State *state, int index) -> bool {
+template <typename T> inline auto IsType(lua_State *state, int index) -> bool {
   // NOLINTNEXTLINE
   auto *proxy = static_cast<Proxy *>(lua_touserdata(state, index));
   if (proxy == nullptr || proxy->object == nullptr) {

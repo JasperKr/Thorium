@@ -181,12 +181,25 @@ function Thorium.graphics.getRenderTargets() end
 
 --- Draws the mesh or texture.
 --- @param mesh Thorium.Mesh|Thorium.Texture The mesh or texture to draw.
-function Thorium.graphics.draw(mesh) end
+function Thorium.graphics.draw(mesh, instanceCount) end
 
---- Draws the mesh with instancing.
+--- Draws the mesh using indirect parameters.
 --- @param mesh Thorium.Mesh The mesh to draw.
---- @param instanceCount number The number of instances to draw.
-function Thorium.graphics.drawInstanced(mesh, instanceCount) end
+--- @param indirectBuffer Thorium.Buffer The buffer containing the draw parameters.
+--- @param offset number The offset in the buffer to read the parameters from.
+--- @param count number The number of draws to perform.
+function Thorium.graphics.drawIndirect(mesh, indirectBuffer, offset, count) end
+
+--- Dispatches a compute shader.
+--- @param threadgroupsX number The number of threadgroups to dispatch in the X dimension.
+--- @param threadgroupsY number The number of threadgroups to dispatch in the Y dimension.
+--- @param threadgroupsZ number The number of threadgroups to dispatch in the Z dimension.
+function Thorium.graphics.dispatch(threadgroupsX, threadgroupsY, threadgroupsZ) end
+
+--- Dispatches a compute shader using indirect parameters.
+--- @param indirectBuffer Thorium.Buffer The buffer containing the dispatch parameters.
+--- @param offset number The offset in the buffer to read the parameters from.
+function Thorium.graphics.dispatchIndirect(indirectBuffer, offset) end
 
 --- Clears the screen or the currently set rendertargets.
 --- @overload fun(r: number, g: number, b: number, a: number)

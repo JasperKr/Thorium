@@ -1,6 +1,6 @@
 
 #include "Wrap/Graphics/wrap_shader.hpp"
-#include "Graphics/buffer.hpp"
+#include "Graphics/Buffers/structured.hpp"
 #include "Graphics/reflect.hpp"
 #include "Graphics/shader.hpp"
 #include "Modules/bytedata.hpp"
@@ -65,7 +65,7 @@ auto wrap_Send(lua_State *state) -> int {
   // Base index of 1; + 1 for shader object; + keyCount for key parts
   auto valueOffset = 2 + keyCount;
 
-  if (LuaWrap::LuaIsType<Graphics::Texture::Texture>(state, valueOffset)) {
+  if (LuaWrap::IsType<Graphics::Texture::Texture>(state, valueOffset)) {
     auto *texture =
         LuaWrap::FromLuaObject<Graphics::Texture::Texture>(state, valueOffset);
     auto result =
@@ -73,8 +73,11 @@ auto wrap_Send(lua_State *state) -> int {
     if (Error::IsError(result)) {
       return luaL_error(state, "%s", result.message.c_str());
     }
-  } else if (LuaWrap::LuaIsType<Graphics::Buffer>(state, valueOffset)) {
-    auto *buffer = LuaWrap::FromLuaObject<Graphics::Buffer>(state, valueOffset);
+  } else if (LuaWrap::IsType<Graphics::StructuredBuffer::StructuredBuffer>(
+                 state, valueOffset)) {
+    auto *buffer =
+        LuaWrap::FromLuaObject<Graphics::StructuredBuffer::StructuredBuffer>(
+            state, valueOffset);
     auto result =
         shader->Send(*Graphics::GetCurrentGraphicsContext(), key, buffer);
     if (Error::IsError(result)) {
@@ -121,7 +124,7 @@ auto wrap_Send(lua_State *state) -> int {
     if (Error::IsError(result)) {
       return luaL_error(state, "%s", result.message.c_str());
     }
-  } else if (LuaWrap::LuaIsType<Data::ByteData>(state, valueOffset)) {
+  } else if (LuaWrap::IsType<Data::ByteData>(state, valueOffset)) {
     auto *byteData = LuaWrap::FromLuaObject<Data::ByteData>(state, valueOffset);
     auto span = byteData->GetDataSpan();
 

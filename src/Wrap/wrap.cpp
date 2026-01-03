@@ -13,6 +13,8 @@ extern "C" {
 #include "Modules/object.hpp"
 #include "Wrap/Graphics/wrap_graphics.hpp"
 #include "Wrap/Modules/wrap_event.hpp"
+#include "Wrap/Modules/wrap_filesystem.hpp"
+#include "Wrap/Modules/wrap_keyboard.hpp"
 #include "Wrap/Modules/wrap_timer.hpp"
 
 namespace LuaWrap {
@@ -323,6 +325,8 @@ static const luaL_Reg ThoriumModules[] = {
     {"event", Event::luaopen_event},
     {"timer", Timer::luaopen_timer},
     {"data", Data::luaopen_data},
+    {"filesystem", Wrap::Filesystem::luaopen_filesystem},
+    {"keyboard", Wrap::Keyboard::luaopen_keyboard},
     {nullptr, nullptr},
 };
 

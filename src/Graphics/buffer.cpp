@@ -4,7 +4,9 @@
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "graphics.hpp"
+#include <algorithm>
 #include <cstdint>
+#include <vector>
 #define VK_NO_PROTOTYPES
 #include "array"
 #include "vulkan/vulkan_core.h"
@@ -150,6 +152,222 @@ auto Buffer::UnmapMemory(GraphicsContext &context) -> void {
   mappedData = nullptr;
 }
 
+constexpr auto dstFlags =
+    static_cast<uint64_t>(VK_ACCESS_2_TRANSFER_WRITE_BIT) |
+    static_cast<uint64_t>(VK_ACCESS_2_TRANSFER_READ_BIT) |
+    static_cast<uint64_t>(VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT) |
+    static_cast<uint64_t>(VK_ACCESS_2_INDEX_READ_BIT) |
+    static_cast<uint64_t>(VK_ACCESS_2_UNIFORM_READ_BIT) |
+    static_cast<uint64_t>(VK_ACCESS_2_SHADER_READ_BIT) |
+    static_cast<uint64_t>(VK_ACCESS_2_SHADER_WRITE_BIT);
+
+// All syncs needed before writing to the buffer
+auto Buffer::SynchroniseWrite(GraphicsContext &context) -> Error {
+  auto *commandBuffer = GetCommandBuffer(context, GetCurrentThreadIndex());
+
+  if (unsynchronisedReadBits == 0) {
+    unsynchronisedReadBits = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+    unsynchronisedReadStages = VK_PIPELINE_STAGE_2_COPY_BIT;
+    unsynchronisedWriteBits = static_cast<VkAccessFlags2>(dstFlags);
+
+    return Error::Success();
+  }
+
+  VkBufferMemoryBarrier2 bufferBarrier = {
+      .sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
+      .srcStageMask = unsynchronisedReadStages,
+      .srcAccessMask = unsynchronisedReadBits,
+      .dstStageMask = VK_PIPELINE_STAGE_2_COPY_BIT,
+      .dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+      .buffer = handle,
+      .offset = 0,
+      .size = VK_WHOLE_SIZE,
+  };
+
+  VkDependencyInfo dependencyInfo = {
+      .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+      .bufferMemoryBarrierCount = 1,
+      .pBufferMemoryBarriers = &bufferBarrier,
+  };
+
+  vkCmdPipelineBarrier2(commandBuffer, &dependencyInfo);
+
+  // we synced for writing, just flag that this write needs to be synced later too
+  unsynchronisedReadBits = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+  unsynchronisedReadStages = VK_PIPELINE_STAGE_2_COPY_BIT;
+  unsynchronisedWriteBits = static_cast<VkAccessFlags2>(dstFlags);
+
+  return Error::Success();
+}
+
+// All syncs needed before reading from the buffer
+auto Buffer::SynchroniseRead(
+    GraphicsContext &context,
+    VkAccessFlags2 dstAccess, // NOLINT (swappable by mistake)
+    VkPipelineStageFlags2 dstStage) -> Error {
+
+  if ((unsynchronisedWriteBits & dstAccess) == 0) {
+    return Error::Success();
+  }
+
+  VkBufferMemoryBarrier2 bufferBarrier = {
+      .sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
+      .srcStageMask = VK_PIPELINE_STAGE_2_COPY_BIT,
+      .srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+      .dstStageMask = dstStage,
+      .dstAccessMask = dstAccess,
+      .buffer = handle,
+      .offset = 0,
+      .size = VK_WHOLE_SIZE,
+  };
+
+  VkDependencyInfo dependencyInfo = {
+      .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+      .bufferMemoryBarrierCount = 1,
+      .pBufferMemoryBarriers = &bufferBarrier,
+  };
+
+  auto *commandBuffer = GetCommandBuffer(context, GetCurrentThreadIndex());
+  vkCmdPipelineBarrier2(commandBuffer, &dependencyInfo);
+
+  unsynchronisedReadBits |= dstAccess;
+  unsynchronisedReadStages |= dstStage;
+  unsynchronisedWriteBits &= ~dstAccess;
+
+  return Error::Success();
+}
+
+auto Buffer::UploadLarge(GraphicsContext &context,
+                         std::span<const uint8_t> data, // NOLINTNEXTLINE
+                         VkDeviceSize offset, VkDeviceSize size) const
+    -> Error {
+
+  auto uploadSize = size == VK_WHOLE_SIZE ? data.size() : size;
+
+  // Use staging buffer
+  VkBufferCreateInfo stagingBufferInfo = {};
+  stagingBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+  stagingBufferInfo.size = uploadSize;
+  stagingBufferInfo.usage =
+      VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+  stagingBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+  // See: https://gpuopen-librariesandsdks.github.io/VulkanMemoryAllocator/html/usage_patterns.html
+  VmaAllocationCreateInfo stagingAllocInfo = {};
+  stagingAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+  stagingAllocInfo.flags =
+      static_cast<uint32_t>(
+          VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT) |
+      static_cast<uint32_t>(VMA_ALLOCATION_CREATE_MAPPED_BIT);
+  VkBuffer stagingBuffer = nullptr;
+  VmaAllocation stagingMemory = nullptr;
+  VkResult result = vmaCreateBuffer(context.vmaAllocator, &stagingBufferInfo,
+                                    &stagingAllocInfo, &stagingBuffer,
+                                    &stagingMemory, nullptr);
+  if (result != VK_SUCCESS) {
+    return Error::Create(result);
+  }
+
+  void *mapped = nullptr;
+  result = vmaMapMemory(context.vmaAllocator, stagingMemory, &mapped);
+  if (result != VK_SUCCESS) {
+    vmaDestroyBuffer(context.vmaAllocator, stagingBuffer, stagingMemory);
+    return Error::Create(result);
+  }
+
+  std::memcpy(static_cast<uint8_t *>(mapped), data.data(), uploadSize);
+  vmaUnmapMemory(context.vmaAllocator, stagingMemory);
+
+  auto *commandBuffer = GetCommandBuffer(context, GetCurrentThreadIndex());
+
+  VkBufferCopy copyRegion = {};
+  copyRegion.srcOffset = 0;
+  copyRegion.dstOffset = offset;
+  copyRegion.size = uploadSize;
+  vkCmdCopyBuffer(commandBuffer, stagingBuffer, handle, 1, &copyRegion);
+  StagingBufferInfo stagingInfo = {};
+  stagingInfo.buffer = stagingBuffer;
+  stagingInfo.memory = stagingMemory;
+  stagingInfo.timelineValue = ++currentTimelineValue;
+
+  StagingBuffers.emplace_back(stagingInfo);
+
+  return Error::Success();
+}
+
+auto Buffer::UploadRing(GraphicsContext &context,
+                        std::span<const uint8_t> data, // NOLINTNEXTLINE
+                        VkDeviceSize offset, VkDeviceSize size) const -> Error {
+
+  auto uploadSize = size == VK_WHOLE_SIZE ? data.size() : size;
+
+  // Use upload buffer
+  auto uploadBuffer = UploadBuffers.at(context.frameIndex);
+  size_t &uploadOffset = UploadBufferOffsets.at(context.frameIndex);
+  if (uploadBuffer.get() == nullptr ||
+      uploadBuffer->sizeInBytes < uploadSize + uploadOffset) {
+    // Create or resize upload buffer
+    if (uploadBuffer.get() != nullptr) {
+      uploadBuffer->ScheduleDestroy();
+    }
+
+    size_t newSize = UploadBufferSize;
+    while (newSize < uploadSize + uploadOffset) {
+      newSize *= 2;
+    }
+
+    Graphics::BufferCreationInfo bufferInfo{};
+    bufferInfo.size = newSize;
+    bufferInfo.usage = static_cast<uint32_t>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT) |
+                       static_cast<uint32_t>(VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+    bufferInfo.properties =
+        static_cast<uint32_t>(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) |
+        static_cast<uint32_t>(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    bufferInfo.PersistentMapping = true;
+
+    auto result = Graphics::Buffer::Create(context, bufferInfo);
+    if (Error::IsError(result)) {
+      return result.error();
+    }
+
+    uploadBuffer = result.value();
+    UploadBuffers.at(context.frameIndex) = uploadBuffer;
+  }
+
+  // Copy data to upload buffer
+  auto result = uploadBuffer->MapMemory(context);
+  if (Error::IsError(result)) {
+    return result;
+  }
+
+  // NOLINTNEXTLINE, because of pointer arithmetic
+  std::memcpy(static_cast<uint8_t *>(uploadBuffer->mappedData) + uploadOffset,
+              data.data(), uploadSize);
+
+  uploadBuffer->UnmapMemory(context);
+
+  // Record copy command
+  auto *commandBuffer = GetCommandBuffer(context, GetCurrentThreadIndex());
+
+  VkCommandBufferBeginInfo beginInfo = {};
+  beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+
+  VkBufferCopy copyRegion = {};
+  copyRegion.srcOffset = uploadOffset;
+  copyRegion.dstOffset = offset;
+  copyRegion.size = uploadSize;
+
+  vkCmdCopyBuffer(commandBuffer, uploadBuffer->handle, handle, 1, &copyRegion);
+  uploadOffset += uploadSize;
+
+  auto alignment =
+      context.deviceProperties.limits.minUniformBufferOffsetAlignment;
+
+  // Align to minUniformBufferOffsetAlignment
+  uploadOffset = (uploadOffset + alignment - 1) & ~(alignment - 1);
+
+  return Error::Success();
+}
+
 auto Buffer::Upload(GraphicsContext &context,
                     std::span<const uint8_t> data, // NOLINTNEXTLINE
                     VkDeviceSize offset, VkDeviceSize size) -> Error {
@@ -160,6 +378,11 @@ auto Buffer::Upload(GraphicsContext &context,
   }
 
   auto uploadSize = size == VK_WHOLE_SIZE ? data.size() : size;
+
+  auto syncResult = SynchroniseWrite(context);
+  if (Error::IsError(syncResult)) {
+    return syncResult;
+  }
 
   if (isStagingBuffer) {
     // We know this will be a large upload,
@@ -182,112 +405,15 @@ auto Buffer::Upload(GraphicsContext &context,
   }
 
   if (uploadSize > LargeUploadThreshold) {
-    // Use staging buffer
-    VkBufferCreateInfo stagingBufferInfo = {};
-    stagingBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    stagingBufferInfo.size = uploadSize;
-    stagingBufferInfo.usage =
-        VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-    stagingBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    // See: https://gpuopen-librariesandsdks.github.io/VulkanMemoryAllocator/html/usage_patterns.html
-    VmaAllocationCreateInfo stagingAllocInfo = {};
-    stagingAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-    stagingAllocInfo.flags =
-        static_cast<uint32_t>(
-            VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT) |
-        static_cast<uint32_t>(VMA_ALLOCATION_CREATE_MAPPED_BIT);
-    VkBuffer stagingBuffer = nullptr;
-    VmaAllocation stagingMemory = nullptr;
-    VkResult result = vmaCreateBuffer(context.vmaAllocator, &stagingBufferInfo,
-                                      &stagingAllocInfo, &stagingBuffer,
-                                      &stagingMemory, nullptr);
-    if (result != VK_SUCCESS) {
-      return Error::Create(result);
+    auto uploadResult = UploadLarge(context, data, offset, size);
+    if (Error::IsError(uploadResult)) {
+      return uploadResult;
     }
-
-    void *mapped = nullptr;
-    result = vmaMapMemory(context.vmaAllocator, stagingMemory, &mapped);
-    if (result != VK_SUCCESS) {
-      vmaDestroyBuffer(context.vmaAllocator, stagingBuffer, stagingMemory);
-      return Error::Create(result);
-    }
-
-    std::memcpy(static_cast<uint8_t *>(mapped), data.data(), uploadSize);
-    vmaUnmapMemory(context.vmaAllocator, stagingMemory);
-
-    auto *commandBuffer = GetCommandBuffer(context, GetCurrentThreadIndex());
-
-    VkBufferCopy copyRegion = {};
-    copyRegion.srcOffset = 0;
-    copyRegion.dstOffset = offset;
-    copyRegion.size = uploadSize;
-    vkCmdCopyBuffer(commandBuffer, stagingBuffer, handle, 1, &copyRegion);
-    StagingBufferInfo stagingInfo = {};
-    stagingInfo.buffer = stagingBuffer;
-    stagingInfo.memory = stagingMemory;
-    stagingInfo.timelineValue = ++currentTimelineValue;
-
-    StagingBuffers.push_back(stagingInfo);
   } else {
-    // Use upload buffer
-    auto uploadBuffer = UploadBuffers.at(context.frameIndex);
-    size_t &uploadOffset = UploadBufferOffsets.at(context.frameIndex);
-    if (uploadBuffer.get() == nullptr ||
-        uploadBuffer->sizeInBytes < uploadSize + uploadOffset) {
-      // Create or resize upload buffer
-      if (uploadBuffer.get() != nullptr) {
-        uploadBuffer->ScheduleDestroy();
-      }
-
-      size_t newSize = UploadBufferSize;
-      while (newSize < uploadSize + uploadOffset) {
-        newSize *= 2;
-      }
-
-      Graphics::BufferCreationInfo bufferInfo{};
-      bufferInfo.size = newSize;
-      bufferInfo.usage =
-          static_cast<uint32_t>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT) |
-          static_cast<uint32_t>(VK_BUFFER_USAGE_TRANSFER_DST_BIT);
-      bufferInfo.properties =
-          static_cast<uint32_t>(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) |
-          static_cast<uint32_t>(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-      bufferInfo.PersistentMapping = true;
-
-      auto result = Graphics::Buffer::Create(context, bufferInfo);
-      if (Error::IsError(result)) {
-        return result.error();
-      }
-
-      uploadBuffer = result.value();
-      UploadBuffers.at(context.frameIndex) = uploadBuffer;
+    auto uploadResult = UploadRing(context, data, offset, size);
+    if (Error::IsError(uploadResult)) {
+      return uploadResult;
     }
-
-    // Copy data to upload buffer
-    auto result = uploadBuffer->MapMemory(context);
-    if (Error::IsError(result)) {
-      return result;
-    }
-
-    // NOLINTNEXTLINE, because of pointer arithmetic
-    std::memcpy(static_cast<uint8_t *>(uploadBuffer->mappedData) + uploadOffset,
-                data.data(), uploadSize);
-
-    uploadBuffer->UnmapMemory(context);
-
-    // Record copy command
-    auto *commandBuffer = GetCommandBuffer(context, GetCurrentThreadIndex());
-
-    VkCommandBufferBeginInfo beginInfo = {};
-    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-
-    VkBufferCopy copyRegion = {};
-    copyRegion.srcOffset = uploadOffset;
-    copyRegion.dstOffset = offset;
-    copyRegion.size = uploadSize;
-    vkCmdCopyBuffer(commandBuffer, uploadBuffer->handle, handle, 1,
-                    &copyRegion);
-    uploadOffset += uploadSize;
   }
 
   return Error::Success();

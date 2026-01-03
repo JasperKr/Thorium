@@ -479,10 +479,11 @@ auto inline GetRenderFormatInfo(const GraphicsContext &context,
   return formats;
 }
 
-inline auto CreatePipeline(const GraphicsContext &context, State &state)
+inline auto CreateGraphicsPipeline(const GraphicsContext &context, State &state)
     -> Result<std::pair<VkPipeline, VkPipelineLayout>> {
   if (state.bindPoint != VK_PIPELINE_BIND_POINT_GRAPHICS) {
-    return Error::Unexpected("Only graphics pipelines are supported.");
+    return Error::Unexpected(
+        "Attempted to create graphics pipeline with non-graphics bind point.");
   }
 
   PrintDebug("Creating graphics pipeline");
@@ -626,6 +627,58 @@ inline auto CreatePipeline(const GraphicsContext &context, State &state)
                                                  layoutResult.value());
 }
 
+inline auto CreateComputePipeline(const GraphicsContext &context, State &state)
+    -> Result<std::pair<VkPipeline, VkPipelineLayout>> {
+  // Currently not implemented
+  // return Error::Unexpected("Compute pipeline creation not implemented.");
+
+  VkComputePipelineCreateInfo pipelineInfo = {};
+  pipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+  pipelineInfo.stage.sType =
+      VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+  pipelineInfo.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+  pipelineInfo.stage.module = state.shader->module;
+  // computeMain doesn't work here because of SPIR-V entry point naming, i guess that only applies to raster stages?
+  // See:
+  // pCreateInfos[0].stage.pName "computeMain" entry point not found for stage VK_SHADER_STAGE_COMPUTE_BIT.
+  // (The only entry point found was "main" for VK_SHADER_STAGE_COMPUTE_BIT
+  // Some shading languages will let you name the main function something else, but when compiled to SPIR-V,
+  // it will keep it as 'main' to match defaults found in other shading langauges such as GLSL.
+  // It is also valid in a single SPIR-V binary to have 'main' for two different stages.
+  pipelineInfo.stage.pName = "main";
+
+  auto layoutResult = GetPipelineLayout(context, state.shader.get());
+  if (Error::IsError(layoutResult)) {
+    return layoutResult.error().AsUnexpected();
+  }
+
+  pipelineInfo.layout = layoutResult.value();
+
+  PrintDebug("Creating compute pipeline...");
+
+  VkPipeline pipeline = VK_NULL_HANDLE;
+  auto error = Error::Create(vkCreateComputePipelines(
+      context.device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline));
+  if (Error::IsError(error)) {
+    return error.AsUnexpected();
+  }
+
+  return std::pair<VkPipeline, VkPipelineLayout>(pipeline,
+                                                 layoutResult.value());
+}
+
+inline auto CreatePipeline(const GraphicsContext &context, State &state)
+    -> Result<std::pair<VkPipeline, VkPipelineLayout>> {
+  if (state.bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS) {
+    return CreateGraphicsPipeline(context, state);
+  }
+  if (state.bindPoint == VK_PIPELINE_BIND_POINT_COMPUTE) {
+    return CreateComputePipeline(context, state);
+  }
+
+  return Error::Unexpected("Unsupported pipeline bind point.");
+}
+
 inline auto GetPipeline(const GraphicsContext &context, State &state)
     -> Result<std::pair<VkPipeline, VkPipelineLayout>> {
 
@@ -725,9 +778,61 @@ auto Reset(GraphicsContext &context) -> void {
 // NOLINTNEXTLINE, to call vkCmdEndRendering
 static bool BegunRendering = false;
 
-auto Flush(GraphicsContext &context) -> Result<bool> {
-
+auto FlushCompute(GraphicsContext &context) -> Result<bool> {
   auto &currentState = StateStack.back();
+
+  if (currentState.bindPoint != VK_PIPELINE_BIND_POINT_COMPUTE) {
+    return Error::Unexpected("Current state is not a compute pipeline.");
+  }
+
+  auto result = CreateDescriptorSets(context, currentState.shader.get());
+  if (Error::IsError(result)) {
+    return result.AsUnexpected();
+  }
+
+  auto pipelineResult = GetPipeline(context, currentState);
+  if (Error::IsError(pipelineResult)) {
+    return pipelineResult.error().AsUnexpected();
+  }
+
+  const auto &commandBuffer =
+      Graphics::GetCommandBuffer(context, GetCurrentThreadIndex());
+
+  // Unset current rendering, otherwise vkCmdPipelineBarrier will fail
+  EndRendering(context);
+
+  PrintAlways("Flushing compute pipeline");
+  auto error =
+      currentState.shader->FlushBuffers(context, pipelineResult.value().second,
+                                        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
+  if (Error::IsError(error)) {
+    return error.AsUnexpected();
+  }
+
+  // Loop over all attachments
+  // Swapchain cannot be used as sampler, so we never have to transition it here
+  for (const auto &rendertarget : currentState.renderTargets) {
+    auto result = rendertarget->texture->UseAsAttachment(context);
+
+    if (Error::IsError(result)) {
+      return result.AsUnexpected();
+    }
+  }
+
+  PrintDebug("Binding pipeline");
+
+  vkCmdBindPipeline(commandBuffer, currentState.bindPoint,
+                    pipelineResult.value().first);
+
+  return true;
+}
+
+auto FlushGraphics(GraphicsContext &context) -> Result<bool> {
+  auto &currentState = StateStack.back();
+
+  if (currentState.bindPoint != VK_PIPELINE_BIND_POINT_GRAPHICS) {
+    return Error::Unexpected("Current state is not a graphics pipeline.");
+  }
 
   auto result = CreateDescriptorSets(context, currentState.shader.get());
   if (Error::IsError(result)) {
@@ -755,10 +860,6 @@ auto Flush(GraphicsContext &context) -> Result<bool> {
 
   auto viewProjectionMatrix = projectionMatrix * translationMatrix;
 
-  // PrintAlways("ViewProjection Matrix: \n{}\n", viewProjectionMatrix.ToString());
-
-  PrintDebug("Sending projection matrix to shader");
-
   auto sendErr = currentState.shader->Send(context, {"DefaultProjectionMatrix"},
                                            viewProjectionMatrix.AsByteSpan());
   if (Error::IsError(sendErr)) {
@@ -766,8 +867,10 @@ auto Flush(GraphicsContext &context) -> Result<bool> {
                sendErr.message);
   }
 
-  auto error =
-      currentState.shader->FlushBuffers(context, pipelineResult.value().second);
+  auto error = currentState.shader->FlushBuffers(
+      context, pipelineResult.value().second,
+      VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT |
+          VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT);
   if (Error::IsError(error)) {
     return error.AsUnexpected();
   }
@@ -788,6 +891,17 @@ auto Flush(GraphicsContext &context) -> Result<bool> {
                     pipelineResult.value().first);
 
   return true;
+}
+
+auto Flush(GraphicsContext &context) -> Result<bool> {
+  if (StateStack.back().bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS) {
+    return FlushGraphics(context);
+  }
+  if (StateStack.back().bindPoint == VK_PIPELINE_BIND_POINT_COMPUTE) {
+    return FlushCompute(context);
+  }
+
+  return Error::Unexpected("Unsupported pipeline bind point in Flush.");
 }
 
 auto Destroy(GraphicsContext &context) -> void {
@@ -816,6 +930,11 @@ inline auto BeginRendering(GraphicsContext &context) -> void {
   auto depthAttachment = VkRenderingAttachmentInfo{};
   auto stencilAttachment = VkRenderingAttachmentInfo{};
 
+  bool hasDepth = false;
+  bool hasStencil = false;
+
+  // TODO: Error if multiple depth/stencil attachments are bound
+
   for (const auto &rendertarget : currentState.renderTargets) {
     VkRenderingAttachmentInfo attachmentInfo = {};
     attachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
@@ -829,10 +948,12 @@ inline auto BeginRendering(GraphicsContext &context) -> void {
       depthAttachment = attachmentInfo;
       depthAttachment.imageLayout =
           VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+      hasDepth = true;
     } else if (Image::IsStencilTexture(rendertarget->texture->format)) {
       stencilAttachment = attachmentInfo;
       stencilAttachment.imageLayout =
           VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+      hasStencil = true;
     } else {
       colorAttachments.emplace_back(attachmentInfo);
     }
@@ -841,8 +962,18 @@ inline auto BeginRendering(GraphicsContext &context) -> void {
   renderingInfo.colorAttachmentCount =
       static_cast<uint32_t>(colorAttachments.size());
   renderingInfo.pColorAttachments = colorAttachments.data();
-  renderingInfo.pDepthAttachment = nullptr;
-  renderingInfo.pStencilAttachment = nullptr;
+
+  if (hasDepth) {
+    renderingInfo.pDepthAttachment = &depthAttachment;
+  } else {
+    renderingInfo.pDepthAttachment = nullptr;
+  }
+
+  if (hasStencil) {
+    renderingInfo.pStencilAttachment = &stencilAttachment;
+  } else {
+    renderingInfo.pStencilAttachment = nullptr;
+  }
 
   PrintDebug("Beginning rendering pass");
 
@@ -866,7 +997,7 @@ auto EndRendering(GraphicsContext &context) -> void {
   }
 }
 
-auto PrepareDraw(GraphicsContext &context) -> Error {
+auto PrepareRendering(GraphicsContext &context) -> Error {
   auto flushResult = Flush(context);
 
   if (Error::IsError(flushResult)) {
@@ -877,7 +1008,11 @@ auto PrepareDraw(GraphicsContext &context) -> Error {
 
   if (updatedState) {
     PrintDebug("Beginning rendering");
-    BeginRendering(context);
+    auto &currentState = StateStack.back();
+
+    if (currentState.bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS) {
+      BeginRendering(context);
+    }
   }
 
   return Error::Success();
@@ -1138,6 +1273,14 @@ auto GetTopology() -> VkPrimitiveTopology {
   return currentState.primitiveTopology;
 }
 
+auto SetBindPoint(VkPipelineBindPoint bindPoint) -> void {
+  StateStack.back().bindPoint = bindPoint;
+}
+auto GetBindPoint() -> VkPipelineBindPoint {
+  auto &currentState = StateStack.back();
+  return currentState.bindPoint;
+}
+
 auto Clear(GraphicsContext &context, const ClearInfo &clearInfo) -> Error {
   auto &currentState = StateStack.back();
 
@@ -1206,7 +1349,7 @@ auto Clear(GraphicsContext &context, const ClearInfo &clearInfo) -> Error {
   }
 
   // TODO: Cache this step and only flush on state changes
-  auto error = PrepareDraw(context);
+  auto error = PrepareRendering(context);
   if (Error::IsError(error)) {
     return error;
   }

@@ -276,7 +276,7 @@ auto RenderTargetsFromOptions(lua_State *state, int index)
 
   lua_rawgeti(state, index, 1);
   if (lua_isnoneornil(state, -1) == 0) {
-    if (LuaWrap::LuaIsType<Graphics::Texture::Texture>(state, -1)) {
+    if (LuaWrap::IsType<Graphics::Texture::Texture>(state, -1)) {
       return Error::Unexpected("Expected named field 'texture' in options "
                                "table, got texture at index 1.");
     }

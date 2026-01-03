@@ -227,7 +227,7 @@ add_executable(Thorium
     src/Modules/Math/quaternion.cpp
 
 # Editor
-    src/Modules/Editor/imgui.cpp
+    # src/Modules/Editor/imgui.cpp
 
 # Wrappers
     src/Wrap/Graphics/wrap_graphics.cpp
@@ -241,6 +241,8 @@ add_executable(Thorium
     src/Wrap/Modules/wrap_data.cpp
     src/Wrap/Modules/wrap_bytedata.cpp
     src/Wrap/Modules/wrap_imagedata.cpp
+    src/Wrap/Modules/wrap_filesystem.cpp
+    src/Wrap/Modules/wrap_keyboard.cpp
     src/Wrap/wrap.cpp
 
 # Libraries

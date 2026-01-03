@@ -140,23 +140,28 @@ static auto FindPhysicalDevice(GraphicsContext &context) -> Error {
   const int DiscreteGPUScore = 1000;
 
   for (uint32_t i = 0; i < gpuCount; i++) {
-    VkPhysicalDeviceProperties deviceProperties;
-    vkGetPhysicalDeviceProperties(gpus.at(i), &deviceProperties);
+    VkPhysicalDeviceProperties2 deviceProperties{
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
+    };
+
+    vkGetPhysicalDeviceProperties2(gpus.at(i), &deviceProperties);
 
     int score = 0;
 
     // Prefer discrete GPUs
-    if (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
+    if (deviceProperties.properties.deviceType ==
+        VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
       score += DiscreteGPUScore;
     }
 
     // Higher max image dimension gets a higher score
-    score += static_cast<int>(deviceProperties.limits.maxImageDimension2D);
+    score += static_cast<int>(
+        deviceProperties.properties.limits.maxImageDimension2D);
 
     if (score > bestGpuScore) {
       bestGpuScore = score;
       bestGpuIndex = static_cast<int>(i);
-      context.deviceProperties = deviceProperties;
+      context.deviceProperties = deviceProperties.properties;
     }
   }
 

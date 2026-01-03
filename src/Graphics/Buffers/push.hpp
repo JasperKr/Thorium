@@ -55,7 +55,9 @@ public:
   auto SetData(const ResourceKey &key, const std::span<const uint8_t> &values)
       -> Error {
 
-    if (!std::holds_alternative<StructInfo>(layout.info)) {
+    auto &bufferInfo = std::get<BufferInfo>(layout.info);
+
+    if (!std::holds_alternative<StructInfo>(bufferInfo.info)) {
       return Error::Create(
           "SetData with key only supported for struct push buffers");
     }
@@ -75,6 +77,9 @@ public:
       return Error::Create("Data exceeds buffer size");
     }
 
+    PrintAlways("Setting push buffer data at offset {} size {}", offset,
+                values.size());
+
     // NOLINTNEXTLINE
     std::memcpy(data.data() + offset, values.data(), values.size());
 
@@ -82,7 +87,10 @@ public:
   }
 
   auto SetData(const std::span<const uint8_t> &values) -> Error {
-    if (!layout.IsScalar() && !layout.IsVector() && !layout.IsMatrix()) {
+    auto &bufferInfo = std::get<BufferInfo>(layout.info);
+
+    if (!bufferInfo.IsScalar() && !bufferInfo.IsVector() &&
+        !bufferInfo.IsMatrix()) {
       return Error::Create("SetData without name only supported for scalar, "
                            "vector, and matrix push buffers");
     }

@@ -684,7 +684,7 @@ auto wrap_NewTexture(lua_State *state) -> int {
   Result<Ref<Graphics::Texture::Texture>> result;
 
   if (args == 1) {
-    if (LuaWrap::LuaIsType<Image::ImageData>(state, 1)) {
+    if (LuaWrap::IsType<Image::ImageData>(state, 1)) {
       result = TextureFromImagedata(state);
     } else if (lua_type(state, 1) == LUA_TSTRING) { // Filepath
       result = TextureFromFilepath(state);
@@ -693,7 +693,7 @@ auto wrap_NewTexture(lua_State *state) -> int {
     }
   } else if (args == 2) {
     // Width, Height or ImageData array + Options or Filepath + Options or ImageData + Options
-    if (LuaWrap::LuaIsType<Image::ImageData>(state, 1)) {
+    if (LuaWrap::IsType<Image::ImageData>(state, 1)) {
       result = TextureFromImagedataAndOptions(state);
     } else if (lua_type(state, 1) == LUA_TSTRING) { // Filepath + Options
       result = TextureFromFilepathAndOptions(state);

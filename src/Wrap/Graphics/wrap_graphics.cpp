@@ -489,7 +489,7 @@ auto wrap_Draw(lua_State *state) -> int {
 
   Ref<Mesh> mesh;
 
-  if (LuaWrap::LuaIsType<Texture::Texture>(state, 1)) {
+  if (LuaWrap::IsType<Texture::Texture>(state, 1)) {
     auto *texture = LuaWrap::FromLuaObject<Texture::Texture>(state, 1);
     auto result =
         GetQuadMesh(*ctx,
@@ -517,7 +517,7 @@ auto wrap_Draw(lua_State *state) -> int {
     }
 
     mesh = result.value();
-  } else if (LuaWrap::LuaIsType<Mesh>(state, 1)) {
+  } else if (LuaWrap::IsType<Mesh>(state, 1)) {
     mesh = Ref<Mesh>(LuaWrap::FromLuaObject<Mesh>(state, 1));
   } else {
     return luaL_error(state, "Invalid argument to draw.");
@@ -542,25 +542,15 @@ auto wrap_Draw(lua_State *state) -> int {
   return 0;
 }
 
-/*
-{"dispatch", wrap_Dispatch},
-{"dispatchIndirect", wrap_DispatchIndirect},
-{"drawIndirect", wrap_DrawIndirect},
-*/
-
 auto wrap_Dispatch(lua_State *state) -> int {
   auto *ctx = GetCurrentGraphicsContext();
 
-  auto *shaderHandle =
-      LuaWrap::FromLuaObject<Graphics::Shader::ShaderModule>(state, 1);
-  Ref<Shader::ShaderModule> shader(shaderHandle);
-
   Math::Uvec3 threadgroups{1, 1, 1};
-  threadgroups.x = static_cast<uint32_t>(luaL_checkinteger(state, 2));
-  threadgroups.y = static_cast<uint32_t>(luaL_checkinteger(state, 3));
-  threadgroups.z = static_cast<uint32_t>(luaL_checkinteger(state, 4));
+  threadgroups.x = static_cast<uint32_t>(luaL_checkinteger(state, 1));
+  threadgroups.y = static_cast<uint32_t>(luaL_checkinteger(state, 2));
+  threadgroups.z = static_cast<uint32_t>(luaL_checkinteger(state, 3));
 
-  auto dispatchResult = Dispatch(*ctx, *shader, threadgroups);
+  auto dispatchResult = Dispatch(*ctx, threadgroups);
 
   if (Error::IsError(dispatchResult)) {
     return luaL_error(state, "%s", dispatchResult.ToString().c_str());
@@ -572,15 +562,11 @@ auto wrap_Dispatch(lua_State *state) -> int {
 auto wrap_DispatchIndirect(lua_State *state) -> int {
   auto *ctx = GetCurrentGraphicsContext();
 
-  auto *shaderHandle =
-      LuaWrap::FromLuaObject<Graphics::Shader::ShaderModule>(state, 1);
-  Ref<Shader::ShaderModule> shader(shaderHandle);
-
-  auto *bufferHandle = LuaWrap::FromLuaObject<Graphics::Buffer>(state, 2);
+  auto *bufferHandle = LuaWrap::FromLuaObject<Graphics::Buffer>(state, 1);
   Ref<Buffer> indirectBuffer(bufferHandle);
 
-  auto offset = static_cast<VkDeviceSize>(luaL_optinteger(state, 3, 0));
-  auto dispatchResult = DispatchIndirect(*ctx, *shader, indirectBuffer, offset);
+  auto offset = static_cast<VkDeviceSize>(luaL_optinteger(state, 2, 0));
+  auto dispatchResult = DispatchIndirect(*ctx, indirectBuffer, offset);
 
   if (Error::IsError(dispatchResult)) {
     return luaL_error(state, "%s", dispatchResult.ToString().c_str());
@@ -594,7 +580,7 @@ auto wrap_DrawIndirect(lua_State *state) -> int {
 
   Ref<Mesh> mesh;
 
-  if (LuaWrap::LuaIsType<Mesh>(state, 1)) {
+  if (LuaWrap::IsType<Mesh>(state, 1)) {
     mesh = Ref<Mesh>(LuaWrap::FromLuaObject<Mesh>(state, 1));
   } else {
     return luaL_error(state, "Invalid argument to drawIndirect.");

@@ -1,6 +1,9 @@
+#include "Modules/color.hpp"
 #include "Modules/console.hpp"
 #include "Wrap/Graphics/wrap_reflection.hpp"
 #include "Wrap/wrap.hpp"
+#include "Wrap/wrap_utils.hpp"
+#include <cstdint>
 extern "C" {
 #include <lauxlib.h>
 #include <lua.h>
@@ -163,16 +166,26 @@ auto wrap_SetData(lua_State *state) -> int {
     return luaL_error(state, "Expected Buffer as first argument");
   }
 
-  std::vector<uint8_t> data;
+  std::vector<uint8_t> data{};
 
   if (lua_istable(state, 2)) {
     // table of numbers
     size_t tableSize = lua_objlen(state, 2);
-    data.resize(tableSize);
+    data.resize(tableSize * sizeof(float));
+    PrintAlways("Setting buffer data from table of size {}", tableSize);
     for (int i = 0; i < tableSize; ++i) {
       lua_rawgeti(state, 2, i + 1);
-      auto value = static_cast<float>(luaL_checknumber(state, -1));
-      std::memcpy(&data[i], &value, sizeof(float));
+      auto value = luaL_checknumber(state, -1);
+
+      auto result = // NOLINTNEXTLINE; pointer arithmetic
+          Wrap::Utils::SetData(value, data.data() + (i * sizeof(float)),
+                               buffer->GetFormat().FormatAt(i));
+
+      if (Error::IsError(result)) {
+        return luaL_error(state, "Failed to set buffer data: %s",
+                          result.message.c_str());
+      }
+
       lua_pop(state, 1);
     }
   } else {
@@ -357,9 +370,13 @@ auto wrap_NewBuffer(lua_State *state) -> int {
                       result.error().message.c_str());
   }
 
+  auto buffer = result.value();
+
   LuaWrap::PushLuaType(state,
                        Graphics::StructuredBuffer::StructuredBuffer::GetType(),
-                       result.value().get());
+                       buffer.get());
+
+  buffer->release(); // Lua now owns the reference
 
   return 1;
 }

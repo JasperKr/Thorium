@@ -3,17 +3,40 @@
 #include "Graphics/graphics.hpp"
 #include "Graphics/mesh.hpp"
 #include "Graphics/rendertarget.hpp"
+#include "Modules/error.hpp"
 #include <cstdint>
 
 namespace Graphics {
-void BindMesh(VkCommandBuffer cmdBuffer, const Mesh &mesh) {
+
+auto BindMesh(GraphicsContext &context, VkCommandBuffer cmdBuffer,
+              const Mesh &mesh) -> Error {
+  auto vboSyncResult = mesh.GetVertexBuffer()->SynchroniseRead(
+      context, VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT,
+      VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT);
+
+  if (Error::IsError(vboSyncResult)) {
+    return vboSyncResult;
+  }
+
   std::vector<VkBuffer> vertexBuffers = {mesh.GetVertexBuffer()->handle};
   std::vector<VkDeviceSize> offsets = {0};
+
   vkCmdBindVertexBuffers(cmdBuffer, 0, 1, vertexBuffers.data(), offsets.data());
+
   if (mesh.GetIndexCount() > 0) {
+    auto iboSyncResult = mesh.GetIndexBuffer()->SynchroniseRead(
+        context, VK_ACCESS_2_INDEX_READ_BIT,
+        VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT);
+
+    if (Error::IsError(iboSyncResult)) {
+      return iboSyncResult;
+    }
+
     vkCmdBindIndexBuffer(cmdBuffer, mesh.GetIndexBuffer()->handle, 0,
                          VK_INDEX_TYPE_UINT32);
   }
+
+  return Error::Success();
 }
 
 auto Draw(GraphicsContext &context, const Mesh &mesh, uint32_t instanceCount)
@@ -21,13 +44,21 @@ auto Draw(GraphicsContext &context, const Mesh &mesh, uint32_t instanceCount)
   RenderData renderData = GetRenderData(context, GetCurrentThreadIndex());
   auto *commandBuffer = GetCommandBuffer(context, GetCurrentThreadIndex());
 
-  BindMesh(commandBuffer, mesh);
   MeshDrawRange range = mesh.GetDrawRange();
 
-  RenderTarget::SetVertexFormat(mesh.GetVertexFormat());
+  auto format = mesh.GetVertexFormat();
+  auto stride = format.GetStride(0); // TODO: Multiple buffers
+
+  auto bindResult = BindMesh(context, commandBuffer, mesh);
+  if (Error::IsError(bindResult)) {
+    return bindResult;
+  }
+
+  RenderTarget::SetBindPoint(VK_PIPELINE_BIND_POINT_GRAPHICS);
+  RenderTarget::SetVertexFormat(format);
   RenderTarget::SetTopology(mesh.GetTopology());
 
-  auto error = RenderTarget::PrepareDraw(context);
+  auto error = RenderTarget::PrepareRendering(context);
   if (Error::IsError(error)) {
     return error;
   }
@@ -46,10 +77,16 @@ auto Draw(GraphicsContext &context, const Mesh &mesh, uint32_t instanceCount)
   return Error::Success();
 }
 
-auto Dispatch(GraphicsContext &context, const Shader::ShaderModule &shader,
-              const Math::Uvec3 &threadgroups) -> Error {
+auto Dispatch(GraphicsContext &context, const Math::Uvec3 &threadgroups)
+    -> Error {
   RenderData renderData = GetRenderData(context, GetCurrentThreadIndex());
   auto *commandBuffer = GetCommandBuffer(context, GetCurrentThreadIndex());
+
+  RenderTarget::SetBindPoint(VK_PIPELINE_BIND_POINT_COMPUTE);
+  auto error = RenderTarget::PrepareRendering(context);
+  if (Error::IsError(error)) {
+    return error;
+  }
 
   vkCmdDispatch(commandBuffer, threadgroups.x, threadgroups.y, threadgroups.z);
 
@@ -57,11 +94,16 @@ auto Dispatch(GraphicsContext &context, const Shader::ShaderModule &shader,
 }
 
 auto DispatchIndirect(GraphicsContext &context,
-                      const Shader::ShaderModule &shader,
                       const Ref<Buffer> &indirectBuffer, VkDeviceSize offset)
     -> Error {
   RenderData renderData = GetRenderData(context, GetCurrentThreadIndex());
   auto *commandBuffer = GetCommandBuffer(context, GetCurrentThreadIndex());
+
+  RenderTarget::SetBindPoint(VK_PIPELINE_BIND_POINT_COMPUTE);
+  auto error = RenderTarget::PrepareRendering(context);
+  if (Error::IsError(error)) {
+    return error;
+  }
 
   vkCmdDispatchIndirect(commandBuffer, indirectBuffer->handle, offset);
 
@@ -75,12 +117,16 @@ auto DrawIndirect(GraphicsContext &context, const Mesh &mesh,
   RenderData renderData = GetRenderData(context, GetCurrentThreadIndex());
   auto *commandBuffer = GetCommandBuffer(context, GetCurrentThreadIndex());
 
-  BindMesh(commandBuffer, mesh);
+  auto bindResult = BindMesh(context, commandBuffer, mesh);
+  if (Error::IsError(bindResult)) {
+    return bindResult;
+  }
 
+  RenderTarget::SetBindPoint(VK_PIPELINE_BIND_POINT_GRAPHICS);
   RenderTarget::SetVertexFormat(mesh.GetVertexFormat());
   RenderTarget::SetTopology(mesh.GetTopology());
 
-  auto error = RenderTarget::PrepareDraw(context);
+  auto error = RenderTarget::PrepareRendering(context);
   if (Error::IsError(error)) {
     return error;
   }
@@ -108,10 +154,11 @@ auto Draw(GraphicsContext &context, const VkPrimitiveTopology &topology,
   RenderData renderData = GetRenderData(context, GetCurrentThreadIndex());
   auto *commandBuffer = GetCommandBuffer(context, GetCurrentThreadIndex());
 
+  RenderTarget::SetBindPoint(VK_PIPELINE_BIND_POINT_GRAPHICS);
   RenderTarget::SetVertexFormat({});
   RenderTarget::SetTopology(topology);
 
-  auto error = RenderTarget::PrepareDraw(context);
+  auto error = RenderTarget::PrepareRendering(context);
   if (Error::IsError(error)) {
     return error;
   }
@@ -127,10 +174,11 @@ auto Draw(GraphicsContext &context, const Ref<Buffer> &indexBuffer,
   RenderData renderData = GetRenderData(context, GetCurrentThreadIndex());
   auto *commandBuffer = GetCommandBuffer(context, GetCurrentThreadIndex());
 
+  RenderTarget::SetBindPoint(VK_PIPELINE_BIND_POINT_GRAPHICS);
   RenderTarget::SetVertexFormat({});
   RenderTarget::SetTopology(topology);
 
-  auto error = RenderTarget::PrepareDraw(context);
+  auto error = RenderTarget::PrepareRendering(context);
   if (Error::IsError(error)) {
     return error;
   }

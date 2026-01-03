@@ -10,17 +10,14 @@ cbuffer Push
 StructuredBuffer<uint> Input;
 RWStructuredBuffer<uint> Output;
 
-[WaveSize(32)]
+[shader("compute")]
 [numthreads(64, 1, 1)]
 void computeMain(uint3 tid : SV_DispatchThreadID)
 {
     uint idx = tid.x;
 
-    uint adjCount = count + increment;
-    uint inc      = increment + 1;
+    if (idx >= count)
+        return;
 
-    if (idx < adjCount)
-    {
-        Output[idx] = Input[idx] + inc;
-    }
+    Output[idx] = Input[idx] + increment;
 }

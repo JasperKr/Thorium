@@ -1,6 +1,8 @@
 #pragma once
 
 #include "error.hpp"
+#include "physfs.h"
+#include <cstdint>
 #include <span>
 #include <string_view>
 #include <vector>
@@ -13,15 +15,17 @@ auto GetConfig() -> Config &;
 
 auto Init(const std::string &orgDir) -> Error;
 auto Deinit() -> Error;
-auto ReadFile(const std::string &path) -> Result<std::vector<unsigned char>>;
-auto ReadTextFile(const std::string &path) -> Result<std::string>;
+auto ReadFile(const std::string &path, int64_t readLength = INT64_MAX)
+    -> Result<std::vector<unsigned char>>;
+auto ReadTextFile(const std::string &path, int64_t readLength = INT64_MAX)
+    -> Result<std::string>;
 auto AppendFile(const std::string &path, std::span<const uint8_t> data)
     -> Error;
 auto AppendFile(const std::string &path, std::string_view data) -> Error;
 auto WriteFile(const std::string &path, std::span<const uint8_t> data) -> Error;
 auto WriteFile(const std::string &path, std::string_view data) -> Error;
 auto FileExists(const std::string &path) -> bool;
-auto GetFileModTime(const std::string &path) -> uint64_t;
+auto GetFileInfo(const std::string &path) -> PHYSFS_Stat;
 auto AddToSearchPath(const std::string &path, bool appendToPath) -> Error;
 auto RemoveFromSearchPath(const std::string &path) -> Error;
 auto Mount(const std::string &path, const std::string &mountPoint,

@@ -8,7 +8,6 @@
 #include "Graphics/reflect.hpp"
 #include "Modules/error.hpp"
 #include "Modules/type.hpp"
-#include "tl/expected.hpp"
 
 namespace Graphics::StructuredBuffer {
 
@@ -32,7 +31,7 @@ struct StructuredBuffer : Object {
 
   auto IsCompatible(BufferInfo &layout) const -> Error {
     for (const auto &component : format.GetComponents()) {
-      auto *field =
+      const auto *field =
           layout.ResolvePath(component.name.begin(), component.name.end());
       if (field == nullptr) {
         return Error(

@@ -14,11 +14,11 @@ extern "C" {
 namespace Data {
 
 auto GetBytedataFromLua(lua_State *state, int index) -> ByteData * {
-  if (LuaWrap::LuaIsType<Data::ByteData>(state, index)) {
+  if (LuaWrap::IsType<Data::ByteData>(state, index)) {
     return LuaWrap::FromLuaObject<Data::ByteData>(state, index);
   }
 
-  if (LuaWrap::LuaIsType<Image::ImageData>(state, index)) {
+  if (LuaWrap::IsType<Image::ImageData>(state, index)) {
     auto *imagedata = LuaWrap::FromLuaObject<Image::ImageData>(state, index);
     return static_cast<Data::ByteData *>(imagedata);
   }

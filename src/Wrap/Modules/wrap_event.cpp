@@ -1,5 +1,6 @@
 #include "wrap_event.hpp"
 #include "Modules/Peripherals/keyboard.hpp"
+#include "Modules/console.hpp"
 #include "Modules/event.hpp"
 #include "SDL3/SDL_events.h"
 
@@ -13,6 +14,9 @@ extern "C" {
 namespace Event {
 auto wrap_Quit(lua_State *state) -> int {
   MainLoopRunning = false;
+
+  PrintAlways("Quit event received, stopping main loop.");
+
   return 0; // Number of return values
 }
 

@@ -66,8 +66,6 @@ private:
                      const std::span<uint32_t> &indices, uint64_t offset)
       -> Error;
 
-  void Bind(VkCommandBuffer cmdBuffer) const;
-
   VertexFormat Format;
 
   Ref<Buffer> VertexBuffer;

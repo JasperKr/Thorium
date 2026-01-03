@@ -503,7 +503,7 @@ auto ShaderModule::Create(Graphics::GraphicsContext &context,
 
 inline auto ValidateBuffers(const ShaderModule *shader) -> Error {
   // Loop over shader->reflection.resources, and check if all buffers are
-  // set up in shader->uniformBuffers and shader->storageBuffers,
+  // set up in shader->buffers,
   // this is done outside the shader as the user must manage these
   // resources themselves.
 
@@ -514,16 +514,17 @@ inline auto ValidateBuffers(const ShaderModule *shader) -> Error {
 
     const auto &bufferInfo = std::get<BufferInfo>(resource.info);
 
-    if (bufferInfo.bufferType == BufferType::Uniform) {
-      if (!shader->uniformBuffers.contains(bufferInfo.set)) {
-        return Error::Create("Uniform buffer '" + resource.name +
-                             "' not set up in shader.");
-      }
-    } else if (bufferInfo.bufferType == BufferType::Storage) {
-      if (!shader->storageBuffers.contains(bufferInfo.set)) {
-        return Error::Create("Storage buffer '" + resource.name +
-                             "' not set up in shader.");
-      }
+    // Not sent by the user
+    if (bufferInfo.bufferType == BufferType::PushConstant) {
+      continue;
+    }
+
+    // NOLINTNEXTLINE
+    auto locationKey = bufferInfo.set | ((uint64_t)bufferInfo.binding << 32U);
+
+    if (!shader->buffers.contains(locationKey)) {
+      return Error::Create("Storage buffer '" + resource.name +
+                           "' not set up in shader.");
     }
   }
 
@@ -587,7 +588,8 @@ auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
   const auto *info =
       reflection.globals.ResolvePath(globalsKey.begin(), globalsKey.end());
   if (info == nullptr) {
-    return Error::Create("Uniform not found.");
+    return Error::Create("Uniform `" + ResourceKeyToString(key) +
+                         "` not found.");
   }
 
   size_t offset = info->GetOffset();
@@ -602,7 +604,11 @@ auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
 }
 
 auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
-                        Buffer *buffer) -> Error {
+                        StructuredBuffer::StructuredBuffer *buffer) -> Error {
+
+  if (buffer == nullptr) {
+    return Error::Create("Buffer is null.");
+  }
 
   for (const auto &resource : reflection.resources) {
     if (!std::holds_alternative<BufferInfo>(resource.info)) {
@@ -611,27 +617,45 @@ auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
 
     const auto &bufferInfo = std::get<BufferInfo>(resource.info);
     if (bufferInfo.name == *key.begin()) {
-      if (descriptorSets[bufferInfo.set] == VK_NULL_HANDLE) {
-        return Error::Success(); // Will be created and set later
-      }
       // NOLINTNEXTLINE
-      auto key = bufferInfo.set | ((uint64_t)bufferInfo.binding << 32U);
+      auto locationKey = bufferInfo.set | ((uint64_t)bufferInfo.binding << 32U);
+
+      buffers[locationKey] = buffer->buffer.get();
 
       VkDescriptorBufferInfo vkBufferInfo{};
-      vkBufferInfo.buffer = buffer->handle;
+      vkBufferInfo.buffer = buffer->buffer->handle;
       vkBufferInfo.offset = 0;
-      vkBufferInfo.range = buffer->size;
+      vkBufferInfo.range = buffer->buffer->size;
 
       DescriptorWriteInfo descriptorWrite{};
       descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
       descriptorWrite.dstSet = bufferInfo.set;
       descriptorWrite.dstBinding = bufferInfo.binding;
       descriptorWrite.dstArrayElement = 0;
-      descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+      descriptorWrite.descriptorType =
+          (bufferInfo.bufferType == BufferType::Uniform
+               ? VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
+               : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
       descriptorWrite.descriptorCount = 1;
       descriptorWrite.pBufferInfo = vkBufferInfo;
+      descriptorWrite.bufferPtr = buffer->buffer.get();
 
-      // vkUpdateDescriptorSets(context.device, 1, &descriptorWrite, 0, nullptr);
+      switch (bufferInfo.access) {
+      case SLANG_RESOURCE_ACCESS_READ:
+        descriptorWrite.bufferAccessBits = VK_ACCESS_2_SHADER_READ_BIT;
+        break;
+      case SLANG_RESOURCE_ACCESS_WRITE:
+        descriptorWrite.bufferAccessBits = VK_ACCESS_2_SHADER_WRITE_BIT;
+        break;
+      case SLANG_RESOURCE_ACCESS_READ_WRITE:
+        descriptorWrite.bufferAccessBits = static_cast<VkAccessFlagBits2>(
+            VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT);
+        break;
+      default:
+        descriptorWrite.bufferAccessBits = VK_ACCESS_2_SHADER_READ_BIT;
+        break;
+      };
+
       pendingDescriptorWrites.emplace_back(descriptorWrite);
 
       return Error::Success();
@@ -668,6 +692,7 @@ auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
           VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
       descriptorWrite.descriptorCount = 1;
       descriptorWrite.pImageInfo = imageInfo;
+      descriptorWrite.imagePtr = texture;
 
       pendingDescriptorWrites.emplace_back(descriptorWrite);
       pendingImageTransitions.emplace_back(ImageTransitionInfo{
@@ -698,7 +723,8 @@ auto ShaderModule::hash() const -> size_t {
 }
 
 auto ShaderModule::FlushBuffers(GraphicsContext &context,
-                                VkPipelineLayout layout) -> Error {
+                                VkPipelineLayout layout,
+                                VkPipelineStageFlags2 dstStage) -> Error {
   auto validateResult = ValidateBuffers(this);
   if (Error::IsError(validateResult)) {
     return validateResult;
@@ -714,7 +740,7 @@ auto ShaderModule::FlushBuffers(GraphicsContext &context,
     return uboFlushResult.error();
   }
 
-  {
+  if (reflection.hasGlobals) {
     // UBO buffer can be resized, we update every frame for now;
     // TODO: dynamic UBO offsets using VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC
     // and only update size when a draw requires more space.
@@ -738,7 +764,8 @@ auto ShaderModule::FlushBuffers(GraphicsContext &context,
 
     vkUpdateDescriptorSets(context.device, 1, &descriptorWrite, 0, nullptr);
 
-    // currentUBOBuffer = buffer.GetBuffer().get();
+    auto result = buffer.GetBuffer()->SynchroniseRead(
+        context, VK_ACCESS_2_UNIFORM_READ_BIT, dstStage);
   }
 
   std::vector<VkWriteDescriptorSet> writes;
@@ -750,6 +777,19 @@ auto ShaderModule::FlushBuffers(GraphicsContext &context,
   // Loop over writes in reverse to prioritize later writes
   for (int32_t i = writeCount - 1; i >= 0; i--) {
     auto &write = pendingDescriptorWrites.at(i);
+
+    if (write.bufferPtr == nullptr && write.imagePtr == nullptr) {
+      return Error::Create("Descriptor write has no buffer or image info set.");
+    }
+
+    if (write.bufferPtr != nullptr) {
+      auto bufferResult = write.bufferPtr->SynchroniseRead(
+          context, write.bufferAccessBits, dstStage);
+      if (Error::IsError(bufferResult)) {
+        return bufferResult;
+      }
+    }
+
     uint64_t key = write.dstSet;
     key |= (static_cast<uint64_t>(write.dstBinding) << 32U); // NOLINT
     if (updatedSets.contains(key)) {

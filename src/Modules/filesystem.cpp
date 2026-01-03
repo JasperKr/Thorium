@@ -1,6 +1,7 @@
 #include "filesystem.hpp"
 #include "../external/physfs/src/physfs.h"
 #include "error.hpp"
+#include <cstdint>
 #include <span>
 #include <string>
 #include <string_view>
@@ -38,16 +39,35 @@ auto Deinit() -> Error {
   return Error::Success();
 }
 
-auto ReadFile(const std::string &path) -> Result<std::vector<unsigned char>> {
+auto ReadFile(const std::string &path, int64_t readLength)
+    -> Result<std::vector<unsigned char>> {
   PHYSFS_File *file = PHYSFS_openRead(path.c_str());
   if (file == nullptr) {
     return Error::Unexpected("Failed to open file: " + path);
   }
 
-  const PHYSFS_sint64 len = PHYSFS_fileLength(file);
-  if (len <= 0) {
+  const PHYSFS_sint64 fileLength = PHYSFS_fileLength(file);
+  PHYSFS_sint64 len = 0;
+
+  if (fileLength <= 0) {
     PHYSFS_close(file);
     return Error::Unexpected("Invalid file length");
+  }
+
+  if (readLength < 0) {
+    PHYSFS_close(file);
+    return Error::Unexpected("Invalid read length");
+  }
+
+  if (readLength > fileLength && readLength != INT64_MAX) {
+    PHYSFS_close(file);
+    return Error::Unexpected("Read length exceeds file length");
+  }
+
+  if (readLength == INT64_MAX) {
+    len = fileLength; // Checked to be > 0 above
+  } else {
+    len = readLength; // Checked to be valid above
   }
 
   std::vector<unsigned char> data((size_t)len);
@@ -66,16 +86,34 @@ auto ReadFile(const std::string &path) -> Result<std::vector<unsigned char>> {
   return data;
 }
 
-auto ReadTextFile(const std::string &path) -> Result<std::string> {
+auto ReadTextFile(const std::string &path, int64_t readLength)
+    -> Result<std::string> {
   PHYSFS_File *file = PHYSFS_openRead(path.c_str());
   if (file == nullptr) {
     return Error::Unexpected("Failed to open file: " + path);
   }
 
-  const PHYSFS_sint64 len = PHYSFS_fileLength(file);
-  if (len <= 0) {
+  const PHYSFS_sint64 fileLength = PHYSFS_fileLength(file);
+  if (fileLength <= 0) {
     PHYSFS_close(file);
     return Error::Unexpected("Invalid file length");
+  }
+
+  PHYSFS_sint64 len = 0;
+  if (readLength < 0) {
+    PHYSFS_close(file);
+    return Error::Unexpected("Invalid read length");
+  }
+
+  if (readLength > fileLength && readLength != INT64_MAX) {
+    PHYSFS_close(file);
+    return Error::Unexpected("Read length exceeds file length");
+  }
+
+  if (readLength == INT64_MAX) {
+    len = fileLength; // Checked to be > 0 above
+  } else {
+    len = readLength; // Checked to be valid above
   }
 
   std::string data((size_t)len, '\0');
@@ -242,12 +280,12 @@ auto Unmount(const std::string &path) -> Error {
   return Error::Success();
 }
 
-auto GetFileModTime(const std::string &path) -> uint64_t {
+auto GetFileInfo(const std::string &path) -> PHYSFS_Stat {
   PHYSFS_Stat stat;
   if (PHYSFS_stat(path.c_str(), &stat) == 0) {
-    return 0;
+    return {};
   }
-  return (uint64_t)stat.modtime;
+  return stat;
 }
 
 auto GetErrorString() -> const char * {

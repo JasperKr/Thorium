@@ -44,6 +44,10 @@ struct DescriptorWriteInfo {
   VkDescriptorBufferInfo pBufferInfo;
   VkBufferView pTexelBufferView;
 
+  Buffer *bufferPtr;
+  Texture::Texture *imagePtr;
+  VkAccessFlagBits2 bufferAccessBits;
+
   [[nodiscard]] auto GetWrite(
       const std::unordered_map<uint32_t, VkDescriptorSet> &descriptorSets) const
       -> VkWriteDescriptorSet {
@@ -124,10 +128,7 @@ struct ShaderModule : Object {
   ShaderReflection reflection;
   std::vector<PushBuffer> pushBuffers;
 
-  std::unordered_map<uint64_t, Ref<StructuredBuffer::StructuredBuffer>>
-      uniformBuffers;
-  std::unordered_map<uint64_t, Ref<StructuredBuffer::StructuredBuffer>>
-      storageBuffers;
+  std::unordered_map<uint64_t, Buffer *> buffers;
 
   std::unordered_map<uint32_t, VkDescriptorSetLayout> descriptorSetLayouts;
   std::unordered_map<uint32_t, VkDescriptorSet> descriptorSets;
@@ -146,15 +147,16 @@ struct ShaderModule : Object {
   auto Send(GraphicsContext &context, const ResourceKey &key,
             const std::span<const uint8_t> &data) -> Error;
 
-  auto Send(GraphicsContext &context, const ResourceKey &key, Buffer *buffer)
-      -> Error;
+  auto Send(GraphicsContext &context, const ResourceKey &key,
+            StructuredBuffer::StructuredBuffer *buffer) -> Error;
 
   auto Send(GraphicsContext &context, const ResourceKey &key,
             Graphics::Texture::Texture *texture) -> Error;
 
   auto GetUniform(const ResourceKey &key) const -> Result<const ResourceInfo>;
 
-  auto FlushBuffers(GraphicsContext &context, VkPipelineLayout layout) -> Error;
+  auto FlushBuffers(GraphicsContext &context, VkPipelineLayout layout,
+                    VkPipelineStageFlags2 dstStage) -> Error;
 
   auto GetThreadgroupSize() const -> Result<Math::Uvec3>;
   auto GetWaveSize() const -> uint32_t;

@@ -92,6 +92,20 @@ struct State {
   std::vector<Ref<RenderTarget>> renderTargets;
 
   auto operator==(const State &other) const -> bool {
+    if (bindPoint != other.bindPoint) {
+      return false;
+    }
+
+    if (bindPoint == VK_PIPELINE_BIND_POINT_COMPUTE) {
+      // For compute pipelines, only compare shader
+      return shader.get() == other.shader.get();
+    }
+
+    if (bindPoint != VK_PIPELINE_BIND_POINT_GRAPHICS) {
+      PrintError("Comparing unsupported pipeline bind point in state equality");
+      return false;
+    }
+
     if (renderTargets.size() != other.renderTargets.size()) {
       return false;
     }
@@ -136,7 +150,7 @@ struct State {
            depthCompareOp == other.depthCompareOp &&
            stencilTestEnable == other.stencilTestEnable &&
            polygonMode == other.polygonMode && lineWidth == other.lineWidth &&
-           shader.get() == other.shader.get() && bindPoint == other.bindPoint &&
+           shader.get() == other.shader.get() &&
            vertexFormat == other.vertexFormat &&
            primitiveTopology == other.primitiveTopology;
   }
@@ -199,6 +213,17 @@ struct StateHash {
     constexpr uint32_t shift = 6;
     constexpr uint32_t shift2 = 2;
 
+    // Special case for compute pipelines
+    if (state.bindPoint == VK_PIPELINE_BIND_POINT_COMPUTE) {
+      AddToHash(hash, std::hash<VkPipelineBindPoint>()(state.bindPoint));
+      AddToHash(hash, state.shader.get() == nullptr ? 0 : state.shader->hash());
+      return hash;
+    }
+
+    if (state.bindPoint != VK_PIPELINE_BIND_POINT_GRAPHICS) {
+      PrintError("Trying to hash unsupported pipeline bind point.");
+    }
+
     AddToHash(hash, std::hash<VkCullModeFlags>()(state.cullMode));
     AddToHash(hash, std::hash<VkFrontFace>()(state.frontFace));
     AddToHash(hash, std::hash<bool>()(state.depthTestEnable));
@@ -226,8 +251,9 @@ struct StateHash {
   }
 };
 
-extern std::unordered_map<State, std::pair<VkPipeline, VkPipelineLayout>,
-                          StateHash> // NOLINTNEXTLINE Pipeline cache
+extern std::unordered_map<
+    State, std::pair<VkPipeline, VkPipelineLayout>,
+    StateHash> // NOLINTNEXTLINE Pipeline cacheBegunRendering
     PipelineCache;
 
 auto SetDirty() -> void;
@@ -237,10 +263,10 @@ auto BeginFrame(GraphicsContext &context) -> Error;
 auto Push(GraphicsContext &context) -> void;
 auto Pop(GraphicsContext &context) -> Error;
 auto Reset(GraphicsContext &context) -> void;
-auto Flush(GraphicsContext &context) -> Result<bool>;
+auto FlushGraphics(GraphicsContext &context) -> Result<bool>;
 auto Load(GraphicsContext &context) -> Error;
 auto Destroy(GraphicsContext &context) -> void;
-auto PrepareDraw(GraphicsContext &context) -> Error;
+auto PrepareRendering(GraphicsContext &context) -> Error;
 
 auto EndRendering(GraphicsContext &context) -> void;
 auto BeginRendering(GraphicsContext &context) -> void;
@@ -272,6 +298,8 @@ auto GetLineWidth() -> float;
 auto GetWindingOrder() -> VkFrontFace;
 auto GetVertexFormat() -> VertexFormat;
 auto GetTopology() -> VkPrimitiveTopology;
+auto SetBindPoint(VkPipelineBindPoint bindPoint) -> void;
+auto GetBindPoint() -> VkPipelineBindPoint;
 
 struct ClearInfo {
   std::vector<Color> colors;
