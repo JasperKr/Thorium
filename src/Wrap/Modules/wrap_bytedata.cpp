@@ -1,7 +1,6 @@
 #include "wrap_bytedata.hpp"
 #include "Modules/bytedata.hpp"
 #include "Modules/color.hpp"
-#include "Modules/console.hpp"
 #include "Modules/imagedata.hpp"
 #include "Wrap/wrap.hpp"
 #include <cstdint>
