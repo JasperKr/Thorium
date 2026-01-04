@@ -213,6 +213,8 @@ struct BufferInfo {
   [[nodiscard]] auto ResolvePath(ResourceKey::const_iterator iterator,
                                  ResourceKey::const_iterator end) const
       -> const ResourceInfo *;
+
+  [[nodiscard]] auto ToString() const -> std::string;
 };
 
 struct ResourceInfo {
@@ -321,6 +323,45 @@ struct ResourceInfo {
       return "Matrix";
     }
     return "Unknown";
+  }
+
+  [[nodiscard]] auto ToString() const -> std::string {
+    std::string result = "Resource Name: " + name + " Type: " + GetTypename() +
+                         " Offset: " + std::to_string(GetOffset()) + "\n";
+
+    if (IsBuffer()) {
+      const auto &bufferInfo = std::get<BufferInfo>(info);
+      result += "  Buffer Type: ";
+      switch (bufferInfo.bufferType) {
+      case BufferType::Uniform:
+        result += "Uniform\n";
+        break;
+      case BufferType::Storage:
+        result += "Storage\n";
+        break;
+      case BufferType::PushConstant:
+        result += "Push Constant\n";
+        break;
+      default:
+        result += "Unknown\n";
+        break;
+      }
+      result += "  Size: " + std::to_string(bufferInfo.size) + "\n";
+      result += "  Set: " + std::to_string(bufferInfo.set) + "\n";
+      result += "  Binding: " + std::to_string(bufferInfo.binding) + "\n";
+    } else if (IsSampler()) {
+      const auto &samplerInfo = std::get<SamplerInfo>(info);
+      result += "  Set: " + std::to_string(samplerInfo.set) + "\n";
+      result += "  Binding: " + std::to_string(samplerInfo.binding) + "\n";
+    } else if (IsStruct()) {
+      const auto &structInfo = std::get<StructInfo>(info);
+      result += "  Struct Size: " + std::to_string(structInfo.size) + "\n";
+      result += "  Fields:\n";
+      for (const auto &field : structInfo.fields) {
+        result += "    - " + field.ToString();
+      }
+    }
+    return result;
   }
 };
 

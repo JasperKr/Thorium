@@ -801,7 +801,6 @@ auto FlushCompute(GraphicsContext &context) -> Result<bool> {
   // Unset current rendering, otherwise vkCmdPipelineBarrier will fail
   EndRendering(context);
 
-  PrintAlways("Flushing compute pipeline");
   auto error =
       currentState.shader->FlushBuffers(context, pipelineResult.value().second,
                                         VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);

@@ -1,4 +1,3 @@
-#include "Modules/color.hpp"
 #include "Modules/console.hpp"
 #include "Wrap/Graphics/wrap_reflection.hpp"
 #include "Wrap/wrap.hpp"
@@ -100,7 +99,13 @@ auto wrap_Clear(lua_State *state) -> int {
     return luaL_error(state, "No current GraphicsContext set for this thread.");
   }
 
-  buffer->GetBuffer()->Clear(*ctx, value, offset, size);
+  auto clearResult = buffer->GetBuffer()->Clear(*ctx, value, offset, size);
+
+  if (Error::IsError(clearResult)) {
+    return luaL_error(state, "Failed to clear buffer: %s",
+                      clearResult.message.c_str());
+  }
+
   return 0;
 }
 

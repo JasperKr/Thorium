@@ -24,9 +24,9 @@ struct StructuredBuffer : Object {
   }
 
   // NOLINTNEXTLINE
-  void Clear(GraphicsContext &context, uint32_t value, VkDeviceSize offset = 0,
-             VkDeviceSize size = VK_WHOLE_SIZE) {
-    buffer->Clear(context, value, offset, size);
+  auto Clear(GraphicsContext &context, uint32_t value, VkDeviceSize offset = 0,
+             VkDeviceSize size = VK_WHOLE_SIZE) -> Error {
+    return buffer->Clear(context, value, offset, size);
   }
 
   auto IsCompatible(BufferInfo &layout) const -> Error {

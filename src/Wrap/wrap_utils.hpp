@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Graphics/reflect.hpp"
 #include "Modules/color.hpp"
 #include "Modules/error.hpp"
 #include <cstdint>
@@ -9,7 +10,8 @@
 
 namespace Wrap::Utils {
 
-auto SetData(double luaNumber, uint8_t *dataPtr, VkFormat format) -> Error {
+inline auto SetData(double luaNumber, uint8_t *dataPtr, VkFormat format)
+    -> Error {
   switch (format) {
   // UINT formats
   // 8-bit
@@ -159,6 +161,36 @@ auto SetData(double luaNumber, uint8_t *dataPtr, VkFormat format) -> Error {
   default:
     return Error::Create("Unsupported format for SetData.");
     break;
+  }
+
+  return Error::Success();
+}
+
+inline auto SetData(double luaNumber, uint8_t *dataPtr, ScalarType format)
+    -> Error {
+  switch (format) {
+  case ScalarType::Float: {
+    auto value = static_cast<float>(luaNumber);
+    std::memcpy(dataPtr, &value, sizeof(float));
+    break;
+  }
+  case ScalarType::Int: {
+    auto value = static_cast<int32_t>(luaNumber);
+    std::memcpy(dataPtr, &value, sizeof(int32_t));
+    break;
+  }
+  case ScalarType::UInt: {
+    auto value = static_cast<uint32_t>(luaNumber);
+    std::memcpy(dataPtr, &value, sizeof(uint32_t));
+    break;
+  }
+  case ScalarType::Bool: {
+    auto value = static_cast<uint32_t>(luaNumber != 0.0);
+    std::memcpy(dataPtr, &value, sizeof(uint32_t));
+    break;
+  }
+  case ScalarType::Unknown:
+    return Error::Create("Unsupported format `Unknown` for SetData.");
   }
 
   return Error::Success();

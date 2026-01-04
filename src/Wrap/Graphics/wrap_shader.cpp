@@ -6,8 +6,10 @@
 #include "Modules/bytedata.hpp"
 #include "Wrap/Graphics/wrap_reflection.hpp"
 #include "Wrap/wrap.hpp"
+#include "Wrap/wrap_utils.hpp"
 #include <bit>
 #include <cstdint>
+#include <variant>
 extern "C" {
 #include <lauxlib.h>
 #include <lua.h>
@@ -85,12 +87,47 @@ auto wrap_Send(lua_State *state) -> int {
     }
   } else if (lua_type(state, valueOffset) == LUA_TNUMBER) {
     auto varargsCount = lua_gettop(state) - valueOffset + 1;
-    std::vector<uint32_t> data{};
+    std::vector<uint8_t> data{};
 
     data.reserve(sizeof(uint32_t) * static_cast<size_t>(varargsCount));
+
+    auto uniformResult = shader->GetUniform(key);
+    if (Error::IsError(uniformResult)) {
+      return luaL_error(state, "%s", uniformResult.error().message.c_str());
+    }
+    const auto &uniformInfo = uniformResult.value();
+    if (!(uniformInfo.IsScalar() || uniformInfo.IsVector() ||
+          uniformInfo.IsMatrix())) {
+      return luaL_error(
+          state, "Unable to send uniform `%s`: expected %s, got number",
+          ResourceKeyToString(key).c_str(), uniformInfo.GetTypename().c_str());
+    }
+
+    ScalarType scalarType{};
+
+    if (uniformInfo.Is<ScalarInfo>()) {
+      scalarType = uniformInfo.GetInfo<ScalarInfo>().type;
+    } else if (uniformInfo.Is<VectorInfo>()) {
+      scalarType = uniformInfo.GetInfo<VectorInfo>().scalarType;
+    } else if (uniformInfo.Is<MatrixInfo>()) {
+      scalarType = ScalarType::Float;
+    }
+
+    if (scalarType == ScalarType::Unknown) {
+      return luaL_error(state,
+                        "Unable to send uniform `%s`: unknown scalar type",
+                        ResourceKeyToString(key).c_str());
+    }
+
     for (int i = 0; i < varargsCount; ++i) {
-      auto value = static_cast<float>(lua_tonumber(state, valueOffset + i));
-      data.emplace_back(std::bit_cast<uint32_t>(value));
+      auto result =
+          Wrap::Utils::SetData(lua_tonumber(state, valueOffset + i),
+                               data.data() + (i * sizeof(uint32_t)), // NOLINT
+                               scalarType);
+
+      if (Error::IsError(result)) {
+        return luaL_error(state, "%s", result.message.c_str());
+      }
     }
 
     auto span = std::span<uint8_t>( // NOLINTNEXTLINE reinterpret cast

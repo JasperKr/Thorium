@@ -545,8 +545,7 @@ auto ShaderModule::GetUniform(const ResourceKey &key) const
     PrintDebug("Checking push buffer {} for key: {}...",
                pushBuffer.GetLayout().name, ResourceKeyToString(key));
     if (pushBuffer.ContainsUniform(key.begin(), key.end())) {
-      const auto *const info =
-          pushBuffer.GetLayout().ResolvePath(key.begin(), key.end());
+      const auto *const info = pushBuffer.GetUniform(key.begin(), key.end());
       if (info == nullptr) {
         return Error::Unexpected("Uniform not found in push buffer.");
       }

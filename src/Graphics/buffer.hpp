@@ -92,8 +92,8 @@ struct Buffer : Object {
   auto UnmapMemory(GraphicsContext &context) -> void;
 
   // NOLINTNEXTLINE
-  void Clear(GraphicsContext &context, uint32_t value, VkDeviceSize offset = 0,
-             VkDeviceSize size = VK_WHOLE_SIZE);
+  auto Clear(GraphicsContext &context, uint32_t value, VkDeviceSize offset = 0,
+             VkDeviceSize size = VK_WHOLE_SIZE) -> Error;
 
   static auto GetType() -> Type const * { return &bufferType; }
 
@@ -109,7 +109,10 @@ private:
       -> Error;
 
   // Range: [min, max]
-  auto SynchroniseWrite(GraphicsContext &context) -> Error;
+  auto SynchroniseWrite(
+      GraphicsContext &context,
+      VkAccessFlagBits2 access = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+      VkPipelineStageFlagBits2 stage = VK_ACCESS_2_TRANSFER_WRITE_BIT) -> Error;
 
   auto RegisterUpload() -> void;
   auto UploadLarge(GraphicsContext &context,

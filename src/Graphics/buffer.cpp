@@ -162,12 +162,14 @@ constexpr auto dstFlags =
     static_cast<uint64_t>(VK_ACCESS_2_SHADER_WRITE_BIT);
 
 // All syncs needed before writing to the buffer
-auto Buffer::SynchroniseWrite(GraphicsContext &context) -> Error {
+auto Buffer::SynchroniseWrite(GraphicsContext &context,
+                              VkAccessFlagBits2 access, // NOLINT
+                              VkPipelineStageFlagBits2 stage) -> Error {
   auto *commandBuffer = GetCommandBuffer(context, GetCurrentThreadIndex());
 
   if (unsynchronisedReadBits == 0) {
-    unsynchronisedReadBits = VK_ACCESS_2_TRANSFER_WRITE_BIT;
-    unsynchronisedReadStages = VK_PIPELINE_STAGE_2_COPY_BIT;
+    unsynchronisedReadBits = access;
+    unsynchronisedReadStages = stage;
     unsynchronisedWriteBits = static_cast<VkAccessFlags2>(dstFlags);
 
     return Error::Success();
@@ -177,8 +179,8 @@ auto Buffer::SynchroniseWrite(GraphicsContext &context) -> Error {
       .sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
       .srcStageMask = unsynchronisedReadStages,
       .srcAccessMask = unsynchronisedReadBits,
-      .dstStageMask = VK_PIPELINE_STAGE_2_COPY_BIT,
-      .dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+      .dstStageMask = stage,
+      .dstAccessMask = access,
       .buffer = handle,
       .offset = 0,
       .size = VK_WHOLE_SIZE,
@@ -193,8 +195,8 @@ auto Buffer::SynchroniseWrite(GraphicsContext &context) -> Error {
   vkCmdPipelineBarrier2(commandBuffer, &dependencyInfo);
 
   // we synced for writing, just flag that this write needs to be synced later too
-  unsynchronisedReadBits = VK_ACCESS_2_TRANSFER_WRITE_BIT;
-  unsynchronisedReadStages = VK_PIPELINE_STAGE_2_COPY_BIT;
+  unsynchronisedReadBits = access;
+  unsynchronisedReadStages = stage;
   unsynchronisedWriteBits = static_cast<VkAccessFlags2>(dstFlags);
 
   return Error::Success();
@@ -533,11 +535,20 @@ auto Buffer::MarkUse(const QueueID queueID, const uint64_t timelineValue)
 }
 
 // NOLINTNEXTLINE
-void Buffer::Clear(GraphicsContext &context, uint32_t value,
-                   VkDeviceSize offset, VkDeviceSize size) {
+auto Buffer::Clear(GraphicsContext &context, uint32_t value,
+                   VkDeviceSize offset, VkDeviceSize size) -> Error {
   auto *commandBuffer = GetCommandBuffer(context, GetCurrentThreadIndex());
 
+  auto result = SynchroniseWrite(context, VK_ACCESS_2_TRANSFER_WRITE_BIT,
+                                 VK_PIPELINE_STAGE_2_CLEAR_BIT);
+
+  if (Error::IsError(result)) {
+    return result;
+  }
+
   vkCmdFillBuffer(commandBuffer, handle, offset, size, value);
+
+  return Error::Success();
 }
 
 } // namespace Graphics

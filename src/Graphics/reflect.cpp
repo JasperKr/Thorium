@@ -94,6 +94,7 @@ auto SetupStruct(slang::TypeLayoutReflection *bufferLayout, // NOLINT
         scalarInfo.size = static_cast<uint32_t>(fieldType->getSize());
         scalarInfo.offset =
             static_cast<uint32_t>(fieldVariableType->getOffset());
+        scalarInfo.type = FromScalarType(fieldType->getScalarType());
         ResourceInfo fieldInfo{
             .name = fieldVariableType->getName(),
             .info = scalarInfo,
@@ -155,6 +156,7 @@ auto SetupStruct(slang::TypeLayoutReflection *bufferLayout, // NOLINT
     scalarInfo.size = static_cast<uint32_t>(bufferLayout->getSize());
     scalarInfo.offset =
         static_cast<uint32_t>(typeLayout->getElementVarLayout()->getOffset());
+    scalarInfo.type = FromScalarType(bufferLayout->getScalarType());
     info.info = scalarInfo;
 
     break;
@@ -286,6 +288,7 @@ auto SetupResource(slang::VariableLayoutReflection *variableLayout,
           scalarInfo.size = sizeof(float);
           scalarInfo.offset =
               static_cast<uint32_t>(fieldVariableType->getOffset());
+          scalarInfo.type = FromScalarType(fieldType->getScalarType());
           ResourceInfo fieldInfo{
               .name = fieldVariableType->getName(),
               .info = scalarInfo,
@@ -350,6 +353,7 @@ auto SetupResource(slang::VariableLayoutReflection *variableLayout,
       scalarInfo.size = static_cast<uint32_t>(sizeof(float));
       scalarInfo.offset = static_cast<uint32_t>(
           bufferLayout->getElementVarLayout()->getOffset());
+      scalarInfo.type = FromScalarType(bufferLayout->getScalarType());
       break;
     }
     case slang::TypeReflection::Kind::Vector: {
@@ -498,6 +502,7 @@ auto SetupFromType(slang::VariableLayoutReflection *variableLayout,
 
     scalarInfo.size = static_cast<uint32_t>(typeLayout->getSize());
     scalarInfo.offset = static_cast<uint32_t>(variableLayout->getOffset());
+    scalarInfo.type = FromScalarType(typeLayout->getScalarType());
     auto resourceInfo = ResourceInfo{};
     resourceInfo.name = variableLayout->getName();
     resourceInfo.stages = SlangStageToVkStage(variableLayout->getStage());
@@ -572,4 +577,35 @@ auto ReflectShader(Graphics::GraphicsContext &context,
                                    globalParamsLayout->getBindingIndex());
 
   return Error::Success();
+}
+
+auto BufferInfo::ToString() const -> std::string {
+  std::string result = "Buffer Name: " + name + " Type: ";
+  switch (bufferType) {
+  case BufferType::Uniform:
+    result += "Uniform";
+    break;
+  case BufferType::Storage:
+    result += "Storage";
+    break;
+  case BufferType::PushConstant:
+    result += "Push Constant";
+    break;
+  default:
+    result += "Unknown";
+    break;
+  }
+  result += " Size: " + std::to_string(size) + " Set: " + std::to_string(set) +
+            " Binding: " + std::to_string(binding) + "\n";
+
+  if (IsStruct()) {
+    const auto &structInfo = std::get<StructInfo>(info);
+    result += "  Struct Size: " + std::to_string(structInfo.size) + "\n";
+    result += "  Fields:\n";
+    for (const auto &field : structInfo.fields) {
+      result += "    - " + field.ToString();
+    }
+  }
+
+  return result;
 }

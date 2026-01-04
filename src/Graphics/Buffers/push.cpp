@@ -1,6 +1,5 @@
 #include "push.hpp"
 #include "Graphics/reflect.hpp"
-#include "Modules/console.hpp"
 #include <vector>
 
 namespace Graphics {

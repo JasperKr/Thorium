@@ -67,7 +67,7 @@ public:
       return Error::Create("Uniform not found in push buffer.");
     }
 
-    size_t offset = result->offset;
+    size_t offset = result->GetOffset();
 
     if (result->GetSize() != values.size()) {
       return Error::Create("Data size does not match field size");
@@ -77,8 +77,10 @@ public:
       return Error::Create("Data exceeds buffer size");
     }
 
-    PrintAlways("Setting push buffer data at offset {} size {}", offset,
-                values.size());
+    // PrintAlways(bufferInfo.ToString());
+
+    // PrintAlways("Setting push buffer data of key {} at offset {} size {}",
+    //             ResourceKeyToString(key), offset, values.size());
 
     // NOLINTNEXTLINE
     std::memcpy(data.data() + offset, values.data(), values.size());
