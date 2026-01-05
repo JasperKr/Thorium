@@ -70,10 +70,7 @@ struct StructuredBuffer : Object {
     return true;
   }
 
-  auto ScheduleDestroy() -> bool override {
-    buffer->ScheduleDestroy();
-    return true;
-  }
+  auto ScheduleDestroy() -> void override { buffer->ScheduleDestroy(); }
 
   static auto GetType() -> Type const * { return &type; }
 

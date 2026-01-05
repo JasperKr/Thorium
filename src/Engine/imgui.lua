@@ -32,23 +32,23 @@ function L.Init(format)
   L.BuildFontAtlas(format)
 
   cliboard_callback_get = ffi.cast("const char* (*)(void*)", function(userdata)
-    return love.system.getClipboardText()
+    return Thorium.system.getClipboardText()
   end)
   cliboard_callback_set = ffi.cast("void (*)(void*, const char*)", function(userdata, text)
-    love.system.setClipboardText(ffi.string(text))
+    Thorium.system.setClipboardText(ffi.string(text))
   end)
 
   platform_io.Platform_GetClipboardTextFn = cliboard_callback_get
   platform_io.Platform_SetClipboardTextFn = cliboard_callback_set
 
-  local dpiscale = love.window.getDPIScale()
+  local dpiscale = Thorium.window.getDPIScale()
   io.DisplayFramebufferScale.x, io.DisplayFramebufferScale.y = dpiscale, dpiscale
 
-  love.filesystem.createDirectory("/")
-  strings.ini_filename = love.filesystem.getSaveDirectory() .. "/imgui.ini"
+  Thorium.filesystem.createDirectory("/")
+  strings.ini_filename = Thorium.filesystem.getSaveDirectory() .. "/imgui.ini"
   io.IniFilename = strings.ini_filename
 
-  strings.impl_name = "cimgui-love"
+  strings.impl_name = "cimgui-Thorium"
   io.BackendPlatformName = strings.impl_name
   io.BackendRendererName = strings.impl_name
 
@@ -69,11 +69,11 @@ function L.BuildFontAtlas(format)
 
   if format == "RGBA32" then
     C.ImFontAtlas_GetTexDataAsRGBA32(io.Fonts, pixels, width, height, nil)
-    imgdata = love.image.newImageData(width[0], height[0], "rgba8", ffi.string(pixels[0], width[0] * height[0] * 4))
+    imgdata = Thorium.image.newImageData(width[0], height[0], "rgba8", ffi.string(pixels[0], width[0] * height[0] * 4))
     textureShader = nil
   elseif format == "Alpha8" then
     C.ImFontAtlas_GetTexDataAsAlpha8(io.Fonts, pixels, width, height, nil)
-    imgdata = love.image.newImageData(width[0], height[0], "r8", ffi.string(pixels[0], width[0] * height[0]))
+    imgdata = Thorium.image.newImageData(width[0], height[0], "r8", ffi.string(pixels[0], width[0] * height[0]))
     textureShader = Alpha8_shader
   else
     error([[Format should be either "RGBA32" or "Alpha8".]], 2)
@@ -84,40 +84,40 @@ function L.BuildFontAtlas(format)
   if textureObject then
     table.insert(Rhodium.internal.garbage, textureObject)
   end
-  textureObject = love.graphics.newTexture(imgdata)
+  textureObject = Thorium.graphics.newTexture(imgdata)
   Rhodium.internal.compressor.compressAsync(imgdata, true, "veryslow",
     format == "Alpha8" and "BC5" or "BC7", function(compressedData)
       if currentBuildCount ~= altasBuildCount then
         return
       end
       table.insert(Rhodium.internal.garbage, textureObject)
-      textureObject = love.graphics.newTexture(compressedData)
+      textureObject = Thorium.graphics.newTexture(compressedData)
     end)
 end
 
 function L.Update(dt)
-  io.DisplaySize.x, io.DisplaySize.y = love.graphics.getDimensions()
+  io.DisplaySize.x, io.DisplaySize.y = Thorium.graphics.getDimensions()
   io.DeltaTime = dt
 
   if io.WantSetMousePos then
-    love.mouse.setPosition(io.MousePos.x, io.MousePos.y)
+    Thorium.mouse.setPosition(io.MousePos.x, io.MousePos.y)
   end
 end
 
-local function love_texture_test(t)
+local function Thorium_texture_test(t)
   return t:typeOf("Texture")
 end
 
 local cursors = {
-  [C.ImGuiMouseCursor_Arrow] = love.mouse.getSystemCursor("arrow"),
-  [C.ImGuiMouseCursor_TextInput] = love.mouse.getSystemCursor("ibeam"),
-  [C.ImGuiMouseCursor_ResizeAll] = love.mouse.getSystemCursor("sizeall"),
-  [C.ImGuiMouseCursor_ResizeNS] = love.mouse.getSystemCursor("sizens"),
-  [C.ImGuiMouseCursor_ResizeEW] = love.mouse.getSystemCursor("sizewe"),
-  [C.ImGuiMouseCursor_ResizeNESW] = love.mouse.getSystemCursor("sizenesw"),
-  [C.ImGuiMouseCursor_ResizeNWSE] = love.mouse.getSystemCursor("sizenwse"),
-  [C.ImGuiMouseCursor_Hand] = love.mouse.getSystemCursor("hand"),
-  [C.ImGuiMouseCursor_NotAllowed] = love.mouse.getSystemCursor("no"),
+  [C.ImGuiMouseCursor_Arrow] = Thorium.mouse.getSystemCursor("arrow"),
+  [C.ImGuiMouseCursor_TextInput] = Thorium.mouse.getSystemCursor("ibeam"),
+  [C.ImGuiMouseCursor_ResizeAll] = Thorium.mouse.getSystemCursor("sizeall"),
+  [C.ImGuiMouseCursor_ResizeNS] = Thorium.mouse.getSystemCursor("sizens"),
+  [C.ImGuiMouseCursor_ResizeEW] = Thorium.mouse.getSystemCursor("sizewe"),
+  [C.ImGuiMouseCursor_ResizeNESW] = Thorium.mouse.getSystemCursor("sizenesw"),
+  [C.ImGuiMouseCursor_ResizeNWSE] = Thorium.mouse.getSystemCursor("sizenwse"),
+  [C.ImGuiMouseCursor_Hand] = Thorium.mouse.getSystemCursor("hand"),
+  [C.ImGuiMouseCursor_NotAllowed] = Thorium.mouse.getSystemCursor("no"),
 }
 
 local cmdBuffers = {}
@@ -125,12 +125,12 @@ local ptrSize = ffi.sizeof("void*")
 
 function L.RenderDrawLists()
   -- Avoid rendering when minimized
-  if io.DisplaySize.x == 0 or io.DisplaySize.y == 0 or not love.window.isVisible() then return end
+  if io.DisplaySize.x == 0 or io.DisplaySize.y == 0 or not Thorium.window.isVisible() then return end
   Rhodium.profiler.push("Cursor Set")
 
-  love.graphics.push("all")
+  Thorium.graphics.push("all")
 
-  love.graphics.setBlendMode("alpha", "alphamultiply")
+  Thorium.graphics.setBlendMode("alpha", "alphamultiply")
 
   common.RunShortcuts()
   local data = C.igGetDrawData()
@@ -139,10 +139,10 @@ function L.RenderDrawLists()
   if bit.band(io.ConfigFlags, C.ImGuiConfigFlags_NoMouseCursorChange) ~= C.ImGuiConfigFlags_NoMouseCursorChange then
     local cursor = cursors[C.igGetMouseCursor()]
     if io.MouseDrawCursor or not cursor then
-      love.mouse.setVisible(false) -- Hide OS mouse cursor if ImGui is drawing it
+      Thorium.mouse.setVisible(false) -- Hide OS mouse cursor if ImGui is drawing it
     else
-      love.mouse.setVisible(true)
-      love.mouse.setCursor(cursor)
+      Thorium.mouse.setVisible(true)
+      Thorium.mouse.setCursor(cursor)
     end
   end
 
@@ -170,10 +170,10 @@ function L.RenderDrawLists()
       cmdBuffer.max_vertexcount = vertexcount
       if cmdBuffer.mesh then cmdBuffer.mesh:release() end
       if cmdBuffer.meshdata then cmdBuffer.meshdata:release() end
-      cmdBuffer.meshdata = love.data.newByteData(math.max(data_size, ffi.sizeof("ImDrawVert")))
+      cmdBuffer.meshdata = Thorium.data.newByteData(math.max(data_size, ffi.sizeof("ImDrawVert")))
       cmdBuffer.meshdata_ptr = cmdBuffer.meshdata:getFFIPointer()
       ffi.copy(cmdBuffer.meshdata_ptr, cmd_list.VtxBuffer.Data, data_size)
-      cmdBuffer.mesh = love.graphics.newMesh(vertexformat, cmdBuffer.meshdata, "triangles", "stream")
+      cmdBuffer.mesh = Thorium.graphics.newMesh(vertexformat, cmdBuffer.meshdata, "triangles", "stream")
     else
       ffi.copy(cmdBuffer.meshdata_ptr, cmd_list.VtxBuffer.Data, data_size)
       cmdBuffer.mesh:setVertices(cmdBuffer.meshdata)
@@ -184,7 +184,7 @@ function L.RenderDrawLists()
     if cmd_list.IdxBuffer.Size > cmdBuffer.max_indexcount then
       cmdBuffer.max_indexcount = cmd_list.IdxBuffer.Size
       if cmdBuffer.idx_buffer then cmdBuffer.idx_buffer:release() end
-      cmdBuffer.idx_buffer = love.data.newByteData(math.max(indices_data_size, ffi.sizeof("ImDrawIdx")))
+      cmdBuffer.idx_buffer = Thorium.data.newByteData(math.max(indices_data_size, ffi.sizeof("ImDrawIdx")))
       cmdBuffer.idx_buffer_ptr = cmdBuffer.idx_buffer:getFFIPointer()
     end
 
@@ -216,28 +216,28 @@ function L.RenderDrawLists()
         -- local texture_id = cmd.TextureId
         if texture_id ~= 0 then
           local obj = common.textures[tostring(texture_id)]
-          love.graphics.setShader(DefaultShader)
+          Thorium.graphics.setShader(DefaultShader)
           DefaultShader:send("Texture", obj)
         else
           local shader = (custom_shader or textureShader) or DefaultShader
-          love.graphics.setShader(shader)
+          Thorium.graphics.setShader(shader)
           shader:send("Texture", textureObject)
         end
 
-        love.graphics.setScissor(clipX, clipY, clipW, clipH)
+        Thorium.graphics.setScissor(clipX, clipY, clipW, clipH)
         mesh:setDrawRange(cmd.IdxOffset + 1, cmd.ElemCount)
 
-        love.graphics.draw(mesh)
+        Thorium.graphics.draw(mesh)
       end
     end
   end
-  love.graphics.pop()
+  Thorium.graphics.pop()
 
   Rhodium.profiler.pop("draw")
 end
 
 function L.MouseMoved(x, y)
-  if love.window.hasMouseFocus() then
+  if Thorium.window.hasMouseFocus() then
     io:AddMousePosEvent(x, y)
   end
 end
@@ -261,7 +261,7 @@ function L.WheelMoved(x, y)
 end
 
 function L.KeyPressed(key)
-  local t = lovekeymap[key]
+  local t = Thoriumkeymap[key]
   if type(t) == "table" then
     io:AddKeyEvent(t[1], true)
     io:AddKeyEvent(t[2], true)
@@ -271,7 +271,7 @@ function L.KeyPressed(key)
 end
 
 function L.KeyReleased(key)
-  local t = lovekeymap[key]
+  local t = Thoriumkeymap[key]
   if type(t) == "table" then
     io:AddKeyEvent(t[1], false)
     io:AddKeyEvent(t[2], false)
@@ -298,7 +298,7 @@ function L.JoystickAdded(joystick)
 end
 
 function L.JoystickRemoved()
-  for _, joystick in ipairs(love.joystick.getJoysticks()) do
+  for _, joystick in ipairs(Thorium.joystick.getJoysticks()) do
     if joystick:isGamepad() then return end
   end
   io.BackendFlags = bit.band(io.BackendFlags, bit.bnot(C.ImGuiBackendFlags_HasGamepad))
@@ -391,7 +391,7 @@ for name in pairs(flags) do
   end
 end
 
--- revert to old implementation names, i.e., imgui.RenderDrawLists instead of imgui.love.RenderDrawLists, etc.
+-- revert to old implementation names, i.e., imgui.RenderDrawLists instead of imgui.Thorium.RenderDrawLists, etc.
 local old_names = {}
 
 for k, v in pairs(L) do

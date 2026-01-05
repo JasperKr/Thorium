@@ -21,7 +21,7 @@ struct MeshDrawRange {
 static const Type meshType = Type("Mesh");
 
 struct Mesh : Object {
-  auto ScheduleDestroy() -> bool override;
+  auto ScheduleDestroy() -> void override;
 
   static auto Create(GraphicsContext &context, VertexFormat vertexFormat,
                      const std::span<uint8_t> &vertexData,

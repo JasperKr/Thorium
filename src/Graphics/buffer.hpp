@@ -68,7 +68,7 @@ struct Buffer : Object {
       -> Result<Ref<Graphics::Buffer>>;
 
   // Release the resources for safe automatic destruction later
-  auto ScheduleDestroy() -> bool override;
+  auto ScheduleDestroy() -> void override;
   auto UseDeferredDestruction() const -> bool override { return true; }
 
   // Destroy the buffer immediately, use with caution

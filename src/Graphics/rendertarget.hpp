@@ -33,8 +33,6 @@ struct RenderTarget : Object {
 
   VkAttachmentLoadOp loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
 
-  auto ScheduleDestroy() -> bool override { return false; };
-
   auto operator==(const RenderTarget &other) const -> bool {
     return blendMode.blendEnable == other.blendMode.blendEnable &&
            blendMode.srcColorBlendFactor ==

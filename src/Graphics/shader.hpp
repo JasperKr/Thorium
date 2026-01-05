@@ -117,8 +117,6 @@ struct ShaderModule : Object {
   std::string name;
   std::vector<ShaderExtern> externs;
 
-  auto ScheduleDestroy() -> bool override { return false; };
-
   slang::ProgramLayout *programLayout = nullptr;
   Slang::ComPtr<slang::IModule> slangModule = nullptr;
   Slang::ComPtr<slang::IComponentType> linkedProgram;

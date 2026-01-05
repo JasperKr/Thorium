@@ -928,15 +928,13 @@ auto Texture::Destroy(GraphicsContext &context) const -> void {
   context.runtimeInfo.textureCount--;
 }
 
-auto Texture::ScheduleDestroy() -> bool {
+auto Texture::ScheduleDestroy() -> void {
   if (released) {
-    return false;
+    return;
   }
 
   ReleasedTextures.emplace_back(this);
   released = true;
-
-  return true;
 }
 
 struct VkFormatTextureTypeHash {

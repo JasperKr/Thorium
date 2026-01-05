@@ -89,7 +89,7 @@ struct Texture : Object {
     lastUsedTimelineValues[queueID] = (std::max)(previousValue, timelineValue);
   }
 
-  auto ScheduleDestroy() -> bool override;
+  auto ScheduleDestroy() -> void override;
   auto UseDeferredDestruction() const -> bool override { return true; }
   auto Destroy(GraphicsContext &context) const -> void;
 

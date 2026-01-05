@@ -513,15 +513,13 @@ auto Buffer::Destroy(GraphicsContext &context) const -> void {
   vmaDestroyBuffer(context.vmaAllocator, handle, memory);
 }
 
-auto Buffer::ScheduleDestroy() -> bool {
+auto Buffer::ScheduleDestroy() -> void {
   if (released) {
-    return false;
+    return;
   }
 
   ReleasedBuffers.emplace_back(this);
   released = true;
-
-  return true;
 }
 
 auto Buffer::MarkUse(const QueueID queueID, const uint64_t timelineValue)

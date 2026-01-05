@@ -15,7 +15,7 @@ public:
 
   virtual ~Object() = 0;
 
-  virtual auto ScheduleDestroy() -> bool = 0;
+  virtual auto ScheduleDestroy() -> void {}
   [[nodiscard]] virtual auto UseDeferredDestruction() const -> bool {
     return false;
   }

@@ -125,10 +125,13 @@ auto TreePop(lua_State *state) -> int;
 auto CollapsingHeader(lua_State *state) -> int;
 auto SetNextItemOpen(lua_State *state) -> int;
 
-auto CreateContext(lua_State *state) -> int;
 auto GetIO(lua_State *state) -> int;
 auto GetPlatformIO(lua_State *state) -> int;
 auto GetStyle(lua_State *state) -> int;
+auto GetFontAtlasAsRGBA32(lua_State *state) -> int;
+auto GetFontAtlasAsAlpha8(lua_State *state) -> int;
+auto GetDrawData(lua_State *state) -> int;
+auto GetTextureID(lua_State *state) -> int;
 
 // NOLINTNEXTLINE
 static const luaL_Reg ImGuiLib[] = {

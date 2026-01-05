@@ -94,6 +94,29 @@ inline auto FromLuaObject(lua_State *state, int index) -> T * {
   return obj;
 }
 
+inline auto PushPointer(lua_State *state, void *pointer) -> void {
+  // NOLINTNEXTLINE
+  auto **userdata =
+      static_cast<void **>(lua_newuserdata(state, sizeof(void *)));
+  *userdata = pointer;
+}
+
+template <typename T>
+inline auto FromPointer(lua_State *state, int index) -> T * {
+  // Check if userdata
+  if (lua_isuserdata(state, index) == 0) {
+    return nullptr;
+  }
+
+  // NOLINTNEXTLINE
+  auto **userdata = static_cast<T **>(lua_touserdata(state, index));
+  if (userdata == nullptr) {
+    return nullptr;
+  }
+
+  return *userdata;
+}
+
 inline auto LuaType(lua_State *state, int index) -> Type const * {
   // NOLINTNEXTLINE
   auto *proxy = static_cast<Proxy *>(lua_touserdata(state, index));

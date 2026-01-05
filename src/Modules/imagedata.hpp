@@ -61,8 +61,6 @@ public:
 
   static auto GetType() -> Type const * { return &type; }
 
-  auto ScheduleDestroy() -> bool override { return false; };
-
 private:
   uint32_t width;
   uint32_t height;

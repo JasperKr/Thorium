@@ -15,8 +15,6 @@ public:
 
   explicit ByteData(size_t size) : size(size), data(new uint8_t[size]) {}
 
-  auto ScheduleDestroy() -> bool override { return false; };
-
   ByteData(const uint8_t *src, size_t size)
       : size(size), data(new uint8_t[size]) {
     std::memcpy(data, src, size);

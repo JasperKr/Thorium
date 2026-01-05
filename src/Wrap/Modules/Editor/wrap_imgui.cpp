@@ -907,5 +907,67 @@ auto SetNextItemOpen(lua_State *state) -> int {
   return 0;
 }
 
+/*
+auto GetIO(lua_State *state) -> int;
+auto GetPlatformIO(lua_State *state) -> int;
+auto GetStyle(lua_State *state) -> int;
+auto GetFontAtlasAsRGBA32(lua_State *state) -> int;
+auto GetFontAtlasAsAlpha8(lua_State *state) -> int;
+auto GetDrawData(lua_State *state) -> int;
+auto GetTextureID(lua_State *state) -> int;
+*/
+
+auto GetIO(lua_State *state) -> int {
+  auto &inputOutput = ImGui::GetIO();
+  LuaWrap::PushPointer(state, &inputOutput);
+  return 1;
+}
+
+auto GetPlatformIO(lua_State *state) -> int {
+  auto &platformIO = ImGui::GetPlatformIO();
+  LuaWrap::PushPointer(state, &platformIO);
+  return 1;
+}
+
+auto GetStyle(lua_State *state) -> int {
+  auto &style = ImGui::GetStyle();
+  LuaWrap::PushPointer(state, &style);
+  return 1;
+}
+
+auto GetFontAtlasAsRGBA32(lua_State *state) -> int {
+  auto *font = LuaWrap::FromLuaObject<ImFont>(state, 1);
+  auto *pixels = LuaWrap::FromLuaObject<uint8_t>(state, 2);
+  int width = static_cast<int>(luaL_checkinteger(state, 3));
+  int height = static_cast<int>(luaL_checkinteger(state, 4));
+  int out_bytes_per_pixel = static_cast<int>(luaL_checkinteger(state, 5));
+  font->OwnerAtlas->GetTexDataAsRGBA32(&pixels, &width, &height,
+                                       &out_bytes_per_pixel);
+  return 0;
+}
+
+auto GetFontAtlasAsAlpha8(lua_State *state) -> int {
+  auto *font = LuaWrap::FromLuaObject<ImFont>(state, 1);
+  auto *pixels = LuaWrap::FromLuaObject<uint8_t>(state, 2);
+  int width = static_cast<int>(luaL_checkinteger(state, 3));
+  int height = static_cast<int>(luaL_checkinteger(state, 4));
+  font->OwnerAtlas->GetTexDataAsAlpha8(&pixels, &width, &height);
+  return 0;
+}
+
+auto GetDrawData(lua_State *state) -> int {
+  auto *drawData = ImGui::GetDrawData();
+  LuaWrap::PushPointer(state, drawData);
+  return 1;
+}
+
+auto GetTextureID(lua_State *state) -> int {
+  auto *drawCommand = LuaWrap::FromLuaObject<ImDrawCmd>(state, 1);
+  auto textureId = drawCommand->GetTexID();
+  auto textureIdAsPtr = reinterpret_cast<void *>(textureId); // NOLINT
+  LuaWrap::PushPointer(state, textureIdAsPtr);
+  return 1;
+}
+
 // NOLINTEND(cppcoreguidelines-avoid-magic-numbers, readability-magic-numbers)
 } // namespace Wrap::Imgui

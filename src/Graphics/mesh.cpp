@@ -16,11 +16,9 @@
 
 namespace Graphics {
 
-auto Mesh::ScheduleDestroy() -> bool {
+auto Mesh::ScheduleDestroy() -> void {
   VertexBuffer->ScheduleDestroy();
   IndexBuffer->ScheduleDestroy();
-
-  return true;
 }
 
 static auto VertexFormatSize(VertexFormat &format, uint32_t binding)
