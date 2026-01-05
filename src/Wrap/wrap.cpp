@@ -1,5 +1,6 @@
 #include "wrap.hpp"
 #include "Modules/console.hpp"
+#include "Wrap/Modules/Editor/wrap_imgui.hpp"
 #include "Wrap/Modules/wrap_data.hpp"
 
 #include <cstdint>
@@ -327,6 +328,7 @@ static const luaL_Reg ThoriumModules[] = {
     {"data", Data::luaopen_data},
     {"filesystem", Wrap::Filesystem::luaopen_filesystem},
     {"keyboard", Wrap::Keyboard::luaopen_keyboard},
+    {"gui", Wrap::Imgui::luaopen_gui},
     {nullptr, nullptr},
 };
 

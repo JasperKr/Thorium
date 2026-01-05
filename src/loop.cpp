@@ -5,6 +5,7 @@
 #include "Graphics/render.hpp"
 #include "Graphics/rendertarget.hpp"
 #include "Graphics/shader.hpp"
+#include "Modules/Editor/gui.hpp"
 #include "Modules/config.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
@@ -272,6 +273,8 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
   if (Error::IsError(error)) {
     return error;
   }
+
+  Gui::LoadGUIState(state);
 
   auto luaLoadErr = LoadLua(state, arguments);
 

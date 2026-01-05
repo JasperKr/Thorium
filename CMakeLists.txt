@@ -228,6 +228,7 @@ add_executable(Thorium
 
 # Editor
     # src/Modules/Editor/imgui.cpp
+    # src/Modules/Editor/gui.cpp
 
 # Wrappers
     src/Wrap/Graphics/wrap_graphics.cpp
@@ -243,6 +244,8 @@ add_executable(Thorium
     src/Wrap/Modules/wrap_imagedata.cpp
     src/Wrap/Modules/wrap_filesystem.cpp
     src/Wrap/Modules/wrap_keyboard.cpp
+    src/Wrap/Modules/Editor/wrap_imgui.cpp
+    src/Wrap/Modules/Editor/wrap_gui.cpp
     src/Wrap/wrap.cpp
 
 # Libraries

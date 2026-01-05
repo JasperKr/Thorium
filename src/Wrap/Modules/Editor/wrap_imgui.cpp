@@ -2,7 +2,6 @@
 #include "Graphics/texture.hpp"
 #include "Wrap/wrap.hpp"
 #include "imgui.h"
-#include <lauxlib.h>
 
 extern "C" {
 #include <lauxlib.h>
@@ -485,8 +484,9 @@ auto DragFloat2(lua_State *state) -> int {
   const auto *format = luaL_optstring(state, 7, "%.3f");
   auto flags = static_cast<ImGuiSliderFlags>(luaL_optinteger(state, 8, 0));
 
-  float value[2] = {value_x, value_y};
-  auto result = ImGui::DragFloat2(label, value, speed, min, max, format, flags);
+  std::array<float, 2> value{value_x, value_y};
+  auto result =
+      ImGui::DragFloat2(label, value.data(), speed, min, max, format, flags);
 
   lua_pushboolean(state, static_cast<int>(result));
   lua_pushnumber(state, value[0]);
@@ -503,8 +503,9 @@ auto DragInt2(lua_State *state) -> int {
   const auto *format = luaL_optstring(state, 7, "%d");
   auto flags = static_cast<ImGuiSliderFlags>(luaL_optinteger(state, 8, 0));
 
-  int value[2] = {value_x, value_y};
-  auto result = ImGui::DragInt2(label, value, speed, min, max, format, flags);
+  std::array<int, 2> value{value_x, value_y};
+  auto result =
+      ImGui::DragInt2(label, value.data(), speed, min, max, format, flags);
 
   lua_pushboolean(state, static_cast<int>(result));
   lua_pushinteger(state, value[0]);
@@ -522,8 +523,9 @@ auto DragFloat3(lua_State *state) -> int {
   const auto *format = luaL_optstring(state, 8, "%.3f");
   auto flags = static_cast<ImGuiSliderFlags>(luaL_optinteger(state, 9, 0));
 
-  float value[3] = {value_x, value_y, value_z};
-  auto result = ImGui::DragFloat3(label, value, speed, min, max, format, flags);
+  std::array<float, 3> value{value_x, value_y, value_z};
+  auto result =
+      ImGui::DragFloat3(label, value.data(), speed, min, max, format, flags);
 
   lua_pushboolean(state, static_cast<int>(result));
   lua_pushnumber(state, value[0]);
@@ -542,8 +544,9 @@ auto DragInt3(lua_State *state) -> int {
   const auto *format = luaL_optstring(state, 8, "%d");
   auto flags = static_cast<ImGuiSliderFlags>(luaL_optinteger(state, 9, 0));
 
-  int value[3] = {value_x, value_y, value_z};
-  auto result = ImGui::DragInt3(label, value, speed, min, max, format, flags);
+  std::array<int, 3> value{value_x, value_y, value_z};
+  auto result =
+      ImGui::DragInt3(label, value.data(), speed, min, max, format, flags);
 
   lua_pushboolean(state, static_cast<int>(result));
   lua_pushinteger(state, value[0]);
@@ -563,8 +566,9 @@ auto DragFloat4(lua_State *state) -> int {
   const auto *format = luaL_optstring(state, 9, "%.3f");
   auto flags = static_cast<ImGuiSliderFlags>(luaL_optinteger(state, 10, 0));
 
-  float value[4] = {value_x, value_y, value_z, value_w};
-  auto result = ImGui::DragFloat4(label, value, speed, min, max, format, flags);
+  std::array<float, 4> value{value_x, value_y, value_z, value_w};
+  auto result =
+      ImGui::DragFloat4(label, value.data(), speed, min, max, format, flags);
 
   lua_pushboolean(state, static_cast<int>(result));
   lua_pushnumber(state, value[0]);
@@ -585,8 +589,9 @@ auto DragInt4(lua_State *state) -> int {
   const auto *format = luaL_optstring(state, 9, "%d");
   auto flags = static_cast<ImGuiSliderFlags>(luaL_optinteger(state, 10, 0));
 
-  int value[4] = {value_x, value_y, value_z, value_w};
-  auto result = ImGui::DragInt4(label, value, speed, min, max, format, flags);
+  std::array<int, 4> value{value_x, value_y, value_z, value_w};
+  auto result =
+      ImGui::DragInt4(label, value.data(), speed, min, max, format, flags);
 
   lua_pushboolean(state, static_cast<int>(result));
   lua_pushinteger(state, value[0]);
@@ -629,34 +634,278 @@ auto InputTextMultiline(lua_State *state) -> int {
   lua_pushstring(state, buffer.c_str());
   return 2;
 }
-auto InputFloat(lua_State *state) -> int {}
-auto InputInt(lua_State *state) -> int {}
-auto InputFloat2(lua_State *state) -> int {}
-auto InputInt2(lua_State *state) -> int {}
-auto InputFloat3(lua_State *state) -> int {}
-auto InputInt3(lua_State *state) -> int {}
-auto InputFloat4(lua_State *state) -> int {}
-auto InputInt4(lua_State *state) -> int {}
+auto InputFloat(lua_State *state) -> int {
+  const auto *label = luaL_checkstring(state, 1);
+  auto value = static_cast<float>(luaL_checknumber(state, 2));
+  auto step = static_cast<float>(luaL_optnumber(state, 3, 0.0F));
+  auto step_fast = static_cast<float>(luaL_optnumber(state, 4, 0.0F));
+  const auto *format = luaL_optstring(state, 5, "%.3f");
+  auto flags = static_cast<ImGuiInputTextFlags>(luaL_optinteger(state, 6, 0));
 
-auto ColorEdit3(lua_State *state) -> int {}
-auto ColorEdit4(lua_State *state) -> int {}
-auto ColorPicker3(lua_State *state) -> int {}
-auto ColorPicker4(lua_State *state) -> int {}
+  auto result =
+      ImGui::InputFloat(label, &value, step, step_fast, format, flags);
 
-auto BeginCombo(lua_State *state) -> int {}
-auto EndCombo(lua_State *state) -> int {}
+  lua_pushboolean(state, static_cast<int>(result));
+  lua_pushnumber(state, value);
+  return 2;
+}
+auto InputInt(lua_State *state) -> int {
+  const auto *label = luaL_checkstring(state, 1);
+  auto value = static_cast<int>(luaL_checkinteger(state, 2));
+  auto step = static_cast<int>(luaL_optnumber(state, 3, 0));
+  auto step_fast = static_cast<int>(luaL_optnumber(state, 4, 0));
+  auto flags = static_cast<ImGuiInputTextFlags>(luaL_optinteger(state, 5, 0));
 
-auto BeginTabBar(lua_State *state) -> int {}
-auto EndTabBar(lua_State *state) -> int {}
-auto BeginTabItem(lua_State *state) -> int {}
-auto EndTabItem(lua_State *state) -> int {}
+  auto result = ImGui::InputInt(label, &value, step, step_fast, flags);
 
-auto TreeNode(lua_State *state) -> int {}
-auto TreeNodeEx(lua_State *state) -> int {}
-auto TreePop(lua_State *state) -> int {}
+  lua_pushboolean(state, static_cast<int>(result));
+  lua_pushinteger(state, value);
+  return 2;
+}
+auto InputFloat2(lua_State *state) -> int {
+  const auto *label = luaL_checkstring(state, 1);
+  auto value_x = static_cast<float>(luaL_checknumber(state, 2));
+  auto value_y = static_cast<float>(luaL_checknumber(state, 3));
+  const auto *format = luaL_optstring(state, 4, "%.3f");
+  auto flags = static_cast<ImGuiInputTextFlags>(luaL_optinteger(state, 5, 0));
 
-auto CollapsingHeader(lua_State *state) -> int {}
-auto SetNextItemOpen(lua_State *state) -> int {}
+  std::array<float, 2> value{value_x, value_y};
+  auto result = ImGui::InputFloat2(label, value.data(), format, flags);
+
+  lua_pushboolean(state, static_cast<int>(result));
+  lua_pushnumber(state, value[0]);
+  lua_pushnumber(state, value[1]);
+  return 3;
+}
+auto InputInt2(lua_State *state) -> int {
+  const auto *label = luaL_checkstring(state, 1);
+  auto value_x = static_cast<int>(luaL_checkinteger(state, 2));
+  auto value_y = static_cast<int>(luaL_checkinteger(state, 3));
+  auto flags = static_cast<ImGuiInputTextFlags>(luaL_optinteger(state, 4, 0));
+
+  std::array<int, 2> value{value_x, value_y};
+  auto result = ImGui::InputInt2(label, value.data(), flags);
+
+  lua_pushboolean(state, static_cast<int>(result));
+  lua_pushinteger(state, value[0]);
+  lua_pushinteger(state, value[1]);
+  return 3;
+}
+auto InputFloat3(lua_State *state) -> int {
+  const auto *label = luaL_checkstring(state, 1);
+  auto value_x = static_cast<float>(luaL_checknumber(state, 2));
+  auto value_y = static_cast<float>(luaL_checknumber(state, 3));
+  auto value_z = static_cast<float>(luaL_checknumber(state, 4));
+  const auto *format = luaL_optstring(state, 5, "%.3f");
+  auto flags = static_cast<ImGuiInputTextFlags>(luaL_optinteger(state, 6, 0));
+
+  std::array<float, 3> value{value_x, value_y, value_z};
+  auto result = ImGui::InputFloat3(label, value.data(), format, flags);
+
+  lua_pushboolean(state, static_cast<int>(result));
+  lua_pushnumber(state, value[0]);
+  lua_pushnumber(state, value[1]);
+  lua_pushnumber(state, value[2]);
+  return 4;
+}
+auto InputInt3(lua_State *state) -> int {
+  const auto *label = luaL_checkstring(state, 1);
+  auto value_x = static_cast<int>(luaL_checkinteger(state, 2));
+  auto value_y = static_cast<int>(luaL_checkinteger(state, 3));
+  auto value_z = static_cast<int>(luaL_checkinteger(state, 4));
+  auto flags = static_cast<ImGuiInputTextFlags>(luaL_optinteger(state, 5, 0));
+
+  std::array<int, 3> value{value_x, value_y, value_z};
+  auto result = ImGui::InputInt3(label, value.data(), flags);
+
+  lua_pushboolean(state, static_cast<int>(result));
+  lua_pushinteger(state, value[0]);
+  lua_pushinteger(state, value[1]);
+  lua_pushinteger(state, value[2]);
+  return 4;
+}
+auto InputFloat4(lua_State *state) -> int {
+  const auto *label = luaL_checkstring(state, 1);
+  auto value_x = static_cast<float>(luaL_checknumber(state, 2));
+  auto value_y = static_cast<float>(luaL_checknumber(state, 3));
+  auto value_z = static_cast<float>(luaL_checknumber(state, 4));
+  auto value_w = static_cast<float>(luaL_checknumber(state, 5));
+  const auto *format = luaL_optstring(state, 6, "%.3f");
+  auto flags = static_cast<ImGuiInputTextFlags>(luaL_optinteger(state, 7, 0));
+
+  std::array<float, 4> value{value_x, value_y, value_z, value_w};
+  auto result = ImGui::InputFloat4(label, value.data(), format, flags);
+
+  lua_pushboolean(state, static_cast<int>(result));
+  lua_pushnumber(state, value[0]);
+  lua_pushnumber(state, value[1]);
+  lua_pushnumber(state, value[2]);
+  lua_pushnumber(state, value[3]);
+  return 5;
+}
+auto InputInt4(lua_State *state) -> int {
+  const auto *label = luaL_checkstring(state, 1);
+  auto value_x = static_cast<int>(luaL_checkinteger(state, 2));
+  auto value_y = static_cast<int>(luaL_checkinteger(state, 3));
+  auto value_z = static_cast<int>(luaL_checkinteger(state, 4));
+  auto value_w = static_cast<int>(luaL_checkinteger(state, 5));
+  auto flags = static_cast<ImGuiInputTextFlags>(luaL_optinteger(state, 6, 0));
+
+  std::array<int, 4> value{value_x, value_y, value_z, value_w};
+  auto result = ImGui::InputInt4(label, value.data(), flags);
+
+  lua_pushboolean(state, static_cast<int>(result));
+  lua_pushinteger(state, value[0]);
+  lua_pushinteger(state, value[1]);
+  lua_pushinteger(state, value[2]);
+  lua_pushinteger(state, value[3]);
+  return 5;
+}
+
+auto ColorEdit3(lua_State *state) -> int {
+  const auto *label = luaL_checkstring(state, 1);
+  auto color_r = static_cast<float>(luaL_checknumber(state, 2));
+  auto color_g = static_cast<float>(luaL_checknumber(state, 3));
+  auto color_b = static_cast<float>(luaL_checknumber(state, 4));
+  auto flags = static_cast<ImGuiColorEditFlags>(luaL_optinteger(state, 5, 0));
+
+  std::array<float, 3> color{color_r, color_g, color_b};
+  auto result = ImGui::ColorEdit3(label, color.data(), flags);
+
+  lua_pushboolean(state, static_cast<int>(result));
+  lua_pushnumber(state, color[0]);
+  lua_pushnumber(state, color[1]);
+  lua_pushnumber(state, color[2]);
+  return 4;
+}
+auto ColorEdit4(lua_State *state) -> int {
+  const auto *label = luaL_checkstring(state, 1);
+  auto color_r = static_cast<float>(luaL_checknumber(state, 2));
+  auto color_g = static_cast<float>(luaL_checknumber(state, 3));
+  auto color_b = static_cast<float>(luaL_checknumber(state, 4));
+  auto color_a = static_cast<float>(luaL_checknumber(state, 5));
+  auto flags = static_cast<ImGuiColorEditFlags>(luaL_optinteger(state, 6, 0));
+
+  std::array<float, 4> color{color_r, color_g, color_b, color_a};
+  auto result = ImGui::ColorEdit4(label, color.data(), flags);
+
+  lua_pushboolean(state, static_cast<int>(result));
+  lua_pushnumber(state, color[0]);
+  lua_pushnumber(state, color[1]);
+  lua_pushnumber(state, color[2]);
+  lua_pushnumber(state, color[3]);
+  return 5;
+}
+auto ColorPicker3(lua_State *state) -> int {
+  const auto *label = luaL_checkstring(state, 1);
+  auto color_r = static_cast<float>(luaL_checknumber(state, 2));
+  auto color_g = static_cast<float>(luaL_checknumber(state, 3));
+  auto color_b = static_cast<float>(luaL_checknumber(state, 4));
+  auto flags = static_cast<ImGuiColorEditFlags>(luaL_optinteger(state, 5, 0));
+
+  std::array<float, 3> color{color_r, color_g, color_b};
+  auto result = ImGui::ColorPicker3(label, color.data(), flags);
+
+  lua_pushboolean(state, static_cast<int>(result));
+  lua_pushnumber(state, color[0]);
+  lua_pushnumber(state, color[1]);
+  lua_pushnumber(state, color[2]);
+  return 4;
+}
+auto ColorPicker4(lua_State *state) -> int {
+  const auto *label = luaL_checkstring(state, 1);
+  auto color_r = static_cast<float>(luaL_checknumber(state, 2));
+  auto color_g = static_cast<float>(luaL_checknumber(state, 3));
+  auto color_b = static_cast<float>(luaL_checknumber(state, 4));
+  auto color_a = static_cast<float>(luaL_checknumber(state, 5));
+  auto flags = static_cast<ImGuiColorEditFlags>(luaL_optinteger(state, 6, 0));
+
+  std::array<float, 4> color{color_r, color_g, color_b, color_a};
+  auto result = ImGui::ColorPicker4(label, color.data(), flags);
+
+  lua_pushboolean(state, static_cast<int>(result));
+  lua_pushnumber(state, color[0]);
+  lua_pushnumber(state, color[1]);
+  lua_pushnumber(state, color[2]);
+  lua_pushnumber(state, color[3]);
+  return 5;
+}
+
+auto BeginCombo(lua_State *state) -> int {
+  const auto *label = luaL_checkstring(state, 1);
+  const auto *preview_value = luaL_checkstring(state, 2);
+  auto flags = static_cast<ImGuiComboFlags>(luaL_optinteger(state, 3, 0));
+
+  auto result = ImGui::BeginCombo(label, preview_value, flags);
+
+  lua_pushboolean(state, static_cast<int>(result));
+  return 1;
+}
+auto EndCombo(lua_State *state) -> int {
+  ImGui::EndCombo();
+  return 0;
+}
+
+auto BeginTabBar(lua_State *state) -> int {
+  const auto *str_id = luaL_checkstring(state, 1);
+  auto flags = static_cast<ImGuiTabBarFlags>(luaL_optinteger(state, 2, 0));
+
+  auto result = ImGui::BeginTabBar(str_id, flags);
+
+  lua_pushboolean(state, static_cast<int>(result));
+  return 1;
+}
+auto EndTabBar(lua_State *state) -> int {
+  ImGui::EndTabBar();
+  return 0;
+}
+auto BeginTabItem(lua_State *state) -> int {
+  const auto *label = luaL_checkstring(state, 1);
+  auto open = static_cast<bool>(lua_toboolean(state, 2));
+  auto flags = static_cast<ImGuiTabItemFlags>(luaL_optinteger(state, 3, 0));
+
+  auto result = ImGui::BeginTabItem(label, &open, flags);
+
+  lua_pushboolean(state, static_cast<int>(result));
+  lua_pushboolean(state, static_cast<int>(open));
+  return 2;
+}
+auto EndTabItem(lua_State *state) -> int {
+  ImGui::EndTabItem();
+  return 0;
+}
+
+auto TreeNode(lua_State *state) -> int {
+  const auto *label = luaL_checkstring(state, 1);
+  auto result = ImGui::TreeNode("%s", "%s", label);
+  lua_pushboolean(state, static_cast<int>(result));
+  return 1;
+}
+auto TreeNodeEx(lua_State *state) -> int {
+  const auto *label = luaL_checkstring(state, 1);
+  auto flags = static_cast<ImGuiTreeNodeFlags>(luaL_optinteger(state, 2, 0));
+  auto result = ImGui::TreeNodeEx("%s", flags, "%s", label);
+  lua_pushboolean(state, static_cast<int>(result));
+  return 1;
+}
+auto TreePop(lua_State *state) -> int {
+  ImGui::TreePop();
+  return 0;
+}
+
+auto CollapsingHeader(lua_State *state) -> int {
+  const auto *label = luaL_checkstring(state, 1);
+  auto flags = static_cast<ImGuiTreeNodeFlags>(luaL_optinteger(state, 2, 0));
+  auto result = ImGui::CollapsingHeader(label, flags);
+  lua_pushboolean(state, static_cast<int>(result));
+  return 1;
+}
+auto SetNextItemOpen(lua_State *state) -> int {
+  auto is_open = static_cast<bool>(lua_toboolean(state, 1));
+  auto cond = static_cast<ImGuiCond>(luaL_optinteger(state, 2, 0));
+  ImGui::SetNextItemOpen(is_open, cond);
+  return 0;
+}
 
 // NOLINTEND(cppcoreguidelines-avoid-magic-numbers, readability-magic-numbers)
 } // namespace Wrap::Imgui

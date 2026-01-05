@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Wrap/Modules/Editor/wrap_gui.hpp"
+#include "Wrap/wrap.hpp"
 extern "C" {
 #include <lauxlib.h>
 #include <lua.h>
@@ -123,6 +125,11 @@ auto TreePop(lua_State *state) -> int;
 auto CollapsingHeader(lua_State *state) -> int;
 auto SetNextItemOpen(lua_State *state) -> int;
 
+auto CreateContext(lua_State *state) -> int;
+auto GetIO(lua_State *state) -> int;
+auto GetPlatformIO(lua_State *state) -> int;
+auto GetStyle(lua_State *state) -> int;
+
 // NOLINTNEXTLINE
 static const luaL_Reg ImGuiLib[] = {
     {"begin", Begin},
@@ -218,6 +225,25 @@ static const luaL_Reg ImGuiLib[] = {
     {"treePop", TreePop},
     {"collapsingHeader", CollapsingHeader},
     {"setNextItemOpen", SetNextItemOpen},
+    {"drawEngineUIComponent", Wrap::Gui::DrawEngineUIComponent},
     {nullptr, nullptr},
 };
+
+// nullptr-terminated NOLINTNEXTLINE
+const static lua_CFunction childrenInitFunctions[] = {
+    nullptr,
+};
+
+extern "C" inline auto luaopen_gui(lua_State *state) -> int {
+  auto module = LuaWrap::LuaModule{
+      .Name = "gui",
+      .Functions = ImGuiLib,                          // NOLINT
+      .ChildrenInitFunctions = childrenInitFunctions, // NOLINT
+      .ModuleType = nullptr,
+  };
+
+  RegisterLuaModule(state, module);
+  return 1;
+}
+
 } // namespace Wrap::Imgui
