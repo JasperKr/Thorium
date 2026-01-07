@@ -39,7 +39,7 @@ auto wrap_NewImagedata(lua_State *state) -> int {
 
     auto imagedata = imagedataResult.value();
 
-    LuaWrap::PushLuaType(state, Image::ImageData::GetType(), imagedata.get());
+    LuaWrap::PushObject(state, Image::ImageData::GetType(), imagedata.get());
     imagedata->release(); // Release C++ reference, Lua now owns it
   } else if (lua_isstring(state, 1) != 0) {
     const auto *filepath = luaL_checkstring(state, 1);
@@ -52,7 +52,7 @@ auto wrap_NewImagedata(lua_State *state) -> int {
 
     auto imagedata = imagedataResult.value();
 
-    LuaWrap::PushLuaType(state, Image::ImageData::GetType(), imagedata.get());
+    LuaWrap::PushObject(state, Image::ImageData::GetType(), imagedata.get());
     imagedata->release(); // Release C++ reference, Lua now owns it
   } else {
     return luaL_error(state, "Invalid arguments to Imagedata constructor.");

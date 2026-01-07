@@ -9,7 +9,6 @@
 #include "Wrap/wrap_utils.hpp"
 #include <bit>
 #include <cstdint>
-#include <variant>
 extern "C" {
 #include <lauxlib.h>
 #include <lua.h>
@@ -46,14 +45,15 @@ auto wrap_NewShader(lua_State *state) -> int {
     return luaL_error(state, "%s", result.error().message.c_str());
   }
 
-  LuaWrap::PushLuaType(state, type, result.value().get());
+  LuaWrap::PushObject(state, type, result.value().get());
   result.value()->release(); // Retained by lua now
 
   return 1;
 }
 
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 auto wrap_Send(lua_State *state) -> int {
-  auto *shader = LuaWrap::FromLuaObject<Shader::ShaderModule>(state, 1);
+  auto *shader = LuaWrap::ObjectFromLua<Shader::ShaderModule>(state, 1);
   if (shader == nullptr) {
     lua_pushboolean(state, 0);
     return 1;
@@ -69,7 +69,7 @@ auto wrap_Send(lua_State *state) -> int {
 
   if (LuaWrap::IsType<Graphics::Texture::Texture>(state, valueOffset)) {
     auto *texture =
-        LuaWrap::FromLuaObject<Graphics::Texture::Texture>(state, valueOffset);
+        LuaWrap::ObjectFromLua<Graphics::Texture::Texture>(state, valueOffset);
     auto result =
         shader->Send(*Graphics::GetCurrentGraphicsContext(), key, texture);
     if (Error::IsError(result)) {
@@ -78,7 +78,7 @@ auto wrap_Send(lua_State *state) -> int {
   } else if (LuaWrap::IsType<Graphics::StructuredBuffer::StructuredBuffer>(
                  state, valueOffset)) {
     auto *buffer =
-        LuaWrap::FromLuaObject<Graphics::StructuredBuffer::StructuredBuffer>(
+        LuaWrap::ObjectFromLua<Graphics::StructuredBuffer::StructuredBuffer>(
             state, valueOffset);
     auto result =
         shader->Send(*Graphics::GetCurrentGraphicsContext(), key, buffer);
@@ -162,7 +162,7 @@ auto wrap_Send(lua_State *state) -> int {
       return luaL_error(state, "%s", result.message.c_str());
     }
   } else if (LuaWrap::IsType<Data::ByteData>(state, valueOffset)) {
-    auto *byteData = LuaWrap::FromLuaObject<Data::ByteData>(state, valueOffset);
+    auto *byteData = LuaWrap::ObjectFromLua<Data::ByteData>(state, valueOffset);
     auto span = byteData->GetDataSpan();
 
     auto result =
@@ -186,7 +186,7 @@ auto wrap_Send(lua_State *state) -> int {
 }
 
 auto wrap_Release(lua_State *state) -> int {
-  auto *shader = LuaWrap::FromLuaObject<Shader::ShaderModule>(state, 1);
+  auto *shader = LuaWrap::ObjectFromLua<Shader::ShaderModule>(state, 1);
   if (shader == nullptr) {
     lua_pushboolean(state, 0);
     return 1;
@@ -197,7 +197,7 @@ auto wrap_Release(lua_State *state) -> int {
 }
 
 auto wrap_HasUniform(lua_State *state) -> int {
-  auto *shader = LuaWrap::FromLuaObject<Shader::ShaderModule>(state, 1);
+  auto *shader = LuaWrap::ObjectFromLua<Shader::ShaderModule>(state, 1);
 
   if (shader == nullptr) {
     lua_pushboolean(state, 0);
@@ -210,7 +210,7 @@ auto wrap_HasUniform(lua_State *state) -> int {
   return 1;
 }
 auto wrap_GetUniforms(lua_State *state) -> int {
-  auto *shader = LuaWrap::FromLuaObject<Shader::ShaderModule>(state, 1);
+  auto *shader = LuaWrap::ObjectFromLua<Shader::ShaderModule>(state, 1);
   if (shader == nullptr) {
     lua_pushboolean(state, 0);
     return 1;
@@ -219,7 +219,7 @@ auto wrap_GetUniforms(lua_State *state) -> int {
   return 0;
 }
 auto wrap_GetThreadgroupSize(lua_State *state) -> int {
-  auto *shader = LuaWrap::FromLuaObject<Shader::ShaderModule>(state, 1);
+  auto *shader = LuaWrap::ObjectFromLua<Shader::ShaderModule>(state, 1);
   if (shader == nullptr) {
     lua_pushboolean(state, 0);
     return 1;
@@ -240,7 +240,7 @@ auto wrap_GetThreadgroupSize(lua_State *state) -> int {
 }
 
 auto wrap_GetWaveSize(lua_State *state) -> int {
-  auto *shader = LuaWrap::FromLuaObject<Shader::ShaderModule>(state, 1);
+  auto *shader = LuaWrap::ObjectFromLua<Shader::ShaderModule>(state, 1);
   if (shader == nullptr) {
     lua_pushboolean(state, 0);
     return 1;

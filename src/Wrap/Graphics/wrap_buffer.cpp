@@ -31,7 +31,7 @@ auto wrap_NewBuffer(lua_State *state) -> int;
 
 auto wrap_GetSize(lua_State *state) -> int {
   auto *buffer =
-      LuaWrap::FromLuaObject<Graphics::StructuredBuffer::StructuredBuffer>(
+      LuaWrap::ObjectFromLua<Graphics::StructuredBuffer::StructuredBuffer>(
           state, 1);
 
   if (buffer == nullptr) {
@@ -44,7 +44,7 @@ auto wrap_GetSize(lua_State *state) -> int {
 
 auto wrap_GetElementCount(lua_State *state) -> int {
   auto *buffer =
-      LuaWrap::FromLuaObject<Graphics::StructuredBuffer::StructuredBuffer>(
+      LuaWrap::ObjectFromLua<Graphics::StructuredBuffer::StructuredBuffer>(
           state, 1);
 
   if (buffer == nullptr) {
@@ -57,7 +57,7 @@ auto wrap_GetElementCount(lua_State *state) -> int {
 
 auto wrap_GetElementStride(lua_State *state) -> int {
   auto *buffer =
-      LuaWrap::FromLuaObject<Graphics::StructuredBuffer::StructuredBuffer>(
+      LuaWrap::ObjectFromLua<Graphics::StructuredBuffer::StructuredBuffer>(
           state, 1);
 
   if (buffer == nullptr) {
@@ -71,7 +71,7 @@ auto wrap_GetElementStride(lua_State *state) -> int {
 // [value = 0], [offset = 0], [size = whole size]
 auto wrap_Clear(lua_State *state) -> int {
   auto *buffer =
-      LuaWrap::FromLuaObject<Graphics::StructuredBuffer::StructuredBuffer>(
+      LuaWrap::ObjectFromLua<Graphics::StructuredBuffer::StructuredBuffer>(
           state, 1);
 
   if (buffer == nullptr) {
@@ -113,7 +113,7 @@ auto wrap_Clear(lua_State *state) -> int {
 // { { name = ..., offset = ..., format = ... } }
 auto wrap_GetFormat(lua_State *state) -> int {
   auto *buffer =
-      LuaWrap::FromLuaObject<Graphics::StructuredBuffer::StructuredBuffer>(
+      LuaWrap::ObjectFromLua<Graphics::StructuredBuffer::StructuredBuffer>(
           state, 1);
 
   if (buffer == nullptr) {
@@ -164,7 +164,7 @@ auto wrap_GetFormat(lua_State *state) -> int {
 // data: Bytedata | table of numbers, offset: integer, size: integer
 auto wrap_SetData(lua_State *state) -> int {
   auto *buffer =
-      LuaWrap::FromLuaObject<Graphics::StructuredBuffer::StructuredBuffer>(
+      LuaWrap::ObjectFromLua<Graphics::StructuredBuffer::StructuredBuffer>(
           state, 1);
 
   if (buffer == nullptr) {
@@ -194,7 +194,7 @@ auto wrap_SetData(lua_State *state) -> int {
       lua_pop(state, 1);
     }
   } else {
-    auto *bytedata = LuaWrap::FromLuaObject<Data::ByteData>(state, 2);
+    auto *bytedata = LuaWrap::ObjectFromLua<Data::ByteData>(state, 2);
     if (bytedata == nullptr) {
       return luaL_error(state, "Expected ByteData or table as second argument");
     }
@@ -377,9 +377,9 @@ auto wrap_NewBuffer(lua_State *state) -> int {
 
   auto buffer = result.value();
 
-  LuaWrap::PushLuaType(state,
-                       Graphics::StructuredBuffer::StructuredBuffer::GetType(),
-                       buffer.get());
+  LuaWrap::PushObject(state,
+                      Graphics::StructuredBuffer::StructuredBuffer::GetType(),
+                      buffer.get());
 
   buffer->release(); // Lua now owns the reference
 
@@ -388,7 +388,7 @@ auto wrap_NewBuffer(lua_State *state) -> int {
 
 auto wrap_Release(lua_State *state) -> int {
   auto *buffer =
-      LuaWrap::FromLuaObject<Graphics::StructuredBuffer::StructuredBuffer>(
+      LuaWrap::ObjectFromLua<Graphics::StructuredBuffer::StructuredBuffer>(
           state, 1);
 
   if (buffer == nullptr) {

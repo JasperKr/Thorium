@@ -23,7 +23,7 @@ auto inline StringToVkFilter(const char *filterStr) -> VkFilter {
 }
 
 auto wrap_SetFilter(lua_State *state) -> int {
-  auto *texture = LuaWrap::FromLuaObject<Texture>(state, 1);
+  auto *texture = LuaWrap::ObjectFromLua<Texture>(state, 1);
 
   if (texture == nullptr) {
     return luaL_error(state, "Expected Texture as first argument");
@@ -48,7 +48,7 @@ auto wrap_SetFilter(lua_State *state) -> int {
 auto wrap_GetFilter(lua_State *state) -> int {
   PrintWarning("Getting texture filter");
   PrintWarning("Texture type ptr: {}", (void *)Texture::GetType());
-  auto *texture = LuaWrap::FromLuaObject<Texture>(state, 1);
+  auto *texture = LuaWrap::ObjectFromLua<Texture>(state, 1);
 
   if (texture == nullptr) {
     return luaL_error(state, "Expected Texture as first argument");
@@ -74,7 +74,7 @@ auto wrap_GetFilter(lua_State *state) -> int {
 }
 
 auto wrap_SetAnisotropy(lua_State *state) -> int {
-  auto *texture = LuaWrap::FromLuaObject<Texture>(state, 1);
+  auto *texture = LuaWrap::ObjectFromLua<Texture>(state, 1);
 
   if (texture == nullptr) {
     return luaL_error(state, "Expected Texture as first argument");
@@ -88,7 +88,7 @@ auto wrap_SetAnisotropy(lua_State *state) -> int {
 }
 
 auto wrap_GetAnisotropy(lua_State *state) -> int {
-  auto *texture = LuaWrap::FromLuaObject<Texture>(state, 1);
+  auto *texture = LuaWrap::ObjectFromLua<Texture>(state, 1);
 
   if (texture == nullptr) {
     return luaL_error(state, "Expected Texture as first argument");
@@ -115,7 +115,7 @@ auto inline StringToAddressMode(const char *addressModeStr)
 }
 
 auto wrap_SetWrapmode(lua_State *state) -> int {
-  auto *texture = LuaWrap::FromLuaObject<Texture>(state, 1);
+  auto *texture = LuaWrap::ObjectFromLua<Texture>(state, 1);
 
   if (texture == nullptr) {
     return luaL_error(state, "Expected Texture as first argument");
@@ -149,7 +149,7 @@ auto inline AddressModeToString(VkSamplerAddressMode addressMode) -> const
 }
 
 auto wrap_GetWrapmode(lua_State *state) -> int {
-  auto *texture = LuaWrap::FromLuaObject<Texture>(state, 1);
+  auto *texture = LuaWrap::ObjectFromLua<Texture>(state, 1);
 
   if (texture == nullptr) {
     return luaL_error(state, "Expected Texture as first argument");
@@ -172,7 +172,7 @@ auto wrap_GetWrapmode(lua_State *state) -> int {
 }
 
 auto wrap_SetLodBias(lua_State *state) -> int {
-  auto *texture = LuaWrap::FromLuaObject<Texture>(state, 1);
+  auto *texture = LuaWrap::ObjectFromLua<Texture>(state, 1);
 
   if (texture == nullptr) {
     return luaL_error(state, "Expected Texture as first argument");
@@ -186,7 +186,7 @@ auto wrap_SetLodBias(lua_State *state) -> int {
 }
 
 auto wrap_GetLodBias(lua_State *state) -> int {
-  auto *texture = LuaWrap::FromLuaObject<Texture>(state, 1);
+  auto *texture = LuaWrap::ObjectFromLua<Texture>(state, 1);
 
   if (texture == nullptr) {
     return luaL_error(state, "Expected Texture as first argument");
@@ -199,7 +199,7 @@ auto wrap_GetLodBias(lua_State *state) -> int {
 }
 
 auto wrap_SetLodRange(lua_State *state) -> int {
-  auto *texture = LuaWrap::FromLuaObject<Texture>(state, 1);
+  auto *texture = LuaWrap::ObjectFromLua<Texture>(state, 1);
 
   if (texture == nullptr) {
     return luaL_error(state, "Expected Texture as first argument");
@@ -214,7 +214,7 @@ auto wrap_SetLodRange(lua_State *state) -> int {
 }
 
 auto wrap_GetLodRange(lua_State *state) -> int {
-  auto *texture = LuaWrap::FromLuaObject<Texture>(state, 1);
+  auto *texture = LuaWrap::ObjectFromLua<Texture>(state, 1);
 
   if (texture == nullptr) {
     return luaL_error(state, "Expected Texture as first argument");
@@ -280,7 +280,7 @@ inline auto CompareOpToString(VkCompareOp compareOp) -> const char * {
 }
 
 auto wrap_SetDepthCompare(lua_State *state) -> int {
-  auto *texture = LuaWrap::FromLuaObject<Texture>(state, 1);
+  auto *texture = LuaWrap::ObjectFromLua<Texture>(state, 1);
 
   if (texture == nullptr) {
     return luaL_error(state, "Expected Texture as first argument");
@@ -299,7 +299,7 @@ auto wrap_SetDepthCompare(lua_State *state) -> int {
 }
 
 auto wrap_GetDepthCompare(lua_State *state) -> int {
-  auto *texture = LuaWrap::FromLuaObject<Texture>(state, 1);
+  auto *texture = LuaWrap::ObjectFromLua<Texture>(state, 1);
 
   if (texture == nullptr) {
     return luaL_error(state, "Expected Texture as first argument");
@@ -314,7 +314,7 @@ auto wrap_GetDepthCompare(lua_State *state) -> int {
 }
 
 auto wrap_GetWidth(lua_State *state) -> int {
-  auto *texture = LuaWrap::FromLuaObject<Texture>(state, 1);
+  auto *texture = LuaWrap::ObjectFromLua<Texture>(state, 1);
 
   if (texture == nullptr) {
     return luaL_error(state, "Expected Texture as first argument");
@@ -327,7 +327,7 @@ auto wrap_GetWidth(lua_State *state) -> int {
 }
 
 auto wrap_GetHeight(lua_State *state) -> int {
-  auto *texture = LuaWrap::FromLuaObject<Texture>(state, 1);
+  auto *texture = LuaWrap::ObjectFromLua<Texture>(state, 1);
 
   if (texture == nullptr) {
     return luaL_error(state, "Expected Texture as first argument");
@@ -340,7 +340,7 @@ auto wrap_GetHeight(lua_State *state) -> int {
 }
 
 auto wrap_GetDepth(lua_State *state) -> int {
-  auto *texture = LuaWrap::FromLuaObject<Texture>(state, 1);
+  auto *texture = LuaWrap::ObjectFromLua<Texture>(state, 1);
 
   if (texture == nullptr) {
     return luaL_error(state, "Expected Texture as first argument");
@@ -353,7 +353,7 @@ auto wrap_GetDepth(lua_State *state) -> int {
 }
 
 auto wrap_GetDimensions(lua_State *state) -> int {
-  auto *texture = LuaWrap::FromLuaObject<Texture>(state, 1);
+  auto *texture = LuaWrap::ObjectFromLua<Texture>(state, 1);
 
   if (texture == nullptr) {
     return luaL_error(state, "Expected Texture as first argument");
@@ -367,7 +367,7 @@ auto wrap_GetDimensions(lua_State *state) -> int {
 }
 
 auto wrap_GetMipmapCount(lua_State *state) -> int {
-  auto *texture = LuaWrap::FromLuaObject<Texture>(state, 1);
+  auto *texture = LuaWrap::ObjectFromLua<Texture>(state, 1);
 
   if (texture == nullptr) {
     return luaL_error(state, "Expected Texture as first argument");
@@ -380,7 +380,7 @@ auto wrap_GetMipmapCount(lua_State *state) -> int {
 }
 
 auto wrap_GetFormat(lua_State *state) -> int {
-  auto *texture = LuaWrap::FromLuaObject<Texture>(state, 1);
+  auto *texture = LuaWrap::ObjectFromLua<Texture>(state, 1);
 
   if (texture == nullptr) {
     return luaL_error(state, "Expected Texture as first argument");
@@ -502,7 +502,7 @@ struct LuaOptions {
 static inline auto TextureFromImagedata(lua_State *state)
     -> Result<Ref<Graphics::Texture::Texture>> {
   auto *ctx = Graphics::GetCurrentGraphicsContext();
-  auto *imageData = LuaWrap::FromLuaObject<Image::ImageData>(state, 1);
+  auto *imageData = LuaWrap::ObjectFromLua<Image::ImageData>(state, 1);
 
   auto result = Graphics::Texture::LoadFromMemory(*ctx, *imageData);
   if (Error::IsError(result)) {
@@ -526,7 +526,7 @@ static inline auto TextureFromFilepath(lua_State *state)
 static inline auto TextureFromImagedataAndOptions(lua_State *state)
     -> Result<Ref<Graphics::Texture::Texture>> {
   auto *ctx = Graphics::GetCurrentGraphicsContext();
-  auto *imageData = LuaWrap::FromLuaObject<Image::ImageData>(state, 1);
+  auto *imageData = LuaWrap::ObjectFromLua<Image::ImageData>(state, 1);
   LuaOptions options(state, 2);
 
   auto usage = TextureUsageToVkImageUsage(options.format, options.usage);
@@ -559,7 +559,7 @@ static inline auto TextureFromImagedataArrayAndOptions(lua_State *state)
   size_t len = lua_objlen(state, 1);
   for (size_t i = 0; i < len; ++i) {
     lua_rawgeti(state, 1, static_cast<int>(i + 1));
-    auto *imageData = LuaWrap::FromLuaObject<Image::ImageData>(state, -1);
+    auto *imageData = LuaWrap::ObjectFromLua<Image::ImageData>(state, -1);
     slices.push_back(imageData);
     lua_pop(state, 1);
   }
@@ -717,14 +717,14 @@ auto wrap_NewTexture(lua_State *state) -> int {
   }
   auto texture = result.value();
 
-  LuaWrap::PushLuaType(state, type, texture.get());
+  LuaWrap::PushObject(state, type, texture.get());
   texture->release(); // Retained by lua now
 
   return 1;
 }
 
 auto wrap_Release(lua_State *state) -> int {
-  auto *texture = LuaWrap::FromLuaObject<Texture>(state, 1);
+  auto *texture = LuaWrap::ObjectFromLua<Texture>(state, 1);
 
   if (texture == nullptr) {
     return luaL_error(state, "Expected Texture as first argument");

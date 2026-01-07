@@ -191,7 +191,7 @@ auto wrap_ClipScissor(lua_State *state) -> int {
 auto wrap_SetShader(lua_State *state) -> int {
   auto *ctx = GetCurrentGraphicsContext();
   auto *shaderHandle =
-      LuaWrap::FromLuaObject<Graphics::Shader::ShaderModule>(state, 1);
+      LuaWrap::ObjectFromLua<Graphics::Shader::ShaderModule>(state, 1);
   RenderTarget::SetShader(Ref<Shader::ShaderModule>(shaderHandle));
   return 0;
 }
@@ -353,7 +353,7 @@ auto wrap_GetShader(lua_State *state) -> int {
 
   const auto *type = Shader::ShaderModule::GetType();
 
-  LuaWrap::PushLuaType(state, type, ref.get());
+  LuaWrap::PushObject(state, type, ref.get());
 
   return 1;
 }
@@ -367,7 +367,7 @@ auto wrap_GetRenderTargets(lua_State *state) -> int {
     auto &renderTarget = renderTargets[i];
     const auto *type = RenderTarget::RenderTarget::GetType();
 
-    LuaWrap::PushLuaType(state, type, renderTarget.get());
+    LuaWrap::PushObject(state, type, renderTarget.get());
     lua_rawseti(state, -2, static_cast<int>(i + 1));
   }
 
@@ -490,7 +490,7 @@ auto wrap_Draw(lua_State *state) -> int {
   Ref<Mesh> mesh;
 
   if (LuaWrap::IsType<Texture::Texture>(state, 1)) {
-    auto *texture = LuaWrap::FromLuaObject<Texture::Texture>(state, 1);
+    auto *texture = LuaWrap::ObjectFromLua<Texture::Texture>(state, 1);
     auto result =
         GetQuadMesh(*ctx,
                     VkRect2D{
@@ -518,7 +518,7 @@ auto wrap_Draw(lua_State *state) -> int {
 
     mesh = result.value();
   } else if (LuaWrap::IsType<Mesh>(state, 1)) {
-    mesh = Ref<Mesh>(LuaWrap::FromLuaObject<Mesh>(state, 1));
+    mesh = Ref<Mesh>(LuaWrap::ObjectFromLua<Mesh>(state, 1));
   } else {
     return luaL_error(state, "Invalid argument to draw.");
   }
@@ -562,7 +562,7 @@ auto wrap_Dispatch(lua_State *state) -> int {
 auto wrap_DispatchIndirect(lua_State *state) -> int {
   auto *ctx = GetCurrentGraphicsContext();
 
-  auto *bufferHandle = LuaWrap::FromLuaObject<Graphics::Buffer>(state, 1);
+  auto *bufferHandle = LuaWrap::ObjectFromLua<Graphics::Buffer>(state, 1);
   Ref<Buffer> indirectBuffer(bufferHandle);
 
   auto offset = static_cast<VkDeviceSize>(luaL_optinteger(state, 2, 0));
@@ -581,7 +581,7 @@ auto wrap_DrawIndirect(lua_State *state) -> int {
   Ref<Mesh> mesh;
 
   if (LuaWrap::IsType<Mesh>(state, 1)) {
-    mesh = Ref<Mesh>(LuaWrap::FromLuaObject<Mesh>(state, 1));
+    mesh = Ref<Mesh>(LuaWrap::ObjectFromLua<Mesh>(state, 1));
   } else {
     return luaL_error(state, "Invalid argument to drawIndirect.");
   }
@@ -590,7 +590,7 @@ auto wrap_DrawIndirect(lua_State *state) -> int {
     return luaL_error(state, "Mesh is null.");
   }
 
-  auto *bufferHandle = LuaWrap::FromLuaObject<Graphics::Buffer>(state, 2);
+  auto *bufferHandle = LuaWrap::ObjectFromLua<Graphics::Buffer>(state, 2);
   Ref<Buffer> indirectBuffer(bufferHandle);
 
   auto offset = static_cast<VkDeviceSize>(luaL_optinteger(state, 3, 0));

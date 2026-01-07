@@ -248,7 +248,7 @@ auto RenderTargetsFromTexture(lua_State *state, int index)
   luaL_checktype(state, index, LUA_TUSERDATA);
 
   auto *texture =
-      LuaWrap::FromLuaObject<Graphics::Texture::Texture>(state, index);
+      LuaWrap::ObjectFromLua<Graphics::Texture::Texture>(state, index);
 
   if (texture == nullptr) {
     auto *ctx = Graphics::GetCurrentGraphicsContext();
@@ -294,7 +294,7 @@ auto RenderTargetsFromOptions(lua_State *state, int index)
         GetSwapchainTextures()[context->swapchainImageIndex];
   } else {
     auto *texture =
-        LuaWrap::FromLuaObject<Graphics::Texture::Texture>(state, -1);
+        LuaWrap::ObjectFromLua<Graphics::Texture::Texture>(state, -1);
     if (texture == nullptr) {
       return Error::Unexpected("Invalid texture in render target options");
     }

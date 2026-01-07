@@ -22,13 +22,13 @@ namespace Graphics {
 
 // Bytedata, [offset], [range]
 auto wrap_SetVertices(lua_State *state) -> int {
-  auto *mesh = LuaWrap::FromLuaObject<Mesh>(state, 1);
+  auto *mesh = LuaWrap::ObjectFromLua<Mesh>(state, 1);
 
   if (mesh == nullptr) {
     return luaL_error(state, "Expected Mesh as first argument");
   }
 
-  auto *data = LuaWrap::FromLuaObject<Data::ByteData>(state, 2);
+  auto *data = LuaWrap::ObjectFromLua<Data::ByteData>(state, 2);
 
   if (data == nullptr) {
     return luaL_error(state, "Expected ByteData as second argument");
@@ -69,13 +69,13 @@ auto wrap_SetVertices(lua_State *state) -> int {
   return 0;
 }
 auto wrap_SetIndices(lua_State *state) -> int {
-  auto *mesh = LuaWrap::FromLuaObject<Mesh>(state, 1);
+  auto *mesh = LuaWrap::ObjectFromLua<Mesh>(state, 1);
 
   if (mesh == nullptr) {
     return luaL_error(state, "Expected Mesh as first argument");
   }
 
-  auto *data = LuaWrap::FromLuaObject<Data::ByteData>(state, 2);
+  auto *data = LuaWrap::ObjectFromLua<Data::ByteData>(state, 2);
 
   if (data == nullptr) {
     return luaL_error(state, "Expected ByteData as second argument");
@@ -119,26 +119,26 @@ auto wrap_SetIndices(lua_State *state) -> int {
 }
 
 auto wrap_SetVertexBuffer(lua_State *state) -> int {
-  auto *mesh = LuaWrap::FromLuaObject<Mesh>(state, 1);
+  auto *mesh = LuaWrap::ObjectFromLua<Mesh>(state, 1);
 
   if (mesh == nullptr) {
     return luaL_error(state, "Expected Mesh as first argument");
   }
 
-  auto *buffer = LuaWrap::FromLuaObject<Buffer>(state, 2);
+  auto *buffer = LuaWrap::ObjectFromLua<Buffer>(state, 2);
 
   mesh->SetVertexBuffer(Ref<Buffer>(buffer));
 
   return 0;
 }
 auto wrap_SetIndexBuffer(lua_State *state) -> int {
-  auto *mesh = LuaWrap::FromLuaObject<Mesh>(state, 1);
+  auto *mesh = LuaWrap::ObjectFromLua<Mesh>(state, 1);
 
   if (mesh == nullptr) {
     return luaL_error(state, "Expected Mesh as first argument");
   }
 
-  auto *buffer = LuaWrap::FromLuaObject<Buffer>(state, 2);
+  auto *buffer = LuaWrap::ObjectFromLua<Buffer>(state, 2);
 
   mesh->SetIndexBuffer(Ref<Buffer>(buffer));
 
@@ -146,7 +146,7 @@ auto wrap_SetIndexBuffer(lua_State *state) -> int {
 }
 
 auto wrap_SetDrawRange(lua_State *state) -> int {
-  auto *mesh = LuaWrap::FromLuaObject<Mesh>(state, 1);
+  auto *mesh = LuaWrap::ObjectFromLua<Mesh>(state, 1);
 
   if (mesh == nullptr) {
     return luaL_error(state, "Expected Mesh as first argument");
@@ -160,7 +160,7 @@ auto wrap_SetDrawRange(lua_State *state) -> int {
   return 0;
 }
 auto wrap_GetDrawRange(lua_State *state) -> int {
-  auto *mesh = LuaWrap::FromLuaObject<Mesh>(state, 1);
+  auto *mesh = LuaWrap::ObjectFromLua<Mesh>(state, 1);
 
   if (mesh == nullptr) {
     return luaL_error(state, "Expected Mesh as first argument");
@@ -499,7 +499,7 @@ auto wrap_NewMesh(lua_State *state) -> int {
 
   // Vertex data
   if (lua_type(state, 2) == LUA_TUSERDATA) {
-    auto *byteData = LuaWrap::FromLuaObject<Data::ByteData>(state, 2);
+    auto *byteData = LuaWrap::ObjectFromLua<Data::ByteData>(state, 2);
     if (byteData == nullptr) {
       return luaL_error(state, "Expected ByteData as second argument");
     }
@@ -542,7 +542,7 @@ auto wrap_NewMesh(lua_State *state) -> int {
   if (lua_gettop(state) >= 4) {
     hasIndexData = true;
     if (lua_type(state, 4) == LUA_TUSERDATA) {
-      auto *byteData = LuaWrap::FromLuaObject<Data::ByteData>(state, 4);
+      auto *byteData = LuaWrap::ObjectFromLua<Data::ByteData>(state, 4);
       if (byteData == nullptr) {
         return luaL_error(state, "Expected ByteData as fourth argument");
       }
@@ -590,12 +590,12 @@ auto wrap_NewMesh(lua_State *state) -> int {
     return luaL_error(state, "%s", setTopologyResult.ToString().c_str());
   }
 
-  LuaWrap::PushLuaType(state, Graphics::Mesh::GetType(), mesh.get());
+  LuaWrap::PushObject(state, Graphics::Mesh::GetType(), mesh.get());
   return 1;
 }
 
 auto wrap_Release(lua_State *state) -> int {
-  auto *mesh = LuaWrap::FromLuaObject<Mesh>(state, 1);
+  auto *mesh = LuaWrap::ObjectFromLua<Mesh>(state, 1);
 
   if (mesh == nullptr) {
     return luaL_error(state, "Expected Mesh as first argument");

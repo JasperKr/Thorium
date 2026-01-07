@@ -14,11 +14,11 @@ namespace Data {
 
 auto GetBytedataFromLua(lua_State *state, int index) -> ByteData * {
   if (LuaWrap::IsType<Data::ByteData>(state, index)) {
-    return LuaWrap::FromLuaObject<Data::ByteData>(state, index);
+    return LuaWrap::ObjectFromLua<Data::ByteData>(state, index);
   }
 
   if (LuaWrap::IsType<Image::ImageData>(state, index)) {
-    auto *imagedata = LuaWrap::FromLuaObject<Image::ImageData>(state, index);
+    auto *imagedata = LuaWrap::ObjectFromLua<Image::ImageData>(state, index);
     return static_cast<Data::ByteData *>(imagedata);
   }
 
@@ -258,7 +258,7 @@ auto wrap_NewBytedata(lua_State *state) -> int {
   // auto *bytedata = new Data::ByteData(size); // NOLINT
   auto bytedata = Ref<Data::ByteData>::Make(size);
 
-  LuaWrap::PushLuaType(state, Data::ByteData::GetType(), bytedata.get());
+  LuaWrap::PushObject(state, Data::ByteData::GetType(), bytedata.get());
   bytedata->release(); // Release C++ reference, Lua now owns it
 
   return 1;

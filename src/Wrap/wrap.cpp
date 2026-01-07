@@ -21,7 +21,7 @@ extern "C" {
 namespace LuaWrap {
 
 static auto wrap_gc(lua_State *state) -> int {
-  Proxy *proxy = ProxyFromLuaObject(state, 1);
+  Proxy *proxy = ProxyFromLua(state, 1);
   if (proxy->object != nullptr) {
     proxy->object->release();
     proxy->object = nullptr;
@@ -31,14 +31,14 @@ static auto wrap_gc(lua_State *state) -> int {
 
 // NOLINTNEXTLINE
 static auto wrap_tostring(lua_State *state) -> int {
-  Proxy *proxy = ProxyFromLuaObject(state, 1);
+  Proxy *proxy = ProxyFromLua(state, 1);
   lua_pushfstring(state, "%s: %p", proxy->type->GetName().c_str(),
                   static_cast<void *>(proxy->object));
   return 1;
 }
 
 static auto wrap_type(lua_State *state) -> int {
-  Proxy *proxy = ProxyFromLuaObject(state, 1);
+  Proxy *proxy = ProxyFromLua(state, 1);
 
   if (proxy == nullptr) {
     lua_pushnil(state);
@@ -50,7 +50,7 @@ static auto wrap_type(lua_State *state) -> int {
 }
 
 static auto wrap_typeof(lua_State *state) -> int {
-  Proxy *proxy = ProxyFromLuaObject(state, 1);
+  Proxy *proxy = ProxyFromLua(state, 1);
   const auto *typeName = luaL_checkstring(state, 2);
   bool sameType = (proxy->type->GetName() == typeName);
   lua_pushboolean(state, sameType ? 1 : 0);
@@ -58,15 +58,15 @@ static auto wrap_typeof(lua_State *state) -> int {
 }
 
 static auto wrap_eq(lua_State *state) -> int {
-  Proxy *proxyA = ProxyFromLuaObject(state, 1);
-  Proxy *proxyB = ProxyFromLuaObject(state, 2);
+  Proxy *proxyA = ProxyFromLua(state, 1);
+  Proxy *proxyB = ProxyFromLua(state, 2);
   bool isEqual = (proxyA->object == proxyB->object);
   lua_pushboolean(state, isEqual ? 1 : 0);
   return 1;
 }
 
 static auto wrap_release(lua_State *state) -> int {
-  Proxy *proxy = ProxyFromLuaObject(state, 1);
+  Proxy *proxy = ProxyFromLua(state, 1);
   Object *object = proxy->object;
 
   if (object != nullptr) {
@@ -280,7 +280,7 @@ auto SetupLuaType(lua_State *state, const Type *type, Object *object) -> void {
   lua_setmetatable(state, -2); // Set metatable for userdata, [userdata]
 }
 
-auto PushLuaType(lua_State *state, const Type *type, Object *object) -> void {
+auto PushObject(lua_State *state, const Type *type, Object *object) -> void {
   if (object == nullptr) {
     lua_pushnil(state);
     return;

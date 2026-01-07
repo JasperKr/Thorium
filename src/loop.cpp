@@ -274,7 +274,11 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
     return error;
   }
 
-  Gui::LoadGUIState(state);
+  auto guiLoadResult = Gui::LoadGUIState(state);
+
+  if (Error::IsError(guiLoadResult)) {
+    return guiLoadResult.error();
+  }
 
   auto luaLoadErr = LoadLua(state, arguments);
 

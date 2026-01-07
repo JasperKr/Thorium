@@ -1,5 +1,6 @@
 #include "wrap_mouse.hpp"
 #include "Graphics/graphics.hpp"
+#include "Modules/Peripherals/mouse.hpp"
 #include "Modules/imagedata.hpp"
 #include "Modules/object.hpp"
 #include "SDL3/SDL_mouse.h"
@@ -13,12 +14,6 @@
 #include <vulkan/vulkan_core.h>
 
 namespace Wrap::Mouse {
-
-const std::map<std::string, int> MouseButtonMap = {
-    {"left", SDL_BUTTON_LEFT},   {"middle", SDL_BUTTON_MIDDLE},
-    {"right", SDL_BUTTON_RIGHT}, {"x1", SDL_BUTTON_X1},
-    {"x2", SDL_BUTTON_X2},
-};
 
 // button: string|integer...
 // Returns: boolean anyDown, boolean button1Down, boolean button2Down, ...
@@ -35,8 +30,8 @@ auto Wrap_IsDown(lua_State *state) -> int {
 
     if (isString) {
       const char *keyString = luaL_checkstring(state, i);
-      auto iterator = MouseButtonMap.find(std::string(keyString));
-      if (iterator == MouseButtonMap.end()) {
+      auto iterator = ::Mouse::MouseButtonMap.find(std::string(keyString));
+      if (iterator == ::Mouse::MouseButtonMap.end()) {
         luaL_error(state, "Unknown mouse button key: %s", keyString);
         return 0;
       }
@@ -137,26 +132,6 @@ auto Wrap_GetVisible(lua_State *state) -> int {
   return 1;
 }
 
-const static Type type = Type("Mouse Cursor");
-
-struct MouseCursor : Object {
-  MouseCursor(const MouseCursor &) = delete;
-  MouseCursor(MouseCursor &&) = delete;
-  auto operator=(const MouseCursor &) -> MouseCursor & = delete;
-  auto operator=(MouseCursor &&) -> MouseCursor & = delete;
-  explicit MouseCursor(SDL_Cursor *sdlCursor) : sdlCursor(sdlCursor) {}
-  SDL_Cursor *sdlCursor;
-
-  ~MouseCursor() override {
-    if (sdlCursor != nullptr) {
-      SDL_DestroyCursor(sdlCursor);
-      sdlCursor = nullptr;
-    }
-  }
-
-  static auto GetType() -> Type const * { return &type; }
-};
-
 auto StringToSDLCursor(const std::string &cursorName) -> SDL_SystemCursor {
   if (cursorName == "arrow") {
     return SDL_SYSTEM_CURSOR_DEFAULT;
@@ -213,10 +188,10 @@ auto Wrap_GetHardwareCursor(lua_State *state) -> int {
     return 0;
   }
 
-  auto mouseCursor = Ref<MouseCursor>::Make(sdlCursor);
+  auto mouseCursor = Ref<::Mouse::MouseCursor>::Make(sdlCursor);
 
-  LuaWrap::PushLuaType(state, Wrap::Mouse::MouseCursor::GetType(),
-                       mouseCursor.get());
+  LuaWrap::PushObject(state, ::Mouse::MouseCursor::GetType(),
+                      mouseCursor.get());
 
   mouseCursor->release();
 
@@ -224,7 +199,7 @@ auto Wrap_GetHardwareCursor(lua_State *state) -> int {
 }
 
 auto Wrap_NewCursor(lua_State *state) -> int {
-  auto *data = LuaWrap::FromLuaObject<Image::ImageData>(state, 1);
+  auto *data = LuaWrap::ObjectFromLua<Image::ImageData>(state, 1);
   int hotX = static_cast<int>(luaL_checkinteger(state, 2));
   int hotY = static_cast<int>(luaL_checkinteger(state, 3));
 
@@ -259,10 +234,10 @@ auto Wrap_NewCursor(lua_State *state) -> int {
     return 0;
   }
 
-  auto mouseCursor = Ref<MouseCursor>::Make(sdlCursor);
+  auto mouseCursor = Ref<::Mouse::MouseCursor>::Make(sdlCursor);
 
-  LuaWrap::PushLuaType(state, Wrap::Mouse::MouseCursor::GetType(),
-                       mouseCursor.get());
+  LuaWrap::PushObject(state, ::Mouse::MouseCursor::GetType(),
+                      mouseCursor.get());
 
   mouseCursor->release();
 
@@ -270,8 +245,7 @@ auto Wrap_NewCursor(lua_State *state) -> int {
 }
 
 auto Wrap_SetCursor(lua_State *state) -> int {
-  auto *mouseCursor =
-      LuaWrap::FromLuaObject<Wrap::Mouse::MouseCursor>(state, 1);
+  auto *mouseCursor = LuaWrap::ObjectFromLua<::Mouse::MouseCursor>(state, 1);
   if (mouseCursor == nullptr) {
     luaL_error(state, "Invalid MouseCursor object");
     return 0;

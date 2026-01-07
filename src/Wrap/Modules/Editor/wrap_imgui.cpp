@@ -1,7 +1,10 @@
 #include "wrap_imgui.hpp"
 #include "Graphics/texture.hpp"
+#include "Modules/imagedata.hpp"
 #include "Wrap/wrap.hpp"
 #include "imgui.h"
+#include "vulkan/vulkan_core.h"
+#include <cstdint>
 
 extern "C" {
 #include <lauxlib.h>
@@ -320,7 +323,7 @@ auto ArrowButton(lua_State *state) -> int {
 }
 auto ImageButton(lua_State *state) -> int {
   const auto *name = luaL_checkstring(state, 1);
-  auto *texture = LuaWrap::FromLuaObject<Graphics::Texture::Texture>(state, 2);
+  auto *texture = LuaWrap::ObjectFromLua<Graphics::Texture::Texture>(state, 2);
   auto width = static_cast<float>(luaL_checknumber(state, 3));
   auto height = static_cast<float>(luaL_checknumber(state, 4));
   auto uv0_x = static_cast<float>(luaL_optnumber(state, 5, 0.0));
@@ -344,7 +347,7 @@ auto ImageButton(lua_State *state) -> int {
   return 1;
 }
 auto Image(lua_State *state) -> int {
-  auto *texture = LuaWrap::FromLuaObject<Graphics::Texture::Texture>(state, 1);
+  auto *texture = LuaWrap::ObjectFromLua<Graphics::Texture::Texture>(state, 1);
   auto width = static_cast<float>(luaL_checknumber(state, 2));
   auto height = static_cast<float>(luaL_checknumber(state, 3));
   auto uv0_x = static_cast<float>(luaL_optnumber(state, 4, 0.0));
@@ -936,23 +939,40 @@ auto GetStyle(lua_State *state) -> int {
 }
 
 auto GetFontAtlasAsRGBA32(lua_State *state) -> int {
-  auto *font = LuaWrap::FromLuaObject<ImFont>(state, 1);
-  auto *pixels = LuaWrap::FromLuaObject<uint8_t>(state, 2);
-  int width = static_cast<int>(luaL_checkinteger(state, 3));
-  int height = static_cast<int>(luaL_checkinteger(state, 4));
-  int out_bytes_per_pixel = static_cast<int>(luaL_checkinteger(state, 5));
+  auto *font = static_cast<ImFont *>(LuaWrap::PointerFromLua(state, 1));
+  int width = static_cast<int>(luaL_checkinteger(state, 2));
+  int height = static_cast<int>(luaL_checkinteger(state, 3));
+
+  auto imagedata =
+      Ref<Image::ImageData>::Make(width, height, VK_FORMAT_R8G8B8A8_UNORM);
+  uint8_t *pixels = imagedata->GetDataPtr();
+  int out_bytes_per_pixel = 0;
+
   font->OwnerAtlas->GetTexDataAsRGBA32(&pixels, &width, &height,
                                        &out_bytes_per_pixel);
-  return 0;
+
+  LuaWrap::PushObject(state, Image::ImageData::GetType(), imagedata.get());
+  imagedata->release();
+
+  return 1;
 }
 
 auto GetFontAtlasAsAlpha8(lua_State *state) -> int {
-  auto *font = LuaWrap::FromLuaObject<ImFont>(state, 1);
-  auto *pixels = LuaWrap::FromLuaObject<uint8_t>(state, 2);
+  auto *font = static_cast<ImFont *>(LuaWrap::PointerFromLua(state, 1));
   int width = static_cast<int>(luaL_checkinteger(state, 3));
   int height = static_cast<int>(luaL_checkinteger(state, 4));
+
+  auto imagedata =
+      Ref<Image::ImageData>::Make(width, height, VK_FORMAT_R8_UNORM);
+  uint8_t *pixels = imagedata->GetDataPtr();
+
   font->OwnerAtlas->GetTexDataAsAlpha8(&pixels, &width, &height);
-  return 0;
+
+  LuaWrap::PushObject(state, Image::ImageData::GetType(), imagedata.get());
+
+  imagedata->release();
+
+  return 1;
 }
 
 auto GetDrawData(lua_State *state) -> int {
@@ -962,7 +982,8 @@ auto GetDrawData(lua_State *state) -> int {
 }
 
 auto GetTextureID(lua_State *state) -> int {
-  auto *drawCommand = LuaWrap::FromLuaObject<ImDrawCmd>(state, 1);
+  auto *drawCommand =
+      static_cast<ImDrawCmd *>(LuaWrap::PointerFromLua(state, 1));
   auto textureId = drawCommand->GetTexID();
   auto textureIdAsPtr = reinterpret_cast<void *>(textureId); // NOLINT
   LuaWrap::PushPointer(state, textureIdAsPtr);

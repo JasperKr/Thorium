@@ -57,7 +57,7 @@ auto Wrap_Read(lua_State *state) -> int {
     auto bytedata = Ref<Data::ByteData>::Make(data.size());
     std::memcpy(bytedata->GetData(), data.data(), data.size());
 
-    LuaWrap::PushLuaType(state, Data::ByteData::GetType(), bytedata.get());
+    LuaWrap::PushObject(state, Data::ByteData::GetType(), bytedata.get());
 
     bytedata->release(); // Lua now owns the reference
 
@@ -80,7 +80,7 @@ auto Wrap_Append(lua_State *state) -> int {
   std::string path = luaL_checkstring(state, 1);
 
   if (LuaWrap::IsType<Data::ByteData>(state, 2)) {
-    auto *bytedata = LuaWrap::FromLuaObject<Data::ByteData>(state, 2);
+    auto *bytedata = LuaWrap::ObjectFromLua<Data::ByteData>(state, 2);
 
     auto error = ::Filesystem::AppendFile(
         path,
@@ -119,7 +119,7 @@ auto Wrap_Write(lua_State *state) -> int {
   std::string path = luaL_checkstring(state, 1);
 
   if (LuaWrap::IsType<Data::ByteData>(state, 2)) {
-    auto *bytedata = LuaWrap::FromLuaObject<Data::ByteData>(state, 2);
+    auto *bytedata = LuaWrap::ObjectFromLua<Data::ByteData>(state, 2);
 
     auto error = ::Filesystem::WriteFile(
         path,

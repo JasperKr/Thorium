@@ -41,13 +41,13 @@ inline auto SetStackToRegistry(lua_State *state, const char *key) -> void {
 }
 
 auto SetStackToTable(lua_State *state, const char *key) -> void;
-auto PushLuaType(lua_State *state, const Type *type, Object *object) -> void;
+auto PushObject(lua_State *state, const Type *type, Object *object) -> void;
 auto RegisterLuaType(lua_State *state, const Type *type,
                      const luaL_Reg *functions) -> void;
 auto SetupLuaType(lua_State *state, const Type *type, Object *object) -> void;
 auto LoadStorageTable(lua_State *state, const char *key) -> void;
 
-inline auto ProxyFromLuaObject(lua_State *state, int index) -> Proxy * {
+inline auto ProxyFromLua(lua_State *state, int index) -> Proxy * {
   // Check if userdata
   if (lua_isuserdata(state, index) == 0) {
     return nullptr;
@@ -59,7 +59,7 @@ inline auto ProxyFromLuaObject(lua_State *state, int index) -> Proxy * {
 }
 
 template <typename T>
-inline auto FromLuaObject(lua_State *state, int index) -> T * {
+inline auto ObjectFromLua(lua_State *state, int index) -> T * {
   // Check if userdata
   if (lua_isuserdata(state, index) == 0) {
     PrintWarning("FromLuaObject: not userdata at index {}", index);
@@ -92,6 +92,21 @@ inline auto FromLuaObject(lua_State *state, int index) -> T * {
 
   auto *obj = dynamic_cast<T *>(proxy->object);
   return obj;
+}
+
+inline auto PointerFromLua(lua_State *state, int index) -> void * {
+  // Check if userdata
+  if (lua_isuserdata(state, index) == 0) {
+    return nullptr;
+  }
+
+  // NOLINTNEXTLINE
+  auto **userdata = static_cast<void **>(lua_touserdata(state, index));
+  if (userdata == nullptr) {
+    return nullptr;
+  }
+
+  return *userdata;
 }
 
 inline auto PushPointer(lua_State *state, void *pointer) -> void {
