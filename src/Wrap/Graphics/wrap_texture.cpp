@@ -1,8 +1,11 @@
 #include "Graphics/format.hpp"
 #include "Graphics/texture.hpp"
 #include "Modules/console.hpp"
+#include "Modules/error.hpp"
 #include "Modules/image.hpp"
 #include "Wrap/wrap.hpp"
+#include <set>
+#include <string>
 
 #define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
@@ -393,6 +396,7 @@ auto wrap_GetFormat(lua_State *state) -> int {
 }
 
 enum class LuaTextureUsage : uint8_t {
+  None = 0,
   Sampled = 1U << 0U,
   RenderTarget = 1U << 1U,
   Storage = 1U << 2U,
@@ -423,6 +427,31 @@ static inline auto TextureUsageToVkImageUsage(VkFormat format,
 
 constexpr VkFormat DefaultFormat = VK_FORMAT_R8G8B8A8_UNORM;
 
+const std::set<std::string> ValidOptionKeys = {
+    "type",    "format",      "mipmaps",     "sampler", "rendertarget",
+    "storage", "mipmapcount", "mipmapstart", "linear",
+};
+
+auto CheckTopOfStackTableKeys(lua_State *state, int index) -> Result<void> {
+  luaL_checktype(state, index, LUA_TTABLE);
+
+  lua_pushnil(state); // first key
+  while (lua_next(state, index) != 0) {
+    // key at -2, value at -1
+    if (lua_type(state, -2) == LUA_TSTRING) {
+      const char *keyStr = luaL_checkstring(state, -2);
+      if (!ValidOptionKeys.contains(std::string(keyStr))) {
+        return Error::Unexpected(
+            std::format("Invalid texture option key: {}", keyStr));
+      }
+    }
+
+    lua_pop(state, 1); // pop value, keep key for next iteration
+  }
+
+  return {};
+}
+
 // Options:
 // { type = "2D"|"3D"|"array"|"cube", format = f, mipmaps = bool, usage = int, mipmapcount = n, mipmapstart = n, linear = bool }
 struct LuaOptions {
@@ -434,21 +463,31 @@ struct LuaOptions {
   uint32_t mipmapStart = 0;
   bool linear = true;
 
-  LuaOptions(lua_State *state, int index) {
+  static auto Create(lua_State *state, int index) -> Result<LuaOptions> {
+    LuaOptions options{};
     luaL_checktype(state, index, LUA_TTABLE);
+
+    auto result = CheckTopOfStackTableKeys(state, index);
+
+    if (Error::IsError(result)) {
+      return result.error().AsUnexpected();
+    }
 
     // type
     lua_getfield(state, index, "type");
     if (lua_isstring(state, -1) != 0) {
       const char *typeStr = luaL_checkstring(state, -1);
       if (strcmp(typeStr, "2D") == 0) {
-        this->type = Graphics::Texture::TextureType::DEFAULT;
+        options.type = Graphics::Texture::TextureType::DEFAULT;
       } else if (strcmp(typeStr, "3D") == 0) {
-        this->type = Graphics::Texture::TextureType::VOLUME;
+        options.type = Graphics::Texture::TextureType::VOLUME;
       } else if (strcmp(typeStr, "array") == 0) {
-        this->type = Graphics::Texture::TextureType::ARRAY;
+        options.type = Graphics::Texture::TextureType::ARRAY;
       } else if (strcmp(typeStr, "cube") == 0) {
-        this->type = Graphics::Texture::TextureType::CUBEMAP;
+        options.type = Graphics::Texture::TextureType::CUBEMAP;
+      } else {
+        return Error::Unexpected(
+            std::format("Invalid texture type string: {}", typeStr));
       }
     }
     lua_pop(state, 1);
@@ -457,45 +496,92 @@ struct LuaOptions {
     lua_getfield(state, index, "format");
     if (lua_isstring(state, -1) != 0) {
       const char *formatStr = luaL_checkstring(state, -1);
-      this->format = Format::StringToImageFormat(std::string(formatStr));
+      options.format = Format::StringToImageFormat(std::string(formatStr));
     }
     lua_pop(state, 1);
 
     // mipmaps
     lua_getfield(state, index, "mipmaps");
     if (lua_isboolean(state, -1) != 0) {
-      this->mipmaps = (lua_toboolean(state, -1) != 0);
+      options.mipmaps = (lua_toboolean(state, -1) != 0);
     }
     lua_pop(state, 1);
 
-    // usage
-    lua_getfield(state, index, "usage");
-    if (lua_isnumber(state, -1) != 0) {
-      int usageInt = static_cast<int>(lua_tointeger(state, -1));
-      this->usage = static_cast<LuaTextureUsage>(usageInt);
+    LuaTextureUsage newUsage{};
+    bool usageSet = false;
+
+    // sampler
+    lua_getfield(state, index, "sampler");
+    if (lua_isboolean(state, -1) != 0) {
+      if (lua_toboolean(state, -1) != 0) {
+        newUsage = static_cast<LuaTextureUsage>(
+            static_cast<uint8_t>(newUsage) |
+            static_cast<uint8_t>(LuaTextureUsage::Sampled));
+      }
+
+      usageSet = true;
     }
     lua_pop(state, 1);
+
+    // rendertarget
+    lua_getfield(state, index, "rendertarget");
+    if (lua_isboolean(state, -1) != 0) {
+      if (lua_toboolean(state, -1) != 0) {
+        newUsage = static_cast<LuaTextureUsage>(
+            static_cast<uint8_t>(newUsage) |
+            static_cast<uint8_t>(LuaTextureUsage::RenderTarget));
+      }
+
+      usageSet = true;
+    }
+    lua_pop(state, 1);
+
+    // storage
+    lua_getfield(state, index, "storage");
+    if (lua_isboolean(state, -1) != 0) {
+      if (lua_toboolean(state, -1) != 0) {
+        newUsage = static_cast<LuaTextureUsage>(
+            static_cast<uint8_t>(newUsage) |
+            static_cast<uint8_t>(LuaTextureUsage::Storage));
+      }
+
+      usageSet = true;
+    }
+    lua_pop(state, 1);
+
+    if (usageSet) {
+      if (newUsage == LuaTextureUsage::None) {
+        return Error::Unexpected("Texture usage cannot be none.");
+      }
+
+      PrintAlways("Setting texture usage to {}",
+                  static_cast<uint8_t>(newUsage));
+
+      options.usage = newUsage;
+    }
 
     // mipmapcount
     lua_getfield(state, index, "mipmapcount");
     if (lua_isnumber(state, -1) != 0) {
-      this->mipmapCount = static_cast<uint32_t>(lua_tointeger(state, -1));
+      options.mipmapCount = static_cast<uint32_t>(lua_tointeger(state, -1));
     }
     lua_pop(state, 1);
 
     // mipmapstart
     lua_getfield(state, index, "mipmapstart");
     if (lua_isnumber(state, -1) != 0) {
-      this->mipmapStart = static_cast<uint32_t>(lua_tointeger(state, -1));
+      options.mipmapStart = static_cast<uint32_t>(lua_tointeger(state, -1));
     }
     lua_pop(state, 1);
 
     // linear
     lua_getfield(state, index, "linear");
     if (lua_isboolean(state, -1) != 0) {
-      this->linear = (lua_toboolean(state, -1) != 0);
+      options.linear = (lua_toboolean(state, -1) != 0);
     }
     lua_pop(state, 1);
+
+    return options;
   }
 };
 
@@ -504,7 +590,8 @@ static inline auto TextureFromImagedata(lua_State *state)
   auto *ctx = Graphics::GetCurrentGraphicsContext();
   auto *imageData = LuaWrap::ObjectFromLua<Image::ImageData>(state, 1);
 
-  auto result = Graphics::Texture::LoadFromMemory(*ctx, *imageData);
+  auto result = Graphics::Texture::LoadFromMemory(*ctx, *imageData,
+                                                  VK_IMAGE_USAGE_SAMPLED_BIT);
   if (Error::IsError(result)) {
     return result.error().AsUnexpected();
   }
@@ -527,7 +614,13 @@ static inline auto TextureFromImagedataAndOptions(lua_State *state)
     -> Result<Ref<Graphics::Texture::Texture>> {
   auto *ctx = Graphics::GetCurrentGraphicsContext();
   auto *imageData = LuaWrap::ObjectFromLua<Image::ImageData>(state, 1);
-  LuaOptions options(state, 2);
+  auto optionsResult = LuaOptions::Create(state, 2);
+
+  if (Error::IsError(optionsResult)) {
+    return optionsResult.error().AsUnexpected();
+  }
+
+  LuaOptions options = optionsResult.value();
 
   auto usage = TextureUsageToVkImageUsage(options.format, options.usage);
 
@@ -542,7 +635,13 @@ static inline auto TextureFromFilepathAndOptions(lua_State *state)
     -> Result<Ref<Graphics::Texture::Texture>> {
   auto *ctx = Graphics::GetCurrentGraphicsContext();
   const char *filepath = luaL_checkstring(state, 1);
-  LuaOptions options(state, 2);
+  auto optionsResult = LuaOptions::Create(state, 2);
+
+  if (Error::IsError(optionsResult)) {
+    return optionsResult.error().AsUnexpected();
+  }
+
+  LuaOptions options = optionsResult.value();
 
   auto usage = TextureUsageToVkImageUsage(options.format, options.usage);
 
@@ -564,8 +663,13 @@ static inline auto TextureFromImagedataArrayAndOptions(lua_State *state)
     lua_pop(state, 1);
   }
 
-  // Options
-  LuaOptions options(state, 2);
+  auto optionsResult = LuaOptions::Create(state, 2);
+
+  if (Error::IsError(optionsResult)) {
+    return optionsResult.error().AsUnexpected();
+  }
+
+  LuaOptions options = optionsResult.value();
 
   auto *ctx = Graphics::GetCurrentGraphicsContext();
 
@@ -602,7 +706,13 @@ static inline auto TextureFromWidthHeightAndOptions(lua_State *state)
   auto *ctx = Graphics::GetCurrentGraphicsContext();
   auto width = static_cast<uint32_t>(luaL_checkinteger(state, 1));
   auto height = static_cast<uint32_t>(luaL_checkinteger(state, 2));
-  LuaOptions options(state, 3);
+  auto optionsResult = LuaOptions::Create(state, 3);
+
+  if (Error::IsError(optionsResult)) {
+    return optionsResult.error().AsUnexpected();
+  }
+
+  LuaOptions options = optionsResult.value();
 
   auto usage = TextureUsageToVkImageUsage(options.format, options.usage);
 
@@ -627,7 +737,13 @@ TextureFromWidthHeightDepthOrLayersAndOptions(lua_State *state)
   auto width = static_cast<uint32_t>(luaL_checkinteger(state, 1));
   auto height = static_cast<uint32_t>(luaL_checkinteger(state, 2));
   auto depthOrLayers = static_cast<uint32_t>(luaL_checkinteger(state, 3));
-  LuaOptions options(state, 4);
+  auto optionsResult = LuaOptions::Create(state, 4);
+
+  if (Error::IsError(optionsResult)) {
+    return optionsResult.error().AsUnexpected();
+  }
+
+  LuaOptions options = optionsResult.value();
 
   auto usage = TextureUsageToVkImageUsage(options.format, options.usage);
 
@@ -685,8 +801,10 @@ auto wrap_NewTexture(lua_State *state) -> int {
 
   if (args == 1) {
     if (LuaWrap::IsType<Image::ImageData>(state, 1)) {
+      PrintAlways("Creating texture from imagedata");
       result = TextureFromImagedata(state);
     } else if (lua_type(state, 1) == LUA_TSTRING) { // Filepath
+      PrintAlways("Creating texture from filepath");
       result = TextureFromFilepath(state);
     } else {
       return luaL_error(state, "Invalid argument to newTexture");
@@ -694,18 +812,25 @@ auto wrap_NewTexture(lua_State *state) -> int {
   } else if (args == 2) {
     // Width, Height or ImageData array + Options or Filepath + Options or ImageData + Options
     if (LuaWrap::IsType<Image::ImageData>(state, 1)) {
+      PrintAlways("Creating texture from imagedata and options");
       result = TextureFromImagedataAndOptions(state);
     } else if (lua_type(state, 1) == LUA_TSTRING) { // Filepath + Options
+      PrintAlways("Creating texture from filepath and options");
       result = TextureFromFilepathAndOptions(state);
     } else if (lua_istable(state, 1) != 0 &&
                lua_istable(state, 2) != 0) { // ImageData array + Options
+      PrintAlways("Creating texture from imagedata array and options");
       result = TextureFromImagedataArrayAndOptions(state);
     } else { // Width, Height
+      PrintAlways("Creating texture from width and height");
       result = TextureFromWidthAndHeight(state);
     }
   } else if (args == 3) { // width, height, Options
+    PrintAlways("Creating texture from width, height and options");
     result = TextureFromWidthHeightAndOptions(state);
   } else if (args == 4) { // width, height, depth|layers, Options
+    PrintAlways(
+        "Creating texture from width, height, depth/layers and options");
     result = TextureFromWidthHeightDepthOrLayersAndOptions(state);
   } else {
     return luaL_error(state, "Invalid arguments to newTexture");

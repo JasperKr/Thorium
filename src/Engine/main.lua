@@ -1,7 +1,14 @@
+require("imgui")
+
+ImguiWrapper.Init()
+
 local i = 0
 
 function Thorium.update(dt)
   i = i + 1
+
+  ImguiWrapper.Update(dt)
+  Thorium.gui.newFrame()
 end
 
 function Thorium.mousemoved(x, y, dx, dy)
@@ -38,17 +45,13 @@ function Thorium.quit()
   print("Quitting the application.")
 end
 
-local sampler = 1
-local rendertarget = 2
-local ssbo = 4
-
-local image = Thorium.graphics.newTexture("leek.png", { usage = sampler })
+local image = Thorium.graphics.newTexture("leek.png", { sampler = true })
 -- print(image:getFilter())
-local target = Thorium.graphics.newTexture(612, 512, { usage = sampler + rendertarget })
+local target = Thorium.graphics.newTexture(612, 512, { sampler = true, rendertarget = true })
 local shader = Thorium.graphics.newShader("default2D")
 local compute = Thorium.graphics.newShader("testCS");
-local inputBuffer = Thorium.graphics.newBuffer("uint32", 1024, { usage = ssbo })
-local outputBuffer = Thorium.graphics.newBuffer("uint32", 1024, { usage = ssbo })
+local inputBuffer = Thorium.graphics.newBuffer("uint32", 1024, { shaderstorage = true })
+local outputBuffer = Thorium.graphics.newBuffer("uint32", 1024, { shaderstorage = true })
 
 inputBuffer:clear()
 inputBuffer:setData({ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 })
@@ -100,7 +103,7 @@ for y = 0, 512 - 1 do
     data:setHalf(offset + 6, 1.0)
   end
 end
-local texture = Thorium.graphics.newTexture(data, { usage = sampler })
+local texture = Thorium.graphics.newTexture(data, { sampler = true })
 
 function hslToRgb(h, s, l)
   local r, g, b;
@@ -139,4 +142,7 @@ function Thorium.draw()
   Thorium.graphics.draw(texture)
   Thorium.graphics.setRenderTarget({ loadas = { 0, 0, 0, 1 } })
   Thorium.graphics.draw(target)
+
+  Thorium.gui.endFrame()
+  ImguiWrapper.RenderDrawLists()
 end

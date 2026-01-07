@@ -30,7 +30,7 @@ struct MouseCursor : Object {
     }
   }
 
-  [[nodiscard]] auto GetType() const -> Type const * override { return &type; }
+  [[nodiscard]] static auto GetType() -> Type const * { return &type; }
 };
 
 } // namespace Mouse

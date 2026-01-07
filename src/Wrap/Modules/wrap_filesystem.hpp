@@ -18,6 +18,7 @@ auto Wrap_Mount(lua_State *state) -> int;
 auto Wrap_Unmount(lua_State *state) -> int;
 auto Wrap_GetRealPath(lua_State *state) -> int;
 auto Wrap_ListFiles(lua_State *state) -> int;
+auto Wrap_CreateDirectory(lua_State *state) -> int;
 
 auto Wrap_GetSaveDirectory(lua_State *state) -> int;
 auto Wrap_GetSourceDirectory(lua_State *state) -> int;
@@ -34,6 +35,7 @@ static const luaL_Reg FilesystemLib[] = {
     {"unmount", Wrap_Unmount},
     {"getRealPath", Wrap_GetRealPath},
     {"listFiles", Wrap_ListFiles},
+    {"createDirectory", Wrap_CreateDirectory},
     {"getSaveDirectory", Wrap_GetSaveDirectory},
     {"getSourceDirectory", Wrap_GetSourceDirectory},
     {"getSourceBaseDirectory", Wrap_GetSourceBaseDirectory},

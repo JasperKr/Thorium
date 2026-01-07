@@ -46,6 +46,10 @@ auto wrap_Dispatch(lua_State *state) -> int;
 auto wrap_DispatchIndirect(lua_State *state) -> int;
 auto wrap_DrawIndirect(lua_State *state) -> int;
 
+auto wrap_GetWidth(lua_State *state) -> int;
+auto wrap_GetHeight(lua_State *state) -> int;
+auto wrap_GetDimensions(lua_State *state) -> int;
+
 // NOLINTNEXTLINE
 static const luaL_Reg GraphicsLib[] = {
     {"present", wrap_Present},
@@ -79,6 +83,9 @@ static const luaL_Reg GraphicsLib[] = {
     {"dispatch", wrap_Dispatch},
     {"dispatchIndirect", wrap_DispatchIndirect},
     {"drawIndirect", wrap_DrawIndirect},
+    {"getWidth", wrap_GetWidth},
+    {"getHeight", wrap_GetHeight},
+    {"getDimensions", wrap_GetDimensions},
     {nullptr, nullptr},
 };
 

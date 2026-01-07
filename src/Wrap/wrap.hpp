@@ -110,10 +110,12 @@ inline auto PointerFromLua(lua_State *state, int index) -> void * {
 }
 
 inline auto PushPointer(lua_State *state, void *pointer) -> void {
-  // NOLINTNEXTLINE
+  // // NOLINTNEXTLINE
   auto **userdata =
       static_cast<void **>(lua_newuserdata(state, sizeof(void *)));
   *userdata = pointer;
+
+  // lua_pushlightuserdata(state, pointer);
 }
 
 template <typename T>

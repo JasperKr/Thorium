@@ -249,10 +249,14 @@ static inline auto LoadSlang(GraphicsContext &context,
   sessionDesc.defaultMatrixLayoutMode =
       SlangMatrixLayoutMode::SLANG_MATRIX_LAYOUT_ROW_MAJOR;
 
-  auto sourceAndSaveDirectory = std::string(".");
+  auto sourceBaseDir = Filesystem::GetSourceBaseDirectory();
+  auto sourceDir = Filesystem::GetSourceDirectory();
+  auto saveDir = Filesystem::GetSaveDirectory();
+
   auto shaderDirectory = Path::Join({"src", "Graphics", "Shaders"});
 
-  std::vector<const char *> searchPaths = {sourceAndSaveDirectory.c_str(),
+  std::vector<const char *> searchPaths = {sourceDir.c_str(), saveDir.c_str(),
+                                           sourceBaseDir.c_str(),
                                            shaderDirectory.c_str()};
 
   std::string directories = "Shader directories:\n";

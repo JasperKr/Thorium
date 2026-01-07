@@ -132,6 +132,12 @@ auto GetFontAtlasAsRGBA32(lua_State *state) -> int;
 auto GetFontAtlasAsAlpha8(lua_State *state) -> int;
 auto GetDrawData(lua_State *state) -> int;
 auto GetTextureID(lua_State *state) -> int;
+auto GetFont(lua_State *state) -> int;
+auto GetFontAtlas(lua_State *state) -> int;
+
+auto NewFrame(lua_State *state) -> int;
+auto GetDrawLists(lua_State *state) -> int;
+auto EndFrame(lua_State *state) -> int;
 
 // NOLINTNEXTLINE
 static const luaL_Reg ImGuiLib[] = {
@@ -229,6 +235,18 @@ static const luaL_Reg ImGuiLib[] = {
     {"collapsingHeader", CollapsingHeader},
     {"setNextItemOpen", SetNextItemOpen},
     {"drawEngineUIComponent", Wrap::Gui::DrawEngineUIComponent},
+    {"getIO", GetIO},
+    {"getPlatformIO", GetPlatformIO},
+    {"getStyle", GetStyle},
+    {"getFontAtlasAsRGBA32", GetFontAtlasAsRGBA32},
+    {"getFontAtlasAsAlpha8", GetFontAtlasAsAlpha8},
+    {"getDrawData", GetDrawData},
+    {"getTextureID", GetTextureID},
+    {"getFont", GetFont},
+    {"getFontAtlas", GetFontAtlas},
+    {"newFrame", NewFrame},
+    {"getDrawLists", GetDrawLists},
+    {"endFrame", EndFrame},
     {nullptr, nullptr},
 };
 

@@ -670,4 +670,33 @@ auto wrap_Clear(lua_State *state) -> int {
   return 0;
 }
 
+/*
+auto wrap_GetWidth(lua_State *state) -> int;
+auto wrap_GetHeight(lua_State *state) -> int;
+auto wrap_GetDimensions(lua_State *state) -> int;
+*/
+
+auto wrap_GetWidth(lua_State *state) -> int {
+  auto *ctx = GetCurrentGraphicsContext();
+  auto width = ctx->swapchainInfo.extent.width;
+  lua_pushinteger(state, static_cast<lua_Integer>(width));
+  return 1;
+}
+
+auto wrap_GetHeight(lua_State *state) -> int {
+  auto *ctx = GetCurrentGraphicsContext();
+  auto height = ctx->swapchainInfo.extent.height;
+  lua_pushinteger(state, static_cast<lua_Integer>(height));
+  return 1;
+}
+
+auto wrap_GetDimensions(lua_State *state) -> int {
+  auto *ctx = GetCurrentGraphicsContext();
+  auto extent = ctx->swapchainInfo.extent;
+
+  lua_pushinteger(state, static_cast<lua_Integer>(extent.width));
+  lua_pushinteger(state, static_cast<lua_Integer>(extent.height));
+  return 2;
+}
+
 } // namespace Graphics

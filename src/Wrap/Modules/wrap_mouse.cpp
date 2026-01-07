@@ -148,22 +148,22 @@ auto StringToSDLCursor(const std::string &cursorName) -> SDL_SystemCursor {
   if (cursorName == "progress") {
     return SDL_SYSTEM_CURSOR_PROGRESS;
   }
-  if (cursorName == "nwse_resize") {
+  if (cursorName == "resizenwse") {
     return SDL_SYSTEM_CURSOR_NWSE_RESIZE;
   }
-  if (cursorName == "nesw_resize") {
+  if (cursorName == "resizenesw") {
     return SDL_SYSTEM_CURSOR_NESW_RESIZE;
   }
-  if (cursorName == "ew_resize") {
+  if (cursorName == "resizewe") {
     return SDL_SYSTEM_CURSOR_EW_RESIZE;
   }
-  if (cursorName == "ns_resize") {
+  if (cursorName == "resizens") {
     return SDL_SYSTEM_CURSOR_NS_RESIZE;
   }
   if (cursorName == "move") {
     return SDL_SYSTEM_CURSOR_MOVE;
   }
-  if (cursorName == "not_allowed") {
+  if (cursorName == "notallowed") {
     return SDL_SYSTEM_CURSOR_NOT_ALLOWED;
   }
   if (cursorName == "pointer") {

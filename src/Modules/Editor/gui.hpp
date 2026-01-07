@@ -4,8 +4,8 @@
 #include "SDL3/SDL_keycode.h"
 #include "guiState.h"
 #include "imgui.h"
+#include "imgui_internal.h"
 #include <string>
-#include <unordered_map>
 
 extern "C" {
 #include <lauxlib.h>
@@ -22,7 +22,7 @@ constexpr unsigned char data[] = {
 // NOLINTNEXTLINE
 const std::string dataView{reinterpret_cast<const char *>(data), sizeof(data)};
 
-auto GetGuiState() -> GuiState & {
+inline auto GetGuiState() -> GuiState & {
   static GuiState guiState{};
   return guiState;
 }
@@ -66,11 +66,14 @@ inline auto LoadGUIState(lua_State *state) -> Result<GuiState> {
   auto *guiContext = ImGui::CreateContext();
 
   GetGuiState() = guiState;
+  ImGui::PushFont(ImGui::GetDefaultFont());
+
+  ImGui::StyleColorsDark();
 
   return guiState;
 }
 
-auto KeyEventToImguiKey(SDL_Keycode keycode, SDL_Scancode scancode)
+inline auto KeyEventToImguiKey(SDL_Keycode keycode, SDL_Scancode scancode)
     -> ImGuiKey {
   // Keypad doesn't have individual key values in SDL3
   switch (scancode) {

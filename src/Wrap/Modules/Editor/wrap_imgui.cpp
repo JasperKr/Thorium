@@ -4,7 +4,10 @@
 #include "Wrap/wrap.hpp"
 #include "imgui.h"
 #include "vulkan/vulkan_core.h"
+#include <array>
+#include <cstddef>
 #include <cstdint>
+#include <cstring>
 
 extern "C" {
 #include <lauxlib.h>
@@ -938,18 +941,48 @@ auto GetStyle(lua_State *state) -> int {
   return 1;
 }
 
+auto GetFont(lua_State *state) -> int {
+  auto inputOutput = ImGui::GetIO();
+  if (inputOutput.Fonts->Fonts.empty()) {
+    return luaL_error(state, "No fonts loaded in ImGui IO");
+  }
+
+  auto *font = inputOutput.Fonts->Fonts[0];
+  LuaWrap::PushPointer(state, font);
+  return 1;
+}
+
+auto GetFontAtlas(lua_State *state) -> int {
+  auto inputOutput = ImGui::GetIO();
+
+  auto *atlas = inputOutput.Fonts;
+
+  if (atlas == nullptr) {
+    return luaL_error(state, "No font atlas available in ImGui IO");
+  }
+
+  LuaWrap::PushPointer(state, atlas);
+  return 1;
+}
+
 auto GetFontAtlasAsRGBA32(lua_State *state) -> int {
-  auto *font = static_cast<ImFont *>(LuaWrap::PointerFromLua(state, 1));
-  int width = static_cast<int>(luaL_checkinteger(state, 2));
-  int height = static_cast<int>(luaL_checkinteger(state, 3));
+  auto *atlas = static_cast<ImFontAtlas *>(LuaWrap::PointerFromLua(state, 1));
+
+  if (atlas == nullptr) {
+    return luaL_error(state, "Invalid atlas pointer");
+  }
+
+  int width = 0;
+  int height = 0;
+  int out_bytes_per_pixel = 0;
+
+  uint8_t *pixels = nullptr;
+  atlas->GetTexDataAsRGBA32(&pixels, &width, &height, &out_bytes_per_pixel);
 
   auto imagedata =
       Ref<Image::ImageData>::Make(width, height, VK_FORMAT_R8G8B8A8_UNORM);
-  uint8_t *pixels = imagedata->GetDataPtr();
-  int out_bytes_per_pixel = 0;
-
-  font->OwnerAtlas->GetTexDataAsRGBA32(&pixels, &width, &height,
-                                       &out_bytes_per_pixel);
+  std::memcpy(imagedata->GetDataPtr(), pixels,
+              static_cast<long>(width * height) * out_bytes_per_pixel);
 
   LuaWrap::PushObject(state, Image::ImageData::GetType(), imagedata.get());
   imagedata->release();
@@ -958,15 +991,23 @@ auto GetFontAtlasAsRGBA32(lua_State *state) -> int {
 }
 
 auto GetFontAtlasAsAlpha8(lua_State *state) -> int {
-  auto *font = static_cast<ImFont *>(LuaWrap::PointerFromLua(state, 1));
-  int width = static_cast<int>(luaL_checkinteger(state, 3));
-  int height = static_cast<int>(luaL_checkinteger(state, 4));
+  auto *atlas = static_cast<ImFontAtlas *>(LuaWrap::PointerFromLua(state, 1));
+
+  if (atlas == nullptr) {
+    return luaL_error(state, "Invalid atlas pointer");
+  }
+
+  int width = 0;
+  int height = 0;
+
+  uint8_t *pixels = nullptr;
+
+  atlas->GetTexDataAsAlpha8(&pixels, &width, &height);
 
   auto imagedata =
       Ref<Image::ImageData>::Make(width, height, VK_FORMAT_R8_UNORM);
-  uint8_t *pixels = imagedata->GetDataPtr();
-
-  font->OwnerAtlas->GetTexDataAsAlpha8(&pixels, &width, &height);
+  std::memcpy(imagedata->GetDataPtr(), pixels,
+              static_cast<long>(width * height));
 
   LuaWrap::PushObject(state, Image::ImageData::GetType(), imagedata.get());
 
@@ -988,6 +1029,22 @@ auto GetTextureID(lua_State *state) -> int {
   auto textureIdAsPtr = reinterpret_cast<void *>(textureId); // NOLINT
   LuaWrap::PushPointer(state, textureIdAsPtr);
   return 1;
+}
+
+auto NewFrame(lua_State *state) -> int {
+  ImGui::NewFrame();
+  return 0;
+}
+
+auto GetDrawLists(lua_State *state) -> int {
+  auto *drawData = ImGui::GetDrawData();
+  LuaWrap::PushPointer(state, drawData);
+  return 1;
+}
+
+auto EndFrame(lua_State *state) -> int {
+  ImGui::EndFrame();
+  return 0;
 }
 
 // NOLINTEND(cppcoreguidelines-avoid-magic-numbers, readability-magic-numbers)

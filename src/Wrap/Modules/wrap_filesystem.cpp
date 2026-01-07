@@ -284,6 +284,17 @@ auto Wrap_ListFiles(lua_State *state) -> int {
   return 1;
 }
 
+// creates a directory at the given path
+auto Wrap_CreateDirectory(lua_State *state) -> int {
+  std::string path = luaL_checkstring(state, 1);
+  auto error = ::Filesystem::CreateDirectory(path);
+  if (Error::IsError(error)) {
+    return luaL_error(state, "Failed to create directory: %s",
+                      error.message.c_str());
+  }
+  return 0;
+}
+
 // returns: string save directory
 auto Wrap_GetSaveDirectory(lua_State *state) -> int {
   std::string saveDir = ::Filesystem::GetSaveDirectory();
