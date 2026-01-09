@@ -19,11 +19,14 @@ namespace Graphics {
 
 struct FrameUniformBufferObject {
 public:
-  explicit FrameUniformBufferObject(GraphicsContext &context)
-      : size(static_cast<uint32_t>(InitialUniformBufferSize)) {
+  static auto Create(GraphicsContext &context)
+      -> Result<FrameUniformBufferObject> {
+
+    FrameUniformBufferObject obj{};
+    obj.size = InitialUniformBufferSize;
 
     BufferCreationInfo info{};
-    info.size = size;
+    info.size = obj.size;
     info.PersistentMapping = true;
     info.IsStagingBuffer = true;
     info.properties =
@@ -32,13 +35,15 @@ public:
         static_cast<uint32_t>(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
     info.usage = static_cast<uint32_t>(VK_BUFFER_USAGE_TRANSFER_DST_BIT) |
                  static_cast<uint32_t>(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+
     auto result = Buffer::Create(context, info);
     if (Error::IsError(result)) {
-      PrintError("Failed to create frame uniform buffer object.");
-      return;
+      return result.error().AsUnexpected();
     }
 
-    buffer = result.value();
+    obj.buffer = result.value();
+
+    return obj;
   }
 
   void SetData(Graphics::GraphicsContext &context,
@@ -112,6 +117,18 @@ public:
     return resized;
   }
 
+  auto ScheduleDestroy() -> void {
+    if (buffer.get() != nullptr) {
+      buffer->ScheduleDestroy();
+    }
+  }
+
+  auto Destroy(GraphicsContext &context) -> void {
+    if (buffer.get() != nullptr) {
+      buffer->Destroy(context);
+    }
+  }
+
   [[nodiscard]] auto GetOffset() const -> uint32_t { return offset; }
   [[nodiscard]] auto GetSize() const -> uint32_t { return size; }
   [[nodiscard]] auto GetLastFlushSize() const -> uint32_t {
@@ -138,5 +155,6 @@ extern thread_local std::vector<std::vector<FrameUniformBufferObject>>
     ThreadUniformBuffers; // NOLINT
 auto InitializeUniformBufferModule(GraphicsContext &context) -> Error;
 auto GetGlobalUniformBuffer(uint32_t frameIndex) -> FrameUniformBufferObject &;
+auto DeInitializeUniformBufferModule(GraphicsContext &context) -> void;
 
 } // namespace Graphics

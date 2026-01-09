@@ -77,11 +77,6 @@ public:
       return Error::Create("Data exceeds buffer size");
     }
 
-    // PrintAlways(bufferInfo.ToString());
-
-    // PrintAlways("Setting push buffer data of key {} at offset {} size {}",
-    //             ResourceKeyToString(key), offset, values.size());
-
     // NOLINTNEXTLINE
     std::memcpy(data.data() + offset, values.data(), values.size());
 

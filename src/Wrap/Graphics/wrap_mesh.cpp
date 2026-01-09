@@ -591,6 +591,8 @@ auto wrap_NewMesh(lua_State *state) -> int {
   }
 
   LuaWrap::PushObject(state, Graphics::Mesh::GetType(), mesh.get());
+
+  // mesh->release();
   return 1;
 }
 

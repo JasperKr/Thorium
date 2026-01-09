@@ -165,7 +165,8 @@ auto Create2D(GraphicsContext &context, TextureCreationInfo info)
 }
 
 auto FromSwapchainTexture(GraphicsContext &context, VkImage swapchainImage,
-                          VkFormat format, uint32_t width, uint32_t height)
+                          VkImageView swapchainImageView, VkFormat format,
+                          uint32_t width, uint32_t height)
     -> Result<Ref<Texture>> {
 
   Ref<Texture> texture = Ref<Texture>::Make();
@@ -188,20 +189,7 @@ auto FromSwapchainTexture(GraphicsContext &context, VkImage swapchainImage,
   }
 
   texture->usage = surfaceCapabilities.supportedUsageFlags;
-
-  VkImageViewCreateInfo viewInfo = {};
-  viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-  viewInfo.image = texture->image;
-  viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-  viewInfo.format = format;
-  viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-  viewInfo.subresourceRange.baseMipLevel = 0;
-  viewInfo.subresourceRange.levelCount = 1;
-  viewInfo.subresourceRange.baseArrayLayer = 0;
-  viewInfo.subresourceRange.layerCount = 1;
-
-  error = Error::Create(
-      vkCreateImageView(context.device, &viewInfo, nullptr, &texture->view));
+  texture->view = swapchainImageView;
 
   if (Error::IsError(error)) {
     return error.AsUnexpected();
@@ -429,8 +417,6 @@ auto LoadFromFile(GraphicsContext &context, const char *path,
   }
 
   auto filedata = fileLoadResult.value();
-  PrintAlways("Loaded file " + std::string(path) + " of size " +
-              std::to_string(filedata.size()) + " bytes.");
   auto dataSpan =
       std::span<uint8_t>(filedata.data(), static_cast<size_t>(filedata.size()));
 
@@ -441,10 +427,6 @@ auto LoadFromFile(GraphicsContext &context, const char *path,
   }
 
   auto imageData = imageDataResult.value();
-
-  PrintAlways("Width: " + std::to_string(imageData->GetWidth()) + " Height: " +
-              std::to_string(imageData->GetHeight()) + " Format: " +
-              Format::ImageFormatToString(imageData->GetFormat()));
 
   auto texture = Create2D(
       context, TextureCreationInfo{

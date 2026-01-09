@@ -259,7 +259,7 @@ auto wrap_NewBytedata(lua_State *state) -> int {
   auto bytedata = Ref<Data::ByteData>::Make(size);
 
   LuaWrap::PushObject(state, Data::ByteData::GetType(), bytedata.get());
-  bytedata->release(); // Release C++ reference, Lua now owns it
+  // bytedata->release(); // Release C++ reference, Lua now owns it
 
   return 1;
 }

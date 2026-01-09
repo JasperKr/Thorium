@@ -3,6 +3,7 @@
 #include "Graphics/buffer.hpp"
 #include "Graphics/bufferformat.hpp"
 #include "Graphics/graphics.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "tl/expected.hpp"

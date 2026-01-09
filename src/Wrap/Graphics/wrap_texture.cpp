@@ -554,9 +554,6 @@ struct LuaOptions {
         return Error::Unexpected("Texture usage cannot be none.");
       }
 
-      PrintAlways("Setting texture usage to {}",
-                  static_cast<uint8_t>(newUsage));
-
       options.usage = newUsage;
     }
 
@@ -801,10 +798,8 @@ auto wrap_NewTexture(lua_State *state) -> int {
 
   if (args == 1) {
     if (LuaWrap::IsType<Image::ImageData>(state, 1)) {
-      PrintAlways("Creating texture from imagedata");
       result = TextureFromImagedata(state);
     } else if (lua_type(state, 1) == LUA_TSTRING) { // Filepath
-      PrintAlways("Creating texture from filepath");
       result = TextureFromFilepath(state);
     } else {
       return luaL_error(state, "Invalid argument to newTexture");
@@ -812,25 +807,18 @@ auto wrap_NewTexture(lua_State *state) -> int {
   } else if (args == 2) {
     // Width, Height or ImageData array + Options or Filepath + Options or ImageData + Options
     if (LuaWrap::IsType<Image::ImageData>(state, 1)) {
-      PrintAlways("Creating texture from imagedata and options");
       result = TextureFromImagedataAndOptions(state);
     } else if (lua_type(state, 1) == LUA_TSTRING) { // Filepath + Options
-      PrintAlways("Creating texture from filepath and options");
       result = TextureFromFilepathAndOptions(state);
     } else if (lua_istable(state, 1) != 0 &&
                lua_istable(state, 2) != 0) { // ImageData array + Options
-      PrintAlways("Creating texture from imagedata array and options");
       result = TextureFromImagedataArrayAndOptions(state);
     } else { // Width, Height
-      PrintAlways("Creating texture from width and height");
       result = TextureFromWidthAndHeight(state);
     }
   } else if (args == 3) { // width, height, Options
-    PrintAlways("Creating texture from width, height and options");
     result = TextureFromWidthHeightAndOptions(state);
   } else if (args == 4) { // width, height, depth|layers, Options
-    PrintAlways(
-        "Creating texture from width, height, depth/layers and options");
     result = TextureFromWidthHeightDepthOrLayersAndOptions(state);
   } else {
     return luaL_error(state, "Invalid arguments to newTexture");
@@ -843,7 +831,7 @@ auto wrap_NewTexture(lua_State *state) -> int {
   auto texture = result.value();
 
   LuaWrap::PushObject(state, type, texture.get());
-  texture->release(); // Retained by lua now
+  // texture->release(); // Retained by lua now
 
   return 1;
 }

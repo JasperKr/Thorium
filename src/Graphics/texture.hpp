@@ -171,7 +171,8 @@ struct TextureCreationInfo {
 auto Create2D(GraphicsContext &context, TextureCreationInfo info)
     -> Result<Ref<Texture>>;
 auto FromSwapchainTexture(GraphicsContext &context, VkImage swapchainImage,
-                          VkFormat format, uint32_t width, uint32_t height)
+                          VkImageView swapchainImageView, VkFormat format,
+                          uint32_t width, uint32_t height)
     -> Result<Ref<Texture>>;
 auto CreateCubeMap(GraphicsContext &context, TextureCreationInfo info)
     -> Result<Ref<Texture>>;

@@ -41,6 +41,13 @@ auto InitializeGlobalTimelineSemaphore(GraphicsContext &context) -> Error {
   return Error::Success();
 }
 
+auto DeInitializeGlobalTimelineSemaphore(GraphicsContext &context) -> void {
+  if (globalTimelineSemaphore != VK_NULL_HANDLE) {
+    vkDestroySemaphore(context.device, globalTimelineSemaphore, nullptr);
+    globalTimelineSemaphore = VK_NULL_HANDLE;
+  }
+}
+
 auto GetGlobalTimelineSemaphore(GraphicsContext &context) -> VkSemaphore {
   return globalTimelineSemaphore;
 }

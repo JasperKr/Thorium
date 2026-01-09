@@ -128,10 +128,7 @@ auto SetNextItemOpen(lua_State *state) -> int;
 auto GetIO(lua_State *state) -> int;
 auto GetPlatformIO(lua_State *state) -> int;
 auto GetStyle(lua_State *state) -> int;
-auto GetFontAtlasAsRGBA32(lua_State *state) -> int;
-auto GetFontAtlasAsAlpha8(lua_State *state) -> int;
 auto GetDrawData(lua_State *state) -> int;
-auto GetTextureID(lua_State *state) -> int;
 auto GetFont(lua_State *state) -> int;
 auto GetFontAtlas(lua_State *state) -> int;
 
@@ -238,10 +235,7 @@ static const luaL_Reg ImGuiLib[] = {
     {"getIO", GetIO},
     {"getPlatformIO", GetPlatformIO},
     {"getStyle", GetStyle},
-    {"getFontAtlasAsRGBA32", GetFontAtlasAsRGBA32},
-    {"getFontAtlasAsAlpha8", GetFontAtlasAsAlpha8},
     {"getDrawData", GetDrawData},
-    {"getTextureID", GetTextureID},
     {"getFont", GetFont},
     {"getFontAtlas", GetFontAtlas},
     {"newFrame", NewFrame},

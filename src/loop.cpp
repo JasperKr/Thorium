@@ -312,11 +312,12 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
       int exitCode = static_cast<int>(lua_tointeger(state, -1));
       lua_pop(state, 1); // pop exit code
       PrintInfo("Exiting main loop with code " + std::to_string(exitCode));
-      lua_close(state);
       Event::ExitCode = exitCode;
       Event::MainLoopRunning = false;
     }
   }
+
+  lua_close(state);
 
   vkDeviceWaitIdle(context.device);
 
@@ -324,10 +325,17 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
   if (Error::IsError(result)) {
     return result;
   }
+
+  Graphics::DeInitializeUniformBufferModule(context);
+
   result = Graphics::UnloadBufferModule(context);
   if (Error::IsError(result)) {
     return result;
   }
+
+  DeInitializeGlobalTimelineSemaphore(context);
+
+  Graphics::Shader::UnloadModule(context);
 
   Graphics::Deinitialize(context);
   Graphics::RenderTarget::Destroy(context);

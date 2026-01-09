@@ -59,7 +59,7 @@ auto Wrap_Read(lua_State *state) -> int {
 
     LuaWrap::PushObject(state, Data::ByteData::GetType(), bytedata.get());
 
-    bytedata->release(); // Lua now owns the reference
+    // bytedata->release(); // Lua now owns the reference
 
     return 1;
   }

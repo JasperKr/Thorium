@@ -55,6 +55,22 @@ inline auto ProxyFromLua(lua_State *state, int index) -> Proxy * {
 
   // NOLINTNEXTLINE
   auto *proxy = static_cast<Proxy *>(lua_touserdata(state, index));
+
+  if (proxy == nullptr) {
+    PrintWarning("ProxyFromLua: proxy is null at index {}", index);
+    return nullptr;
+  }
+
+  if (proxy->object == nullptr) {
+    PrintWarning("ProxyFromLua: proxy invalid object at index {}", index);
+    return nullptr;
+  }
+
+  if (proxy->type == nullptr) {
+    PrintWarning("ProxyFromLua: proxy invalid type at index {}", index);
+    return nullptr;
+  }
+
   return proxy;
 }
 
@@ -101,7 +117,18 @@ inline auto PushPointer(lua_State *state, void *pointer) -> void {
 inline auto LuaType(lua_State *state, int index) -> Type const * {
   // NOLINTNEXTLINE
   auto *proxy = static_cast<Proxy *>(lua_touserdata(state, index));
-  if (proxy == nullptr || proxy->object == nullptr) {
+  if (proxy == nullptr) {
+    PrintWarning("LuaType: proxy is null at index {}", index);
+    return nullptr;
+  }
+
+  if (proxy->type == nullptr) {
+    PrintWarning("LuaType: proxy type is null at index {}", index);
+    return nullptr;
+  }
+
+  if (proxy->object == nullptr) {
+    PrintWarning("LuaType: proxy object is null at index {}", index);
     return nullptr;
   }
 

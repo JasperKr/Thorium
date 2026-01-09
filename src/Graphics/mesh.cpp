@@ -1,6 +1,7 @@
 #include "mesh.hpp"
 #include <sys/types.h>
 
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "buffer.hpp"

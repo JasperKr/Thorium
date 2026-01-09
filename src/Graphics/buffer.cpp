@@ -22,6 +22,8 @@ struct StagingBufferInfo {
   uint64_t timelineValue;
 };
 
+static int BUFFER_COUNTER = 0;
+
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
 
 inline std::array<Ref<Buffer>, FRAMES_IN_FLIGHT> UploadBuffers;
@@ -510,6 +512,7 @@ auto Buffer::Destroy(GraphicsContext &context) const -> void {
   if (persistentMapping && mappedData != nullptr) {
     vmaUnmapMemory(context.vmaAllocator, memory);
   }
+
   vmaDestroyBuffer(context.vmaAllocator, handle, memory);
 }
 

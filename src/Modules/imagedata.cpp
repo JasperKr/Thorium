@@ -404,15 +404,9 @@ auto ImageData::Create(const std::span<uint8_t> &data)
   // check for LDR formats, supported by default stbi_load
   if (stbi_is_hdr_from_memory(data.data(), static_cast<int>(data.size())) ==
       0) {
-    PrintAlways("Loading LDR image format.");
-
     stbi_uc *pixels = stbi_load_from_memory(
         data.data(), static_cast<int>(data.size()), &texWidth, &texHeight,
         &texChannels, STBI_rgb_alpha);
-
-    PrintAlways("Image loaded: " + std::to_string(texWidth) + "x" +
-                std::to_string(texHeight) + " with " +
-                std::to_string(texChannels) + " channels.");
 
     if (pixels == nullptr) {
       return Error::Unexpected("Failed to load image.");
@@ -421,26 +415,6 @@ auto ImageData::Create(const std::span<uint8_t> &data)
     auto span =
         std::span<uint8_t>(pixels, static_cast<size_t>(texWidth) *
                                        static_cast<size_t>(texHeight) * 4);
-    // std::vector<uint8_t> convertedData{};
-
-    // if (texChannels == 3) {
-    //   // Convert RGB to RGBA by adding an alpha channel
-    //   convertedData.resize(static_cast<size_t>(texWidth) *
-    //                        static_cast<size_t>(texHeight) * 4);
-    //   for (size_t i = 0;
-    //        i < static_cast<size_t>(texWidth) * static_cast<size_t>(texHeight);
-    //        ++i) {
-    //     convertedData[(i * 4) + 0] = span[(i * 3) + 0]; // R
-    //     convertedData[(i * 4) + 1] = span[(i * 3) + 1]; // G
-    //     convertedData[(i * 4) + 2] = span[(i * 3) + 2]; // B
-    //     convertedData[(i * 4) + 3] = 255;               // A
-    //   }
-
-    //   PrintAlways("Converted RGB image to RGBA format.");
-
-    //   span = std::span<uint8_t>(convertedData.data(), convertedData.size());
-    //   texChannels = 4;
-    // }
 
     auto imageData = Image::ImageData::Create(texWidth, texHeight, span,
                                               VK_FORMAT_R8G8B8A8_UNORM);

@@ -193,7 +193,7 @@ auto Wrap_GetHardwareCursor(lua_State *state) -> int {
   LuaWrap::PushObject(state, ::Mouse::MouseCursor::GetType(),
                       mouseCursor.get());
 
-  mouseCursor->release();
+  // mouseCursor->release();
 
   return 1;
 }
@@ -239,7 +239,7 @@ auto Wrap_NewCursor(lua_State *state) -> int {
   LuaWrap::PushObject(state, ::Mouse::MouseCursor::GetType(),
                       mouseCursor.get());
 
-  mouseCursor->release();
+  // mouseCursor->release();
 
   return 1;
 }

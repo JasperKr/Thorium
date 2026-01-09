@@ -736,7 +736,8 @@ auto Load(GraphicsContext &context) -> Error {
 
   for (uint32_t i = 0; i < context.swapchainInfo.imageCount; i++) {
     auto textureResult = Graphics::Texture::FromSwapchainTexture(
-        context, context.swapchainInfo.images[i], context.swapchainInfo.format,
+        context, context.swapchainInfo.images[i],
+        context.swapchainInfo.imageViews[i], context.swapchainInfo.format,
         context.swapchainInfo.extent.width,
         context.swapchainInfo.extent.height);
 

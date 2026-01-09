@@ -46,7 +46,7 @@ public:
     }
   }
   auto operator=(const Ref &reference) -> Ref & {
-    if (this != &reference) {
+    if (this != &reference && ptr != reference.ptr) {
       if (ptr != nullptr) {
         ptr->release();
       }
@@ -63,7 +63,7 @@ public:
     reference.ptr = nullptr;
   }
   auto operator=(Ref &&reference) noexcept -> Ref & {
-    if (this != &reference) {
+    if (this != &reference && ptr != reference.ptr) {
       if (ptr != nullptr) {
         ptr->release();
       }
@@ -76,6 +76,7 @@ public:
   ~Ref() {
     if (ptr != nullptr) {
       ptr->release();
+      ptr = nullptr;
     }
   }
 

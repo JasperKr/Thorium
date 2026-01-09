@@ -179,7 +179,7 @@ struct ShaderModule : Object {
 extern Ref<ShaderModule> DefaultShaderModule; // NOLINT
 
 auto LoadModule() -> Error;
-void UnloadModule();
+void UnloadModule(GraphicsContext &context);
 
 auto AddGlobalShaderExtern(const ShaderExtern &externVar) -> void;
 

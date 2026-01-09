@@ -224,6 +224,20 @@ inline void PrintInfo(std::string_view format, Args &&...args) {
   }
 }
 
+inline void PrintLibrary(const std::string &message) {
+  if (LogLevel::Info >= CurrentLogLevel) {
+    std::cout << ColorText("[LIBRARY] ", ConsoleColor::Blue) << message << '\n';
+  }
+}
+
+template <typename... Args> // NOLINTNEXTLINE args forwarding
+inline void PrintLibrary(std::string_view format, Args &&...args) {
+  if (LogLevel::Info >= CurrentLogLevel) {
+    std::cout << ColorText("[LIBRARY] ", ConsoleColor::Blue)
+              << std::vformat(format, std::make_format_args(args...)) << '\n';
+  }
+}
+
 inline void PrintWarning(const std::string &message) {
   if (LogLevel::Warning >= CurrentLogLevel) {
     std::cout << ColorText("[WARNING] ", ConsoleColor::Yellow) << message

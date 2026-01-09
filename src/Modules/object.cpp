@@ -1,4 +1,6 @@
 #include "object.hpp"
+#include "Modules/console.hpp"
+#include "Modules/timer.hpp"
 
 Object::~Object() = default;
 auto Object::getReferenceCount() const -> int { return count.load(); }

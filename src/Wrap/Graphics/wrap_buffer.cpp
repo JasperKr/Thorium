@@ -177,7 +177,6 @@ auto wrap_SetData(lua_State *state) -> int {
     // table of numbers
     size_t tableSize = lua_objlen(state, 2);
     data.resize(tableSize * sizeof(float));
-    PrintAlways("Setting buffer data from table of size {}", tableSize);
     for (int i = 0; i < tableSize; ++i) {
       lua_rawgeti(state, 2, i + 1);
       auto value = luaL_checknumber(state, -1);
@@ -316,8 +315,6 @@ auto wrap_NewBuffer(lua_State *state) -> int {
   auto format = BufferFormatFromLua(state, 1);
   auto elementCount = static_cast<size_t>(luaL_checkinteger(state, 2));
 
-  PrintAlways("Creating StructuredBuffer with element count: {}", elementCount);
-
   VkMemoryPropertyFlags memoryFlags = 0;
   VkBufferUsageFlags usageFlags = 0;
 
@@ -381,7 +378,7 @@ auto wrap_NewBuffer(lua_State *state) -> int {
                       Graphics::StructuredBuffer::StructuredBuffer::GetType(),
                       buffer.get());
 
-  buffer->release(); // Lua now owns the reference
+  // buffer->release(); // Lua now owns the reference
 
   return 1;
 }

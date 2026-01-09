@@ -117,6 +117,7 @@ auto GetCurrentGraphicsContext() -> GraphicsContext *;
 auto GetCurrentTimelineSemaphoreValue(GraphicsContext &context)
     -> Result<uint64_t>;
 auto InitializeGlobalTimelineSemaphore(GraphicsContext &context) -> Error;
+auto DeInitializeGlobalTimelineSemaphore(GraphicsContext &context) -> void;
 auto GetCPUTimelineSemaphoreValue(GraphicsContext &context) -> uint64_t &;
 auto GetGlobalTimelineSemaphore(GraphicsContext &context) -> VkSemaphore;
 

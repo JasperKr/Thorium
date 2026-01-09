@@ -22,8 +22,17 @@ extern "C" {
 namespace LuaWrap {
 
 static auto wrap_gc(lua_State *state) -> int {
+  // Get lua traceback from debug library
+
+  PrintAlways("Garbage collecting object");
   Proxy *proxy = ProxyFromLua(state, 1);
-  if (proxy->object != nullptr) {
+
+  if (proxy != nullptr) {
+    if (proxy->type == nullptr) { // Collecting module.
+      return 0;
+    }
+
+    PrintAlways("Type: {}", proxy->type->GetName().c_str());
     proxy->object->release();
     proxy->object = nullptr;
   }
@@ -33,12 +42,19 @@ static auto wrap_gc(lua_State *state) -> int {
 // NOLINTNEXTLINE
 static auto wrap_tostring(lua_State *state) -> int {
   Proxy *proxy = ProxyFromLua(state, 1);
+
+  if (proxy == nullptr) {
+    lua_pushnil(state);
+    return 1;
+  }
+
   lua_pushfstring(state, "%s: %p", proxy->type->GetName().c_str(),
                   static_cast<void *>(proxy->object));
   return 1;
 }
 
 static auto wrap_type(lua_State *state) -> int {
+  PrintAlways("Getting type of object");
   Proxy *proxy = ProxyFromLua(state, 1);
 
   if (proxy == nullptr) {
@@ -51,7 +67,14 @@ static auto wrap_type(lua_State *state) -> int {
 }
 
 static auto wrap_typeof(lua_State *state) -> int {
+  PrintAlways("Checking type of object");
   Proxy *proxy = ProxyFromLua(state, 1);
+
+  if (proxy == nullptr) {
+    lua_pushnil(state);
+    return 1;
+  }
+
   const auto *typeName = luaL_checkstring(state, 2);
   bool sameType = (proxy->type->GetName() == typeName);
   lua_pushboolean(state, sameType ? 1 : 0);
@@ -59,15 +82,29 @@ static auto wrap_typeof(lua_State *state) -> int {
 }
 
 static auto wrap_eq(lua_State *state) -> int {
+  PrintAlways("Checking equality of objects");
   Proxy *proxyA = ProxyFromLua(state, 1);
   Proxy *proxyB = ProxyFromLua(state, 2);
+
+  if (proxyA == nullptr || proxyB == nullptr) {
+    lua_pushboolean(state, 0);
+    return 1;
+  }
+
   bool isEqual = (proxyA->object == proxyB->object);
   lua_pushboolean(state, isEqual ? 1 : 0);
   return 1;
 }
 
 static auto wrap_release(lua_State *state) -> int {
+  PrintAlways("Releasing object");
   Proxy *proxy = ProxyFromLua(state, 1);
+
+  if (proxy == nullptr) {
+    lua_pushboolean(state, 0);
+    return 1;
+  }
+
   Object *object = proxy->object;
 
   if (object != nullptr) {
@@ -139,7 +176,7 @@ auto RegisterLuaModule(lua_State *state, const LuaModule &module) -> void {
 
   // Create userdata for the module NOLINTNEXTLINE
   auto *proxy = (Proxy *)lua_newuserdata(state, sizeof(Proxy));
-  proxy->type = module.ModuleType;
+  proxy->type = nullptr;
   // proxy->object = m.module; // TODO: idk...
 
   const auto *name = module.Name.c_str();
@@ -261,6 +298,11 @@ auto SetupLuaType(lua_State *state, const Type *type, Object *object) -> void {
   auto *proxy = (Proxy *)lua_newuserdata(state, sizeof(Proxy)); // [userdata]
   proxy->type = type;
   proxy->object = object;
+
+  if (type == nullptr) {
+    PrintError("SetupLuaType: type is null");
+    return;
+  }
 
   object->retain();
 

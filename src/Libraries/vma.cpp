@@ -1,12 +1,9 @@
 #include "../Modules/console.hpp"
 
-template <typename... Args> // NOLINTNEXTLINE args forwarding
-inline void PrintLibrary(std::string_view format, Args &&...args) {
-  if (CurrentLogLevel <= LogLevel::Debug) {
-    std::cout << ColorText("[LIBRARY] ", ConsoleColor::Blue)
-              << std::vformat(format, std::make_format_args(args...)) << '\n';
-  }
-}
+#include <cstddef>
+#include <cstdint>
+#include <iostream>
+#include <string>
 
 #define VMA_DEBUG_LOG(format, ...) PrintLibrary(format, ##__VA_ARGS__)
 #define VMA_VULKAN_VERSION 1004000
@@ -14,5 +11,20 @@ inline void PrintLibrary(std::string_view format, Args &&...args) {
 #define VMA_ASSERT(expr) assert(expr)
 #define VMA_IMPORT_FUNCTIONS_FROM_VOLK 1
 #define VMA_DYNAMIC_VULKAN_FUNCTIONS 0
+
+// Define macro VMA_DEBUG_LOG_FORMAT or more specialized VMA_LEAK_LOG_FORMAT
+// to receive the list of the unfreed allocations.
+
+// #ifndef NDEBUG
+// formatted with %s etc, we cannot PrintLibrary directly since it uses std::format
+// We must first format the string ourselves
+#define VMA_DEBUG_LOG_FORMAT(format, ...)                                      \
+  do {                                                                         \
+    char buf[256];                                                             \
+    std::snprintf(buf, sizeof(buf), format, __VA_ARGS__);                      \
+    PrintLibrary(std::string("VMA: ") + buf);                                  \
+  } while (0)
+// #endif
+
 #include "volk/volk.h"
 #include <vma/vk_mem_alloc.h>

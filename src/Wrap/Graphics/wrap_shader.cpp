@@ -46,7 +46,7 @@ auto wrap_NewShader(lua_State *state) -> int {
   }
 
   LuaWrap::PushObject(state, type, result.value().get());
-  result.value()->release(); // Retained by lua now
+  // result.value()->release(); // Retained by lua now
 
   return 1;
 }

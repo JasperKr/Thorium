@@ -1338,8 +1338,8 @@ auto inline AllocateResourceMemory(GraphicsContext &context, RenderGraph &graph,
     viewInfo.subresourceRange.baseArrayLayer = 0;
     viewInfo.subresourceRange.layerCount = texture->arrayLayers;
 
-    result = Error::Create(
-        vkCreateImageView(context.device, &viewInfo, nullptr, &texture->view));
+    result = Error::Create(vkCreateImageView(context.device, &viewInfo, nullptr,
+                                             &(texture->view)));
 
     if (Error::IsError(result)) {
       return result;

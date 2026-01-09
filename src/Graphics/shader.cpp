@@ -83,6 +83,15 @@ auto LoadModule() -> Error {
   return Error::Success();
 }
 
+void UnloadModule(Graphics::GraphicsContext &context) {
+  DefaultShaderModule->Destroy(context.device);
+
+  if (GlobalSlangSession != nullptr) {
+    GlobalSlangSession->release();
+    GlobalSlangSession = nullptr;
+  }
+}
+
 static inline auto GetGlobalShaderExterns() -> std::vector<ShaderExtern> & {
   static std::vector<ShaderExtern> GlobalShaderExterns = {};
   return GlobalShaderExterns;
@@ -386,11 +395,6 @@ static inline auto LoadSlang(GraphicsContext &context,
     entrypointReflection->getComputeThreadGroupSize(3,
                                                     out_workgroupSize.data());
     entrypointReflection->getComputeWaveSize(&out_waveSize);
-
-    PrintAlways("Compute shader threadgroup size: ({}, {}, {})",
-                out_workgroupSize[0], out_workgroupSize[1],
-                out_workgroupSize[2]);
-    PrintAlways("Compute shader wave size: {}", out_waveSize);
 
     shader->threadgroupSize =
         Math::Uvec3{static_cast<uint32_t>(out_workgroupSize[0]),

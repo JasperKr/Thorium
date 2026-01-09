@@ -12,11 +12,27 @@ auto InitializeUniformBufferModule(GraphicsContext &context) -> Error {
   for (uint32_t i = 0; i < context.renderThreadCount; i++) {
     ThreadUniformBuffers.emplace_back();
     for (uint32_t j = 0; j < FRAMES_IN_FLIGHT; j++) {
-      ThreadUniformBuffers[i].emplace_back(context);
+      auto createResult = FrameUniformBufferObject::Create(context);
+
+      if (Error::IsError(createResult)) {
+        return createResult.error();
+      }
+
+      ThreadUniformBuffers[i].emplace_back(createResult.value());
     }
   }
 
   return Error::Success();
+}
+
+auto DeInitializeUniformBufferModule(GraphicsContext &context) -> void {
+  for (auto &threadBuffers : ThreadUniformBuffers) {
+    for (auto &bufferObj : threadBuffers) {
+      bufferObj.Destroy(context);
+    }
+    threadBuffers.clear();
+  }
+  ThreadUniformBuffers.clear();
 }
 
 auto GetGlobalUniformBuffer(uint32_t frameIndex) -> FrameUniformBufferObject & {
