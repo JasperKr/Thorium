@@ -72,6 +72,10 @@ public:
 
   [[nodiscard]] auto Clone() const -> ByteData { return *this; }
 
+  [[nodiscard]] auto GetInstanceType() const -> Type const * override {
+    return ByteData::GetType();
+  }
+
 private:
   size_t size = 0;
   uint8_t *data = nullptr;

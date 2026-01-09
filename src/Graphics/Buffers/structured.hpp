@@ -73,6 +73,9 @@ struct StructuredBuffer : Object {
   auto ScheduleDestroy() -> void override { buffer->ScheduleDestroy(); }
 
   static auto GetType() -> Type const * { return &type; }
+  [[nodiscard]] auto GetInstanceType() const -> Type const * override {
+    return StructuredBuffer::GetType();
+  }
 
   [[nodiscard]] auto GetSize() const -> size_t {
     return elementCount * elementStride;

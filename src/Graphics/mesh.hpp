@@ -58,6 +58,10 @@ struct Mesh : Object {
 
   static auto GetType() -> Type const * { return &meshType; }
 
+  [[nodiscard]] auto GetInstanceType() const -> Type const * override {
+    return Mesh::GetType();
+  }
+
 private:
   auto UploadVertices(GraphicsContext &context,
                       const std::span<uint8_t> &vertices, uint64_t offset)

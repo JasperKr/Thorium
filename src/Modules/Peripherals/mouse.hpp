@@ -31,6 +31,10 @@ struct MouseCursor : Object {
   }
 
   [[nodiscard]] static auto GetType() -> Type const * { return &type; }
+
+  [[nodiscard]] auto GetInstanceType() const -> Type const * override {
+    return MouseCursor::GetType();
+  }
 };
 
 } // namespace Mouse

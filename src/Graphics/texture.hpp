@@ -153,6 +153,10 @@ struct Texture : Object {
           VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
       VkAccessFlags2 srcAccessMask = VK_ACCESS_NONE, // NOLINT
       VkAccessFlags2 dstAccessMask = VK_ACCESS_NONE) -> Error;
+
+  [[nodiscard]] auto GetInstanceType() const -> Type const * override {
+    return Texture::GetType();
+  }
 };
 
 struct TextureCreationInfo {

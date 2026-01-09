@@ -321,6 +321,47 @@ auto PushObject(lua_State *state, const Type *type, Object *object) -> void {
   lua_remove(state, -2); // Remove storage table [userdata]
 }
 
+auto PushObject(lua_State *state, Object *object) -> void {
+  if (object == nullptr) {
+    lua_pushnil(state);
+    return;
+  }
+
+  // fetch permanent object storage table
+  LoadStorageTable(state, "ThoriumObjectStorage"); // [storage]
+
+  if (lua_isnoneornil(state, -1)) {
+    // No storage table
+
+    lua_pop(state, 1); // Remove nil [empty]
+
+    SetupLuaType(state, object->GetInstanceType(), object); // [userdata]
+    return;
+  }
+
+  // Check if object already has a userdata
+  auto key = (uintptr_t)(object);            // NOLINT
+  lua_pushlightuserdata(state, (void *)key); // [storage, key] NOLINT
+  lua_gettable(state, -2);                   // [storage, value]
+
+  if (lua_type(state, -1) != LUA_TUSERDATA) {
+    // No existing userdata
+    lua_pop(state, 1); // Remove nil [storage]
+
+    // Create new userdata
+    SetupLuaType(state, object->GetInstanceType(),
+                 object); // [storage, userdata]
+
+    // Store in storage table
+    lua_pushlightuserdata(state,
+                          (void *)key); // [storage, userdata, key] NOLINT
+    lua_pushvalue(state, -2);           // [storage, userdata, key, userdata]
+    lua_settable(state, -4); // storage[key] = userdata [storage, userdata]
+  }
+
+  lua_remove(state, -2); // Remove storage table [userdata]
+}
+
 // NOLINTNEXTLINE
 static const luaL_Reg ThoriumModules[] = {
     {"graphics", Graphics::luaopen_graphics},

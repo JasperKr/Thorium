@@ -58,6 +58,10 @@ struct RenderTarget : Object {
   }
 
   static auto GetType() -> Type const * { return &type; }
+
+  [[nodiscard]] auto GetInstanceType() const -> Type const * override {
+    return RenderTarget::GetType();
+  }
 };
 
 struct SetBindingEntry {

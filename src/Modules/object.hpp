@@ -19,6 +19,7 @@ public:
   [[nodiscard]] virtual auto UseDeferredDestruction() const -> bool {
     return false;
   }
+  [[nodiscard]] virtual auto GetInstanceType() const -> Type const * = 0;
 
   void retain();
   void release();
@@ -88,6 +89,9 @@ public:
   }
 
   [[nodiscard]] static auto GetType() -> Type const * { return T::GetType(); }
+  [[nodiscard]] auto GetInstanceType() const -> Type const * {
+    return T::GetType();
+  }
 
 private:
   T *ptr = nullptr;

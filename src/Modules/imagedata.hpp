@@ -61,6 +61,10 @@ public:
 
   static auto GetType() -> Type const * { return &type; }
 
+  [[nodiscard]] auto GetInstanceType() const -> Type const * override {
+    return ImageData::GetType();
+  }
+
 private:
   uint32_t width;
   uint32_t height;

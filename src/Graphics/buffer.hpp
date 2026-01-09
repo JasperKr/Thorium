@@ -97,6 +97,10 @@ struct Buffer : Object {
 
   static auto GetType() -> Type const * { return &bufferType; }
 
+  [[nodiscard]] auto GetInstanceType() const -> Type const * override {
+    return Buffer::GetType();
+  }
+
   // Range: [min, max]
   auto SynchroniseRead(GraphicsContext &context,
                        VkAccessFlags2 dstAccess = VK_ACCESS_2_TRANSFER_READ_BIT,

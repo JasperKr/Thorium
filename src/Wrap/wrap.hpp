@@ -94,44 +94,8 @@ inline auto ObjectFromLua(lua_State *state, int index) -> T * {
   return obj;
 }
 
-inline auto PointerFromLua(lua_State *state, int index) -> void * {
-  // Check if userdata
-  if (lua_isuserdata(state, index) == 0) {
-    return nullptr;
-  }
-
-  // NOLINTNEXTLINE
-  auto **userdata = static_cast<void **>(lua_touserdata(state, index));
-  if (userdata == nullptr) {
-    return nullptr;
-  }
-
-  return *userdata;
-}
-
 inline auto PushPointer(lua_State *state, void *pointer) -> void {
-  // // NOLINTNEXTLINE
-  auto **userdata =
-      static_cast<void **>(lua_newuserdata(state, sizeof(void *)));
-  *userdata = pointer;
-
-  // lua_pushlightuserdata(state, pointer);
-}
-
-template <typename T>
-inline auto FromPointer(lua_State *state, int index) -> T * {
-  // Check if userdata
-  if (lua_isuserdata(state, index) == 0) {
-    return nullptr;
-  }
-
-  // NOLINTNEXTLINE
-  auto **userdata = static_cast<T **>(lua_touserdata(state, index));
-  if (userdata == nullptr) {
-    return nullptr;
-  }
-
-  return *userdata;
+  lua_pushlightuserdata(state, pointer);
 }
 
 inline auto LuaType(lua_State *state, int index) -> Type const * {

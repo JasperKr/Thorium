@@ -170,6 +170,10 @@ struct ShaderModule : Object {
   auto hash() const -> size_t;
 
   static auto GetType() -> Type const * { return &type; }
+
+  [[nodiscard]] auto GetInstanceType() const -> Type const * override {
+    return ShaderModule::GetType();
+  }
 };
 
 extern Ref<ShaderModule> DefaultShaderModule; // NOLINT
