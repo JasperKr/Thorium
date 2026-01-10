@@ -76,12 +76,7 @@ function ImguiWrapper.BuildFontAtlas(format)
 end
 
 function ImguiWrapper.Update(dt)
-  io.DisplaySize.x, io.DisplaySize.y = Thorium.graphics.getDimensions()
-  io.DeltaTime = dt
 
-  if io.WantSetMousePos then
-    Thorium.mouse.setPosition(io.MousePos.x, io.MousePos.y)
-  end
 end
 
 local cursors = {
@@ -95,122 +90,6 @@ local cursors = {
   [ffi.C.ImGuiMouseCursor_Hand] = Thorium.mouse.getHardwareCursor("pointer"),
   [ffi.C.ImGuiMouseCursor_NotAllowed] = Thorium.mouse.getHardwareCursor("notallowed"),
 }
-
-local cmdBuffers = {}
-local ptrSize = ffi.sizeof("void*")
-
-function ImguiWrapper.RenderDrawLists()
-  -- Avoid rendering when minimized
-  if io.DisplaySize.x == 0 or io.DisplaySize.y == 0 or not Thorium.window.isVisible() then return end
-  -- Rhodium.profiler.push("Cursor Set")
-
-  Thorium.graphics.push("all")
-
-  Thorium.graphics.setBlendMode("alpha", "alphamultiply")
-
-  common.RunShortcuts()
-  local data = Thorium.gui.getDrawData()
-
-  -- change mouse cursor
-  if bit.band(io.ConfigFlags, ffi.C.ImGuiConfigFlags_NoMouseCursorChange) ~= ffi.C.ImGuiConfigFlags_NoMouseCursorChange then
-    local cursor = cursors[Thorium.gui.igGetMouseCursor()]
-    if io.MouseDrawCursor or not cursor then
-      Thorium.mouse.setVisible(false) -- Hide OS mouse cursor if ImGui is drawing it
-    else
-      Thorium.mouse.setVisible(true)
-      Thorium.mouse.setCursor(cursor)
-    end
-  end
-
-  -- Rhodium.profiler.pop("Cursor Set")
-  -- Rhodium.profiler.push("perpare mesh")
-  for i = 0, data.CmdListsCount - 1 do
-    local cmd_list = data.CmdLists.Data[i]
-
-    local cmdBuffer = cmdBuffers[i + 1]
-
-    if not cmdBuffer then
-      cmdBuffer = {
-        max_vertexcount = -math.huge,
-        max_indexcount = -math.huge,
-      }
-
-      cmdBuffers[i + 1] = cmdBuffer
-    end
-
-    cmdBuffer.cmd_list = cmd_list
-
-    local vertexcount = cmd_list.VtxBuffer.Size
-    local data_size = vertexcount * ffi.sizeof("ImDrawVert")
-    if vertexcount > cmdBuffer.max_vertexcount then
-      cmdBuffer.max_vertexcount = vertexcount
-      if cmdBuffer.mesh then cmdBuffer.mesh:release() end
-      if cmdBuffer.meshdata then cmdBuffer.meshdata:release() end
-      cmdBuffer.meshdata = Thorium.data.newByteData(math.max(data_size, ffi.sizeof("ImDrawVert")))
-      cmdBuffer.meshdata_ptr = cmdBuffer.meshdata:getFFIPointer()
-      ffi.copy(cmdBuffer.meshdata_ptr, cmd_list.VtxBuffer.Data, data_size)
-      cmdBuffer.mesh = Thorium.graphics.newMesh(vertexformat, cmdBuffer.meshdata, "triangles", "stream")
-    else
-      ffi.copy(cmdBuffer.meshdata_ptr, cmd_list.VtxBuffer.Data, data_size)
-      cmdBuffer.mesh:setVertices(cmdBuffer.meshdata)
-    end
-
-    local indices_data_size = cmd_list.IdxBuffer.Size * ffi.sizeof("ImDrawIdx")
-
-    if cmd_list.IdxBuffer.Size > cmdBuffer.max_indexcount then
-      cmdBuffer.max_indexcount = cmd_list.IdxBuffer.Size
-      if cmdBuffer.idx_buffer then cmdBuffer.idx_buffer:release() end
-      cmdBuffer.idx_buffer = Thorium.data.newByteData(math.max(indices_data_size, ffi.sizeof("ImDrawIdx")))
-      cmdBuffer.idx_buffer_ptr = cmdBuffer.idx_buffer:getFFIPointer()
-    end
-
-    ffi.copy(cmdBuffer.idx_buffer_ptr, cmd_list.IdxBuffer.Data, indices_data_size)
-
-    cmdBuffer.mesh:setVertexMap(cmdBuffer.idx_buffer, "uint16")
-  end
-  -- Rhodium.profiler.pop("perpare mesh")
-
-  -- Rhodium.profiler.push("draw")
-  for i = 0, data.CmdListsCount - 1 do
-    local cmdBuffer = cmdBuffers[i + 1]
-
-    local cmd_list = cmdBuffer.cmd_list
-    local mesh = cmdBuffer.mesh
-
-    for k = 0, cmd_list.CmdBuffer.Size - 1 do
-      local cmd = cmd_list.CmdBuffer.Data[k]
-      if cmd.UserCallback ~= nil then
-        local callback = common.callbacks[ffi.string(ffi.cast("void*", cmd.UserCallback), ptrSize)] or
-            cmd.UserCallback
-        callback(cmd_list, cmd)
-      elseif cmd.ElemCount > 0 then
-        local clipX, clipY = cmd.ClipRect.x, cmd.ClipRect.y
-        local clipW = cmd.ClipRect.z - clipX
-        local clipH = cmd.ClipRect.w - clipY
-
-        local texture_id = Thorium.gui.ImDrawCmd_GetTexID(cmd)
-        -- local texture_id = cmd.TextureId
-        if texture_id ~= 0 then
-          local obj = common.textures[tostring(texture_id)]
-          Thorium.graphics.setShader(DefaultShader)
-          DefaultShader:send("Texture", obj)
-        else
-          local shader = textureShader or DefaultShader
-          Thorium.graphics.setShader(shader)
-          shader:send("Texture", textureObject)
-        end
-
-        Thorium.graphics.setScissor(clipX, clipY, clipW, clipH)
-        mesh:setDrawRange(cmd.IdxOffset + 1, cmd.ElemCount)
-
-        Thorium.graphics.draw(mesh)
-      end
-    end
-  end
-  Thorium.graphics.pop()
-
-  -- Rhodium.profiler.pop("draw")
-end
 
 function ImguiWrapper.MouseMoved(x, y)
   if Thorium.window.hasMouseFocus() then

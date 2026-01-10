@@ -1,5 +1,6 @@
 #include "buffer.hpp"
 #include "Graphics/graphics.hpp"
+#include "Graphics/graphicsState.hpp"
 #include "Graphics/resource.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
@@ -248,6 +249,11 @@ auto Buffer::UploadLarge(GraphicsContext &context,
 
   auto uploadSize = size == VK_WHOLE_SIZE ? data.size() : size;
 
+  if (uploadSize > this->size) {
+    return Error::Create(
+        "Error uploading data, cannot upload more data than is allocated.");
+  }
+
   // Use staging buffer
   VkBufferCreateInfo stagingBufferInfo = {};
   stagingBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -303,6 +309,11 @@ auto Buffer::UploadRing(GraphicsContext &context,
                         VkDeviceSize offset, VkDeviceSize size) const -> Error {
 
   auto uploadSize = size == VK_WHOLE_SIZE ? data.size() : size;
+
+  if (uploadSize > this->size) {
+    return Error::Create(
+        "Error uploading data, cannot upload more data than is allocated.");
+  }
 
   // Use upload buffer
   auto uploadBuffer = UploadBuffers.at(context.frameIndex);
@@ -382,6 +393,11 @@ auto Buffer::Upload(GraphicsContext &context,
   }
 
   auto uploadSize = size == VK_WHOLE_SIZE ? data.size() : size;
+
+  if (uploadSize + offset > this->size) {
+    return Error::Create(
+        "Error uploading data, cannot upload more data than is allocated.");
+  }
 
   auto syncResult = SynchroniseWrite(context);
   if (Error::IsError(syncResult)) {
@@ -495,6 +511,10 @@ auto Buffer::Create(GraphicsContext &context, BufferCreationInfo info)
 auto Buffer::SetData(GraphicsContext &context,
                      const std::span<uint8_t> &data, // NOLINTNEXTLINE
                      VkDeviceSize offset, VkDeviceSize size) -> Error {
+
+  if (GetIsCurrentlyRendering()) {
+    return Error::Create("Cannot upload to buffer while rendering.");
+  }
 
   auto result = Upload(context, data, offset, size);
   if (Error::IsError(result)) {

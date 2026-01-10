@@ -1,13 +1,15 @@
 #pragma once
 
+#include "Modules/Math/vector.hpp"
 #include "Modules/object.hpp"
 #include "Modules/type.hpp"
 #include "SDL3/SDL_mouse.h"
+#include <cstdint>
 #include <map>
 #include <string>
 namespace Mouse {
 
-const std::map<std::string, int> MouseButtonMap = {
+const std::map<std::string, uint32_t> MouseButtonMap = {
     {"left", SDL_BUTTON_LEFT},   {"middle", SDL_BUTTON_MIDDLE},
     {"right", SDL_BUTTON_RIGHT}, {"x1", SDL_BUTTON_X1},
     {"x2", SDL_BUTTON_X2},
@@ -36,5 +38,17 @@ struct MouseCursor : Object {
     return MouseCursor::GetType();
   }
 };
+
+auto StringToSDLCursor(const std::string &cursorName) -> SDL_SystemCursor;
+auto GetX() -> float;
+auto GetY() -> float;
+auto GetPosition() -> Math::Vec2;
+auto SetPosition(float x_position, float y_position) -> void;
+auto SetPosition(const Math::Vec2 &position) -> void;
+auto IsButtonDown(const std::string &buttonName) -> bool;
+auto SetVisible(bool show) -> void;
+auto IsCursorVisible() -> bool;
+auto SetCursor(const Ref<MouseCursor> &cursor) -> void;
+auto CreateSystemCursor(const std::string &cursorName) -> Ref<MouseCursor>;
 
 } // namespace Mouse

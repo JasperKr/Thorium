@@ -9,6 +9,7 @@
 #include "Graphics/texture.hpp"
 #include "Graphics/vertexformat.hpp"
 #include "Modules/color.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Wrap/Graphics/wrap_color.hpp"
@@ -466,16 +467,19 @@ inline auto GetQuadMesh(GraphicsContext &context, const VkRect2D size,
 
   RenderTarget::EndRendering(context);
 
-  const static auto mesh = Mesh::Create(context, vertexFormat, span, &indices);
+  const static auto mesh = Mesh::Create(context, vertexFormat, span);
 
   auto setDataError = mesh->get()->SetVertices(context, span);
   if (Error::IsError(setDataError)) {
     return setDataError.AsUnexpected();
   }
 
-  auto indexSpan = std::span<uint32_t>(indices.data(), indices.size());
+  auto indexSpan = std::span<uint8_t>( // NOLINTNEXTLINE
+      reinterpret_cast<uint8_t *>(indices.data()),
+      indices.size() * GetIndexFormatSize(IndexFormat::Uint32));
 
-  setDataError = mesh->get()->SetIndices(context, indexSpan);
+  setDataError =
+      mesh->get()->SetIndices(context, indexSpan, IndexFormat::Uint32);
   if (Error::IsError(setDataError)) {
     return setDataError.AsUnexpected();
   }

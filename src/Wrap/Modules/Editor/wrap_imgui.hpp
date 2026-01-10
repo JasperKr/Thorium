@@ -128,13 +128,22 @@ auto SetNextItemOpen(lua_State *state) -> int;
 auto GetIO(lua_State *state) -> int;
 auto GetPlatformIO(lua_State *state) -> int;
 auto GetStyle(lua_State *state) -> int;
-auto GetDrawData(lua_State *state) -> int;
 auto GetFont(lua_State *state) -> int;
 auto GetFontAtlas(lua_State *state) -> int;
 
 auto NewFrame(lua_State *state) -> int;
-auto GetDrawLists(lua_State *state) -> int;
 auto EndFrame(lua_State *state) -> int;
+auto Draw(lua_State *state) -> int;
+
+// Imgui event passthrough functions
+auto MousePressed(lua_State *state) -> int;
+auto MouseReleased(lua_State *state) -> int;
+auto MouseMoved(lua_State *state) -> int;
+auto MouseWheelMoved(lua_State *state) -> int;
+
+auto KeyPressed(lua_State *state) -> int;
+auto KeyReleased(lua_State *state) -> int;
+auto TextInput(lua_State *state) -> int;
 
 // NOLINTNEXTLINE
 static const luaL_Reg ImGuiLib[] = {
@@ -235,12 +244,18 @@ static const luaL_Reg ImGuiLib[] = {
     {"getIO", GetIO},
     {"getPlatformIO", GetPlatformIO},
     {"getStyle", GetStyle},
-    {"getDrawData", GetDrawData},
     {"getFont", GetFont},
     {"getFontAtlas", GetFontAtlas},
     {"newFrame", NewFrame},
-    {"getDrawLists", GetDrawLists},
     {"endFrame", EndFrame},
+    {"draw", Draw},
+    {"mousePressed", MousePressed},
+    {"mouseReleased", MouseReleased},
+    {"mouseMoved", MouseMoved},
+    {"mouseWheelMoved", MouseWheelMoved},
+    {"keyPressed", KeyPressed},
+    {"keyReleased", KeyReleased},
+    {"textInput", TextInput},
     {nullptr, nullptr},
 };
 

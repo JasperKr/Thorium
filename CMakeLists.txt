@@ -220,6 +220,7 @@ add_executable(Thorium
     src/Modules/event.cpp
     src/Modules/object.cpp
     src/Modules/imagedata.cpp
+    src/Modules/Peripherals/mouse.cpp
 
 # Math Modules
     src/Modules/Math/vector.cpp
@@ -228,7 +229,7 @@ add_executable(Thorium
 
 # Editor
     # src/Modules/Editor/imgui.cpp
-    # src/Modules/Editor/gui.cpp
+    src/Modules/Editor/gui.cpp
 
 # Wrappers
     src/Wrap/Graphics/wrap_graphics.cpp

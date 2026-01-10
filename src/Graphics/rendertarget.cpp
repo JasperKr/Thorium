@@ -1,5 +1,6 @@
 #include "rendertarget.hpp"
 #include "Graphics/graphics.hpp"
+#include "Graphics/graphicsState.hpp"
 #include "Graphics/shader.hpp"
 #include "Graphics/texture.hpp"
 #include "Modules/Math/matrix.hpp"
@@ -776,9 +777,6 @@ auto Reset(GraphicsContext &context) -> void {
   LastState = State();
 }
 
-// NOLINTNEXTLINE, to call vkCmdEndRendering
-static bool BegunRendering = false;
-
 auto FlushCompute(GraphicsContext &context) -> Result<bool> {
   auto &currentState = StateStack.back();
 
@@ -911,7 +909,7 @@ auto Destroy(GraphicsContext &context) -> void {
   PipelineCache.clear();
 }
 
-inline auto BeginRendering(GraphicsContext &context) -> void {
+inline auto BeginRendering(GraphicsContext &context) -> Error {
   auto &currentState = StateStack.back();
 
   VkRenderingInfo renderingInfo = {};
@@ -925,6 +923,29 @@ inline auto BeginRendering(GraphicsContext &context) -> void {
   renderingInfo.layerCount = 1;
   renderingInfo.viewMask = 0;
   renderingInfo.flags = 0;
+
+  if (currentState.renderTargets.size() == 0) {
+    return Error::Create("No render targets bound for rendering pass.");
+  }
+
+  if (currentState.renderTargets.size() >
+      context.deviceProperties.limits.maxColorAttachments) {
+    return Error::Create(
+        "Number of bound render targets exceeds device limits.");
+  }
+
+  if (renderingInfo.renderArea.extent.width == 0 ||
+      renderingInfo.renderArea.extent.height == 0) {
+    return Error::Create("Render area has zero width or height.");
+  }
+
+  if (viewport.width == 0 || viewport.height == 0) {
+    return Error::Create("Viewport has zero width or height.");
+  }
+
+  if (scissor.extent.width == 0 || scissor.extent.height == 0) {
+    return Error::Create("Scissor has zero width or height.");
+  }
 
   auto colorAttachments = std::vector<VkRenderingAttachmentInfo>{};
   auto depthAttachment = VkRenderingAttachmentInfo{};
@@ -986,14 +1007,16 @@ inline auto BeginRendering(GraphicsContext &context) -> void {
   vkCmdSetScissor(Graphics::GetCommandBuffer(context, GetCurrentThreadIndex()),
                   0, 1, &scissor);
 
-  BegunRendering = true;
+  GetIsCurrentlyRendering() = true;
+
+  return Error::Success();
 }
 
 auto EndRendering(GraphicsContext &context) -> void {
-  if (BegunRendering) {
+  if (GetIsCurrentlyRendering()) {
     vkCmdEndRendering(
         Graphics::GetCommandBuffer(context, GetCurrentThreadIndex()));
-    BegunRendering = false;
+    GetIsCurrentlyRendering() = false;
   }
 }
 
@@ -1011,7 +1034,11 @@ auto PrepareRendering(GraphicsContext &context) -> Error {
     auto &currentState = StateStack.back();
 
     if (currentState.bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS) {
-      BeginRendering(context);
+      auto beginResult = BeginRendering(context);
+
+      if (Error::IsError(beginResult)) {
+        return beginResult;
+      }
     }
   }
 

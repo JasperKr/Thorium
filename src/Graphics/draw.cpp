@@ -5,6 +5,7 @@
 #include "Graphics/rendertarget.hpp"
 #include "Modules/error.hpp"
 #include <cstdint>
+#include <vulkan/vulkan_core.h>
 
 namespace Graphics {
 
@@ -16,6 +17,38 @@ auto BindMesh(GraphicsContext &context, VkCommandBuffer cmdBuffer,
 
   if (Error::IsError(vboSyncResult)) {
     return vboSyncResult;
+  }
+
+  auto count =
+      mesh.GetIndexCount() > 0 ? mesh.GetIndexCount() : mesh.GetVertexCount();
+
+  switch (mesh.GetTopology()) {
+  case VK_PRIMITIVE_TOPOLOGY_LINE_LIST:
+    if (count % 2 != 0) {
+      return Error::Create(
+          "Line List topology requires an even number of vertices.");
+    }
+    break;
+  case VK_PRIMITIVE_TOPOLOGY_LINE_STRIP:
+    if (count < 2) {
+      return Error::Create("Line Strip topology requires at least 2 vertices.");
+    }
+    break;
+  case VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST:
+    if (count % 3 != 0) {
+      return Error::Create("Triangle List topology requires vertex count to be "
+                           "a multiple of 3.");
+    }
+    break;
+  case VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP:
+    if (count < 3) {
+      return Error::Create(
+          "Triangle Strip topology requires at least 3 vertices.");
+    }
+    break;
+  case VK_PRIMITIVE_TOPOLOGY_POINT_LIST:
+  default:
+    break;
   }
 
   std::vector<VkBuffer> vertexBuffers = {mesh.GetVertexBuffer()->handle};
@@ -32,8 +65,20 @@ auto BindMesh(GraphicsContext &context, VkCommandBuffer cmdBuffer,
       return iboSyncResult;
     }
 
-    vkCmdBindIndexBuffer(cmdBuffer, mesh.GetIndexBuffer()->handle, 0,
-                         VK_INDEX_TYPE_UINT32);
+    VkIndexType type{};
+
+    switch (mesh.GetIndexFormat()) {
+    case IndexFormat::None:
+      return Error::Create("Unable to bind index buffer: invalid Index format");
+    case IndexFormat::Uint16:
+      type = VK_INDEX_TYPE_UINT16;
+      break;
+    case IndexFormat::Uint32:
+      type = VK_INDEX_TYPE_UINT32;
+      break;
+    }
+
+    vkCmdBindIndexBuffer(cmdBuffer, mesh.GetIndexBuffer()->handle, 0, type);
   }
 
   return Error::Success();

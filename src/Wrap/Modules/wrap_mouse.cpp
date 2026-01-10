@@ -6,6 +6,7 @@
 #include "SDL3/SDL_mouse.h"
 #include "SDL3/SDL_surface.h"
 #include "Wrap/wrap.hpp"
+#include <cstdint>
 #include <lauxlib.h>
 #include <lua.h>
 #include <map>
@@ -26,7 +27,7 @@ auto Wrap_IsDown(lua_State *state) -> int {
 
   for (int i = 1; i <= keyCount; ++i) {
     bool isString = lua_type(state, i) == LUA_TSTRING;
-    int button = 0;
+    uint32_t button = 0;
 
     if (isString) {
       const char *keyString = luaL_checkstring(state, i);
@@ -132,50 +133,9 @@ auto Wrap_GetVisible(lua_State *state) -> int {
   return 1;
 }
 
-auto StringToSDLCursor(const std::string &cursorName) -> SDL_SystemCursor {
-  if (cursorName == "arrow") {
-    return SDL_SYSTEM_CURSOR_DEFAULT;
-  }
-  if (cursorName == "ibeam") {
-    return SDL_SYSTEM_CURSOR_TEXT;
-  }
-  if (cursorName == "wait") {
-    return SDL_SYSTEM_CURSOR_WAIT;
-  }
-  if (cursorName == "crosshair") {
-    return SDL_SYSTEM_CURSOR_CROSSHAIR;
-  }
-  if (cursorName == "progress") {
-    return SDL_SYSTEM_CURSOR_PROGRESS;
-  }
-  if (cursorName == "resizenwse") {
-    return SDL_SYSTEM_CURSOR_NWSE_RESIZE;
-  }
-  if (cursorName == "resizenesw") {
-    return SDL_SYSTEM_CURSOR_NESW_RESIZE;
-  }
-  if (cursorName == "resizewe") {
-    return SDL_SYSTEM_CURSOR_EW_RESIZE;
-  }
-  if (cursorName == "resizens") {
-    return SDL_SYSTEM_CURSOR_NS_RESIZE;
-  }
-  if (cursorName == "move") {
-    return SDL_SYSTEM_CURSOR_MOVE;
-  }
-  if (cursorName == "notallowed") {
-    return SDL_SYSTEM_CURSOR_NOT_ALLOWED;
-  }
-  if (cursorName == "pointer") {
-    return SDL_SYSTEM_CURSOR_POINTER;
-  }
-  // Default fallback
-  return SDL_SYSTEM_CURSOR_COUNT;
-}
-
 auto Wrap_GetHardwareCursor(lua_State *state) -> int {
   auto cursorName = std::string(luaL_checkstring(state, 1));
-  SDL_SystemCursor sdlCursorType = StringToSDLCursor(cursorName);
+  SDL_SystemCursor sdlCursorType = ::Mouse::StringToSDLCursor(cursorName);
   if (sdlCursorType == SDL_SYSTEM_CURSOR_COUNT) {
     luaL_error(state, "Unknown cursor type: %s", cursorName.c_str());
     return 0;

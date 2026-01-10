@@ -3,6 +3,7 @@
 #include "Graphics/graphics.hpp"
 #include "Graphics/texture.hpp"
 #include "Modules/console.hpp"
+#include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Modules/type.hpp"
 #include "shader.hpp"
@@ -271,7 +272,7 @@ auto Destroy(GraphicsContext &context) -> void;
 auto PrepareRendering(GraphicsContext &context) -> Error;
 
 auto EndRendering(GraphicsContext &context) -> void;
-auto BeginRendering(GraphicsContext &context) -> void;
+auto BeginRendering(GraphicsContext &context) -> Error;
 
 auto SetDepthMode(bool enable, bool writeEnable, VkCompareOp compareOp) -> void;
 auto SetCullMode(VkCullModeFlags cullMode) -> void;

@@ -7,16 +7,22 @@ local i = 0
 function Thorium.update(dt)
   i = i + 1
 
-  -- ImguiWrapper.Update(dt)
-  -- Thorium.gui.newFrame()
+  Thorium.gui.newFrame(dt)
 end
 
 function Thorium.mousemoved(x, y, dx, dy)
   -- print("Mouse moved", x, y, dx, dy)
+  Thorium.gui.mouseMoved(x, y)
 end
 
 function Thorium.mousepressed(x, y, button, istouch, presses)
   -- print("Mouse pressed", x, y, button, istouch, presses)
+  Thorium.gui.mousePressed(x, y, button)
+end
+
+function Thorium.mousereleased(x, y, button, istouch, presses)
+  -- print("Mouse released", x, y, button, istouch, presses)
+  Thorium.gui.mouseReleased(x, y, button)
 end
 
 function Thorium.keypressed(key, scancode, isrepeat)
@@ -27,83 +33,88 @@ function Thorium.keypressed(key, scancode, isrepeat)
     Thorium.filesystem.write("capture", "")
     print(Thorium.filesystem.getSaveDirectory() .. "/capture created")
   end
+
+  Thorium.gui.keyPressed(key)
 end
 
 function Thorium.keyreleased(key, scancode)
   -- print("Key released: " .. key, scancode)
+  Thorium.gui.keyReleased(key)
 end
 
 function Thorium.textinput(text)
   -- print("Text input: " .. text)
+  Thorium.gui.textInput(text)
 end
 
 function Thorium.wheelmoved(x, y)
   -- print("Wheel moved", x, y)
+  Thorium.gui.wheelMoved(x, y)
 end
 
 function Thorium.quit()
   print("Quitting the application.")
 end
 
--- local image = Thorium.graphics.newTexture("leek.png", { sampler = true })
--- -- print(image:getFilter())
--- local target = Thorium.graphics.newTexture(612, 512, { sampler = true, rendertarget = true })
--- local shader = Thorium.graphics.newShader("default2D")
--- local compute = Thorium.graphics.newShader("testCS");
--- local inputBuffer = Thorium.graphics.newBuffer("uint32", 1024, { shaderstorage = true })
--- local outputBuffer = Thorium.graphics.newBuffer("uint32", 1024, { shaderstorage = true })
+local image = Thorium.graphics.newTexture("leek.png", { sampler = true })
+-- print(image:getFilter())
+local target = Thorium.graphics.newTexture(612, 512, { sampler = true, rendertarget = true })
+local shader = Thorium.graphics.newShader("default2D")
+local compute = Thorium.graphics.newShader("testCS");
+local inputBuffer = Thorium.graphics.newBuffer("uint32", 1024, { shaderstorage = true })
+local outputBuffer = Thorium.graphics.newBuffer("uint32", 1024, { shaderstorage = true })
 
--- inputBuffer:clear()
--- inputBuffer:setData({ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 })
+inputBuffer:clear()
+inputBuffer:setData({ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 })
 
--- print("Setting input buffer")
--- compute:send("Input", inputBuffer)
+print("Setting input buffer")
+compute:send("Input", inputBuffer)
 
--- print("Setting output buffer")
--- compute:send("Output", outputBuffer)
+print("Setting output buffer")
+compute:send("Output", outputBuffer)
 
--- print(compute:getThreadgroupSize())
--- print(compute:getWaveSize())
+print(compute:getThreadgroupSize())
+print(compute:getWaveSize())
 
--- compute:send("Push", "count", 10)
--- compute:send("Push", "increment", 1)
+compute:send("Push", "count", 10)
+compute:send("Push", "increment", 1)
 
--- Thorium.graphics.setShader(compute)
--- print("Dispatching compute shader")
--- Thorium.graphics.dispatch(1, 1, 1)
+Thorium.graphics.setShader(compute)
+print("Dispatching compute shader")
+Thorium.graphics.dispatch(1, 1, 1)
 
--- local vertexFormat = {
---   { name = "position", format = "floatvec2",  location = 0 },
---   { name = "texcoord", format = "floatvec2",  location = 1 },
---   { name = "color",    format = "unorm8vec4", location = 2 },
--- }
+local vertexFormat = {
+  { name = "position", format = "floatvec2",  location = 0 },
+  { name = "texcoord", format = "floatvec2",  location = 1 },
+  { name = "color",    format = "unorm8vec4", location = 2 },
+}
 
--- local vertices = {
---   { -0.5, -0.5, 0, 0, 1, 0, 0, 1 },
---   { 0.5,  -0.5, 1, 0, 0, 1, 0, 1 },
---   { 0.5,  0.5,  1, 1, 0, 0, 1, 1 },
---   { -0.5, 0.5,  0, 1, 1, 1, 1, 1 },
--- }
+local vertices = {
+  { -0.5, -0.5, 0, 0, 1, 0, 0, 1 },
+  { 0.5,  -0.5, 1, 0, 0, 1, 0, 1 },
+  { 0.5,  0.5,  1, 1, 0, 0, 1, 1 },
+  { -0.5, 0.5,  0, 1, 1, 1, 1, 1 },
+}
 
--- local indices = {
---   1, 2, 3,
---   3, 4, 1,
--- }
+local indices = {
+  1, 2, 3,
+  3, 4, 1,
+}
 
--- local mesh = Thorium.graphics.newMesh(vertexFormat, vertices, "triangles", indices)
--- local data = Thorium.data.newImagedata(512, 512, "rgba16f")
--- for y = 0, 512 - 1 do
---   for x = 0, 512 - 1 do
---     -- size of half = 2, 4 components
---     local offset = (y * 512 + x) * 2 * 4
---     local grayscale = (x / 512) * (y / 512)
---     data:setHalf(offset, grayscale)
---     data:setHalf(offset + 2, grayscale)
---     data:setHalf(offset + 4, grayscale)
---     data:setHalf(offset + 6, 1.0)
---   end
--- end
--- local texture = Thorium.graphics.newTexture(data, { sampler = true })
+local mesh = Thorium.graphics.newMesh(vertexFormat, vertices, "triangles")
+local data = Thorium.data.newImagedata(512, 512, "rgba16f")
+for y = 0, 512 - 1 do
+  for x = 0, 512 - 1 do
+    -- size of half = 2, 4 components
+    local offset = (y * 512 + x) * 2 * 4
+    local grayscale = (x / 512) * (y / 512)
+    data:setHalf(offset, grayscale)
+    data:setHalf(offset + 2, grayscale)
+    data:setHalf(offset + 4, grayscale)
+    data:setHalf(offset + 6, 1.0)
+  end
+end
+local texture = Thorium.graphics.newTexture(data, { sampler = true })
 
 function hslToRgb(h, s, l)
   local r, g, b;
@@ -134,17 +145,16 @@ end
 local ffi = require("ffi")
 
 function Thorium.draw()
-  -- Thorium.graphics.setShader(shader)
-  -- Thorium.graphics.setRenderTarget({ texture = target, loadas = { hslToRgb((Thorium.timer.getTime() * 0.5) % 1, 0.5, 0.5) } })
-  -- shader:send("test", i)
-  -- shader:send("testColor", { 1, 0, 0 })
-  -- shader:send("testMatrix", { 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1 })
-  -- Thorium.graphics.draw(texture)
-  -- Thorium.graphics.setRenderTarget({ loadas = { 0, 0, 0, 1 } })
-  -- Thorium.graphics.draw(target)
+  Thorium.graphics.setShader(shader)
+  Thorium.graphics.setRenderTarget({ texture = target, loadas = { hslToRgb((Thorium.timer.getTime() * 0.5) % 1, 0.5, 0.5) } })
+  Thorium.graphics.draw(texture)
+  Thorium.graphics.setRenderTarget({ loadas = { 0, 0, 0, 1 } })
+  Thorium.graphics.draw(target)
 
-  -- Thorium.gui.endFrame()
-  -- ImguiWrapper.RenderDrawLists()
+  Thorium.gui.begin("Test window")
 
-  -- Thorium.event.quit()
+  Thorium.gui["end"]()
+
+  Thorium.gui.endFrame()
+  Thorium.gui.draw()
 end

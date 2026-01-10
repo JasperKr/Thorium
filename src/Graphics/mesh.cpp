@@ -1,4 +1,5 @@
 #include "mesh.hpp"
+#include <algorithm>
 #include <sys/types.h>
 
 #include "Modules/console.hpp"
@@ -34,19 +35,13 @@ auto Mesh::UploadVertices(GraphicsContext &context,
 }
 
 auto Mesh::UploadIndices(GraphicsContext &context,
-                         const std::span<uint32_t> &indices, uint64_t offset)
-    -> Error {
-
-  auto uint8Span = // NOLINTNEXTLINE
-      std::span<uint8_t>(reinterpret_cast<uint8_t *>(indices.data()),
-                         indices.size() * sizeof(uint32_t));
-
-  return IndexBuffer->SetData(context, uint8Span, offset);
+                         const std::span<uint8_t> &indices, uint64_t offset,
+                         IndexFormat format) -> Error {
+  return IndexBuffer->SetData(context, indices, offset);
 }
 
 auto Mesh::Create(GraphicsContext &context, VertexFormat vertexFormat,
-                  const std::span<uint8_t> &vertexData,
-                  std::vector<uint32_t> *indexData) -> Result<Ref<Mesh>> {
+                  const std::span<uint8_t> &vertexData) -> Result<Ref<Mesh>> {
 
   auto meshData = Ref<Mesh>::Make();
   auto *mesh = meshData.get();
@@ -55,10 +50,7 @@ auto Mesh::Create(GraphicsContext &context, VertexFormat vertexFormat,
 
   mesh->VertexCount = vertexData.size() / VertexFormatSize(vertexFormat, 0);
 
-  bool hasIndices = indexData != nullptr;
-  mesh->IndexCount = hasIndices ? static_cast<uint32_t>(indexData->size()) : 0;
-
-  uint64_t indicesSize = mesh->IndexCount * sizeof(uint32_t);
+  mesh->IndexCount = 0;
 
   mesh->Format = vertexFormat;
 
@@ -83,24 +75,8 @@ auto Mesh::Create(GraphicsContext &context, VertexFormat vertexFormat,
 
   mesh->VertexBuffer = bufferResult.value();
 
-  Graphics::BufferCreationInfo iboCreationInfo = {};
-  iboCreationInfo.usage =
-      static_cast<uint32_t>(VK_BUFFER_USAGE_INDEX_BUFFER_BIT) |
-      static_cast<uint32_t>(VK_BUFFER_USAGE_TRANSFER_DST_BIT);
-  iboCreationInfo.properties = properties;
-  iboCreationInfo.size = indicesSize;
-
-  bufferResult = Buffer::Create(context, iboCreationInfo);
-
-  if (Error::IsError(bufferResult)) {
-    return bufferResult.error().AsUnexpected();
-  }
-
-  mesh->IndexBuffer = bufferResult.value();
-
   mesh->DrawRange.Offset = 0;
-  mesh->DrawRange.Count =
-      mesh->IndexCount > 0 ? mesh->IndexCount : vertexData.size();
+  mesh->DrawRange.Count = mesh->VertexCount;
 
   Error error = mesh->UploadVertices(context, vertexData, 0);
 
@@ -108,15 +84,57 @@ auto Mesh::Create(GraphicsContext &context, VertexFormat vertexFormat,
     return error.AsUnexpected();
   }
 
-  if (hasIndices) {
-    auto indexSpan = std::span<uint32_t>(indexData->data(), indexData->size());
+  return meshData;
+}
 
-    error = mesh->UploadIndices(context, indexSpan, 0);
+auto Mesh::Create(GraphicsContext &context, VertexFormat vertexFormat,
+                  uint64_t vertexCount) // NOLINT
+    -> Result<Ref<Mesh>> {
+  auto size = VertexFormatSize(vertexFormat, 0);
 
-    if (Error::IsError(error)) {
-      return error.AsUnexpected();
-    }
+  if (size == 0) {
+    return Error::Create("Vertex format has zero size for binding 0.")
+        .AsUnexpected();
   }
+
+  auto vertexDataSize = vertexCount * size;
+
+  PrintAlways("vertex data size: {}", vertexDataSize);
+
+  std::vector<uint32_t> indexData;
+
+  auto meshData = Ref<Mesh>::Make();
+  auto *mesh = meshData.get();
+
+  mesh->VertexCount = vertexCount;
+
+  mesh->Format = vertexFormat;
+
+  VkMemoryPropertyFlags properties =
+      static_cast<uint32_t>(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) |
+      static_cast<uint32_t>(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) |
+      static_cast<uint32_t>(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+  Graphics::BufferCreationInfo vboCreationInfo = {};
+  vboCreationInfo.usage =
+      static_cast<uint32_t>(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT) |
+      static_cast<uint32_t>(VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+
+  vboCreationInfo.properties = properties;
+  vboCreationInfo.size = vertexDataSize;
+
+  PrintAlways("Creating VBO of size {}", vboCreationInfo.size);
+
+  auto bufferResult = Buffer::Create(context, vboCreationInfo);
+
+  if (Error::IsError(bufferResult)) {
+    return bufferResult.error().AsUnexpected();
+  }
+
+  mesh->VertexBuffer = bufferResult.value();
+
+  mesh->DrawRange.Offset = 0;
+  mesh->DrawRange.Count = mesh->VertexCount;
 
   return meshData;
 }
@@ -136,7 +154,9 @@ auto Mesh::Release() const -> void {
   return IndexCount;
 }
 void Mesh::SetDrawRange(MeshDrawRange range) {
-  assert(range.Offset >= 0 && range.Offset + range.Count <= IndexCount);
+  auto maxCount = IndexCount == 0 ? VertexCount : IndexCount;
+
+  assert(range.Offset >= 0 && range.Offset + range.Count <= maxCount);
 
   DrawRange.Offset = range.Offset;
   DrawRange.Count = range.Count;
@@ -151,17 +171,70 @@ auto Mesh::SetVertices(GraphicsContext &context,
   return UploadVertices(context, vertexData, offset);
 }
 auto Mesh::SetIndices(GraphicsContext &context,
-                      const std::span<uint32_t> &indexData, uint64_t offset)
+                      const std::span<uint8_t> &indexData, IndexFormat format)
     -> Error {
-  return UploadIndices(context, indexData, offset);
+
+  if (format == IndexFormat::None) {
+    return Error::Create("Invalid Index Format: None");
+  }
+
+  auto newCount = indexData.size() / GetIndexFormatSize(format);
+
+  if (IndexBuffer.get() == nullptr || IndexBuffer->size < indexData.size()) {
+    if (IndexBuffer.get() != nullptr) {
+      IndexBuffer->ScheduleDestroy();
+    }
+
+    Graphics::BufferCreationInfo iboCreationInfo = {};
+    iboCreationInfo.usage =
+        static_cast<uint32_t>(VK_BUFFER_USAGE_INDEX_BUFFER_BIT) |
+        static_cast<uint32_t>(VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+
+    VkMemoryPropertyFlags properties =
+        static_cast<uint32_t>(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) |
+        static_cast<uint32_t>(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) |
+        static_cast<uint32_t>(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+    iboCreationInfo.properties = properties;
+    iboCreationInfo.size = indexData.size();
+
+    auto bufferResult = Buffer::Create(context, iboCreationInfo);
+
+    if (Error::IsError(bufferResult)) {
+      return bufferResult.error();
+    }
+
+    IndexBuffer = bufferResult.value();
+    IndexCount = newCount;
+
+    DrawRange.Count = IndexCount;
+    DrawRange.Offset =
+        (std::min)(DrawRange.Offset, static_cast<uint32_t>(IndexCount - 1));
+  }
+
+  IndicesFormat = format;
+
+  return UploadIndices(context, indexData, 0, format);
 }
 
 auto Mesh::SetVertexBuffer(const Ref<Buffer> &buffer) -> void {
   VertexBuffer = buffer;
 }
-auto Mesh::SetIndexBuffer(const Ref<Buffer> &buffer) -> void {
+auto Mesh::SetIndexBuffer(const Ref<Buffer> &buffer, IndexFormat format)
+    -> Error {
+
+  if (format == IndexFormat::None) {
+    return Error::Create("Invalid Index Format: None");
+  }
+
   IndexBuffer = buffer;
+  IndicesFormat = format;
+
+  return Error::Success();
 }
+
+auto Mesh::GetIndexFormat() const -> IndexFormat { return IndicesFormat; }
+
 auto Mesh::GetVertexBuffer() const -> Ref<Buffer> { return VertexBuffer; }
 auto Mesh::GetIndexBuffer() const -> Ref<Buffer> { return IndexBuffer; }
 
@@ -183,37 +256,6 @@ auto Mesh::SetTopology(VkPrimitiveTopology topology) -> Error {
 
   if (!isValid) {
     return Error::Create("Invalid primitive topology for Mesh.");
-  }
-
-  auto count = IndexCount > 0 ? IndexCount : VertexCount;
-
-  switch (topology) {
-  case VK_PRIMITIVE_TOPOLOGY_LINE_LIST:
-    if (count % 2 != 0) {
-      return Error::Create(
-          "Line List topology requires an even number of vertices.");
-    }
-    break;
-  case VK_PRIMITIVE_TOPOLOGY_LINE_STRIP:
-    if (count < 2) {
-      return Error::Create("Line Strip topology requires at least 2 vertices.");
-    }
-    break;
-  case VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST:
-    if (count % 3 != 0) {
-      return Error::Create("Triangle List topology requires vertex count to be "
-                           "a multiple of 3.");
-    }
-    break;
-  case VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP:
-    if (count < 3) {
-      return Error::Create(
-          "Triangle Strip topology requires at least 3 vertices.");
-    }
-    break;
-  case VK_PRIMITIVE_TOPOLOGY_POINT_LIST:
-  default:
-    break;
   }
 
   Topology = topology;

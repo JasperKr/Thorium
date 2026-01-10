@@ -36,24 +36,8 @@ struct FragmentInput
 
 Sampler2D MainTexture;
 
-uniform float test;
-uniform float3 testColor;
-uniform float4x4 testMatrix;
-
-struct PushConstants
-{
-    float4x4 model;
-    float2 aaaaaa;
-    float4 b;
-};
-
-[[vk::push_constant]]
-ConstantBuffer<PushConstants> pc;
-
 [shader("fragment")]
 float4 fragmentMain(FragmentInput input)
 {
-  float4 texColor = MainTexture.Sample(input.tex_coord);
-    texColor.rgb += testColor * test * 0.0;
-  return input.color * texColor;
+  return input.color * MainTexture.Sample(input.tex_coord);
 }

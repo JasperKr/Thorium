@@ -20,7 +20,7 @@ namespace Graphics {
 using QueueID = uint32_t;
 
 constexpr VkPipelineColorBlendAttachmentState DefaultBlendMode = {
-    .blendEnable = VK_FALSE,
+    .blendEnable = VK_TRUE,
     .srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA,
     .dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA,
     .colorBlendOp = VK_BLEND_OP_ADD,

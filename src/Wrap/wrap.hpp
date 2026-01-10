@@ -111,7 +111,10 @@ inline auto ObjectFromLua(lua_State *state, int index) -> T * {
 }
 
 inline auto PushPointer(lua_State *state, void *pointer) -> void {
-  lua_pushlightuserdata(state, pointer);
+  // // NOLINTNEXTLINE
+  auto **userdata =
+      static_cast<void **>(lua_newuserdata(state, sizeof(void *)));
+  *userdata = pointer;
 }
 
 inline auto LuaType(lua_State *state, int index) -> Type const * {

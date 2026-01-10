@@ -85,7 +85,7 @@ auto inline ConvertStringToBlendFactor(const char *string) -> VkBlendFactor {
 auto inline FromLuaState(lua_State *state)
     -> Result<VkPipelineColorBlendAttachmentState> {
   // blend mode from lua top of stack
-  VkPipelineColorBlendAttachmentState blendMode = {};
+  VkPipelineColorBlendAttachmentState blendMode = DefaultBlendMode;
 
   // assume stack is now [stuff, blendmode table]
 

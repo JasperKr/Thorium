@@ -1,10 +1,10 @@
 #pragma once
 
+#include "Graphics/shader.hpp"
 #include "Modules/error.hpp"
 #include "SDL3/SDL_keycode.h"
 #include "guiState.h"
 #include "imgui.h"
-#include "imgui_internal.h"
 #include <string>
 
 extern "C" {
@@ -50,28 +50,13 @@ const auto luaStateDefinition =
     "local ffi = require(\"ffi\")\nffi.cdef [[\n" + filtered + "]]";
 
 namespace Gui {
-inline auto LoadGUIState(lua_State *state) -> Result<GuiState> {
-  GuiState guiState{};
 
-  // Load GUI state from Lua
-  if (luaL_dostring(state, luaStateDefinition.c_str()) != LUA_OK) {
-    const char *errorMessage = lua_tostring(state, -1);
-    lua_pop(state, 1); // Remove error message from stack
+// NOLINTBEGIN
+extern Ref<Graphics::Shader::ShaderModule> ImGuiShaderRGBA8;
+extern Ref<Graphics::Shader::ShaderModule> ImGuiShaderA8;
+// NOLINTEND
 
-    return Error::Unexpected(
-        "Failed to load GUI state definition: " +
-        std::string(errorMessage != nullptr ? errorMessage : "Unknown error"));
-  }
-
-  auto *guiContext = ImGui::CreateContext();
-
-  GetGuiState() = guiState;
-  ImGui::PushFont(ImGui::GetDefaultFont());
-
-  ImGui::StyleColorsDark();
-
-  return guiState;
-}
+auto LoadGUIState(lua_State *state) -> Result<GuiState>;
 
 inline auto KeyEventToImguiKey(SDL_Keycode keycode, SDL_Scancode scancode)
     -> ImGuiKey {

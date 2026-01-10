@@ -7,6 +7,7 @@
 #include "Wrap/wrap.hpp"
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 extern "C" {
 #include <lauxlib.h>
 #include <lua.h>
@@ -68,6 +69,8 @@ auto wrap_SetVertices(lua_State *state) -> int {
 
   return 0;
 }
+
+// data: bytedata, offset: int, precision: [uint32_t] | uint16_t
 auto wrap_SetIndices(lua_State *state) -> int {
   auto *mesh = LuaWrap::ObjectFromLua<Mesh>(state, 1);
 
@@ -81,35 +84,40 @@ auto wrap_SetIndices(lua_State *state) -> int {
     return luaL_error(state, "Expected ByteData as second argument");
   }
 
-  auto offset = 0L;
+  auto count = data->GetSize();
   if (lua_gettop(state) >= 3) {
-    offset = static_cast<int64_t>(luaL_checkinteger(state, 3));
-  }
-
-  if (offset >= data->GetSize() || offset < 0) {
-    return luaL_error(state, "Index data offset out of bounds.");
-  }
-
-  auto count = data->GetSize() - offset;
-  if (lua_gettop(state) >= 4) {
-    count = static_cast<int64_t>(luaL_checkinteger(state, 4));
+    count = static_cast<int64_t>(luaL_checkinteger(state, 3));
 
     if (count < 0) {
       return luaL_error(state, "Index data count cannot be negative.");
     }
   }
 
-  if (offset + count > data->GetSize()) {
+  if (count > data->GetSize()) {
     return luaL_error(state, "Index data range out of bounds.");
   }
 
-  std::span<uint32_t> indexData = std::span<
-      uint32_t>( // NOLINTNEXTLINE, pointer arithmetic and reinterpret cast
-      reinterpret_cast<uint32_t *>(data->GetData() + offset),
-      static_cast<size_t>(count / sizeof(uint32_t)));
+  auto format = IndexFormat::Uint32;
+
+  if (lua_gettop(state) >= 4) {
+    const auto *luaStrFormat = luaL_checkstring(state, 4);
+
+    if (std::strcmp(luaStrFormat, "uint32_t") == 0) {
+      format = IndexFormat::Uint32;
+    } else if (std::strcmp(luaStrFormat, "uint16_t") == 0) {
+      format = IndexFormat::Uint16;
+    } else {
+      return luaL_error(state, "Unknown index data format: %s", luaStrFormat);
+    }
+  }
+
+  std::span<uint8_t> indexData = std::span<
+      uint8_t>( // NOLINTNEXTLINE, pointer arithmetic and reinterpret cast
+      reinterpret_cast<uint8_t *>(data->GetData()),
+      static_cast<size_t>(count / GetIndexFormatSize(format)));
 
   auto result = mesh->SetIndices(*Graphics::GetCurrentGraphicsContext(),
-                                 indexData, static_cast<uint64_t>(offset));
+                                 indexData, format);
 
   if (Error::IsError(result)) {
     return luaL_error(state, "%s", result.ToString().c_str());
@@ -140,7 +148,26 @@ auto wrap_SetIndexBuffer(lua_State *state) -> int {
 
   auto *buffer = LuaWrap::ObjectFromLua<Buffer>(state, 2);
 
-  mesh->SetIndexBuffer(Ref<Buffer>(buffer));
+  auto format = IndexFormat::Uint32;
+
+  if (lua_gettop(state) >= 3) {
+    const auto *luaStrFormat = luaL_checkstring(state, 3);
+
+    if (std::strcmp(luaStrFormat, "uint32_t") == 0) {
+      format = IndexFormat::Uint32;
+    } else if (std::strcmp(luaStrFormat, "uint16_t") == 0) {
+      format = IndexFormat::Uint16;
+    } else {
+      return luaL_error(state, "Unknown index data format: %s", luaStrFormat);
+    }
+  }
+
+  auto result = mesh->SetIndexBuffer(Ref<Buffer>(buffer), format);
+
+  if (Error::IsError(result)) {
+    return luaL_error(state, "Error Setting index buffer: %s",
+                      result.message.c_str());
+  }
 
   return 0;
 }
@@ -475,9 +502,9 @@ inline auto PrimitiveTopologyFromLua(lua_State *state, int index)
 }
 
 // new mesh
-// vertexFormat, vertex count, [topology], [index count]
-// vertexFormat, bytedata(vertices), [topology], [bytedata(indices)]
-// vertexFormat, table(vertices), [topology], [table(indices)]
+// vertexFormat, vertex count, [topology]
+// vertexFormat, bytedata(vertices), [topology]
+// vertexFormat, table(vertices), [topology]
 // NOLINTNEXTLINE
 auto wrap_NewMesh(lua_State *state) -> int {
   auto *ctx = Graphics::GetCurrentGraphicsContext();
@@ -494,7 +521,6 @@ auto wrap_NewMesh(lua_State *state) -> int {
 
   std::span<uint8_t> vertexData;
   std::vector<uint8_t> vertexStorage;
-  std::vector<uint32_t> indexDataStorage;
   VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 
   // Vertex data
@@ -536,48 +562,7 @@ auto wrap_NewMesh(lua_State *state) -> int {
     topology = PrimitiveTopologyFromLua(state, 3);
   }
 
-  bool hasIndexData = false;
-
-  // Index data
-  if (lua_gettop(state) >= 4) {
-    hasIndexData = true;
-    if (lua_type(state, 4) == LUA_TUSERDATA) {
-      auto *byteData = LuaWrap::ObjectFromLua<Data::ByteData>(state, 4);
-      if (byteData == nullptr) {
-        return luaL_error(state, "Expected ByteData as fourth argument");
-      }
-
-      auto span = byteData->GetDataSpan();
-      indexDataStorage.resize(span.size() / sizeof(uint32_t));
-      std::memcpy(indexDataStorage.data(), span.data(), span.size());
-    } else if (lua_type(state, 4) == LUA_TTABLE) {
-      luaL_checktype(state, 4, LUA_TTABLE);
-
-      size_t indexCount = lua_objlen(state, 4);
-      indexDataStorage.reserve(indexCount);
-
-      for (int i = 0; i < indexCount; ++i) {
-        lua_rawgeti(state, 4, i + 1);                  // [table, index]
-        auto value = luaL_checkinteger(state, -1) - 1; // Lua to C index
-        if (value < 0) {
-          return luaL_error(state, "Index values must be 1 or greater.");
-        }
-        indexDataStorage.emplace_back(static_cast<uint32_t>(value));
-        lua_pop(state, 1); // pop index
-      }
-    } else {
-      return luaL_error(state, "Expected ByteData or table as fourth argument");
-    }
-  }
-
-  Result<Ref<Mesh>> meshResult;
-
-  if (!hasIndexData) {
-    meshResult = Mesh::Create(*ctx, vertexFormat, vertexData, nullptr);
-  } else {
-    meshResult =
-        Mesh::Create(*ctx, vertexFormat, vertexData, &indexDataStorage);
-  }
+  auto meshResult = Mesh::Create(*ctx, vertexFormat, vertexData);
 
   if (Error::IsError(meshResult)) {
     return luaL_error(state, "%s", meshResult.error().message.c_str());
@@ -592,7 +577,6 @@ auto wrap_NewMesh(lua_State *state) -> int {
 
   LuaWrap::PushObject(state, Graphics::Mesh::GetType(), mesh.get());
 
-  // mesh->release();
   return 1;
 }
 
