@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Graphics/shader.hpp"
+#include "Modules/Peripherals/mouse.hpp"
 #include "Modules/error.hpp"
 #include "SDL3/SDL_keycode.h"
 #include "guiState.h"
@@ -331,5 +332,15 @@ inline auto KeyEventToImguiKey(SDL_Keycode keycode, SDL_Scancode scancode)
   }
   return ImGuiKey_None;
 }
+
+inline auto GetImGuiCursorMap()
+    -> std::unordered_map<ImGuiMouseCursor, Ref<Mouse::MouseCursor>> & {
+  static std::unordered_map<ImGuiMouseCursor, Ref<Mouse::MouseCursor>>
+      imgui_cursor_to_mouse_cursor;
+
+  return imgui_cursor_to_mouse_cursor;
+}
+
+auto LoadImGuiCursorMap() -> Error;
 
 } // namespace Gui

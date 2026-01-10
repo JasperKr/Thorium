@@ -145,6 +145,8 @@ auto KeyPressed(lua_State *state) -> int;
 auto KeyReleased(lua_State *state) -> int;
 auto TextInput(lua_State *state) -> int;
 
+auto ShowDebugWindow(lua_State *state) -> int;
+
 // NOLINTNEXTLINE
 static const luaL_Reg ImGuiLib[] = {
     {"begin", Begin},
@@ -256,6 +258,7 @@ static const luaL_Reg ImGuiLib[] = {
     {"keyPressed", KeyPressed},
     {"keyReleased", KeyReleased},
     {"textInput", TextInput},
+    {"showDebugWindow", ShowDebugWindow},
     {nullptr, nullptr},
 };
 

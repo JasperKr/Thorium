@@ -140,6 +140,10 @@ struct Texture : Object {
                  VkOffset2D target) -> Error;
   auto SetPixels(GraphicsContext &context, Image::ImageData &imageData,
                  uint32_t mipLevel = 0, uint32_t arrayLayer = 0) -> Error;
+  auto SetPixels(GraphicsContext &context, const std::span<uint8_t> &data,
+                 size_t width, size_t height, uint32_t mipLevel,
+                 uint32_t arrayLayer, VkRect2D source, VkOffset2D target)
+      -> Error;
   [[nodiscard]] auto GetMipmapCount() const -> size_t { return mipmapcount; }
   [[nodiscard]] auto GetFormat() const -> VkFormat { return format; }
 
@@ -170,7 +174,8 @@ struct TextureCreationInfo {
 
 auto Create2D(GraphicsContext &context, TextureCreationInfo info)
     -> Result<Ref<Texture>>;
-auto FromSwapchainTexture(GraphicsContext &context, VkImage swapchainImage,
+auto FromSwapchainTexture(const GraphicsContext &context,
+                          VkImage swapchainImage,
                           VkImageView swapchainImageView, VkFormat format,
                           uint32_t width, uint32_t height)
     -> Result<Ref<Texture>>;

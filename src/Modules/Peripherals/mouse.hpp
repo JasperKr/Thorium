@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Modules/Math/vector.hpp"
+#include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Modules/type.hpp"
 #include "SDL3/SDL_mouse.h"
@@ -48,7 +49,8 @@ auto SetPosition(const Math::Vec2 &position) -> void;
 auto IsButtonDown(const std::string &buttonName) -> bool;
 auto SetVisible(bool show) -> void;
 auto IsCursorVisible() -> bool;
-auto SetCursor(const Ref<MouseCursor> &cursor) -> void;
-auto CreateSystemCursor(const std::string &cursorName) -> Ref<MouseCursor>;
+auto SetCursor(const Ref<MouseCursor> &cursor) -> Error;
+auto CreateSystemCursor(SDL_SystemCursor sdlCursorType)
+    -> Result<Ref<MouseCursor>>;
 
 } // namespace Mouse

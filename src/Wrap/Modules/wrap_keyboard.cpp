@@ -1,5 +1,7 @@
 #include "wrap_keyboard.hpp"
+#include "Graphics/graphics.hpp"
 #include "Modules/Peripherals/keyboard.hpp"
+#include "SDL3/SDL_keyboard.h"
 #include <vector>
 
 namespace Wrap::Keyboard {
@@ -51,6 +53,26 @@ auto Wrap_IsScancodeDown(lua_State *state) -> int {
     lua_pushboolean(state, scancodeState ? 1 : 0);
   }
   return 1 + scancodeCount;
+}
+
+auto Wrap_SetEnableTextInput(lua_State *state) -> int {
+  bool enable = static_cast<bool>(lua_toboolean(state, 1));
+  auto *ctx = Graphics::GetCurrentGraphicsContext();
+
+  if (enable) {
+    SDL_StartTextInput(ctx->sdlWindow);
+  } else {
+    SDL_StopTextInput(ctx->sdlWindow);
+  }
+
+  return 0;
+}
+
+auto Wrap_IsTextInputEnabled(lua_State *state) -> int {
+  auto *ctx = Graphics::GetCurrentGraphicsContext();
+  bool enabled = SDL_TextInputActive(ctx->sdlWindow);
+  lua_pushboolean(state, static_cast<int>(enabled));
+  return 1;
 }
 
 } // namespace Wrap::Keyboard

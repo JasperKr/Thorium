@@ -11,11 +11,15 @@ namespace Wrap::Keyboard {
 
 auto Wrap_IsDown(lua_State *state) -> int;
 auto Wrap_IsScancodeDown(lua_State *state) -> int;
+auto Wrap_SetEnableTextInput(lua_State *state) -> int;
+auto Wrap_IsTextInputEnabled(lua_State *state) -> int;
 
 // NOLINTNEXTLINE
 static const luaL_Reg KeyboardLib[] = {
     {"isDown", Wrap_IsDown},
     {"isScancodeDown", Wrap_IsScancodeDown},
+    {"setEnableTextInput", Wrap_SetEnableTextInput},
+    {"isTextInputEnabled", Wrap_IsTextInputEnabled},
     {nullptr, nullptr},
 };
 

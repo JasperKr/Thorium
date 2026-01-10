@@ -1003,18 +1003,12 @@ auto EndFrame(lua_State *state) -> int {
   return 0;
 }
 
-const std::unordered_map<ImGuiMouseCursor, Ref<Mouse::MouseCursor>>
-    imgui_cursor_to_mouse_cursor{
-        {ImGuiMouseCursor_Arrow, Mouse::CreateSystemCursor("arrow")},
-        {ImGuiMouseCursor_TextInput, Mouse::CreateSystemCursor("text_input")},
-        {ImGuiMouseCursor_ResizeAll, Mouse::CreateSystemCursor("resize_all")},
-        {ImGuiMouseCursor_ResizeNS, Mouse::CreateSystemCursor("resize_ns")},
-        {ImGuiMouseCursor_ResizeEW, Mouse::CreateSystemCursor("resize_ew")},
-        {ImGuiMouseCursor_ResizeNESW, Mouse::CreateSystemCursor("resize_nesw")},
-        {ImGuiMouseCursor_ResizeNWSE, Mouse::CreateSystemCursor("resize_nwse")},
-        {ImGuiMouseCursor_Hand, Mouse::CreateSystemCursor("hand")},
-        {ImGuiMouseCursor_NotAllowed, Mouse::CreateSystemCursor("not_allowed")},
-    };
+auto ShowDebugWindow(lua_State *state) -> int {
+  auto open = static_cast<bool>(lua_toboolean(state, 1));
+  ImGui::ShowDemoWindow(&open);
+  lua_pushboolean(state, static_cast<int>(open));
+  return 1;
+}
 
 struct TemporaryCommandList {
   int32_t MaxVertexCount = INT32_MIN;
@@ -1049,17 +1043,30 @@ auto Draw(lua_State *state) -> int {
   auto ctx = *Graphics::GetCurrentGraphicsContext();
 
   auto inout = ImGui::GetIO();
+  Graphics::RenderTarget::SetCullMode(VK_CULL_MODE_NONE);
 
   if ((static_cast<uint32_t>(inout.ConfigFlags) &
        ImGuiConfigFlags_NoMouseCursorChange) == 0) {
     auto imgui_cursor = ImGui::GetMouseCursor();
     if (imgui_cursor == ImGuiMouseCursor_None || inout.MouseDrawCursor) {
+      PrintAlways("Hiding mouse cursor for ImGui");
       Mouse::SetVisible(false);
     } else {
+      PrintAlways("Showing mouse cursor {} for ImGui", imgui_cursor);
       Mouse::SetVisible(true);
+      const auto &imgui_cursor_to_mouse_cursor = ::Gui::GetImGuiCursorMap();
+
       const auto &iterator = imgui_cursor_to_mouse_cursor.find(imgui_cursor);
       if (iterator != imgui_cursor_to_mouse_cursor.end()) {
-        Mouse::SetCursor(iterator->second);
+        if (iterator->second->sdlCursor == nullptr) {
+          return luaL_error(state, "ImGui mouse cursor not created");
+        }
+
+        auto setResult = Mouse::SetCursor(iterator->second);
+        if (Error::IsError(setResult)) {
+          return luaL_error(state, "Failed to set ImGui mouse cursor: %s",
+                            setResult.message.c_str());
+        }
       } else {
         return luaL_error(state, "Unmapped ImGui mouse cursor type");
       }
@@ -1139,8 +1146,60 @@ auto Draw(lua_State *state) -> int {
           reinterpret_cast<Graphics::Texture::Texture *>(tex->GetTexID());
 
       texture->release(); // Release ImGui reference
+      tex->SetTexID(0);
 
       tex->SetStatus(ImTextureStatus_Destroyed);
+    } else if (tex->Status == ImTextureStatus_WantUpdates) {
+
+      auto encompassingRect = tex->UpdateRect;
+
+      auto *pixels = static_cast<uint8_t *>(tex->GetPixels());
+      auto pixelSpan = std::span<uint8_t>(
+          pixels,
+          static_cast<size_t>(tex->Width * tex->Height * tex->BytesPerPixel));
+
+      auto *texture = // NOLINTNEXTLINE reinterpret-cast
+          reinterpret_cast<Graphics::Texture::Texture *>(tex->GetTexID());
+
+      PrintAlways("Processing ImGui Texture ID {} Updates: {}  "
+                  "Texture Size: ({}, {}) ",
+                  tex->GetTexID(), tex->Updates.size(), tex->Width,
+                  tex->Height);
+
+      for (ImTextureRect &currentRect : tex->Updates) {
+
+        PrintAlways("Updating ImGui Texture ID {}: Rect ({}, {}) - ({}, {}), ",
+                    tex->GetTexID(), currentRect.x, currentRect.y,
+                    currentRect.w, currentRect.h);
+
+        VkRect2D sourceRect{
+            .offset{
+                .x = static_cast<int32_t>(currentRect.x),
+                .y = static_cast<int32_t>(currentRect.y),
+            },
+            .extent{
+                .width = static_cast<uint32_t>(currentRect.w),
+                .height = static_cast<uint32_t>(currentRect.h),
+            },
+        };
+
+        VkOffset2D destOffset{
+            .x = static_cast<int32_t>(currentRect.x),
+            .y = static_cast<int32_t>(currentRect.y),
+        };
+
+        // Use the update data from the current pixels
+        auto updateResult =
+            texture->SetPixels(ctx, pixelSpan, tex->Width, tex->Height, 0, 0,
+                               sourceRect, destOffset);
+
+        if (Error::IsError(updateResult)) {
+          return luaL_error(state, "Failed to update ImGui texture pixels: %s",
+                            updateResult.message.c_str());
+        }
+      }
+
+      tex->SetStatus(ImTextureStatus_OK);
     }
   }
 
@@ -1200,7 +1259,7 @@ auto Draw(lua_State *state) -> int {
 
     auto indexSpan = std::span<uint8_t>( // NOLINTNEXTLINE
         reinterpret_cast<uint8_t *>(commandList->IdxBuffer.Data),
-        static_cast<size_t>(commandList->IdxBuffer.Size * 2));
+        static_cast<size_t>(commandList->IdxBuffer.size() * 2));
 
     setResult = temporaryCommandList.Mesh->SetIndices(
         ctx, indexSpan, Graphics::IndexFormat::Uint16);

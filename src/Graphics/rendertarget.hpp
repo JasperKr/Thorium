@@ -21,7 +21,8 @@ struct ShaderModule;
 
 namespace RenderTarget {
 
-auto GetSwapchainTextures() -> std::vector<Ref<Graphics::Texture::Texture>> &;
+auto GetSwapchainTextures(const GraphicsContext &context)
+    -> Result<std::vector<Ref<Graphics::Texture::Texture>>>;
 
 const static Type type = Type("RenderTarget");
 
@@ -110,6 +111,9 @@ struct State {
     }
 
     if (renderTargets.size() != other.renderTargets.size()) {
+      PrintAlways("Render target size mismatch in state equality comparison");
+      PrintAlways("This size: {}, Other size: {}", renderTargets.size(),
+                  other.renderTargets.size());
       return false;
     }
 
@@ -124,27 +128,6 @@ struct State {
       if (*renderTargets[i] != *other.renderTargets[i]) {
         return false;
       }
-    }
-
-    if (hasScissor != other.hasScissor) {
-      return false;
-    }
-
-    if (scissor.offset.x != other.scissor.offset.x ||
-        scissor.offset.y != other.scissor.offset.y ||
-        scissor.extent.width != other.scissor.extent.width ||
-        scissor.extent.height != other.scissor.extent.height) {
-      return false;
-    }
-
-    if (hasViewport != other.hasViewport) {
-      return false;
-    }
-
-    if (viewport.x != other.viewport.x || viewport.y != other.viewport.y ||
-        viewport.width != other.viewport.width ||
-        viewport.height != other.viewport.height) {
-      return false;
     }
 
     return cullMode == other.cullMode && frontFace == other.frontFace &&
@@ -263,9 +246,9 @@ auto SetDirty() -> void;
 auto FinalizeFrame(GraphicsContext &context) -> Error;
 auto BeginFrame(GraphicsContext &context) -> Error;
 
-auto Push(GraphicsContext &context) -> void;
+auto Push(GraphicsContext &context) -> Error;
 auto Pop(GraphicsContext &context) -> Error;
-auto Reset(GraphicsContext &context) -> void;
+auto Reset(GraphicsContext &context) -> Error;
 auto FlushGraphics(GraphicsContext &context) -> Result<bool>;
 auto Load(GraphicsContext &context) -> Error;
 auto Destroy(GraphicsContext &context) -> void;
@@ -282,7 +265,7 @@ auto SetScissor(const VkRect2D *scissor) -> void;
 auto ClipScissor(const VkRect2D &scissor) -> void;
 auto SetShader(const Ref<Shader::ShaderModule> &shader) -> void;
 auto SetRenderTargets(const std::vector<Ref<RenderTarget>> &renderTargets)
-    -> void;
+    -> Error;
 auto SetLineWidth(float lineWidth) -> void;
 auto SetWindingOrder(VkFrontFace frontFace) -> void;
 auto SetVertexFormat(const VertexFormat &vertexFormat) -> void;

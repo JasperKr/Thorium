@@ -252,7 +252,14 @@ auto RenderTargetsFromTexture(lua_State *state, int index)
 
   if (texture == nullptr) {
     auto *ctx = Graphics::GetCurrentGraphicsContext();
-    texture = GetSwapchainTextures()[ctx->swapchainImageIndex].get();
+
+    auto swapchainTexturesResult = GetSwapchainTextures(*ctx);
+
+    if (Error::IsError(swapchainTexturesResult)) {
+      luaL_error(state, swapchainTexturesResult.error().message.c_str());
+    }
+
+    texture = swapchainTexturesResult.value()[ctx->swapchainImageIndex].get();
   }
 
   auto rendertarget = Ref<Graphics::RenderTarget::RenderTarget>::Make();
@@ -290,8 +297,15 @@ auto RenderTargetsFromOptions(lua_State *state, int index)
   lua_getfield(state, index, "texture");
   if (lua_isnoneornil(state, -1) != 0) {
     auto *context = Graphics::GetCurrentGraphicsContext();
+
+    auto swapchainTexturesResult = GetSwapchainTextures(*context);
+
+    if (Error::IsError(swapchainTexturesResult)) {
+      return swapchainTexturesResult.error().AsUnexpected();
+    }
+
     rendertarget->texture =
-        GetSwapchainTextures()[context->swapchainImageIndex];
+        swapchainTexturesResult.value()[context->swapchainImageIndex];
   } else {
     auto *texture =
         LuaWrap::ObjectFromLua<Graphics::Texture::Texture>(state, -1);
@@ -424,7 +438,29 @@ auto wrap_SetRenderTargets(lua_State *state) -> int {
 
   if (lua_gettop(state) == 0) {
     // No arguments, reset to default
-    Graphics::RenderTarget::SetRenderTargets({});
+
+    auto rendertarget = Ref<Graphics::RenderTarget::RenderTarget>::Make();
+
+    auto swapchainTexturesResult = GetSwapchainTextures(*ctx);
+
+    if (Error::IsError(swapchainTexturesResult)) {
+      return luaL_error(state, swapchainTexturesResult.error().message.c_str());
+    }
+
+    rendertarget->blendMode = DefaultBlendMode;
+    rendertarget->clearValue = {0.0F, 0.0F, 0.0F, 1.0F};
+    rendertarget->texture =
+        swapchainTexturesResult.value()[ctx->swapchainImageIndex];
+    rendertarget->location = 0;
+    rendertarget->layer = 0;
+    rendertarget->loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+
+    auto setResult = Graphics::RenderTarget::SetRenderTargets({rendertarget});
+
+    if (Error::IsError(setResult)) {
+      return luaL_error(state, setResult.message.c_str());
+    }
+
     return 0;
   }
 
@@ -500,7 +536,10 @@ auto wrap_SetRenderTargets(lua_State *state) -> int {
                       "Invalid arguments to RenderTarget.setRenderTargets");
   }
 
-  Graphics::RenderTarget::SetRenderTargets(renderTargets);
+  auto setResult = Graphics::RenderTarget::SetRenderTargets(renderTargets);
+  if (Error::IsError(setResult)) {
+    return luaL_error(state, setResult.message.c_str());
+  }
   return 0;
 }
 } // namespace Graphics::RenderTarget

@@ -14,6 +14,7 @@
 #include "sampler.hpp"
 #include "stb/stb_image.h"
 #include "tl/expected.hpp"
+#include <cstddef>
 #include <cstdint>
 #include <string>
 
@@ -164,7 +165,8 @@ auto Create2D(GraphicsContext &context, TextureCreationInfo info)
   return texture;
 }
 
-auto FromSwapchainTexture(GraphicsContext &context, VkImage swapchainImage,
+auto FromSwapchainTexture(const GraphicsContext &context,
+                          VkImage swapchainImage,
                           VkImageView swapchainImageView, VkFormat format,
                           uint32_t width, uint32_t height)
     -> Result<Ref<Texture>> {
@@ -799,10 +801,10 @@ auto Texture::SetPixels(GraphicsContext &context, Image::ImageData &imageData,
     return Error::Create(
         "ImageData dimensions exceed texture dimensions in SetPixels.");
   }
-  if (source.extent.width + source.offset.x + target.x > size.width ||
-      source.extent.height + source.offset.y + target.y > size.height) {
-    return Error::Create(
-        "Source and target offsets exceed texture dimensions in SetPixels.");
+  if (source.extent.width + target.x > size.width ||
+      source.extent.height + target.y > size.height) {
+    return Error::Create("Source width and target offset exceed texture "
+                         "dimensions in SetPixels.");
   }
   if (target.x < 0 || target.y < 0) {
     return Error::Create(
@@ -841,21 +843,32 @@ auto Texture::SetPixels(GraphicsContext &context, Image::ImageData &imageData,
 
   auto buffer = bufferResult.value();
 
-  auto error = buffer->SetData(context, imageData.GetDataSpan());
+  // auto error = buffer->SetData(context, imageData.GetDataSpan());
   // also sets the buffer usage semaphore value
 
-  if (Error::IsError(error)) {
-    buffer->Destroy(context); // Not used yet so we can destroy immediately
-    return error;
-  }
+  auto rowSize =
+      static_cast<size_t>(source.extent.width) * Format::GetSize(format);
+  auto rowCount = static_cast<size_t>(source.extent.height);
 
-  PrintDebug("Copying buffer to texture-> mipLevel {}, arrayLayer {}", mipLevel,
-             arrayLayer);
+  for (size_t row = 0; row < rowCount; ++row) {
+    size_t sourceOffset =
+        ((row + source.offset.y) * imageData.GetWidth() + source.offset.x) *
+        Format::GetSize(format);
+
+    auto rowSpan = // NOLINTNEXTLINE pointer arithmetic
+        std::span<uint8_t>(imageData.GetDataPtr() + sourceOffset, rowSize);
+    auto error = buffer->SetData(context, rowSpan, row * rowSize);
+
+    if (Error::IsError(error)) {
+      buffer->ScheduleDestroy();
+      return error;
+    }
+  }
 
   VkBufferImageCopy region = {};
   region.bufferOffset = 0;
-  region.bufferRowLength = imageData.GetWidth();
-  region.bufferImageHeight = imageData.GetHeight();
+  region.bufferRowLength = source.extent.width;
+  region.bufferImageHeight = source.extent.height;
   region.imageSubresource.aspectMask = GetAspectFlagsForFormat(format);
   region.imageSubresource.mipLevel = mipLevel;
   region.imageSubresource.baseArrayLayer = arrayLayer;
@@ -864,7 +877,7 @@ auto Texture::SetPixels(GraphicsContext &context, Image::ImageData &imageData,
   region.imageExtent = {
       .width = source.extent.width, .height = source.extent.height, .depth = 1};
 
-  error = UseAsTransferDst(context);
+  auto error = UseAsTransferDst(context);
 
   if (Error::IsError(error)) {
     buffer->Destroy(context); // Not used yet so we can destroy immediately
@@ -902,6 +915,117 @@ auto Texture::SetPixels(GraphicsContext &context, Image::ImageData &imageData,
   source.extent = {.width = size.width, .height = size.height};
   VkOffset2D target = {0, 0};
   return SetPixels(context, imageData, mipLevel, arrayLayer, source, target);
+}
+
+auto Texture::SetPixels(GraphicsContext &context,
+                        const std::span<uint8_t> &data, size_t dataWidth,
+                        size_t dataHeight, uint32_t mipLevel, // NOLINT
+                        uint32_t arrayLayer, VkRect2D source, VkOffset2D target)
+    -> Error {
+  if (source.extent.width > size.width || source.extent.height > size.height) {
+    return Error::Create(
+        "Source rectangle dimensions exceed texture dimensions in SetPixels.");
+  }
+  if (source.extent.width + target.x > size.width ||
+      source.extent.height + target.y > size.height) {
+    return Error::Create("Source width and target offset exceed texture "
+                         "dimensions in SetPixels.");
+  }
+  if (target.x < 0 || target.y < 0) {
+    return Error::Create(
+        "Negative target offsets are not supported in SetPixels.");
+  }
+  if (source.extent.width > dataWidth || source.extent.height > dataHeight) {
+    return Error::Create(
+        "Source rectangle exceeds ImageData dimensions in SetPixels.");
+  }
+  if (source.offset.x < 0 || source.offset.y < 0) {
+    return Error::Create(
+        "Negative source offsets are not supported in SetPixels.");
+  }
+  if (data.size() < dataWidth * dataHeight * Format::GetSize(format)) {
+    return Error::Create("Data size is insufficient for specified dimensions.");
+  }
+
+  // Create staging buffer
+  BufferCreationInfo bufferCreationInfo = {};
+  bufferCreationInfo.size = data.size();
+  bufferCreationInfo.usage =
+      VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+  bufferCreationInfo.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                                  VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+  bufferCreationInfo.IsStagingBuffer = true;
+
+  if (dataWidth > size.width || dataHeight > size.height) {
+    return Error::Create(
+        "provided source dimensions exceed texture dimensions in SetPixels.");
+  }
+
+  auto bufferResult = Buffer::Create(context, bufferCreationInfo);
+
+  if (Error::IsError(bufferResult)) {
+    return bufferResult.error();
+  }
+
+  auto rowSize =
+      static_cast<size_t>(source.extent.width) * Format::GetSize(format);
+  auto rowCount = static_cast<size_t>(source.extent.height);
+
+  auto buffer = bufferResult.value();
+  for (size_t row = 0; row < rowCount; ++row) {
+    size_t sourceOffset =
+        ((row + source.offset.y) * dataWidth + source.offset.x) *
+        Format::GetSize(format);
+
+    // NOLINTNEXTLINE pointer arithmetic
+    auto rowSpan = std::span<uint8_t>(data.data() + sourceOffset, rowSize);
+    auto error = buffer->SetData(context, rowSpan, row * rowSize);
+
+    if (Error::IsError(error)) {
+      buffer->ScheduleDestroy();
+      return error;
+    }
+  }
+
+  VkBufferImageCopy region = {};
+  region.bufferOffset = 0;
+  region.bufferRowLength = source.extent.width;
+  region.bufferImageHeight = source.extent.height;
+  region.imageSubresource.aspectMask = GetAspectFlagsForFormat(format);
+  region.imageSubresource.mipLevel = mipLevel;
+  region.imageSubresource.baseArrayLayer = arrayLayer;
+  region.imageSubresource.layerCount = 1;
+  region.imageOffset = {.x = target.x, .y = target.y, .z = 0};
+  region.imageExtent = {
+      .width = source.extent.width, .height = source.extent.height, .depth = 1};
+
+  auto error = UseAsTransferDst(context);
+
+  if (Error::IsError(error)) {
+    buffer->Destroy(context); // Not used yet so we can destroy immediately
+    return error;
+  }
+
+  auto *commandBuffer = GetCommandBuffer(context, GetCurrentThreadIndex());
+
+  vkCmdCopyBufferToImage(commandBuffer, buffer->handle, image,
+                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+
+  error = UseAsSampler(context, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT);
+
+  if (Error::IsError(error)) {
+    buffer->ScheduleDestroy();
+    return error;
+  }
+
+  auto timelineValue = GetCPUTimelineSemaphoreValue(context);
+
+  buffer->MarkUse(0, timelineValue);
+  MarkUse(0, timelineValue);
+
+  buffer->ScheduleDestroy();
+
+  return Error::Success();
 }
 
 auto Texture::Destroy(GraphicsContext &context) const -> void {

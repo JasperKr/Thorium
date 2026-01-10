@@ -32,26 +32,27 @@ std::unordered_map<State, std::pair<VkPipeline, VkPipelineLayout>,
     PipelineCache = {};
 
 inline auto GetSwapchainRendertarget(const GraphicsContext &context)
-    -> Ref<RenderTarget> {
+    -> Result<Ref<RenderTarget>> {
   static Ref<RenderTarget> swapchainRendertarget = Ref<RenderTarget>::Make();
-  auto texture = GetSwapchainTextures()[context.swapchainImageIndex];
+
+  auto swapchainTexturesResult = GetSwapchainTextures(context);
+
+  if (Error::IsError(swapchainTexturesResult)) {
+    return swapchainTexturesResult.error().AsUnexpected();
+  }
+
+  auto texture = swapchainTexturesResult.value()[context.swapchainImageIndex];
 
   swapchainRendertarget->texture = texture;
   swapchainRendertarget->location = 0;
   swapchainRendertarget->blendMode = DefaultBlendMode;
   swapchainRendertarget->clearValue = {0.0F, 0.0F, 0.0F, 1.0F};
+  swapchainRendertarget->loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
   return swapchainRendertarget;
 }
 
 inline auto GetRenderExtent(const GraphicsContext &context, const State &state)
     -> VkExtent2D {
-
-  if (state.renderTargets.empty()) {
-    return VkExtent2D{
-        .width = 0,
-        .height = 0,
-    };
-  }
 
   return VkExtent2D{
       .width = state.renderTargets.at(0).get()->texture->size.width,
@@ -59,8 +60,28 @@ inline auto GetRenderExtent(const GraphicsContext &context, const State &state)
   };
 }
 
-auto GetSwapchainTextures() -> std::vector<Ref<Graphics::Texture::Texture>> & {
+auto GetSwapchainTextures(const GraphicsContext &context)
+    -> Result<std::vector<Ref<Graphics::Texture::Texture>>> {
   static std::vector<Ref<Graphics::Texture::Texture>> textures = {};
+
+  if (textures.empty()) {
+    textures.reserve(context.swapchainInfo.imageCount);
+
+    for (uint32_t i = 0; i < context.swapchainInfo.imageCount; i++) {
+      auto textureResult = Graphics::Texture::FromSwapchainTexture(
+          context, context.swapchainInfo.images[i],
+          context.swapchainInfo.imageViews[i], context.swapchainInfo.format,
+          context.swapchainInfo.extent.width,
+          context.swapchainInfo.extent.height);
+
+      if (Error::IsError(textureResult)) {
+        return textureResult.error().AsUnexpected();
+      }
+
+      textures.emplace_back(textureResult.value());
+    }
+  }
+
   return textures;
 }
 
@@ -322,34 +343,6 @@ inline auto GetShaderStages(const State &state)
   return shaderStages;
 }
 
-inline auto GetVertexInputState(State &state)
-    -> VkPipelineVertexInputStateCreateInfo {
-
-  static std::unordered_map<VertexFormat, VkPipelineVertexInputStateCreateInfo,
-                            VertexFormatHash>
-      vertexInputStateCache;
-
-  if (vertexInputStateCache.contains(state.vertexFormat)) {
-    return vertexInputStateCache[state.vertexFormat];
-  }
-
-  VkPipelineVertexInputStateCreateInfo vertexInputInfo = {};
-  vertexInputInfo.sType =
-      VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-  vertexInputInfo.vertexBindingDescriptionCount =
-      state.vertexFormat.GetBindings().size();
-  vertexInputInfo.pVertexBindingDescriptions =
-      state.vertexFormat.GetBindings().data();
-  vertexInputInfo.vertexAttributeDescriptionCount =
-      state.vertexFormat.GetAttributes().size();
-  vertexInputInfo.pVertexAttributeDescriptions =
-      state.vertexFormat.GetVkAttributes().data();
-
-  vertexInputStateCache[state.vertexFormat] = vertexInputInfo;
-
-  return vertexInputInfo;
-}
-
 auto inline GetInputAssemblyState(const State &state)
     -> VkPipelineInputAssemblyStateCreateInfo {
   VkPipelineInputAssemblyStateCreateInfo inputAssembly = {};
@@ -496,7 +489,18 @@ inline auto CreateGraphicsPipeline(const GraphicsContext &context, State &state)
 
   auto shaderStages = shaderStagesResult.value();
 
-  auto vertexInputInfo = GetVertexInputState(state);
+  VkPipelineVertexInputStateCreateInfo vertexInputInfo = {};
+
+  auto bindings = state.vertexFormat.GetBindings();
+  auto attributes = state.vertexFormat.GetVkAttributes();
+
+  vertexInputInfo.sType =
+      VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+  vertexInputInfo.vertexBindingDescriptionCount = bindings.size();
+  vertexInputInfo.pVertexBindingDescriptions = bindings.data();
+  vertexInputInfo.vertexAttributeDescriptionCount = attributes.size();
+  vertexInputInfo.pVertexAttributeDescriptions = attributes.data();
+
   auto inputAssembly = GetInputAssemblyState(state);
   auto rasterizer = GetRasterizationState(state);
 
@@ -715,13 +719,20 @@ static bool Dirty;
 
 auto SetDirty() -> void { Dirty = true; }
 
-inline auto SetupDefaultState(GraphicsContext &context) -> State {
+inline auto SetupDefaultState(GraphicsContext &context) -> Result<State> {
   auto defaultState = State();
 
   defaultState.viewport = {};
   defaultState.scissor = {};
 
   defaultState.shader = Shader::DefaultShaderModule;
+
+  auto targetResult = GetSwapchainRendertarget(context);
+  if (Error::IsError(targetResult)) {
+    return targetResult.error().AsUnexpected();
+  }
+
+  defaultState.renderTargets = {targetResult.value()};
 
   return defaultState;
 }
@@ -730,34 +741,29 @@ auto Load(GraphicsContext &context) -> Error {
   assert(StateStack.size() == 0 &&
          "RenderTarget state stack is not empty on Load.");
 
-  StateStack.emplace_back(SetupDefaultState(context));
-
-  auto &swapchainTextures = GetSwapchainTextures();
-  swapchainTextures.reserve(context.swapchainInfo.imageCount);
-
-  for (uint32_t i = 0; i < context.swapchainInfo.imageCount; i++) {
-    auto textureResult = Graphics::Texture::FromSwapchainTexture(
-        context, context.swapchainInfo.images[i],
-        context.swapchainInfo.imageViews[i], context.swapchainInfo.format,
-        context.swapchainInfo.extent.width,
-        context.swapchainInfo.extent.height);
-
-    if (Error::IsError(textureResult)) {
-      return textureResult.error();
-    }
-
-    swapchainTextures.emplace_back(textureResult.value());
+  auto defaultStateResult = SetupDefaultState(context);
+  if (Error::IsError(defaultStateResult)) {
+    return defaultStateResult.error();
   }
+
+  StateStack.emplace_back(defaultStateResult.value());
 
   return Error::Success();
 }
 
-auto Push(GraphicsContext &context) -> void {
+auto Push(GraphicsContext &context) -> Error {
   if (StateStack.size() == 0) {
-    StateStack.emplace_back(SetupDefaultState(context));
+    auto defaultStateResult = SetupDefaultState(context);
+    if (Error::IsError(defaultStateResult)) {
+      return defaultStateResult.error();
+    }
+
+    StateStack.emplace_back(defaultStateResult.value());
   } else {
     StateStack.emplace_back(StateStack.back());
   }
+
+  return Error::Success();
 }
 
 auto Pop(GraphicsContext &context) -> Error {
@@ -770,11 +776,21 @@ auto Pop(GraphicsContext &context) -> Error {
   return Error::Success();
 }
 
-auto Reset(GraphicsContext &context) -> void {
+auto Reset(GraphicsContext &context) -> Error {
+  PrintAlways("Resetting RenderTarget state stack.");
+
   StateStack.clear();
-  StateStack.emplace_back(SetupDefaultState(context));
+
+  auto defaultStateResult = SetupDefaultState(context);
+  if (Error::IsError(defaultStateResult)) {
+    return defaultStateResult.error();
+  }
+
+  StateStack.emplace_back(defaultStateResult.value());
 
   LastState = State();
+
+  return Error::Success();
 }
 
 auto FlushCompute(GraphicsContext &context) -> Result<bool> {
@@ -892,6 +908,13 @@ auto FlushGraphics(GraphicsContext &context) -> Result<bool> {
 }
 
 auto Flush(GraphicsContext &context) -> Result<bool> {
+  if (StateStack.back() == LastState && !Dirty && GetIsCurrentlyRendering()) {
+    return false;
+  }
+
+  LastState = StateStack.back();
+  Dirty = false;
+
   if (StateStack.back().bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS) {
     return FlushGraphics(context);
   }
@@ -923,10 +946,6 @@ inline auto BeginRendering(GraphicsContext &context) -> Error {
   renderingInfo.layerCount = 1;
   renderingInfo.viewMask = 0;
   renderingInfo.flags = 0;
-
-  if (currentState.renderTargets.size() == 0) {
-    return Error::Create("No render targets bound for rendering pass.");
-  }
 
   if (currentState.renderTargets.size() >
       context.deviceProperties.limits.maxColorAttachments) {
@@ -1002,12 +1021,12 @@ inline auto BeginRendering(GraphicsContext &context) -> Error {
       Graphics::GetCommandBuffer(context, GetCurrentThreadIndex()),
       &renderingInfo);
 
-  vkCmdSetViewport(Graphics::GetCommandBuffer(context, GetCurrentThreadIndex()),
-                   0, 1, &viewport);
-  vkCmdSetScissor(Graphics::GetCommandBuffer(context, GetCurrentThreadIndex()),
-                  0, 1, &scissor);
-
   GetIsCurrentlyRendering() = true;
+
+  for (auto &rendertarget : currentState.renderTargets) {
+    // Make sure subsequent renders load from the existing content if we ever need to re-bind mid-pass
+    rendertarget->loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+  }
 
   return Error::Success();
 }
@@ -1028,11 +1047,9 @@ auto PrepareRendering(GraphicsContext &context) -> Error {
   }
 
   auto updatedState = flushResult.value();
+  auto &currentState = StateStack.back();
 
   if (updatedState) {
-    PrintDebug("Beginning rendering");
-    auto &currentState = StateStack.back();
-
     if (currentState.bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS) {
       auto beginResult = BeginRendering(context);
 
@@ -1042,11 +1059,31 @@ auto PrepareRendering(GraphicsContext &context) -> Error {
     }
   }
 
+  if (currentState.bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS) {
+    auto viewport = GetClippedViewport();
+    auto scissor = GetScissor();
+
+    vkCmdSetViewport(
+        Graphics::GetCommandBuffer(context, GetCurrentThreadIndex()), 0, 1,
+        &viewport);
+    vkCmdSetScissor(
+        Graphics::GetCommandBuffer(context, GetCurrentThreadIndex()), 0, 1,
+        &scissor);
+  }
+
   return Error::Success();
 }
 
-auto IsSwapchainTexture(const Graphics::Texture::Texture &texture) -> bool {
-  auto &swapchainTextures = GetSwapchainTextures();
+auto IsSwapchainTexture(const GraphicsContext &context,
+                        const Graphics::Texture::Texture &texture)
+    -> Result<bool> {
+  auto swapchainTexturesResult = GetSwapchainTextures(context);
+
+  if (Error::IsError(swapchainTexturesResult)) {
+    return swapchainTexturesResult.error().AsUnexpected();
+  }
+
+  const auto &swapchainTextures = swapchainTexturesResult.value();
 
   for (const auto &swapchainTexture : swapchainTextures) {
     if (swapchainTexture.get() == &texture) {
@@ -1063,7 +1100,7 @@ auto FinalizeFrame(GraphicsContext &context) -> Error {
   }
   if (StateStack.back().renderTargets.size() != 0) {
     for (const auto &rendertarget : StateStack.back().renderTargets) {
-      if (!IsSwapchainTexture(*rendertarget->texture)) {
+      if (!IsSwapchainTexture(context, *rendertarget->texture)) {
         return Error::Create(
             "Non-swapchain render targets remain bound at end of frame.");
       }
@@ -1077,11 +1114,13 @@ auto BeginFrame(GraphicsContext &context) -> Error {
   // Setup stack with new swapchain texture
 
   StateStack.clear();
-  StateStack.emplace_back(SetupDefaultState(context));
 
-  auto renderTarget = GetSwapchainRendertarget(context);
+  auto defaultStateResult = SetupDefaultState(context);
+  if (Error::IsError(defaultStateResult)) {
+    return defaultStateResult.error();
+  }
 
-  SetRenderTargets({renderTarget});
+  StateStack.emplace_back(defaultStateResult.value());
 
   return Error::Success();
 }
@@ -1159,9 +1198,16 @@ auto SetShader(const Ref<Shader::ShaderModule> &shader) -> void {
 }
 
 auto SetRenderTargets(const std::vector<Ref<RenderTarget>> &renderTargets)
-    -> void {
+    -> Error {
+
+  if (renderTargets.empty()) {
+    return Error::Create("No render targets provided.");
+  }
+
   StateStack.back().renderTargets = renderTargets;
   SetViewport(nullptr);
+
+  return Error::Success();
 }
 
 auto SetLineWidth(float lineWidth) -> void {
@@ -1201,18 +1247,6 @@ auto GetPolygonMode() -> VkPolygonMode {
 auto GetMaximumAllowedViewport() -> VkViewport {
   auto &currentState = StateStack.back();
   auto viewport = currentState.viewport;
-
-  // Default to size of current attachments
-  if (currentState.renderTargets.empty()) {
-    return {
-        .x = 0.0F,
-        .y = 0.0F,
-        .width = 0.0F,
-        .height = 0.0F,
-        .minDepth = 0.0F,
-        .maxDepth = 1.0F,
-    };
-  }
 
   auto size = currentState.renderTargets[0]->texture->size;
 

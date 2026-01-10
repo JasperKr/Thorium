@@ -1,5 +1,7 @@
 #include "gui.hpp"
 #include "Modules/filesystem.hpp"
+#include "imgui.h"
+#include <array>
 
 namespace Gui {
 
@@ -11,6 +13,11 @@ Ref<Graphics::Shader::ShaderModule> ImGuiShaderA8;
 auto MainWindow() -> void {}
 
 auto LoadGUIState(lua_State *state) -> Result<GuiState> {
+  auto loadResult = LoadImGuiCursorMap();
+  if (Error::IsError(loadResult)) {
+    return loadResult.AsUnexpected();
+  }
+
   GuiState guiState{};
 
   // Load GUI state from Lua
@@ -59,9 +66,9 @@ auto LoadGUIState(lua_State *state) -> Result<GuiState> {
   // NOLINTNEXTLINE
   std::strncpy(baseConfig.Name, debugname.c_str(), sizeof(baseConfig.Name) - 1);
   baseConfig.MergeMode = false;
-  baseConfig.PixelSnapH = true;
-  baseConfig.OversampleH = 5; // NOLINT
-  baseConfig.OversampleV = 5; // NOLINT
+  baseConfig.PixelSnapH = false;
+  baseConfig.OversampleH = 0; // NOLINT
+  baseConfig.OversampleV = 0; // NOLINT
 
   ImFont *font = inout.Fonts->AddFontFromMemoryTTF(
       fontData.data(), static_cast<int>(fontData.size()), fontSize,
@@ -93,6 +100,48 @@ auto LoadGUIState(lua_State *state) -> Result<GuiState> {
   ImGuiShaderA8 = a8CreationResult.value();
 
   return guiState;
+}
+
+auto LoadImGuiCursorMap() -> Error {
+  auto &map = GetImGuiCursorMap();
+
+  struct CursorMapping {
+    int imguiCursor;
+    SDL_SystemCursor sdlCursor;
+  };
+
+  static const std::array<CursorMapping, 9> mappings{
+      CursorMapping{.imguiCursor = ImGuiMouseCursor_Arrow,
+                    .sdlCursor = SDL_SYSTEM_CURSOR_DEFAULT},
+      CursorMapping{.imguiCursor = ImGuiMouseCursor_TextInput,
+                    .sdlCursor = SDL_SYSTEM_CURSOR_TEXT},
+      CursorMapping{.imguiCursor = ImGuiMouseCursor_ResizeAll,
+                    .sdlCursor = SDL_SYSTEM_CURSOR_MOVE},
+      CursorMapping{.imguiCursor = ImGuiMouseCursor_ResizeNS,
+                    .sdlCursor = SDL_SYSTEM_CURSOR_NS_RESIZE},
+      CursorMapping{.imguiCursor = ImGuiMouseCursor_ResizeEW,
+                    .sdlCursor = SDL_SYSTEM_CURSOR_EW_RESIZE},
+      CursorMapping{.imguiCursor = ImGuiMouseCursor_ResizeNESW,
+                    .sdlCursor = SDL_SYSTEM_CURSOR_NESW_RESIZE},
+      CursorMapping{.imguiCursor = ImGuiMouseCursor_ResizeNWSE,
+                    .sdlCursor = SDL_SYSTEM_CURSOR_NWSE_RESIZE},
+      CursorMapping{.imguiCursor = ImGuiMouseCursor_Hand,
+                    .sdlCursor = SDL_SYSTEM_CURSOR_POINTER},
+      CursorMapping{.imguiCursor = ImGuiMouseCursor_NotAllowed,
+                    .sdlCursor = SDL_SYSTEM_CURSOR_NOT_ALLOWED},
+      // Optionally add more mappings if your backend supports them
+      // {ImGuiMouseCursor_None, nullptr},
+  };
+
+  for (const auto &mapping : mappings) {
+    auto result = Mouse::CreateSystemCursor(mapping.sdlCursor);
+    if (Error::IsError(result)) {
+      return result.error();
+    }
+    map[mapping.imguiCursor] = result.value();
+  }
+
+  return Error::Success();
 }
 
 } // namespace Gui

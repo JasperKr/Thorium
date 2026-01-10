@@ -1,4 +1,5 @@
 #include "mouse.hpp"
+#include "Modules/error.hpp"
 #include "SDL3/SDL_mouse.h"
 #include <cstdint>
 
@@ -51,14 +52,41 @@ auto SetVisible(bool show) -> void {
 
 auto IsCursorVisible() -> bool { return SDL_CursorVisible(); }
 
-auto SetCursor(const Ref<MouseCursor> &cursor) -> void {
-  SDL_SetCursor(cursor->sdlCursor);
+auto SetCursor(const Ref<MouseCursor> &cursor) -> Error {
+  if (cursor->sdlCursor == nullptr) {
+    return Error::Create("Mouse cursor is null.");
+  }
+
+  if (cursor->sdlCursor == SDL_GetCursor()) {
+    return Error::Success();
+  }
+
+  bool success = SDL_SetCursor(cursor->sdlCursor);
+
+  if (!success) {
+    const auto *sdlError = SDL_GetError();
+    return Error::Create("Failed to set mouse cursor: " +
+                         std::string(sdlError));
+  }
+
+  return Error::Success();
 }
 
-auto CreateSystemCursor(const std::string &cursorName) -> Ref<MouseCursor> {
-  SDL_SystemCursor sdlCursorType = StringToSDLCursor(cursorName);
+auto CreateSystemCursor(SDL_SystemCursor sdlCursorType)
+    -> Result<Ref<MouseCursor>> {
+  if (sdlCursorType == SDL_SYSTEM_CURSOR_COUNT) {
+    return Error::Create("Unknown system cursor type.").AsUnexpected();
+  }
 
   SDL_Cursor *sdlCursor = SDL_CreateSystemCursor(sdlCursorType);
+
+  if (sdlCursor == nullptr) {
+    const auto *sdlError = SDL_GetError();
+    return Error::Create("Failed to create system mouse cursor: " +
+                         std::string(sdlError))
+        .AsUnexpected();
+  }
+
   return Ref<MouseCursor>::Make(sdlCursor);
 }
 

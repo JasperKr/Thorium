@@ -49,7 +49,7 @@ end
 
 function Thorium.wheelmoved(x, y)
   -- print("Wheel moved", x, y)
-  Thorium.gui.wheelMoved(x, y)
+  Thorium.gui.mouseWheelMoved(x, y)
 end
 
 function Thorium.quit()
@@ -144,6 +144,8 @@ end
 
 local ffi = require("ffi")
 
+Thorium.keyboard.setEnableTextInput(true)
+
 function Thorium.draw()
   Thorium.graphics.setShader(shader)
   Thorium.graphics.setRenderTarget({ texture = target, loadas = { hslToRgb((Thorium.timer.getTime() * 0.5) % 1, 0.5, 0.5) } })
@@ -154,6 +156,8 @@ function Thorium.draw()
   Thorium.gui.begin("Test window")
 
   Thorium.gui["end"]()
+
+  Thorium.gui.showDebugWindow(true)
 
   Thorium.gui.endFrame()
   Thorium.gui.draw()
