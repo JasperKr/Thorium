@@ -69,4 +69,14 @@ mkdir -p include/float16_t
 cp float16_t_temp/float16_t.hpp include/float16_t/float16_t.hpp
 rm -rf float16_t_temp
 
+# Download https://github.com/spnda/fastgltf.git to temp/fastgltf and copy temp/fastgltf/include/fastgltf/* to include/fastgltf/
+URL="https://github.com/spnda/fastgltf.git"
+if [ ! -d "temp/fastgltf" ]; then
+    git clone --depth 1 "$URL" temp/fastgltf
+fi
+mkdir -p include/fastgltf
+cp -r temp/fastgltf/include/fastgltf/* include/fastgltf/
+cp -r temp/fastgltf/src/* include/fastgltf/
+rm -rf temp
+
 echo "All dependencies fetched into include/"

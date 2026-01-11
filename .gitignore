@@ -12,3 +12,4 @@ vgcore.*
 *.o
 *.so
 *.dylib
+assets/

@@ -151,6 +151,14 @@ endif()
 add_dependencies(LuaJIT::LuaJIT luajit)
 
 # -------------------------------
+# FastGLTF
+# -------------------------------
+add_library(fastgltf INTERFACE)
+target_include_directories(fastgltf
+    INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include/fastgltf
+)
+
+# -------------------------------
 # Slang
 # -------------------------------
 
@@ -195,6 +203,7 @@ add_executable(Thorium
     src/Graphics/resource.cpp
     src/Graphics/mesh.cpp
     src/Graphics/draw.cpp
+    src/Graphics/gltfLoader.cpp
 
 # Graphics Buffers
     src/Graphics/Buffers/push.cpp
@@ -279,6 +288,7 @@ target_link_libraries(Thorium
         ${Vulkan_LIBRARIES}
         LuaJIT::LuaJIT
         ${SLANG_LIBS}
+        fastgltf
 )
 
 if (WIN32)

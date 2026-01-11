@@ -1,5 +1,6 @@
 #include "Graphics/Buffers/uniform.hpp"
 #include "Graphics/buffer.hpp"
+#include "Graphics/gltfLoader.hpp"
 #include "Graphics/graphics.hpp"
 #include "Graphics/info.hpp"
 #include "Graphics/render.hpp"
@@ -10,6 +11,7 @@
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/filesystem.hpp"
+#include "Modules/model.hpp"
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -284,6 +286,13 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
 
   if (Error::IsError(luaLoadErr)) {
     return luaLoadErr;
+  }
+
+  Engine::Scene scene;
+
+  auto gltfresult = glTF::LoadGltfModel(context, "assets/testscene.glb", scene);
+  if (Error::IsError(gltfresult)) {
+    return gltfresult;
   }
 
   PrintDebug("Entering main loop...");

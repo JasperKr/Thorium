@@ -127,6 +127,7 @@ struct ShaderModule : Object {
   std::vector<PushBuffer> pushBuffers;
 
   std::unordered_map<uint64_t, Buffer *> buffers;
+  std::unordered_map<uint64_t, Texture::Texture *> textures;
 
   std::unordered_map<uint32_t, VkDescriptorSetLayout> descriptorSetLayouts;
   std::unordered_map<uint32_t, VkDescriptorSet> descriptorSets;
@@ -174,6 +175,10 @@ struct ShaderModule : Object {
   [[nodiscard]] auto GetInstanceType() const -> Type const * override {
     return ShaderModule::GetType();
   }
+
+private:
+  auto FlushGlobals(GraphicsContext &context, VkPipelineLayout layout,
+                    VkPipelineStageFlags2 dstStage) -> Error;
 };
 
 extern Ref<ShaderModule> DefaultShaderModule; // NOLINT
