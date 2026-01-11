@@ -28,24 +28,13 @@ add_subdirectory(external/SDL EXCLUDE_FROM_ALL)
 # -------------------------------
 # ImGui
 # -------------------------------
-add_library(imgui
-    external/imgui/imgui.cpp
-    external/imgui/imgui_draw.cpp
-    external/imgui/imgui_tables.cpp
-    external/imgui/imgui_widgets.cpp
-    external/imgui/imgui_demo.cpp
-
-    external/imgui/backends/imgui_impl_sdl3.cpp
-    external/imgui/backends/imgui_impl_vulkan.cpp
+add_library(imgui SHARED IMPORTED)
+set(CIMGUI_LIB "${CMAKE_CURRENT_SOURCE_DIR}/bin/cimgui/cimgui.so")
+set_target_properties(imgui PROPERTIES
+    IMPORTED_LOCATION "${CIMGUI_LIB}"
+    INTERFACE_INCLUDE_DIRECTORIES "${CMAKE_CURRENT_SOURCE_DIR}/external/imgui"
 )
-
-target_compile_definitions(imgui PRIVATE
-    IMGUI_IMPL_VULKAN_NO_PROTOTYPES
-    IMGUI_IMPL_VULKAN_USE_LOADER
-)
-
-target_include_directories(imgui PUBLIC external/imgui)
-target_link_libraries(imgui PUBLIC SDL3::SDL3 Vulkan::Vulkan)
+target_link_libraries(imgui INTERFACE SDL3::SDL3 Vulkan::Vulkan)
 
 # -------------------------------
 # PhysFS
@@ -228,7 +217,6 @@ add_executable(Thorium
     src/Modules/Math/quaternion.cpp
 
 # Editor
-    # src/Modules/Editor/imgui.cpp
     src/Modules/Editor/gui.cpp
 
 # Wrappers

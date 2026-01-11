@@ -1,6 +1,4 @@
--- require("imgui")
-
--- ImguiWrapper.Init()
+Imgui = require("cimgui.init")
 
 local i = 0
 
@@ -153,11 +151,11 @@ function Thorium.draw()
   Thorium.graphics.setRenderTarget({ loadas = { 0, 0, 0, 1 } })
   Thorium.graphics.draw(target)
 
-  Thorium.gui.begin("Test window")
+  Imgui.Begin("Test window")
 
-  Thorium.gui["end"]()
+  Imgui.End()
 
-  Thorium.gui.showDebugWindow(true)
+  Imgui.ShowDemoWindow()
 
   Thorium.gui.endFrame()
   Thorium.gui.draw()

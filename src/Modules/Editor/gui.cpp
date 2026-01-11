@@ -1,4 +1,5 @@
 #include "gui.hpp"
+#include "Modules/console.hpp"
 #include "Modules/filesystem.hpp"
 #include "imgui.h"
 #include <array>
@@ -13,6 +14,8 @@ Ref<Graphics::Shader::ShaderModule> ImGuiShaderA8;
 auto MainWindow() -> void {}
 
 auto LoadGUIState(lua_State *state) -> Result<GuiState> {
+  PrintAlways("Loading GUI state...");
+
   auto loadResult = LoadImGuiCursorMap();
   if (Error::IsError(loadResult)) {
     return loadResult.AsUnexpected();

@@ -24,7 +24,6 @@ namespace LuaWrap {
 static auto wrap_gc(lua_State *state) -> int {
   // Get lua traceback from debug library
 
-  PrintAlways("Garbage collecting object");
   Proxy *proxy = ProxyFromLua(state, 1);
 
   if (proxy != nullptr) {
@@ -32,7 +31,6 @@ static auto wrap_gc(lua_State *state) -> int {
       return 0;
     }
 
-    PrintAlways("Type: {}", proxy->type->GetName().c_str());
     proxy->object->release();
     proxy->object = nullptr;
   }
