@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Graphics/Buffers/structured.hpp"
-#include "Graphics/buffer.hpp"
 #include "Modules/console.hpp"
 #include "Wrap/wrap.hpp"
 extern "C" {

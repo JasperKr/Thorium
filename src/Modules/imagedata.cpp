@@ -2,7 +2,6 @@
 #include "Graphics/format.hpp"
 #include "Modules/bytedata.hpp"
 #include "Modules/color.hpp"
-#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/filesystem.hpp"
 #include <vector>

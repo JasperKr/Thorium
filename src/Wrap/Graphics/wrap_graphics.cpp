@@ -9,7 +9,6 @@
 #include "Graphics/texture.hpp"
 #include "Graphics/vertexformat.hpp"
 #include "Modules/color.hpp"
-#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Wrap/Graphics/wrap_color.hpp"
@@ -42,7 +41,10 @@ auto wrap_Present(lua_State *state) -> int {
 // RenderTarget functions
 auto wrap_Push(lua_State *state) -> int {
   auto *ctx = GetCurrentGraphicsContext();
-  RenderTarget::Push(*ctx);
+  auto pushError = RenderTarget::Push(*ctx);
+  if (Error::IsError(pushError)) {
+    return luaL_error(state, "%s", pushError.ToString().c_str());
+  }
   return 0;
 }
 auto wrap_Pop(lua_State *state) -> int {
@@ -56,7 +58,10 @@ auto wrap_Pop(lua_State *state) -> int {
 }
 auto wrap_Reset(lua_State *state) -> int {
   auto *ctx = GetCurrentGraphicsContext();
-  RenderTarget::Reset(*ctx);
+  auto resetError = RenderTarget::Reset(*ctx);
+  if (Error::IsError(resetError)) {
+    return luaL_error(state, "%s", resetError.ToString().c_str());
+  }
   return 0;
 }
 

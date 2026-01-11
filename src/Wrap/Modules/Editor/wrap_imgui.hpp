@@ -1,6 +1,5 @@
 #pragma once
 
-#include "Wrap/Modules/Editor/wrap_gui.hpp"
 #include "Wrap/wrap.hpp"
 extern "C" {
 #include <lauxlib.h>
