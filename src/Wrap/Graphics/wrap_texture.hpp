@@ -27,7 +27,7 @@ auto wrap_GetDepth(lua_State *state) -> int;
 auto wrap_GetDimensions(lua_State *state) -> int;
 auto wrap_GetMipmapCount(lua_State *state) -> int;
 auto wrap_GetFormat(lua_State *state) -> int;
-
+auto wrap_GetID(lua_State *state) -> int; // ImGui texture Identifier
 auto wrap_NewTexture(lua_State *state) -> int;
 auto wrap_Release(lua_State *state) -> int;
 
@@ -51,6 +51,7 @@ static const luaL_Reg TextureLib[] = {
     {"getDimensions", wrap_GetDimensions},
     {"getMipmapCount", wrap_GetMipmapCount},
     {"getFormat", wrap_GetFormat},
+    {"getID", wrap_GetID},
     {"release", wrap_Release},
     {nullptr, nullptr} // terminate with nullptr
 };

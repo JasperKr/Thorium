@@ -1,4 +1,5 @@
 #include "Graphics/Buffers/uniform.hpp"
+#include "Graphics/graphicsState.hpp"
 #include "Graphics/resource.hpp"
 #include "Modules/error.hpp"
 #include "buffer.hpp"
@@ -325,7 +326,7 @@ auto Present(Graphics::GraphicsContext &context) -> Error {
     return error;
   }
 
-  RenderTarget::SetDirty();
+  Graphics::SetDirtyState();
   error = RenderTarget::BeginFrame(context);
   if (Error::IsError(error)) {
     return error;

@@ -1,6 +1,7 @@
 #include "shader.hpp"
 #include "Buffers/uniform.hpp"
 #include "Graphics/Buffers/push.hpp"
+#include "Graphics/graphicsState.hpp"
 #include "Graphics/reflect.hpp"
 #include "Modules/Math/vector.hpp"
 #include "Modules/console.hpp"
@@ -582,6 +583,7 @@ auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
     PrintDebug("Checking push buffer {} for key: {}...",
                pushBuffer.GetLayout().name, ResourceKeyToString(key));
     if (pushBuffer.ContainsUniform(key.begin(), key.end())) {
+      Graphics::SetDirtyState();
       return pushBuffer.SetData(key, data);
     }
   }
@@ -606,6 +608,7 @@ auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
 
   // NOLINTNEXTLINE, pointer arithmetic
   memcpy(globalUniforms.data() + offset, data.data(), data.size());
+  Graphics::SetDirtyState();
 
   return Error::Success();
 }
@@ -665,6 +668,8 @@ auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
 
       pendingDescriptorWrites.emplace_back(descriptorWrite);
 
+      Graphics::SetDirtyState();
+
       return Error::Success();
     }
   }
@@ -674,6 +679,14 @@ auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
 
 auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
                         Graphics::Texture::Texture *texture) -> Error {
+  if (texture == nullptr) {
+    return Error::Create("Texture is null.");
+  }
+
+  if (texture->view == VK_NULL_HANDLE) {
+    return Error::Create("Texture has no valid image view.");
+  }
+
   for (const auto &resource : reflection.resources) {
     if (!std::holds_alternative<SamplerInfo>(resource.info)) {
       continue;
@@ -707,6 +720,8 @@ auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
           .newUsage = Texture::TextureUsage::Sampler,
           .newStage = ShaderStageFlagsToPipelineStageFlags(resource.stages),
       });
+
+      Graphics::SetDirtyState();
 
       return Error::Success();
     }

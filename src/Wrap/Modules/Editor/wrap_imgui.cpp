@@ -284,6 +284,9 @@ inline auto SetupTemporaryCommandLists(
 inline auto DrawTemporaryCommandLists(
     Graphics::GraphicsContext &ctx, ImDrawData *drawData,
     const std::vector<TemporaryCommandList> &temporaryCommandLists) -> Error {
+
+  Graphics::RenderTarget::SetShader(::Gui::ImGuiShaderRGBA8);
+
   for (int i = 0; drawData->CmdListsCount > i; ++i) {
     const auto &temporaryCommandList = temporaryCommandLists[i];
     auto *commandList = temporaryCommandList.DrawList;
@@ -311,14 +314,12 @@ inline auto DrawTemporaryCommandLists(
         auto *texture = // NOLINTNEXTLINE
             reinterpret_cast<Graphics::Texture::Texture *>(pcmd.GetTexID());
 
-        if (texture != nullptr) {
-          Graphics::RenderTarget::SetShader(::Gui::ImGuiShaderRGBA8);
-        } else {
-          Graphics::RenderTarget::SetShader(::Gui::ImGuiShaderA8);
+        if (texture == nullptr) {
+          return Error::Create("ImGui texture is null");
         }
 
-        auto shader = Graphics::RenderTarget::GetShader();
-        auto sendResult = shader->Send(ctx, {"MainTexture"}, texture);
+        auto sendResult =
+            ::Gui::ImGuiShaderRGBA8->Send(ctx, {"MainTexture"}, texture);
         if (Error::IsError(sendResult)) {
           return sendResult;
         }

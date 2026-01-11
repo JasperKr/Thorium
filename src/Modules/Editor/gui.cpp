@@ -60,7 +60,7 @@ auto LoadGUIState(lua_State *state) -> Result<GuiState> {
 
   PrintAlways("Loaded GUI font file, size: {} bytes", fontData.size());
 
-  const float fontSize = 16.0F;
+  const float fontSize = 18.0F;
   const std::string debugname = "Source Code Pro - Mono";
 
   auto baseConfig = ImFontConfig();

@@ -4,6 +4,7 @@
 #include "Modules/error.hpp"
 #include "Modules/image.hpp"
 #include "Wrap/wrap.hpp"
+#include <imgui.h>
 #include <set>
 #include <string>
 
@@ -833,6 +834,19 @@ auto wrap_NewTexture(lua_State *state) -> int {
   LuaWrap::PushObject(state, type, texture.get());
   // texture->release(); // Retained by lua now
 
+  return 1;
+}
+
+auto wrap_GetID(lua_State *state) -> int {
+  auto *texture = LuaWrap::ObjectFromLua<Texture>(state, 1);
+
+  if (texture == nullptr) {
+    return luaL_error(state, "Expected Texture as first argument");
+  }
+
+  PrintAlways("Getting texture ID: {}", (void *)texture);
+
+  LuaWrap::PushPointer(state, texture);
   return 1;
 }
 

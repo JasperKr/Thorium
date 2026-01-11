@@ -242,7 +242,6 @@ extern std::unordered_map<
     StateHash> // NOLINTNEXTLINE Pipeline cacheBegunRendering
     PipelineCache;
 
-auto SetDirty() -> void;
 auto FinalizeFrame(GraphicsContext &context) -> Error;
 auto BeginFrame(GraphicsContext &context) -> Error;
 

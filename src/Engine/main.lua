@@ -1,4 +1,5 @@
 Imgui = require("cimgui.init")
+local bit = require("bit")
 
 local i = 0
 
@@ -152,6 +153,8 @@ function Thorium.draw()
   Thorium.graphics.draw(target)
 
   Imgui.Begin("Test window")
+
+  Imgui.Image(image, Imgui.ImVec2_Float(256, 256))
 
   Imgui.End()
 

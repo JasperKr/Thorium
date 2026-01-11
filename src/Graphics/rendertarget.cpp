@@ -714,11 +714,6 @@ static std::vector<State> StateStack{};
 // NOLINTNEXTLINE, to keep track of last applied state
 static State LastState{};
 
-// NOLINTNEXTLINE, for rendergraph and present, which do not use the stack but manually modify the vk state
-static bool Dirty;
-
-auto SetDirty() -> void { Dirty = true; }
-
 inline auto SetupDefaultState(GraphicsContext &context) -> Result<State> {
   auto defaultState = State();
 
@@ -908,12 +903,13 @@ auto FlushGraphics(GraphicsContext &context) -> Result<bool> {
 }
 
 auto Flush(GraphicsContext &context) -> Result<bool> {
-  if (StateStack.back() == LastState && !Dirty && GetIsCurrentlyRendering()) {
+  if (StateStack.back() == LastState && !Graphics::GetIsStateDirty() &&
+      GetIsCurrentlyRendering()) {
     return false;
   }
 
   LastState = StateStack.back();
-  Dirty = false;
+  Graphics::GetIsStateDirty() = false;
 
   if (StateStack.back().bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS) {
     return FlushGraphics(context);

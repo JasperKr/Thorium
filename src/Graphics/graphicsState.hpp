@@ -7,4 +7,11 @@ inline auto GetIsCurrentlyRendering() -> bool & {
   return CurrentlyRendering;
 }
 
+inline auto GetIsStateDirty() -> bool & {
+  static bool StateDirty = true;
+  return StateDirty;
+}
+
+inline auto SetDirtyState() -> void { GetIsStateDirty() = true; }
+
 } // namespace Graphics
