@@ -1021,7 +1021,6 @@ inline auto BeginRendering(GraphicsContext &context) -> Error {
 
 auto EndRendering(GraphicsContext &context) -> void {
   if (GetIsCurrentlyRendering()) {
-    PrintAlways("Ending rendering pass");
     vkCmdEndRendering(
         Graphics::GetCommandBuffer(context, GetCurrentThreadIndex()));
     GetIsCurrentlyRendering() = false;
@@ -1029,7 +1028,6 @@ auto EndRendering(GraphicsContext &context) -> void {
 }
 
 auto PrepareRendering(GraphicsContext &context) -> Error {
-  PrintAlways("Preparing rendering state...");
   auto flushResult = Flush(context);
 
   if (Error::IsError(flushResult)) {

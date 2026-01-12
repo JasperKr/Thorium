@@ -174,6 +174,7 @@ function Thorium.draw()
 
   Thorium.gui.endFrame()
   local imStartTime = Thorium.timer.getTime()
+  print("Rendering ImGui")
   Thorium.gui.draw()
   lastImDrawTime = lastImDrawTime + Thorium.timer.getTime() - imStartTime
   lastDrawTime = lastDrawTime + Thorium.timer.getTime() - startTime

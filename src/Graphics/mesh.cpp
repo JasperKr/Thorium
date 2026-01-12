@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <sys/types.h>
 
+#include "Graphics/barrier.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
@@ -31,12 +32,29 @@ static auto VertexFormatSize(VertexFormat &format, uint32_t binding)
 auto Mesh::UploadVertices(GraphicsContext &context,
                           const std::span<uint8_t> &vertices, uint64_t offset)
     -> Error {
+
+  Barrier::InsertUsage(Barrier::ResourceState{
+      .type = Barrier::UsageType::Write,
+      .stages = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+      .access = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+  });
+
+  Barrier::FlushBarriers(context, Barrier::GlobalResourceUsageTimeline);
+
   return VertexBuffer->SetData(context, vertices, offset);
 }
 
 auto Mesh::UploadIndices(GraphicsContext &context,
                          const std::span<uint8_t> &indices, uint64_t offset,
                          IndexFormat format) -> Error {
+  Barrier::InsertUsage(Barrier::ResourceState{
+      .type = Barrier::UsageType::Write,
+      .stages = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+      .access = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+  });
+
+  Barrier::FlushBarriers(context, Barrier::GlobalResourceUsageTimeline);
+
   return IndexBuffer->SetData(context, indices, offset);
 }
 

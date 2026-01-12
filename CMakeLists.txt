@@ -195,6 +195,7 @@ add_executable(Thorium
     src/Graphics/resource.cpp
     src/Graphics/mesh.cpp
     src/Graphics/draw.cpp
+    src/Graphics/barrier.cpp
 
 # Graphics Buffers
     src/Graphics/Buffers/push.cpp

@@ -1,6 +1,7 @@
 #include "shader.hpp"
 #include "Buffers/uniform.hpp"
 #include "Graphics/Buffers/push.hpp"
+#include "Graphics/barrier.hpp"
 #include "Graphics/graphicsState.hpp"
 #include "Graphics/reflect.hpp"
 #include "Modules/Math/vector.hpp"
@@ -785,9 +786,6 @@ auto ShaderModule::FlushBuffers(GraphicsContext &context,
     descriptorWrite.pBufferInfo = &bufferInfo;
 
     vkUpdateDescriptorSets(context.device, 1, &descriptorWrite, 0, nullptr);
-
-    auto result = buffer.GetBuffer()->SynchroniseRead(
-        context, VK_ACCESS_2_UNIFORM_READ_BIT, dstStage);
   }
 
   std::vector<VkWriteDescriptorSet> writes;
@@ -802,14 +800,6 @@ auto ShaderModule::FlushBuffers(GraphicsContext &context,
 
     if (write.bufferPtr == nullptr && write.imagePtr == nullptr) {
       return Error::Create("Descriptor write has no buffer or image info set.");
-    }
-
-    if (write.bufferPtr != nullptr) {
-      auto bufferResult = write.bufferPtr->SynchroniseRead(
-          context, write.bufferAccessBits, dstStage);
-      if (Error::IsError(bufferResult)) {
-        return bufferResult;
-      }
     }
 
     uint64_t key = write.dstSet;

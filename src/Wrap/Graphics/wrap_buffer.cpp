@@ -1,3 +1,4 @@
+#include "Graphics/barrier.hpp"
 #include "Wrap/Graphics/wrap_reflection.hpp"
 #include "Wrap/wrap.hpp"
 #include "Wrap/wrap_utils.hpp"
@@ -171,6 +172,16 @@ auto wrap_SetData(lua_State *state) -> int {
   }
 
   std::vector<uint8_t> data{};
+
+  Graphics::Barrier::InsertUsage(Graphics::Barrier::ResourceState{
+      .type = Graphics::Barrier::UsageType::Write,
+      .stages = VK_PIPELINE_STAGE_2_HOST_BIT,
+      .access = VK_ACCESS_2_HOST_WRITE_BIT,
+  });
+
+  Graphics::Barrier::FlushBarriers(
+      *GetCurrentGraphicsContext(),
+      Graphics::Barrier::GlobalResourceUsageTimeline);
 
   if (lua_istable(state, 2)) {
     // table of numbers

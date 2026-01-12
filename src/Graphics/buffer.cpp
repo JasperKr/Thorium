@@ -1,9 +1,11 @@
 #include "buffer.hpp"
+#include "Graphics/barrier.hpp"
 #include "Graphics/graphics.hpp"
 #include "Graphics/graphicsState.hpp"
 #include "Graphics/resource.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
+#include "Modules/object.hpp"
 #include "graphics.hpp"
 #include <algorithm>
 #include <cstdint>
@@ -22,8 +24,6 @@ struct StagingBufferInfo {
   VmaAllocation memory;
   uint64_t timelineValue;
 };
-
-static int BUFFER_COUNTER = 0;
 
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
 
@@ -153,93 +153,6 @@ auto Buffer::UnmapMemory(GraphicsContext &context) -> void {
 
   vmaUnmapMemory(context.vmaAllocator, this->memory);
   mappedData = nullptr;
-}
-
-constexpr auto dstFlags =
-    static_cast<uint64_t>(VK_ACCESS_2_TRANSFER_WRITE_BIT) |
-    static_cast<uint64_t>(VK_ACCESS_2_TRANSFER_READ_BIT) |
-    static_cast<uint64_t>(VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT) |
-    static_cast<uint64_t>(VK_ACCESS_2_INDEX_READ_BIT) |
-    static_cast<uint64_t>(VK_ACCESS_2_UNIFORM_READ_BIT) |
-    static_cast<uint64_t>(VK_ACCESS_2_SHADER_READ_BIT) |
-    static_cast<uint64_t>(VK_ACCESS_2_SHADER_WRITE_BIT);
-
-// All syncs needed before writing to the buffer
-auto Buffer::SynchroniseWrite(GraphicsContext &context,
-                              VkAccessFlagBits2 access, // NOLINT
-                              VkPipelineStageFlagBits2 stage) -> Error {
-  auto *commandBuffer = GetCommandBuffer(context, GetCurrentThreadIndex());
-
-  if (unsynchronisedReadBits == 0) {
-    unsynchronisedReadBits = access;
-    unsynchronisedReadStages = stage;
-    unsynchronisedWriteBits = static_cast<VkAccessFlags2>(dstFlags);
-
-    return Error::Success();
-  }
-
-  VkBufferMemoryBarrier2 bufferBarrier = {
-      .sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
-      .srcStageMask = unsynchronisedReadStages,
-      .srcAccessMask = unsynchronisedReadBits,
-      .dstStageMask = stage,
-      .dstAccessMask = access,
-      .buffer = handle,
-      .offset = 0,
-      .size = VK_WHOLE_SIZE,
-  };
-
-  VkDependencyInfo dependencyInfo = {
-      .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-      .bufferMemoryBarrierCount = 1,
-      .pBufferMemoryBarriers = &bufferBarrier,
-  };
-
-  vkCmdPipelineBarrier2(commandBuffer, &dependencyInfo);
-
-  // we synced for writing, just flag that this write needs to be synced later too
-  unsynchronisedReadBits = access;
-  unsynchronisedReadStages = stage;
-  unsynchronisedWriteBits = static_cast<VkAccessFlags2>(dstFlags);
-
-  return Error::Success();
-}
-
-// All syncs needed before reading from the buffer
-auto Buffer::SynchroniseRead(
-    GraphicsContext &context,
-    VkAccessFlags2 dstAccess, // NOLINT (swappable by mistake)
-    VkPipelineStageFlags2 dstStage) -> Error {
-
-  if ((unsynchronisedWriteBits & dstAccess) == 0) {
-    return Error::Success();
-  }
-
-  VkBufferMemoryBarrier2 bufferBarrier = {
-      .sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
-      .srcStageMask = VK_PIPELINE_STAGE_2_COPY_BIT,
-      .srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
-      .dstStageMask = dstStage,
-      .dstAccessMask = dstAccess,
-      .buffer = handle,
-      .offset = 0,
-      .size = VK_WHOLE_SIZE,
-  };
-
-  VkDependencyInfo dependencyInfo = {
-      .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-      .bufferMemoryBarrierCount = 1,
-      .pBufferMemoryBarriers = &bufferBarrier,
-  };
-
-  auto *commandBuffer = GetCommandBuffer(context, GetCurrentThreadIndex());
-  vkCmdPipelineBarrier2(commandBuffer, &dependencyInfo);
-
-  unsynchronisedReadBits |= dstAccess;
-  unsynchronisedReadStages |= dstStage;
-  unsynchronisedWriteBits &= ~dstAccess;
-
-  return Error::Success();
 }
 
 auto Buffer::UploadLarge(GraphicsContext &context,
@@ -399,11 +312,6 @@ auto Buffer::Upload(GraphicsContext &context,
         "Error uploading data, cannot upload more data than is allocated.");
   }
 
-  auto syncResult = SynchroniseWrite(context);
-  if (Error::IsError(syncResult)) {
-    return syncResult;
-  }
-
   if (isStagingBuffer) {
     // We know this will be a large upload,
     // no need for upload buffers as it is a one time upload and we won't be interfering with
@@ -560,12 +468,22 @@ auto Buffer::Clear(GraphicsContext &context, uint32_t value,
                    VkDeviceSize offset, VkDeviceSize size) -> Error {
   auto *commandBuffer = GetCommandBuffer(context, GetCurrentThreadIndex());
 
-  auto result = SynchroniseWrite(context, VK_ACCESS_2_TRANSFER_WRITE_BIT,
-                                 VK_PIPELINE_STAGE_2_CLEAR_BIT);
-
-  if (Error::IsError(result)) {
-    return result;
-  }
+  // Must flush, for WaW hazards
+  Barrier::FlushBarriers(
+      context,
+      Barrier::ResourceState{
+          .stages = VK_PIPELINE_STAGE_2_TRANSFER_BIT |
+                    VK_PIPELINE_STAGE_2_COPY_BIT |
+                    VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT,
+          .access = VK_ACCESS_2_TRANSFER_WRITE_BIT |
+                    VK_ACCESS_2_SHADER_WRITE_BIT |
+                    VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT |
+                    VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+      },
+      Barrier::ResourceState{
+          .stages = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+          .access = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+      });
 
   vkCmdFillBuffer(commandBuffer, handle, offset, size, value);
 

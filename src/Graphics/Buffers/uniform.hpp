@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Graphics/barrier.hpp"
 #include "Graphics/buffer.hpp"
 #include "Graphics/graphics.hpp"
 #include "Modules/console.hpp"
@@ -94,6 +95,14 @@ public:
       buffer = result.value();
       resized = true;
     }
+
+    Barrier::InsertUsage(Graphics::Barrier::ResourceState{
+        .type = Graphics::Barrier::UsageType::Write,
+        .stages = VK_PIPELINE_STAGE_2_HOST_BIT,
+        .access = VK_ACCESS_2_HOST_WRITE_BIT,
+    });
+
+    Barrier::FlushBarriers(context, Barrier::GlobalResourceUsageTimeline);
 
     auto result = buffer->SetData(context, localData, offset);
     auto initialOffset = offset;
