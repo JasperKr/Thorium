@@ -55,7 +55,7 @@ function Thorium.quit()
   print("Quitting the application.")
 end
 
-local image = Thorium.graphics.newTexture("leek.png", { sampler = true })
+local image = Thorium.graphics.newTexture("test.png", { sampler = true })
 -- print(image:getFilter())
 local target = Thorium.graphics.newTexture(612, 512, { sampler = true, rendertarget = true })
 local shader = Thorium.graphics.newShader("default2D")
@@ -145,21 +145,44 @@ local ffi = require("ffi")
 
 Thorium.keyboard.setEnableTextInput(true)
 
+local lastDrawTime = 0
+local lastImDrawTime = 0
+local lastShownTime = 0
+local lastShownImDrawTime = 0
+local count = 0
+
 function Thorium.draw()
-  Thorium.graphics.setShader(shader)
-  Thorium.graphics.setRenderTarget({ texture = target, loadas = { hslToRgb((Thorium.timer.getTime() * 0.5) % 1, 0.5, 0.5) } })
-  Thorium.graphics.draw(texture)
-  Thorium.graphics.setRenderTarget({ loadas = { 0, 0, 0, 1 } })
-  Thorium.graphics.draw(target)
+  local startTime = Thorium.timer.getTime()
+  -- Thorium.graphics.setShader(shader)
+  -- Thorium.graphics.setRenderTarget({ texture = target, loadas = { hslToRgb((Thorium.timer.getTime() * 0.5) % 1, 0.5, 0.5) } })
+  -- Thorium.graphics.draw(texture)
+  -- Thorium.graphics.setRenderTarget({ loadas = { 0, 0, 0, 1 } })
+  -- Thorium.graphics.draw(target)
 
   Imgui.Begin("Test window")
 
-  Imgui.Image(image, Imgui.ImVec2_Float(256, 256))
+  -- Imgui.Image(image, Imgui.ImVec2_Float(256, 256))
+  Imgui.Separator()
+  Imgui.Text("FPS: " .. tostring(Thorium.timer.getFPS()))
+  Imgui.Text("DT: " .. tostring(Thorium.timer.getDelta()))
+  Imgui.Text("Last Draw Time (ms): " .. tostring(lastShownTime * 1000))
+  Imgui.Text("Last ImGui Draw Time (ms): " .. tostring(lastShownImDrawTime * 1000))
 
   Imgui.End()
 
   Imgui.ShowDemoWindow()
 
   Thorium.gui.endFrame()
+  local imStartTime = Thorium.timer.getTime()
   Thorium.gui.draw()
+  lastImDrawTime = lastImDrawTime + Thorium.timer.getTime() - imStartTime
+  lastDrawTime = lastDrawTime + Thorium.timer.getTime() - startTime
+  count = count + 1
+  if (count >= 20) then
+    lastShownTime = lastDrawTime / count
+    lastShownImDrawTime = lastImDrawTime / count
+    count = 0
+    lastDrawTime = 0
+    lastImDrawTime = 0
+  end
 end

@@ -954,14 +954,6 @@ inline auto BeginRendering(GraphicsContext &context) -> Error {
     return Error::Create("Render area has zero width or height.");
   }
 
-  if (viewport.width == 0 || viewport.height == 0) {
-    return Error::Create("Viewport has zero width or height.");
-  }
-
-  if (scissor.extent.width == 0 || scissor.extent.height == 0) {
-    return Error::Create("Scissor has zero width or height.");
-  }
-
   auto colorAttachments = std::vector<VkRenderingAttachmentInfo>{};
   auto depthAttachment = VkRenderingAttachmentInfo{};
   auto stencilAttachment = VkRenderingAttachmentInfo{};
@@ -1029,6 +1021,7 @@ inline auto BeginRendering(GraphicsContext &context) -> Error {
 
 auto EndRendering(GraphicsContext &context) -> void {
   if (GetIsCurrentlyRendering()) {
+    PrintAlways("Ending rendering pass");
     vkCmdEndRendering(
         Graphics::GetCommandBuffer(context, GetCurrentThreadIndex()));
     GetIsCurrentlyRendering() = false;
@@ -1036,6 +1029,7 @@ auto EndRendering(GraphicsContext &context) -> void {
 }
 
 auto PrepareRendering(GraphicsContext &context) -> Error {
+  PrintAlways("Preparing rendering state...");
   auto flushResult = Flush(context);
 
   if (Error::IsError(flushResult)) {
@@ -1249,6 +1243,9 @@ auto GetMaximumAllowedViewport() -> VkViewport {
   viewport.width = static_cast<float>(size.width);
   viewport.height = static_cast<float>(size.height);
 
+  viewport.width = (std::max)(viewport.width, 1.0F);
+  viewport.height = (std::max)(viewport.height, 1.0F);
+
   return viewport;
 }
 
@@ -1277,7 +1274,15 @@ auto GetViewport() -> VkViewport {
     return GetMaximumAllowedViewport();
   }
 
-  return currentState.viewport;
+  // return currentState.viewport;
+  return {
+      .x = currentState.viewport.x,
+      .y = currentState.viewport.y,
+      .width = (std::max)(currentState.viewport.width, 1.0F),
+      .height = (std::max)(currentState.viewport.height, 1.0F),
+      .minDepth = currentState.viewport.minDepth,
+      .maxDepth = currentState.viewport.maxDepth,
+  };
 }
 
 auto GetScissor() -> VkRect2D {
@@ -1291,10 +1296,27 @@ auto GetScissor() -> VkRect2D {
         .width = static_cast<uint32_t>(viewport.width),
         .height = static_cast<uint32_t>(viewport.height),
     };
+
+    scissor.extent.width = (std::max)(scissor.extent.width, 1U);
+    scissor.extent.height = (std::max)(scissor.extent.height, 1U);
+
     return scissor;
   }
 
-  return currentState.scissor;
+  // return currentState.scissor;
+
+  return {
+      .offset =
+          {
+              .x = currentState.scissor.offset.x,
+              .y = currentState.scissor.offset.y,
+          },
+      .extent =
+          {
+              .width = (std::max)(currentState.scissor.extent.width, 1U),
+              .height = (std::max)(currentState.scissor.extent.height, 1U),
+          },
+  };
 }
 
 auto GetShader() -> Ref<Shader::ShaderModule> {
