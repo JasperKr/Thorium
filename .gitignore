@@ -12,3 +12,5 @@ vgcore.*
 *.o
 *.so
 *.dylib
+*.glb
+*.gltf

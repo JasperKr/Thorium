@@ -429,7 +429,7 @@ static inline auto TextureUsageToVkImageUsage(VkFormat format,
 constexpr VkFormat DefaultFormat = VK_FORMAT_R8G8B8A8_UNORM;
 
 const std::set<std::string> ValidOptionKeys = {
-    "type",    "format",      "mipmaps",     "sampler", "rendertarget",
+    "type",    "format",      "mipmaps",     "sampler", "dynamicRendering",
     "storage", "mipmapcount", "mipmapstart", "linear",
 };
 
@@ -525,7 +525,7 @@ struct LuaOptions {
     lua_pop(state, 1);
 
     // rendertarget
-    lua_getfield(state, index, "rendertarget");
+    lua_getfield(state, index, "dynamicRendering");
     if (lua_isboolean(state, -1) != 0) {
       if (lua_toboolean(state, -1) != 0) {
         newUsage = static_cast<LuaTextureUsage>(
