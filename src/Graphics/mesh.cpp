@@ -33,13 +33,11 @@ auto Mesh::UploadVertices(GraphicsContext &context,
                           const std::span<uint8_t> &vertices, uint64_t offset)
     -> Error {
 
-  Barrier::InsertUsage(Barrier::ResourceState{
-      .type = Barrier::UsageType::Write,
-      .stages = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-      .access = VK_ACCESS_2_TRANSFER_WRITE_BIT,
-  });
-
-  Barrier::FlushBarriers(context, Barrier::GlobalResourceUsageTimeline);
+  Barrier::UpdateUsage(context, *VertexBuffer,
+                       Barrier::ResourceState{
+                           .stages = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                           .access = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+                       });
 
   return VertexBuffer->SetData(context, vertices, offset);
 }
@@ -47,13 +45,11 @@ auto Mesh::UploadVertices(GraphicsContext &context,
 auto Mesh::UploadIndices(GraphicsContext &context,
                          const std::span<uint8_t> &indices, uint64_t offset,
                          IndexFormat format) -> Error {
-  Barrier::InsertUsage(Barrier::ResourceState{
-      .type = Barrier::UsageType::Write,
-      .stages = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-      .access = VK_ACCESS_2_TRANSFER_WRITE_BIT,
-  });
-
-  Barrier::FlushBarriers(context, Barrier::GlobalResourceUsageTimeline);
+  Barrier::UpdateUsage(context, *IndexBuffer,
+                       Barrier::ResourceState{
+                           .stages = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                           .access = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+                       });
 
   return IndexBuffer->SetData(context, indices, offset);
 }

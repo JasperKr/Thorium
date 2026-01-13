@@ -7,6 +7,7 @@
 #include <forward_list>
 #include <string>
 #include <sys/types.h>
+#include <unordered_map>
 #include <variant>
 #include <vector>
 #define VK_NO_PROTOTYPES
@@ -367,6 +368,7 @@ struct ResourceInfo {
 
 struct ShaderReflection {
   std::vector<ResourceInfo> resources;
+  std::unordered_map<uint64_t, ResourceInfo> slotToInfo;
   BufferInfo globals;
   bool hasGlobals{false};
 

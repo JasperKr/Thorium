@@ -851,13 +851,11 @@ auto Texture::SetPixels(GraphicsContext &context, Image::ImageData &imageData,
       static_cast<size_t>(source.extent.width) * Format::GetSize(format);
   auto rowCount = static_cast<size_t>(source.extent.height);
 
-  Graphics::Barrier::InsertUsage(Graphics::Barrier::ResourceState{
-      .type = Graphics::Barrier::UsageType::Read,
-      .stages = VK_PIPELINE_STAGE_2_HOST_BIT,
-      .access = VK_ACCESS_2_HOST_WRITE_BIT,
-  });
-
-  Barrier::FlushBarriers(context, Barrier::GlobalResourceUsageTimeline);
+  Graphics::Barrier::UpdateUsage(context, *this,
+                                 Graphics::Barrier::ResourceState{
+                                     .stages = VK_PIPELINE_STAGE_2_HOST_BIT,
+                                     .access = VK_ACCESS_2_HOST_WRITE_BIT,
+                                 });
 
   for (size_t row = 0; row < rowCount; ++row) {
     size_t sourceOffset =
@@ -980,13 +978,11 @@ auto Texture::SetPixels(GraphicsContext &context,
       static_cast<size_t>(source.extent.width) * Format::GetSize(format);
   auto rowCount = static_cast<size_t>(source.extent.height);
 
-  Graphics::Barrier::InsertUsage(Graphics::Barrier::ResourceState{
-      .type = Graphics::Barrier::UsageType::Read,
-      .stages = VK_PIPELINE_STAGE_2_HOST_BIT,
-      .access = VK_ACCESS_2_HOST_WRITE_BIT,
-  });
-
-  Barrier::FlushBarriers(context, Barrier::GlobalResourceUsageTimeline);
+  Graphics::Barrier::UpdateUsage(context, *this,
+                                 Graphics::Barrier::ResourceState{
+                                     .stages = VK_PIPELINE_STAGE_2_HOST_BIT,
+                                     .access = VK_ACCESS_2_HOST_WRITE_BIT,
+                                 });
 
   auto buffer = bufferResult.value();
   for (size_t row = 0; row < rowCount; ++row) {

@@ -911,4 +911,29 @@ void ShaderModule::Destroy(VkDevice &device) {
   }
 }
 
+auto ShaderModule::GetSlotDescription(uint32_t set, uint32_t binding) // NOLINT
+    -> Result<const ResourceInfo> {
+
+  auto key = static_cast<uint64_t>(set) |
+             (static_cast<uint64_t>(binding) << 32U); // NOLINT
+
+  auto iter = reflection.slotToInfo.find(key);
+  if (iter == reflection.slotToInfo.end()) {
+    return Error::Unexpected("Slot not found in shader reflection.");
+  }
+
+  return iter->second;
+}
+
+auto ShaderModule::GetSlotDescription(uint64_t slot)
+    -> Result<const ResourceInfo> {
+
+  auto iter = reflection.slotToInfo.find(slot);
+  if (iter == reflection.slotToInfo.end()) {
+    return Error::Unexpected("Slot not found in shader reflection.");
+  }
+
+  return iter->second;
+}
+
 } // namespace Graphics::Shader

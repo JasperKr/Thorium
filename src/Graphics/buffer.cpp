@@ -469,21 +469,9 @@ auto Buffer::Clear(GraphicsContext &context, uint32_t value,
   auto *commandBuffer = GetCommandBuffer(context, GetCurrentThreadIndex());
 
   // Must flush, for WaW hazards
-  Barrier::FlushBarriers(
-      context,
-      Barrier::ResourceState{
-          .stages = VK_PIPELINE_STAGE_2_TRANSFER_BIT |
-                    VK_PIPELINE_STAGE_2_COPY_BIT |
-                    VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT,
-          .access = VK_ACCESS_2_TRANSFER_WRITE_BIT |
-                    VK_ACCESS_2_SHADER_WRITE_BIT |
-                    VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT |
-                    VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
-      },
-      Barrier::ResourceState{
-          .stages = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-          .access = VK_ACCESS_2_TRANSFER_WRITE_BIT,
-      });
+  Barrier::UpdateUsage(context, *this,
+                       {.stages = VK_PIPELINE_STAGE_TRANSFER_BIT,
+                        .access = VK_ACCESS_TRANSFER_WRITE_BIT});
 
   vkCmdFillBuffer(commandBuffer, handle, offset, size, value);
 

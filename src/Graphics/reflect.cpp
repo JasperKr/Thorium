@@ -5,6 +5,10 @@
 #define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
 
+inline auto SetBindingToSlot(uint32_t set, uint32_t binding) -> uint64_t {
+  return (static_cast<uint64_t>(set) << 32U) | binding; // NOLINT
+}
+
 // Resolve path for struct fields is exclusive to the struct resource info
 // Since structs are nameless and their name is only described by the parent resource info
 auto StructInfo::ResolvePath(ResourceKey::const_iterator iterator,
@@ -255,6 +259,8 @@ auto SetupResource(slang::VariableLayoutReflection *variableLayout,
     resourceInfo.info = samplerInfo;
 
     reflection.resources.emplace_back(resourceInfo);
+    reflection.slotToInfo.emplace(
+        SetBindingToSlot(samplerInfo.set, samplerInfo.binding), resourceInfo);
   } else if (maskedShape == SLANG_STRUCTURED_BUFFER ||
              maskedShape == SLANG_BYTE_ADDRESS_BUFFER) {
     // SSBO
@@ -395,6 +401,8 @@ auto SetupResource(slang::VariableLayoutReflection *variableLayout,
     resourceInfo.info = bufferInfo;
 
     reflection.resources.emplace_back(resourceInfo);
+    reflection.slotToInfo.emplace(
+        SetBindingToSlot(bufferInfo.set, bufferInfo.binding), resourceInfo);
   } else {
     return Error::Create("Unsupported resource shape in reflection.");
   }
@@ -453,6 +461,8 @@ auto SetupFromType(slang::VariableLayoutReflection *variableLayout,
     resourceInfo.info = bufferInfo;
 
     reflection.resources.emplace_back(resourceInfo);
+    reflection.slotToInfo.emplace(
+        SetBindingToSlot(bufferInfo.set, bufferInfo.binding), resourceInfo);
     break;
   }
   case slang::TypeReflection::Kind::Resource: {

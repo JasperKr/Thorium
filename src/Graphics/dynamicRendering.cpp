@@ -1,6 +1,8 @@
 #include "dynamicRendering.hpp"
+#include "Graphics/barrier.hpp"
 #include "Graphics/graphics.hpp"
 #include "Graphics/graphicsState.hpp"
+#include "Graphics/reflect.hpp"
 #include "Graphics/shader.hpp"
 #include "Graphics/texture.hpp"
 #include "Modules/Math/matrix.hpp"
@@ -961,8 +963,6 @@ inline auto BeginRendering(GraphicsContext &context) -> Error {
   bool hasDepth = false;
   bool hasStencil = false;
 
-  // TODO: Error if multiple depth/stencil attachments are bound
-
   for (const auto &rendertarget : currentState.renderTargets) {
     VkRenderingAttachmentInfo attachmentInfo = {};
     attachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
@@ -973,17 +973,43 @@ inline auto BeginRendering(GraphicsContext &context) -> Error {
     attachmentInfo.clearValue = rendertarget->clearValue;
 
     if (Image::IsDepthTexture(rendertarget->texture->format)) {
+      if (hasDepth) {
+        return Error::Create("Multiple depth attachments bound.");
+      }
       depthAttachment = attachmentInfo;
       depthAttachment.imageLayout =
           VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
       hasDepth = true;
+
+      Barrier::UpdateUsage(
+          context, *rendertarget->texture,
+          {.stages = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT |
+                     VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+           .access = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT |
+                     VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT});
     } else if (Image::IsStencilTexture(rendertarget->texture->format)) {
+      if (hasStencil) {
+        return Error::Create("Multiple stencil attachments bound.");
+      }
       stencilAttachment = attachmentInfo;
       stencilAttachment.imageLayout =
           VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
       hasStencil = true;
+
+      Barrier::UpdateUsage(
+          context, *rendertarget->texture,
+          {.stages = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT |
+                     VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+           .access = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT |
+                     VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT});
     } else {
       colorAttachments.emplace_back(attachmentInfo);
+
+      Barrier::UpdateUsage(
+          context, *rendertarget->texture,
+          {.stages = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+           .access = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT |
+                     VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT});
     }
   }
 
@@ -1027,6 +1053,59 @@ auto EndRendering(GraphicsContext &context) -> void {
   }
 }
 
+auto InsertResourceBarriers(GraphicsContext &context) -> Error {
+  auto &currentState = StateStack.back();
+  auto &shader = currentState.shader;
+
+  for (auto &bufferPair : shader->boundBuffers) {
+    auto &buffer = bufferPair.second;
+    auto key = bufferPair.first;
+
+    auto infoResult = shader->GetSlotDescription(key);
+    if (Error::IsError(infoResult)) {
+      return infoResult.error();
+    }
+
+    auto info = infoResult.value().GetInfo<BufferInfo>();
+
+    VkAccessFlags2 access = 0;
+
+    switch (info.access) {
+    case SLANG_RESOURCE_ACCESS_READ:
+      access = VK_ACCESS_2_SHADER_READ_BIT;
+      break;
+    case SLANG_RESOURCE_ACCESS_READ_WRITE:
+      access = VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT;
+      break;
+    case SLANG_RESOURCE_ACCESS_WRITE:
+      access = VK_ACCESS_2_SHADER_WRITE_BIT;
+      break;
+    case SLANG_RESOURCE_ACCESS_RASTER_ORDERED:
+    case SLANG_RESOURCE_ACCESS_APPEND:
+    case SLANG_RESOURCE_ACCESS_CONSUME:
+    case SLANG_RESOURCE_ACCESS_FEEDBACK:
+    case SLANG_RESOURCE_ACCESS_NONE:
+    case SLANG_RESOURCE_ACCESS_UNKNOWN:
+      break;
+    }
+
+    if (access == 0) {
+      PrintWarning("Buffer access type is Unknown for slang access: {}, "
+                   "skipping barrier.",
+                   static_cast<uint32_t>(info.access));
+      continue;
+    }
+
+    Barrier::UpdateUsage(context, *buffer,
+                         {
+                             .stages = shader->stages,
+                             .access = access,
+                         });
+  }
+
+  return Error::Success();
+}
+
 auto PrepareRendering(GraphicsContext &context) -> Error {
   auto flushResult = Flush(context);
 
@@ -1036,6 +1115,8 @@ auto PrepareRendering(GraphicsContext &context) -> Error {
 
   auto updatedState = flushResult.value();
   auto &currentState = StateStack.back();
+
+  InsertResourceBarriers(context);
 
   if (updatedState) {
     if (currentState.bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS) {
