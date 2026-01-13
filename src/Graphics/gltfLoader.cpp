@@ -3,6 +3,7 @@
 #include "gltfLoader.hpp"
 #include "Graphics/graphics.hpp"
 #include "Graphics/texture.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/filesystem.hpp"
 #include "Modules/imagedata.hpp"
@@ -13,15 +14,18 @@
 #include <span>
 #include <string>
 
-#include <fastgltf/core.hpp>
-#include <fastgltf/types.hpp>
+// #define FASTGLTF_USE_STD_MODULE
+
+#include "fastgltf/include/fastgltf/core.hpp"
+#include "fastgltf/include/fastgltf/types.hpp"
+
 #include <variant>
 #include <vector>
 
 namespace glTF {
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
-fastgltf::Parser Parser =
+static fastgltf::Parser Parser =
     fastgltf::Parser(fastgltf::Extensions::KHR_lights_punctual);
 
 inline auto LoadDataSource(const fastgltf::Asset &asset,
@@ -157,6 +161,7 @@ inline auto LoadTexture(Graphics::GraphicsContext &context,
   createInfo.format = imageData->GetFormat();
   createInfo.usage =
       VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+  createInfo.mipmapCount = 1;
 
   auto textureResult = Graphics::Texture::Create2D(context, createInfo);
 
@@ -263,8 +268,7 @@ inline auto LoadNode(Graphics::GraphicsContext &context,
   bool isLight = gltfNode.lightIndex.has_value();
 
   // Note: checking if children aren't empty might cull some nodes, should check if this is an issue.
-  bool isNode =
-      !isMesh && !isSkin && !isCamera && !isLight && !gltfNode.children.empty();
+  bool isNode = !isMesh && !isSkin && !isCamera && !isLight;
 
   if (isNode) {
     Engine::Node node;
@@ -329,12 +333,15 @@ inline auto LoadNode(Graphics::GraphicsContext &context,
   }
 
   if (isSkin) {
+    return {};
   }
 
   if (isCamera) {
+    return {};
   }
 
   if (isLight) {
+    return {};
   }
 
   return Error::Unexpected("Failed to determine node type.");

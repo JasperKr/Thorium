@@ -153,10 +153,32 @@ add_dependencies(LuaJIT::LuaJIT luajit)
 # -------------------------------
 # FastGLTF
 # -------------------------------
-add_library(fastgltf INTERFACE)
-target_include_directories(fastgltf
-    INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include/fastgltf
+
+set(fastGLTFSources
+    include/fastgltf/src/fastgltf.cpp
+    include/fastgltf/src/base64.cpp
+    include/fastgltf/src/io.cpp
 )
+
+add_library(fastgltf STATIC ${fastGLTFSources})
+
+target_include_directories(fastgltf
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/fastgltf/include
+)
+
+add_library(simdjson STATIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/simdjson/simdjson.cpp
+)
+
+target_include_directories(simdjson
+    PUBLIC include
+)
+
+target_link_libraries(fastgltf
+    PUBLIC simdjson
+)
+
 
 # -------------------------------
 # Slang

@@ -86,14 +86,14 @@ auto LoadGUIState(lua_State *state) -> Result<GuiState> {
   auto ctx = *Graphics::GetCurrentGraphicsContext();
 
   auto rgba8CreationResult = Graphics::Shader::ShaderModule::Create(
-      ctx, "ImGuiRGBA8", "Imgui rgba8 shader");
+      ctx, "Shaders/ImGuiRGBA8", "Imgui rgba8 shader");
   if (Error::IsError(rgba8CreationResult)) {
     return Error::Unexpected("Failed to create ImGui RGBA8 shader: " +
                              rgba8CreationResult.error().message);
   }
 
-  auto a8CreationResult =
-      Graphics::Shader::ShaderModule::Create(ctx, "ImGuiA8", "Imgui a8 shader");
+  auto a8CreationResult = Graphics::Shader::ShaderModule::Create(
+      ctx, "Shaders/ImGuiA8", "Imgui a8 shader");
   if (Error::IsError(a8CreationResult)) {
     return Error::Unexpected("Failed to create ImGui A8 shader: " +
                              a8CreationResult.error().message);

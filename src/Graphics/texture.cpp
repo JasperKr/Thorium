@@ -80,7 +80,7 @@ auto Create2D(const GraphicsContext &context, TextureCreationInfo info)
   allocInfo.requiredFlags = 0;
   allocInfo.preferredFlags = 0;
 
-  auto error =
+  Error error =
       Error::Create(vmaCreateImage(context.vmaAllocator, &imageInfo, &allocInfo,
                                    &texture->image, &texture->memory, nullptr));
 
@@ -191,6 +191,7 @@ auto CreateCubeMap(const GraphicsContext &context, TextureCreationInfo info)
   allocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
   allocInfo.requiredFlags = 0;
   allocInfo.preferredFlags = 0;
+
   Error error =
       Error::Create(vmaCreateImage(context.vmaAllocator, &imageInfo, &allocInfo,
                                    &texture->image, &texture->memory, nullptr));
