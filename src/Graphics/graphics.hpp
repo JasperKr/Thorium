@@ -57,10 +57,6 @@ struct SwapchainInfo {
   std::vector<VkImageView> imageViews;
 };
 
-struct RuntimeInfo {
-  uint32_t textureCount;
-};
-
 struct GraphicsContext {
   VkInstance instance;
   VkSurfaceKHR surface;
@@ -88,7 +84,6 @@ struct GraphicsContext {
 
   int32_t renderThreadCount;
   std::vector<RenderData> renderData;
-  RuntimeInfo runtimeInfo;
 };
 
 auto Initialize(GraphicsContext &context, Config::ApplicationConfig &config)

@@ -151,6 +151,36 @@ endif()
 add_dependencies(LuaJIT::LuaJIT luajit)
 
 # -------------------------------
+# FastGLTF
+# -------------------------------
+
+set(fastGLTFSources
+    include/fastgltf/src/fastgltf.cpp
+    include/fastgltf/src/base64.cpp
+    include/fastgltf/src/io.cpp
+)
+
+add_library(fastgltf STATIC ${fastGLTFSources})
+
+target_include_directories(fastgltf
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/fastgltf/include
+)
+
+add_library(simdjson STATIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/simdjson/simdjson.cpp
+)
+
+target_include_directories(simdjson
+    PUBLIC include
+)
+
+target_link_libraries(fastgltf
+    PUBLIC simdjson
+)
+
+
+# -------------------------------
 # Slang
 # -------------------------------
 
@@ -196,6 +226,7 @@ add_executable(Thorium
     src/Graphics/mesh.cpp
     src/Graphics/draw.cpp
     src/Graphics/barrier.cpp
+    src/Graphics/gltfLoader.cpp
 
 # Graphics Buffers
     src/Graphics/Buffers/push.cpp
@@ -280,6 +311,7 @@ target_link_libraries(Thorium
         ${Vulkan_LIBRARIES}
         LuaJIT::LuaJIT
         ${SLANG_LIBS}
+        fastgltf
 )
 
 if (WIN32)

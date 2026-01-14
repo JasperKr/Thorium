@@ -26,52 +26,6 @@
 
 namespace Graphics::Texture {
 
-auto StartSingleUseCommandBuffer(GraphicsContext &context)
-    -> Result<VkCommandBuffer> {
-  VkCommandBufferAllocateInfo allocInfo = {};
-  allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-  allocInfo.commandPool = GetRenderData(context, 0).pool;
-  allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-  allocInfo.commandBufferCount = 1;
-
-  VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
-
-  Error error = Error::Create(
-      vkAllocateCommandBuffers(context.device, &allocInfo, &commandBuffer));
-
-  if (Error::IsError(error)) {
-    return error.AsUnexpected();
-  }
-
-  return commandBuffer;
-}
-
-auto EndSingleUseCommandBuffer(GraphicsContext &context,
-                               VkCommandBuffer commandBuffer) -> Error {
-  vkEndCommandBuffer(commandBuffer);
-
-  VkSubmitInfo submitInfo = {};
-  submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-  submitInfo.commandBufferCount = 1;
-  submitInfo.pCommandBuffers = &commandBuffer;
-
-  Error error = Error::Create(
-      vkQueueSubmit(context.graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE));
-
-  if (Error::IsError(error)) {
-    return error;
-  }
-  vkQueueWaitIdle(context.graphicsQueue);
-
-  // Cleanup
-  VkCommandPool commandPool = GetRenderData(context, 0).pool;
-
-  vkFreeCommandBuffers(context.device, commandPool, 1, &commandBuffer);
-  vkDestroyCommandPool(context.device, commandPool, nullptr);
-
-  return Error::Success();
-}
-
 auto GetAspectFlagsForFormat(VkFormat format) -> VkImageAspectFlagBits {
   switch (format) {
   case VK_FORMAT_D16_UNORM:
@@ -94,7 +48,7 @@ auto GetAspectFlagsForFormat(VkFormat format) -> VkImageAspectFlagBits {
   }
 }
 
-auto Create2D(GraphicsContext &context, TextureCreationInfo info)
+auto Create2D(const GraphicsContext &context, TextureCreationInfo info)
     -> Result<Ref<Texture>> {
 
   Ref<Texture> texture = Ref<Texture>::Make();
@@ -127,15 +81,13 @@ auto Create2D(GraphicsContext &context, TextureCreationInfo info)
   allocInfo.requiredFlags = 0;
   allocInfo.preferredFlags = 0;
 
-  auto error =
+  Error error =
       Error::Create(vmaCreateImage(context.vmaAllocator, &imageInfo, &allocInfo,
                                    &texture->image, &texture->memory, nullptr));
 
   if (Error::IsError(error)) {
     return error.AsUnexpected();
   }
-
-  context.runtimeInfo.textureCount++;
 
   VkImageViewCreateInfo viewInfo = {};
   viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -201,7 +153,7 @@ auto FromSwapchainTexture(const GraphicsContext &context,
   return texture;
 }
 
-auto CreateCubeMap(GraphicsContext &context, TextureCreationInfo info)
+auto CreateCubeMap(const GraphicsContext &context, TextureCreationInfo info)
     -> Result<Ref<Texture>> {
 
   if (info.width != info.height) {
@@ -240,6 +192,7 @@ auto CreateCubeMap(GraphicsContext &context, TextureCreationInfo info)
   allocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
   allocInfo.requiredFlags = 0;
   allocInfo.preferredFlags = 0;
+
   Error error =
       Error::Create(vmaCreateImage(context.vmaAllocator, &imageInfo, &allocInfo,
                                    &texture->image, &texture->memory, nullptr));
@@ -247,8 +200,6 @@ auto CreateCubeMap(GraphicsContext &context, TextureCreationInfo info)
   if (Error::IsError(error)) {
     return error.AsUnexpected();
   }
-
-  context.runtimeInfo.textureCount++;
 
   VkImageViewCreateInfo viewInfo = {};
   viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -275,7 +226,7 @@ auto CreateCubeMap(GraphicsContext &context, TextureCreationInfo info)
   return texture;
 }
 
-auto CreateVolume(GraphicsContext &context, TextureCreationInfo info)
+auto CreateVolume(const GraphicsContext &context, TextureCreationInfo info)
     -> Result<Ref<Texture>> {
 
   Ref<Texture> texture = Ref<Texture>::Make();
@@ -316,8 +267,6 @@ auto CreateVolume(GraphicsContext &context, TextureCreationInfo info)
     return error.AsUnexpected();
   }
 
-  context.runtimeInfo.textureCount++;
-
   VkImageViewCreateInfo viewInfo = {};
   viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
   viewInfo.image = texture->image;
@@ -343,7 +292,7 @@ auto CreateVolume(GraphicsContext &context, TextureCreationInfo info)
   return texture;
 }
 
-auto CreateArray(GraphicsContext &context, TextureCreationInfo info)
+auto CreateArray(const GraphicsContext &context, TextureCreationInfo info)
     -> Result<Ref<Texture>> {
 
   Ref<Texture> texture = Ref<Texture>::Make();
@@ -383,8 +332,6 @@ auto CreateArray(GraphicsContext &context, TextureCreationInfo info)
   if (Error::IsError(error)) {
     return error.AsUnexpected();
   }
-
-  context.runtimeInfo.textureCount++;
 
   VkImageViewCreateInfo viewInfo = {};
   viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -1044,7 +991,6 @@ auto Texture::SetPixels(GraphicsContext &context,
 auto Texture::Destroy(GraphicsContext &context) const -> void {
   vkDestroyImageView(context.device, view, nullptr);
   vmaDestroyImage(context.vmaAllocator, image, memory);
-  context.runtimeInfo.textureCount--;
 }
 
 auto Texture::ScheduleDestroy() -> void {

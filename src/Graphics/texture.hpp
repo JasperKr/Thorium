@@ -173,18 +173,18 @@ struct TextureCreationInfo {
   int mipmapCount{};                     // Number of mipmap levels
 };
 
-auto Create2D(GraphicsContext &context, TextureCreationInfo info)
+auto Create2D(const GraphicsContext &context, TextureCreationInfo info)
     -> Result<Ref<Texture>>;
 auto FromSwapchainTexture(const GraphicsContext &context,
                           VkImage swapchainImage,
                           VkImageView swapchainImageView, VkFormat format,
                           uint32_t width, uint32_t height)
     -> Result<Ref<Texture>>;
-auto CreateCubeMap(GraphicsContext &context, TextureCreationInfo info)
+auto CreateCubeMap(const GraphicsContext &context, TextureCreationInfo info)
     -> Result<Ref<Texture>>;
-auto CreateVolume(GraphicsContext &context, TextureCreationInfo info)
+auto CreateVolume(const GraphicsContext &context, TextureCreationInfo info)
     -> Result<Ref<Texture>>;
-auto CreateArray(GraphicsContext &context, TextureCreationInfo info)
+auto CreateArray(const GraphicsContext &context, TextureCreationInfo info)
     -> Result<Ref<Texture>>;
 
 auto TransitionLayout(GraphicsContext &context, Texture *texture,

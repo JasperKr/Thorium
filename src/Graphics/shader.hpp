@@ -178,6 +178,10 @@ struct ShaderModule : Object {
   [[nodiscard]] auto GetInstanceType() const -> Type const * override {
     return ShaderModule::GetType();
   }
+
+private:
+  auto FlushGlobals(GraphicsContext &context, VkPipelineLayout layout,
+                    VkPipelineStageFlags2 dstStage) -> Error;
 };
 
 extern Ref<ShaderModule> DefaultShaderModule; // NOLINT

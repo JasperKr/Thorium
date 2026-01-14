@@ -629,6 +629,10 @@ auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
     const auto &bufferInfo = std::get<BufferInfo>(resource.info);
     if (bufferInfo.name == *key.begin()) {
       auto locationKey = SetBindingToSlot(bufferInfo.set, bufferInfo.binding);
+      
+      if (boundBuffers[locationKey] == buffer->buffer.get()) {
+        return Error::Success(); // No need to update or dirty state
+      }
 
       boundBuffers[locationKey] = buffer->buffer.get();
 
@@ -696,6 +700,12 @@ auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
     if (resource.name == *key.begin()) {
       auto key = SetBindingToSlot(samplerInfo.set, samplerInfo.binding);
 
+      if (textures[key] == texture) {
+        return Error::Success(); // No need to update or dirty state
+      }
+
+      textures[key] = texture;
+
       // Create descriptor set for this texture
       VkDescriptorImageInfo imageInfo{};
       imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
@@ -743,15 +753,9 @@ auto ShaderModule::hash() const -> size_t {
   return hasher.get();
 }
 
-auto ShaderModule::FlushBuffers(GraphicsContext &context,
+auto ShaderModule::FlushGlobals(GraphicsContext &context,
                                 VkPipelineLayout layout,
                                 VkPipelineStageFlags2 dstStage) -> Error {
-  auto validateResult = ValidateBuffers(this);
-  if (Error::IsError(validateResult)) {
-    return validateResult;
-  }
-
-  static Graphics::Buffer *currentUBOBuffer;
 
   auto &buffer = GetGlobalUniformBuffer(context.frameIndex);
   buffer.SetData(context, globalUniforms, 0);
@@ -784,6 +788,24 @@ auto ShaderModule::FlushBuffers(GraphicsContext &context,
     descriptorWrite.pBufferInfo = &bufferInfo;
 
     vkUpdateDescriptorSets(context.device, 1, &descriptorWrite, 0, nullptr);
+  }
+
+  return Error::Success();
+}
+
+auto ShaderModule::FlushBuffers(GraphicsContext &context,
+                                VkPipelineLayout layout,
+                                VkPipelineStageFlags2 dstStage) -> Error {
+  auto validateResult = ValidateBuffers(this);
+  if (Error::IsError(validateResult)) {
+    return validateResult;
+  }
+
+  static Graphics::Buffer *currentUBOBuffer;
+
+  auto updateResult = FlushGlobals(context, layout, dstStage);
+  if (Error::IsError(updateResult)) {
+    return updateResult;
   }
 
   std::vector<VkWriteDescriptorSet> writes;
