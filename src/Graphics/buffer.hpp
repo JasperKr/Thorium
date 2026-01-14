@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Graphics/barrier.hpp"
 #include "Graphics/graphics.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
@@ -31,7 +32,7 @@ auto UnloadBufferModule(GraphicsContext &context) -> Error;
 
 static const Type bufferType = Type("Internal Buffer");
 
-struct Buffer : Object {
+struct Buffer : Object, Barrier::GraphicsResource {
   VkBuffer handle = VK_NULL_HANDLE;
   VmaAllocation memory = VK_NULL_HANDLE;
   VkDeviceSize size = 0;
@@ -101,22 +102,9 @@ struct Buffer : Object {
     return Buffer::GetType();
   }
 
-  // Range: [min, max]
-  auto SynchroniseRead(GraphicsContext &context,
-                       VkAccessFlags2 dstAccess = VK_ACCESS_2_TRANSFER_READ_BIT,
-                       VkPipelineStageFlags2 dstStage =
-                           VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT) -> Error;
-
-private:
   auto Upload(GraphicsContext &context, std::span<const uint8_t> data,
               VkDeviceSize offset = 0, VkDeviceSize size = VK_WHOLE_SIZE)
       -> Error;
-
-  // Range: [min, max]
-  auto SynchroniseWrite(
-      GraphicsContext &context,
-      VkAccessFlagBits2 access = VK_ACCESS_2_TRANSFER_WRITE_BIT,
-      VkPipelineStageFlagBits2 stage = VK_ACCESS_2_TRANSFER_WRITE_BIT) -> Error;
 
   auto RegisterUpload() -> void;
   auto UploadLarge(GraphicsContext &context,

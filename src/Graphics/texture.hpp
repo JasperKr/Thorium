@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Graphics/barrier.hpp"
 #include "Graphics/sampler.hpp"
 #include "Modules/console.hpp"
 #include "Modules/imagedata.hpp"
@@ -41,7 +42,7 @@ enum class TextureUsage : uint8_t {
   Unknown,
 };
 
-struct Texture : Object {
+struct Texture : Object, Barrier::GraphicsResource {
   VkExtent3D size{};
   VkFormat format = VK_FORMAT_UNDEFINED;
   VkImage image = VK_NULL_HANDLE;

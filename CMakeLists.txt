@@ -220,11 +220,12 @@ add_executable(Thorium
     src/Graphics/shader.cpp
     src/Graphics/rendergraph.cpp
     src/Graphics/sampler.cpp
-    src/Graphics/rendertarget.cpp
+    src/Graphics/dynamicRendering.cpp
     src/Graphics/reflect.cpp
     src/Graphics/resource.cpp
     src/Graphics/mesh.cpp
     src/Graphics/draw.cpp
+    src/Graphics/barrier.cpp
     src/Graphics/gltfLoader.cpp
 
 # Graphics Buffers

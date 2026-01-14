@@ -1,5 +1,6 @@
 #include "reflect.hpp"
 #include "Graphics/graphics.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "slang/slang.h"
 #define VK_NO_PROTOTYPES
@@ -255,6 +256,11 @@ auto SetupResource(slang::VariableLayoutReflection *variableLayout,
     resourceInfo.info = samplerInfo;
 
     reflection.resources.emplace_back(resourceInfo);
+    reflection
+        .slotToInfo[SetBindingToSlot(samplerInfo.set, samplerInfo.binding)] =
+        resourceInfo;
+    PrintAlways("Added sampler resource: {}, set: {}, binding: {}",
+                resourceInfo.name, samplerInfo.set, samplerInfo.binding);
   } else if (maskedShape == SLANG_STRUCTURED_BUFFER ||
              maskedShape == SLANG_BYTE_ADDRESS_BUFFER) {
     // SSBO
@@ -395,6 +401,11 @@ auto SetupResource(slang::VariableLayoutReflection *variableLayout,
     resourceInfo.info = bufferInfo;
 
     reflection.resources.emplace_back(resourceInfo);
+    reflection
+        .slotToInfo[SetBindingToSlot(bufferInfo.set, bufferInfo.binding)] =
+        resourceInfo;
+    PrintAlways("Added storage buffer resource: {}, set: {}, binding: {}",
+                resourceInfo.name, bufferInfo.set, bufferInfo.binding);
   } else {
     return Error::Create("Unsupported resource shape in reflection.");
   }
@@ -453,6 +464,9 @@ auto SetupFromType(slang::VariableLayoutReflection *variableLayout,
     resourceInfo.info = bufferInfo;
 
     reflection.resources.emplace_back(resourceInfo);
+    reflection
+        .slotToInfo[SetBindingToSlot(bufferInfo.set, bufferInfo.binding)] =
+        resourceInfo;
     break;
   }
   case slang::TypeReflection::Kind::Resource: {

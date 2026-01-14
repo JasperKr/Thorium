@@ -1,7 +1,7 @@
 #include "wrap_rendertarget.hpp"
 
+#include "Graphics/dynamicRendering.hpp"
 #include "Graphics/graphics.hpp"
-#include "Graphics/rendertarget.hpp"
 #include "Graphics/texture.hpp"
 #include "Modules/error.hpp"
 #include "Wrap/Graphics/wrap_color.hpp"

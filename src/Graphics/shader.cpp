@@ -1,6 +1,7 @@
 #include "shader.hpp"
 #include "Buffers/uniform.hpp"
 #include "Graphics/Buffers/push.hpp"
+#include "Graphics/barrier.hpp"
 #include "Graphics/graphicsState.hpp"
 #include "Graphics/reflect.hpp"
 #include "Modules/Math/vector.hpp"
@@ -17,6 +18,7 @@
 #include "tl/expected.hpp"
 #include <array>
 #include <span>
+#include <utility>
 #define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
 #include <cassert>
@@ -528,10 +530,9 @@ inline auto ValidateBuffers(const ShaderModule *shader) -> Error {
       continue;
     }
 
-    // NOLINTNEXTLINE
-    auto locationKey = bufferInfo.set | ((uint64_t)bufferInfo.binding << 32U);
+    auto locationKey = SetBindingToSlot(bufferInfo.set, bufferInfo.binding);
 
-    if (!shader->buffers.contains(locationKey)) {
+    if (!shader->boundBuffers.contains(locationKey)) {
       return Error::Create("Storage buffer '" + resource.name +
                            "' not set up in shader.");
     }
@@ -627,14 +628,13 @@ auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
 
     const auto &bufferInfo = std::get<BufferInfo>(resource.info);
     if (bufferInfo.name == *key.begin()) {
-      // NOLINTNEXTLINE
-      auto locationKey = bufferInfo.set | ((uint64_t)bufferInfo.binding << 32U);
-
-      if (buffers[locationKey] == buffer->buffer.get()) {
+      auto locationKey = SetBindingToSlot(bufferInfo.set, bufferInfo.binding);
+      
+      if (boundBuffers[locationKey] == buffer->buffer.get()) {
         return Error::Success(); // No need to update or dirty state
       }
 
-      buffers[locationKey] = buffer->buffer.get();
+      boundBuffers[locationKey] = buffer->buffer.get();
 
       VkDescriptorBufferInfo vkBufferInfo{};
       vkBufferInfo.buffer = buffer->buffer->handle;
@@ -698,8 +698,7 @@ auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
 
     const auto &samplerInfo = std::get<SamplerInfo>(resource.info);
     if (resource.name == *key.begin()) {
-      // NOLINTNEXTLINE
-      auto key = samplerInfo.set | ((uint64_t)samplerInfo.binding << 32U);
+      auto key = SetBindingToSlot(samplerInfo.set, samplerInfo.binding);
 
       if (textures[key] == texture) {
         return Error::Success(); // No need to update or dirty state
@@ -789,9 +788,6 @@ auto ShaderModule::FlushGlobals(GraphicsContext &context,
     descriptorWrite.pBufferInfo = &bufferInfo;
 
     vkUpdateDescriptorSets(context.device, 1, &descriptorWrite, 0, nullptr);
-
-    auto result = buffer.GetBuffer()->SynchroniseRead(
-        context, VK_ACCESS_2_UNIFORM_READ_BIT, dstStage);
   }
 
   return Error::Success();
@@ -824,14 +820,6 @@ auto ShaderModule::FlushBuffers(GraphicsContext &context,
 
     if (write.bufferPtr == nullptr && write.imagePtr == nullptr) {
       return Error::Create("Descriptor write has no buffer or image info set.");
-    }
-
-    if (write.bufferPtr != nullptr) {
-      auto bufferResult = write.bufferPtr->SynchroniseRead(
-          context, write.bufferAccessBits, dstStage);
-      if (Error::IsError(bufferResult)) {
-        return bufferResult;
-      }
     }
 
     uint64_t key = write.dstSet;
@@ -941,6 +929,35 @@ void ShaderModule::Destroy(VkDevice &device) {
     vkDestroyShaderModule(device, module, nullptr);
     module = VK_NULL_HANDLE;
   }
+}
+
+auto ShaderModule::GetSlotDescription(uint32_t set, uint32_t binding) // NOLINT
+    -> Result<const ResourceInfo> {
+
+  auto key = SetBindingToSlot(set, binding);
+
+  auto iter = reflection.slotToInfo.find(key);
+  if (iter == reflection.slotToInfo.end()) {
+    return Error::Unexpectedf(
+        "Slot (set: {}, binding: {}) not found in shader reflection.", set,
+        binding);
+  }
+
+  return iter->second;
+}
+
+auto ShaderModule::GetSlotDescription(uint64_t slot)
+    -> Result<const ResourceInfo> {
+
+  auto iter = reflection.slotToInfo.find(slot);
+  if (iter == reflection.slotToInfo.end()) {
+    const auto &[set, binding] = SlotToSetBinding(slot);
+    return Error::Unexpectedf(
+        "Slot (set: {}, binding: {}) not found in shader reflection.", set,
+        binding);
+  }
+
+  return iter->second;
 }
 
 } // namespace Graphics::Shader

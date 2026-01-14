@@ -1,8 +1,8 @@
 #pragma once
 
+#include "Graphics/barrier.hpp"
 #include "Graphics/buffer.hpp"
 #include "Graphics/graphics.hpp"
-#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "tl/expected.hpp"
@@ -94,6 +94,12 @@ public:
       buffer = result.value();
       resized = true;
     }
+
+    Barrier::UpdateUsage(context, *buffer,
+                         Graphics::Barrier::ResourceState{
+                             .stages = VK_PIPELINE_STAGE_2_HOST_BIT,
+                             .access = VK_ACCESS_2_HOST_WRITE_BIT,
+                         });
 
     auto result = buffer->SetData(context, localData, offset);
     auto initialOffset = offset;

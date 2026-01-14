@@ -368,6 +368,21 @@ struct [[nodiscard]] Error {
     return tl::unexpected<Error>(Create(result));
   }
 
+  template <typename... Args>
+  static auto Unexpectedf(std::string_view format, Args &&...args) {
+    return tl::unexpected<Error>(
+        Create(std::vformat(format,
+                            std::make_format_args(std::forward<Args>(args)...)),
+               -1, 1));
+  }
+
+  template <typename... Args>
+  static auto Createf(std::string_view format, Args &&...args) -> Error {
+    return Create(std::vformat(format, std::make_format_args(
+                                           std::forward<Args>(args)...)),
+                  -1, 1);
+  }
+
   template <typename T>
   static auto Create(SlangResult result,
                      Slang::ComPtr<slang::IBlob> diagnosticsBlob,

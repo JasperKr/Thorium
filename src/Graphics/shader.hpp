@@ -126,8 +126,8 @@ struct ShaderModule : Object {
   ShaderReflection reflection;
   std::vector<PushBuffer> pushBuffers;
 
-  std::unordered_map<uint64_t, Buffer *> buffers;
-  std::unordered_map<uint64_t, Texture::Texture *> textures;
+  std::unordered_map<uint64_t, Buffer *> boundBuffers;
+  std::unordered_map<uint64_t, Texture::Texture *> boundTextures;
 
   std::unordered_map<uint32_t, VkDescriptorSetLayout> descriptorSetLayouts;
   std::unordered_map<uint32_t, VkDescriptorSet> descriptorSets;
@@ -153,6 +153,9 @@ struct ShaderModule : Object {
             Graphics::Texture::Texture *texture) -> Error;
 
   auto GetUniform(const ResourceKey &key) const -> Result<const ResourceInfo>;
+  auto GetSlotDescription(uint32_t set, uint32_t binding)
+      -> Result<const ResourceInfo>;
+  auto GetSlotDescription(uint64_t slot) -> Result<const ResourceInfo>;
 
   auto FlushBuffers(GraphicsContext &context, VkPipelineLayout layout,
                     VkPipelineStageFlags2 dstStage) -> Error;

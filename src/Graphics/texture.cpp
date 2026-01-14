@@ -1,4 +1,5 @@
 #include "texture.hpp"
+#include "Graphics/barrier.hpp"
 #include "Graphics/buffer.hpp"
 #include "Graphics/format.hpp"
 #include "Graphics/graphics.hpp"
@@ -797,6 +798,12 @@ auto Texture::SetPixels(GraphicsContext &context, Image::ImageData &imageData,
       static_cast<size_t>(source.extent.width) * Format::GetSize(format);
   auto rowCount = static_cast<size_t>(source.extent.height);
 
+  Graphics::Barrier::UpdateUsage(context, *this,
+                                 Graphics::Barrier::ResourceState{
+                                     .stages = VK_PIPELINE_STAGE_2_HOST_BIT,
+                                     .access = VK_ACCESS_2_HOST_WRITE_BIT,
+                                 });
+
   for (size_t row = 0; row < rowCount; ++row) {
     size_t sourceOffset =
         ((row + source.offset.y) * imageData.GetWidth() + source.offset.x) *
@@ -917,6 +924,12 @@ auto Texture::SetPixels(GraphicsContext &context,
   auto rowSize =
       static_cast<size_t>(source.extent.width) * Format::GetSize(format);
   auto rowCount = static_cast<size_t>(source.extent.height);
+
+  Graphics::Barrier::UpdateUsage(context, *this,
+                                 Graphics::Barrier::ResourceState{
+                                     .stages = VK_PIPELINE_STAGE_2_HOST_BIT,
+                                     .access = VK_ACCESS_2_HOST_WRITE_BIT,
+                                 });
 
   auto buffer = bufferResult.value();
   for (size_t row = 0; row < rowCount; ++row) {

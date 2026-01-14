@@ -1,8 +1,8 @@
 #include "wrap_imgui.hpp"
 #include "Graphics/draw.hpp"
+#include "Graphics/dynamicRendering.hpp"
 #include "Graphics/graphics.hpp"
 #include "Graphics/mesh.hpp"
-#include "Graphics/rendertarget.hpp"
 #include "Graphics/shader.hpp"
 #include "Graphics/texture.hpp"
 #include "Graphics/vertexformat.hpp"
@@ -415,7 +415,6 @@ auto MousePressed(lua_State *state) -> int {
   auto button = static_cast<int>(luaL_checkinteger(state, 3)) - 1; // 0-based
 
   auto &inout = ImGui::GetIO();
-  inout.AddMousePosEvent(x_position, y_position);
 
   // NOLINTBEGIN
   if (button >= 0 && button < IM_ARRAYSIZE(inout.MouseDown)) {
@@ -433,7 +432,6 @@ auto MouseReleased(lua_State *state) -> int {
   auto button = static_cast<int>(luaL_checkinteger(state, 3)) - 1; // 0-based
 
   auto &inout = ImGui::GetIO();
-  inout.AddMousePosEvent(x_position, y_position);
   // NOLINTBEGIN
   if (button >= 0 && button < IM_ARRAYSIZE(inout.MouseDown)) {
     inout.AddMouseButtonEvent(button, false);

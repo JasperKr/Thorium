@@ -197,17 +197,21 @@ inline void PrintAlways(std::string_view format, Args &&...args) {
 }
 
 inline void PrintDebug(const std::string &message) {
+#ifndef NDEBUG
   if (LogLevel::Debug >= CurrentLogLevel) {
     std::cout << ColorText("[DEBUG] ", ConsoleColor::Cyan) << message << '\n';
   }
+#endif
 }
 
 template <typename... Args> // NOLINTNEXTLINE args forwarding
 inline void PrintDebug(std::string_view format, Args &&...args) {
+#ifndef NDEBUG
   if (LogLevel::Debug >= CurrentLogLevel) {
     std::cout << ColorText("[DEBUG] ", ConsoleColor::Cyan)
               << std::vformat(format, std::make_format_args(args...)) << '\n';
   }
+#endif
 }
 
 inline void PrintInfo(const std::string &message) {
@@ -225,17 +229,21 @@ inline void PrintInfo(std::string_view format, Args &&...args) {
 }
 
 inline void PrintLibrary(const std::string &message) {
+#ifndef NDEBUG
   if (LogLevel::Info >= CurrentLogLevel) {
     std::cout << ColorText("[LIBRARY] ", ConsoleColor::Blue) << message << '\n';
   }
+#endif
 }
 
 template <typename... Args> // NOLINTNEXTLINE args forwarding
 inline void PrintLibrary(std::string_view format, Args &&...args) {
+#ifndef NDEBUG
   if (LogLevel::Info >= CurrentLogLevel) {
     std::cout << ColorText("[LIBRARY] ", ConsoleColor::Blue)
               << std::vformat(format, std::make_format_args(args...)) << '\n';
   }
+#endif
 }
 
 inline void PrintWarning(const std::string &message) {
