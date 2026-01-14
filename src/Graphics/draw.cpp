@@ -15,11 +15,11 @@ auto BindMesh(GraphicsContext &context, VkCommandBuffer cmdBuffer,
   auto count =
       mesh.GetIndexCount() > 0 ? mesh.GetIndexCount() : mesh.GetVertexCount();
 
-  Barrier::InsertUsage(Barrier::ResourceState{
-      .type = Barrier::UsageType::Read,
-      .stages = VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT,
-      .access = VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT,
-  });
+  Barrier::UpdateUsage(context, *mesh.GetVertexBuffer(),
+                       Barrier::ResourceState{
+                           .stages = VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT,
+                           .access = VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT,
+                       });
 
   switch (mesh.GetTopology()) {
   case VK_PRIMITIVE_TOPOLOGY_LINE_LIST:
@@ -56,11 +56,11 @@ auto BindMesh(GraphicsContext &context, VkCommandBuffer cmdBuffer,
   vkCmdBindVertexBuffers(cmdBuffer, 0, 1, vertexBuffers.data(), offsets.data());
 
   if (mesh.GetIndexCount() > 0) {
-    Barrier::InsertUsage(Barrier::ResourceState{
-        .type = Barrier::UsageType::Read,
-        .stages = VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT,
-        .access = VK_ACCESS_2_INDEX_READ_BIT,
-    });
+    Barrier::UpdateUsage(context, *mesh.GetIndexBuffer(),
+                         Barrier::ResourceState{
+                             .stages = VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT,
+                             .access = VK_ACCESS_2_INDEX_READ_BIT,
+                         });
 
     VkIndexType type{};
 
@@ -99,7 +99,6 @@ auto Draw(GraphicsContext &context, const Mesh &mesh, uint32_t instanceCount)
   RenderTarget::SetBindPoint(VK_PIPELINE_BIND_POINT_GRAPHICS);
   RenderTarget::SetVertexFormat(format);
   RenderTarget::SetTopology(mesh.GetTopology());
-  Barrier::FlushBarriers(context, Barrier::GlobalResourceUsageTimeline);
 
   auto error = RenderTarget::PrepareRendering(context);
   if (Error::IsError(error)) {

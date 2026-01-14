@@ -18,6 +18,7 @@
 #include "tl/expected.hpp"
 #include <array>
 #include <span>
+#include <utility>
 #define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
 #include <cassert>
@@ -529,10 +530,9 @@ inline auto ValidateBuffers(const ShaderModule *shader) -> Error {
       continue;
     }
 
-    // NOLINTNEXTLINE
-    auto locationKey = bufferInfo.set | ((uint64_t)bufferInfo.binding << 32U);
+    auto locationKey = SetBindingToSlot(bufferInfo.set, bufferInfo.binding);
 
-    if (!shader->buffers.contains(locationKey)) {
+    if (!shader->boundBuffers.contains(locationKey)) {
       return Error::Create("Storage buffer '" + resource.name +
                            "' not set up in shader.");
     }
@@ -628,10 +628,9 @@ auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
 
     const auto &bufferInfo = std::get<BufferInfo>(resource.info);
     if (bufferInfo.name == *key.begin()) {
-      // NOLINTNEXTLINE
-      auto locationKey = bufferInfo.set | ((uint64_t)bufferInfo.binding << 32U);
+      auto locationKey = SetBindingToSlot(bufferInfo.set, bufferInfo.binding);
 
-      buffers[locationKey] = buffer->buffer.get();
+      boundBuffers[locationKey] = buffer->buffer.get();
 
       VkDescriptorBufferInfo vkBufferInfo{};
       vkBufferInfo.buffer = buffer->buffer->handle;
@@ -695,8 +694,7 @@ auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
 
     const auto &samplerInfo = std::get<SamplerInfo>(resource.info);
     if (resource.name == *key.begin()) {
-      // NOLINTNEXTLINE
-      auto key = samplerInfo.set | ((uint64_t)samplerInfo.binding << 32U);
+      auto key = SetBindingToSlot(samplerInfo.set, samplerInfo.binding);
 
       // Create descriptor set for this texture
       VkDescriptorImageInfo imageInfo{};
@@ -914,12 +912,13 @@ void ShaderModule::Destroy(VkDevice &device) {
 auto ShaderModule::GetSlotDescription(uint32_t set, uint32_t binding) // NOLINT
     -> Result<const ResourceInfo> {
 
-  auto key = static_cast<uint64_t>(set) |
-             (static_cast<uint64_t>(binding) << 32U); // NOLINT
+  auto key = SetBindingToSlot(set, binding);
 
   auto iter = reflection.slotToInfo.find(key);
   if (iter == reflection.slotToInfo.end()) {
-    return Error::Unexpected("Slot not found in shader reflection.");
+    return Error::Unexpectedf(
+        "Slot (set: {}, binding: {}) not found in shader reflection.", set,
+        binding);
   }
 
   return iter->second;
@@ -930,7 +929,10 @@ auto ShaderModule::GetSlotDescription(uint64_t slot)
 
   auto iter = reflection.slotToInfo.find(slot);
   if (iter == reflection.slotToInfo.end()) {
-    return Error::Unexpected("Slot not found in shader reflection.");
+    const auto &[set, binding] = SlotToSetBinding(slot);
+    return Error::Unexpectedf(
+        "Slot (set: {}, binding: {}) not found in shader reflection.", set,
+        binding);
   }
 
   return iter->second;

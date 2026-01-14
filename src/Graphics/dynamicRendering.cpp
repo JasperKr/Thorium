@@ -811,7 +811,7 @@ auto FlushCompute(GraphicsContext &context) -> Result<bool> {
       Graphics::GetCommandBuffer(context, GetCurrentThreadIndex());
 
   // Unset current rendering, otherwise vkCmdPipelineBarrier will fail
-  EndRendering(context);
+  // EndRendering(context);
 
   auto error =
       currentState.shader->FlushBuffers(context, pipelineResult.value().second,
@@ -859,7 +859,7 @@ auto FlushGraphics(GraphicsContext &context) -> Result<bool> {
       Graphics::GetCommandBuffer(context, GetCurrentThreadIndex());
 
   // Unset current rendering, otherwise vkCmdPipelineBarrier will fail
-  EndRendering(context);
+  // EndRendering(context);
 
   auto viewport = GetClippedViewport();
 
@@ -1005,11 +1005,11 @@ inline auto BeginRendering(GraphicsContext &context) -> Error {
     } else {
       colorAttachments.emplace_back(attachmentInfo);
 
-      Barrier::UpdateUsage(
-          context, *rendertarget->texture,
-          {.stages = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-           .access = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT |
-                     VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT});
+      // Barrier::UpdateUsage(
+      //     context, *rendertarget->texture,
+      //     {.stages = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+      //      .access = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT |
+      //                VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT});
     }
   }
 
@@ -1096,9 +1096,27 @@ auto InsertResourceBarriers(GraphicsContext &context) -> Error {
       continue;
     }
 
+    auto stages = VK_PIPELINE_STAGE_2_NONE;
+
+    for (const auto &stage : shader->stages) {
+      switch (stage) {
+      case VK_SHADER_STAGE_VERTEX_BIT:
+        stages |= VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT;
+        break;
+      case VK_SHADER_STAGE_FRAGMENT_BIT:
+        stages |= VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+        break;
+      case VK_SHADER_STAGE_COMPUTE_BIT:
+        stages |= VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+        break;
+      default:
+        break;
+      }
+    }
+
     Barrier::UpdateUsage(context, *buffer,
                          {
-                             .stages = shader->stages,
+                             .stages = stages,
                              .access = access,
                          });
   }
@@ -1116,10 +1134,15 @@ auto PrepareRendering(GraphicsContext &context) -> Error {
   auto updatedState = flushResult.value();
   auto &currentState = StateStack.back();
 
-  InsertResourceBarriers(context);
+  auto insertionResult = InsertResourceBarriers(context);
+
+  if (Error::IsError(insertionResult)) {
+    return insertionResult;
+  }
 
   if (updatedState) {
-    if (currentState.bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS) {
+    if (currentState.bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS &&
+        !GetIsCurrentlyRendering()) {
       auto beginResult = BeginRendering(context);
 
       if (Error::IsError(beginResult)) {

@@ -163,6 +163,12 @@ auto wrap_GetFormat(lua_State *state) -> int {
 
 // data: Bytedata | table of numbers, offset: integer, size: integer
 auto wrap_SetData(lua_State *state) -> int {
+  auto *ctx = GetCurrentGraphicsContext();
+
+  if (ctx == nullptr) {
+    return luaL_error(state, "No current GraphicsContext set for this thread.");
+  }
+
   auto *buffer =
       LuaWrap::ObjectFromLua<Graphics::StructuredBuffer::StructuredBuffer>(
           state, 1);
@@ -173,15 +179,11 @@ auto wrap_SetData(lua_State *state) -> int {
 
   std::vector<uint8_t> data{};
 
-  Graphics::Barrier::InsertUsage(Graphics::Barrier::ResourceState{
-      .type = Graphics::Barrier::UsageType::Write,
-      .stages = VK_PIPELINE_STAGE_2_HOST_BIT,
-      .access = VK_ACCESS_2_HOST_WRITE_BIT,
-  });
-
-  Graphics::Barrier::FlushBarriers(
-      *GetCurrentGraphicsContext(),
-      Graphics::Barrier::GlobalResourceUsageTimeline);
+  Graphics::Barrier::UpdateUsage(*ctx, *buffer->buffer,
+                                 Graphics::Barrier::ResourceState{
+                                     .stages = VK_PIPELINE_STAGE_2_HOST_BIT,
+                                     .access = VK_ACCESS_2_HOST_WRITE_BIT,
+                                 });
 
   if (lua_istable(state, 2)) {
     // table of numbers
@@ -222,12 +224,6 @@ auto wrap_SetData(lua_State *state) -> int {
   VkDeviceSize size = VK_WHOLE_SIZE;
   if (lua_gettop(state) >= 4) {
     size = static_cast<VkDeviceSize>(luaL_checkinteger(state, 4));
-  }
-
-  auto *ctx = GetCurrentGraphicsContext();
-
-  if (ctx == nullptr) {
-    return luaL_error(state, "No current GraphicsContext set for this thread.");
   }
 
   auto result = buffer->GetBuffer()->SetData(*ctx, data, offset, size);

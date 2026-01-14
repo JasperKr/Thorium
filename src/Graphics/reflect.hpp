@@ -366,6 +366,16 @@ struct ResourceInfo {
   }
 };
 
+inline auto SetBindingToSlot(uint32_t set, uint32_t binding) -> uint64_t {
+  return (static_cast<uint64_t>(set) << 32U) | binding; // NOLINT
+}
+
+inline auto SlotToSetBinding(uint64_t slot) -> std::pair<uint32_t, uint32_t> {
+  auto set = static_cast<uint32_t>((slot >> 32U) & UINT32_MAX); // NOLINT
+  auto binding = static_cast<uint32_t>(slot & UINT32_MAX);
+  return {set, binding};
+}
+
 struct ShaderReflection {
   std::vector<ResourceInfo> resources;
   std::unordered_map<uint64_t, ResourceInfo> slotToInfo;
@@ -427,6 +437,8 @@ struct ShaderReflection {
         .bufferType = BufferType::Uniform,
         .info = globalUBOStruct,
     };
+
+    slotToInfo.emplace(SetBindingToSlot(set, binding), globalUBOInfo);
 
     hasGlobals = true;
   }

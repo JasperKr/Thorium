@@ -1,4 +1,5 @@
 #include "Graphics/barrier.hpp"
+#include "Graphics/graphicsState.hpp"
 #include "vulkan/vulkan_core.h"
 #include <array>
 #include <cstdint>
@@ -113,9 +114,14 @@ inline auto TimelineLookback(uint64_t currentTimelineIndex,
     }
   }
 
+  if (GlobalTimelineIndex == 0 || currentTimelineIndex >= GlobalTimelineIndex) {
+    return true; // No barriers yet, need to sync
+  }
+
   // current timeline index meaning the last barrier that affected this resource
   // and global timeline index the actual current barrier index
-  for (uint64_t i = GlobalTimelineIndex; i > currentTimelineIndex; i--) {
+  for (uint64_t i = GlobalTimelineIndex - 1ULL; i > currentTimelineIndex; i--) {
+
     auto &sync = GlobalResourceSyncTimeline[i];
 
     auto mask = sync.dstStages;
@@ -175,6 +181,13 @@ auto UpdateUsage(GraphicsContext &context, GraphicsResource &resource,
     depInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
     depInfo.memoryBarrierCount = 1;
     depInfo.pMemoryBarriers = &barrier;
+
+    if (GetIsCurrentlyRendering()) {
+      // End rendering before doing a barrier
+      vkCmdEndRendering(
+          Graphics::GetCommandBuffer(context, GetCurrentThreadIndex()));
+      GetIsCurrentlyRendering() = false;
+    }
 
     vkCmdPipelineBarrier2(
         Graphics::GetCommandBuffer(context, GetCurrentThreadIndex()), &depInfo);

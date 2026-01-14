@@ -332,6 +332,10 @@ auto Buffer::Upload(GraphicsContext &context,
     return Error::Success();
   }
 
+  if (GetIsCurrentlyRendering()) {
+    return Error::Create("Cannot upload to buffer while rendering.");
+  }
+
   if (uploadSize > LargeUploadThreshold) {
     auto uploadResult = UploadLarge(context, data, offset, size);
     if (Error::IsError(uploadResult)) {
@@ -419,10 +423,6 @@ auto Buffer::Create(GraphicsContext &context, BufferCreationInfo info)
 auto Buffer::SetData(GraphicsContext &context,
                      const std::span<uint8_t> &data, // NOLINTNEXTLINE
                      VkDeviceSize offset, VkDeviceSize size) -> Error {
-
-  if (GetIsCurrentlyRendering()) {
-    return Error::Create("Cannot upload to buffer while rendering.");
-  }
 
   auto result = Upload(context, data, offset, size);
   if (Error::IsError(result)) {
