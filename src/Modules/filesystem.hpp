@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Modules/bytedata.hpp"
 #include "error.hpp"
 #include "physfs.h"
 #include <cstdint>
@@ -17,6 +18,10 @@ auto Init(const std::string &orgDir) -> Error;
 auto Deinit() -> Error;
 auto ReadFile(const std::string &path, int64_t readLength = INT64_MAX)
     -> Result<std::vector<unsigned char>>;
+// Useful for loading binary data into Bytedata objects
+// Instead of stack allocating a vector and copying it over.
+auto ReadFileToBytedata(const std::string &path, int64_t readLength = INT64_MAX)
+    -> Result<Ref<Data::ByteData>>;
 auto ReadTextFile(const std::string &path, int64_t readLength = INT64_MAX)
     -> Result<std::string>;
 auto AppendFile(const std::string &path, std::span<const uint8_t> data)

@@ -629,10 +629,10 @@ auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
     const auto &bufferInfo = std::get<BufferInfo>(resource.info);
     if (bufferInfo.name == *key.begin()) {
       auto locationKey = SetBindingToSlot(bufferInfo.set, bufferInfo.binding);
-      
-      if (boundBuffers[locationKey] == buffer->buffer.get()) {
-        return Error::Success(); // No need to update or dirty state
-      }
+
+      // if (boundBuffers[locationKey] == buffer->buffer.get()) {
+      //   return Error::Success(); // No need to update or dirty state
+      // }
 
       boundBuffers[locationKey] = buffer->buffer.get();
 
@@ -700,11 +700,11 @@ auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
     if (resource.name == *key.begin()) {
       auto key = SetBindingToSlot(samplerInfo.set, samplerInfo.binding);
 
-      if (textures[key] == texture) {
-        return Error::Success(); // No need to update or dirty state
-      }
+      // if (boundTextures[key] == texture) {
+      //   return Error::Success(); // No need to update or dirty state
+      // }
 
-      textures[key] = texture;
+      boundTextures[key] = texture;
 
       // Create descriptor set for this texture
       VkDescriptorImageInfo imageInfo{};

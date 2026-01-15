@@ -1,5 +1,9 @@
 #pragma once
+#include "Modules/error.hpp"
+#include <span>
+#include <variant>
 #define VK_NO_PROTOTYPES
+#include "stb/stb_image.h"
 #include "vulkan/vulkan_core.h"
 #include <algorithm>
 #include <cstdint>
@@ -101,6 +105,54 @@ static inline auto IsCompressedTexture(VkFormat format) -> bool {
   default:
     return false;
   }
+}
+
+using ImageLoadResultVariant = std::variant<float *, stbi_uc *>;
+
+// NOLINTNEXTLINE
+inline auto FromMemory(const std::span<const uint8_t> &data, int &outWidth,
+                       int &outHeight, VkFormat &outFormat)
+    -> Result<ImageLoadResultVariant> {
+  int texWidth = 0;
+  int texHeight = 0;
+  int texChannels = 0;
+
+  // check for LDR formats, supported by default stbi_load
+  if (stbi_is_hdr_from_memory(data.data(), static_cast<int>(data.size())) ==
+      0) {
+    stbi_uc *pixels = stbi_load_from_memory(
+        data.data(), static_cast<int>(data.size()), &texWidth, &texHeight,
+        &texChannels, STBI_rgb_alpha);
+
+    if (pixels == nullptr) {
+      return Error::Unexpected("Failed to load image.");
+    }
+
+    outWidth = texWidth;
+    outHeight = texHeight;
+    outFormat = VK_FORMAT_R8G8B8A8_UNORM;
+
+    return pixels;
+  }
+
+  if (stbi_is_hdr_from_memory(data.data(), static_cast<int>(data.size())) !=
+      0) {
+    float *pixels = stbi_loadf_from_memory(
+        data.data(), static_cast<int>(data.size()), &texWidth, &texHeight,
+        &texChannels, STBI_rgb_alpha); // force 4 channels
+
+    if (pixels == nullptr) {
+      return Error::Unexpected("Failed to load image.");
+    }
+
+    outWidth = texWidth;
+    outHeight = texHeight;
+    outFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
+
+    return pixels;
+  }
+
+  return Error::Unexpected("Unsupported image format.");
 }
 
 } // namespace Image

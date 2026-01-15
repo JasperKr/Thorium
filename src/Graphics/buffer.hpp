@@ -85,7 +85,7 @@ struct Buffer : Object, Barrier::GraphicsResource {
   }
 
   // Set data into the buffer at the given offset
-  auto SetData(GraphicsContext &context, const std::span<uint8_t> &data,
+  auto SetData(GraphicsContext &context, const std::span<const uint8_t> &data,
                VkDeviceSize offset = 0, VkDeviceSize size = VK_WHOLE_SIZE)
       -> Error;
 

@@ -421,7 +421,7 @@ auto Buffer::Create(GraphicsContext &context, BufferCreationInfo info)
 }
 
 auto Buffer::SetData(GraphicsContext &context,
-                     const std::span<uint8_t> &data, // NOLINTNEXTLINE
+                     const std::span<const uint8_t> &data, // NOLINTNEXTLINE
                      VkDeviceSize offset, VkDeviceSize size) -> Error {
 
   auto result = Upload(context, data, offset, size);

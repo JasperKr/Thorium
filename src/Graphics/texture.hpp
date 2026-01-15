@@ -141,7 +141,7 @@ struct Texture : Object, Barrier::GraphicsResource {
                  VkOffset2D target) -> Error;
   auto SetPixels(GraphicsContext &context, Image::ImageData &imageData,
                  uint32_t mipLevel = 0, uint32_t arrayLayer = 0) -> Error;
-  auto SetPixels(GraphicsContext &context, const std::span<uint8_t> &data,
+  auto SetPixels(GraphicsContext &context, const std::span<const uint8_t> &data,
                  size_t width, size_t height, uint32_t mipLevel,
                  uint32_t arrayLayer, VkRect2D source, VkOffset2D target)
       -> Error;
@@ -197,8 +197,8 @@ auto LoadFromFile(GraphicsContext &context, const char *path,
                   VkImageUsageFlags usage = 0) -> Result<Ref<Texture>>;
 
 // texture 2D From byte array
-auto LoadFromMemory(GraphicsContext &context, const std::span<uint8_t> &data,
-                    size_t dataSize, VkFormat format,
+auto LoadFromMemory(GraphicsContext &context,
+                    const std::span<const uint8_t> &data,
                     VkImageUsageFlags usage = 0) -> Result<Ref<Texture>>;
 
 // texture 2D From ImageData

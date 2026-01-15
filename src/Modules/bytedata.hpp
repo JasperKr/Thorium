@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include <cstddef>
 #include <cstdint>
@@ -16,6 +17,11 @@ public:
   explicit ByteData(size_t size) : size(size), data(new uint8_t[size]) {}
 
   ByteData(const uint8_t *src, size_t size)
+      : size(size), data(new uint8_t[size]) {
+    std::memcpy(data, src, size);
+  }
+
+  ByteData(const std::byte *src, size_t size)
       : size(size), data(new uint8_t[size]) {
     std::memcpy(data, src, size);
   }
@@ -56,7 +62,13 @@ public:
     return *this;
   }
 
-  ~ByteData() override { delete[] data; }
+  ~ByteData() override {
+    if (parent != nullptr) {
+      parent->release(); // Parent owns the data
+    } else {
+      delete[] data; // We own the data
+    }
+  }
 
   [[nodiscard]] auto GetSize() const -> size_t { return size; }
   auto GetData() -> uint8_t * { return data; }
@@ -76,9 +88,31 @@ public:
     return ByteData::GetType();
   }
 
+  [[nodiscard]] auto GetParent() const -> ByteData * { return parent; }
+
+  // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+  [[nodiscard]] auto View(size_t offset, size_t range)
+      -> Result<Ref<ByteData>> {
+    if (offset + range > size) {
+      return Error::Unexpected("ByteData view out of bounds.");
+    }
+
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+    auto newBytedata = ByteData(data + offset, range, this);
+
+    this->retain(); // Retained by the view
+    return Ref<ByteData>::Make(newBytedata);
+  }
+
 private:
   size_t size = 0;
   uint8_t *data = nullptr;
+
+  ByteData *parent = nullptr;
+
+  // private constructor for views
+  ByteData(uint8_t *data, size_t size, ByteData *parent)
+      : size(size), data(data), parent(parent) {}
 };
 
 } // namespace Data

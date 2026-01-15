@@ -6,7 +6,6 @@
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/filesystem.hpp"
-#include "Modules/imagedata.hpp"
 #include "Modules/material.hpp"
 #include "Modules/model.hpp"
 #include "Modules/object.hpp"
@@ -14,15 +13,77 @@
 #include <span>
 #include <string>
 
-// #define FASTGLTF_USE_STD_MODULE
-
 #include "fastgltf/include/fastgltf/core.hpp"
 #include "fastgltf/include/fastgltf/types.hpp"
+#include "vulkan/vulkan_core.h"
 
+#include <utility>
 #include <variant>
 #include <vector>
 
 namespace glTF {
+
+// Instead of heap allocating all loaded data, we store them here.
+// And reference them by the index in the LoadedBuffers vector.
+// This way we can avoid many large heap allocations.
+
+struct BufferData {
+  bool isHoldingView = false;
+  bool isHoldingSpan = false;
+  std::vector<uint8_t> Data;
+  std::span<const uint8_t> SpanData;
+
+  size_t offset = 0;
+  size_t length = 0;
+  size_t refIdx = 0;
+
+  auto GetData() -> std::span<const uint8_t>;
+  [[nodiscard]] auto GetSize() const -> size_t {
+    if (isHoldingView) {
+      return length;
+    }
+    if (isHoldingSpan) {
+      return SpanData.size();
+    }
+    return Data.size();
+  }
+
+  // NOLINTNEXTLINE easily swapped parameters
+  static auto ViewOther(size_t off, size_t len, size_t ref) -> BufferData {
+    BufferData buffData{};
+    buffData.isHoldingView = true;
+    buffData.offset = off;
+    buffData.length = len;
+    buffData.refIdx = ref;
+    return buffData;
+  }
+
+  static auto ViewSpan(std::span<const uint8_t> span) -> BufferData {
+    BufferData buffData{};
+    buffData.isHoldingSpan = true;
+    buffData.SpanData = span;
+    return buffData;
+  }
+};
+
+// NOLINTNEXTLINE
+static std::vector<BufferData> LoadedBuffers;
+
+auto BufferData::GetData() -> std::span<const uint8_t> {
+  if (isHoldingView) {
+    auto parentData = LoadedBuffers[refIdx].GetData();
+    // NOLINTNEXTLINE
+    return {parentData.data() + offset, length};
+  }
+
+  if (isHoldingSpan) {
+    return SpanData;
+  }
+
+  return {Data.data(), Data.size()};
+}
+
+using DataIndex = size_t;
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 static fastgltf::Parser Parser =
@@ -30,36 +91,39 @@ static fastgltf::Parser Parser =
 
 inline auto LoadDataSource(const fastgltf::Asset &asset,
                            const fastgltf::DataSource &dataSource)
-    -> Result<std::vector<std::byte>>;
+    -> Result<DataIndex>;
 
 inline auto LoadBufferView(const fastgltf::Asset &asset,
                            const fastgltf::BufferView &bufferView)
-    -> Result<std::vector<std::byte>> {
+    -> Result<DataIndex> {
   const auto &buffer = asset.buffers[bufferView.bufferIndex];
 
   auto bufferData = LoadDataSource(asset, buffer.data);
   if (Error::IsError(bufferData)) {
-    return bufferData.error().AsUnexpected();
+    return bufferData;
   }
 
-  const auto &bytes = bufferData.value();
+  const auto byteOffset = static_cast<long>(bufferView.byteOffset);
+  const auto byteLength = static_cast<long>(bufferView.byteLength);
 
-  const auto byteOffset = bufferView.byteOffset;
-  const auto byteLength = bufferView.byteLength;
+  // if (byteOffset + byteLength > bufferData.value()->GetSize()) {
+  //   return Error::Unexpected("Buffer view out of bounds.");
+  // }
 
-  if (byteOffset + byteLength > bytes.size()) {
-    return Error::Unexpected("Buffer view out of bounds.");
-  }
+  // return bufferData.value()->View(byteOffset, byteLength);
 
-  // Pointer arithmetic galore
-  // NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-  return std::vector<std::byte>(bytes.data() + byteOffset,
-                                bytes.data() + byteOffset + byteLength);
-  // NOLINTEND(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+  // auto &loadedBuffer = LoadedBuffers[bufferView.bufferIndex];
+  // std::vector<uint8_t> bufferViewData(loadedBuffer.begin() + byteOffset,
+  //                                     loadedBuffer.begin() + byteOffset +
+  //                                         byteLength);
+
+  LoadedBuffers.emplace_back(
+      BufferData::ViewOther(byteOffset, byteLength, bufferView.bufferIndex));
+  return LoadedBuffers.size() - 1;
 }
 
 inline auto LoadURI(const fastgltf::sources::URI &uriSource)
-    -> Result<std::vector<std::byte>> {
+    -> Result<DataIndex> {
   const auto &uri = uriSource.uri;
   const auto &path = std::string(uri.path()); // (TODO: is this correct?)
 
@@ -69,17 +133,16 @@ inline auto LoadURI(const fastgltf::sources::URI &uriSource)
     return fileResult.error().AsUnexpected();
   }
 
-  auto bytes = fileResult.value();
-  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-  auto *bytedata = reinterpret_cast<std::byte *>(bytes.data());
+  LoadedBuffers.emplace_back(
+      BufferData{.isHoldingView = false, .Data = fileResult.value()});
 
-  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-  return std::vector<std::byte>(bytedata, bytedata + bytes.size());
+  // return fileResult.value();
+  return LoadedBuffers.size() - 1;
 }
 
 inline auto LoadDataSource(const fastgltf::Asset &asset,
                            const fastgltf::DataSource &dataSource)
-    -> Result<std::vector<std::byte>> {
+    -> Result<DataIndex> {
 
   // never monostate
   // std::variant<std::monostate, sources::BufferView, sources::URI, sources::Array, sources::Vector, sources::CustomBuffer, sources::ByteView, sources::Fallback>
@@ -87,25 +150,43 @@ inline auto LoadDataSource(const fastgltf::Asset &asset,
   if (std::holds_alternative<fastgltf::sources::BufferView>(dataSource)) {
     const auto &view = std::get<fastgltf::sources::BufferView>(dataSource);
     const auto &bufferView = asset.bufferViews[view.bufferViewIndex];
-    return LoadBufferView(asset, bufferView);
+    auto ret = LoadBufferView(asset, bufferView);
+    return ret;
   }
 
   if (std::holds_alternative<fastgltf::sources::URI>(dataSource)) {
     const auto &uriSource = std::get<fastgltf::sources::URI>(dataSource);
-    return LoadURI(uriSource);
+    auto ret = LoadURI(uriSource);
+    return ret;
   }
 
   if (std::holds_alternative<fastgltf::sources::Array>(dataSource)) {
     const auto &arraySource = std::get<fastgltf::sources::Array>(dataSource);
 
-    return std::vector<std::byte>(arraySource.bytes.begin(),
-                                  arraySource.bytes.end());
+    // NOLINTBEGIN
+    auto span = std::span<const uint8_t>(
+        reinterpret_cast<const uint8_t *>(arraySource.bytes.data()),
+        arraySource.bytes.size());
+
+    LoadedBuffers.emplace_back(BufferData::ViewSpan(span));
+    // NOLINTEND
+
+    return LoadedBuffers.size() - 1;
   }
   if (std::holds_alternative<fastgltf::sources::Vector>(dataSource)) {
     const auto &vectorSource = std::get<fastgltf::sources::Vector>(dataSource);
 
-    return std::vector<std::byte>(vectorSource.bytes.begin(),
-                                  vectorSource.bytes.end());
+    // NOLINTBEGIN
+    LoadedBuffers.emplace_back(BufferData{
+        .isHoldingView = false,
+        .Data = {
+            reinterpret_cast<const uint8_t *>(vectorSource.bytes.data()),
+            reinterpret_cast<const uint8_t *>(vectorSource.bytes.data() +
+                                              vectorSource.bytes.size()),
+        }});
+    // NOLINTEND
+
+    return LoadedBuffers.size() - 1;
   }
   if (std::holds_alternative<fastgltf::sources::CustomBuffer>(dataSource)) {
     const auto &customBufferSource =
@@ -117,8 +198,18 @@ inline auto LoadDataSource(const fastgltf::Asset &asset,
     const auto &byteViewSource =
         std::get<fastgltf::sources::ByteView>(dataSource);
 
-    return std::vector<std::byte>(byteViewSource.bytes.begin(),
-                                  byteViewSource.bytes.end());
+    // NOLINTBEGIN
+
+    LoadedBuffers.emplace_back(BufferData{
+        .isHoldingView = false,
+        .Data = {
+            reinterpret_cast<const uint8_t *>(byteViewSource.bytes.data()),
+            reinterpret_cast<const uint8_t *>(byteViewSource.bytes.data() +
+                                              byteViewSource.bytes.size()),
+        }});
+    // NOLINTEND
+
+    return LoadedBuffers.size() - 1;
   }
 
   return Error::Unexpected("Unsupported data source.");
@@ -139,43 +230,27 @@ inline auto LoadTexture(Graphics::GraphicsContext &context,
 
   const auto &image = asset.images[texture.imageIndex.value()];
 
-  auto data = LoadDataSource(asset, image.data);
-  if (Error::IsError(data)) {
-    return data.error().AsUnexpected();
+  auto loadResult = LoadDataSource(asset, image.data);
+  if (Error::IsError(loadResult)) {
+    return loadResult.error().AsUnexpected();
   }
 
-  auto byteSpan = std::span<
-      uint8_t>( // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-      reinterpret_cast<uint8_t *>(data.value().data()), data.value().size());
+  auto dataIdx = loadResult.value();
 
-  auto imageDataResult = Image::ImageData::Create(byteSpan);
-  if (Error::IsError(imageDataResult)) {
-    return imageDataResult.error().AsUnexpected();
-  }
+  auto &data = LoadedBuffers[dataIdx];
+  auto span = data.GetData();
 
-  auto imageData = imageDataResult.value();
+  // return Ref<Graphics::Texture::Texture>::Make();
 
-  Graphics::Texture::TextureCreationInfo createInfo;
-  createInfo.width = imageData->GetWidth();
-  createInfo.height = imageData->GetHeight();
-  createInfo.format = imageData->GetFormat();
-  createInfo.usage =
-      VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-  createInfo.mipmapCount = 1;
-
-  auto textureResult = Graphics::Texture::Create2D(context, createInfo);
+  auto textureResult = Graphics::Texture::LoadFromMemory(
+      context, span,
+      VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
 
   if (Error::IsError(textureResult)) {
     return textureResult.error().AsUnexpected();
   }
 
   auto textureRef = textureResult.value();
-
-  auto uploadResult = textureRef->SetPixels(context, *imageData);
-
-  if (Error::IsError(uploadResult)) {
-    return uploadResult.AsUnexpected();
-  }
 
   return textureRef;
 }
@@ -190,6 +265,12 @@ inline auto LoadMaterial(Graphics::GraphicsContext &context,
       gltfMaterial.doubleSided ? VK_CULL_MODE_NONE : VK_CULL_MODE_BACK_BIT;
 
   material.AlphaCutoff = gltfMaterial.alphaCutoff;
+  material.RoughnessFactor = gltfMaterial.pbrData.roughnessFactor;
+  material.MetallicFactor = gltfMaterial.pbrData.metallicFactor;
+  material.AlbedoFactor = Math::Vec4(gltfMaterial.pbrData.baseColorFactor[0],
+                                     gltfMaterial.pbrData.baseColorFactor[1],
+                                     gltfMaterial.pbrData.baseColorFactor[2],
+                                     gltfMaterial.pbrData.baseColorFactor[3]);
 
   // The alpha mode is exactly the same enum as our AlphaMode.
   // But for type safety, we do a manual mapping.
@@ -211,6 +292,7 @@ inline auto LoadMaterial(Graphics::GraphicsContext &context,
                  gltfMaterial.emissiveFactor[2]);
 
   if (gltfMaterial.pbrData.baseColorTexture.has_value()) {
+    PrintInfo("Loading albedo texture.");
     auto albedoTextureLoadResult = LoadTexture(
         context, asset, gltfMaterial.pbrData.baseColorTexture.value());
 
@@ -221,19 +303,32 @@ inline auto LoadMaterial(Graphics::GraphicsContext &context,
     material.AlbedoTexture = albedoTextureLoadResult.value();
   }
 
-  // TODO: Combine metallic, roughness, ao, reflectance into one texture.
   if (gltfMaterial.pbrData.metallicRoughnessTexture.has_value()) {
-    auto materialTextureLoadResult = LoadTexture(
+    PrintInfo("Loading metallic-roughness texture.");
+    auto metallicRoughnessLoadResult = LoadTexture(
         context, asset, gltfMaterial.pbrData.metallicRoughnessTexture.value());
 
-    if (Error::IsError(materialTextureLoadResult)) {
-      return materialTextureLoadResult.error();
+    if (Error::IsError(metallicRoughnessLoadResult)) {
+      return metallicRoughnessLoadResult.error();
     }
 
-    material.MaterialTexture = materialTextureLoadResult.value();
+    material.MetallicRoughnessTexture = metallicRoughnessLoadResult.value();
+  }
+
+  if (gltfMaterial.occlusionTexture.has_value()) {
+    PrintInfo("Loading occlusion texture.");
+    auto aoTextureLoadResult =
+        LoadTexture(context, asset, gltfMaterial.occlusionTexture.value());
+
+    if (Error::IsError(aoTextureLoadResult)) {
+      return aoTextureLoadResult.error();
+    }
+
+    material.AmbientOcclusionTexture = aoTextureLoadResult.value();
   }
 
   if (gltfMaterial.normalTexture.has_value()) {
+    PrintInfo("Loading normal texture.");
     auto normalTextureLoadResult =
         LoadTexture(context, asset, gltfMaterial.normalTexture.value());
 
@@ -245,6 +340,7 @@ inline auto LoadMaterial(Graphics::GraphicsContext &context,
   }
 
   if (gltfMaterial.emissiveTexture.has_value()) {
+    PrintInfo("Loading emissive texture.");
     auto emissiveTextureLoadResult =
         LoadTexture(context, asset, gltfMaterial.emissiveTexture.value());
 
@@ -258,6 +354,7 @@ inline auto LoadMaterial(Graphics::GraphicsContext &context,
   return Error::Success();
 }
 
+// NOLINTNEXTLINE
 inline auto LoadNode(Graphics::GraphicsContext &context,
                      const fastgltf::Asset &asset,
                      const fastgltf::Node &gltfNode)
@@ -385,17 +482,24 @@ auto LoadGltfModel(Graphics::GraphicsContext &context, const std::string &path,
                          std::string(fastgltf::getErrorName(validationError)));
   }
 
-  // loop through nodes
-  for (const auto &gltfNode : asset.get().nodes) {
-    auto nodeResult = LoadNode(context, asset.get(), gltfNode);
-    if (Error::IsError(nodeResult)) {
-      return nodeResult.error();
-    }
+  // loop through scenes
+  for (const auto &glTFScene : asset->scenes) {
+    PrintInfo("Loading glTF scene: {}", glTFScene.name);
+    for (const auto &nodeIndex : glTFScene.nodeIndices) {
+      const auto &gltfNode = asset->nodes[nodeIndex];
+      PrintInfo("Loading glTF node: {}", gltfNode.name);
+      auto nodeResult = LoadNode(context, asset.get(), gltfNode);
+      if (Error::IsError(nodeResult)) {
+        return nodeResult.error();
+      }
 
-    for (auto &sceneObject : nodeResult.value()) {
-      scene.Nodes.emplace_back(std::move(sceneObject));
+      for (auto &sceneObject : nodeResult.value()) {
+        scene.Nodes.emplace_back(std::move(sceneObject));
+      }
     }
   }
+
+  LoadedBuffers.clear();
 
   return Error::Success();
 }

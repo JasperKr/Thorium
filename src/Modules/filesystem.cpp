@@ -1,5 +1,6 @@
 #include "filesystem.hpp"
 #include "../external/physfs/src/physfs.h"
+#include "Modules/bytedata.hpp"
 #include "error.hpp"
 #include <cstdint>
 #include <span>
@@ -73,6 +74,55 @@ auto ReadFile(const std::string &path, int64_t readLength)
   std::vector<unsigned char> data((size_t)len);
 
   const auto read = PHYSFS_readBytes(file, data.data(), len);
+  int error = PHYSFS_close(file);
+
+  if (error == PHYSFS_ERR_ERROR) {
+    return Error::Unexpected("Failed to close file");
+  }
+
+  if (read != len) {
+    return Error::Unexpected("Failed to read entire file");
+  }
+
+  return data;
+}
+
+// Useful for loading binary data into Bytedata objects
+// Instead of stack allocating a vector and copying it over.
+auto ReadFileToBytedata(const std::string &path, int64_t readLength)
+    -> Result<Ref<Data::ByteData>> {
+  PHYSFS_File *file = PHYSFS_openRead(path.c_str());
+  if (file == nullptr) {
+    return Error::Unexpected("Failed to open file: " + path);
+  }
+
+  const PHYSFS_sint64 fileLength = PHYSFS_fileLength(file);
+  PHYSFS_sint64 len = 0;
+
+  if (fileLength <= 0) {
+    PHYSFS_close(file);
+    return Error::Unexpected("Invalid file length");
+  }
+
+  if (readLength < 0) {
+    PHYSFS_close(file);
+    return Error::Unexpected("Invalid read length");
+  }
+
+  if (readLength > fileLength && readLength != INT64_MAX) {
+    PHYSFS_close(file);
+    return Error::Unexpected("Read length exceeds file length");
+  }
+
+  if (readLength == INT64_MAX) {
+    len = fileLength; // Checked to be > 0 above
+  } else {
+    len = readLength; // Checked to be valid above
+  }
+
+  auto data = Ref<Data::ByteData>::Make((size_t)len);
+
+  const auto read = PHYSFS_readBytes(file, data->GetData(), len);
   int error = PHYSFS_close(file);
 
   if (error == PHYSFS_ERR_ERROR) {

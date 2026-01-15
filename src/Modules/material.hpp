@@ -26,10 +26,12 @@ struct Material {
 
   TexRef Preview;
 
-  TexRef AlbedoTexture;   // Linear RGBA
-  TexRef NormalTexture;   // Linear RGB
-  TexRef MaterialTexture; // Linear RGBA [roughness, metallic, ao, reflectance]
-  TexRef EmissiveTexture; // Linear RGB
+  TexRef AlbedoTexture;            // Linear RGBA
+  TexRef NormalTexture;            // Linear RGB
+  TexRef MetallicRoughnessTexture; // Linear RG
+  TexRef AmbientOcclusionTexture;  // Linear R
+  TexRef ReflectanceTexture;       // Linear R
+  TexRef EmissiveTexture;          // Linear RGB
 
   Math::Vec4 AlbedoFactor = Math::Vec4(1.0F, 1.0F, 1.0F, 1.0F);
   float RoughnessFactor = 1.0F;

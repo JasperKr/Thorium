@@ -17,6 +17,7 @@
 #include "tl/expected.hpp"
 #include <cstddef>
 #include <cstdint>
+#include <span>
 #include <string>
 
 #define VMA_VULKAN_VERSION 1004000
@@ -402,22 +403,24 @@ auto LoadFromFile(GraphicsContext &context, const char *path,
 }
 
 // texture 2D From byte array
-auto LoadFromMemory(GraphicsContext &context, const std::span<uint8_t> &data,
+auto LoadFromMemory(GraphicsContext &context,
+                    const std::span<const uint8_t> &data,
                     VkImageUsageFlags usage) -> Result<Ref<Texture>> {
 
-  auto imageDataResult = Image::ImageData::Create(data);
+  auto width = 0;
+  auto height = 0;
+  auto format = VK_FORMAT_UNDEFINED;
 
-  if (Error::IsError(imageDataResult)) {
-    return imageDataResult.error().AsUnexpected();
+  auto loadResult = Image::FromMemory(data, width, height, format);
+  if (Error::IsError(loadResult)) {
+    return loadResult.error().AsUnexpected();
   }
-
-  auto imageData = imageDataResult.value();
 
   auto texture = Create2D(
       context, TextureCreationInfo{
-                   .width = imageData->GetWidth(),
-                   .height = imageData->GetHeight(),
-                   .format = imageData->GetFormat(),
+                   .width = static_cast<uint32_t>(width),
+                   .height = static_cast<uint32_t>(height),
+                   .format = format,
                    .usage = usage | static_cast<uint32_t>(
                                         VK_IMAGE_USAGE_TRANSFER_DST_BIT),
                    .mipmapCount = 1,
@@ -427,7 +430,46 @@ auto LoadFromMemory(GraphicsContext &context, const std::span<uint8_t> &data,
     return texture.error().AsUnexpected();
   }
 
-  auto result = texture.value()->SetPixels(context, *imageData);
+  std::span<uint8_t> dataSpan;
+
+  auto variant = loadResult.value();
+  if (std::holds_alternative<stbi_uc *>(variant)) {
+    auto *pixels = std::get<stbi_uc *>(variant);
+    dataSpan = std::span<uint8_t>(pixels, static_cast<size_t>(width) *
+                                              static_cast<size_t>(height) *
+                                              Format::GetSize(format));
+
+  } else if (std::holds_alternative<float *>(variant)) {
+    auto *pixels = std::get<float *>(variant);
+
+    // NOLINTNEXTLINE, reinterpret cast is safe here
+    dataSpan = std::span<uint8_t>(reinterpret_cast<uint8_t *>(pixels),
+                                  static_cast<size_t>(width) *
+                                      static_cast<size_t>(height) *
+                                      Format::GetSize(format));
+
+  } else {
+    return Error::Unexpected("Unsupported image data format.");
+  }
+
+  auto source = VkRect2D{
+      .offset = VkOffset2D{0, 0},
+      .extent = VkExtent2D{static_cast<uint32_t>(width),
+                           static_cast<uint32_t>(height)},
+  };
+
+  auto dst = VkOffset2D{0, 0};
+
+  auto result = texture.value()->SetPixels(context, dataSpan, width, height, 0,
+                                           0, source, dst);
+
+  if (std::holds_alternative<stbi_uc *>(variant)) {
+    auto *pixels = std::get<stbi_uc *>(variant);
+    stbi_image_free(pixels);
+  } else if (std::holds_alternative<float *>(variant)) {
+    auto *pixels = std::get<float *>(variant);
+    stbi_image_free(pixels);
+  }
 
   if (Error::IsError(result)) {
     return result.AsUnexpected();
@@ -872,7 +914,7 @@ auto Texture::SetPixels(GraphicsContext &context, Image::ImageData &imageData,
 }
 
 auto Texture::SetPixels(GraphicsContext &context,
-                        const std::span<uint8_t> &data, size_t dataWidth,
+                        const std::span<const uint8_t> &data, size_t dataWidth,
                         size_t dataHeight, uint32_t mipLevel, // NOLINT
                         uint32_t arrayLayer, VkRect2D source, VkOffset2D target)
     -> Error {
@@ -937,8 +979,8 @@ auto Texture::SetPixels(GraphicsContext &context,
         ((row + source.offset.y) * dataWidth + source.offset.x) *
         Format::GetSize(format);
 
-    // NOLINTNEXTLINE pointer arithmetic
-    auto rowSpan = std::span<uint8_t>(data.data() + sourceOffset, rowSize);
+    auto rowSpan = // NOLINTNEXTLINE pointer arithmetic
+        std::span<const uint8_t>(data.data() + sourceOffset, rowSize);
     auto error = buffer->SetData(context, rowSpan, row * rowSize);
 
     if (Error::IsError(error)) {
