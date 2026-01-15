@@ -21,13 +21,13 @@ public:
   }
   [[nodiscard]] virtual auto GetInstanceType() const -> Type const * = 0;
 
-  void retain();
+  void retain() const;
   void release();
 
   [[nodiscard]] auto getReferenceCount() const -> int;
 
 private:
-  std::atomic<int> count{1};
+  mutable std::atomic<int> count{1};
 };
 
 template <typename T> class Ref {
