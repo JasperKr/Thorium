@@ -6,7 +6,7 @@ extern "C" {
 #include <lua.h>
 #include <lualib.h>
 }
-namespace Event {
+namespace Wrap::Event {
 
 auto wrap_Quit(lua_State *state) -> int;
 auto wrap_Pull(lua_State *state) -> int;
@@ -35,4 +35,4 @@ extern "C" inline auto luaopen_event(lua_State *state) -> int {
   return 1;
 }
 
-} // namespace Event
+} // namespace Wrap::Event

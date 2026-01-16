@@ -1,19 +1,25 @@
-#include "SDL3/SDL_events.h"
+#include <cstdint>
 #include <optional>
+#include <string>
+#include <variant>
+#include <vector>
+
 namespace Event {
 // NOLINTNEXTLINE
 extern bool MainLoopRunning;
 // NOLINTNEXTLINE
 static int32_t ExitCode = 0;
 
-// NOLINTNEXTLINE
-auto OnKeyEvent(const SDL_KeyboardEvent &keyEvent) -> void;
-auto OnMouseEvent(const SDL_MouseButtonEvent &mouseEvent) -> void;
-auto OnMouseMotionEvent(const SDL_MouseMotionEvent &mouseMotionEvent) -> void;
-auto OnMouseWheelEvent(const SDL_MouseWheelEvent &mouseWheelEvent) -> void;
-auto OnTextEditEvent(const SDL_TextEditingEvent &textEditEvent) -> void;
-auto OnTextInputEvent(const SDL_TextInputEvent &textInputEvent) -> void;
+using EventValue =
+    std::variant<int32_t, uint32_t, float, double, std::string, bool>;
+
+struct Event {
+  std::string Name;
+  std::vector<EventValue> Values;
+};
 
 auto Pull() -> void;
-auto Pop() -> std::optional<SDL_Event>;
+auto Pop() -> std::optional<Event>;
+auto Push(const Event &event) -> void;
+auto Quit() -> void;
 } // namespace Event

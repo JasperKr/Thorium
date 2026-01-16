@@ -10,16 +10,16 @@ extern "C" {
 #include <lualib.h>
 }
 
-namespace Data {
+namespace Wrap::Data {
 
-auto GetBytedataFromLua(lua_State *state, int index) -> ByteData * {
-  if (LuaWrap::IsType<Data::ByteData>(state, index)) {
-    return LuaWrap::ObjectFromLua<Data::ByteData>(state, index);
+auto GetBytedataFromLua(lua_State *state, int index) -> ::Data::ByteData * {
+  if (LuaWrap::IsType<::Data::ByteData>(state, index)) {
+    return LuaWrap::ObjectFromLua<::Data::ByteData>(state, index);
   }
 
   if (LuaWrap::IsType<Image::ImageData>(state, index)) {
     auto *imagedata = LuaWrap::ObjectFromLua<Image::ImageData>(state, index);
-    return static_cast<Data::ByteData *>(imagedata);
+    return static_cast<::Data::ByteData *>(imagedata);
   }
 
   return nullptr;
@@ -255,13 +255,13 @@ auto wrap_GetPointer(lua_State *state) -> int {
 
 auto wrap_NewBytedata(lua_State *state) -> int {
   auto size = static_cast<size_t>(luaL_checkinteger(state, 1));
-  // auto *bytedata = new Data::ByteData(size); // NOLINT
-  auto bytedata = Ref<Data::ByteData>::Make(size);
+  // auto *bytedata = new ::Data::ByteData(size); // NOLINT
+  auto bytedata = Ref<::Data::ByteData>::Make(size);
 
-  LuaWrap::PushObject(state, Data::ByteData::GetType(), bytedata.get());
+  LuaWrap::PushObject(state, ::Data::ByteData::GetType(), bytedata.get());
   // bytedata->release(); // Release C++ reference, Lua now owns it
 
   return 1;
 }
 
-} // namespace Data
+} // namespace Wrap::Data

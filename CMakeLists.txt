@@ -242,6 +242,8 @@ add_executable(Thorium
     src/Modules/object.cpp
     src/Modules/imagedata.cpp
     src/Modules/Peripherals/mouse.cpp
+    src/Modules/Peripherals/keyboard.cpp
+    src/Modules/thread.cpp
 
 # Math Modules
     src/Modules/Math/vector.cpp
@@ -268,6 +270,8 @@ add_executable(Thorium
     src/Wrap/Modules/wrap_mouse.cpp
     src/Wrap/Modules/Editor/wrap_imgui.cpp
     src/Wrap/Modules/Editor/wrap_gui.cpp
+    src/Wrap/Modules/wrap_thread.cpp
+    src/Wrap/Modules/wrap_channel.cpp
     src/Wrap/wrap.cpp
 
 # Libraries

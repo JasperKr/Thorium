@@ -8,7 +8,7 @@ extern "C" {
 #include <lua.h>
 #include <lualib.h>
 }
-namespace Data {
+namespace Wrap::Data {
 
 auto wrap_SetUInt32(lua_State *state) -> int;
 auto wrap_SetInt32(lua_State *state) -> int;
@@ -62,10 +62,10 @@ static const luaL_Reg BytedataLib[] = {
 extern "C" inline auto luaopen_bytedata(lua_State *state) -> int {
   PrintDebug("Registering Bytedata Lua type.");
 
-  LuaWrap::RegisterLuaType(state, Data::ByteData::GetType(),
+  LuaWrap::RegisterLuaType(state, ::Data::ByteData::GetType(),
                            BytedataLib); // NOLINT
 
   return 1;
 }
 
-} // namespace Data
+} // namespace Wrap::Data

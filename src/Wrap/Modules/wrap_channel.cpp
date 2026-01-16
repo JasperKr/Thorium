@@ -1,0 +1,105 @@
+#include "wrap_channel.hpp"
+#include "Wrap/wrap.hpp"
+
+namespace Wrap::Threading {
+
+auto wrap_NewChannel(lua_State *state) -> int {
+  // NOLINTNEXTLINE
+  auto channel = Ref<::Threading::Channel>::Make();
+
+  LuaWrap::PushObject(state, ::Threading::Channel::GetType(), channel.get());
+
+  return 1;
+}
+auto wrap_Push(lua_State *state) -> int {
+  auto *channel = LuaWrap::ObjectFromLua<::Threading::Channel>(state, 1);
+  if (channel == nullptr) {
+    luaL_error(state, "Invalid Channel object.");
+  }
+
+  auto encodedMessage = LuaWrap::SerializeValueToString(state, 2);
+
+  if (Error::IsError(encodedMessage)) {
+    return luaL_error(state, "Failed to serialize message: %s",
+                      encodedMessage.error().message.c_str());
+  }
+
+  channel->Push(encodedMessage.value());
+
+  return 0;
+}
+auto wrap_Pop(lua_State *state) -> int {
+  auto *channel = LuaWrap::ObjectFromLua<::Threading::Channel>(state, 1);
+  if (channel == nullptr) {
+    luaL_error(state, "Invalid Channel object.");
+  }
+
+  auto message = channel->Pop();
+
+  if (!message.has_value()) {
+    lua_pushnil(state);
+    return 1;
+  }
+
+  auto error = LuaWrap::PushValueFromString(state, message.value());
+
+  if (Error::IsError(error)) {
+    return luaL_error(state, "Failed to deserialize message: %s",
+                      error.message.c_str());
+  }
+
+  return 1;
+}
+auto wrap_Peek(lua_State *state) -> int {
+  auto *channel = LuaWrap::ObjectFromLua<::Threading::Channel>(state, 1);
+  if (channel == nullptr) {
+    luaL_error(state, "Invalid Channel object.");
+  }
+
+  auto message = channel->Peek();
+
+  if (!message.has_value()) {
+    lua_pushnil(state);
+    return 1;
+  }
+
+  auto error = LuaWrap::PushValueFromString(state, message.value());
+
+  if (Error::IsError(error)) {
+    return luaL_error(state, "Failed to deserialize message: %s",
+                      error.message.c_str());
+  }
+
+  return 1;
+}
+auto wrap_GetCount(lua_State *state) -> int {
+  auto *channel = LuaWrap::ObjectFromLua<::Threading::Channel>(state, 1);
+  if (channel == nullptr) {
+    luaL_error(state, "Invalid Channel object.");
+  }
+
+  auto count = channel->GetCount();
+
+  lua_pushinteger(state, static_cast<lua_Integer>(count));
+
+  return 1;
+}
+auto wrap_Demand(lua_State *state) -> int {
+  auto *channel = LuaWrap::ObjectFromLua<::Threading::Channel>(state, 1);
+  if (channel == nullptr) {
+    luaL_error(state, "Invalid Channel object.");
+  }
+
+  auto message = channel->Demand();
+
+  auto error = LuaWrap::PushValueFromString(state, message);
+
+  if (Error::IsError(error)) {
+    return luaL_error(state, "Failed to deserialize message: %s",
+                      error.message.c_str());
+  }
+
+  return 1;
+}
+
+} // namespace Wrap::Threading

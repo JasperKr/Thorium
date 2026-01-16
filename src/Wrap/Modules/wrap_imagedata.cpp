@@ -10,7 +10,7 @@ extern "C" {
 #define VK_NO_PROTOTYPES
 #include <vulkan/vulkan_core.h>
 
-namespace Image {
+namespace Wrap::Image {
 
 // width: number, height: number
 // width: number, height: number, format: string
@@ -29,7 +29,7 @@ auto wrap_NewImagedata(lua_State *state) -> int {
       format = Graphics::Format::StringToImageFormat(formatStr);
     }
 
-    auto imagedataResult = Image::ImageData::Create(
+    auto imagedataResult = ::Image::ImageData::Create(
         static_cast<uint32_t>(width), static_cast<uint32_t>(height), format);
 
     if (Error::IsError(imagedataResult)) {
@@ -39,11 +39,11 @@ auto wrap_NewImagedata(lua_State *state) -> int {
 
     auto imagedata = imagedataResult.value();
 
-    LuaWrap::PushObject(state, Image::ImageData::GetType(), imagedata.get());
+    LuaWrap::PushObject(state, ::Image::ImageData::GetType(), imagedata.get());
     // imagedata->release(); // Release C++ reference, Lua now owns it
   } else if (lua_isstring(state, 1) != 0) {
     const auto *filepath = luaL_checkstring(state, 1);
-    auto imagedataResult = Image::ImageData::Create(filepath);
+    auto imagedataResult = ::Image::ImageData::Create(filepath);
 
     if (Error::IsError(imagedataResult)) {
       return luaL_error(state, "Failed to create ImageData from file: %s",
@@ -52,7 +52,7 @@ auto wrap_NewImagedata(lua_State *state) -> int {
 
     auto imagedata = imagedataResult.value();
 
-    LuaWrap::PushObject(state, Image::ImageData::GetType(), imagedata.get());
+    LuaWrap::PushObject(state, ::Image::ImageData::GetType(), imagedata.get());
     // imagedata->release(); // Release C++ reference, Lua now owns it
   } else {
     return luaL_error(state, "Invalid arguments to Imagedata constructor.");
@@ -61,4 +61,4 @@ auto wrap_NewImagedata(lua_State *state) -> int {
   return 1;
 }
 
-} // namespace Image
+} // namespace Wrap::Image

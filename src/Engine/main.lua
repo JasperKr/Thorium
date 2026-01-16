@@ -3,6 +3,15 @@ local bit = require("bit")
 
 local i = 0
 
+local thread = Thorium.thread.newThread([[
+print('varargs: ', ...)
+local channel = ...
+print(channel:demand())
+]])
+local channel = Thorium.thread.newChannel()
+thread:start(channel)
+channel:push("Hello from main thread!")
+
 function Thorium.update(dt)
   i = i + 1
 

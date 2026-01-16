@@ -457,7 +457,7 @@ auto KeyPressed(lua_State *state) -> int {
   const auto *key = luaL_checkstring(state, 1);
 
   // use keyboard module to get SDL keycode
-  auto keycodeMap = Keyboard::StringToKeycode;
+  auto keycodeMap = Keyboard::StringToKeycodeMap;
   auto iterator = keycodeMap.find(key);
   if (iterator == keycodeMap.end()) {
     return luaL_error(state,
@@ -466,7 +466,7 @@ auto KeyPressed(lua_State *state) -> int {
 
   auto keycode = static_cast<SDL_Keycode>(iterator->second);
 
-  auto scanecodeMap = Keyboard::StringToScancode;
+  auto scanecodeMap = Keyboard::StringToScancodeMap;
   auto scancodeIterator = scanecodeMap.find(key);
   if (scancodeIterator == scanecodeMap.end()) {
     return luaL_error(state,
@@ -487,7 +487,7 @@ auto KeyReleased(lua_State *state) -> int {
   const auto *key = luaL_checkstring(state, 1);
 
   // use keyboard module to get SDL keycode
-  auto keycodeMap = Keyboard::StringToKeycode;
+  auto keycodeMap = Keyboard::StringToKeycodeMap;
   auto iterator = keycodeMap.find(key);
   if (iterator == keycodeMap.end()) {
     return luaL_error(
@@ -496,7 +496,7 @@ auto KeyReleased(lua_State *state) -> int {
 
   auto keycode = static_cast<SDL_Keycode>(iterator->second);
 
-  auto scanecodeMap = Keyboard::StringToScancode;
+  auto scanecodeMap = Keyboard::StringToScancodeMap;
   auto scancodeIterator = scanecodeMap.find(key);
   if (scancodeIterator == scanecodeMap.end()) {
     return luaL_error(

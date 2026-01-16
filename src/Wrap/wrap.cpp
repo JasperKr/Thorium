@@ -3,6 +3,7 @@
 #include "Wrap/Modules/Editor/wrap_imgui.hpp"
 #include "Wrap/Modules/wrap_data.hpp"
 #include "Wrap/Modules/wrap_mouse.hpp"
+#include "Wrap/Modules/wrap_thread.hpp"
 
 #include <cstdint>
 #include <iostream>
@@ -147,19 +148,29 @@ auto LoadStorageTable(lua_State *state, const char *key) -> void {
 auto LoadOrCreateStorageTable(lua_State *state, const char *key) -> void {
   lua_getfield(state, LUA_REGISTRYINDEX, key); // [storage]
 
-  if (!lua_istable(state, -1)) {
-    // Create storage table
-    lua_newtable(state);
-    lua_replace(state, -2); // replace nil in registry with new table
+  if (!lua_istable(state, -1)) { // no table found
+    lua_newtable(state);         // Create new table [nil, new table]
+    lua_replace(state, -2); // replace nil in registry with new table [storage]
 
     // Create metatable with weak values
-    lua_newtable(state);
-    lua_pushstring(state, "v");
-    lua_setfield(state, -2, "__mode");
-    lua_setmetatable(state, -2); // new table .mt = mt, popped mt
+    lua_newtable(state);               // [storage, mt]
+    lua_pushstring(state, "v");        // [storage, mt, "v"]
+    lua_setfield(state, -2, "__mode"); // mt.__mode = "v" [storage, mt]
+    lua_setmetatable(state, -2); // new table .mt = mt, popped mt [storage]
 
-    // we now only have storage and new table
-    lua_setfield(state, LUA_REGISTRYINDEX, key);
+    lua_pushvalue(state, -1); // [storage, storage]
+    lua_setfield(state, LUA_REGISTRYINDEX,
+                 key); // registry[key] = storage [storage]
+  }
+}
+
+auto LogStack(lua_State *state) -> void {
+  int top = lua_gettop(state);
+  PrintAlways("Lua Stack (top={}):", top);
+  for (int i = 1; i <= top; ++i) {
+    int type = lua_type(state, i);
+    const char *typeName = lua_typename(state, type);
+    PrintAlways("  [{}] Type: {}", i, typeName);
   }
 }
 
@@ -405,9 +416,10 @@ auto PushObject(lua_State *state, Object *object) -> void {
 // NOLINTNEXTLINE
 static const luaL_Reg ThoriumModules[] = {
     {"graphics", Graphics::luaopen_graphics},
-    {"event", Event::luaopen_event},
-    {"timer", Timer::luaopen_timer},
-    {"data", Data::luaopen_data},
+    {"event", Wrap::Event::luaopen_event},
+    {"timer", Wrap::Timer::luaopen_timer},
+    {"data", Wrap::Data::luaopen_data},
+    {"thread", Wrap::Threading::luaopen_threading},
     {"filesystem", Wrap::Filesystem::luaopen_filesystem},
     {"keyboard", Wrap::Keyboard::luaopen_keyboard},
     {"mouse", Wrap::Mouse::luaopen_mouse},

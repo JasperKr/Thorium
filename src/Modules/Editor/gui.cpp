@@ -14,8 +14,6 @@ Ref<Graphics::Shader::ShaderModule> ImGuiShaderA8;
 auto MainWindow() -> void {}
 
 auto LoadGUIState(lua_State *state) -> Result<GuiState> {
-  PrintAlways("Loading GUI state...");
-
   auto loadResult = LoadImGuiCursorMap();
   if (Error::IsError(loadResult)) {
     return loadResult.AsUnexpected();
@@ -57,8 +55,6 @@ auto LoadGUIState(lua_State *state) -> Result<GuiState> {
   }
 
   auto fontData = fontDataResult.value();
-
-  PrintAlways("Loaded GUI font file, size: {} bytes", fontData.size());
 
   const float fontSize = 18.0F;
   const std::string debugname = "Source Code Pro - Mono";

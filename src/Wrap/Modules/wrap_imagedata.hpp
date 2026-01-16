@@ -10,7 +10,7 @@ extern "C" {
 #include <lualib.h>
 }
 
-namespace Image {
+namespace Wrap::Image {
 
 auto wrap_NewImagedata(lua_State *state) -> int;
 
@@ -41,10 +41,10 @@ static const luaL_Reg ImagedataLib[] = {
 extern "C" inline auto luaopen_imagedata(lua_State *state) -> int {
   PrintDebug("Registering Imagedata Lua type.");
 
-  LuaWrap::RegisterLuaType(state, Image::ImageData::GetType(),
+  LuaWrap::RegisterLuaType(state, ::Image::ImageData::GetType(),
                            ImagedataLib); // NOLINT
 
   return 1;
 }
 
-} // namespace Image
+} // namespace Wrap::Image

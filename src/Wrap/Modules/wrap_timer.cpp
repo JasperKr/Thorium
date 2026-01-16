@@ -5,9 +5,9 @@ extern "C" {
 #include <lualib.h>
 }
 
-namespace Timer {
+namespace Wrap::Timer {
 auto wrap_GetTime(lua_State *state) -> int {
-  auto time = Timer::GetTime();
+  auto time = ::Timer::GetTime();
 
   lua_pushnumber(state, time);
 
@@ -15,7 +15,7 @@ auto wrap_GetTime(lua_State *state) -> int {
 }
 
 auto wrap_GetDelta(lua_State *state) -> int {
-  auto delta = Timer::GetDelta();
+  auto delta = ::Timer::GetDelta();
 
   lua_pushnumber(state, delta);
 
@@ -23,7 +23,7 @@ auto wrap_GetDelta(lua_State *state) -> int {
 }
 
 auto wrap_GetAverageDelta(lua_State *state) -> int {
-  auto averageDelta = Timer::GetAverageDelta();
+  auto averageDelta = ::Timer::GetAverageDelta();
 
   lua_pushnumber(state, averageDelta);
 
@@ -31,7 +31,7 @@ auto wrap_GetAverageDelta(lua_State *state) -> int {
 }
 
 auto wrap_GetFPS(lua_State *state) -> int {
-  auto fps = Timer::GetFPS();
+  auto fps = ::Timer::GetFPS();
 
   lua_pushnumber(state, fps);
 
@@ -41,15 +41,15 @@ auto wrap_GetFPS(lua_State *state) -> int {
 auto wrap_Sleep(lua_State *state) -> int {
   double seconds = luaL_checknumber(state, 1);
 
-  Timer::Sleep(seconds, true);
+  ::Timer::Sleep(seconds, true);
 
   return 0;
 }
 
 auto wrap_Step(lua_State *state) -> int {
-  Timer::Step();
+  ::Timer::Step();
 
   return 0;
 }
 
-} // namespace Timer
+} // namespace Wrap::Timer

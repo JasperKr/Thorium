@@ -6,7 +6,7 @@ extern "C" {
 #include <lua.h>
 #include <lualib.h>
 }
-namespace Timer {
+namespace Wrap::Timer {
 
 auto wrap_GetTime(lua_State *state) -> int;
 auto wrap_GetDelta(lua_State *state) -> int;
@@ -40,4 +40,4 @@ extern "C" inline auto luaopen_timer(lua_State *state) -> int {
   return 1;
 }
 
-} // namespace Timer
+} // namespace Wrap::Timer

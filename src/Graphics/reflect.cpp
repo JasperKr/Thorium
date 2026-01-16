@@ -259,8 +259,6 @@ auto SetupResource(slang::VariableLayoutReflection *variableLayout,
     reflection
         .slotToInfo[SetBindingToSlot(samplerInfo.set, samplerInfo.binding)] =
         resourceInfo;
-    PrintAlways("Added sampler resource: {}, set: {}, binding: {}",
-                resourceInfo.name, samplerInfo.set, samplerInfo.binding);
   } else if (maskedShape == SLANG_STRUCTURED_BUFFER ||
              maskedShape == SLANG_BYTE_ADDRESS_BUFFER) {
     // SSBO
@@ -404,8 +402,6 @@ auto SetupResource(slang::VariableLayoutReflection *variableLayout,
     reflection
         .slotToInfo[SetBindingToSlot(bufferInfo.set, bufferInfo.binding)] =
         resourceInfo;
-    PrintAlways("Added storage buffer resource: {}, set: {}, binding: {}",
-                resourceInfo.name, bufferInfo.set, bufferInfo.binding);
   } else {
     return Error::Create("Unsupported resource shape in reflection.");
   }

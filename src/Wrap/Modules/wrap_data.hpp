@@ -9,11 +9,11 @@ extern "C" {
 #include <lualib.h>
 }
 
-namespace Data {
+namespace Wrap::Data {
 
 // NOLINTNEXTLINE
 static const luaL_Reg DataLib[] = {
-    {"newBytedata", wrap_NewBytedata},
+    {"newBytedata", Data::wrap_NewBytedata},
     {"newImagedata", Image::wrap_NewImagedata},
     {nullptr, nullptr},
 };
@@ -37,4 +37,4 @@ extern "C" inline auto luaopen_data(lua_State *state) -> int {
   return 1;
 }
 
-} // namespace Data
+} // namespace Wrap::Data

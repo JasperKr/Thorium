@@ -292,7 +292,6 @@ inline auto LoadMaterial(Graphics::GraphicsContext &context,
                  gltfMaterial.emissiveFactor[2]);
 
   if (gltfMaterial.pbrData.baseColorTexture.has_value()) {
-    PrintInfo("Loading albedo texture.");
     auto albedoTextureLoadResult = LoadTexture(
         context, asset, gltfMaterial.pbrData.baseColorTexture.value());
 
@@ -304,7 +303,6 @@ inline auto LoadMaterial(Graphics::GraphicsContext &context,
   }
 
   if (gltfMaterial.pbrData.metallicRoughnessTexture.has_value()) {
-    PrintInfo("Loading metallic-roughness texture.");
     auto metallicRoughnessLoadResult = LoadTexture(
         context, asset, gltfMaterial.pbrData.metallicRoughnessTexture.value());
 
@@ -316,7 +314,6 @@ inline auto LoadMaterial(Graphics::GraphicsContext &context,
   }
 
   if (gltfMaterial.occlusionTexture.has_value()) {
-    PrintInfo("Loading occlusion texture.");
     auto aoTextureLoadResult =
         LoadTexture(context, asset, gltfMaterial.occlusionTexture.value());
 
@@ -328,7 +325,6 @@ inline auto LoadMaterial(Graphics::GraphicsContext &context,
   }
 
   if (gltfMaterial.normalTexture.has_value()) {
-    PrintInfo("Loading normal texture.");
     auto normalTextureLoadResult =
         LoadTexture(context, asset, gltfMaterial.normalTexture.value());
 
@@ -340,7 +336,6 @@ inline auto LoadMaterial(Graphics::GraphicsContext &context,
   }
 
   if (gltfMaterial.emissiveTexture.has_value()) {
-    PrintInfo("Loading emissive texture.");
     auto emissiveTextureLoadResult =
         LoadTexture(context, asset, gltfMaterial.emissiveTexture.value());
 
