@@ -15,10 +15,9 @@ static void ResetCommandBuffers(Graphics::GraphicsContext &context) {
   // Reset command buffers for all render threads
 
   for (int i = 0; i < context.renderThreadCount; i++) {
-    Graphics::RenderData renderData =
-        GetRenderData(context, i); // Get render data for this thread
-
-    vkResetCommandBuffer(renderData.commandBuffers[context.frameIndex], 0);
+    vkResetCommandBuffer(
+        GetCommandBuffer(context), // TODO: Fix for multithreading later
+        0);
   }
 }
 
@@ -26,16 +25,11 @@ static void StartRecording(Graphics::GraphicsContext &context) {
   // Begin command buffer, so recording can start
 
   for (int i = 0; i < context.renderThreadCount; i++) {
-    Graphics::RenderData renderData =
-        GetRenderData(context, i); // Get render data for this thread
-
-    // TODO: Thread safety here?
-    renderData.frameReady[context.frameIndex] = false;
-
     VkCommandBufferBeginInfo beginInfo = {};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    vkBeginCommandBuffer(renderData.commandBuffers[context.frameIndex],
-                         &beginInfo);
+    vkBeginCommandBuffer(
+        GetCommandBuffer(context), // TODO: Fix for multithreading later
+        &beginInfo);
   }
 }
 
@@ -52,10 +46,8 @@ static auto EndRecording(Graphics::GraphicsContext &context,
 
   // End command buffer recording
   for (int i = 0; i < context.renderThreadCount; i++) {
-    Graphics::RenderData renderData =
-        GetRenderData(context, i); // Get render data for this thread
-
-    vkEndCommandBuffer(renderData.commandBuffers[frameIndex]);
+    vkEndCommandBuffer(
+        GetCommandBuffer(context)); // TODO: Fix for multithreading later
   }
 
   auto currentTimelineResult =
@@ -149,7 +141,7 @@ auto PrepareRecording(Graphics::GraphicsContext &context) -> Error {
   StartRecording(context);
 
   TransitionPresentToColor(
-      GetCommandBuffer(context, 0),
+      GetCommandBuffer(context),
       context.swapchainInfo.images[context.swapchainImageIndex]);
 
   return Error::Success();
@@ -186,8 +178,8 @@ auto SubmitCommandBuffers(Graphics::GraphicsContext &context) -> Error {
   // Command buffers
   std::vector<VkCommandBuffer> commandBuffers(context.renderThreadCount);
   for (int i = 0; i < context.renderThreadCount; i++) {
-    Graphics::RenderData renderData = GetRenderData(context, i);
-    commandBuffers[i] = renderData.commandBuffers[context.frameIndex];
+    commandBuffers[i] =
+        GetCommandBuffer(context); // TODO: Fix for multithreading later
   }
   submitInfo.commandBufferCount = context.renderThreadCount;
   submitInfo.pCommandBuffers = commandBuffers.data();
@@ -265,7 +257,7 @@ auto InitializeGraphics(Graphics::GraphicsContext &context) -> Error {
   StartRecording(context);
 
   TransitionPresentToColor(
-      GetCommandBuffer(context, 0),
+      GetCommandBuffer(context),
       context.swapchainInfo.images[context.swapchainImageIndex]);
 
   vkResetFences(context.device, 1, &context.inFlightFences[context.frameIndex]);
@@ -284,7 +276,7 @@ auto Present(Graphics::GraphicsContext &context) -> Error {
   }
 
   TransitionColorToPresent(
-      GetCommandBuffer(context, 0),
+      GetCommandBuffer(context),
       context.swapchainInfo.images[context.swapchainImageIndex]);
 
   // Draw of this frame is done, end recording
@@ -308,6 +300,7 @@ auto Present(Graphics::GraphicsContext &context) -> Error {
   // Prepare for next frame
   context.currentFrame++;
   context.frameIndex = context.currentFrame % FRAMES_IN_FLIGHT;
+  Barrier::ResetFrameTimeline();
 
   auto error = AquireNextSwapchainImage(context);
   if (Error::IsError(error)) {

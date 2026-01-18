@@ -6,15 +6,20 @@
 
 namespace Graphics::Barrier {
 
-// NOLINTNEXTLINE global bullshit
-std::vector<GraphicsResource> Resources;
-
 // Per-Frame global timeline index
 // NOLINTNEXTLINE
-uint64_t GlobalTimelineIndex = 0;
+thread_local uint64_t GlobalTimelineIndex = 0;
+
+// Timeline index offset for this frame
+// NOLINTNEXTLINE
+thread_local uint64_t GlobalTimelineOffset = 0;
+
+// The number of barriers issued this frame
+// NOLINTNEXTLINE
+thread_local uint64_t FrameBarrierCount = 0;
 
 // NOLINTNEXTLINE
-std::vector<ResourceSync> GlobalResourceSyncTimeline{};
+thread_local std::vector<ResourceSync> GlobalResourceSyncTimeline{};
 
 inline auto IsHazard(const ResourceState &oldState,
                      const ResourceState &newState) -> bool {
@@ -114,18 +119,18 @@ inline auto TimelineLookback(uint64_t currentTimelineIndex,
     }
   }
 
-  if (GlobalTimelineIndex == 0 || currentTimelineIndex >= GlobalTimelineIndex) {
+  uint64_t LocalTimelineIndex = GlobalTimelineIndex - GlobalTimelineOffset;
+
+  if (LocalTimelineIndex == 0 || currentTimelineIndex >= LocalTimelineIndex) {
     return true; // No barriers yet, need to sync
   }
 
   // current timeline index meaning the last barrier that affected this resource
   // and global timeline index the actual current barrier index
   for (uint64_t i = GlobalTimelineIndex - 1ULL; i > currentTimelineIndex; i--) {
-
-    auto &sync = GlobalResourceSyncTimeline[i];
+    auto &sync = GlobalResourceSyncTimeline[i - GlobalTimelineOffset];
 
     auto mask = sync.dstStages;
-    // for (uint32_t bitIndex = 0; bitIndex < 64; bitIndex++) {
     while (mask != 0U) {
       auto bit = mask & -mask;
       uint32_t bitIndex = __builtin_ctzll(bit);
@@ -184,13 +189,11 @@ auto UpdateUsage(GraphicsContext &context, GraphicsResource &resource,
 
     if (GetIsCurrentlyRendering()) {
       // End rendering before doing a barrier
-      vkCmdEndRendering(
-          Graphics::GetCommandBuffer(context, GetCurrentThreadIndex()));
+      vkCmdEndRendering(Graphics::GetCommandBuffer(context));
       GetIsCurrentlyRendering() = false;
     }
 
-    vkCmdPipelineBarrier2(
-        Graphics::GetCommandBuffer(context, GetCurrentThreadIndex()), &depInfo);
+    vkCmdPipelineBarrier2(Graphics::GetCommandBuffer(context), &depInfo);
 
     // Update to new usage
     previousAccess = usage.access;
@@ -201,6 +204,7 @@ auto UpdateUsage(GraphicsContext &context, GraphicsResource &resource,
                                           .dstStages = barrier.dstStageMask,
                                           .dstAccess = barrier.dstAccessMask});
     GlobalTimelineIndex++;
+    FrameBarrierCount++;
   } else {
     // Only used to accumulate read access/stages
     // Since anything involving writes would have caused a hazard and barrier above

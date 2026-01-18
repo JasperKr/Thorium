@@ -336,7 +336,6 @@ static auto CreateDevice(GraphicsContext &context) -> Error {
 }
 
 static void InitializeSwapchainTextures(GraphicsContext &context) {
-  // Allocate a temporary command buffer
   auto *commandBuffer = BeginSingleTimeCommands(context);
 
   // Transition each image from UNDEFINED -> COLOR_ATTACHMENT_OPTIMAL
@@ -458,53 +457,40 @@ static auto CreateSwapchain(GraphicsContext &context) -> Error {
 }
 
 static auto CreateRenderData(GraphicsContext &context) -> Error {
-  context.renderData = std::vector<RenderData>(context.renderThreadCount);
+  VkCommandPoolCreateInfo poolInfo = {};
+  poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+  poolInfo.queueFamilyIndex = context.graphicsQueueFamily;
+  poolInfo.flags =
+      static_cast<uint32_t>(VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT) |
+      static_cast<uint32_t>(VK_COMMAND_POOL_CREATE_TRANSIENT_BIT);
 
-  for (RenderData &renderData : context.renderData) {
+  Error error = Error::Create(vkCreateCommandPool(
+      context.device, &poolInfo, nullptr, &context.commandPool));
 
-    VkCommandPoolCreateInfo poolInfo = {};
-    poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-    poolInfo.queueFamilyIndex = context.graphicsQueueFamily;
-    poolInfo.flags =
-        static_cast<uint32_t>(VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT) |
-        static_cast<uint32_t>(VK_COMMAND_POOL_CREATE_TRANSIENT_BIT);
+  if (Error::IsError(error)) {
+    return error;
+  }
 
-    Error error = Error::Create(vkCreateCommandPool(context.device, &poolInfo,
-                                                    nullptr, &renderData.pool));
+  context.commandBuffers = std::vector<VkCommandBuffer>(FRAMES_IN_FLIGHT);
 
-    if (Error::IsError(error)) {
-      return error;
-    }
+  VkCommandBufferAllocateInfo allocInfo = {};
+  allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+  allocInfo.commandPool = context.commandPool;
+  allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+  allocInfo.commandBufferCount = FRAMES_IN_FLIGHT;
 
-    renderData.commandBuffers = std::vector<VkCommandBuffer>(FRAMES_IN_FLIGHT);
-    renderData.frameReady = std::vector<bool>(FRAMES_IN_FLIGHT, false);
+  error = Error::Create(vkAllocateCommandBuffers(
+      context.device, &allocInfo, context.commandBuffers.data()));
 
-    VkCommandBufferAllocateInfo allocInfo = {};
-    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    allocInfo.commandPool = renderData.pool;
-    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    allocInfo.commandBufferCount = FRAMES_IN_FLIGHT;
-
-    error = Error::Create(vkAllocateCommandBuffers(
-        context.device, &allocInfo, renderData.commandBuffers.data()));
-
-    if (Error::IsError(error)) {
-      return error;
-    }
+  if (Error::IsError(error)) {
+    return error;
   }
 
   return Error::Success();
 }
 
-auto GetRenderData(GraphicsContext &context, uint32_t threadIndex)
-    -> RenderData {
-  return context.renderData.at(threadIndex);
-}
-
-auto GetCommandBuffer(GraphicsContext &context, uint32_t threadIndex)
-    -> VkCommandBuffer {
-  RenderData renderData = GetRenderData(context, threadIndex);
-  return renderData.commandBuffers.at(context.frameIndex);
+auto GetCommandBuffer(GraphicsContext &context) -> VkCommandBuffer {
+  return context.commandBuffers.at(context.frameIndex);
 }
 
 static auto CreateSemaphores(GraphicsContext &context) -> Error {
@@ -731,37 +717,37 @@ auto Initialize(GraphicsContext &context, Config::ApplicationConfig &config)
   if (Error::IsError(error)) {
     return error;
   }
-  PrintDebug("calling: CreateDevice...");
+  PrintDebug("called: CreateDevice...");
   error = CreateVmaAllocator(context);
   if (Error::IsError(error)) {
     return error;
   }
-  PrintDebug("calling: CreateVmaAllocator...");
+  PrintDebug("called: CreateVmaAllocator...");
   error = CreateRenderData(context);
   if (Error::IsError(error)) {
     return error;
   }
-  PrintDebug("calling: CreateRenderData...");
+  PrintDebug("called: CreateRenderData...");
   error = CreateSwapchain(context);
   if (Error::IsError(error)) {
     return error;
   }
-  PrintDebug("calling: CreateSwapchain...");
+  PrintDebug("called: CreateSwapchain...");
   error = CreateSemaphores(context);
   if (Error::IsError(error)) {
     return error;
   }
-  PrintDebug("calling: CreateSemaphores...");
+  PrintDebug("called: CreateSemaphores...");
   error = CreateFences(context);
   if (Error::IsError(error)) {
     return error;
   }
-  PrintDebug("calling: CreateFences.");
+  PrintDebug("called: CreateFences.");
   error = CreateDescriptorPool(context);
   if (Error::IsError(error)) {
     return error;
   }
-  PrintDebug("calling: CreateDescriptorPool.");
+  PrintDebug("called: CreateDescriptorPool.");
 
   return Error::Success();
 }
@@ -783,9 +769,7 @@ void Deinitialize(GraphicsContext &context) {
     vkDestroySemaphore(context.device, semaphore, nullptr);
   }
 
-  for (RenderData &renderData : context.renderData) {
-    vkDestroyCommandPool(context.device, renderData.pool, nullptr);
-  }
+  vkDestroyCommandPool(context.device, context.commandPool, nullptr);
 
   for (VkImageView imageView : context.swapchainInfo.imageViews) {
     vkDestroyImageView(context.device, imageView, nullptr);
@@ -810,7 +794,7 @@ auto BeginSingleTimeCommands(GraphicsContext &context) -> VkCommandBuffer {
   VkCommandBufferAllocateInfo allocInfo = {};
   allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
   allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-  allocInfo.commandPool = GetRenderData(context, 0).pool;
+  allocInfo.commandPool = context.commandPool;
   allocInfo.commandBufferCount = 1;
 
   VkCommandBuffer commandBuffer = nullptr;
@@ -837,8 +821,7 @@ auto EndSingleTimeCommands(GraphicsContext &context,
   vkQueueSubmit(context.graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
   vkQueueWaitIdle(context.graphicsQueue);
 
-  vkFreeCommandBuffers(context.device, GetRenderData(context, 0).pool, 1,
-                       &commandBuffer);
+  vkFreeCommandBuffers(context.device, context.commandPool, 1, &commandBuffer);
 }
 
 void SetCurrentGraphicsContext(GraphicsContext *ctx) { g_ctx = ctx; }

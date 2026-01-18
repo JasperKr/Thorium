@@ -807,8 +807,7 @@ auto FlushCompute(GraphicsContext &context) -> Result<bool> {
     return pipelineResult.error().AsUnexpected();
   }
 
-  const auto &commandBuffer =
-      Graphics::GetCommandBuffer(context, GetCurrentThreadIndex());
+  const auto &commandBuffer = Graphics::GetCommandBuffer(context);
 
   // Unset current rendering, otherwise vkCmdPipelineBarrier will fail
   // EndRendering(context);
@@ -855,8 +854,7 @@ auto FlushGraphics(GraphicsContext &context) -> Result<bool> {
     return pipelineResult.error().AsUnexpected();
   }
 
-  const auto &commandBuffer =
-      Graphics::GetCommandBuffer(context, GetCurrentThreadIndex());
+  const auto &commandBuffer = Graphics::GetCommandBuffer(context);
 
   // Unset current rendering, otherwise vkCmdPipelineBarrier will fail
   // EndRendering(context);
@@ -1031,9 +1029,7 @@ inline auto BeginRendering(GraphicsContext &context) -> Error {
 
   PrintDebug("Beginning rendering pass");
 
-  vkCmdBeginRendering(
-      Graphics::GetCommandBuffer(context, GetCurrentThreadIndex()),
-      &renderingInfo);
+  vkCmdBeginRendering(Graphics::GetCommandBuffer(context), &renderingInfo);
 
   GetIsCurrentlyRendering() = true;
 
@@ -1047,8 +1043,7 @@ inline auto BeginRendering(GraphicsContext &context) -> Error {
 
 auto EndRendering(GraphicsContext &context) -> void {
   if (GetIsCurrentlyRendering()) {
-    vkCmdEndRendering(
-        Graphics::GetCommandBuffer(context, GetCurrentThreadIndex()));
+    vkCmdEndRendering(Graphics::GetCommandBuffer(context));
     GetIsCurrentlyRendering() = false;
   }
 }
@@ -1155,12 +1150,8 @@ auto PrepareRendering(GraphicsContext &context) -> Error {
     auto viewport = GetClippedViewport();
     auto scissor = GetScissor();
 
-    vkCmdSetViewport(
-        Graphics::GetCommandBuffer(context, GetCurrentThreadIndex()), 0, 1,
-        &viewport);
-    vkCmdSetScissor(
-        Graphics::GetCommandBuffer(context, GetCurrentThreadIndex()), 0, 1,
-        &scissor);
+    vkCmdSetViewport(Graphics::GetCommandBuffer(context), 0, 1, &viewport);
+    vkCmdSetScissor(Graphics::GetCommandBuffer(context), 0, 1, &scissor);
   }
 
   return Error::Success();
@@ -1465,8 +1456,7 @@ auto GetBindPoint() -> VkPipelineBindPoint {
 auto Clear(GraphicsContext &context, const ClearInfo &clearInfo) -> Error {
   auto &currentState = StateStack.back();
 
-  auto *commandBuffer =
-      Graphics::GetCommandBuffer(context, GetCurrentThreadIndex());
+  auto *commandBuffer = Graphics::GetCommandBuffer(context);
 
   auto count = currentState.renderTargets.size();
 

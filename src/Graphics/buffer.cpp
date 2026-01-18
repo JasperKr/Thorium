@@ -200,7 +200,7 @@ auto Buffer::UploadLarge(GraphicsContext &context,
   std::memcpy(static_cast<uint8_t *>(mapped), data.data(), uploadSize);
   vmaUnmapMemory(context.vmaAllocator, stagingMemory);
 
-  auto *commandBuffer = GetCommandBuffer(context, GetCurrentThreadIndex());
+  auto *commandBuffer = GetCommandBuffer(context);
 
   VkBufferCopy copyRegion = {};
   copyRegion.srcOffset = 0;
@@ -274,7 +274,7 @@ auto Buffer::UploadRing(GraphicsContext &context,
   uploadBuffer->UnmapMemory(context);
 
   // Record copy command
-  auto *commandBuffer = GetCommandBuffer(context, GetCurrentThreadIndex());
+  auto *commandBuffer = GetCommandBuffer(context);
 
   VkCommandBufferBeginInfo beginInfo = {};
   beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -466,7 +466,7 @@ auto Buffer::MarkUse(const QueueID queueID, const uint64_t timelineValue)
 // NOLINTNEXTLINE
 auto Buffer::Clear(GraphicsContext &context, uint32_t value,
                    VkDeviceSize offset, VkDeviceSize size) -> Error {
-  auto *commandBuffer = GetCommandBuffer(context, GetCurrentThreadIndex());
+  auto *commandBuffer = GetCommandBuffer(context);
 
   // Must flush, for WaW hazards
   Barrier::UpdateUsage(context, *this,

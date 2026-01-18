@@ -5,6 +5,8 @@
 #include "Modules/object.hpp"
 #include <array>
 #include <string>
+
+#define VK_NO_PROTOTYPES
 #include <vulkan/vulkan_core.h>
 namespace Renderer {
 

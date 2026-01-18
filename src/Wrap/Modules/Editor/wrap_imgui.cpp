@@ -97,7 +97,8 @@ inline auto ChangeMouseState(ImGuiIO &inout) -> Error {
           return setResult;
         }
       } else {
-        return Error::Create("Unmapped ImGui mouse cursor type");
+        return Error::Create("Unmapped ImGui mouse cursor type: " +
+                             std::to_string(static_cast<int>(imgui_cursor)));
       }
     }
   }

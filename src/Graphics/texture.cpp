@@ -662,7 +662,7 @@ auto Texture::TransitionLayout(GraphicsContext &context, VkImageLayout layout,
     return Error::Success();
   }
 
-  auto *commandBuffer = GetCommandBuffer(context, GetCurrentThreadIndex());
+  auto *commandBuffer = GetCommandBuffer(context);
 
   VkImageMemoryBarrier2 barrier = {};
   barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
@@ -880,7 +880,7 @@ auto Texture::SetPixels(GraphicsContext &context, Image::ImageData &imageData,
     return error;
   }
 
-  auto *commandBuffer = GetCommandBuffer(context, GetCurrentThreadIndex());
+  auto *commandBuffer = GetCommandBuffer(context);
 
   vkCmdCopyBufferToImage(commandBuffer, buffer->handle, image,
                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
@@ -1008,7 +1008,7 @@ auto Texture::SetPixels(GraphicsContext &context,
     return error;
   }
 
-  auto *commandBuffer = GetCommandBuffer(context, GetCurrentThreadIndex());
+  auto *commandBuffer = GetCommandBuffer(context);
 
   vkCmdCopyBufferToImage(commandBuffer, buffer->handle, image,
                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);

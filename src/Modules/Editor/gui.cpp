@@ -1,6 +1,7 @@
 #include "gui.hpp"
 #include "Modules/console.hpp"
 #include "Modules/filesystem.hpp"
+#include "SDL3/SDL_mouse.h"
 #include "imgui.h"
 #include <array>
 
@@ -109,7 +110,7 @@ auto LoadImGuiCursorMap() -> Error {
     SDL_SystemCursor sdlCursor;
   };
 
-  static const std::array<CursorMapping, 9> mappings{
+  static const std::array<CursorMapping, 11> mappings{
       CursorMapping{.imguiCursor = ImGuiMouseCursor_Arrow,
                     .sdlCursor = SDL_SYSTEM_CURSOR_DEFAULT},
       CursorMapping{.imguiCursor = ImGuiMouseCursor_TextInput,
@@ -126,10 +127,12 @@ auto LoadImGuiCursorMap() -> Error {
                     .sdlCursor = SDL_SYSTEM_CURSOR_NWSE_RESIZE},
       CursorMapping{.imguiCursor = ImGuiMouseCursor_Hand,
                     .sdlCursor = SDL_SYSTEM_CURSOR_POINTER},
+      CursorMapping{.imguiCursor = ImGuiMouseCursor_Wait,
+                    .sdlCursor = SDL_SYSTEM_CURSOR_WAIT},
+      CursorMapping{.imguiCursor = ImGuiMouseCursor_Progress,
+                    .sdlCursor = SDL_SYSTEM_CURSOR_PROGRESS},
       CursorMapping{.imguiCursor = ImGuiMouseCursor_NotAllowed,
                     .sdlCursor = SDL_SYSTEM_CURSOR_NOT_ALLOWED},
-      // Optionally add more mappings if your backend supports them
-      // {ImGuiMouseCursor_None, nullptr},
   };
 
   for (const auto &mapping : mappings) {

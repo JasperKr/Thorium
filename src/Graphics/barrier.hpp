@@ -18,12 +18,24 @@ struct ResourceSync {
   VkAccessFlags2 dstAccess;
 };
 
+// As every thread will be recording commands async,
+// and these command buffers may be reordered before submission,
+// All barriers are thread-local and recorded as needed.
+
 // Per-Frame global timeline index
 // NOLINTNEXTLINE
-extern uint64_t GlobalTimelineIndex;
+thread_local extern uint64_t GlobalTimelineIndex;
+
+// Timeline index offset for this frame
+// NOLINTNEXTLINE
+thread_local extern uint64_t GlobalTimelineOffset;
+
+// The number of barriers issued this frame
+// NOLINTNEXTLINE
+thread_local extern uint64_t FrameBarrierCount;
 
 // NOLINTNEXTLINE
-extern std::vector<ResourceSync> GlobalResourceSyncTimeline;
+thread_local extern std::vector<ResourceSync> GlobalResourceSyncTimeline;
 
 /*
 For example.
@@ -81,15 +93,14 @@ struct GraphicsResource {
   uint64_t lastUsedTimelineIndex = 0;
 };
 
-// NOLINTNEXTLINE global bullshit
-extern std::vector<GraphicsResource> Resources;
-
 auto UpdateUsage(GraphicsContext &context, GraphicsResource &resource,
                  const ResourceState &usage) -> void;
 
 inline auto ResetFrameTimeline() -> void {
-  GlobalTimelineIndex = 0;
+  GlobalTimelineOffset += FrameBarrierCount;
   GlobalResourceSyncTimeline.clear();
+
+  FrameBarrierCount = 0;
 }
 
 } // namespace Graphics::Barrier

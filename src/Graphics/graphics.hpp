@@ -36,12 +36,6 @@ constexpr VkPipelineColorBlendAttachmentState DefaultBlendMode = {
 constexpr uint32_t FRAMES_IN_FLIGHT = 2;
 constexpr uint32_t MAX_SWAPCHAIN_IMAGES = 3;
 
-struct RenderData {
-  VkCommandPool pool = VK_NULL_HANDLE;
-  std::vector<VkCommandBuffer> commandBuffers;
-  std::vector<bool> frameReady;
-};
-
 struct SurfaceInfo {
   VkSurfaceFormatKHR format;
   VkPresentModeKHR presentMode;
@@ -83,15 +77,14 @@ struct GraphicsContext {
   uint32_t swapchainImageIndex;
 
   int32_t renderThreadCount;
-  std::vector<RenderData> renderData;
+
+  VkCommandPool commandPool;
+  std::vector<VkCommandBuffer> commandBuffers;
 };
 
 auto Initialize(GraphicsContext &context, Config::ApplicationConfig &config)
     -> Error;
-auto GetRenderData(GraphicsContext &context, uint32_t threadIndex)
-    -> RenderData;
-auto GetCommandBuffer(GraphicsContext &context, uint32_t threadIndex)
-    -> VkCommandBuffer;
+auto GetCommandBuffer(GraphicsContext &context) -> VkCommandBuffer;
 void Deinitialize(GraphicsContext &context);
 
 inline auto GetCurrentThreadIndex() -> int8_t & {
@@ -104,7 +97,7 @@ auto BeginSingleTimeCommands(GraphicsContext &context) -> VkCommandBuffer;
 auto EndSingleTimeCommands(GraphicsContext &context,
                            VkCommandBuffer commandBuffer) -> void;
 
-// Graphics context for the current thread NOLINTNEXTLINE
+// Graphics context  NOLINTNEXTLINE
 static thread_local GraphicsContext *g_ctx = nullptr;
 void SetCurrentGraphicsContext(GraphicsContext *ctx);
 auto GetCurrentGraphicsContext() -> GraphicsContext *;

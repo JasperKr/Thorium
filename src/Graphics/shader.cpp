@@ -867,7 +867,7 @@ auto ShaderModule::FlushBuffers(GraphicsContext &context,
                          writes.data(), 0, nullptr);
   pendingDescriptorWrites.clear();
 
-  auto *commandBuffer = GetCommandBuffer(context, GetCurrentThreadIndex());
+  auto *commandBuffer = GetCommandBuffer(context);
 
   VkPipelineBindPoint bindpoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
 
