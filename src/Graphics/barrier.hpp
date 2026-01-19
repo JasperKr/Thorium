@@ -91,6 +91,13 @@ struct GraphicsResource {
   // CS read from buffer 2
   // We need to know when stuff was synced last
   uint64_t lastUsedTimelineIndex = 0;
+
+  // Whether this is the first usage recorded for this resource in the frame
+  // When using it for async work.
+  // We need to make sure to never add a barrier on first usage since we will insert this later
+  // Before the command buffer is stitched together with others. Because the usage is unknown at the time of recording.
+  // Due to async recording and reordering.
+  bool firstAsyncUsage = false;
 };
 
 auto UpdateUsage(GraphicsContext &context, GraphicsResource &resource,

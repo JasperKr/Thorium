@@ -29,6 +29,19 @@ inline auto IsHazard(const ResourceState &oldState,
            VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT)) != 0U;
 }
 
+// Count trailing bits set in a 64-bit integer
+// Staring from least significant bit to most significant bit
+inline auto TrailingBitCount(uint64_t bits) -> uint32_t {
+  if (bits == 0U) {
+    return 64U; // No bits set NOLINT
+  }
+#if defined(_MSC_VER)
+  return static_cast<uint32_t>(__tzcnt_u64(bits));
+#else
+  return __builtin_ctzll(bits);
+#endif
+}
+
 /*
 
 For example.
@@ -111,10 +124,11 @@ inline auto TimelineLookback(uint64_t currentTimelineIndex,
     auto bit = mask & -mask; // negative of a number isolates the lowest set bit
 
     // count trailing zeros after removing the latest bit to get index
-    uint32_t bitIndex = __builtin_ctzll(bit);
+    uint32_t bitIndex = TrailingBitCount(bit);
     mask &= ~bit; // clear the lowest set bit
 
-    if ((desiredSynchronization.stages & bit) != 0U) {
+    // NOLINTNEXTLINE
+    if ((desiredSynchronization.stages & bit) != 0U && bitIndex != 64U) {
       maskBits.at(bitIndex) = desiredSynchronization.access;
     }
   }
@@ -133,7 +147,12 @@ inline auto TimelineLookback(uint64_t currentTimelineIndex,
     auto mask = sync.dstStages;
     while (mask != 0U) {
       auto bit = mask & -mask;
-      uint32_t bitIndex = __builtin_ctzll(bit);
+      uint32_t bitIndex = TrailingBitCount(bit);
+
+      if (bitIndex == 64U) { // NOLINT
+        break;               // No bits set
+      }
+
       mask &= ~bit;
       // If this stage bit is active in this sync and we still need it
 
@@ -156,7 +175,7 @@ inline auto TimelineLookback(uint64_t currentTimelineIndex,
   mask = desiredSynchronization.stages;
   while (mask != 0U) {
     auto bit = mask & -mask;
-    uint32_t bitIndex = __builtin_ctzll(bit);
+    uint32_t bitIndex = TrailingBitCount(bit);
     mask &= ~bit;
     if (maskBits.at(bitIndex) != 0U) {
       return true; // Still need barrier
@@ -171,7 +190,8 @@ auto UpdateUsage(GraphicsContext &context, GraphicsResource &resource,
   auto &previousAccess = resource.lastUsedAccess;
   auto &previousStages = resource.lastUsedStages;
 
-  if (TimelineLookback(resource.lastUsedTimelineIndex, // NOLINT
+  if (!resource.firstAsyncUsage &&
+      TimelineLookback(resource.lastUsedTimelineIndex, // NOLINT
                        {.stages = previousStages, .access = previousAccess},
                        usage)) {
     // Insert barrier
@@ -213,6 +233,8 @@ auto UpdateUsage(GraphicsContext &context, GraphicsResource &resource,
     previousStages |= usage.stages;
     resource.lastUsedTimelineIndex = GlobalTimelineIndex;
   }
+
+  resource.firstAsyncUsage = false;
 }
 
 } // namespace Graphics::Barrier

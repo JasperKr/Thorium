@@ -1,10 +1,14 @@
 #include "Graphics/Buffers/uniform.hpp"
 #include "Graphics/graphicsState.hpp"
+#include "Graphics/renderThread.hpp"
 #include "Graphics/resource.hpp"
 #include "Modules/error.hpp"
 #include "buffer.hpp"
 #include "dynamicRendering.hpp"
 #include "graphics.hpp"
+#include "vulkan/vulkan_core.h"
+#include <algorithm>
+#include <array>
 #include <cstdint>
 #include <unordered_map>
 #include <vector>
@@ -265,11 +269,49 @@ auto InitializeGraphics(Graphics::GraphicsContext &context) -> Error {
   return Error::Success();
 }
 
+// Temporary location of struct for now
+struct StitchInfo {
+  // Any amount of buffers to stitch together
+  std::array<std::vector<VkCommandBuffer>, FRAMES_IN_FLIGHT> commandBuffers{};
+};
+
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+StitchInfo GlobalStitchInfo{};
+
 auto Present(Graphics::GraphicsContext &context) -> Error {
   auto validateResult = RenderTarget::FinalizeFrame(context);
   if (Error::IsError(validateResult)) {
     return validateResult;
   }
+
+  // Do note that the user must have started all async recording before calling this
+  // If the user tries to start recording after this point it will be part of the next frame
+  {
+    std::lock_guard<std::mutex> lock(Threading::CanStartNewCommandsMutex);
+    Threading::CanStartNewCommands = false;
+  }
+
+  // Notify all threads that they cannot start new commands
+  Threading::CanStartNewCommandsCV.notify_all();
+
+  std::vector<Threading::RenderThreadData> threadRenderdatas;
+
+  for (auto &threadInfo : Threading::Results) {
+    // Wait for thread to finish recording
+    std::unique_lock<std::mutex> lock(threadInfo->availabilityMutex);
+    while (threadInfo->currentlyRecording) {
+      threadInfo->availabilityCV.wait(lock);
+    }
+
+    threadRenderdatas.emplace_back(threadInfo->threadData);
+  }
+
+  std::ranges::sort(threadRenderdatas,
+                    [](const Threading::RenderThreadData &first,
+                       const Threading::RenderThreadData &second) -> bool {
+                      return first.index < second.index;
+                    });
+
   auto uploadResult = FlushBufferUploads(context);
   if (Error::IsError(uploadResult)) {
     return uploadResult;
@@ -330,6 +372,12 @@ auto Present(Graphics::GraphicsContext &context) -> Error {
   if (Error::IsError(result)) {
     return result;
   }
+
+  {
+    std::lock_guard<std::mutex> lock(Threading::CanStartNewCommandsMutex);
+    Threading::CanStartNewCommands = true;
+  }
+  Threading::CanStartNewCommandsCV.notify_all();
 
   return Error::Success();
 }

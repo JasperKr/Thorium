@@ -3,11 +3,12 @@
 #include "Graphics/barrier.hpp"
 #include "Graphics/graphics.hpp"
 #include "Modules/error.hpp"
-#include "Modules/future.hpp"
 #include "Modules/object.hpp"
-#include "Modules/type.hpp"
 #include <condition_variable>
+#include <cstdint>
 #include <mutex>
+#include <sys/types.h>
+#include <vector>
 #define VK_NO_PROTOTYPES
 #include <vulkan/vulkan_core.h>
 
@@ -20,12 +21,18 @@ struct RenderThreadData {
   std::vector<Barrier::ResourceState> usageUpdates;
   std::vector<Barrier::ResourceSync> resourceSyncs;
 
+  uint64_t index;
+  uint64_t queueID;
+
   VkCommandBuffer commandBuffer = nullptr;
 };
 
 struct RenderThreadInfo {
-  RenderThreadData *threadData = nullptr;
-  uint32_t threadIndex = 0;
+  RenderThreadData threadData;
+
+  // Protects the `currentlyRecording` flag
+  std::mutex availabilityMutex;
+  std::condition_variable availabilityCV;
   bool currentlyRecording = false;
 };
 
@@ -34,80 +41,31 @@ struct RenderThreadInfo {
 extern std::mutex CanStartNewCommandsMutex;
 extern bool CanStartNewCommands;
 extern std::condition_variable CanStartNewCommandsCV;
+extern std::mutex ResultsMutex;
+extern std::vector<Ref<RenderThreadInfo>> Results;
 
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
-static const Type type = Type("CommandBufferRequest");
+auto HasRenderingPermission() -> bool;
+auto DemandRenderingPermission() -> void;
 
-struct CommandBufferResult : Future<VkCommandBuffer>, Object {
-  explicit CommandBufferResult(GraphicsContext &ctx) : context(&ctx) {}
-  CommandBufferResult(const CommandBufferResult &) = delete;
-  CommandBufferResult(CommandBufferResult &&) = delete;
-  auto operator=(const CommandBufferResult &) -> CommandBufferResult & = delete;
-  auto operator=(CommandBufferResult &&) -> CommandBufferResult & = delete;
-  ~CommandBufferResult() override = default;
+struct AquireInfo {
 
-  GraphicsContext *context = nullptr;
-  static auto GetType() -> Type const * { return &type; }
+  // used later on the main thread for reordering command buffers
+  // this will be sorted to be inorder, does NOT have to be continuous,
+  // you MAY give the same index to multiple command buffers for unordered execution
+  uint32_t commandIndex = UINT64_MAX;
 
-  [[nodiscard]] auto GetInstanceType() const -> Type const * override {
-    return CommandBufferResult::GetType();
-  }
-
-protected:
-  auto BlockUntilReady() -> Error override {
-    {
-      std::unique_lock<std::mutex> lock(CanStartNewCommandsMutex);
-      CanStartNewCommandsCV.wait(lock,
-                                 [] -> bool { return CanStartNewCommands; });
-    }
-
-    auto *cmdBuffer = VkCommandBuffer{};
-    VkCommandBufferAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    allocInfo.commandPool = context->commandPool;
-    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    allocInfo.commandBufferCount = 1;
-    auto result = Error::Create(
-        vkAllocateCommandBuffers(context->device, &allocInfo, &cmdBuffer));
-    if (result.IsError()) {
-      return result;
-    }
-
-    SetData(cmdBuffer);
-    return Error::Success();
-  }
-
-  auto CheckIsReady() -> Error override {
-    {
-      std::lock_guard<std::mutex> lock(CanStartNewCommandsMutex);
-      if (!CanStartNewCommands) {
-        return Error::Success();
-      }
-    }
-
-    auto *cmdBuffer = VkCommandBuffer{};
-    VkCommandBufferAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    allocInfo.commandPool = context->commandPool;
-    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    allocInfo.commandBufferCount = 1;
-    auto result = Error::Create(
-        vkAllocateCommandBuffers(context->device, &allocInfo, &cmdBuffer));
-    if (result.IsError()) {
-      return result;
-    }
-
-    SetData(cmdBuffer);
-    return Error::Success();
-  }
+  // used to identify which queue this command buffer will be submitted to
+  // useful for asyncing multiple queues
+  uint32_t queueID = 0;
 };
 
-auto AquireCommandBuffer(Graphics::GraphicsContext &context,
-                         RenderThreadInfo &threadInfo)
-    -> Ref<CommandBufferResult>;
+// Aquire a command buffer for the current thread, must have rendering permission
+
+auto AquireCommandBuffer(Graphics::GraphicsContext &context, AquireInfo info)
+    -> Result<Ref<RenderThreadInfo>>;
 auto SubmitCommands(Graphics::GraphicsContext &context,
-                    VkCommandBuffer commandBuffer, RenderThreadInfo &threadInfo)
-    -> Error;
+                    RenderThreadInfo &threadInfo) -> Error;
 
 } // namespace Graphics::Threading

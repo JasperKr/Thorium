@@ -3,6 +3,7 @@
 #include "Modules/error.hpp"
 #include <algorithm>
 #include <atomic>
+#include <cstdint>
 #include <mutex>
 #include <optional>
 template <typename T> class Future {
@@ -54,4 +55,6 @@ private:
   T value{};
   std::mutex mutex;
   std::atomic<bool> ready{false};
+
+  uint64_t id = 0;
 };
