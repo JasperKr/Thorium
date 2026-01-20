@@ -5,6 +5,7 @@
 #include "Graphics/graphics.hpp"
 #include "Graphics/mesh.hpp"
 #include "Graphics/render.hpp"
+#include "Graphics/renderThread.hpp"
 #include "Graphics/shader.hpp"
 #include "Graphics/texture.hpp"
 #include "Graphics/vertexformat.hpp"
@@ -706,6 +707,42 @@ auto wrap_GetDimensions(lua_State *state) -> int {
   lua_pushinteger(state, static_cast<lua_Integer>(extent.width));
   lua_pushinteger(state, static_cast<lua_Integer>(extent.height));
   return 2;
+}
+
+auto wrap_AquireCommandBuffer(lua_State *state) -> int {
+  auto *ctx = GetCurrentGraphicsContext();
+
+  Threading::AquireInfo info{};
+  info.name = luaL_checkstring(state, 1);
+  info.priority = static_cast<int>(luaL_optinteger(state, 2, 0));
+
+  auto result = Threading::AquireCommandBuffer(*ctx, info);
+  if (Error::IsError(result)) {
+    return luaL_error(state, "%s", result.error().message.c_str());
+  }
+
+  return 0;
+}
+
+auto wrap_SubmitCommandBuffer(lua_State *state) -> int {
+  auto *ctx = GetCurrentGraphicsContext();
+
+  auto submitResult = Threading::SubmitCommands(*ctx);
+  if (Error::IsError(submitResult)) {
+    return luaL_error(state, "%s", submitResult.ToString().c_str());
+  }
+
+  return 0;
+}
+
+auto wrap_HasRenderingPermission(lua_State *state) -> int {
+  lua_pushboolean(state, Graphics::Threading::HasRenderingPermission() ? 1 : 0);
+  return 1;
+}
+
+auto wrap_DemandRenderingPermission(lua_State *state) -> int {
+  Graphics::Threading::DemandRenderingPermission();
+  return 0;
 }
 
 } // namespace Graphics

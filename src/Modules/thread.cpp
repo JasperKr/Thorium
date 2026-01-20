@@ -1,6 +1,7 @@
 #include "thread.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
+#include "Modules/filesystem.hpp"
 #include "Wrap/wrap.hpp"
 #include "event.hpp"
 #include <mutex>
@@ -31,9 +32,14 @@ auto Thread::Run(Thread *thread, const EncodedLuaData &launchArguments,
   lua_State *state = luaL_newstate();
   luaL_openlibs(state);
 
+  LuaWrap::RegisterModules(state);
+
   bool isPath = (thread->script.size() > 4 &&
                  (thread->script.substr(thread->script.size() - 4) == ".lua" ||
                   thread->script.substr(thread->script.size() - 3) == ".luac"));
+
+  PrintAlways("Starting thread with script: {}",
+              isPath ? thread->script : "[inline script]");
 
   {
     std::lock_guard<std::mutex> lock(thread->statusMutex);
@@ -48,26 +54,28 @@ auto Thread::Run(Thread *thread, const EncodedLuaData &launchArguments,
     result = luaL_loadstring(state, thread->script.c_str());
   }
 
+  PrintAlways("Thread script load result: {}", result);
+
   if (result == LUA_OK) {
-    auto error = LuaWrap::PushVarargsFromString(state, launchArguments, count);
+    // auto error = LuaWrap::PushVarargsFromString(state, launchArguments, count);
 
-    if (Error::IsError(error)) {
-      PrintAlways("Error pushing launch arguments: {}", error.message);
+    // if (Error::IsError(error)) {
+    //   PrintAlways("Error pushing launch arguments: {}", error.message);
 
-      {
-        std::lock_guard<std::mutex> lock(thread->statusMutex);
-        thread->status = ThreadStatus::Error;
-        thread->errorMessage = error.message;
-      }
+    //   {
+    //     std::lock_guard<std::mutex> lock(thread->statusMutex);
+    //     thread->status = ThreadStatus::Error;
+    //     thread->errorMessage = error.message;
+    //   }
 
-      Event::Push(Event::Event{
-          .Name = "threaderror",
-          .Values = {thread->errorMessage},
-      });
+    //   Event::Push(Event::Event{
+    //       .Name = "threaderror",
+    //       .Values = {thread->errorMessage},
+    //   });
 
-      lua_close(state);
-      return;
-    }
+    //   lua_close(state);
+    //   return;
+    // }
 
     result = lua_pcall(state, count, 0, 0);
   }
@@ -75,6 +83,10 @@ auto Thread::Run(Thread *thread, const EncodedLuaData &launchArguments,
   if (result != LUA_OK) {
     const auto *luaErrorMessage = lua_tostring(state, -1);
     lua_pop(state, 1);
+
+    PrintAlways("Thread encountered an error: {}", (luaErrorMessage != nullptr)
+                                                       ? luaErrorMessage
+                                                       : "Unknown Lua error");
 
     {
       std::lock_guard<std::mutex> lock(thread->statusMutex);

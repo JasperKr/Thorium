@@ -75,7 +75,7 @@ inline auto LuaSetLogLevel(lua_State *state) -> int {
     return luaL_error(state, "Unknown LogLevel: %s", levelStr);
   }
 
-  PrintInfo("LogLevel set to ", levelStr);
+  PrintInfo("LogLevel set to {}", levelStr);
   return 0;
 }
 

@@ -3,6 +3,7 @@
 #include "Graphics/graphics.hpp"
 #include "vulkan/vulkan_core.h"
 #include <cstdint>
+#include <utility>
 #include <vector>
 namespace Graphics::Barrier {
 
@@ -36,6 +37,10 @@ thread_local extern uint64_t FrameBarrierCount;
 
 // NOLINTNEXTLINE
 thread_local extern std::vector<ResourceSync> GlobalResourceSyncTimeline;
+
+thread_local extern std::vector<
+    std::pair<struct GraphicsResource, ResourceState>>
+    GlobalResourceStateUpdates; // NOLINT
 
 /*
 For example.
@@ -100,14 +105,35 @@ struct GraphicsResource {
   bool firstAsyncUsage = false;
 };
 
-auto UpdateUsage(GraphicsContext &context, GraphicsResource &resource,
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+static thread_local std::vector<GraphicsResource> GraphicsResources;
+
+auto UpdateUsage(const GraphicsContext &context, GraphicsResource &resource,
                  const ResourceState &usage) -> void;
+
+inline auto InsertBarrier(ResourceSync &barrier) {
+  GlobalResourceSyncTimeline.push_back(barrier);
+  FrameBarrierCount++;
+}
 
 inline auto ResetFrameTimeline() -> void {
   GlobalTimelineOffset += FrameBarrierCount;
   GlobalResourceSyncTimeline.clear();
+  GlobalResourceStateUpdates.clear();
 
   FrameBarrierCount = 0;
+}
+
+inline auto ResetModule() -> void {
+  GlobalTimelineIndex = 0;
+  GlobalTimelineOffset = 0;
+  FrameBarrierCount = 0;
+  GlobalResourceSyncTimeline.clear();
+  GlobalResourceStateUpdates.clear();
+
+  for (auto &res : GraphicsResources) {
+    res.firstAsyncUsage = true;
+  }
 }
 
 } // namespace Graphics::Barrier

@@ -50,6 +50,11 @@ auto wrap_GetWidth(lua_State *state) -> int;
 auto wrap_GetHeight(lua_State *state) -> int;
 auto wrap_GetDimensions(lua_State *state) -> int;
 
+auto wrap_AquireCommandBuffer(lua_State *state) -> int;
+auto wrap_SubmitCommandBuffer(lua_State *state) -> int;
+auto wrap_HasRenderingPermission(lua_State *state) -> int;
+auto wrap_DemandRenderingPermission(lua_State *state) -> int;
+
 // NOLINTNEXTLINE
 static const luaL_Reg GraphicsLib[] = {
     {"present", wrap_Present},
@@ -86,6 +91,10 @@ static const luaL_Reg GraphicsLib[] = {
     {"getWidth", wrap_GetWidth},
     {"getHeight", wrap_GetHeight},
     {"getDimensions", wrap_GetDimensions},
+    {"aquireGraphics", wrap_AquireCommandBuffer},
+    {"submitGraphics", wrap_SubmitCommandBuffer},
+    {"hasRenderingPermission", wrap_HasRenderingPermission},
+    {"demandRenderingPermission", wrap_DemandRenderingPermission},
     {nullptr, nullptr},
 };
 

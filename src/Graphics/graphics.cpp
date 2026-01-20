@@ -471,26 +471,26 @@ static auto CreateRenderData(GraphicsContext &context) -> Error {
     return error;
   }
 
-  context.commandBuffers = std::vector<VkCommandBuffer>(FRAMES_IN_FLIGHT);
+  // context.commandBuffers = std::vector<VkCommandBuffer>(FRAMES_IN_FLIGHT);
 
-  VkCommandBufferAllocateInfo allocInfo = {};
-  allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-  allocInfo.commandPool = context.commandPool;
-  allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-  allocInfo.commandBufferCount = FRAMES_IN_FLIGHT;
+  // VkCommandBufferAllocateInfo allocInfo = {};
+  // allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+  // allocInfo.commandPool = context.commandPool;
+  // allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+  // allocInfo.commandBufferCount = FRAMES_IN_FLIGHT;
 
-  error = Error::Create(vkAllocateCommandBuffers(
-      context.device, &allocInfo, context.commandBuffers.data()));
+  // error = Error::Create(vkAllocateCommandBuffers(
+  //     context.device, &allocInfo, context.commandBuffers.data()));
 
-  if (Error::IsError(error)) {
-    return error;
-  }
+  // if (Error::IsError(error)) {
+  //   return error;
+  // }
 
   return Error::Success();
 }
 
-auto GetCommandBuffer(GraphicsContext &context) -> VkCommandBuffer {
-  return context.commandBuffers.at(context.frameIndex);
+auto GetCommandBuffer(const GraphicsContext &context) -> VkCommandBuffer {
+  return context.commandBuffer;
 }
 
 static auto CreateSemaphores(GraphicsContext &context) -> Error {

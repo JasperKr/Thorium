@@ -3,6 +3,10 @@
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "vulkan/vulkan_core.h"
+#include <cassert>
+#include <functional>
+#include <mutex>
+#include <string>
 
 namespace Graphics::Threading {
 
@@ -23,14 +27,15 @@ auto HasRenderingPermission() -> bool {
 
 auto DemandRenderingPermission() -> void {
   std::unique_lock<std::mutex> lock(CanStartNewCommandsMutex);
-
-  // Wait until CanStartNewCommands is true
-  while (!CanStartNewCommands) {
-    CanStartNewCommandsCV.wait(lock);
-  }
+  CanStartNewCommandsCV.wait(lock,
+                             [&]() -> bool { return CanStartNewCommands; });
 }
 
-auto AquireCommandBuffer(Graphics::GraphicsContext &context, AquireInfo info)
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+thread_local inline Ref<RenderThreadInfo> CurrentRenderThreadInfo;
+
+auto AquireCommandBuffer(Graphics::GraphicsContext &context,
+                         const AquireInfo &info)
     -> Result<Ref<RenderThreadInfo>> {
 
   if (!HasRenderingPermission()) {
@@ -38,10 +43,18 @@ auto AquireCommandBuffer(Graphics::GraphicsContext &context, AquireInfo info)
         "Cannot aquire command buffer without rendering permission");
   }
 
+  if (CurrentRenderThreadInfo.get() != nullptr) {
+    return Error::Unexpected(
+        "Current thread already has an aquired command buffer");
+  }
+
   auto threadInfo = Ref<RenderThreadInfo>::Make();
   threadInfo->currentlyRecording = true;
-  threadInfo->threadData.index = info.commandIndex;
-  threadInfo->threadData.queueID = info.queueID;
+  threadInfo->threadData.key = std::hash<std::string>()(info.name);
+  threadInfo->threadData.priority = info.priority;
+#ifndef NDEBUG
+  threadInfo->threadData.name = info.name;
+#endif
 
   {
     std::lock_guard<std::mutex> lock(ResultsMutex);
@@ -78,17 +91,27 @@ auto AquireCommandBuffer(Graphics::GraphicsContext &context, AquireInfo info)
     return beginResult.AsUnexpected();
   }
 
+  Barrier::ResetModule();
+
+  context.commandBuffer = threadInfo->threadData.commandBuffer;
+  CurrentRenderThreadInfo = threadInfo;
+
   return threadInfo;
 }
 
-auto SubmitCommands(Graphics::GraphicsContext &context,
-                    RenderThreadInfo &threadInfo) -> Error {
+auto SubmitCommands(Graphics::GraphicsContext &context) -> Error {
+  auto &threadInfo = *CurrentRenderThreadInfo;
 
   auto endResult =
       Error::Create(vkEndCommandBuffer(threadInfo.threadData.commandBuffer));
   if (Error::IsError(endResult)) {
     return endResult;
   }
+
+  threadInfo.threadData.resourceSyncs = Barrier::GlobalResourceSyncTimeline;
+  threadInfo.threadData.usageUpdates = Barrier::GlobalResourceStateUpdates;
+
+  context.commandBuffer = VK_NULL_HANDLE;
 
   {
     std::lock_guard<std::mutex> lock(threadInfo.availabilityMutex);

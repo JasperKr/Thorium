@@ -79,12 +79,12 @@ struct GraphicsContext {
   int32_t renderThreadCount;
 
   VkCommandPool commandPool;
-  std::vector<VkCommandBuffer> commandBuffers;
+  VkCommandBuffer commandBuffer; // Not an owner
 };
 
 auto Initialize(GraphicsContext &context, Config::ApplicationConfig &config)
     -> Error;
-auto GetCommandBuffer(GraphicsContext &context) -> VkCommandBuffer;
+auto GetCommandBuffer(const GraphicsContext &context) -> VkCommandBuffer;
 void Deinitialize(GraphicsContext &context);
 
 inline auto GetCurrentThreadIndex() -> int8_t & {

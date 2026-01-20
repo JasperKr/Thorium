@@ -2,6 +2,7 @@
 #include "Graphics/graphicsState.hpp"
 #include "Graphics/renderThread.hpp"
 #include "Graphics/resource.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "buffer.hpp"
 #include "dynamicRendering.hpp"
@@ -15,26 +16,74 @@
 
 namespace Graphics {
 
+// Temporary location of struct for now
+struct StitchInfo {
+  // Any amount of buffers to stitch together
+  std::array<std::vector<VkCommandBuffer>, FRAMES_IN_FLIGHT> commandBuffers{};
+
+  std::vector<uint64_t> orderingKeys;
+#ifndef NDEBUG
+  std::vector<std::string> orderingNames;
+#endif
+};
+
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+StitchInfo GlobalStitchInfo{};
+
 static void ResetCommandBuffers(Graphics::GraphicsContext &context) {
   // Reset command buffers for all render threads
 
-  for (int i = 0; i < context.renderThreadCount; i++) {
-    vkResetCommandBuffer(
-        GetCommandBuffer(context), // TODO: Fix for multithreading later
-        0);
+  // for (int i = 0; i < context.renderThreadCount; i++) {
+  //   vkResetCommandBuffer(
+  //       GetCommandBuffer(context), // TODO: Fix for multithreading later
+  //       0);
+  // }
+
+  auto &cmdBuffers = GlobalStitchInfo.commandBuffers.at(context.frameIndex);
+  for (auto &cmdBuffer : cmdBuffers) {
+    vkResetCommandBuffer(cmdBuffer, 0);
   }
 }
 
 static void StartRecording(Graphics::GraphicsContext &context) {
   // Begin command buffer, so recording can start
 
-  for (int i = 0; i < context.renderThreadCount; i++) {
-    VkCommandBufferBeginInfo beginInfo = {};
-    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    vkBeginCommandBuffer(
-        GetCommandBuffer(context), // TODO: Fix for multithreading later
-        &beginInfo);
+  if (GlobalStitchInfo.commandBuffers.at(context.frameIndex).empty()) {
+    PrintDebug("Allocating stitch command buffer for frame {}",
+               context.frameIndex);
+    // Allocate 1 command buffer if none exist yet
+    VkCommandBufferAllocateInfo allocInfo = {};
+    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    allocInfo.commandPool = context.commandPool;
+    allocInfo.commandBufferCount = 1;
+
+    GlobalStitchInfo.commandBuffers.at(context.frameIndex).resize(1);
+    auto result = Error::Create(vkAllocateCommandBuffers(
+        context.device, &allocInfo,
+        &GlobalStitchInfo.commandBuffers.at(context.frameIndex).at(0)));
+    if (Error::IsError(result)) {
+      PrintError("Failed to allocate stitch command buffer: {}",
+                 result.ToString());
+      return;
+    }
   }
+
+  // Grab the first stitch command buffer for converting
+  // From present to color attachment
+  VkCommandBuffer cmdBuffer =
+      GlobalStitchInfo.commandBuffers.at(context.frameIndex).at(0);
+
+  VkCommandBufferBeginInfo beginInfo = {};
+  beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+  auto beginResult = Error::Create(vkBeginCommandBuffer(cmdBuffer, &beginInfo));
+  if (Error::IsError(beginResult)) {
+    PrintError("Failed to begin stitch command buffer: {}",
+               beginResult.ToString());
+    return;
+  }
+
+  context.commandBuffer = cmdBuffer;
 }
 
 static auto EndRecording(Graphics::GraphicsContext &context,
@@ -49,10 +98,10 @@ static auto EndRecording(Graphics::GraphicsContext &context,
   }
 
   // End command buffer recording
-  for (int i = 0; i < context.renderThreadCount; i++) {
-    vkEndCommandBuffer(
-        GetCommandBuffer(context)); // TODO: Fix for multithreading later
-  }
+  // for (int i = 0; i < context.renderThreadCount; i++) {
+  //   vkEndCommandBuffer(
+  //       GetCommandBuffer(context)); // TODO: Fix for multithreading later
+  // }
 
   auto currentTimelineResult =
       Graphics::GetCurrentTimelineSemaphoreValue(context);
@@ -145,7 +194,7 @@ auto PrepareRecording(Graphics::GraphicsContext &context) -> Error {
   StartRecording(context);
 
   TransitionPresentToColor(
-      GetCommandBuffer(context),
+      GlobalStitchInfo.commandBuffers.at(context.frameIndex).at(0),
       context.swapchainInfo.images[context.swapchainImageIndex]);
 
   return Error::Success();
@@ -269,14 +318,126 @@ auto InitializeGraphics(Graphics::GraphicsContext &context) -> Error {
   return Error::Success();
 }
 
-// Temporary location of struct for now
-struct StitchInfo {
-  // Any amount of buffers to stitch together
-  std::array<std::vector<VkCommandBuffer>, FRAMES_IN_FLIGHT> commandBuffers{};
-};
+inline auto DisallowThreadRendering() -> void {
+  {
+    std::lock_guard<std::mutex> lock(Threading::CanStartNewCommandsMutex);
+    Threading::CanStartNewCommands = false;
+  }
+}
 
-// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
-StitchInfo GlobalStitchInfo{};
+inline auto AllowThreadRendering() -> void {
+  {
+    std::lock_guard<std::mutex> lock(Threading::CanStartNewCommandsMutex);
+    Threading::CanStartNewCommands = true;
+  }
+  Threading::CanStartNewCommandsCV.notify_all();
+}
+
+inline auto
+GetOrderedCommands(GraphicsContext &context,
+                   std::vector<Threading::RenderThreadData> &threadRenderdatas)
+    -> Error {
+  std::unordered_map<uint64_t, std::vector<Threading::RenderThreadData>>
+      unorderedThreadRenderdatas;
+
+  for (auto &threadInfo : Threading::Results) {
+    // Wait for thread to finish recording
+    std::unique_lock<std::mutex> lock(threadInfo->availabilityMutex);
+    while (threadInfo->currentlyRecording) {
+      threadInfo->availabilityCV.wait(lock);
+    }
+
+    unorderedThreadRenderdatas[threadInfo->threadData.key].emplace_back(
+        threadInfo->threadData);
+  }
+
+  int idx = 0;
+  for (auto key : GlobalStitchInfo.orderingKeys) {
+    auto found = unorderedThreadRenderdatas.find(key);
+    if (found != unorderedThreadRenderdatas.end()) {
+      std::ranges::sort(found->second,
+                        [](const Threading::RenderThreadData &first,
+                           const Threading::RenderThreadData &second) -> bool {
+                          return first.priority > second.priority;
+                        });
+
+      for (auto &data : found->second) {
+        threadRenderdatas.emplace_back(data);
+      }
+    } else {
+#ifndef NDEBUG
+      PrintWarning("Missing command buffer for `",
+                   GlobalStitchInfo.orderingNames.at(idx), "` (key ", key,
+                   ")\n");
+#else
+      PrintWarning("Missing command buffer for key ", key, "\n");
+#endif
+    }
+
+    idx++;
+  }
+
+#ifndef NDEBUG
+  GlobalStitchInfo.orderingNames.clear();
+
+  // Check for any graphics work that was not included in the ordering keys
+  for (auto &[key, datas] : unorderedThreadRenderdatas) {
+    auto iter = std::ranges::find(GlobalStitchInfo.orderingKeys, key);
+    if (iter == GlobalStitchInfo.orderingKeys.end()) {
+      PrintWarning("Thread command buffer `", datas[0].name, "` (key ", key,
+                   ") is never used\n");
+    }
+  }
+#endif
+
+  // Insert a command buffer before each recorded command buffer to handle resource barriers
+  // And one at the end to transition the swapchain image to present
+  size_t totalCommandBuffers = threadRenderdatas.size() + 1;
+  auto commandBuffers = GlobalStitchInfo.commandBuffers.at(context.frameIndex);
+  if (commandBuffers.size() < totalCommandBuffers) {
+    auto allocationSize = totalCommandBuffers - commandBuffers.size();
+    auto previousSize = commandBuffers.size();
+    commandBuffers.resize(totalCommandBuffers);
+
+    VkCommandBufferAllocateInfo allocInfo = {};
+    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocInfo.commandPool = context.commandPool;
+    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    allocInfo.commandBufferCount = static_cast<uint32_t>(allocationSize);
+
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+    auto *writeAddress = commandBuffers.data() + previousSize;
+
+    auto err = Error::Create(
+        vkAllocateCommandBuffers(context.device, &allocInfo, writeAddress));
+    if (Error::IsError(err)) {
+      return err;
+    }
+  }
+
+  return Error::Success();
+}
+
+inline auto SubmitBarriers(
+    const GraphicsContext &context,
+    const std::vector<Threading::RenderThreadData> &threadRenderdatas) {
+  for (size_t i = 0; i < threadRenderdatas.size(); i++) {
+    const auto &threadData = threadRenderdatas.at(i);
+    auto *commandBuffer =
+        GlobalStitchInfo.commandBuffers.at(context.frameIndex).at(i);
+
+    VkCommandBufferBeginInfo beginInfo = {};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    vkBeginCommandBuffer(commandBuffer, &beginInfo);
+
+    for (auto [resource, newUsage] : threadData.usageUpdates) {
+      Graphics::Barrier::UpdateUsage(context, resource, newUsage);
+    }
+
+    vkEndCommandBuffer(commandBuffer);
+  }
+  return Error::Success();
+}
 
 auto Present(Graphics::GraphicsContext &context) -> Error {
   auto validateResult = RenderTarget::FinalizeFrame(context);
@@ -286,31 +447,40 @@ auto Present(Graphics::GraphicsContext &context) -> Error {
 
   // Do note that the user must have started all async recording before calling this
   // If the user tries to start recording after this point it will be part of the next frame
-  {
-    std::lock_guard<std::mutex> lock(Threading::CanStartNewCommandsMutex);
-    Threading::CanStartNewCommands = false;
-  }
-
-  // Notify all threads that they cannot start new commands
-  Threading::CanStartNewCommandsCV.notify_all();
+  DisallowThreadRendering();
 
   std::vector<Threading::RenderThreadData> threadRenderdatas;
 
-  for (auto &threadInfo : Threading::Results) {
-    // Wait for thread to finish recording
-    std::unique_lock<std::mutex> lock(threadInfo->availabilityMutex);
-    while (threadInfo->currentlyRecording) {
-      threadInfo->availabilityCV.wait(lock);
-    }
-
-    threadRenderdatas.emplace_back(threadInfo->threadData);
+  auto orderResult = GetOrderedCommands(context, threadRenderdatas);
+  if (Error::IsError(orderResult)) {
+    return orderResult;
   }
 
-  std::ranges::sort(threadRenderdatas,
-                    [](const Threading::RenderThreadData &first,
-                       const Threading::RenderThreadData &second) -> bool {
-                      return first.index < second.index;
-                    });
+  auto barrierResult = SubmitBarriers(context, threadRenderdatas);
+  if (Error::IsError(barrierResult)) {
+    return barrierResult;
+  }
+
+  std::vector<VkCommandBuffer> finalCommandBuffers;
+  // all thread command buffers + barrier command buffers + 1 present transition
+  finalCommandBuffers.resize((threadRenderdatas.size() * 2) + 1);
+
+  for (size_t i = 0; i < threadRenderdatas.size(); i++) {
+    auto *stitchBuffer =
+        GlobalStitchInfo.commandBuffers.at(context.frameIndex).at(i);
+    auto *threadBuffer = threadRenderdatas.at(i).commandBuffer;
+
+    finalCommandBuffers[i * 2] = stitchBuffer;
+    finalCommandBuffers[(i * 2) + 1] = threadBuffer;
+  }
+
+  // Start present transition command buffer
+  auto *presentTransitionBuffer =
+      GlobalStitchInfo.commandBuffers.at(context.frameIndex)
+          .at(finalCommandBuffers.size() - 1);
+  VkCommandBufferBeginInfo beginInfo = {};
+  beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+  vkBeginCommandBuffer(presentTransitionBuffer, &beginInfo);
 
   auto uploadResult = FlushBufferUploads(context);
   if (Error::IsError(uploadResult)) {
@@ -320,6 +490,8 @@ auto Present(Graphics::GraphicsContext &context) -> Error {
   TransitionColorToPresent(
       GetCommandBuffer(context),
       context.swapchainInfo.images[context.swapchainImageIndex]);
+
+  vkEndCommandBuffer(presentTransitionBuffer);
 
   // Draw of this frame is done, end recording
   auto endResult = EndRecording(context, context.frameIndex);
@@ -373,11 +545,7 @@ auto Present(Graphics::GraphicsContext &context) -> Error {
     return result;
   }
 
-  {
-    std::lock_guard<std::mutex> lock(Threading::CanStartNewCommandsMutex);
-    Threading::CanStartNewCommands = true;
-  }
-  Threading::CanStartNewCommandsCV.notify_all();
+  AllowThreadRendering();
 
   return Error::Success();
 }

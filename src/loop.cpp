@@ -239,6 +239,8 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
 
   Graphics::SetCurrentGraphicsContext(&context);
 
+  PrintDebug("Loading shader modules...");
+
   auto shaderModuleLoadResult = Graphics::Shader::LoadModule();
 
   if (Error::IsError(shaderModuleLoadResult)) {
@@ -288,12 +290,12 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
     return luaLoadErr;
   }
 
-  Engine::Scene scene;
+  // Engine::Scene scene;
 
-  auto gltfresult = glTF::LoadGltfModel(context, "assets/testscene.glb", scene);
-  if (Error::IsError(gltfresult)) {
-    return gltfresult;
-  }
+  // auto gltfresult = glTF::LoadGltfModel(context, "assets/testscene.glb", scene);
+  // if (Error::IsError(gltfresult)) {
+  //   return gltfresult;
+  // }
 
   PrintDebug("Entering main loop...");
 

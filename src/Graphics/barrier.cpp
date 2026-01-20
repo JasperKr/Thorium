@@ -3,6 +3,8 @@
 #include "vulkan/vulkan_core.h"
 #include <array>
 #include <cstdint>
+#include <utility>
+#include <vector>
 
 namespace Graphics::Barrier {
 
@@ -20,6 +22,9 @@ thread_local uint64_t FrameBarrierCount = 0;
 
 // NOLINTNEXTLINE
 thread_local std::vector<ResourceSync> GlobalResourceSyncTimeline{};
+
+thread_local std::vector<std::pair<GraphicsResource, ResourceState>>
+    GlobalResourceStateUpdates{}; // NOLINT
 
 inline auto IsHazard(const ResourceState &oldState,
                      const ResourceState &newState) -> bool {
@@ -185,10 +190,15 @@ inline auto TimelineLookback(uint64_t currentTimelineIndex,
   return false; // All bits satisfied, no barrier needed
 }
 
-auto UpdateUsage(GraphicsContext &context, GraphicsResource &resource,
+auto UpdateUsage(const GraphicsContext &context, GraphicsResource &resource,
                  const ResourceState &usage) -> void {
   auto &previousAccess = resource.lastUsedAccess;
   auto &previousStages = resource.lastUsedStages;
+
+  // Keep track of first usage for async recording so we can barrier later
+  if (resource.firstAsyncUsage) {
+    GlobalResourceStateUpdates.emplace_back(resource, usage);
+  }
 
   if (!resource.firstAsyncUsage &&
       TimelineLookback(resource.lastUsedTimelineIndex, // NOLINT
