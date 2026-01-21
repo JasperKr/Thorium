@@ -5,6 +5,7 @@
 
 #include "Modules/error.hpp"
 #include <cstdint>
+#include <mutex>
 #include <vector>
 
 #include "volk/volk.h"
@@ -51,7 +52,13 @@ struct SwapchainInfo {
   std::vector<VkImageView> imageViews;
 };
 
+struct GraphicsMutexes {
+  std::mutex device;
+};
+
 struct GraphicsContext {
+  static GraphicsMutexes mutexes;
+
   VkInstance instance;
   VkSurfaceKHR surface;
   VkPhysicalDevice physicalDevice;
@@ -79,18 +86,12 @@ struct GraphicsContext {
   int32_t renderThreadCount;
 
   VkCommandPool commandPool;
-  VkCommandBuffer commandBuffer; // Not an owner
 };
 
 auto Initialize(GraphicsContext &context, Config::ApplicationConfig &config)
     -> Error;
-auto GetCommandBuffer(const GraphicsContext &context) -> VkCommandBuffer;
+auto GetCommandBuffer() -> VkCommandBuffer &;
 void Deinitialize(GraphicsContext &context);
-
-inline auto GetCurrentThreadIndex() -> int8_t & {
-  thread_local static int8_t current = -1; // Default to invalid
-  return current;
-}
 
 auto BeginSingleTimeCommands(GraphicsContext &context) -> VkCommandBuffer;
 
@@ -98,7 +99,7 @@ auto EndSingleTimeCommands(GraphicsContext &context,
                            VkCommandBuffer commandBuffer) -> void;
 
 // Graphics context  NOLINTNEXTLINE
-static thread_local GraphicsContext *g_ctx = nullptr;
+static GraphicsContext *g_ctx = nullptr;
 void SetCurrentGraphicsContext(GraphicsContext *ctx);
 auto GetCurrentGraphicsContext() -> GraphicsContext *;
 

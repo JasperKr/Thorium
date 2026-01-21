@@ -4,6 +4,7 @@
 #include "Wrap/Modules/wrap_data.hpp"
 #include "Wrap/Modules/wrap_mouse.hpp"
 #include "Wrap/Modules/wrap_thread.hpp"
+#include "Wrap/proxy.hpp"
 
 #include <cstdint>
 #include <iostream>

@@ -60,6 +60,9 @@ extern std::condition_variable CanStartNewCommandsCV;
 extern std::mutex ResultsMutex;
 extern std::vector<Ref<RenderThreadInfo>> Results;
 
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+extern thread_local Ref<RenderThreadInfo> CurrentRenderThreadInfo;
+
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
 auto HasRenderingPermission() -> bool;
@@ -76,5 +79,7 @@ auto AquireCommandBuffer(Graphics::GraphicsContext &context,
                          const AquireInfo &info)
     -> Result<Ref<RenderThreadInfo>>;
 auto SubmitCommands(Graphics::GraphicsContext &context) -> Error;
+auto Initialize(Graphics::GraphicsContext &context) -> Error;
+auto Deinitialize(Graphics::GraphicsContext &context) -> void;
 
 } // namespace Graphics::Threading

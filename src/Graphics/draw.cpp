@@ -85,7 +85,7 @@ auto BindMesh(GraphicsContext &context, VkCommandBuffer cmdBuffer,
 
 auto Draw(GraphicsContext &context, const Mesh &mesh, uint32_t instanceCount)
     -> Error {
-  auto *commandBuffer = GetCommandBuffer(context);
+  auto *commandBuffer = GetCommandBuffer();
 
   MeshDrawRange range = mesh.GetDrawRange();
 
@@ -122,7 +122,7 @@ auto Draw(GraphicsContext &context, const Mesh &mesh, uint32_t instanceCount)
 
 auto Dispatch(GraphicsContext &context, const Math::Uvec3 &threadgroups)
     -> Error {
-  auto *commandBuffer = GetCommandBuffer(context);
+  auto *commandBuffer = GetCommandBuffer();
 
   RenderTarget::SetBindPoint(VK_PIPELINE_BIND_POINT_COMPUTE);
   auto error = RenderTarget::PrepareRendering(context);
@@ -138,7 +138,7 @@ auto Dispatch(GraphicsContext &context, const Math::Uvec3 &threadgroups)
 auto DispatchIndirect(GraphicsContext &context,
                       const Ref<Buffer> &indirectBuffer, VkDeviceSize offset)
     -> Error {
-  auto *commandBuffer = GetCommandBuffer(context);
+  auto *commandBuffer = GetCommandBuffer();
 
   RenderTarget::SetBindPoint(VK_PIPELINE_BIND_POINT_COMPUTE);
   auto error = RenderTarget::PrepareRendering(context);
@@ -155,7 +155,7 @@ auto DrawIndirect(GraphicsContext &context, const Mesh &mesh,
                   const Ref<Buffer> &indirectBuffer,
                   VkDeviceSize offset, // NOLINT
                   uint32_t count) -> Error {
-  auto *commandBuffer = GetCommandBuffer(context);
+  auto *commandBuffer = GetCommandBuffer();
 
   auto bindResult = BindMesh(context, commandBuffer, mesh);
   if (Error::IsError(bindResult)) {
@@ -191,7 +191,7 @@ auto DrawIndirect(GraphicsContext &context, const Mesh &mesh,
 
 auto Draw(GraphicsContext &context, const VkPrimitiveTopology &topology,
           uint32_t vertexCount, uint32_t instanceCount) -> Error { // NOLINT
-  auto *commandBuffer = GetCommandBuffer(context);
+  auto *commandBuffer = GetCommandBuffer();
 
   RenderTarget::SetBindPoint(VK_PIPELINE_BIND_POINT_GRAPHICS);
   RenderTarget::SetVertexFormat({});
@@ -210,7 +210,7 @@ auto Draw(GraphicsContext &context, const VkPrimitiveTopology &topology,
 auto Draw(GraphicsContext &context, const Ref<Buffer> &indexBuffer,
           const VkPrimitiveTopology &topology, uint32_t indexCount, // NOLINT
           uint32_t instanceCount) -> Error {
-  auto *commandBuffer = GetCommandBuffer(context);
+  auto *commandBuffer = GetCommandBuffer();
 
   RenderTarget::SetBindPoint(VK_PIPELINE_BIND_POINT_GRAPHICS);
   RenderTarget::SetVertexFormat({});

@@ -157,7 +157,7 @@ private:
   uint32_t offset{};
 };
 
-extern thread_local std::vector<std::vector<FrameUniformBufferObject>>
+extern thread_local std::vector<FrameUniformBufferObject>
     ThreadUniformBuffers; // NOLINT
 auto InitializeUniformBufferModule(GraphicsContext &context) -> Error;
 auto GetGlobalUniformBuffer(uint32_t frameIndex) -> FrameUniformBufferObject &;

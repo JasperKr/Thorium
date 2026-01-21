@@ -712,6 +712,10 @@ auto wrap_GetDimensions(lua_State *state) -> int {
 auto wrap_AquireCommandBuffer(lua_State *state) -> int {
   auto *ctx = GetCurrentGraphicsContext();
 
+  if (ctx == nullptr) {
+    return luaL_error(state, "No current graphics context.");
+  }
+
   Threading::AquireInfo info{};
   info.name = luaL_checkstring(state, 1);
   info.priority = static_cast<int>(luaL_optinteger(state, 2, 0));
@@ -726,6 +730,10 @@ auto wrap_AquireCommandBuffer(lua_State *state) -> int {
 
 auto wrap_SubmitCommandBuffer(lua_State *state) -> int {
   auto *ctx = GetCurrentGraphicsContext();
+
+  if (ctx == nullptr) {
+    return luaL_error(state, "No current graphics context.");
+  }
 
   auto submitResult = Threading::SubmitCommands(*ctx);
   if (Error::IsError(submitResult)) {

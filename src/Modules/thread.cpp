@@ -1,12 +1,16 @@
 #include "thread.hpp"
+#include "Graphics/graphics.hpp"
+#include "Graphics/renderThread.hpp"
 #include "Modules/console.hpp"
-#include "Modules/error.hpp"
 #include "Modules/filesystem.hpp"
+#include "Wrap/lua_data.hpp"
 #include "Wrap/wrap.hpp"
 #include "event.hpp"
+#include <cmath>
 #include <mutex>
 #include <optional>
 #include <thread>
+#include <vector>
 
 extern "C" {
 #include <lauxlib.h>
@@ -27,12 +31,42 @@ auto Thread::Create(const std::string &script) -> Ref<Thread> {
   return thread;
 }
 
-auto Thread::Run(Thread *thread, const EncodedLuaData &launchArguments,
+auto Thread::Run(Thread *thread,
+                 const std::vector<LuaWrap::Data::LuaType> &launchArguments,
                  int count) -> void {
   lua_State *state = luaL_newstate();
   luaL_openlibs(state);
 
+  lua_getglobal(state, "package");
+  lua_getfield(state, -1, "path");
+  std::string currentPath = lua_tostring(state, -1);
+  lua_pop(state, 1); // remove original path
+  std::string newPath =
+      Path::Join(Filesystem::GetSourceDirectory(), std::string("?.lua;")) +
+      currentPath;
+  lua_pushstring(state, newPath.c_str());
+  lua_setfield(state, -2, "path");
+  lua_pop(state, 1); // remove package table
+
   LuaWrap::RegisterModules(state);
+
+  auto err =
+      Graphics::Threading::Initialize(*Graphics::GetCurrentGraphicsContext());
+
+  if (Error::IsError(err)) {
+    PrintAlways("Error initializing graphics thread module: {}", err.message);
+    {
+      std::lock_guard<std::mutex> lock(thread->statusMutex);
+      thread->status = ThreadStatus::Error;
+      thread->errorMessage = err.message;
+    }
+    Event::Push(Event::Event{
+        .Name = "threaderror",
+        .Values = {thread->errorMessage},
+    });
+    lua_close(state);
+    return;
+  }
 
   bool isPath = (thread->script.size() > 4 &&
                  (thread->script.substr(thread->script.size() - 4) == ".lua" ||
@@ -57,27 +91,36 @@ auto Thread::Run(Thread *thread, const EncodedLuaData &launchArguments,
   PrintAlways("Thread script load result: {}", result);
 
   if (result == LUA_OK) {
-    // auto error = LuaWrap::PushVarargsFromString(state, launchArguments, count);
+    auto error = LuaWrap::PushVarargs(state, launchArguments, count);
 
-    // if (Error::IsError(error)) {
-    //   PrintAlways("Error pushing launch arguments: {}", error.message);
+    if (Error::IsError(error)) {
+      PrintAlways("Error pushing launch arguments: {}", error.message);
 
-    //   {
-    //     std::lock_guard<std::mutex> lock(thread->statusMutex);
-    //     thread->status = ThreadStatus::Error;
-    //     thread->errorMessage = error.message;
-    //   }
+      {
+        std::lock_guard<std::mutex> lock(thread->statusMutex);
+        thread->status = ThreadStatus::Error;
+        thread->errorMessage = error.message;
+      }
 
-    //   Event::Push(Event::Event{
-    //       .Name = "threaderror",
-    //       .Values = {thread->errorMessage},
-    //   });
+      Event::Push(Event::Event{
+          .Name = "threaderror",
+          .Values = {thread->errorMessage},
+      });
 
-    //   lua_close(state);
-    //   return;
-    // }
+      lua_close(state);
+      return;
+    }
 
     result = lua_pcall(state, count, 0, 0);
+  }
+
+  if (Graphics::Threading::CurrentRenderThreadInfo.get() != nullptr) {
+    {
+      std::lock_guard<std::mutex> lock(
+          Graphics::Threading::CurrentRenderThreadInfo->availabilityMutex);
+      Graphics::Threading::CurrentRenderThreadInfo->currentlyRecording = false;
+    }
+    Graphics::Threading::CurrentRenderThreadInfo->availabilityCV.notify_all();
   }
 
   if (result != LUA_OK) {
@@ -95,19 +138,26 @@ auto Thread::Run(Thread *thread, const EncodedLuaData &launchArguments,
           (luaErrorMessage != nullptr) ? luaErrorMessage : "Unknown Lua error";
     }
 
+    PrintAlways("Pushing thread error event to main thread.");
+
     Event::Push(Event::Event{
         .Name = "threaderror",
         .Values = {thread->errorMessage},
     });
   }
 
+  PrintAlways("Thread finished execution.");
+
   {
     std::lock_guard<std::mutex> lock(thread->statusMutex);
     thread->status = ThreadStatus::Stopped;
   }
+
+  lua_close(state);
 }
 
-auto Thread::Start(const EncodedLuaData &launchArguments, int count) -> void {
+auto Thread::Start(const std::vector<LuaWrap::Data::LuaType> &launchArguments,
+                   int count) -> void {
   handle = std::thread(Threading::Thread::Run, this, launchArguments, count);
 }
 
@@ -133,22 +183,26 @@ auto Thread::GetErrorMessage() const -> std::string {
   return errorMessage;
 }
 
-auto Channel::Push(const EncodedLuaData &message) -> void {
-  std::lock_guard<std::mutex> lock(mutex);
-  messages.push(message);
+auto Channel::Push(const LuaWrap::Data::LuaType &message) -> void {
+  {
+    std::lock_guard<std::mutex> lock(mutex);
+    messages.push(message);
+  }
+
+  condition.notify_one();
 }
 
-auto Channel::Pop() -> std::optional<EncodedLuaData> {
+auto Channel::Pop() -> std::optional<LuaWrap::Data::LuaType> {
   std::lock_guard<std::mutex> lock(mutex);
   if (messages.empty()) {
     return std::nullopt;
   }
-  EncodedLuaData message = messages.front();
+  LuaWrap::Data::LuaType message = messages.front();
   messages.pop();
   return message;
 }
 
-auto Channel::Peek() const -> std::optional<EncodedLuaData> {
+auto Channel::Peek() const -> std::optional<LuaWrap::Data::LuaType> {
   std::lock_guard<std::mutex> lock(mutex);
   if (messages.empty()) {
     return std::nullopt;
@@ -161,10 +215,17 @@ auto Channel::GetCount() const -> size_t {
   return messages.size();
 }
 
-auto Channel::Demand() -> EncodedLuaData {
+auto Channel::Demand(double timeout) -> std::optional<LuaWrap::Data::LuaType> {
   std::unique_lock<std::mutex> lock(mutex);
-  condition.wait(lock, [this]() -> bool { return !messages.empty(); });
-  EncodedLuaData message = messages.front();
+  if (timeout == INFINITY) {
+    condition.wait(lock, [this]() -> bool { return !messages.empty(); });
+  } else {
+    if (!condition.wait_for(lock, std::chrono::duration<double>(timeout),
+                            [this]() -> bool { return !messages.empty(); })) {
+      return std::nullopt;
+    }
+  }
+  LuaWrap::Data::LuaType message = messages.front();
   messages.pop();
   return message;
 }

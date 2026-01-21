@@ -50,14 +50,13 @@ auto LoadBufferModule(GraphicsContext &context) -> Error {
       .pNext = &timelineInfo,
   };
 
-  auto result = Error::Create(
-      vkCreateSemaphore(context.device, &semInfo, nullptr, &uploadTimeline));
-  if (Error::IsError(result)) {
-    return result;
-  }
-
-  if (Error::IsError(result)) {
-    return result;
+  {
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+    auto result = Error::Create(
+        vkCreateSemaphore(context.device, &semInfo, nullptr, &uploadTimeline));
+    if (Error::IsError(result)) {
+      return result;
+    }
   }
 
   moduleInitialized = true;
@@ -85,6 +84,7 @@ auto UnloadBufferModule(GraphicsContext &context) -> Error {
   }
 
   if (uploadTimeline != nullptr) {
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
     vkDestroySemaphore(context.device, uploadTimeline, nullptr);
     uploadTimeline = nullptr;
   }
@@ -98,10 +98,13 @@ auto UnloadBufferModule(GraphicsContext &context) -> Error {
 auto FlushBufferUploads(GraphicsContext &context) -> Error {
   // Check staging buffers for completed uploads
   uint64_t completedValue = 0;
-  auto result = Error::Create(vkGetSemaphoreCounterValue(
-      context.device, uploadTimeline, &completedValue));
-  if (Error::IsError(result)) {
-    return result;
+  {
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+    auto result = Error::Create(vkGetSemaphoreCounterValue(
+        context.device, uploadTimeline, &completedValue));
+    if (Error::IsError(result)) {
+      return result;
+    }
   }
 
   auto stagingBufferIterator = StagingBuffers.begin();
@@ -200,7 +203,7 @@ auto Buffer::UploadLarge(GraphicsContext &context,
   std::memcpy(static_cast<uint8_t *>(mapped), data.data(), uploadSize);
   vmaUnmapMemory(context.vmaAllocator, stagingMemory);
 
-  auto *commandBuffer = GetCommandBuffer(context);
+  auto *commandBuffer = GetCommandBuffer();
 
   VkBufferCopy copyRegion = {};
   copyRegion.srcOffset = 0;
@@ -274,7 +277,7 @@ auto Buffer::UploadRing(GraphicsContext &context,
   uploadBuffer->UnmapMemory(context);
 
   // Record copy command
-  auto *commandBuffer = GetCommandBuffer(context);
+  auto *commandBuffer = GetCommandBuffer();
 
   VkCommandBufferBeginInfo beginInfo = {};
   beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -466,7 +469,7 @@ auto Buffer::MarkUse(const QueueID queueID, const uint64_t timelineValue)
 // NOLINTNEXTLINE
 auto Buffer::Clear(GraphicsContext &context, uint32_t value,
                    VkDeviceSize offset, VkDeviceSize size) -> Error {
-  auto *commandBuffer = GetCommandBuffer(context);
+  auto *commandBuffer = GetCommandBuffer();
 
   // Must flush, for WaW hazards
   Barrier::UpdateUsage(context, *this,

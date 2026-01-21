@@ -1,4 +1,3 @@
-Imgui = require("cimgui.init")
 local bit = require("bit")
 
 local i = 0
@@ -13,7 +12,8 @@ local i = 0
 Thorium.threaderror = error
 
 local thread = Thorium.thread.newThread("src/Engine/thread.lua")
-thread:start()
+local channel = Thorium.thread.newChannel()
+thread:start(channel)
 
 function Thorium.update(dt)
   i = i + 1
@@ -163,6 +163,8 @@ local lastShownImDrawTime = 0
 local count = 0
 
 function Thorium.draw()
+  print("DRAWING")
+
   -- local startTime = Thorium.timer.getTime()
   -- Imgui.Begin("Test window")
 
@@ -189,4 +191,8 @@ function Thorium.draw()
   --   lastDrawTime = 0
   --   lastImDrawTime = 0
   -- end
+
+  print("Demanding from thread...")
+  print(tostring(channel:demand(10)))
+  print("Done drawing frame.")
 end

@@ -105,11 +105,14 @@ auto Create2D(const GraphicsContext &context, TextureCreationInfo info)
                          .b = VK_COMPONENT_SWIZZLE_IDENTITY,
                          .a = VK_COMPONENT_SWIZZLE_IDENTITY};
 
-  error = Error::Create(
-      vkCreateImageView(context.device, &viewInfo, nullptr, &texture->view));
+  {
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+    error = Error::Create(
+        vkCreateImageView(context.device, &viewInfo, nullptr, &texture->view));
 
-  if (Error::IsError(error)) {
-    return error.AsUnexpected();
+    if (Error::IsError(error)) {
+      return error.AsUnexpected();
+    }
   }
 
   VmaAllocationInfo memRequirements;
@@ -213,11 +216,14 @@ auto CreateCubeMap(const GraphicsContext &context, TextureCreationInfo info)
   viewInfo.subresourceRange.baseArrayLayer = 0;
   viewInfo.subresourceRange.layerCount = CubeFaceCount;
 
-  error = Error::Create(
-      vkCreateImageView(context.device, &viewInfo, nullptr, &texture->view));
+  {
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+    error = Error::Create(
+        vkCreateImageView(context.device, &viewInfo, nullptr, &texture->view));
 
-  if (Error::IsError(error)) {
-    return error.AsUnexpected();
+    if (Error::IsError(error)) {
+      return error.AsUnexpected();
+    }
   }
 
   VmaAllocationInfo memRequirements;
@@ -279,11 +285,14 @@ auto CreateVolume(const GraphicsContext &context, TextureCreationInfo info)
   viewInfo.subresourceRange.baseArrayLayer = 0;
   viewInfo.subresourceRange.layerCount = 1;
 
-  error = Error::Create(
-      vkCreateImageView(context.device, &viewInfo, nullptr, &texture->view));
+  {
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+    error = Error::Create(
+        vkCreateImageView(context.device, &viewInfo, nullptr, &texture->view));
 
-  if (Error::IsError(error)) {
-    return error.AsUnexpected();
+    if (Error::IsError(error)) {
+      return error.AsUnexpected();
+    }
   }
 
   VmaAllocationInfo memRequirements;
@@ -345,11 +354,14 @@ auto CreateArray(const GraphicsContext &context, TextureCreationInfo info)
   viewInfo.subresourceRange.baseArrayLayer = 0;
   viewInfo.subresourceRange.layerCount = info.depth;
 
-  error = Error::Create(
-      vkCreateImageView(context.device, &viewInfo, nullptr, &texture->view));
+  {
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+    error = Error::Create(
+        vkCreateImageView(context.device, &viewInfo, nullptr, &texture->view));
 
-  if (Error::IsError(error)) {
-    return error.AsUnexpected();
+    if (Error::IsError(error)) {
+      return error.AsUnexpected();
+    }
   }
 
   VmaAllocationInfo memRequirements;
@@ -662,7 +674,7 @@ auto Texture::TransitionLayout(GraphicsContext &context, VkImageLayout layout,
     return Error::Success();
   }
 
-  auto *commandBuffer = GetCommandBuffer(context);
+  auto *commandBuffer = GetCommandBuffer();
 
   VkImageMemoryBarrier2 barrier = {};
   barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
@@ -880,7 +892,7 @@ auto Texture::SetPixels(GraphicsContext &context, Image::ImageData &imageData,
     return error;
   }
 
-  auto *commandBuffer = GetCommandBuffer(context);
+  auto *commandBuffer = GetCommandBuffer();
 
   vkCmdCopyBufferToImage(commandBuffer, buffer->handle, image,
                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
@@ -1008,7 +1020,7 @@ auto Texture::SetPixels(GraphicsContext &context,
     return error;
   }
 
-  auto *commandBuffer = GetCommandBuffer(context);
+  auto *commandBuffer = GetCommandBuffer();
 
   vkCmdCopyBufferToImage(commandBuffer, buffer->handle, image,
                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
@@ -1031,6 +1043,7 @@ auto Texture::SetPixels(GraphicsContext &context,
 }
 
 auto Texture::Destroy(GraphicsContext &context) const -> void {
+  std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
   vkDestroyImageView(context.device, view, nullptr);
   vmaDestroyImage(context.vmaAllocator, image, memory);
 }

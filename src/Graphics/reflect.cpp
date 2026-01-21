@@ -550,10 +550,13 @@ auto ReflectGlobals(Graphics::GraphicsContext &context,
   layoutCreateInfo.bindingCount = 1;
   layoutCreateInfo.pBindings = &binding;
   VkDescriptorSetLayout descriptorSetLayout = {};
-  auto result = Error::Create(vkCreateDescriptorSetLayout(
-      context.device, &layoutCreateInfo, nullptr, &descriptorSetLayout));
-  if (Error::IsError(result)) {
-    return result;
+  {
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+    auto result = Error::Create(vkCreateDescriptorSetLayout(
+        context.device, &layoutCreateInfo, nullptr, &descriptorSetLayout));
+    if (Error::IsError(result)) {
+      return result;
+    }
   }
 
   return Error::Success();

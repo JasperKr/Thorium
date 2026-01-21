@@ -44,6 +44,7 @@ static const luaL_Reg ThreadingLib[] = {
 // nullptr-terminated NOLINTNEXTLINE
 const static lua_CFunction childrenInitFunctions[] = {
     luaopen_thread,
+    Wrap::Threading::luaopen_channel,
     nullptr,
 };
 

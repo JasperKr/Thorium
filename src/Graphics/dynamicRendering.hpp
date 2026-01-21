@@ -237,7 +237,7 @@ struct StateHash {
   }
 };
 
-extern std::unordered_map<
+extern thread_local std::unordered_map<
     State, std::pair<VkPipeline, VkPipelineLayout>,
     StateHash> // NOLINTNEXTLINE Pipeline cacheBegunRendering
     PipelineCache;

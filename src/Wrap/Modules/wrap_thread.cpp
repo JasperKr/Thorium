@@ -21,11 +21,11 @@ auto wrap_NewThread(lua_State *state) -> int {
 auto wrap_StartThread(lua_State *state) -> int {
   auto *thread = LuaWrap::ObjectFromLua<::Threading::Thread>(state, 1);
   if (thread == nullptr) {
-    luaL_error(state, "Invalid Thread object.");
+    return luaL_error(state, "Invalid Thread object.");
   }
 
   int numArgs = lua_gettop(state) - 1;
-  auto result = LuaWrap::SerializeVarargsToString(state, 2);
+  auto result = LuaWrap::SerializeVarargs(state, 2);
 
   if (Error::IsError(result)) {
     return luaL_error(state, "Failed to build launch arguments: %s",
@@ -39,7 +39,7 @@ auto wrap_StartThread(lua_State *state) -> int {
 auto wrap_StopThread(lua_State *state) -> int {
   auto *thread = LuaWrap::ObjectFromLua<::Threading::Thread>(state, 1);
   if (thread == nullptr) {
-    luaL_error(state, "Invalid Thread object.");
+    return luaL_error(state, "Invalid Thread object.");
   }
 
   thread->Stop();
@@ -49,7 +49,7 @@ auto wrap_StopThread(lua_State *state) -> int {
 auto wrap_GetThreadStatus(lua_State *state) -> int {
   auto *thread = LuaWrap::ObjectFromLua<::Threading::Thread>(state, 1);
   if (thread == nullptr) {
-    luaL_error(state, "Invalid Thread object.");
+    return luaL_error(state, "Invalid Thread object.");
   }
 
   auto status = thread->GetStatus();
@@ -74,7 +74,7 @@ auto wrap_GetThreadStatus(lua_State *state) -> int {
 auto wrap_GetThreadErrorMessage(lua_State *state) -> int {
   auto *thread = LuaWrap::ObjectFromLua<::Threading::Thread>(state, 1);
   if (thread == nullptr) {
-    luaL_error(state, "Invalid Thread object.");
+    return luaL_error(state, "Invalid Thread object.");
   }
 
   auto errorMessage = thread->GetErrorMessage();

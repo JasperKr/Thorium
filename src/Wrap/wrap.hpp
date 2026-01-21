@@ -3,7 +3,9 @@
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/type.hpp"
+#include "Wrap/lua_data.hpp"
 #include <Modules/object.hpp>
+#include <vector>
 extern "C" {
 #include <lauxlib.h>
 #include <lua.h>
@@ -49,33 +51,6 @@ auto SetupLuaType(lua_State *state, const Type *type, Object *object) -> void;
 auto LoadStorageTable(lua_State *state, const char *key) -> void;
 auto LoadOrCreateStorageTable(lua_State *state, const char *key) -> void;
 auto LogStack(lua_State *state) -> void;
-
-inline auto ProxyFromLua(lua_State *state, int index) -> Proxy * {
-  // Check if userdata
-  if (lua_isuserdata(state, index) == 0) {
-    return nullptr;
-  }
-
-  // NOLINTNEXTLINE
-  auto *proxy = static_cast<Proxy *>(lua_touserdata(state, index));
-
-  if (proxy == nullptr) {
-    PrintWarning("ProxyFromLua: proxy is null at index {}", index);
-    return nullptr;
-  }
-
-  if (proxy->object == nullptr) {
-    PrintWarning("ProxyFromLua: proxy invalid object at index {}", index);
-    return nullptr;
-  }
-
-  if (proxy->type == nullptr) {
-    PrintWarning("ProxyFromLua: proxy invalid type at index {}", index);
-    return nullptr;
-  }
-
-  return proxy;
-}
 
 template <typename T>
 inline auto ObjectFromLua(lua_State *state, int index) -> T * {
@@ -152,188 +127,36 @@ template <typename T> inline auto IsType(lua_State *state, int index) -> bool {
   return proxy->type->GetName() == T::GetType()->GetName();
 }
 
-inline auto SerializeVarargsToString(lua_State *state, int startIndex)
-    -> Result<std::string> {
-
-  constexpr auto encodeVarargs = R"Lua(
-  return require('string.buffer').encode({...})
-)Lua";
+inline auto SerializeVarargs(lua_State *state, int startIndex)
+    -> Result<std::vector<Data::LuaType>> {
 
   int numArgs = lua_gettop(state) - startIndex + 1;
 
-  LuaWrap::LoadOrCreateStorageTable(state, "ThoriumObjectStorage"); // [storage]
-
-  // if no function, add it
-  lua_getfield(state, -1, "encode arguments"); // [storage, func/nil]
-
-  if (lua_isnil(state, -1)) {
-    lua_pop(state, 1); // [storage]
-
-    auto loadResult = luaL_loadstring(state, encodeVarargs); // [storage, func]
-    if (loadResult != LUA_OK) {
-      std::string luaErrorMessage = lua_tostring(state, -1);
-      lua_pop(state, 1); // Remove error message from stack
-      return Error::Unexpected(luaErrorMessage);
-    }
-    lua_pushvalue(state, -1);                    // [storage, func, func]
-    lua_setfield(state, -3, "encode arguments"); // [storage, func]
-  }
-
-  // [storage, func]
+  std::vector<Data::LuaType> launchArguments;
+  launchArguments.reserve(numArgs);
 
   for (int i = 0; i < numArgs; ++i) {
-    // [thread, args, storage, func, arg1, arg2, ...]
-    lua_pushvalue(state, startIndex + i);
+    auto argResult = Data::FromStack(state, startIndex + i);
+    if (Error::IsError(argResult)) {
+      return argResult.error().AsUnexpected();
+    }
+    launchArguments.emplace_back(argResult.value());
   }
-
-  auto result = lua_pcall(state, numArgs, 1, 0); // [storage, encodedArgs]
-
-  if (result != LUA_OK) {
-    std::string luaErrorMessage = lua_tostring(state, -1);
-    lua_pop(state, 1); // Remove error message from stack
-    return Error::Unexpected(luaErrorMessage);
-  }
-
-  size_t len = 0;
-  const char *data = lua_tolstring(state, -1, &len);
-  std::string launchArguments;
-  if (data != nullptr && len > 0) {
-    launchArguments.assign(data, len);
-  }
-
-  lua_pop(state, 2); // []
 
   return launchArguments;
 }
 
-inline auto PushVarargsFromString(lua_State *state,
-                                  const std::string &launchArguments, int count)
-    -> Error {
-  constexpr auto decodeVarargs = R"Lua(
-  local args = require('string.buffer').decode((...))
+inline auto PushVarargs(lua_State *state,
+                        const std::vector<Data::LuaType> &launchArguments,
+                        int count) -> Error {
 
-  return unpack(args, 1, (select(2, ...)))
-)Lua";
-
-  LuaWrap::LoadOrCreateStorageTable(state, "ThoriumObjectStorage"); // [storage]
-
-  // if no function, add it
-  lua_getfield(state, -1, "decode arguments"); // [storage, func/nil]
-
-  if (lua_isnil(state, -1)) {
-    lua_pop(state, 1);                                   // [storage]
-    auto result = luaL_loadstring(state, decodeVarargs); // [storage, func]
-
-    if (result != LUA_OK) {
-      std::string luaErrorMessage = lua_tostring(state, -1);
-      lua_pop(state, 1); // Remove error message from stack
-      return Error::Createf("Failed to load decode arguments function: {}",
-                            luaErrorMessage);
+  for (int i = 0; i < count; ++i) {
+    const auto &arg = launchArguments[i];
+    auto pushResult = Data::ToStack(state, arg);
+    if (Error::IsError(pushResult)) {
+      return pushResult;
     }
-
-    lua_pushvalue(state, -1);                    // [storage, func, func]
-    lua_setfield(state, -3, "decode arguments"); // [storage, func]
   }
-
-  // [storage, func]
-
-  lua_pushlstring(state, launchArguments.data(),
-                  launchArguments.size()); // [storage, func, args]
-  lua_pushinteger(state, count);           // [storage, func, args, count]
-  auto callResult = lua_pcall(state, 2, count, 0); // [storage, ...]
-  if (callResult != LUA_OK) {
-    std::string luaErrorMessage = lua_tostring(state, -1);
-    lua_pop(state, 1); // Remove error message from stack
-    return Error::Createf(
-        "Failed to push launch arguments in decode arguments: {}",
-        luaErrorMessage);
-  }
-
-  // [function, args, args...]
-
-  lua_remove(state, 2); // [function, ...]
-
-  return Error::Success();
-}
-
-inline auto SerializeValueToString(lua_State *state, int index)
-    -> Result<std::string> {
-  constexpr auto encodeValue = R"Lua(
-  return require('string.buffer').encode({ ... })
-)Lua";
-  LuaWrap::LoadOrCreateStorageTable(state, "ThoriumObjectStorage"); // [storage]
-
-  // if no function, add it
-  lua_getfield(state, -1, "encode value"); // [storage, func/nil]
-  if (lua_isnil(state, -1)) {
-    lua_pop(state, 1);                                     // [storage]
-    auto loadResult = luaL_loadstring(state, encodeValue); // [storage, func]
-    if (loadResult != LUA_OK) {
-      std::string luaErrorMessage = lua_tostring(state, -1);
-      lua_pop(state, 1); // Remove error message from stack
-      return Error::Unexpectedf("Failed to load encode value function: {}",
-                                luaErrorMessage);
-    }
-    lua_pushvalue(state, -1);                // [storage, func, func]
-    lua_setfield(state, -3, "encode value"); // [storage, func]
-  }
-
-  // [storage, func]
-  lua_pushvalue(state, index);             // [storage, func, value]
-  auto result = lua_pcall(state, 1, 1, 0); // [storage, encodedValue]
-  if (result != LUA_OK) {
-    std::string luaErrorMessage = lua_tostring(state, -1);
-    lua_pop(state, 1); // Remove error message from stack
-    return Error::Unexpectedf("Failed to encode value: {}", luaErrorMessage);
-  }
-
-  size_t len = 0;
-  const char *data = lua_tolstring(state, -1, &len);
-  std::string encodedValue;
-  if (data != nullptr && len > 0) {
-    encodedValue.assign(data, len);
-  }
-
-  lua_pop(state, 2); // []
-
-  return encodedValue;
-}
-
-inline auto PushValueFromString(lua_State *state,
-                                const std::string &encodedValue) -> Error {
-  constexpr auto decodeValue = R"Lua(
-  local args = require('string.buffer').decode((...))
-  return args[1]
-)Lua";
-
-  LuaWrap::LoadOrCreateStorageTable(state, "ThoriumObjectStorage"); // [storage]
-
-  // if no function, add it
-  lua_getfield(state, -1, "decode value"); // [storage, func/nil]
-  if (lua_isnil(state, -1)) {
-    lua_pop(state, 1);                                 // [storage]
-    auto result = luaL_loadstring(state, decodeValue); // [storage, func]
-    if (result != LUA_OK) {
-      std::string luaErrorMessage = lua_tostring(state, -1);
-      lua_pop(state, 1); // Remove error message from stack
-      return Error::Createf("Failed to load decode value function: {}",
-                            luaErrorMessage);
-    }
-    lua_pushvalue(state, -1);                // [storage, func, func]
-    lua_setfield(state, -3, "decode value"); // [storage, func]
-  }
-
-  // [storage, func]
-  lua_pushlstring(state, encodedValue.data(),
-                  encodedValue.size());        // [storage, func, encodedValue]
-  auto callResult = lua_pcall(state, 1, 1, 0); // [storage, value]
-  if (callResult != LUA_OK) {
-    std::string luaErrorMessage = lua_tostring(state, -1);
-    lua_pop(state, 1); // Remove error message from stack
-    return Error::Createf("Failed to decode value: {}", luaErrorMessage);
-  }
-
-  lua_remove(state, -2); // Remove [storage], leave [value] on stack
 
   return Error::Success();
 }

@@ -13,6 +13,7 @@
 #include "Modules/object.hpp"
 #include "slang/slang.h"
 #include "tl/expected.hpp"
+#include <mutex>
 #define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
 #include <algorithm>
@@ -29,8 +30,8 @@
 
 namespace Graphics::RenderTarget {
 
-std::unordered_map<State, std::pair<VkPipeline, VkPipelineLayout>,
-                   StateHash> // NOLINTNEXTLINE Pipeline cache
+thread_local std::unordered_map<State, std::pair<VkPipeline, VkPipelineLayout>,
+                                StateHash> // NOLINTNEXTLINE Pipeline cache
     PipelineCache = {};
 
 inline auto GetSwapchainRendertarget(const GraphicsContext &context)
@@ -132,8 +133,13 @@ auto GetPipelineLayout(const GraphicsContext &context,
   pipelineLayoutInfo.pushConstantRangeCount = pushConstantRanges.size();
   pipelineLayoutInfo.pPushConstantRanges = pushConstantRanges.data();
   VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
-  auto error = Error::Create(vkCreatePipelineLayout(
-      context.device, &pipelineLayoutInfo, nullptr, &pipelineLayout));
+
+  Error error;
+  {
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+    error = Error::Create(vkCreatePipelineLayout(
+        context.device, &pipelineLayoutInfo, nullptr, &pipelineLayout));
+  }
 
   if (Error::IsError(error)) {
     return error.AsUnexpected();
@@ -241,7 +247,11 @@ auto BindDefaultTextures(GraphicsContext &context, Shader::ShaderModule *shader)
           VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
       descriptorWrite.descriptorCount = 1;
       descriptorWrite.pImageInfo = &imageInfo;
-      vkUpdateDescriptorSets(context.device, 1, &descriptorWrite, 0, nullptr);
+      {
+        std::lock_guard<std::mutex> lock(
+            Graphics::GraphicsContext::mutexes.device);
+        vkUpdateDescriptorSets(context.device, 1, &descriptorWrite, 0, nullptr);
+      }
     }
   }
 
@@ -273,14 +283,18 @@ auto CreateDescriptorSets(GraphicsContext &context,
     layoutInfo.pBindings = bindings.data();
 
     VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
-    auto error = Error::Create(vkCreateDescriptorSetLayout(
-        context.device, &layoutInfo, nullptr, &descriptorSetLayout));
+    {
+      std::lock_guard<std::mutex> lock(
+          Graphics::GraphicsContext::mutexes.device);
+      auto error = Error::Create(vkCreateDescriptorSetLayout(
+          context.device, &layoutInfo, nullptr, &descriptorSetLayout));
+
+      if (Error::IsError(error)) {
+        return error;
+      }
+    }
 
     shader->descriptorSetLayouts[setIndex] = descriptorSetLayout;
-
-    if (Error::IsError(error)) {
-      return error;
-    }
 
     VkDescriptorSetAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
@@ -288,10 +302,14 @@ auto CreateDescriptorSets(GraphicsContext &context,
     allocInfo.descriptorSetCount = 1;
     allocInfo.pSetLayouts = &descriptorSetLayout;
 
-    error = Error::Create(vkAllocateDescriptorSets(
-        context.device, &allocInfo, &shader->descriptorSets[setIndex]));
-    if (Error::IsError(error)) {
-      return error;
+    {
+      std::lock_guard<std::mutex> lock(
+          Graphics::GraphicsContext::mutexes.device);
+      auto error = Error::Create(vkAllocateDescriptorSets(
+          context.device, &allocInfo, &shader->descriptorSets[setIndex]));
+      if (Error::IsError(error)) {
+        return error;
+      }
     }
   }
 
@@ -621,14 +639,16 @@ inline auto CreateGraphicsPipeline(const GraphicsContext &context, State &state)
   PrintDebug("Creating graphics pipeline...");
 
   VkPipeline pipeline = VK_NULL_HANDLE;
-  auto error = Error::Create(vkCreateGraphicsPipelines(
-      context.device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline));
+  {
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+    auto error = Error::Create(vkCreateGraphicsPipelines(
+        context.device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline));
 
-  PipelineCache[state] = {pipeline, layoutResult.value()};
-
-  if (Error::IsError(error)) {
-    return error.AsUnexpected();
+    if (Error::IsError(error)) {
+      return error.AsUnexpected();
+    }
   }
+  PipelineCache[state] = {pipeline, layoutResult.value()};
 
   return std::pair<VkPipeline, VkPipelineLayout>(pipeline,
                                                  layoutResult.value());
@@ -664,10 +684,13 @@ inline auto CreateComputePipeline(const GraphicsContext &context, State &state)
   PrintDebug("Creating compute pipeline...");
 
   VkPipeline pipeline = VK_NULL_HANDLE;
-  auto error = Error::Create(vkCreateComputePipelines(
-      context.device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline));
-  if (Error::IsError(error)) {
-    return error.AsUnexpected();
+  {
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+    auto error = Error::Create(vkCreateComputePipelines(
+        context.device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline));
+    if (Error::IsError(error)) {
+      return error.AsUnexpected();
+    }
   }
 
   return std::pair<VkPipeline, VkPipelineLayout>(pipeline,
@@ -711,10 +734,10 @@ inline auto GetPipeline(const GraphicsContext &context, State &state)
 }
 
 // NOLINTNEXTLINE, render target state stack
-static std::vector<State> StateStack{};
+thread_local static std::vector<State> StateStack{};
 
 // NOLINTNEXTLINE, to keep track of last applied state
-static State LastState{};
+thread_local static State LastState{};
 
 inline auto SetupDefaultState(GraphicsContext &context) -> Result<State> {
   auto defaultState = State();
@@ -807,7 +830,7 @@ auto FlushCompute(GraphicsContext &context) -> Result<bool> {
     return pipelineResult.error().AsUnexpected();
   }
 
-  const auto &commandBuffer = Graphics::GetCommandBuffer(context);
+  const auto &commandBuffer = Graphics::GetCommandBuffer();
 
   // Unset current rendering, otherwise vkCmdPipelineBarrier will fail
   // EndRendering(context);
@@ -854,7 +877,7 @@ auto FlushGraphics(GraphicsContext &context) -> Result<bool> {
     return pipelineResult.error().AsUnexpected();
   }
 
-  const auto &commandBuffer = Graphics::GetCommandBuffer(context);
+  const auto &commandBuffer = Graphics::GetCommandBuffer();
 
   // Unset current rendering, otherwise vkCmdPipelineBarrier will fail
   // EndRendering(context);
@@ -922,6 +945,7 @@ auto Flush(GraphicsContext &context) -> Result<bool> {
 }
 
 auto Destroy(GraphicsContext &context) -> void {
+  std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
   for (const auto &pair : PipelineCache) {
     vkDestroyPipeline(context.device, pair.second.first, nullptr);
   }
@@ -1029,7 +1053,7 @@ inline auto BeginRendering(GraphicsContext &context) -> Error {
 
   PrintDebug("Beginning rendering pass");
 
-  vkCmdBeginRendering(Graphics::GetCommandBuffer(context), &renderingInfo);
+  vkCmdBeginRendering(Graphics::GetCommandBuffer(), &renderingInfo);
 
   GetIsCurrentlyRendering() = true;
 
@@ -1043,7 +1067,12 @@ inline auto BeginRendering(GraphicsContext &context) -> Error {
 
 auto EndRendering(GraphicsContext &context) -> void {
   if (GetIsCurrentlyRendering()) {
-    vkCmdEndRendering(Graphics::GetCommandBuffer(context));
+    if (Graphics::GetCommandBuffer() == VK_NULL_HANDLE) {
+      PrintWarning(
+          "Tried to end rendering, but command buffer is null. Skipping.");
+      return;
+    }
+    vkCmdEndRendering(Graphics::GetCommandBuffer());
     GetIsCurrentlyRendering() = false;
   }
 }
@@ -1150,8 +1179,8 @@ auto PrepareRendering(GraphicsContext &context) -> Error {
     auto viewport = GetClippedViewport();
     auto scissor = GetScissor();
 
-    vkCmdSetViewport(Graphics::GetCommandBuffer(context), 0, 1, &viewport);
-    vkCmdSetScissor(Graphics::GetCommandBuffer(context), 0, 1, &scissor);
+    vkCmdSetViewport(Graphics::GetCommandBuffer(), 0, 1, &viewport);
+    vkCmdSetScissor(Graphics::GetCommandBuffer(), 0, 1, &scissor);
   }
 
   return Error::Success();
@@ -1456,7 +1485,7 @@ auto GetBindPoint() -> VkPipelineBindPoint {
 auto Clear(GraphicsContext &context, const ClearInfo &clearInfo) -> Error {
   auto &currentState = StateStack.back();
 
-  auto *commandBuffer = Graphics::GetCommandBuffer(context);
+  auto *commandBuffer = Graphics::GetCommandBuffer();
 
   auto count = currentState.renderTargets.size();
 

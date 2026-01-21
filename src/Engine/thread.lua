@@ -1,11 +1,14 @@
-print("AAAAAAAAAAAAa")
+print("AAAAAAAAAAAA")
+
+Imgui = require("cimgui.init")
+
 local lastDrawTime = 0
 local lastImDrawTime = 0
 local lastShownTime = 0
 local lastShownImDrawTime = 0
 local count = 0
 
-print("Rendering thread started.")
+local channel = ...
 
 local function draw()
   local startTime = Thorium.timer.getTime()
@@ -42,14 +45,17 @@ while true do
   print("Thread waiting for rendering permission...")
   Thorium.graphics.demandRenderingPermission()
   print("Rendering thread granted permission.")
+  print(Thorium.graphics.hasRenderingPermission())
   Thorium.graphics.aquireGraphics("gui")
   print("Rendering thread acquired graphics context.")
+
 
   Thorium.gui.newFrame(1 / 60)
   print("Rendering thread drawing...")
 
   draw()
   print("Rendering thread submitting graphics...")
+  channel:push(true)
 
   Thorium.graphics.submitGraphics()
 end

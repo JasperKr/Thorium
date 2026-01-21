@@ -35,12 +35,16 @@ auto GetOrCreateSampler(GraphicsContext &context,
   samplerInfo.unnormalizedCoordinates = VK_FALSE;
 
   VkSampler vkSampler = VK_NULL_HANDLE;
-  VkResult result =
-      vkCreateSampler(context.device, &samplerInfo, nullptr, &vkSampler);
+  {
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+    VkResult result =
+        vkCreateSampler(context.device, &samplerInfo, nullptr, &vkSampler);
 
-  if (result != VK_SUCCESS) {
-    PrintError("Failed to create sampler: {}\n", Error::Create(result).message);
-    return VK_NULL_HANDLE; // Failed to create sampler
+    if (result != VK_SUCCESS) {
+      PrintError("Failed to create sampler: {}\n",
+                 Error::Create(result).message);
+      return VK_NULL_HANDLE; // Failed to create sampler
+    }
   }
 
   samplerCache[description] = vkSampler;

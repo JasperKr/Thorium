@@ -1,5 +1,8 @@
 #include "wrap_channel.hpp"
+#include "Modules/console.hpp"
+#include "Wrap/lua_data.hpp"
 #include "Wrap/wrap.hpp"
+#include <lua.h>
 
 namespace Wrap::Threading {
 
@@ -14,10 +17,14 @@ auto wrap_NewChannel(lua_State *state) -> int {
 auto wrap_Push(lua_State *state) -> int {
   auto *channel = LuaWrap::ObjectFromLua<::Threading::Channel>(state, 1);
   if (channel == nullptr) {
-    luaL_error(state, "Invalid Channel object.");
+    return luaL_error(state, "Invalid Channel object.");
   }
 
-  auto encodedMessage = LuaWrap::SerializeValueToString(state, 2);
+  if (lua_gettop(state) < 2) {
+    return luaL_error(state, "Channel:push requires a message argument.");
+  }
+
+  auto encodedMessage = LuaWrap::Data::FromStack(state, 2);
 
   if (Error::IsError(encodedMessage)) {
     return luaL_error(state, "Failed to serialize message: %s",
@@ -31,7 +38,7 @@ auto wrap_Push(lua_State *state) -> int {
 auto wrap_Pop(lua_State *state) -> int {
   auto *channel = LuaWrap::ObjectFromLua<::Threading::Channel>(state, 1);
   if (channel == nullptr) {
-    luaL_error(state, "Invalid Channel object.");
+    return luaL_error(state, "Invalid Channel object.");
   }
 
   auto message = channel->Pop();
@@ -41,7 +48,7 @@ auto wrap_Pop(lua_State *state) -> int {
     return 1;
   }
 
-  auto error = LuaWrap::PushValueFromString(state, message.value());
+  auto error = LuaWrap::Data::ToStack(state, message.value());
 
   if (Error::IsError(error)) {
     return luaL_error(state, "Failed to deserialize message: %s",
@@ -53,7 +60,7 @@ auto wrap_Pop(lua_State *state) -> int {
 auto wrap_Peek(lua_State *state) -> int {
   auto *channel = LuaWrap::ObjectFromLua<::Threading::Channel>(state, 1);
   if (channel == nullptr) {
-    luaL_error(state, "Invalid Channel object.");
+    return luaL_error(state, "Invalid Channel object.");
   }
 
   auto message = channel->Peek();
@@ -63,7 +70,7 @@ auto wrap_Peek(lua_State *state) -> int {
     return 1;
   }
 
-  auto error = LuaWrap::PushValueFromString(state, message.value());
+  auto error = LuaWrap::Data::ToStack(state, message.value());
 
   if (Error::IsError(error)) {
     return luaL_error(state, "Failed to deserialize message: %s",
@@ -75,7 +82,7 @@ auto wrap_Peek(lua_State *state) -> int {
 auto wrap_GetCount(lua_State *state) -> int {
   auto *channel = LuaWrap::ObjectFromLua<::Threading::Channel>(state, 1);
   if (channel == nullptr) {
-    luaL_error(state, "Invalid Channel object.");
+    return luaL_error(state, "Invalid Channel object.");
   }
 
   auto count = channel->GetCount();
@@ -87,12 +94,29 @@ auto wrap_GetCount(lua_State *state) -> int {
 auto wrap_Demand(lua_State *state) -> int {
   auto *channel = LuaWrap::ObjectFromLua<::Threading::Channel>(state, 1);
   if (channel == nullptr) {
-    luaL_error(state, "Invalid Channel object.");
+    return luaL_error(state, "Invalid Channel object.");
   }
 
-  auto message = channel->Demand();
+  lua_Number timeout = INFINITY;
+  if (lua_gettop(state) >= 2) {
+    if (lua_isnumber(state, 2) == 0) {
+      return luaL_error(state, "Timeout argument must be a number.");
+    }
 
-  auto error = LuaWrap::PushValueFromString(state, message);
+    timeout = lua_tonumber(state, 2);
+  }
+
+  PrintAlways("Channel demand with timeout: {}", timeout);
+
+  auto messageResult = channel->Demand(timeout);
+
+  if (!messageResult.has_value()) {
+    lua_pushnil(state);
+    return 1;
+  }
+
+  auto &message = messageResult.value();
+  auto error = LuaWrap::Data::ToStack(state, message);
 
   if (Error::IsError(error)) {
     return luaL_error(state, "Failed to deserialize message: %s",

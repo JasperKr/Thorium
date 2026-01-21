@@ -274,6 +274,7 @@ add_executable(Thorium
     src/Wrap/Modules/wrap_thread.cpp
     src/Wrap/Modules/wrap_channel.cpp
     src/Wrap/wrap.cpp
+    src/Wrap/lua_data.cpp
 
 # Libraries
     src/Libraries/vma.cpp

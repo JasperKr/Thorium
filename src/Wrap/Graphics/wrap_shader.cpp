@@ -192,6 +192,7 @@ auto wrap_Release(lua_State *state) -> int {
     return 1;
   }
 
+  std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
   shader->Destroy(Graphics::GetCurrentGraphicsContext()->device);
   return 0;
 }

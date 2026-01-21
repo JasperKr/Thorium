@@ -87,6 +87,7 @@ auto LoadModule() -> Error {
 }
 
 void UnloadModule(Graphics::GraphicsContext &context) {
+  std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
   DefaultShaderModule->Destroy(context.device);
 
   if (GlobalSlangSession != nullptr) {
@@ -464,11 +465,14 @@ static inline auto LoadSlang(GraphicsContext &context,
   moduleCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
   moduleCreateInfo.codeSize = data.size() * sizeof(uint32_t);
   moduleCreateInfo.pCode = data.data();
-  Error error = Error::Create(vkCreateShaderModule(
-      context.device, &moduleCreateInfo, nullptr, &shader->module));
+  {
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+    Error error = Error::Create(vkCreateShaderModule(
+        context.device, &moduleCreateInfo, nullptr, &shader->module));
 
-  if (Error::IsError(error)) {
-    return error;
+    if (Error::IsError(error)) {
+      return error;
+    }
   }
 
   PrintDebug("Shader module created successfully.");
@@ -787,7 +791,11 @@ auto ShaderModule::FlushGlobals(GraphicsContext &context,
     descriptorWrite.descriptorCount = 1;
     descriptorWrite.pBufferInfo = &bufferInfo;
 
-    vkUpdateDescriptorSets(context.device, 1, &descriptorWrite, 0, nullptr);
+    {
+      std::lock_guard<std::mutex> lock(
+          Graphics::GraphicsContext::mutexes.device);
+      vkUpdateDescriptorSets(context.device, 1, &descriptorWrite, 0, nullptr);
+    }
   }
 
   return Error::Success();
@@ -863,11 +871,14 @@ auto ShaderModule::FlushBuffers(GraphicsContext &context,
   }
   pendingImageTransitions.clear();
 
-  vkUpdateDescriptorSets(context.device, static_cast<uint32_t>(writes.size()),
-                         writes.data(), 0, nullptr);
+  {
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+    vkUpdateDescriptorSets(context.device, static_cast<uint32_t>(writes.size()),
+                           writes.data(), 0, nullptr);
+  }
   pendingDescriptorWrites.clear();
 
-  auto *commandBuffer = GetCommandBuffer(context);
+  auto *commandBuffer = GetCommandBuffer();
 
   VkPipelineBindPoint bindpoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
 
@@ -921,6 +932,7 @@ auto ShaderModule::GetThreadgroupSize() const -> Result<Math::Uvec3> {
 auto ShaderModule::GetWaveSize() const -> uint32_t { return waveSize; }
 
 void ShaderModule::Destroy(VkDevice &device) {
+  std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
   for (auto &pair : descriptorSetLayouts) {
     vkDestroyDescriptorSetLayout(device, pair.second, nullptr);
   }

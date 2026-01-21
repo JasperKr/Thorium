@@ -2,6 +2,8 @@
 
 #include "Modules/object.hpp"
 #include "Modules/type.hpp"
+#include "Wrap/lua_data.hpp"
+#include <cmath>
 #include <condition_variable>
 #include <cstdint>
 #include <mutex>
@@ -24,7 +26,6 @@ extern "C" {
 
 namespace Threading {
 enum class ThreadStatus : uint8_t { Running, Stopped, Error };
-using EncodedLuaData = std::string;
 
 const static Type threadType = Type("Thread");
 
@@ -39,7 +40,8 @@ public:
 
   static auto Create(const std::string &script) -> Ref<Thread>;
 
-  auto Start(const EncodedLuaData &launchArguments, int count) -> void;
+  auto Start(const std::vector<LuaWrap::Data::LuaType> &launchArguments,
+             int count) -> void;
   [[nodiscard]] auto GetStatus() const -> ThreadStatus;
   [[nodiscard]] auto GetErrorMessage() const -> std::string;
   auto Stop() -> void;
@@ -48,7 +50,8 @@ public:
   static auto GetType() -> Type const * { return &threadType; }
 
 private:
-  static auto Run(Thread *thread, const EncodedLuaData &launchArguments,
+  static auto Run(Thread *thread,
+                  const std::vector<LuaWrap::Data::LuaType> &launchArguments,
                   int count) -> void;
 
   std::string script;
@@ -65,26 +68,27 @@ const static Type channelType = Type("Channel");
 struct Channel : Object {
 public:
   // Push a message to the channel
-  auto Push(const EncodedLuaData &message) -> void;
+  auto Push(const LuaWrap::Data::LuaType &message) -> void;
 
   // Pop a message from the channel
-  auto Pop() -> std::optional<EncodedLuaData>;
+  auto Pop() -> std::optional<LuaWrap::Data::LuaType>;
 
   // Peek at the next message without removing it
   [[nodiscard]]
-  auto Peek() const -> std::optional<EncodedLuaData>;
+  auto Peek() const -> std::optional<LuaWrap::Data::LuaType>;
 
   [[nodiscard]]
   auto GetCount() const -> size_t;
 
   // Demand a message, blocking until one is available
-  auto Demand() -> EncodedLuaData;
+  auto Demand(double timeout = INFINITY)
+      -> std::optional<LuaWrap::Data::LuaType>;
 
   auto GetInstanceType() const -> Type const * override { return &channelType; }
   static auto GetType() -> Type const * { return &channelType; }
 
 private:
-  std::queue<EncodedLuaData> messages;
+  std::queue<LuaWrap::Data::LuaType> messages;
 
   // Mutex for thread safety
   mutable std::mutex mutex;

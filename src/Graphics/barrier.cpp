@@ -219,11 +219,11 @@ auto UpdateUsage(const GraphicsContext &context, GraphicsResource &resource,
 
     if (GetIsCurrentlyRendering()) {
       // End rendering before doing a barrier
-      vkCmdEndRendering(Graphics::GetCommandBuffer(context));
+      vkCmdEndRendering(Graphics::GetCommandBuffer());
       GetIsCurrentlyRendering() = false;
     }
 
-    vkCmdPipelineBarrier2(Graphics::GetCommandBuffer(context), &depInfo);
+    vkCmdPipelineBarrier2(Graphics::GetCommandBuffer(), &depInfo);
 
     // Update to new usage
     previousAccess = usage.access;

@@ -1,7 +1,6 @@
 #include "Graphics/Buffers/uniform.hpp"
 #include "Graphics/buffer.hpp"
 #include "Graphics/dynamicRendering.hpp"
-#include "Graphics/gltfLoader.hpp"
 #include "Graphics/graphics.hpp"
 #include "Graphics/info.hpp"
 #include "Graphics/render.hpp"
@@ -11,7 +10,7 @@
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/filesystem.hpp"
-#include "Modules/model.hpp"
+#include "SDL3/SDL_cpuinfo.h"
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -166,7 +165,6 @@ auto LoadLua(lua_State *state, const std::vector<std::string> &launchArgs)
 }
 
 auto MainLoop(const std::vector<std::string> &arguments) -> Error {
-  Graphics::GetCurrentThreadIndex() = 0;
   Error::SetupTraceback();
 
   PrintDebug("Initializing Lua state...");
@@ -225,7 +223,7 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
   }
 
   Graphics::GraphicsContext context = {};
-  context.renderThreadCount = 1;
+  context.renderThreadCount = SDL_GetNumLogicalCPUCores();
 
   PrintDebug("Initializing graphics...");
 
@@ -330,7 +328,10 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
 
   lua_close(state);
 
-  vkDeviceWaitIdle(context.device);
+  {
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+    vkDeviceWaitIdle(context.device);
+  }
 
   result = FlushBufferUploads(context);
   if (Error::IsError(result)) {

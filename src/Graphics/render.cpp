@@ -35,7 +35,7 @@ static void ResetCommandBuffers(Graphics::GraphicsContext &context) {
 
   // for (int i = 0; i < context.renderThreadCount; i++) {
   //   vkResetCommandBuffer(
-  //       GetCommandBuffer(context), // TODO: Fix for multithreading later
+  //       GetCommandBuffer(), // TODO: Fix for multithreading later
   //       0);
   // }
 
@@ -59,13 +59,17 @@ static void StartRecording(Graphics::GraphicsContext &context) {
     allocInfo.commandBufferCount = 1;
 
     GlobalStitchInfo.commandBuffers.at(context.frameIndex).resize(1);
-    auto result = Error::Create(vkAllocateCommandBuffers(
-        context.device, &allocInfo,
-        &GlobalStitchInfo.commandBuffers.at(context.frameIndex).at(0)));
-    if (Error::IsError(result)) {
-      PrintError("Failed to allocate stitch command buffer: {}",
-                 result.ToString());
-      return;
+    {
+      std::lock_guard<std::mutex> lock(
+          Graphics::GraphicsContext::mutexes.device);
+      auto result = Error::Create(vkAllocateCommandBuffers(
+          context.device, &allocInfo,
+          &GlobalStitchInfo.commandBuffers.at(context.frameIndex).at(0)));
+      if (Error::IsError(result)) {
+        PrintError("Failed to allocate stitch command buffer: {}",
+                   result.ToString());
+        return;
+      }
     }
   }
 
@@ -83,7 +87,8 @@ static void StartRecording(Graphics::GraphicsContext &context) {
     return;
   }
 
-  context.commandBuffer = cmdBuffer;
+  // context.commandBuffer = cmdBuffer;
+  GetCommandBuffer() = cmdBuffer;
 }
 
 static auto EndRecording(Graphics::GraphicsContext &context,
@@ -100,7 +105,7 @@ static auto EndRecording(Graphics::GraphicsContext &context,
   // End command buffer recording
   // for (int i = 0; i < context.renderThreadCount; i++) {
   //   vkEndCommandBuffer(
-  //       GetCommandBuffer(context)); // TODO: Fix for multithreading later
+  //       GetCommandBuffer()); // TODO: Fix for multithreading later
   // }
 
   auto currentTimelineResult =
@@ -113,7 +118,7 @@ static auto EndRecording(Graphics::GraphicsContext &context,
   uint64_t completedValue = currentTimelineResult.value();
 
   std::unordered_map<QueueID, uint64_t> completedTimelineValues = {
-      {GetCurrentThreadIndex(), completedValue},
+      {0, completedValue},
   };
 
   Graphics::ProcessReleasedResources(context, completedTimelineValues);
@@ -172,6 +177,7 @@ void TransitionPresentToColor(VkCommandBuffer cmd, VkImage image) {
 }
 
 auto AquireNextSwapchainImage(Graphics::GraphicsContext &context) -> Error {
+  std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
 
   if (context.imagesInFlight[context.frameIndex] != VK_NULL_HANDLE) {
     vkWaitForFences(context.device, 1,
@@ -188,8 +194,11 @@ auto AquireNextSwapchainImage(Graphics::GraphicsContext &context) -> Error {
 auto PrepareRecording(Graphics::GraphicsContext &context) -> Error {
   ResetCommandBuffers(context);
 
-  vkResetDescriptorPool(context.device,
-                        context.descriptorPools.at(context.frameIndex), 0);
+  {
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+    vkResetDescriptorPool(context.device,
+                          context.descriptorPools.at(context.frameIndex), 0);
+  }
 
   StartRecording(context);
 
@@ -202,6 +211,7 @@ auto PrepareRecording(Graphics::GraphicsContext &context) -> Error {
 
 auto WaitOnFrame(Graphics::GraphicsContext &context) -> Error {
   // Wait on swapchainImageReady semaphore
+  std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
   vkWaitForFences(context.device, 1,
                   &context.inFlightFences[context.frameIndex], VK_TRUE,
                   UINT64_MAX);
@@ -232,7 +242,7 @@ auto SubmitCommandBuffers(Graphics::GraphicsContext &context) -> Error {
   std::vector<VkCommandBuffer> commandBuffers(context.renderThreadCount);
   for (int i = 0; i < context.renderThreadCount; i++) {
     commandBuffers[i] =
-        GetCommandBuffer(context); // TODO: Fix for multithreading later
+        GetCommandBuffer(); // TODO: Fix for multithreading later
   }
   submitInfo.commandBufferCount = context.renderThreadCount;
   submitInfo.pCommandBuffers = commandBuffers.data();
@@ -301,23 +311,6 @@ auto PresentFrame(Graphics::GraphicsContext &context) -> Error {
   return Error::Success();
 }
 
-auto InitializeGraphics(Graphics::GraphicsContext &context) -> Error {
-  auto error = AquireNextSwapchainImage(context);
-  if (Error::IsError(error)) {
-    return error;
-  }
-
-  StartRecording(context);
-
-  TransitionPresentToColor(
-      GetCommandBuffer(context),
-      context.swapchainInfo.images[context.swapchainImageIndex]);
-
-  vkResetFences(context.device, 1, &context.inFlightFences[context.frameIndex]);
-
-  return Error::Success();
-}
-
 inline auto DisallowThreadRendering() -> void {
   {
     std::lock_guard<std::mutex> lock(Threading::CanStartNewCommandsMutex);
@@ -331,6 +324,29 @@ inline auto AllowThreadRendering() -> void {
     Threading::CanStartNewCommands = true;
   }
   Threading::CanStartNewCommandsCV.notify_all();
+}
+
+auto InitializeGraphics(Graphics::GraphicsContext &context) -> Error {
+  auto error = AquireNextSwapchainImage(context);
+  if (Error::IsError(error)) {
+    return error;
+  }
+
+  StartRecording(context);
+
+  TransitionPresentToColor(
+      GetCommandBuffer(),
+      context.swapchainInfo.images[context.swapchainImageIndex]);
+
+  {
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+    vkResetFences(context.device, 1,
+                  &context.inFlightFences[context.frameIndex]);
+  }
+
+  AllowThreadRendering();
+
+  return Error::Success();
 }
 
 inline auto
@@ -408,10 +424,14 @@ GetOrderedCommands(GraphicsContext &context,
     // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
     auto *writeAddress = commandBuffers.data() + previousSize;
 
-    auto err = Error::Create(
-        vkAllocateCommandBuffers(context.device, &allocInfo, writeAddress));
-    if (Error::IsError(err)) {
-      return err;
+    {
+      std::lock_guard<std::mutex> lock(
+          Graphics::GraphicsContext::mutexes.device);
+      auto err = Error::Create(
+          vkAllocateCommandBuffers(context.device, &allocInfo, writeAddress));
+      if (Error::IsError(err)) {
+        return err;
+      }
     }
   }
 
@@ -488,7 +508,7 @@ auto Present(Graphics::GraphicsContext &context) -> Error {
   }
 
   TransitionColorToPresent(
-      GetCommandBuffer(context),
+      GetCommandBuffer(),
       context.swapchainInfo.images[context.swapchainImageIndex]);
 
   vkEndCommandBuffer(presentTransitionBuffer);
