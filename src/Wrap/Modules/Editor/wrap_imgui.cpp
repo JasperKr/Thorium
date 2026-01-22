@@ -249,8 +249,6 @@ inline auto SetupTemporaryCommandLists(
       }
 
       temporaryCommandList.Mesh = meshCreationResult.value();
-      PrintAlways("Created new mesh for imgui elements. Vertex Count: {}",
-                  vertexCount);
     }
 
     auto vertexSpan =

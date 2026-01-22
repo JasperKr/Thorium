@@ -4,6 +4,7 @@
 #include "Graphics/dynamicRendering.hpp"
 #include "Graphics/graphics.hpp"
 #include "Graphics/mesh.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include <cstdint>
 
@@ -22,6 +23,8 @@ auto BindMesh(GraphicsContext &context, VkCommandBuffer cmdBuffer,
                            .stages = VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT,
                            .access = VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT,
                        });
+
+  PrintDebug("Validating mesh topology with {} vertices", count);
 
   switch (mesh.GetTopology()) {
   case VK_PRIMITIVE_TOPOLOGY_LINE_LIST:
@@ -55,6 +58,7 @@ auto BindMesh(GraphicsContext &context, VkCommandBuffer cmdBuffer,
   std::vector<VkBuffer> vertexBuffers = {mesh.GetVertexBuffer()->handle};
   std::vector<VkDeviceSize> offsets = {0};
 
+  PrintDebug("Binding vertex buffer");
   vkCmdBindVertexBuffers(cmdBuffer, 0, 1, vertexBuffers.data(), offsets.data());
 
   if (mesh.GetIndexCount() > 0) {
@@ -92,6 +96,7 @@ auto Draw(GraphicsContext &context, const Mesh &mesh, uint32_t instanceCount)
   auto format = mesh.GetVertexFormat();
   auto stride = format.GetStride(0); // TODO: Multiple buffers
 
+  PrintDebug("Binding mesh");
   auto bindResult = BindMesh(context, commandBuffer, mesh);
   if (Error::IsError(bindResult)) {
     return bindResult;
@@ -101,11 +106,13 @@ auto Draw(GraphicsContext &context, const Mesh &mesh, uint32_t instanceCount)
   RenderTarget::SetVertexFormat(format);
   RenderTarget::SetTopology(mesh.GetTopology());
 
+  PrintDebug("Preparing rendering");
   auto error = RenderTarget::PrepareRendering(context);
   if (Error::IsError(error)) {
     return error;
   }
 
+  PrintDebug("Issuing draw call");
   if (mesh.GetIndexCount() > 0) {
     vkCmdDrawIndexed(commandBuffer, range.Count, instanceCount, range.Offset, 0,
                      0);

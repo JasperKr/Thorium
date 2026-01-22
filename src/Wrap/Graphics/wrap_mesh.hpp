@@ -19,6 +19,9 @@ auto wrap_SetIndexBuffer(lua_State *state) -> int;
 auto wrap_SetDrawRange(lua_State *state) -> int;
 auto wrap_GetDrawRange(lua_State *state) -> int;
 
+auto wrap_GetVertexCount(lua_State *state) -> int;
+auto wrap_GetIndexCount(lua_State *state) -> int;
+
 auto wrap_NewMesh(lua_State *state) -> int;
 auto wrap_Release(lua_State *state) -> int;
 
@@ -28,6 +31,8 @@ static const luaL_Reg MeshLib[] = {
     {"setIndices", wrap_SetIndices},
     {"setVertexBuffer", wrap_SetVertexBuffer},
     {"setIndexBuffer", wrap_SetIndexBuffer},
+    {"getVertexCount", wrap_GetVertexCount},
+    {"getIndexCount", wrap_GetIndexCount},
     {"setDrawRange", wrap_SetDrawRange},
     {"getDrawRange", wrap_GetDrawRange},
     {"release", wrap_Release},

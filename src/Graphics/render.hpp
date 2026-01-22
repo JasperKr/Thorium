@@ -3,11 +3,13 @@
 #include "Modules/error.hpp"
 #include "graphics.hpp"
 #include <string>
+#include <vector>
 namespace Graphics {
 
 struct StitchInfo {
   // Any amount of buffers to stitch together
   std::array<std::vector<VkCommandBuffer>, FRAMES_IN_FLIGHT> commandBuffers{};
+  std::vector<bool> usedCommandBuffers;
 
   std::vector<uint64_t> orderingKeys;
 #ifndef NDEBUG

@@ -245,6 +245,7 @@ add_executable(Thorium
     src/Modules/Peripherals/mouse.cpp
     src/Modules/Peripherals/keyboard.cpp
     src/Modules/thread.cpp
+    src/Modules/channel.cpp
 
 # Math Modules
     src/Modules/Math/vector.cpp

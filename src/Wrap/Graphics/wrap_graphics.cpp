@@ -10,6 +10,7 @@
 #include "Graphics/texture.hpp"
 #include "Graphics/vertexformat.hpp"
 #include "Modules/color.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Wrap/Graphics/wrap_color.hpp"
@@ -543,6 +544,7 @@ auto wrap_Draw(lua_State *state) -> int {
     instanceCount = static_cast<uint32_t>(luaL_checkinteger(state, 2));
   }
 
+  PrintDebug("Drawing mesh with {} instances", instanceCount);
   auto drawResult = Draw(*ctx, *mesh, instanceCount);
 
   if (Error::IsError(drawResult)) {

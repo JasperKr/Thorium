@@ -84,13 +84,18 @@ struct GraphicsContext {
   uint32_t swapchainImageIndex;
 
   int32_t renderThreadCount;
+};
 
-  VkCommandPool commandPool;
+struct ThreadContext {
+  GraphicsContext *graphicsContext; // Global graphics context
+  VkCommandPool commandPool;        // Per-thread command pool
+  VkCommandBuffer commandBuffer;    // Current command buffer
 };
 
 auto Initialize(GraphicsContext &context, Config::ApplicationConfig &config)
     -> Error;
-auto GetCommandBuffer() -> VkCommandBuffer &;
+auto GetThreadContext() -> ThreadContext &;
+auto GetCommandBuffer() -> VkCommandBuffer;
 void Deinitialize(GraphicsContext &context);
 
 auto BeginSingleTimeCommands(GraphicsContext &context) -> VkCommandBuffer;

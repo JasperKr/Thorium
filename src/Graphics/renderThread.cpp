@@ -3,7 +3,9 @@
 #include "Graphics/buffer.hpp"
 #include "Graphics/dynamicRendering.hpp"
 #include "Graphics/graphics.hpp"
+#include "Graphics/graphicsState.hpp"
 #include "Graphics/shader.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "vulkan/vulkan_core.h"
@@ -37,11 +39,13 @@ auto DemandRenderingPermission() -> void {
                              [&]() -> bool { return CanStartNewCommands; });
 }
 
-// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+// NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
 thread_local Ref<RenderThreadInfo> CurrentRenderThreadInfo;
-
 thread_local inline std::array<std::vector<VkCommandBuffer>, FRAMES_IN_FLIGHT>
-    ThreadCommandBuffers; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+    ThreadCommandBuffers;
+thread_local inline uint64_t lastThreadFrame;
+thread_local inline std::vector<VkCommandBuffer> frameCommandBufferCache;
+// NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
 auto AquireCommandBuffer(Graphics::GraphicsContext &context,
                          const AquireInfo &info)
@@ -57,6 +61,11 @@ auto AquireCommandBuffer(Graphics::GraphicsContext &context,
         "Current thread already has an aquired command buffer");
   }
 
+  if (context.currentFrame != lastThreadFrame) {
+    frameCommandBufferCache = ThreadCommandBuffers.at(context.frameIndex);
+    lastThreadFrame = context.currentFrame;
+  }
+
   auto threadInfo = Ref<RenderThreadInfo>::Make();
   threadInfo->currentlyRecording = true;
   threadInfo->threadData.key = std::hash<std::string>()(info.name);
@@ -70,7 +79,9 @@ auto AquireCommandBuffer(Graphics::GraphicsContext &context,
     Results.emplace_back(threadInfo);
   }
 
-  if (context.commandPool == VK_NULL_HANDLE) {
+  auto &tcontext = GetThreadContext();
+
+  if (tcontext.commandPool == VK_NULL_HANDLE) {
     return Error::Unexpected(
         "Invalid command pool when aquiring command buffer");
   }
@@ -79,13 +90,13 @@ auto AquireCommandBuffer(Graphics::GraphicsContext &context,
     return Error::Unexpected("Invalid device when aquiring command buffer");
   }
 
-  VkCommandBufferAllocateInfo allocInfo = {};
-  allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-  allocInfo.commandPool = context.commandPool;
-  allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-  allocInfo.commandBufferCount = 1;
+  if (frameCommandBufferCache.empty()) {
+    VkCommandBufferAllocateInfo allocInfo = {};
+    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocInfo.commandPool = tcontext.commandPool;
+    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    allocInfo.commandBufferCount = 1;
 
-  if (ThreadCommandBuffers.at(context.frameIndex).empty()) {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
     auto allocationResult = Error::Create(vkAllocateCommandBuffers(
         context.device, &allocInfo, &threadInfo->threadData.commandBuffer));
@@ -94,9 +105,8 @@ auto AquireCommandBuffer(Graphics::GraphicsContext &context,
       return allocationResult.AsUnexpected();
     }
   } else {
-    threadInfo->threadData.commandBuffer =
-        ThreadCommandBuffers.at(context.frameIndex).back();
-    ThreadCommandBuffers.at(context.frameIndex).pop_back();
+    threadInfo->threadData.commandBuffer = frameCommandBufferCache.back();
+    frameCommandBufferCache.pop_back();
   }
 
   // Reset old command buffer
@@ -115,8 +125,20 @@ auto AquireCommandBuffer(Graphics::GraphicsContext &context,
 
   Barrier::ResetModule();
 
-  GetCommandBuffer() = threadInfo->threadData.commandBuffer;
+  GetThreadContext().commandBuffer = threadInfo->threadData.commandBuffer;
   CurrentRenderThreadInfo = threadInfo;
+
+  if (GetCommandBuffer() == VK_NULL_HANDLE) {
+    return Error::Unexpected("Failed to aquire command buffer.");
+  }
+
+  Graphics::SetDirtyState();
+
+  auto result = GetGlobalUniformBuffer(context.frameIndex).NewFrame(context);
+
+  if (Error::IsError(result)) {
+    return result.AsUnexpected();
+  }
 
   return threadInfo;
 }
@@ -125,6 +147,11 @@ auto SubmitCommands(Graphics::GraphicsContext &context) -> Error {
   auto validateResult = RenderTarget::FinalizeFrame(context);
   if (Error::IsError(validateResult)) {
     return validateResult;
+  }
+
+  auto flushResult = FlushBufferUploads(context);
+  if (Error::IsError(flushResult)) {
+    return flushResult;
   }
 
   auto &threadInfo = *CurrentRenderThreadInfo;
@@ -141,7 +168,7 @@ auto SubmitCommands(Graphics::GraphicsContext &context) -> Error {
   ThreadCommandBuffers.at(context.frameIndex)
       .emplace_back(threadInfo.threadData.commandBuffer);
 
-  GetCommandBuffer() = VK_NULL_HANDLE;
+  GetThreadContext().commandBuffer = VK_NULL_HANDLE;
 
   {
     std::lock_guard<std::mutex> lock(threadInfo.availabilityMutex);
@@ -153,7 +180,36 @@ auto SubmitCommands(Graphics::GraphicsContext &context) -> Error {
   return Error::Success();
 }
 
+inline auto CreateCommandPool(ThreadContext &tcontext) -> Error {
+  VkCommandPoolCreateInfo poolInfo = {};
+  poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+  poolInfo.queueFamilyIndex = tcontext.graphicsContext->graphicsQueueFamily;
+  poolInfo.flags =
+      static_cast<uint32_t>(VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT) |
+      static_cast<uint32_t>(VK_COMMAND_POOL_CREATE_TRANSIENT_BIT);
+
+  {
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+    Error error = Error::Create(
+        vkCreateCommandPool(tcontext.graphicsContext->device, &poolInfo,
+                            nullptr, &tcontext.commandPool));
+
+    if (Error::IsError(error)) {
+      return error;
+    }
+  }
+
+  return Error::Success();
+}
+
 auto Initialize(Graphics::GraphicsContext &context) -> Error {
+  auto &tcontext = GetThreadContext();
+  tcontext.graphicsContext = &context;
+
+  auto poolCreationResult = CreateCommandPool(tcontext);
+  if (Error::IsError(poolCreationResult)) {
+    return poolCreationResult;
+  }
 
   auto error = Graphics::LoadBufferModule(context);
   if (Error::IsError(error)) {

@@ -27,14 +27,14 @@ struct StagingBufferInfo {
 
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
 
-inline std::array<Ref<Buffer>, FRAMES_IN_FLIGHT> UploadBuffers;
-inline std::array<size_t, FRAMES_IN_FLIGHT> UploadBufferOffsets;
+thread_local inline std::array<Ref<Buffer>, FRAMES_IN_FLIGHT> UploadBuffers;
+thread_local inline std::array<size_t, FRAMES_IN_FLIGHT> UploadBufferOffsets;
 
 // we'll use staging buffers until upload buffers are initialized
-inline std::vector<StagingBufferInfo> StagingBuffers;
-inline VkSemaphore uploadTimeline = nullptr;
-inline bool moduleInitialized = false;
-inline uint64_t currentTimelineValue = 0;
+thread_local inline std::vector<StagingBufferInfo> StagingBuffers;
+thread_local inline VkSemaphore uploadTimeline = nullptr;
+thread_local inline bool moduleInitialized = false;
+thread_local inline uint64_t currentTimelineValue = 0;
 
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 

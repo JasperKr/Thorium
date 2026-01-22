@@ -111,9 +111,6 @@ struct State {
     }
 
     if (renderTargets.size() != other.renderTargets.size()) {
-      PrintAlways("Render target size mismatch in state equality comparison");
-      PrintAlways("This size: {}, Other size: {}", renderTargets.size(),
-                  other.renderTargets.size());
       return false;
     }
 

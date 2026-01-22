@@ -250,4 +250,49 @@ auto UpdateUsage(const GraphicsContext &context, GraphicsResource &resource,
   resource.firstAsyncUsage = false;
 }
 
+// The same as Update Usage but doesn't insert any barriers
+auto UpdateUsageVirtual(GraphicsResource &resource, const ResourceState &usage)
+    -> std::optional<ResourceSync> {
+  auto &previousAccess = resource.lastUsedAccess;
+  auto &previousStages = resource.lastUsedStages;
+
+  // Keep track of first usage for async recording so we can barrier later
+  if (resource.firstAsyncUsage) {
+    GlobalResourceStateUpdates.emplace_back(resource, usage);
+  }
+
+  if (!resource.firstAsyncUsage &&
+      TimelineLookback(resource.lastUsedTimelineIndex, // NOLINT
+                       {.stages = previousStages, .access = previousAccess},
+                       usage)) {
+    resource.lastUsedTimelineIndex = GlobalTimelineIndex;
+
+    auto sync = ResourceSync{.srcStages = previousStages,
+                             .srcAccess = previousAccess,
+                             .dstStages = usage.stages,
+                             .dstAccess = usage.access};
+
+    // Update to new usage
+    previousAccess = usage.access;
+    previousStages = usage.stages;
+
+    GlobalResourceSyncTimeline.emplace_back(sync);
+    GlobalTimelineIndex++;
+    FrameBarrierCount++;
+
+    return sync;
+  }
+
+  // Only used to accumulate read access/stages
+  // Since anything involving writes would have caused a hazard and barrier above
+  // Not doing this might miss some necessary stages/accesses
+  previousAccess |= usage.access;
+  previousStages |= usage.stages;
+  resource.lastUsedTimelineIndex = GlobalTimelineIndex;
+
+  resource.firstAsyncUsage = false;
+
+  return std::nullopt;
+}
+
 } // namespace Graphics::Barrier

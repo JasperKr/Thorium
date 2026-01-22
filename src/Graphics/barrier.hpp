@@ -111,6 +111,9 @@ static thread_local std::vector<GraphicsResource> GraphicsResources;
 auto UpdateUsage(const GraphicsContext &context, GraphicsResource &resource,
                  const ResourceState &usage) -> void;
 
+auto UpdateUsageVirtual(GraphicsResource &resource, const ResourceState &usage)
+    -> std::optional<ResourceSync>;
+
 inline auto InsertBarrier(ResourceSync &barrier) {
   GlobalResourceSyncTimeline.push_back(barrier);
   FrameBarrierCount++;

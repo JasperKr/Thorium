@@ -62,7 +62,7 @@ static void StartRecording(Graphics::GraphicsContext &context) {
     VkCommandBufferAllocateInfo allocInfo = {};
     allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
     allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    allocInfo.commandPool = context.commandPool;
+    allocInfo.commandPool = GetThreadContext().commandPool;
     allocInfo.commandBufferCount = 1;
 
     GlobalStitchInfo.commandBuffers.at(context.frameIndex).resize(1);
@@ -95,7 +95,7 @@ static void StartRecording(Graphics::GraphicsContext &context) {
   }
 
   // context.commandBuffer = cmdBuffer;
-  GetCommandBuffer() = cmdBuffer;
+  GetThreadContext().commandBuffer = cmdBuffer;
 }
 
 static auto EndRecording(Graphics::GraphicsContext &context,
@@ -235,8 +235,8 @@ auto WaitOnFrame(Graphics::GraphicsContext &context) -> Error {
 }
 
 auto SubmitCommandBuffers(Graphics::GraphicsContext &context,
-                          const std::vector<VkCommandBuffer> &buffers)
-    -> Error {
+                          const std::vector<VkCommandBuffer> &buffers,
+                          size_t count) -> Error {
   VkSubmitInfo submitInfo = {};
   submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
@@ -247,7 +247,7 @@ auto SubmitCommandBuffers(Graphics::GraphicsContext &context,
   submitInfo.pWaitSemaphores = &context.swapchainImageReady[context.frameIndex];
   submitInfo.pWaitDstStageMask = &waitStage;
 
-  submitInfo.commandBufferCount = buffers.size();
+  submitInfo.commandBufferCount = count;
   submitInfo.pCommandBuffers = buffers.data();
 
   // Signal the swapchain finished semaphore
@@ -390,11 +390,10 @@ GetOrderedCommands(GraphicsContext &context,
       }
     } else {
 #ifndef NDEBUG
-      PrintWarning("Missing command buffer for `",
-                   GlobalStitchInfo.orderingNames.at(idx), "` (key ", key,
-                   ")\n");
+      PrintWarning("Missing command buffer for '{}' (key: {})",
+                   GlobalStitchInfo.orderingNames.at(idx), key);
 #else
-      PrintWarning("Missing command buffer for key ", key, "\n");
+      PrintWarning("Missing command buffer for key {}", key);
 #endif
     }
 
@@ -425,7 +424,7 @@ GetOrderedCommands(GraphicsContext &context,
 
     VkCommandBufferAllocateInfo allocInfo = {};
     allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    allocInfo.commandPool = context.commandPool;
+    allocInfo.commandPool = GetThreadContext().commandPool;
     allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     allocInfo.commandBufferCount = static_cast<uint32_t>(allocationSize);
 
@@ -450,7 +449,6 @@ inline auto SubmitBarriers(
     const GraphicsContext &context,
     const std::vector<Threading::RenderThreadData> &threadRenderdatas) {
   for (size_t i = 0; i < threadRenderdatas.size(); i++) {
-    PrintAlways("Indexing barriers: {} / {}", i, threadRenderdatas.size());
     assert(i < threadRenderdatas.size());
     assert(context.frameIndex < GlobalStitchInfo.commandBuffers.size());
     assert(i < GlobalStitchInfo.commandBuffers.at(context.frameIndex).size());
@@ -461,19 +459,48 @@ inline auto SubmitBarriers(
 
     VkCommandBufferBeginInfo beginInfo = {};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    vkBeginCommandBuffer(commandBuffer, &beginInfo);
+
+    bool begunCmdBuffer = false;
 
     for (auto [resource, newUsage] : threadData.usageUpdates) {
-      Graphics::Barrier::UpdateUsage(context, resource, newUsage);
+      auto updateResult =
+          Graphics::Barrier::UpdateUsageVirtual(resource, newUsage);
+
+      if (!updateResult.has_value()) {
+        continue;
+      }
+
+      if (!begunCmdBuffer) {
+        vkBeginCommandBuffer(commandBuffer, &beginInfo);
+        begunCmdBuffer = true;
+      }
+
+      auto &sync = updateResult.value();
+
+      VkMemoryBarrier2 barrier = {};
+      barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2;
+      barrier.srcStageMask = sync.srcStages;
+      barrier.dstStageMask = sync.dstStages;
+      barrier.srcAccessMask = sync.srcAccess;
+      barrier.dstAccessMask = sync.dstAccess;
+
+      VkDependencyInfo depInfo = {};
+      depInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+      depInfo.memoryBarrierCount = 1;
+      depInfo.pMemoryBarriers = &barrier;
+
+      vkCmdPipelineBarrier2(commandBuffer, &depInfo);
     }
 
-    vkEndCommandBuffer(commandBuffer);
+    if (begunCmdBuffer) {
+      vkEndCommandBuffer(commandBuffer);
+    }
+
+    GlobalStitchInfo.usedCommandBuffers.emplace_back(begunCmdBuffer);
   }
 
   GlobalStitchInfo.orderingKeys.clear();
   GlobalStitchInfo.orderingNames.clear();
-
-  PrintAlways("Done indexing barriers: final present transition");
 
   return Error::Success();
 }
@@ -502,13 +529,10 @@ auto Present(Graphics::GraphicsContext &context) -> Error {
 
   std::vector<VkCommandBuffer> finalCommandBuffers;
 
-  PrintAlways("Preparing final command buffer submission...");
-  PrintAlways("Total thread command buffers: {}", threadRenderdatas.size());
-
   // all thread command buffers + barrier command buffers + 1 present transition
   finalCommandBuffers.resize((threadRenderdatas.size() * 2) + 1);
 
-  PrintAlways("Final command buffer count: {}", finalCommandBuffers.size());
+  size_t index = 0;
 
   for (size_t i = 0; i < threadRenderdatas.size(); i++) {
     assert(i < threadRenderdatas.size());
@@ -520,22 +544,23 @@ auto Present(Graphics::GraphicsContext &context) -> Error {
         GlobalStitchInfo.commandBuffers.at(context.frameIndex).at(i);
     auto *threadBuffer = threadRenderdatas.at(i).commandBuffer;
 
-    finalCommandBuffers[i * 2] = stitchBuffer;
-    finalCommandBuffers[(i * 2) + 1] = threadBuffer;
+    // If no barriers were needed for this thread, skip its barrier command buffer
+    if (GlobalStitchInfo.usedCommandBuffers.at(i)) {
+      finalCommandBuffers[index++] = stitchBuffer;
+    }
+    finalCommandBuffers[index++] = threadBuffer;
   }
 
   // Add final present transition command buffer
   assert(context.frameIndex < GlobalStitchInfo.commandBuffers.size());
   assert(threadRenderdatas.size() <
          GlobalStitchInfo.commandBuffers.at(context.frameIndex).size());
-  finalCommandBuffers.back() =
+  finalCommandBuffers.at(index) =
       GlobalStitchInfo.commandBuffers.at(context.frameIndex)
           .at(threadRenderdatas.size());
 
-  PrintAlways("Starting present transition command buffer...");
-
   // Start present transition command buffer
-  auto *presentTransitionBuffer = finalCommandBuffers.back();
+  auto *presentTransitionBuffer = finalCommandBuffers.at(index);
   VkCommandBufferBeginInfo beginInfo = {};
   beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
   vkBeginCommandBuffer(presentTransitionBuffer, &beginInfo);
@@ -551,6 +576,8 @@ auto Present(Graphics::GraphicsContext &context) -> Error {
 
   vkEndCommandBuffer(presentTransitionBuffer);
 
+  GlobalStitchInfo.usedCommandBuffers.clear();
+
   // Draw of this frame is done, end recording
   auto endResult = EndRecording(context, context.frameIndex);
   if (Error::IsError(endResult)) {
@@ -558,7 +585,8 @@ auto Present(Graphics::GraphicsContext &context) -> Error {
   }
 
   // Submit command buffers
-  auto submitResult = SubmitCommandBuffers(context, finalCommandBuffers);
+  auto submitResult =
+      SubmitCommandBuffers(context, finalCommandBuffers, index + 1);
   if (Error::IsError(submitResult)) {
     return submitResult;
   }

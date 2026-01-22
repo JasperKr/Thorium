@@ -7,11 +7,8 @@
 #include "Wrap/lua_data.hpp"
 #include "Wrap/wrap.hpp"
 #include "event.hpp"
-#include <cmath>
 #include <mutex>
-#include <optional>
 #include <thread>
-#include <variant>
 #include <vector>
 
 extern "C" {
@@ -20,18 +17,9 @@ extern "C" {
 #include <lualib.h>
 }
 
+#include "channel.hpp"
+
 namespace Threading {
-
-// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
-std::vector<Ref<Channel>> Channels{};
-
-auto UnloadModule() -> void {
-  for (auto &channel : Channels) {
-    channel->DestroyImmediately();
-  }
-
-  Channels.clear();
-}
 
 inline auto GetThreadStatusChannel() -> Ref<Channel> & {
   static auto threadStatusChannel = Ref<Channel>::Make();
@@ -194,76 +182,6 @@ auto Thread::Stop() -> void {
 auto Thread::GetErrorMessage() const -> std::string {
   std::lock_guard<std::mutex> lock(statusMutex);
   return errorMessage;
-}
-
-auto Channel::Push(const LuaWrap::Data::LuaType &message) -> void {
-  if (IsDestroyed()) {
-    return;
-  }
-
-  {
-    std::lock_guard<std::mutex> lock(mutex);
-    messages.push(message);
-  }
-
-  condition.notify_one();
-}
-
-auto Channel::Pop() -> std::optional<LuaWrap::Data::LuaType> {
-  if (IsDestroyed()) {
-    return LuaWrap::Data::LuaType{std::monostate{}};
-  }
-
-  std::lock_guard<std::mutex> lock(mutex);
-  if (messages.empty()) {
-    return LuaWrap::Data::LuaType{std::monostate{}};
-  }
-  LuaWrap::Data::LuaType message = messages.front();
-  messages.pop();
-  return message;
-}
-
-auto Channel::Peek() const -> std::optional<LuaWrap::Data::LuaType> {
-  if (IsDestroyed()) {
-    return LuaWrap::Data::LuaType{std::monostate{}};
-  }
-
-  std::lock_guard<std::mutex> lock(mutex);
-  if (messages.empty()) {
-    return LuaWrap::Data::LuaType{std::monostate{}};
-  }
-  return messages.front();
-}
-
-auto Channel::GetCount() const -> size_t {
-  if (IsDestroyed()) {
-    return 0;
-  }
-
-  std::lock_guard<std::mutex> lock(mutex);
-  return messages.size();
-}
-
-auto Channel::Demand(double timeout) -> std::optional<LuaWrap::Data::LuaType> {
-  std::unique_lock<std::mutex> lock(mutex);
-  if (timeout == INFINITY) {
-    condition.wait(
-        lock, [this]() -> bool { return !messages.empty() || IsDestroyed(); });
-  } else {
-    if (!condition.wait_for(
-            lock, std::chrono::duration<double>(timeout),
-            [this]() -> bool { return !messages.empty() || IsDestroyed(); })) {
-      return LuaWrap::Data::LuaType{std::monostate{}};
-    }
-  }
-
-  if (IsDestroyed()) {
-    return LuaWrap::Data::LuaType{std::monostate{}};
-  }
-
-  LuaWrap::Data::LuaType message = messages.front();
-  messages.pop();
-  return message;
 }
 
 } // namespace Threading

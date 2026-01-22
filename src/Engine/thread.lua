@@ -21,10 +21,7 @@ local function draw()
   Imgui.Text("Last ImGui Draw Time (ms): " .. tostring(lastShownImDrawTime * 1000))
 
   Imgui.End()
-
   Imgui.ShowDemoWindow()
-
-  print("Ending frame...")
 
   Thorium.gui.endFrame()
   local imStartTime = Thorium.timer.getTime()
@@ -44,19 +41,12 @@ end
 while true do
   canStartChannel:demand()
 
-  print("Thread waiting for rendering permission...")
   Thorium.graphics.demandRenderingPermission()
-  print("Rendering thread granted permission.")
-  print(Thorium.graphics.hasRenderingPermission())
   Thorium.graphics.aquireGraphics("gui")
-  print("Rendering thread acquired graphics context.")
-
 
   Thorium.gui.newFrame(1 / 60)
-  print("Rendering thread drawing...")
 
   draw()
-  print("Rendering thread submitting graphics...")
   doneChannel:push(true)
 
   Thorium.graphics.submitGraphics()

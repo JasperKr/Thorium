@@ -92,6 +92,8 @@ auto Mesh::Create(GraphicsContext &context, VertexFormat vertexFormat,
   mesh->DrawRange.Offset = 0;
   mesh->DrawRange.Count = mesh->VertexCount;
 
+  PrintAlways("Uploading {} bytes of vertex data.", vertexData.size());
+
   Error error = mesh->UploadVertices(context, vertexData, 0);
 
   if (Error::IsError(error)) {
@@ -112,8 +114,6 @@ auto Mesh::Create(GraphicsContext &context, VertexFormat vertexFormat,
   }
 
   auto vertexDataSize = vertexCount * size;
-
-  PrintAlways("vertex data size: {}", vertexDataSize);
 
   std::vector<uint32_t> indexData;
 
@@ -136,8 +136,6 @@ auto Mesh::Create(GraphicsContext &context, VertexFormat vertexFormat,
 
   vboCreationInfo.properties = properties;
   vboCreationInfo.size = vertexDataSize;
-
-  PrintAlways("Creating VBO of size {}", vboCreationInfo.size);
 
   auto bufferResult = Buffer::Create(context, vboCreationInfo);
 

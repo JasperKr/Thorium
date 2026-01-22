@@ -475,44 +475,16 @@ static auto CreateSwapchain(GraphicsContext &context) -> Error {
   return Error::Success();
 }
 
-static auto CreateRenderData(GraphicsContext &context) -> Error {
-  VkCommandPoolCreateInfo poolInfo = {};
-  poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-  poolInfo.queueFamilyIndex = context.graphicsQueueFamily;
-  poolInfo.flags =
-      static_cast<uint32_t>(VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT) |
-      static_cast<uint32_t>(VK_COMMAND_POOL_CREATE_TRANSIENT_BIT);
-
-  {
-    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    Error error = Error::Create(vkCreateCommandPool(
-        context.device, &poolInfo, nullptr, &context.commandPool));
-
-    if (Error::IsError(error)) {
-      return error;
-    }
-  }
-
-  // context.commandBuffers = std::vector<VkCommandBuffer>(FRAMES_IN_FLIGHT);
-
-  // VkCommandBufferAllocateInfo allocInfo = {};
-  // allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-  // allocInfo.commandPool = context.commandPool;
-  // allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-  // allocInfo.commandBufferCount = FRAMES_IN_FLIGHT;
-
-  // error = Error::Create(vkAllocateCommandBuffers(
-  //     context.device, &allocInfo, context.commandBuffers.data()));
-
-  // if (Error::IsError(error)) {
-  //   return error;
-  // }
-
-  return Error::Success();
+auto GetThreadContext() -> ThreadContext & {
+  static thread_local ThreadContext threadContext;
+  return threadContext;
 }
 
-auto GetCommandBuffer() -> VkCommandBuffer & {
-  static thread_local VkCommandBuffer commandBuffer = nullptr;
+auto GetCommandBuffer() -> VkCommandBuffer {
+  auto *commandBuffer = GetThreadContext().commandBuffer;
+  if (commandBuffer == nullptr) {
+    throw std::runtime_error("No command buffer aquired for current thread.");
+  }
   return commandBuffer;
 }
 
@@ -650,6 +622,28 @@ static auto CreateDescriptorPool(GraphicsContext &context) -> Error {
   return Error::Success();
 }
 
+inline auto CreateCommandPool(ThreadContext &tcontext) -> Error {
+  VkCommandPoolCreateInfo poolInfo = {};
+  poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+  poolInfo.queueFamilyIndex = tcontext.graphicsContext->graphicsQueueFamily;
+  poolInfo.flags =
+      static_cast<uint32_t>(VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT) |
+      static_cast<uint32_t>(VK_COMMAND_POOL_CREATE_TRANSIENT_BIT);
+
+  {
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+    Error error = Error::Create(
+        vkCreateCommandPool(tcontext.graphicsContext->device, &poolInfo,
+                            nullptr, &tcontext.commandPool));
+
+    if (Error::IsError(error)) {
+      return error;
+    }
+  }
+
+  return Error::Success();
+}
+
 auto Initialize(GraphicsContext &context, Config::ApplicationConfig &config)
     -> Error {
   PrintDebug("Initializing Volk...");
@@ -663,9 +657,9 @@ auto Initialize(GraphicsContext &context, Config::ApplicationConfig &config)
   SDL_Window *window = SDL_CreateWindow(config.Title.c_str(), config.Size.width,
                                         config.Size.height, SDL_WINDOW_VULKAN);
 
-  PrintDebug("Created SDL window with title '", config.Title, "' and size ",
-             std::to_string(config.Size.width) + "x" +
-                 std::to_string(config.Size.height));
+  PrintDebug("Created SDL window with title '{}', Size: ({} x {})",
+             config.Title, std::to_string(config.Size.width),
+             std::to_string(config.Size.height));
 
   if (window == nullptr) {
     return Error::Create("Failed to create SDL window.");
@@ -753,11 +747,14 @@ auto Initialize(GraphicsContext &context, Config::ApplicationConfig &config)
     return error;
   }
   PrintDebug("called: CreateVmaAllocator...");
-  error = CreateRenderData(context);
+
+  GetThreadContext().graphicsContext = &context;
+
+  error = CreateCommandPool(GetThreadContext());
   if (Error::IsError(error)) {
     return error;
   }
-  PrintDebug("called: CreateRenderData...");
+  PrintDebug("called: CreateCommandPool...");
   error = CreateSwapchain(context);
   if (Error::IsError(error)) {
     return error;
@@ -800,7 +797,7 @@ void Deinitialize(GraphicsContext &context) {
     vkDestroySemaphore(context.device, semaphore, nullptr);
   }
 
-  vkDestroyCommandPool(context.device, context.commandPool, nullptr);
+  vkDestroyCommandPool(context.device, GetThreadContext().commandPool, nullptr);
 
   for (VkImageView imageView : context.swapchainInfo.imageViews) {
     vkDestroyImageView(context.device, imageView, nullptr);
@@ -825,7 +822,10 @@ auto BeginSingleTimeCommands(GraphicsContext &context) -> VkCommandBuffer {
   VkCommandBufferAllocateInfo allocInfo = {};
   allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
   allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-  allocInfo.commandPool = context.commandPool;
+
+  auto &tcontext = GetThreadContext();
+
+  allocInfo.commandPool = tcontext.commandPool;
   allocInfo.commandBufferCount = 1;
 
   VkCommandBuffer commandBuffer = nullptr;
@@ -855,7 +855,9 @@ auto EndSingleTimeCommands(GraphicsContext &context,
   vkQueueSubmit(context.graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
   vkQueueWaitIdle(context.graphicsQueue);
 
-  vkFreeCommandBuffers(context.device, context.commandPool, 1, &commandBuffer);
+  auto &tcontext = GetThreadContext();
+
+  vkFreeCommandBuffers(context.device, tcontext.commandPool, 1, &commandBuffer);
 }
 
 void SetCurrentGraphicsContext(GraphicsContext *ctx) { g_ctx = ctx; }

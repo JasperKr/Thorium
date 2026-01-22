@@ -106,8 +106,6 @@ auto wrap_Demand(lua_State *state) -> int {
     timeout = lua_tonumber(state, 2);
   }
 
-  PrintAlways("Channel demand with timeout: {}", timeout);
-
   auto messageResult = channel->Demand(timeout);
 
   if (!messageResult.has_value()) {
