@@ -2,6 +2,7 @@
 #include "Graphics/graphicsState.hpp"
 #include "vulkan/vulkan_core.h"
 #include <array>
+#include <cassert>
 #include <cstdint>
 #include <utility>
 #include <vector>
@@ -147,6 +148,8 @@ inline auto TimelineLookback(uint64_t currentTimelineIndex,
   // current timeline index meaning the last barrier that affected this resource
   // and global timeline index the actual current barrier index
   for (uint64_t i = GlobalTimelineIndex - 1ULL; i > currentTimelineIndex; i--) {
+    assert(i - GlobalTimelineOffset < GlobalResourceSyncTimeline.size() &&
+           "Timeline index out of bounds in lookback");
     auto &sync = GlobalResourceSyncTimeline[i - GlobalTimelineOffset];
 
     auto mask = sync.dstStages;

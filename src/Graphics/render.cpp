@@ -1,3 +1,4 @@
+#include "render.hpp"
 #include "Graphics/Buffers/uniform.hpp"
 #include "Graphics/graphicsState.hpp"
 #include "Graphics/renderThread.hpp"
@@ -7,6 +8,8 @@
 #include "buffer.hpp"
 #include "dynamicRendering.hpp"
 #include "graphics.hpp"
+#include <cassert>
+#define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
 #include <algorithm>
 #include <array>
@@ -16,19 +19,23 @@
 
 namespace Graphics {
 
-// Temporary location of struct for now
-struct StitchInfo {
-  // Any amount of buffers to stitch together
-  std::array<std::vector<VkCommandBuffer>, FRAMES_IN_FLIGHT> commandBuffers{};
-
-  std::vector<uint64_t> orderingKeys;
-#ifndef NDEBUG
-  std::vector<std::string> orderingNames;
-#endif
-};
-
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 StitchInfo GlobalStitchInfo{};
+
+auto UseCommands(uint64_t key) -> void {
+  GlobalStitchInfo.orderingKeys.emplace_back(key);
+#ifndef NDEBUG
+  GlobalStitchInfo.orderingNames.emplace_back(std::to_string(key));
+#endif
+}
+
+auto UseCommands(const std::string &name) -> void {
+  uint64_t hash = std::hash<std::string>{}(name);
+  GlobalStitchInfo.orderingKeys.emplace_back(hash);
+#ifndef NDEBUG
+  GlobalStitchInfo.orderingNames.emplace_back(name);
+#endif
+}
 
 static void ResetCommandBuffers(Graphics::GraphicsContext &context) {
   // Reset command buffers for all render threads
@@ -227,7 +234,9 @@ auto WaitOnFrame(Graphics::GraphicsContext &context) -> Error {
   return Error::Success();
 }
 
-auto SubmitCommandBuffers(Graphics::GraphicsContext &context) -> Error {
+auto SubmitCommandBuffers(Graphics::GraphicsContext &context,
+                          const std::vector<VkCommandBuffer> &buffers)
+    -> Error {
   VkSubmitInfo submitInfo = {};
   submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
@@ -238,14 +247,8 @@ auto SubmitCommandBuffers(Graphics::GraphicsContext &context) -> Error {
   submitInfo.pWaitSemaphores = &context.swapchainImageReady[context.frameIndex];
   submitInfo.pWaitDstStageMask = &waitStage;
 
-  // Command buffers
-  std::vector<VkCommandBuffer> commandBuffers(context.renderThreadCount);
-  for (int i = 0; i < context.renderThreadCount; i++) {
-    commandBuffers[i] =
-        GetCommandBuffer(); // TODO: Fix for multithreading later
-  }
-  submitInfo.commandBufferCount = context.renderThreadCount;
-  submitInfo.pCommandBuffers = commandBuffers.data();
+  submitInfo.commandBufferCount = buffers.size();
+  submitInfo.pCommandBuffers = buffers.data();
 
   // Signal the swapchain finished semaphore
   submitInfo.signalSemaphoreCount = 1;
@@ -356,15 +359,20 @@ GetOrderedCommands(GraphicsContext &context,
   std::unordered_map<uint64_t, std::vector<Threading::RenderThreadData>>
       unorderedThreadRenderdatas;
 
-  for (auto &threadInfo : Threading::Results) {
-    // Wait for thread to finish recording
-    std::unique_lock<std::mutex> lock(threadInfo->availabilityMutex);
-    while (threadInfo->currentlyRecording) {
-      threadInfo->availabilityCV.wait(lock);
+  {
+    std::lock_guard<std::mutex> lock(Threading::ResultsMutex);
+    for (auto &threadInfo : Threading::Results) {
+      // Wait for thread to finish recording
+      std::unique_lock<std::mutex> lock(threadInfo->availabilityMutex);
+      while (threadInfo->currentlyRecording) {
+        threadInfo->availabilityCV.wait(lock);
+      }
+
+      unorderedThreadRenderdatas[threadInfo->threadData.key].emplace_back(
+          threadInfo->threadData);
     }
 
-    unorderedThreadRenderdatas[threadInfo->threadData.key].emplace_back(
-        threadInfo->threadData);
+    Threading::Results.clear();
   }
 
   int idx = 0;
@@ -400,8 +408,7 @@ GetOrderedCommands(GraphicsContext &context,
   for (auto &[key, datas] : unorderedThreadRenderdatas) {
     auto iter = std::ranges::find(GlobalStitchInfo.orderingKeys, key);
     if (iter == GlobalStitchInfo.orderingKeys.end()) {
-      PrintWarning("Thread command buffer `", datas[0].name, "` (key ", key,
-                   ") is never used\n");
+      PrintWarning("Thread command buffer '{}' Is never used.", datas[0].name);
     }
   }
 #endif
@@ -409,7 +416,8 @@ GetOrderedCommands(GraphicsContext &context,
   // Insert a command buffer before each recorded command buffer to handle resource barriers
   // And one at the end to transition the swapchain image to present
   size_t totalCommandBuffers = threadRenderdatas.size() + 1;
-  auto commandBuffers = GlobalStitchInfo.commandBuffers.at(context.frameIndex);
+  auto &commandBuffers = GlobalStitchInfo.commandBuffers.at(context.frameIndex);
+
   if (commandBuffers.size() < totalCommandBuffers) {
     auto allocationSize = totalCommandBuffers - commandBuffers.size();
     auto previousSize = commandBuffers.size();
@@ -442,6 +450,11 @@ inline auto SubmitBarriers(
     const GraphicsContext &context,
     const std::vector<Threading::RenderThreadData> &threadRenderdatas) {
   for (size_t i = 0; i < threadRenderdatas.size(); i++) {
+    PrintAlways("Indexing barriers: {} / {}", i, threadRenderdatas.size());
+    assert(i < threadRenderdatas.size());
+    assert(context.frameIndex < GlobalStitchInfo.commandBuffers.size());
+    assert(i < GlobalStitchInfo.commandBuffers.at(context.frameIndex).size());
+
     const auto &threadData = threadRenderdatas.at(i);
     auto *commandBuffer =
         GlobalStitchInfo.commandBuffers.at(context.frameIndex).at(i);
@@ -456,6 +469,12 @@ inline auto SubmitBarriers(
 
     vkEndCommandBuffer(commandBuffer);
   }
+
+  GlobalStitchInfo.orderingKeys.clear();
+  GlobalStitchInfo.orderingNames.clear();
+
+  PrintAlways("Done indexing barriers: final present transition");
+
   return Error::Success();
 }
 
@@ -469,7 +488,7 @@ auto Present(Graphics::GraphicsContext &context) -> Error {
   // If the user tries to start recording after this point it will be part of the next frame
   DisallowThreadRendering();
 
-  std::vector<Threading::RenderThreadData> threadRenderdatas;
+  std::vector<Threading::RenderThreadData> threadRenderdatas{};
 
   auto orderResult = GetOrderedCommands(context, threadRenderdatas);
   if (Error::IsError(orderResult)) {
@@ -482,10 +501,21 @@ auto Present(Graphics::GraphicsContext &context) -> Error {
   }
 
   std::vector<VkCommandBuffer> finalCommandBuffers;
+
+  PrintAlways("Preparing final command buffer submission...");
+  PrintAlways("Total thread command buffers: {}", threadRenderdatas.size());
+
   // all thread command buffers + barrier command buffers + 1 present transition
   finalCommandBuffers.resize((threadRenderdatas.size() * 2) + 1);
 
+  PrintAlways("Final command buffer count: {}", finalCommandBuffers.size());
+
   for (size_t i = 0; i < threadRenderdatas.size(); i++) {
+    assert(i < threadRenderdatas.size());
+    assert(context.frameIndex < GlobalStitchInfo.commandBuffers.size());
+    assert(i < GlobalStitchInfo.commandBuffers.at(context.frameIndex).size());
+    assert((i * 2) + 1 < finalCommandBuffers.size());
+
     auto *stitchBuffer =
         GlobalStitchInfo.commandBuffers.at(context.frameIndex).at(i);
     auto *threadBuffer = threadRenderdatas.at(i).commandBuffer;
@@ -494,10 +524,18 @@ auto Present(Graphics::GraphicsContext &context) -> Error {
     finalCommandBuffers[(i * 2) + 1] = threadBuffer;
   }
 
-  // Start present transition command buffer
-  auto *presentTransitionBuffer =
+  // Add final present transition command buffer
+  assert(context.frameIndex < GlobalStitchInfo.commandBuffers.size());
+  assert(threadRenderdatas.size() <
+         GlobalStitchInfo.commandBuffers.at(context.frameIndex).size());
+  finalCommandBuffers.back() =
       GlobalStitchInfo.commandBuffers.at(context.frameIndex)
-          .at(finalCommandBuffers.size() - 1);
+          .at(threadRenderdatas.size());
+
+  PrintAlways("Starting present transition command buffer...");
+
+  // Start present transition command buffer
+  auto *presentTransitionBuffer = finalCommandBuffers.back();
   VkCommandBufferBeginInfo beginInfo = {};
   beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
   vkBeginCommandBuffer(presentTransitionBuffer, &beginInfo);
@@ -520,7 +558,7 @@ auto Present(Graphics::GraphicsContext &context) -> Error {
   }
 
   // Submit command buffers
-  auto submitResult = SubmitCommandBuffers(context);
+  auto submitResult = SubmitCommandBuffers(context, finalCommandBuffers);
   if (Error::IsError(submitResult)) {
     return submitResult;
   }

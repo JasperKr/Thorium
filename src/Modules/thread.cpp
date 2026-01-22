@@ -3,6 +3,7 @@
 #include "Graphics/renderThread.hpp"
 #include "Modules/console.hpp"
 #include "Modules/filesystem.hpp"
+#include "Modules/object.hpp"
 #include "Wrap/lua_data.hpp"
 #include "Wrap/wrap.hpp"
 #include "event.hpp"
@@ -20,8 +21,19 @@ extern "C" {
 
 namespace Threading {
 
-inline auto GetThreadStatusChannel() -> Channel & {
-  static Channel threadStatusChannel;
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+std::vector<Ref<Channel>> Channels{};
+
+auto UnloadModule() -> void {
+  for (auto &channel : Channels) {
+    channel->DestroyImmediately();
+  }
+
+  Channels.clear();
+}
+
+inline auto GetThreadStatusChannel() -> Ref<Channel> & {
+  static auto threadStatusChannel = Ref<Channel>::Make();
   return threadStatusChannel;
 }
 
@@ -184,6 +196,10 @@ auto Thread::GetErrorMessage() const -> std::string {
 }
 
 auto Channel::Push(const LuaWrap::Data::LuaType &message) -> void {
+  if (IsDestroyed()) {
+    return;
+  }
+
   {
     std::lock_guard<std::mutex> lock(mutex);
     messages.push(message);
@@ -193,6 +209,10 @@ auto Channel::Push(const LuaWrap::Data::LuaType &message) -> void {
 }
 
 auto Channel::Pop() -> std::optional<LuaWrap::Data::LuaType> {
+  if (IsDestroyed()) {
+    return std::nullopt;
+  }
+
   std::lock_guard<std::mutex> lock(mutex);
   if (messages.empty()) {
     return std::nullopt;
@@ -203,6 +223,10 @@ auto Channel::Pop() -> std::optional<LuaWrap::Data::LuaType> {
 }
 
 auto Channel::Peek() const -> std::optional<LuaWrap::Data::LuaType> {
+  if (IsDestroyed()) {
+    return std::nullopt;
+  }
+
   std::lock_guard<std::mutex> lock(mutex);
   if (messages.empty()) {
     return std::nullopt;
@@ -211,11 +235,19 @@ auto Channel::Peek() const -> std::optional<LuaWrap::Data::LuaType> {
 }
 
 auto Channel::GetCount() const -> size_t {
+  if (IsDestroyed()) {
+    return 0;
+  }
+
   std::lock_guard<std::mutex> lock(mutex);
   return messages.size();
 }
 
 auto Channel::Demand(double timeout) -> std::optional<LuaWrap::Data::LuaType> {
+  if (IsDestroyed()) {
+    return std::nullopt;
+  }
+
   std::unique_lock<std::mutex> lock(mutex);
   if (timeout == INFINITY) {
     condition.wait(lock, [this]() -> bool { return !messages.empty(); });

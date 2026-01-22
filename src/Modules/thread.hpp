@@ -10,6 +10,7 @@
 #include <optional>
 #include <queue>
 #include <string>
+#include <vector>
 
 extern "C" {
 #include <lauxlib.h>
@@ -25,6 +26,9 @@ extern "C" {
 // numbers, strings, booleans, tables, but not functions or userdata except for any engine-defined types
 
 namespace Threading {
+
+auto UnloadModule() -> void;
+
 enum class ThreadStatus : uint8_t { Running, Stopped, Error };
 
 const static Type threadType = Type("Thread");
@@ -65,8 +69,20 @@ private:
 
 const static Type channelType = Type("Channel");
 
+// Channel storage for shutdown
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+extern std::vector<Ref<struct Channel>> Channels;
+
 struct Channel : Object {
 public:
+  Channel() {
+    Channels.emplace_back(this);
+    this->release(); // The channels vector does not own a reference
+  }
+  Channel(const Channel &) = delete;
+  Channel(Channel &&) = delete;
+  auto operator=(const Channel &) -> Channel & = delete;
+  auto operator=(Channel &&) -> Channel & = delete;
   // Push a message to the channel
   auto Push(const LuaWrap::Data::LuaType &message) -> void;
 
@@ -87,13 +103,30 @@ public:
   auto GetInstanceType() const -> Type const * override { return &channelType; }
   static auto GetType() -> Type const * { return &channelType; }
 
+  auto IsDestroyed() const -> bool {
+    std::lock_guard<std::mutex> lock(isDestroyedMutex);
+    return isDestroyed;
+  }
+
+  auto DestroyImmediately() -> void {
+    std::lock_guard<std::mutex> lock(isDestroyedMutex);
+    isDestroyed = true;
+
+    // Notify all waiting threads
+    condition.notify_all();
+  }
+
+  ~Channel() override = default;
+
 private:
   std::queue<LuaWrap::Data::LuaType> messages;
 
   // Mutex for thread safety
   mutable std::mutex mutex;
-
   mutable std::condition_variable condition;
+
+  mutable std::mutex isDestroyedMutex;
+  mutable bool isDestroyed = false;
 };
 
 } // namespace Threading

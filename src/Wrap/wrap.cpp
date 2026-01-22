@@ -175,6 +175,21 @@ auto LogStack(lua_State *state) -> void {
   }
 }
 
+using LuaFn = int (*)(lua_State *);
+
+auto LuaTrampoline(lua_State *state) -> int {
+  auto func = // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+      reinterpret_cast<LuaFn>(lua_touserdata(state, lua_upvalueindex(1)));
+
+  try {
+    return func(state);
+  } catch (const std::exception &e) {
+    return luaL_error(state, "C++ exception: %s", e.what());
+  } catch (...) {
+    return luaL_error(state, "Unknown C++ exception");
+  }
+}
+
 auto RegisterLuaModule(lua_State *state, const LuaModule &module) -> void {
   if (module.Functions == nullptr) {
     std::cerr << "Module " << module.Name << " has no functions to register."
@@ -209,8 +224,20 @@ auto RegisterLuaModule(lua_State *state, const LuaModule &module) -> void {
   if (module.Functions != nullptr) {
     const luaL_Reg *func = module.Functions;
     while (func->name != nullptr) {
-      lua_pushcfunction(state, func->func); // [Thorium, module, func]
-      lua_setfield(state, -2, func->name);  // [Thorium, module]
+      // lua_pushcfunction(state, func->func); // [Thorium, module, func]
+
+#ifndef NDEBUG // If debug build
+      // Wrap function in trampoline to catch exceptions
+      lua_pushlightuserdata(
+          state, // NOLINTNEXTLINE(cppcoreguidelines-pro-type-cstyle-cast)
+          (void *)func->func); // [mt, lightuserdata with function pointer]
+      lua_pushcclosure(state, LuaTrampoline,
+                       1); // [mt, cclosure that calls function pointer]
+#else
+      lua_pushcfunction(state, func->func); // [mt, func]
+#endif
+
+      lua_setfield(state, -2, func->name); // [Thorium, module]
       func++; // NOLINT, functions are nullptr-terminated
     }
   }
@@ -294,8 +321,17 @@ auto RegisterLuaType(lua_State *state, const Type *type,
   if (functions != nullptr) {
     const luaL_Reg *func = functions;
     while (func->name != nullptr) {
+#ifndef NDEBUG // If debug build
+      // Wrap function in trampoline to catch exceptions
+      lua_pushlightuserdata(
+          state, // NOLINTNEXTLINE(cppcoreguidelines-pro-type-cstyle-cast)
+          (void *)func->func); // [mt, lightuserdata with function pointer]
+      lua_pushcclosure(state, LuaTrampoline,
+                       1); // [mt, cclosure that calls function pointer]
+#else
       lua_pushcfunction(state, func->func); // [mt, func]
-      lua_setfield(state, -2, func->name);  // [mt]
+#endif
+      lua_setfield(state, -2, func->name); // [mt]
       func++; // NOLINT, functions are nullptr-terminated
     }
   }

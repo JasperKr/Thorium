@@ -12,8 +12,9 @@ local i = 0
 Thorium.threaderror = error
 
 local thread = Thorium.thread.newThread("src/Engine/thread.lua")
-local channel = Thorium.thread.newChannel()
-thread:start(channel)
+local threadDoneChannel = Thorium.thread.newChannel()
+local startThreadChannel = Thorium.thread.newChannel()
+thread:start(threadDoneChannel, startThreadChannel)
 
 function Thorium.update(dt)
   i = i + 1
@@ -192,7 +193,11 @@ function Thorium.draw()
   --   lastImDrawTime = 0
   -- end
 
+  startThreadChannel:push(true)
+
   print("Demanding from thread...")
-  print(tostring(channel:demand(10)))
+  print("Demand answer: " .. tostring(threadDoneChannel:demand(10)))
   print("Done drawing frame.")
+
+  Thorium.graphics.useCommands("gui")
 end

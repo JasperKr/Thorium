@@ -8,7 +8,7 @@ local lastShownTime = 0
 local lastShownImDrawTime = 0
 local count = 0
 
-local channel = ...
+local doneChannel, canStartChannel = ...
 
 local function draw()
   local startTime = Thorium.timer.getTime()
@@ -42,6 +42,8 @@ local function draw()
 end
 
 while true do
+  canStartChannel:demand()
+
   print("Thread waiting for rendering permission...")
   Thorium.graphics.demandRenderingPermission()
   print("Rendering thread granted permission.")
@@ -55,7 +57,7 @@ while true do
 
   draw()
   print("Rendering thread submitting graphics...")
-  channel:push(true)
+  doneChannel:push(true)
 
   Thorium.graphics.submitGraphics()
 end

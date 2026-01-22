@@ -753,4 +753,17 @@ auto wrap_DemandRenderingPermission(lua_State *state) -> int {
   return 0;
 }
 
+auto wrap_UseCommands(lua_State *state) -> int {
+
+  if (lua_type(state, 1) == LUA_TNUMBER) {
+    Graphics::UseCommands(static_cast<uint64_t>(luaL_checkinteger(state, 1)));
+  } else if (lua_type(state, 1) == LUA_TSTRING) {
+    Graphics::UseCommands(luaL_checkstring(state, 1));
+  } else {
+    return luaL_error(state, "Invalid argument to useCommands.");
+  }
+
+  return 0;
+}
+
 } // namespace Graphics

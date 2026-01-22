@@ -136,6 +136,11 @@ inline auto SerializeVarargs(lua_State *state, int startIndex)
   launchArguments.reserve(numArgs);
 
   for (int i = 0; i < numArgs; ++i) {
+    if (lua_isnoneornil(state, startIndex + i)) {
+      launchArguments.emplace_back(); // nil
+      continue;
+    }
+
     auto argResult = Data::FromStack(state, startIndex + i);
     if (Error::IsError(argResult)) {
       return argResult.error().AsUnexpected();
@@ -152,6 +157,11 @@ inline auto PushVarargs(lua_State *state,
 
   for (int i = 0; i < count; ++i) {
     const auto &arg = launchArguments[i];
+    if (arg.index() == std::variant_npos) {
+      lua_pushnil(state);
+      continue;
+    }
+
     auto pushResult = Data::ToStack(state, arg);
     if (Error::IsError(pushResult)) {
       return pushResult;

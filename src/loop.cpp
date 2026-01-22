@@ -10,6 +10,7 @@
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/filesystem.hpp"
+#include "Modules/thread.hpp"
 #include "SDL3/SDL_cpuinfo.h"
 #include <filesystem>
 #include <string>
@@ -348,6 +349,7 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
   DeInitializeGlobalTimelineSemaphore(context);
 
   Graphics::Shader::UnloadModule(context);
+  Threading::UnloadModule();
 
   Graphics::Deinitialize(context);
   Graphics::RenderTarget::Destroy(context);
