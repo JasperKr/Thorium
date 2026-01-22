@@ -339,6 +339,7 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
     return result;
   }
 
+  Threading::UnloadModule();
   Graphics::DeInitializeUniformBufferModule(context);
 
   result = Graphics::UnloadBufferModule(context);
@@ -349,7 +350,6 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
   DeInitializeGlobalTimelineSemaphore(context);
 
   Graphics::Shader::UnloadModule(context);
-  Threading::UnloadModule();
 
   Graphics::Deinitialize(context);
   Graphics::RenderTarget::Destroy(context);

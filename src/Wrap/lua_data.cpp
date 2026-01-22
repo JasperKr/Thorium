@@ -42,6 +42,8 @@ auto ToStack(lua_State *state, const LuaType &data) -> Error {
 
       lua_settable(state, -3);
     }
+  } else if (std::holds_alternative<std::monostate>(data)) {
+    lua_pushnil(state);
   } else {
     return Error::Create("Unsupported LuaType variant for ToStack.");
   }

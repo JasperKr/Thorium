@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Modules/console.hpp"
 #include "Modules/object.hpp"
 #include "Modules/type.hpp"
 #include "Wrap/lua_data.hpp"
@@ -109,6 +110,7 @@ public:
   }
 
   auto DestroyImmediately() -> void {
+    PrintDebug("Destroying channel immediately.");
     std::lock_guard<std::mutex> lock(isDestroyedMutex);
     isDestroyed = true;
 

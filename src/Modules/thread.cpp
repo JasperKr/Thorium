@@ -11,6 +11,7 @@
 #include <mutex>
 #include <optional>
 #include <thread>
+#include <variant>
 #include <vector>
 
 extern "C" {
@@ -210,12 +211,12 @@ auto Channel::Push(const LuaWrap::Data::LuaType &message) -> void {
 
 auto Channel::Pop() -> std::optional<LuaWrap::Data::LuaType> {
   if (IsDestroyed()) {
-    return std::nullopt;
+    return LuaWrap::Data::LuaType{std::monostate{}};
   }
 
   std::lock_guard<std::mutex> lock(mutex);
   if (messages.empty()) {
-    return std::nullopt;
+    return LuaWrap::Data::LuaType{std::monostate{}};
   }
   LuaWrap::Data::LuaType message = messages.front();
   messages.pop();
@@ -224,12 +225,12 @@ auto Channel::Pop() -> std::optional<LuaWrap::Data::LuaType> {
 
 auto Channel::Peek() const -> std::optional<LuaWrap::Data::LuaType> {
   if (IsDestroyed()) {
-    return std::nullopt;
+    return LuaWrap::Data::LuaType{std::monostate{}};
   }
 
   std::lock_guard<std::mutex> lock(mutex);
   if (messages.empty()) {
-    return std::nullopt;
+    return LuaWrap::Data::LuaType{std::monostate{}};
   }
   return messages.front();
 }
@@ -244,19 +245,22 @@ auto Channel::GetCount() const -> size_t {
 }
 
 auto Channel::Demand(double timeout) -> std::optional<LuaWrap::Data::LuaType> {
-  if (IsDestroyed()) {
-    return std::nullopt;
-  }
-
   std::unique_lock<std::mutex> lock(mutex);
   if (timeout == INFINITY) {
-    condition.wait(lock, [this]() -> bool { return !messages.empty(); });
+    condition.wait(
+        lock, [this]() -> bool { return !messages.empty() || IsDestroyed(); });
   } else {
-    if (!condition.wait_for(lock, std::chrono::duration<double>(timeout),
-                            [this]() -> bool { return !messages.empty(); })) {
-      return std::nullopt;
+    if (!condition.wait_for(
+            lock, std::chrono::duration<double>(timeout),
+            [this]() -> bool { return !messages.empty() || IsDestroyed(); })) {
+      return LuaWrap::Data::LuaType{std::monostate{}};
     }
   }
+
+  if (IsDestroyed()) {
+    return LuaWrap::Data::LuaType{std::monostate{}};
+  }
+
   LuaWrap::Data::LuaType message = messages.front();
   messages.pop();
   return message;

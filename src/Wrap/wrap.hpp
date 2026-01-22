@@ -5,6 +5,7 @@
 #include "Modules/type.hpp"
 #include "Wrap/lua_data.hpp"
 #include <Modules/object.hpp>
+#include <variant>
 #include <vector>
 extern "C" {
 #include <lauxlib.h>
@@ -137,7 +138,7 @@ inline auto SerializeVarargs(lua_State *state, int startIndex)
 
   for (int i = 0; i < numArgs; ++i) {
     if (lua_isnoneornil(state, startIndex + i)) {
-      launchArguments.emplace_back(); // nil
+      launchArguments.emplace_back(std::monostate{});
       continue;
     }
 
@@ -157,10 +158,6 @@ inline auto PushVarargs(lua_State *state,
 
   for (int i = 0; i < count; ++i) {
     const auto &arg = launchArguments[i];
-    if (arg.index() == std::variant_npos) {
-      lua_pushnil(state);
-      continue;
-    }
 
     auto pushResult = Data::ToStack(state, arg);
     if (Error::IsError(pushResult)) {
