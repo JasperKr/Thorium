@@ -28,7 +28,6 @@ static const luaL_Reg BufferLib[] = {
     {"getFormat", wrap_GetFormat},
     {"setData", wrap_SetData},
     {"clear", wrap_Clear},
-    {"release", wrap_Release},
     {nullptr, nullptr} // terminate with nullptr
 };
 

@@ -67,7 +67,7 @@ struct StructuredBuffer : Object {
   }
 
   [[nodiscard]] auto UseDeferredDestruction() const -> bool override {
-    return true;
+    return GetDeferredDestructionAllowed();
   }
 
   auto ScheduleDestroy() -> void override { buffer->ScheduleDestroy(); }

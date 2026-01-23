@@ -74,17 +74,11 @@ function Thorium.draw()
     Thorium.graphics.useCommands("load")
   end
 
-  print("Starting threads...")
-
   startThreadChannel:push(true)
   startSecondThreadChannel:push(true)
 
-  print("Waiting for threads to finish...")
-
-  threadDoneChannel:demand(1)
-  secondThreadDoneChannel:demand(1)
-
-  print("Drawing meshes...")
+  threadDoneChannel:demand(5)
+  secondThreadDoneChannel:demand(5)
 
   Thorium.graphics.useCommands("gui")
   for i = 1, 4 do

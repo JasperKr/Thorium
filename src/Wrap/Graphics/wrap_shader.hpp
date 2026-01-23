@@ -27,7 +27,6 @@ static const luaL_Reg ShaderLib[] = {
     {"getUniforms", wrap_GetUniforms},
     {"getThreadgroupSize", wrap_GetThreadgroupSize},
     {"getWaveSize", wrap_GetWaveSize},
-    {"release", wrap_Release},
     {nullptr, nullptr} // terminate with nullptr
 };
 

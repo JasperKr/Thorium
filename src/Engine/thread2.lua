@@ -67,7 +67,7 @@ local function draw(i)
 end
 
 while true do
-  if not (canStartChannel:demand(1)) then
+  if not (canStartChannel:demand(5)) then
     break
   end
 
@@ -81,5 +81,16 @@ while true do
   end
   doneChannel:push(true)
 end
+
+for i = 1, drawCount do
+  print(meshes[i]:release())
+  print(meshes[i]:release())
+  print(meshes[i]:release())
+  print(meshes[i]:release())
+  meshes[i] = nil
+end
+
+collectgarbage()
+collectgarbage()
 
 print("THREAD #2 EXITING")

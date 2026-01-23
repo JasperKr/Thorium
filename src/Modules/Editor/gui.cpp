@@ -146,4 +146,17 @@ auto LoadImGuiCursorMap() -> Error {
   return Error::Success();
 }
 
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+std::vector<Graphics::Texture::Texture *> ImGuiTextures{};
+
+auto ShutdownImGui() -> Error {
+  ImGui::DestroyContext();
+
+  for (auto *texture : ImGuiTextures) {
+    texture->release();
+  }
+
+  return Error::Success();
+}
+
 } // namespace Gui

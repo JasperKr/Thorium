@@ -384,8 +384,6 @@ auto wrap_NewBuffer(lua_State *state) -> int {
                       Graphics::StructuredBuffer::StructuredBuffer::GetType(),
                       buffer.get());
 
-  // buffer->release(); // Lua now owns the reference
-
   return 1;
 }
 

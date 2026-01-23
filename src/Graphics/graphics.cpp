@@ -6,8 +6,10 @@
 #include "SDL3/SDL_vulkan.h"
 #include "tl/expected.hpp"
 #include "vulkan/vulkan_core.h"
+#include <atomic>
 #include <cassert>
 #include <cstdint>
+#include <mutex>
 #include <vector>
 
 namespace Graphics {
@@ -16,12 +18,14 @@ GraphicsMutexes GraphicsContext::mutexes = {};
 
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
 
-thread_local inline VkSemaphore globalTimelineSemaphore = nullptr;
-thread_local inline uint64_t currentCPUTimelineValue = 1;
+inline VkSemaphore globalTimelineSemaphore = nullptr;
+std::mutex globalTimelineSemaphoreMutex{};
+inline std::atomic<uint64_t> currentCPUTimelineValue = 1;
 
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
 auto InitializeGlobalTimelineSemaphore(GraphicsContext &context) -> Error {
+  PrintDebug("Initializing global timeline semaphore...");
 
   VkSemaphoreTypeCreateInfo timelineInfo = {
       .sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
@@ -36,6 +40,7 @@ auto InitializeGlobalTimelineSemaphore(GraphicsContext &context) -> Error {
 
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+    std::lock_guard<std::mutex> lock2(globalTimelineSemaphoreMutex);
     auto result = Error::Create(vkCreateSemaphore(
         context.device, &semInfo, nullptr, &globalTimelineSemaphore));
     if (Error::IsError(result)) {
@@ -47,8 +52,9 @@ auto InitializeGlobalTimelineSemaphore(GraphicsContext &context) -> Error {
 }
 
 auto DeInitializeGlobalTimelineSemaphore(GraphicsContext &context) -> void {
-  std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
   if (globalTimelineSemaphore != VK_NULL_HANDLE) {
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+    std::lock_guard<std::mutex> lock2(globalTimelineSemaphoreMutex);
     vkDestroySemaphore(context.device, globalTimelineSemaphore, nullptr);
     globalTimelineSemaphore = VK_NULL_HANDLE;
   }
@@ -58,8 +64,17 @@ auto GetGlobalTimelineSemaphore(GraphicsContext &context) -> VkSemaphore {
   return globalTimelineSemaphore;
 }
 
-auto GetCPUTimelineSemaphoreValue(GraphicsContext &context) -> uint64_t & {
-  return currentCPUTimelineValue;
+auto GetCPUTimelineSemaphoreValue(GraphicsContext &context) -> uint64_t {
+  return currentCPUTimelineValue.load();
+}
+
+auto SetCPUTimelineSemaphoreValue(GraphicsContext &context, uint64_t newValue)
+    -> void {
+  currentCPUTimelineValue.store(newValue);
+}
+
+auto IncrementCPUTimelineSemaphoreValue(GraphicsContext &context) -> uint64_t {
+  return currentCPUTimelineValue.fetch_add(1) + 1;
 }
 
 auto GetCurrentTimelineSemaphoreValue(GraphicsContext &context)
@@ -68,6 +83,7 @@ auto GetCurrentTimelineSemaphoreValue(GraphicsContext &context)
 
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+    std::lock_guard<std::mutex> lock2(globalTimelineSemaphoreMutex);
     auto result = Error::Create(vkGetSemaphoreCounterValue(
         context.device, globalTimelineSemaphore, &completedValue));
 
@@ -77,6 +93,11 @@ auto GetCurrentTimelineSemaphoreValue(GraphicsContext &context)
   }
 
   return completedValue;
+}
+
+auto GetDeferredDestructionAllowed() -> bool & {
+  static bool deferredDestructionAllowed = true;
+  return deferredDestructionAllowed;
 }
 
 static auto FindSurfaceFormat(GraphicsContext &context)

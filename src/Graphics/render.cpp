@@ -10,6 +10,7 @@
 #include "dynamicRendering.hpp"
 #include "graphics.hpp"
 #include <cassert>
+#include <mutex>
 #define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
 #include <algorithm>
@@ -39,21 +40,13 @@ auto UseCommands(const std::string &name) -> void {
 }
 
 static void ResetCommandBuffers(Graphics::GraphicsContext &context) {
-  // Reset command buffers for all render threads
-
-  // for (int i = 0; i < context.renderThreadCount; i++) {
-  //   vkResetCommandBuffer(
-  //       GetCommandBuffer(), // TODO: Fix for multithreading later
-  //       0);
-  // }
-
   auto &cmdBuffers = GlobalStitchInfo.commandBuffers.at(context.frameIndex);
   for (auto &cmdBuffer : cmdBuffers) {
     vkResetCommandBuffer(cmdBuffer, 0);
   }
 }
 
-static void StartRecording(Graphics::GraphicsContext &context) {
+static auto StartRecording(Graphics::GraphicsContext &context) -> Error {
   // Begin command buffer, so recording can start
 
   if (GlobalStitchInfo.commandBuffers.at(context.frameIndex).empty()) {
@@ -74,9 +67,7 @@ static void StartRecording(Graphics::GraphicsContext &context) {
           context.device, &allocInfo,
           &GlobalStitchInfo.commandBuffers.at(context.frameIndex).at(0)));
       if (Error::IsError(result)) {
-        PrintError("Failed to allocate stitch command buffer: {}",
-                   result.ToString());
-        return;
+        return result;
       }
     }
   }
@@ -90,31 +81,16 @@ static void StartRecording(Graphics::GraphicsContext &context) {
   beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
   auto beginResult = Error::Create(vkBeginCommandBuffer(cmdBuffer, &beginInfo));
   if (Error::IsError(beginResult)) {
-    PrintError("Failed to begin stitch command buffer: {}",
-               beginResult.ToString());
-    return;
+    return beginResult;
   }
 
-  // context.commandBuffer = cmdBuffer;
   GetThreadContext().commandBuffer = cmdBuffer;
+
+  return Error::Success();
 }
 
 static auto EndRecording(Graphics::GraphicsContext &context,
                          uint32_t frameIndex) -> Error {
-
-  // Wait for all render threads to finish recording
-  for (int i = 0; i < context.renderThreadCount; i++) {
-
-    // TODO: Wait for:
-    // renderData->frameReady[frameIndex] == true;
-    // for now we assume it's ready immediately since we are single threaded
-  }
-
-  // End command buffer recording
-  // for (int i = 0; i < context.renderThreadCount; i++) {
-  //   vkEndCommandBuffer(
-  //       GetCommandBuffer()); // TODO: Fix for multithreading later
-  // }
 
   auto currentTimelineResult =
       Graphics::GetCurrentTimelineSemaphoreValue(context);
@@ -208,11 +184,18 @@ auto PrepareRecording(Graphics::GraphicsContext &context) -> Error {
                           context.descriptorPools.at(context.frameIndex), 0);
   }
 
-  StartRecording(context);
+  auto result = StartRecording(context);
+
+  if (Error::IsError(result)) {
+    return result;
+  }
+
+  auto *cmdBuffer = GetCommandBuffer();
 
   TransitionPresentToColor(
-      GlobalStitchInfo.commandBuffers.at(context.frameIndex).at(0),
-      context.swapchainInfo.images[context.swapchainImageIndex]);
+      cmdBuffer, context.swapchainInfo.images[context.swapchainImageIndex]);
+
+  vkEndCommandBuffer(cmdBuffer);
 
   return Error::Success();
 }
@@ -264,32 +247,34 @@ auto SubmitCommandBuffers(Graphics::GraphicsContext &context,
     return err;
   }
 
-  VkSemaphore globalTimelineSemaphore = GetGlobalTimelineSemaphore(context);
-  if (globalTimelineSemaphore != VK_NULL_HANDLE) {
-    uint64_t timelineValue = GetCPUTimelineSemaphoreValue(context);
+  {
+    std::lock_guard<std::mutex> lock(Graphics::globalTimelineSemaphoreMutex);
+    VkSemaphore globalTimelineSemaphore = GetGlobalTimelineSemaphore(context);
+    if (globalTimelineSemaphore != VK_NULL_HANDLE) {
+      uint64_t timelineValue = GetCPUTimelineSemaphoreValue(context);
 
-    VkTimelineSemaphoreSubmitInfo timelineInfo{};
-    timelineInfo.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO;
-    timelineInfo.signalSemaphoreValueCount = 1;
-    timelineInfo.pSignalSemaphoreValues = &timelineValue;
+      VkTimelineSemaphoreSubmitInfo timelineInfo{};
+      timelineInfo.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO;
+      timelineInfo.signalSemaphoreValueCount = 1;
+      timelineInfo.pSignalSemaphoreValues = &timelineValue;
 
-    VkSubmitInfo submitTimeline{};
-    submitTimeline.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    submitTimeline.pNext = &timelineInfo;
-    submitTimeline.commandBufferCount = 0; // no commands needed
-    submitTimeline.pCommandBuffers = nullptr;
-    submitTimeline.signalSemaphoreCount = 1;
-    submitTimeline.pSignalSemaphores = &globalTimelineSemaphore;
+      VkSubmitInfo submitTimeline{};
+      submitTimeline.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+      submitTimeline.pNext = &timelineInfo;
+      submitTimeline.commandBufferCount = 0; // no commands needed
+      submitTimeline.pCommandBuffers = nullptr;
+      submitTimeline.signalSemaphoreCount = 1;
+      submitTimeline.pSignalSemaphores = &globalTimelineSemaphore;
 
-    err = Error::Create(vkQueueSubmit(context.graphicsQueue, 1, &submitTimeline,
-                                      VK_NULL_HANDLE));
-    if (Error::IsError(err)) {
-      return err;
+      err = Error::Create(vkQueueSubmit(context.graphicsQueue, 1,
+                                        &submitTimeline, VK_NULL_HANDLE));
+      if (Error::IsError(err)) {
+        return err;
+      }
     }
   }
 
-  uint64_t &timelineValue = GetCPUTimelineSemaphoreValue(context);
-  timelineValue++;
+  IncrementCPUTimelineSemaphoreValue(context);
 
   return Error::Success();
 }
@@ -336,11 +321,17 @@ auto InitializeGraphics(Graphics::GraphicsContext &context) -> Error {
     return error;
   }
 
-  StartRecording(context);
+  auto result = StartRecording(context);
+
+  if (Error::IsError(result)) {
+    return result;
+  }
 
   TransitionPresentToColor(
       GetCommandBuffer(),
       context.swapchainInfo.images[context.swapchainImageIndex]);
+
+  vkEndCommandBuffer(GetCommandBuffer());
 
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
@@ -538,14 +529,15 @@ auto Present(Graphics::GraphicsContext &context) -> Error {
     assert(i < threadRenderdatas.size());
     assert(context.frameIndex < GlobalStitchInfo.commandBuffers.size());
     assert(i < GlobalStitchInfo.commandBuffers.at(context.frameIndex).size());
-    assert((i * 2) + 1 < finalCommandBuffers.size());
+    assert(index + 1 < finalCommandBuffers.size());
 
     auto *stitchBuffer =
         GlobalStitchInfo.commandBuffers.at(context.frameIndex).at(i);
     auto *threadBuffer = threadRenderdatas.at(i).commandBuffer;
 
     // If no barriers were needed for this thread, skip its barrier command buffer
-    if (GlobalStitchInfo.usedCommandBuffers.at(i)) {
+    if (GlobalStitchInfo.usedCommandBuffers.at(i) ||
+        i == 0) { // 0 is present transition
       finalCommandBuffers[index++] = stitchBuffer;
     }
     finalCommandBuffers[index++] = threadBuffer;
@@ -571,7 +563,7 @@ auto Present(Graphics::GraphicsContext &context) -> Error {
   }
 
   TransitionColorToPresent(
-      GetCommandBuffer(),
+      presentTransitionBuffer,
       context.swapchainInfo.images[context.swapchainImageIndex]);
 
   vkEndCommandBuffer(presentTransitionBuffer);

@@ -4,6 +4,7 @@
 #include "Graphics/graphics.hpp"
 #include "Graphics/info.hpp"
 #include "Graphics/render.hpp"
+#include "Graphics/resource.hpp"
 #include "Graphics/shader.hpp"
 #include "Modules/Editor/gui.hpp"
 #include "Modules/config.hpp"
@@ -11,7 +12,6 @@
 #include "Modules/error.hpp"
 #include "Modules/filesystem.hpp"
 #include "Modules/thread.hpp"
-#include "SDL3/SDL_cpuinfo.h"
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -224,7 +224,6 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
   }
 
   Graphics::GraphicsContext context = {};
-  context.renderThreadCount = SDL_GetNumLogicalCPUCores();
 
   PrintDebug("Initializing graphics...");
 
@@ -237,6 +236,11 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
   PrintAlways(Graphics::Info::GetGpuInfoString(context.physicalDevice));
 
   Graphics::SetCurrentGraphicsContext(&context);
+
+  auto error = Graphics::InitializeGlobalTimelineSemaphore(context);
+  if (Error::IsError(error)) {
+    return error;
+  }
 
   PrintDebug("Loading shader modules...");
 
@@ -260,11 +264,6 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
 
   if (Error::IsError(result)) {
     return result;
-  }
-
-  auto error = Graphics::InitializeGlobalTimelineSemaphore(context);
-  if (Error::IsError(error)) {
-    return error;
   }
 
   error = Graphics::LoadBufferModule(context);
@@ -315,8 +314,6 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
       return Error::Create(luaErrorMessage);
     }
 
-    PrintAlways("Frame complete; {}", lua_isnoneornil(state, -1));
-
     // returned value nil == continue, non-nil == exit with code
     if (lua_isnoneornil(state, -1)) {
       lua_pop(state, 1); // pop nil
@@ -329,14 +326,37 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
     }
   }
 
-  PrintInfo("Closing Lua state...");
-  lua_close(state);
-
   PrintInfo("Waiting on device idle...");
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
     vkDeviceWaitIdle(context.device);
   }
+
+  // Force all deferred destructions to happen now
+  Graphics::GetDeferredDestructionAllowed() = false;
+
+  auto shutdownResult = Gui::ShutdownImGui();
+  if (Error::IsError(shutdownResult)) {
+    PrintError("Error during ImGui shutdown: {}", shutdownResult.message);
+  }
+
+  auto currentTimelineResult =
+      Graphics::GetCurrentTimelineSemaphoreValue(context);
+
+  if (Error::IsError(currentTimelineResult)) {
+    return currentTimelineResult.error();
+  }
+
+  uint64_t completedValue = currentTimelineResult.value();
+
+  std::unordered_map<Graphics::QueueID, uint64_t> completedTimelineValues = {
+      {0, completedValue},
+  };
+
+  Graphics::ProcessReleasedResources(context, completedTimelineValues);
+
+  PrintInfo("Closing Lua state...");
+  lua_close(state);
 
   PrintInfo("Deinitializing threading module...");
 

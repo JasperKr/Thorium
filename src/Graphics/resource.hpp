@@ -24,6 +24,11 @@ inline auto CanBeDestroyed( // NOLINTNEXTLINE
     const std::unordered_map<QueueID, uint64_t> &completedTimelineValues,
     const std::unordered_map<QueueID, uint64_t> &resourceTimelineValues)
     -> bool {
+
+  if (!GetDeferredDestructionAllowed()) {
+    return true;
+  }
+
   // NOLINTNEXTLINE
   for (const auto &[queueID, timelineValue] : resourceTimelineValues) {
     auto iterator = completedTimelineValues.find(queueID);

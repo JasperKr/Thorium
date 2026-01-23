@@ -4,6 +4,7 @@
 #include "Math/vector.hpp"
 #include "Modules/bytedata.hpp"
 #include "Modules/error.hpp"
+#include "Modules/object.hpp"
 #include "Modules/type.hpp"
 #include "color.hpp"
 #include <cassert>
@@ -16,14 +17,16 @@ namespace Image {
 
 static const Type type = Type("ImageData");
 
-struct ImageData : Data::ByteData {
+struct ImageData : Object {
 public:
+  ~ImageData() override { internalData = {}; }
+
   auto SetColor(Math::Uvec2 position, const Color &color) -> void;
   auto GetColor(Math::Uvec2 position) -> Color &;
   auto Copy(const ImageData &source) -> void;
-  auto GetDataPtr() -> uint8_t * { return Data::ByteData::GetData(); }
+  auto GetDataPtr() -> uint8_t * { return internalData->GetData(); }
   [[nodiscard]] auto GetSize() const -> size_t {
-    return Data::ByteData::GetSize();
+    return internalData->GetSize();
   }
   [[nodiscard]] auto GetWidth() const -> uint32_t { return width; }
   [[nodiscard]] auto GetHeight() const -> uint32_t { return height; }
@@ -35,18 +38,20 @@ public:
     return Graphics::Format::GetSize(format);
   }
 
+  ImageData(const ImageData &) = delete;
+  ImageData(ImageData &&) = delete;
+  auto operator=(const ImageData &) -> ImageData & = delete;
+  auto operator=(ImageData &&) -> ImageData & = delete;
   // NOLINTNEXTLINE
   ImageData(uint32_t width, uint32_t height, Data::ByteData &byteData,
             VkFormat format)
-      : Data::ByteData(byteData), width(width), height(height), format(format) {
-  }
+      : internalData(&byteData), width(width), height(height), format(format) {}
   // NOLINTNEXTLINE
   ImageData(uint32_t width, uint32_t height, VkFormat format)
-      : Data::ByteData(static_cast<size_t>(width * height *
-                                           Graphics::Format::GetSize(format))),
+      : internalData(Ref<Data::ByteData>::Make(static_cast<size_t>(
+            width * height * Graphics::Format::GetSize(format)))),
         width(width), height(height), format(format) {}
 
-  // TODO: Refactor to return Ref, so we can refcount for lua
   static auto Create(uint32_t width, uint32_t height, VkFormat format)
       -> Result<Ref<ImageData>>;
   static auto Create(uint32_t width, uint32_t height,
@@ -68,6 +73,8 @@ private:
   uint32_t width;
   uint32_t height;
   VkFormat format;
+
+  Ref<Data::ByteData> internalData;
 };
 
 } // namespace Image

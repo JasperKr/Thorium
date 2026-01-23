@@ -8,7 +8,9 @@
 #include "Modules/object.hpp"
 #include "graphics.hpp"
 #include <algorithm>
+#include <atomic>
 #include <cstdint>
+#include <mutex>
 #include <vector>
 #define VK_NO_PROTOTYPES
 #include "array"
@@ -32,13 +34,18 @@ thread_local inline std::array<size_t, FRAMES_IN_FLIGHT> UploadBufferOffsets;
 
 // we'll use staging buffers until upload buffers are initialized
 thread_local inline std::vector<StagingBufferInfo> StagingBuffers;
-thread_local inline VkSemaphore uploadTimeline = nullptr;
-thread_local inline bool moduleInitialized = false;
-thread_local inline uint64_t currentTimelineValue = 0;
+inline std::mutex uploadSemaphoreMutex{};
+inline VkSemaphore uploadSemaphore = nullptr;
+inline bool moduleInitialized = false;
+inline std::atomic<uint64_t> currentTimelineValue = 0;
 
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
 auto LoadBufferModule(GraphicsContext &context) -> Error {
+  if (moduleInitialized) {
+    return Error::Success();
+  }
+
   VkSemaphoreTypeCreateInfo timelineInfo = {
       .sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
       .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
@@ -52,8 +59,9 @@ auto LoadBufferModule(GraphicsContext &context) -> Error {
 
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+    std::lock_guard<std::mutex> lock2(uploadSemaphoreMutex);
     auto result = Error::Create(
-        vkCreateSemaphore(context.device, &semInfo, nullptr, &uploadTimeline));
+        vkCreateSemaphore(context.device, &semInfo, nullptr, &uploadSemaphore));
     if (Error::IsError(result)) {
       return result;
     }
@@ -65,6 +73,10 @@ auto LoadBufferModule(GraphicsContext &context) -> Error {
 }
 
 auto UnloadBufferModule(GraphicsContext &context) -> Error {
+  if (!moduleInitialized) {
+    return Error::Success();
+  }
+
   for (auto &stagingBuffer : StagingBuffers) {
     if (stagingBuffer.buffer != VK_NULL_HANDLE) {
       if (stagingBuffer.memory != VK_NULL_HANDLE) {
@@ -83,10 +95,11 @@ auto UnloadBufferModule(GraphicsContext &context) -> Error {
     }
   }
 
-  if (uploadTimeline != nullptr) {
+  if (uploadSemaphore != nullptr) {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    vkDestroySemaphore(context.device, uploadTimeline, nullptr);
-    uploadTimeline = nullptr;
+    std::lock_guard<std::mutex> lock2(uploadSemaphoreMutex);
+    vkDestroySemaphore(context.device, uploadSemaphore, nullptr);
+    uploadSemaphore = nullptr;
   }
 
   moduleInitialized = false;
@@ -100,8 +113,9 @@ auto FlushBufferUploads(GraphicsContext &context) -> Error {
   uint64_t completedValue = 0;
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+    std::lock_guard<std::mutex> lock2(uploadSemaphoreMutex);
     auto result = Error::Create(vkGetSemaphoreCounterValue(
-        context.device, uploadTimeline, &completedValue));
+        context.device, uploadSemaphore, &completedValue));
     if (Error::IsError(result)) {
       return result;
     }
@@ -213,7 +227,7 @@ auto Buffer::UploadLarge(GraphicsContext &context,
   StagingBufferInfo stagingInfo = {};
   stagingInfo.buffer = stagingBuffer;
   stagingInfo.memory = stagingMemory;
-  stagingInfo.timelineValue = ++currentTimelineValue;
+  stagingInfo.timelineValue = currentTimelineValue.fetch_add(1) + 1;
 
   StagingBuffers.emplace_back(stagingInfo);
 
@@ -356,13 +370,6 @@ auto Buffer::Upload(GraphicsContext &context,
 
 auto Buffer::Create(GraphicsContext &context, BufferCreationInfo info)
     -> Result<Ref<Buffer>> {
-  if (!moduleInitialized) {
-    auto result = LoadBufferModule(context);
-    if (Error::IsError(result)) {
-      return result.AsUnexpected();
-    }
-  }
-
   if (info.size == 0) {
     return Error::Unexpected("Cannot create buffer with size 0.");
   }
@@ -444,6 +451,7 @@ auto Buffer::Destroy(GraphicsContext &context) const -> void {
     vmaUnmapMemory(context.vmaAllocator, memory);
   }
 
+  PrintAlways("Destroying buffer with handle {}", (void *)handle);
   vmaDestroyBuffer(context.vmaAllocator, handle, memory);
 }
 

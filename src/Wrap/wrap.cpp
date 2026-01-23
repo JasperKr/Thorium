@@ -8,6 +8,8 @@
 
 #include <cstdint>
 #include <iostream>
+#include <set>
+#include <string>
 extern "C" {
 #include <lauxlib.h>
 #include <lua.h>
@@ -26,15 +28,20 @@ namespace LuaWrap {
 static auto wrap_gc(lua_State *state) -> int {
   // Get lua traceback from debug library
 
-  Proxy *proxy = ProxyFromLua(state, 1);
+  // NOLINTNEXTLINE
+  auto *proxy = static_cast<Proxy *>(lua_touserdata(state, 1));
 
   if (proxy != nullptr) {
-    if (proxy->type == nullptr) { // Collecting module.
+    if (proxy->object == nullptr) {
       return 0;
     }
 
     proxy->object->release();
     proxy->object = nullptr;
+
+    if (proxy->type == nullptr) { // Collecting module.
+      return 0;
+    }
   }
   return 0;
 }
@@ -97,8 +104,7 @@ static auto wrap_eq(lua_State *state) -> int {
 }
 
 static auto wrap_release(lua_State *state) -> int {
-  PrintAlways("Releasing object");
-  Proxy *proxy = ProxyFromLua(state, 1);
+  auto *proxy = static_cast<Proxy *>(lua_touserdata(state, 1));
 
   if (proxy == nullptr) {
     lua_pushboolean(state, 0);
@@ -108,8 +114,8 @@ static auto wrap_release(lua_State *state) -> int {
   Object *object = proxy->object;
 
   if (object != nullptr) {
-    proxy->object = nullptr;
     object->release();
+    proxy->object = nullptr;
 
     // load object storage table
     LoadStorageTable(state, "ThoriumObjectStorage"); // [storage]
@@ -190,6 +196,8 @@ auto LuaTrampoline(lua_State *state) -> int {
   }
 }
 
+static const Type moduleType("MODULE");
+
 auto RegisterLuaModule(lua_State *state, const LuaModule &module) -> void {
   if (module.Functions == nullptr) {
     std::cerr << "Module " << module.Name << " has no functions to register."
@@ -201,8 +209,7 @@ auto RegisterLuaModule(lua_State *state, const LuaModule &module) -> void {
 
   // Create userdata for the module NOLINTNEXTLINE
   auto *proxy = (Proxy *)lua_newuserdata(state, sizeof(Proxy));
-  proxy->type = nullptr;
-  // proxy->object = m.module; // TODO: idk...
+  proxy->type = &moduleType;
 
   const auto *name = module.Name.c_str();
 
@@ -290,7 +297,7 @@ auto RegisterLuaType(lua_State *state, const Type *type,
                      const luaL_Reg *functions) -> void {
 
   if (type == nullptr) {
-    std::cerr << "Cannot register Lua type: type is null" << "\n";
+    PrintError("Cannot register Lua type: type is null");
     return;
   }
 
@@ -317,10 +324,22 @@ auto RegisterLuaType(lua_State *state, const Type *type,
   lua_pushcfunction(state, wrap_release);
   lua_setfield(state, -2, "release"); // mt.release = wrap_release [mt]
 
+  static const std::set<std::string> ReservedNames = {
+      "__gc", "__index", "__tostring", "type", "typeof", "__eq", "release",
+  };
+
   // Register functions
   if (functions != nullptr) {
     const luaL_Reg *func = functions;
     while (func->name != nullptr) {
+      // Check for reserved names
+      if (ReservedNames.contains(func->name)) {
+        PrintError("Cannot register Lua type {}: function name '{}' is "
+                   "reserved.",
+                   type->GetName(), func->name);
+        func++; // NOLINT, functions are nullptr-terminated
+        continue;
+      }
 #ifndef NDEBUG // If debug build
       // Wrap function in trampoline to catch exceptions
       lua_pushlightuserdata(
@@ -340,6 +359,12 @@ auto RegisterLuaType(lua_State *state, const Type *type,
 }
 
 auto SetupLuaType(lua_State *state, const Type *type, Object *object) -> void {
+
+  if (object == nullptr) {
+    lua_pushnil(state);
+    return;
+  }
+
   // NOLINTNEXTLINE
   auto *proxy = (Proxy *)lua_newuserdata(state, sizeof(Proxy)); // [userdata]
   proxy->type = type;
@@ -376,14 +401,16 @@ auto PushObject(lua_State *state, const Type *type, Object *object) -> void {
   }
 
   // fetch permanent object storage table
-  LoadStorageTable(state, "ThoriumObjectStorage"); // [storage]
+  LoadOrCreateStorageTable(state, "ThoriumObjectStorage"); // [storage]
 
   if (lua_isnoneornil(state, -1)) {
     // No storage table
 
     lua_pop(state, 1); // Remove nil [empty]
 
-    SetupLuaType(state, type, object); // [userdata]
+    lua_pushnil(state); // Push nil since we cannot store the object
+
+    PrintError("PushObject: storage table missing, cannot store object.");
     return;
   }
 
@@ -392,9 +419,12 @@ auto PushObject(lua_State *state, const Type *type, Object *object) -> void {
   lua_pushlightuserdata(state, (void *)key); // [storage, key] NOLINT
   lua_gettable(state, -2);                   // [storage, value]
 
-  if (lua_type(state, -1) != LUA_TUSERDATA) {
+  if (lua_type(state, -1) != LUA_TLIGHTUSERDATA &&
+      lua_type(state, -1) != LUA_TUSERDATA) {
     // No existing userdata
     lua_pop(state, 1); // Remove nil [storage]
+
+    PrintAlways("Pushing object of key {} to Lua", (void *)(object));
 
     // Create new userdata
     SetupLuaType(state, type, object); // [storage, userdata]

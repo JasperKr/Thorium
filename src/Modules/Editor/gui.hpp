@@ -1,12 +1,14 @@
 #pragma once
 
 #include "Graphics/shader.hpp"
+#include "Graphics/texture.hpp"
 #include "Modules/Peripherals/mouse.hpp"
 #include "Modules/error.hpp"
 #include "SDL3/SDL_keycode.h"
 #include "guiState.h"
 #include "imgui.h"
 #include <string>
+#include <vector>
 
 extern "C" {
 #include <lauxlib.h>
@@ -341,6 +343,10 @@ inline auto GetImGuiCursorMap()
   return imgui_cursor_to_mouse_cursor;
 }
 
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+extern std::vector<Graphics::Texture::Texture *> ImGuiTextures;
+
 auto LoadImGuiCursorMap() -> Error;
+auto ShutdownImGui() -> Error;
 
 } // namespace Gui

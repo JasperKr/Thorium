@@ -832,7 +832,6 @@ auto wrap_NewTexture(lua_State *state) -> int {
   auto texture = result.value();
 
   LuaWrap::PushObject(state, type, texture.get());
-  // texture->release(); // Retained by lua now
 
   return 1;
 }

@@ -35,7 +35,6 @@ static const luaL_Reg MeshLib[] = {
     {"getIndexCount", wrap_GetIndexCount},
     {"setDrawRange", wrap_SetDrawRange},
     {"getDrawRange", wrap_GetDrawRange},
-    {"release", wrap_Release},
     {nullptr, nullptr} // terminate with nullptr
 };
 

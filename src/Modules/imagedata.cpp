@@ -325,7 +325,7 @@ auto ImageData::SetColor(Math::Uvec2 position, const Color &color) -> void {
   auto funcIterator = formatFunctionMap.find(format);
   if (funcIterator != formatFunctionMap.end()) {
     const FormatFunctions &functions = funcIterator->second;
-    functions.set(color, &GetData()[index]);
+    functions.set(color, &GetDataPtr()[index]);
   } else {
     // Unsupported format, handle error as needed
   }
@@ -339,7 +339,7 @@ auto ImageData::GetColor(Math::Uvec2 position) -> Color & {
   static Color outColor; // NOLINT
   if (funcIterator != formatFunctionMap.end()) {
     const FormatFunctions &functions = funcIterator->second;
-    functions.get(&GetData()[index], outColor);
+    functions.get(&GetDataPtr()[index], outColor);
     return outColor;
   }
 
@@ -349,18 +349,14 @@ auto ImageData::GetColor(Math::Uvec2 position) -> Color & {
 
 auto ImageData::Create(uint32_t width, uint32_t height, VkFormat format)
     -> Result<Ref<ImageData>> {
-  size_t dataSize = static_cast<size_t>(width) * static_cast<size_t>(height) *
-                    Graphics::Format::GetSize(format);
-  auto byteData = Data::ByteData(dataSize);
-
-  return Ref<ImageData>::Make(width, height, byteData, format);
+  return Ref<ImageData>::Make(width, height, format);
 }
 
 auto ImageData::Create(uint32_t width, uint32_t height,
                        const std::span<uint8_t> &srcData, VkFormat format)
     -> Result<Ref<ImageData>> {
   auto imgdata = Ref<ImageData>::Make(width, height, format);
-  std::memcpy(imgdata->GetData(), srcData.data(), srcData.size());
+  std::memcpy(imgdata->GetDataPtr(), srcData.data(), srcData.size());
   return imgdata;
 }
 

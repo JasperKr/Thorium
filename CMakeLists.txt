@@ -321,6 +321,10 @@ target_link_libraries(Thorium
         fastgltf
 )
 
+target_link_options(Thorium PRIVATE
+    $<$<CONFIG:Debug>:-rdynamic>
+)
+
 if (WIN32)
     target_link_libraries(Thorium PRIVATE dbghelp)
 endif()

@@ -38,6 +38,8 @@ auto Thread::Close(ThreadStatus status, const std::string &message) -> void {
     state = nullptr;
   }
 
+  Graphics::Threading::Deinitialize(*Graphics::GetCurrentGraphicsContext());
+
   {
     std::lock_guard<std::mutex> lock(statusMutex);
     this->status = status;

@@ -91,7 +91,9 @@ struct Texture : Object, Barrier::GraphicsResource {
   }
 
   auto ScheduleDestroy() -> void override;
-  auto UseDeferredDestruction() const -> bool override { return true; }
+  auto UseDeferredDestruction() const -> bool override {
+    return GetDeferredDestructionAllowed();
+  }
   auto Destroy(GraphicsContext &context) const -> void;
 
   Texture() = default;

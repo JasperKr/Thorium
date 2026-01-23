@@ -70,7 +70,9 @@ struct Buffer : Object, Barrier::GraphicsResource {
 
   // Release the resources for safe automatic destruction later
   auto ScheduleDestroy() -> void override;
-  auto UseDeferredDestruction() const -> bool override { return true; }
+  auto UseDeferredDestruction() const -> bool override {
+    return GetDeferredDestructionAllowed();
+  }
 
   // Destroy the buffer immediately, use with caution
   auto Destroy(GraphicsContext &context) const -> void;

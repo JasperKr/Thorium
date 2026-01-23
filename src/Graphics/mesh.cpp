@@ -20,8 +20,15 @@
 namespace Graphics {
 
 auto Mesh::ScheduleDestroy() -> void {
-  VertexBuffer->ScheduleDestroy();
-  IndexBuffer->ScheduleDestroy();
+  if (VertexBuffer.get() == nullptr || IndexBuffer.get() == nullptr) {
+    PrintError("Mesh resources already released or were never allocated.");
+    return;
+  }
+
+  PrintAlways("Scheduling mesh for destruction.");
+
+  VertexBuffer->release();
+  IndexBuffer->release();
 }
 
 static auto VertexFormatSize(VertexFormat &format, uint32_t binding)
@@ -149,11 +156,6 @@ auto Mesh::Create(GraphicsContext &context, VertexFormat vertexFormat,
   mesh->DrawRange.Count = mesh->VertexCount;
 
   return meshData;
-}
-
-auto Mesh::Release() const -> void {
-  VertexBuffer->ScheduleDestroy();
-  IndexBuffer->ScheduleDestroy();
 }
 
 [[nodiscard]] auto Mesh::GetVertexFormat() const -> VertexFormat {

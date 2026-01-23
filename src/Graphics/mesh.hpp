@@ -38,14 +38,15 @@ static const Type meshType = Type("Mesh");
 
 struct Mesh : Object {
   auto ScheduleDestroy() -> void override;
+  auto UseDeferredDestruction() const -> bool override {
+    return Graphics::GetDeferredDestructionAllowed();
+  }
 
   static auto Create(GraphicsContext &context, VertexFormat vertexFormat,
                      const std::span<uint8_t> &vertexData) -> Result<Ref<Mesh>>;
 
   static auto Create(GraphicsContext &context, VertexFormat vertexFormat,
                      uint64_t vertexCount) -> Result<Ref<Mesh>>;
-
-  auto Release() const -> void;
 
   [[nodiscard]] auto GetVertexFormat() const -> VertexFormat;
 

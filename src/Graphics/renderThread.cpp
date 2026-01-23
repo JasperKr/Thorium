@@ -212,12 +212,12 @@ auto Initialize(Graphics::GraphicsContext &context) -> Error {
     return poolCreationResult;
   }
 
-  auto error = Graphics::LoadBufferModule(context);
-  if (Error::IsError(error)) {
-    return error;
-  }
+  // auto error = Graphics::LoadBufferModule(context);
+  // if (Error::IsError(error)) {
+  //   return error;
+  // }
 
-  error = InitializeUniformBufferModule(context);
+  auto error = InitializeUniformBufferModule(context);
   if (Error::IsError(error)) {
     return error;
   }
@@ -240,12 +240,13 @@ auto Initialize(Graphics::GraphicsContext &context) -> Error {
 }
 
 auto Deinitialize(Graphics::GraphicsContext &context) -> void {
-  DeInitializeUniformBufferModule(context);
-  auto err = Graphics::UnloadBufferModule(context);
+  // DeInitializeUniformBufferModule(context);
+  ThreadUniformBuffers.clear();
+  // auto err = Graphics::UnloadBufferModule(context);
 
-  if (Error::IsError(err)) {
-    PrintAlways("Error deinitializing buffer module: {}", err.message);
-  }
+  // if (Error::IsError(err)) {
+  //   PrintAlways("Error deinitializing buffer module: {}", err.message);
+  // }
 }
 
 auto GetGeneratedCommands() -> std::vector<std::string> {

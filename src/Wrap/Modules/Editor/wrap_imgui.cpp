@@ -9,10 +9,10 @@
 #include "Modules/Editor/gui.hpp"
 #include "Modules/Peripherals/keyboard.hpp"
 #include "Modules/Peripherals/mouse.hpp"
-#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/imagedata.hpp"
 #include "Modules/object.hpp"
+#include "Modules/utils.hpp"
 #include "imgui.h"
 #include "vulkan/vulkan_core.h"
 #include <cstddef>
@@ -134,6 +134,8 @@ inline auto HandleImguiCreateTextureEvent(Graphics::GraphicsContext &context,
   texture->SetFilter(VK_FILTER_NEAREST, VK_FILTER_NEAREST,
                      VK_SAMPLER_MIPMAP_MODE_NEAREST);
 
+  Gui::ImGuiTextures.emplace_back(texture);
+
   auto pixelSpan = std::span<uint8_t>(
       tex->Pixels,
       static_cast<size_t>(tex->Width * tex->Height * tex->BytesPerPixel));
@@ -146,10 +148,11 @@ inline auto HandleImguiCreateTextureEvent(Graphics::GraphicsContext &context,
     return imagedataResult.error();
   }
 
-  auto imagedata = *imagedataResult.value();
-  std::memcpy(imagedata.GetDataPtr(), pixelSpan.data(), pixelSpan.size_bytes());
+  auto imagedata = imagedataResult.value();
+  std::memcpy(imagedata->GetDataPtr(), pixelSpan.data(),
+              pixelSpan.size_bytes());
 
-  auto setPixelsResult = texture->SetPixels(context, imagedata);
+  auto setPixelsResult = texture->SetPixels(context, *imagedata);
 
   if (Error::IsError(setPixelsResult)) {
     return setPixelsResult;
@@ -164,8 +167,17 @@ inline auto HandleImguiDestroyTextureEvent(ImTextureData *tex) -> Error {
   auto *texture = // NOLINTNEXTLINE reinterpret-cast
       reinterpret_cast<Graphics::Texture::Texture *>(tex->GetTexID());
 
+  if (texture == nullptr) {
+    return Error::Create("Attempted to destroy null ImGui texture.");
+  }
+
   texture->release(); // Release ImGui reference
   tex->SetTexID(0);
+
+  Utils::UnorderedErase(Gui::ImGuiTextures,
+                        [&](Graphics::Texture::Texture *current) -> bool {
+                          return current == texture;
+                        });
 
   tex->SetStatus(ImTextureStatus_Destroyed);
 

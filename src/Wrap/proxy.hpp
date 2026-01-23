@@ -24,13 +24,18 @@ inline auto ProxyFromLua(lua_State *state, int index) -> Proxy * {
     return nullptr;
   }
 
-  if (proxy->object == nullptr) {
-    PrintWarning("ProxyFromLua: proxy invalid object at index {}", index);
+  if (proxy->type == nullptr) {
+    PrintWarning("ProxyFromLua: proxy invalid type at index {}", index);
     return nullptr;
   }
 
-  if (proxy->type == nullptr) {
-    PrintWarning("ProxyFromLua: proxy invalid type at index {}", index);
+  if (proxy->type->GetName() == "MODULE") {
+    // Modules do not have objects
+    return proxy;
+  }
+
+  if (proxy->object == nullptr) {
+    PrintWarning("ProxyFromLua: proxy invalid object at index {}", index);
     return nullptr;
   }
 

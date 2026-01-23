@@ -4,9 +4,10 @@
 #include <atomic>
 
 class Object {
-public:
+protected:
   Object() = default;
 
+public:
   Object(const Object &) = delete;
   Object(Object &&) = delete;
 
@@ -22,7 +23,7 @@ public:
   [[nodiscard]] virtual auto GetInstanceType() const -> Type const * = 0;
 
   void retain() const;
-  void release();
+  auto release() -> bool;
 
   [[nodiscard]] auto getReferenceCount() const -> int;
 

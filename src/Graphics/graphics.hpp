@@ -82,8 +82,6 @@ struct GraphicsContext {
   uint64_t currentFrame;
   uint32_t frameIndex;
   uint32_t swapchainImageIndex;
-
-  int32_t renderThreadCount;
 };
 
 struct ThreadContext {
@@ -112,7 +110,14 @@ auto GetCurrentTimelineSemaphoreValue(GraphicsContext &context)
     -> Result<uint64_t>;
 auto InitializeGlobalTimelineSemaphore(GraphicsContext &context) -> Error;
 auto DeInitializeGlobalTimelineSemaphore(GraphicsContext &context) -> void;
-auto GetCPUTimelineSemaphoreValue(GraphicsContext &context) -> uint64_t &;
+auto GetCPUTimelineSemaphoreValue(GraphicsContext &context) -> uint64_t;
+auto SetCPUTimelineSemaphoreValue(GraphicsContext &context, uint64_t newValue)
+    -> void;
+auto IncrementCPUTimelineSemaphoreValue(GraphicsContext &context) -> uint64_t;
 auto GetGlobalTimelineSemaphore(GraphicsContext &context) -> VkSemaphore;
+auto GetDeferredDestructionAllowed() -> bool &;
+
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+extern std::mutex globalTimelineSemaphoreMutex;
 
 } // namespace Graphics
