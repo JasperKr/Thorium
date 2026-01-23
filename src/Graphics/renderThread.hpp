@@ -30,9 +30,8 @@ struct RenderThreadData {
 
   VkCommandBuffer commandBuffer = nullptr;
 
-#ifndef NDEBUG // If debug mode is not not defined..
   std::string name;
-#endif
+  uint64_t id;
 };
 
 const Type renderInfoType = Type("Internal RenderThreadInfo");
@@ -74,12 +73,20 @@ struct AquireInfo {
 };
 
 // Aquire a command buffer for the current thread, must have rendering permission
-
 auto AquireCommandBuffer(Graphics::GraphicsContext &context,
                          const AquireInfo &info)
     -> Result<Ref<RenderThreadInfo>>;
+
+// Submit the commands recorded on the current thread
 auto SubmitCommands(Graphics::GraphicsContext &context) -> Error;
+
+// Initialize the render threading module
 auto Initialize(Graphics::GraphicsContext &context) -> Error;
+
+// Deinitialize the render threading module
 auto Deinitialize(Graphics::GraphicsContext &context) -> void;
+
+// Get all generated command names
+auto GetGeneratedCommands() -> std::vector<std::string>;
 
 } // namespace Graphics::Threading

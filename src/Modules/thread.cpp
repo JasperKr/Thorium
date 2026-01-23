@@ -32,11 +32,33 @@ auto Thread::Create(const std::string &script) -> Ref<Thread> {
   return thread;
 }
 
+auto Thread::Close(ThreadStatus status, const std::string &message) -> void {
+  if (state != nullptr) {
+    lua_close(state);
+    state = nullptr;
+  }
+
+  {
+    std::lock_guard<std::mutex> lock(statusMutex);
+    this->status = status;
+    this->errorMessage = message;
+  }
+
+  if (status == ThreadStatus::Error) {
+    PrintWarning("Thread encountered an error: {}", message);
+    Event::Push(Event::Event{
+        .Name = "threaderror",
+        .Values = {message},
+    });
+  }
+}
+
 auto Thread::Run(Thread *thread,
                  const std::vector<LuaWrap::Data::LuaType> &launchArguments,
                  int count) -> void {
   lua_State *state = luaL_newstate();
   luaL_openlibs(state);
+  thread->state = state;
 
   lua_getglobal(state, "package");
   lua_getfield(state, -1, "path");
@@ -55,17 +77,7 @@ auto Thread::Run(Thread *thread,
       Graphics::Threading::Initialize(*Graphics::GetCurrentGraphicsContext());
 
   if (Error::IsError(err)) {
-    PrintAlways("Error initializing graphics thread module: {}", err.message);
-    {
-      std::lock_guard<std::mutex> lock(thread->statusMutex);
-      thread->status = ThreadStatus::Error;
-      thread->errorMessage = err.message;
-    }
-    Event::Push(Event::Event{
-        .Name = "threaderror",
-        .Values = {thread->errorMessage},
-    });
-    lua_close(state);
+    thread->Close(ThreadStatus::Error, err.message);
     return;
   }
 
@@ -95,20 +107,7 @@ auto Thread::Run(Thread *thread,
     auto error = LuaWrap::PushVarargs(state, launchArguments, count);
 
     if (Error::IsError(error)) {
-      PrintAlways("Error pushing launch arguments: {}", error.message);
-
-      {
-        std::lock_guard<std::mutex> lock(thread->statusMutex);
-        thread->status = ThreadStatus::Error;
-        thread->errorMessage = error.message;
-      }
-
-      Event::Push(Event::Event{
-          .Name = "threaderror",
-          .Values = {thread->errorMessage},
-      });
-
-      lua_close(state);
+      thread->Close(ThreadStatus::Error, error.message);
       return;
     }
 
@@ -128,33 +127,15 @@ auto Thread::Run(Thread *thread,
     const auto *luaErrorMessage = lua_tostring(state, -1);
     lua_pop(state, 1);
 
-    PrintAlways("Thread encountered an error: {}", (luaErrorMessage != nullptr)
-                                                       ? luaErrorMessage
-                                                       : "Unknown Lua error");
-
-    {
-      std::lock_guard<std::mutex> lock(thread->statusMutex);
-      thread->status = ThreadStatus::Error;
-      thread->errorMessage =
-          (luaErrorMessage != nullptr) ? luaErrorMessage : "Unknown Lua error";
-    }
-
-    PrintAlways("Pushing thread error event to main thread.");
-
-    Event::Push(Event::Event{
-        .Name = "threaderror",
-        .Values = {thread->errorMessage},
-    });
+    thread->Close(ThreadStatus::Error, luaErrorMessage != nullptr
+                                           ? std::string(luaErrorMessage)
+                                           : "Unknown Lua error occurred.");
+    return;
   }
 
   PrintAlways("Thread finished execution.");
 
-  {
-    std::lock_guard<std::mutex> lock(thread->statusMutex);
-    thread->status = ThreadStatus::Stopped;
-  }
-
-  lua_close(state);
+  thread->Close(ThreadStatus::Stopped, "");
 }
 
 auto Thread::Start(const std::vector<LuaWrap::Data::LuaType> &launchArguments,

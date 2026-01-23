@@ -39,7 +39,9 @@ local function draw()
 end
 
 while true do
-  canStartChannel:demand()
+  if not (canStartChannel:demand(1)) then
+    break
+  end
 
   Thorium.graphics.demandRenderingPermission()
   Thorium.graphics.aquireGraphics("gui")
@@ -51,3 +53,5 @@ while true do
 
   Thorium.graphics.submitGraphics()
 end
+
+print("THREAD #1 EXITING")

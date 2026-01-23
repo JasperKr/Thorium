@@ -315,8 +315,10 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
       return Error::Create(luaErrorMessage);
     }
 
+    PrintAlways("Frame complete; {}", lua_isnoneornil(state, -1));
+
     // returned value nil == continue, non-nil == exit with code
-    if (lua_isnil(state, -1)) {
+    if (lua_isnoneornil(state, -1)) {
       lua_pop(state, 1); // pop nil
     } else {
       int exitCode = static_cast<int>(lua_tointeger(state, -1));
@@ -327,32 +329,49 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
     }
   }
 
+  PrintInfo("Closing Lua state...");
   lua_close(state);
 
+  PrintInfo("Waiting on device idle...");
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
     vkDeviceWaitIdle(context.device);
   }
 
-  result = FlushBufferUploads(context);
-  if (Error::IsError(result)) {
-    return result;
-  }
+  PrintInfo("Deinitializing threading module...");
+
+  // result = FlushBufferUploads(context);
+  // if (Error::IsError(result)) {
+  //   return result;
+  // }
 
   Threading::UnloadModule();
+
+  PrintInfo("Deinitializing graphics...");
+
   Graphics::DeInitializeUniformBufferModule(context);
+
+  PrintInfo("Unloading buffer module...");
 
   result = Graphics::UnloadBufferModule(context);
   if (Error::IsError(result)) {
     return result;
   }
 
+  PrintInfo("Deinitializing global timeline semaphore...");
+
   DeInitializeGlobalTimelineSemaphore(context);
+
+  PrintInfo("Unloading shader modules...");
 
   Graphics::Shader::UnloadModule(context);
 
-  Graphics::Deinitialize(context);
+  PrintInfo("Destroying rendertargets...");
   Graphics::RenderTarget::Destroy(context);
+
+  PrintInfo("Destroying graphics context...");
+
+  Graphics::Deinitialize(context);
 
   PrintInfo("App shutdown complete.");
 

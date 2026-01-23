@@ -67,7 +67,10 @@ local function draw(i)
 end
 
 while true do
-  canStartChannel:demand()
+  if not (canStartChannel:demand(1)) then
+    break
+  end
+
   Thorium.graphics.demandRenderingPermission()
 
   for i = 1, drawCount do
@@ -78,3 +81,5 @@ while true do
   end
   doneChannel:push(true)
 end
+
+print("THREAD #2 EXITING")

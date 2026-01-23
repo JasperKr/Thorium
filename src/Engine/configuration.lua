@@ -8,5 +8,5 @@ function Thorium.config(config)
   config.filesystem.identity = "ConfiguredIdentity"
 
   -- "debug" > "info" > "warning" > "error" > "fatal"
-  config.loglevel = "warning"
+  config.loglevel = "info"
 end

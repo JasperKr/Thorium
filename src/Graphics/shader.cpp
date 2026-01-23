@@ -87,7 +87,6 @@ auto LoadModule() -> Error {
 }
 
 void UnloadModule(Graphics::GraphicsContext &context) {
-  std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
   DefaultShaderModule->Destroy(context.device);
 
   if (GlobalSlangSession != nullptr) {

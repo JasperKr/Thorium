@@ -54,6 +54,7 @@ private:
   static auto Run(Thread *thread,
                   const std::vector<LuaWrap::Data::LuaType> &launchArguments,
                   int count) -> void;
+  auto Close(ThreadStatus status, const std::string &message) -> void;
 
   std::string script;
   lua_State *luaState = nullptr;
@@ -62,6 +63,7 @@ private:
   mutable std::mutex statusMutex;
   ThreadStatus status{ThreadStatus::Stopped};
   std::string errorMessage;
+  lua_State *state = nullptr;
 };
 
 } // namespace Threading

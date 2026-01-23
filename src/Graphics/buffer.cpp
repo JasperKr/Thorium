@@ -452,7 +452,7 @@ auto Buffer::ScheduleDestroy() -> void {
     return;
   }
 
-  ReleasedBuffers.emplace_back(this);
+  ScheduleDestruction(this);
   released = true;
 }
 

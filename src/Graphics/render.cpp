@@ -5,6 +5,7 @@
 #include "Graphics/resource.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
+#include "Modules/utils.hpp"
 #include "buffer.hpp"
 #include "dynamicRendering.hpp"
 #include "graphics.hpp"
@@ -360,7 +361,11 @@ GetOrderedCommands(GraphicsContext &context,
       unorderedThreadRenderdatas;
 
   {
-    std::lock_guard<std::mutex> lock(Threading::ResultsMutex);
+    std::vector<Ref<Threading::RenderThreadInfo>> tempResults;
+    {
+      std::lock_guard<std::mutex> lock(Threading::ResultsMutex);
+      tempResults = Threading::Results;
+    }
     for (auto &threadInfo : Threading::Results) {
       // Wait for thread to finish recording
       std::unique_lock<std::mutex> lock(threadInfo->availabilityMutex);
@@ -371,8 +376,6 @@ GetOrderedCommands(GraphicsContext &context,
       unorderedThreadRenderdatas[threadInfo->threadData.key].emplace_back(
           threadInfo->threadData);
     }
-
-    Threading::Results.clear();
   }
 
   int idx = 0;
@@ -382,35 +385,32 @@ GetOrderedCommands(GraphicsContext &context,
       std::ranges::sort(found->second,
                         [](const Threading::RenderThreadData &first,
                            const Threading::RenderThreadData &second) -> bool {
+                          if (first.priority == second.priority) {
+                            return first.id < second.id;
+                          }
                           return first.priority > second.priority;
                         });
 
       for (auto &data : found->second) {
         threadRenderdatas.emplace_back(data);
+
+        Utils::UnorderedErase(
+            Threading::Results,
+            [&](const Ref<Threading::RenderThreadInfo> &info) -> bool {
+              return info->threadData.id == data.id;
+            });
       }
     } else {
 #ifndef NDEBUG
-      PrintWarning("Missing command buffer for '{}' (key: {})",
-                   GlobalStitchInfo.orderingNames.at(idx), key);
+      return Error::Createf("Missing command buffer for '{}' (key: {})",
+                            GlobalStitchInfo.orderingNames.at(idx), key);
 #else
-      PrintWarning("Missing command buffer for key {}", key);
+      return Error::Createf("Missing command buffer for key {}", key);
 #endif
     }
 
     idx++;
   }
-
-#ifndef NDEBUG
-  GlobalStitchInfo.orderingNames.clear();
-
-  // Check for any graphics work that was not included in the ordering keys
-  for (auto &[key, datas] : unorderedThreadRenderdatas) {
-    auto iter = std::ranges::find(GlobalStitchInfo.orderingKeys, key);
-    if (iter == GlobalStitchInfo.orderingKeys.end()) {
-      PrintWarning("Thread command buffer '{}' Is never used.", datas[0].name);
-    }
-  }
-#endif
 
   // Insert a command buffer before each recorded command buffer to handle resource barriers
   // And one at the end to transition the swapchain image to present

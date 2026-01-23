@@ -11,6 +11,7 @@
 #include "vulkan/vulkan_core.h"
 #include <array>
 #include <cassert>
+#include <cstdint>
 #include <functional>
 #include <mutex>
 #include <string>
@@ -45,6 +46,7 @@ thread_local inline std::array<std::vector<VkCommandBuffer>, FRAMES_IN_FLIGHT>
     ThreadCommandBuffers;
 thread_local inline uint64_t lastThreadFrame;
 thread_local inline std::vector<VkCommandBuffer> frameCommandBufferCache;
+inline std::atomic<uint64_t> threadDataIDCounter = 0;
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
 auto AquireCommandBuffer(Graphics::GraphicsContext &context,
@@ -70,9 +72,8 @@ auto AquireCommandBuffer(Graphics::GraphicsContext &context,
   threadInfo->currentlyRecording = true;
   threadInfo->threadData.key = std::hash<std::string>()(info.name);
   threadInfo->threadData.priority = info.priority;
-#ifndef NDEBUG
   threadInfo->threadData.name = info.name;
-#endif
+  threadInfo->threadData.id = threadDataIDCounter.fetch_add(1);
 
   {
     std::lock_guard<std::mutex> lock(ResultsMutex);
@@ -245,6 +246,17 @@ auto Deinitialize(Graphics::GraphicsContext &context) -> void {
   if (Error::IsError(err)) {
     PrintAlways("Error deinitializing buffer module: {}", err.message);
   }
+}
+
+auto GetGeneratedCommands() -> std::vector<std::string> {
+  std::lock_guard<std::mutex> lock(ResultsMutex);
+  std::vector<std::string> commandNames;
+  commandNames.reserve(Results.size());
+
+  for (const auto &info : Results) {
+    commandNames.emplace_back(info->threadData.name);
+  }
+  return commandNames;
 }
 
 } // namespace Graphics::Threading

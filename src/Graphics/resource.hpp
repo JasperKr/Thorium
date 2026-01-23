@@ -3,10 +3,10 @@
 #include "Graphics/buffer.hpp"
 #include "Graphics/graphics.hpp"
 #include "Graphics/texture.hpp"
-#include "Modules/console.hpp"
 #include "Modules/object.hpp"
 #include <cassert>
 #include <cstdint>
+#include <mutex>
 #include <unordered_map>
 
 namespace Graphics {
@@ -14,6 +14,10 @@ namespace Graphics {
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
 extern std::vector<Ref<Texture::Texture>> ReleasedTextures;
 extern std::vector<Ref<Buffer>> ReleasedBuffers;
+
+extern std::mutex ReleasedTexturesMutex;
+extern std::mutex ReleasedBuffersMutex;
+
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
 inline auto CanBeDestroyed( // NOLINTNEXTLINE
@@ -57,5 +61,8 @@ inline auto ProcessReleasedResources(
     }
   }
 }
+
+auto ScheduleDestruction(Texture::Texture *texture) -> void;
+auto ScheduleDestruction(Buffer *buffer) -> void;
 
 } // namespace Graphics

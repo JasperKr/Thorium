@@ -1053,7 +1053,7 @@ auto Texture::ScheduleDestroy() -> void {
     return;
   }
 
-  ReleasedTextures.emplace_back(this);
+  ScheduleDestruction(this);
   released = true;
 }
 

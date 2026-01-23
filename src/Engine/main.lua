@@ -61,6 +61,7 @@ end
 
 function Thorium.quit()
   print("Quitting the application.")
+  return 1
 end
 
 Thorium.keyboard.setEnableTextInput(true)
@@ -73,11 +74,17 @@ function Thorium.draw()
     Thorium.graphics.useCommands("load")
   end
 
+  print("Starting threads...")
+
   startThreadChannel:push(true)
   startSecondThreadChannel:push(true)
 
+  print("Waiting for threads to finish...")
+
   threadDoneChannel:demand(1)
   secondThreadDoneChannel:demand(1)
+
+  print("Drawing meshes...")
 
   Thorium.graphics.useCommands("gui")
   for i = 1, 4 do

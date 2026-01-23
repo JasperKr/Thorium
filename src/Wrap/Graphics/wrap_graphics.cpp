@@ -768,4 +768,25 @@ auto wrap_UseCommands(lua_State *state) -> int {
   return 0;
 }
 
+// Get a list of command buffer names
+// Optionally a table to fill
+auto wrap_GetGeneratedCommands(lua_State *state) -> int {
+  if (lua_gettop(state) == 1 && lua_istable(state, 1) == 0) {
+    return luaL_error(state, "Expected table as argument.");
+  }
+
+  if (lua_gettop(state) == 0) {
+    lua_newtable(state); // Create new table
+  }
+
+  auto commands = Graphics::Threading::GetGeneratedCommands();
+
+  for (size_t i = 0; i < commands.size(); ++i) {
+    lua_pushstring(state, commands[i].c_str());
+    lua_rawseti(state, -2, static_cast<int>(i + 1));
+  }
+
+  return 1;
+}
+
 } // namespace Graphics

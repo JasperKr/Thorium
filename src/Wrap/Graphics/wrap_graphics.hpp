@@ -55,6 +55,7 @@ auto wrap_SubmitCommandBuffer(lua_State *state) -> int;
 auto wrap_HasRenderingPermission(lua_State *state) -> int;
 auto wrap_DemandRenderingPermission(lua_State *state) -> int;
 auto wrap_UseCommands(lua_State *state) -> int;
+auto wrap_GetGeneratedCommands(lua_State *state) -> int;
 
 // NOLINTNEXTLINE
 static const luaL_Reg GraphicsLib[] = {
@@ -97,6 +98,7 @@ static const luaL_Reg GraphicsLib[] = {
     {"hasRenderingPermission", wrap_HasRenderingPermission},
     {"demandRenderingPermission", wrap_DemandRenderingPermission},
     {"useCommands", wrap_UseCommands},
+    {"getGeneratedCommands", wrap_GetGeneratedCommands},
     {nullptr, nullptr},
 };
 
