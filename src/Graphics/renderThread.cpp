@@ -134,6 +134,10 @@ auto AquireCommandBuffer(Graphics::GraphicsContext &context,
   }
 
   Graphics::SetDirtyState();
+  auto frameBeginResult = Graphics::DynamicRendering::BeginFrame(context);
+  if (Error::IsError(frameBeginResult)) {
+    return frameBeginResult.AsUnexpected();
+  }
 
   auto result = GetGlobalUniformBuffer(context.frameIndex).NewFrame(context);
 

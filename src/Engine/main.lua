@@ -60,10 +60,12 @@ function Thorium.wheelmoved(x, y)
 end
 
 function Thorium.quit()
-  -- startThreadChannel:push(false)
+  startThreadChannel:push(false)
+  startThreadChannel:push(false)
+
   -- startSecondThreadChannel:push(false)
 
-  -- thread:wait()
+  thread:wait()
   -- secondThread:wait()
 
   print("Quitting the application.")

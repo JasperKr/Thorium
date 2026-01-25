@@ -718,7 +718,7 @@ thread_local static std::vector<State> StateStack{};
 // NOLINTNEXTLINE, to keep track of last applied state
 thread_local static State LastState{};
 
-inline auto SetupDefaultState(GraphicsContext &context) -> Result<State> {
+inline auto SetupDefaultState(const GraphicsContext &context) -> Result<State> {
   auto defaultState = State();
 
   defaultState.viewport = {};
@@ -726,7 +726,7 @@ inline auto SetupDefaultState(GraphicsContext &context) -> Result<State> {
 
   defaultState.shader = Shader::DefaultShaderModule;
 
-  auto &texture =
+  auto const &texture =
       Graphics::DynamicRendering::SwapchainTextures[context
                                                         .swapchainImageIndex];
 
@@ -737,6 +737,9 @@ inline auto SetupDefaultState(GraphicsContext &context) -> Result<State> {
   swapchainRendertarget->blendMode = DefaultBlendMode;
   swapchainRendertarget->clearValue = {0.0F, 0.0F, 0.0F, 1.0F};
   swapchainRendertarget->loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+
+  PrintDebug("Setup default state with swapchain handle: {}",
+             (void *)texture->view);
 
   defaultState.renderTargets = {swapchainRendertarget};
 
