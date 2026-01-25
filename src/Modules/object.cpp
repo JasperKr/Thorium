@@ -1,9 +1,10 @@
 #include "object.hpp"
-#include "console.hpp"
+#include <cassert>
 // #define DEBUG_DOUBLE_RELEASE
 
 #ifdef DEBUG_DOUBLE_RELEASE
 #include "Modules/console.hpp"
+#include "console.hpp"
 #include <execinfo.h>
 #endif
 
@@ -27,24 +28,28 @@ Object::~Object() {
 #endif
 }
 auto Object::getReferenceCount() const -> int { return count.load(); }
-void Object::retain() const { count.fetch_add(1); }
+void Object::retain() const {
+  assert(count.load() >= 0);
+  count.fetch_add(1);
+}
 auto Object::release() -> bool {
-  auto fetchedCount = count.fetch_sub(1);
-  if (fetchedCount == 1) {
-#ifndef DEBUG_DOUBLE_RELEASE
+  auto refcount = count.fetch_sub(1) - 1;
+  if (refcount <= 0) {
     if (UseDeferredDestruction()) {
       this->ScheduleDestroy();
     } else {
+#ifndef DEBUG_DOUBLE_RELEASE
       delete this;
-    }
 #endif
+    }
 
     return true;
   }
 
 #ifdef DEBUG_DOUBLE_RELEASE
-  if (fetchedCount < 1) {
-    PrintFatal("Object::release() called on object with zero references!");
+  if (refcount < 0) {
+    PrintFatal("Object::release() called on object with {} references!",
+               refcount);
   }
 #endif
 

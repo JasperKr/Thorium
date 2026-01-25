@@ -1,0 +1,6 @@
+If:
+  PathMatch: .*\/(include|external)\/.*
+
+Diagnostics:
+  ClangTidy:
+    Remove: modernize*

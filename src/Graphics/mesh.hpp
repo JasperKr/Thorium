@@ -6,6 +6,7 @@
 #include "graphics.hpp"
 #include <cstdint>
 #include <span>
+#include <string>
 #define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
 
@@ -43,10 +44,14 @@ struct Mesh : Object {
   }
 
   static auto Create(GraphicsContext &context, VertexFormat vertexFormat,
-                     const std::span<uint8_t> &vertexData) -> Result<Ref<Mesh>>;
+                     const std::span<uint8_t> &vertexData,
+                     const std::string &debugName = "Mesh")
+      -> Result<Ref<Mesh>>;
 
   static auto Create(GraphicsContext &context, VertexFormat vertexFormat,
-                     uint64_t vertexCount) -> Result<Ref<Mesh>>;
+                     uint64_t vertexCount,
+                     const std::string &debugName = "Mesh")
+      -> Result<Ref<Mesh>>;
 
   [[nodiscard]] auto GetVertexFormat() const -> VertexFormat;
 
@@ -98,6 +103,7 @@ private:
   uint64_t VertexCount;
   uint64_t IndexCount;
   IndexFormat IndicesFormat;
+  std::string DebugName;
 
   VkPrimitiveTopology Topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 };

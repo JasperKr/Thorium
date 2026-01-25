@@ -3,6 +3,7 @@
 #include "Modules/object.hpp"
 #include "Modules/type.hpp"
 #include "Wrap/lua_data.hpp"
+#include <condition_variable>
 #include <cstdint>
 #include <mutex>
 #include <string>
@@ -45,7 +46,7 @@ public:
              int count) -> void;
   [[nodiscard]] auto GetStatus() const -> ThreadStatus;
   [[nodiscard]] auto GetErrorMessage() const -> std::string;
-  auto Stop() -> void;
+  auto Wait() -> void;
 
   auto GetInstanceType() const -> Type const * override { return &threadType; }
   static auto GetType() -> Type const * { return &threadType; }
@@ -61,9 +62,13 @@ private:
   std::thread handle;
 
   mutable std::mutex statusMutex;
+  mutable std::condition_variable statusCV;
   ThreadStatus status{ThreadStatus::Stopped};
   std::string errorMessage;
   lua_State *state = nullptr;
+
+  // Auto-generated name for the thread
+  std::string debugname;
 };
 
 } // namespace Threading

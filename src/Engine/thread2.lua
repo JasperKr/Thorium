@@ -1,5 +1,7 @@
 print("AAAAAAAAAAAA - 2")
 
+do return end
+
 Imgui = require("cimgui.init")
 
 local doneChannel, canStartChannel = ...
@@ -81,16 +83,5 @@ while true do
   end
   doneChannel:push(true)
 end
-
-for i = 1, drawCount do
-  print(meshes[i]:release())
-  print(meshes[i]:release())
-  print(meshes[i]:release())
-  print(meshes[i]:release())
-  meshes[i] = nil
-end
-
-collectgarbage()
-collectgarbage()
 
 print("THREAD #2 EXITING")

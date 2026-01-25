@@ -5,6 +5,38 @@ namespace Threading {
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 std::vector<Ref<Channel>> Channels{};
 
+auto AddReferences(const LuaWrap::Data::LuaType &data) -> void {
+  if (std::holds_alternative<Proxy>(data)) {
+    const auto &proxy = std::get<Proxy>(data);
+    if (proxy.object != nullptr) {
+      proxy.object->retain();
+    }
+  } else if (std::holds_alternative<std::vector<LuaWrap::Data::LuaData>>(
+                 data)) {
+    const auto &tableData = std::get<std::vector<LuaWrap::Data::LuaData>>(data);
+    for (const auto &entry : tableData) {
+      AddReferences(entry.key);
+      AddReferences(entry.value);
+    }
+  }
+}
+
+auto RemoveReferences(const LuaWrap::Data::LuaType &data) -> void {
+  if (std::holds_alternative<Proxy>(data)) {
+    const auto &proxy = std::get<Proxy>(data);
+    if (proxy.object != nullptr) {
+      proxy.object->release();
+    }
+  } else if (std::holds_alternative<std::vector<LuaWrap::Data::LuaData>>(
+                 data)) {
+    const auto &tableData = std::get<std::vector<LuaWrap::Data::LuaData>>(data);
+    for (const auto &entry : tableData) {
+      RemoveReferences(entry.key);
+      RemoveReferences(entry.value);
+    }
+  }
+}
+
 auto UnloadModule() -> void {
   for (auto &channel : Channels) {
     channel->DestroyImmediately();

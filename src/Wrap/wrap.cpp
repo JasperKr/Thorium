@@ -191,6 +191,10 @@ auto LuaTrampoline(lua_State *state) -> int {
     return func(state);
   } catch (const std::exception &e) {
     return luaL_error(state, "C++ exception: %s", e.what());
+  } catch (const char *str) {
+    return luaL_error(state, "C++ exception: %s", str);
+  } catch (int val) {
+    return luaL_error(state, "C++ exception: int %d", val);
   } catch (...) {
     return luaL_error(state, "Unknown C++ exception");
   }
@@ -233,7 +237,7 @@ auto RegisterLuaModule(lua_State *state, const LuaModule &module) -> void {
     while (func->name != nullptr) {
       // lua_pushcfunction(state, func->func); // [Thorium, module, func]
 
-#ifndef NDEBUG // If debug build
+#if !defined(NDEBUG) && DEBUG_CPP_EXCEPTION // If debug build
       // Wrap function in trampoline to catch exceptions
       lua_pushlightuserdata(
           state, // NOLINTNEXTLINE(cppcoreguidelines-pro-type-cstyle-cast)
@@ -340,7 +344,7 @@ auto RegisterLuaType(lua_State *state, const Type *type,
         func++; // NOLINT, functions are nullptr-terminated
         continue;
       }
-#ifndef NDEBUG // If debug build
+#if !defined(NDEBUG) && DEBUG_CPP_EXCEPTION // If debug build
       // Wrap function in trampoline to catch exceptions
       lua_pushlightuserdata(
           state, // NOLINTNEXTLINE(cppcoreguidelines-pro-type-cstyle-cast)
@@ -423,8 +427,6 @@ auto PushObject(lua_State *state, const Type *type, Object *object) -> void {
       lua_type(state, -1) != LUA_TUSERDATA) {
     // No existing userdata
     lua_pop(state, 1); // Remove nil [storage]
-
-    PrintAlways("Pushing object of key {} to Lua", (void *)(object));
 
     // Create new userdata
     SetupLuaType(state, type, object); // [storage, userdata]

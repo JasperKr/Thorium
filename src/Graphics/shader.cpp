@@ -1,7 +1,6 @@
 #include "shader.hpp"
 #include "Buffers/uniform.hpp"
 #include "Graphics/Buffers/push.hpp"
-#include "Graphics/barrier.hpp"
 #include "Graphics/graphicsState.hpp"
 #include "Graphics/reflect.hpp"
 #include "Modules/Math/vector.hpp"
@@ -33,7 +32,7 @@ namespace Graphics::Shader {
 
 static slang::IGlobalSession *GlobalSlangSession = nullptr; // NOLINT
 
-const std::vector<slang::CompilerOptionEntry> CompilerOptions = {
+static const std::vector<slang::CompilerOptionEntry> CompilerOptions = {
     slang::CompilerOptionEntry{
         .name = slang::CompilerOptionName::Optimization,
         .value =
@@ -91,8 +90,9 @@ void UnloadModule(Graphics::GraphicsContext &context) {
 
   if (GlobalSlangSession != nullptr) {
     GlobalSlangSession->release();
-    GlobalSlangSession = nullptr;
   }
+
+  slang::shutdown();
 }
 
 static inline auto GetGlobalShaderExterns() -> std::vector<ShaderExtern> & {
@@ -345,30 +345,25 @@ static inline auto LoadSlang(GraphicsContext &context,
   }
 
   Slang::ComPtr<slang::IComponentType> composedProgram;
-  {
-    PrintDebug("Composing program...");
-    SlangResult result = session->createCompositeComponentType(
-        componentTypes.data(), static_cast<SlangInt>(componentTypes.size()),
-        composedProgram.writeRef(), diagnosticsBlob.writeRef());
 
-    auto err =
-        Error::Create(result, diagnosticsBlob, composedProgram.readRef());
-    if (Error::IsError(err)) {
-      return err;
-    }
+  PrintDebug("Composing program...");
+  result = session->createCompositeComponentType(
+      componentTypes.data(), static_cast<SlangInt>(componentTypes.size()),
+      composedProgram.writeRef(), diagnosticsBlob.writeRef());
+
+  auto err = Error::Create(result, diagnosticsBlob, composedProgram.readRef());
+  if (Error::IsError(err)) {
+    return err;
   }
 
-  {
-    PrintDebug("Linking program...");
+  PrintDebug("Linking program...");
 
-    SlangResult result = composedProgram->link(shader->linkedProgram.writeRef(),
-                                               diagnosticsBlob.writeRef());
+  result = composedProgram->link(shader->linkedProgram.writeRef(),
+                                 diagnosticsBlob.writeRef());
 
-    auto err =
-        Error::Create(result, diagnosticsBlob, shader->linkedProgram.readRef());
-    if (Error::IsError(err)) {
-      return err;
-    }
+  err = Error::Create(result, diagnosticsBlob, shader->linkedProgram.readRef());
+  if (Error::IsError(err)) {
+    return err;
   }
 
   PrintDebug("Getting program layout...");
@@ -376,7 +371,7 @@ static inline auto LoadSlang(GraphicsContext &context,
   shader->programLayout =
       shader->linkedProgram->getLayout(0, diagnosticsBlob.writeRef());
 
-  auto err = Error::Create(result, diagnosticsBlob, shader->programLayout);
+  err = Error::Create(result, diagnosticsBlob, shader->programLayout);
   if (Error::IsError(err)) {
     return err;
   }
@@ -453,12 +448,6 @@ static inline auto LoadSlang(GraphicsContext &context,
   // NOLINTNEXTLINE
   std::span<uint8_t> spirvCodeSpan(reinterpret_cast<uint8_t *>(data.data()),
                                    codeSize);
-
-  auto fserr = Filesystem::CreateDirectory(SpirvDirectory);
-
-  if (Error::IsError(fserr)) {
-    return fserr;
-  }
 
   VkShaderModuleCreateInfo moduleCreateInfo = {};
   moduleCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;

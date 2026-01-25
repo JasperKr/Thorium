@@ -1,8 +1,10 @@
 #pragma once
 
+#include "Modules/object.hpp"
 #include "Modules/thread.hpp"
 #include "Wrap/Modules/wrap_channel.hpp"
 #include "Wrap/wrap.hpp"
+#include <vector>
 extern "C" {
 #include <lauxlib.h>
 #include <lua.h>
@@ -10,16 +12,19 @@ extern "C" {
 }
 namespace Wrap::Threading {
 
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+extern std::vector<Ref<::Threading::Thread>> Threads;
+
 auto wrap_NewThread(lua_State *state) -> int;
 auto wrap_StartThread(lua_State *state) -> int;
-auto wrap_StopThread(lua_State *state) -> int;
+auto wrap_WaitThread(lua_State *state) -> int;
 auto wrap_GetThreadStatus(lua_State *state) -> int;
 auto wrap_GetThreadErrorMessage(lua_State *state) -> int;
 
 // NOLINTNEXTLINE
 static const luaL_Reg ThreadLib[] = {
     {"start", wrap_StartThread},
-    {"stop", wrap_StopThread},
+    {"wait", wrap_WaitThread},
     {"getStatus", wrap_GetThreadStatus},
     {"getError", wrap_GetThreadErrorMessage},
     {nullptr, nullptr},

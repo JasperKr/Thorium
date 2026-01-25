@@ -28,7 +28,7 @@ public:
   [[nodiscard]] auto getReferenceCount() const -> int;
 
 private:
-  mutable std::atomic<int> count{1};
+  mutable std::atomic<int> count{0};
 };
 
 template <typename T> class Ref {
@@ -64,7 +64,7 @@ public:
     reference.ptr = nullptr;
   }
   auto operator=(Ref &&reference) noexcept -> Ref & {
-    if (this != &reference && ptr != reference.ptr) {
+    if (this != &reference) {
       if (ptr != nullptr) {
         ptr->release();
       }

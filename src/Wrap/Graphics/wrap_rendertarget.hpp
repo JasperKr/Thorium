@@ -5,6 +5,6 @@ extern "C" {
 #include <lua.h>
 #include <lualib.h>
 }
-namespace Graphics::RenderTarget {
+namespace Graphics::DynamicRendering {
 auto wrap_SetRenderTargets(lua_State *state) -> int;
 }

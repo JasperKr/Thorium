@@ -39,7 +39,7 @@ local function draw()
 end
 
 while true do
-  if not (canStartChannel:demand(5)) then
+  if not (canStartChannel:demand(1)) then
     break
   end
 

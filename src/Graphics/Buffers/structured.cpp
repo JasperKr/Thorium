@@ -14,14 +14,14 @@ namespace Graphics::StructuredBuffer {
 
 auto CreateStructuredBuffer(GraphicsContext &context, BufferFormat &format,
                             size_t elementCount,
-                            VkMemoryPropertyFlags memoryFlags,
-                            VkBufferUsageFlags usageFlags)
+                            StructuredBufferCreationInfo const &info)
     -> Result<Ref<StructuredBuffer>> {
 
   Graphics::BufferCreationInfo bufferCreateInfo{
       .size = format.GetSize() * elementCount,
-      .usage = usageFlags,
-      .properties = memoryFlags,
+      .usage = info.usageFlags,
+      .properties = info.memoryFlags,
+      .debugName = info.debugName,
   };
 
   auto result = Buffer::Create(context, bufferCreateInfo);

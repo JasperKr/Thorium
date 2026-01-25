@@ -70,7 +70,7 @@ static const luaL_Reg GraphicsLib[] = {
     {"setScissor", wrap_SetScissor},
     {"clipScissor", wrap_ClipScissor},
     {"setShader", wrap_SetShader},
-    {"setRenderTarget", RenderTarget::wrap_SetRenderTargets},
+    {"setRenderTarget", DynamicRendering::wrap_SetRenderTargets},
     {"setLineWidth", wrap_SetLineWidth},
     {"setWindingOrder", wrap_SetWindingOrder},
     {"getDepthMode", wrap_GetDepthMode},

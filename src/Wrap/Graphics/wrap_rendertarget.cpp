@@ -17,7 +17,7 @@ extern "C" {
 #include <lualib.h>
 }
 #include <vector>
-namespace Graphics::RenderTarget {
+namespace Graphics::DynamicRendering {
 auto inline ConvertStringToBlendOp(const char *string) -> VkBlendOp {
   // add, sub, revsub, min, max
 
@@ -244,7 +244,7 @@ auto inline FromLuaState(lua_State *state)
 }
 
 auto RenderTargetsFromTexture(lua_State *state, int index)
-    -> Ref<Graphics::RenderTarget::RenderTarget> {
+    -> Ref<Graphics::DynamicRendering::RenderTarget> {
   luaL_checktype(state, index, LUA_TUSERDATA);
 
   auto *texture =
@@ -253,16 +253,12 @@ auto RenderTargetsFromTexture(lua_State *state, int index)
   if (texture == nullptr) {
     auto *ctx = Graphics::GetCurrentGraphicsContext();
 
-    auto swapchainTexturesResult = GetSwapchainTextures(*ctx);
-
-    if (Error::IsError(swapchainTexturesResult)) {
-      luaL_error(state, swapchainTexturesResult.error().message.c_str());
-    }
-
-    texture = swapchainTexturesResult.value()[ctx->swapchainImageIndex].get();
+    texture =
+        Graphics::DynamicRendering::SwapchainTextures[ctx->swapchainImageIndex]
+            .get();
   }
 
-  auto rendertarget = Ref<Graphics::RenderTarget::RenderTarget>::Make();
+  auto rendertarget = Ref<Graphics::DynamicRendering::RenderTarget>::Make();
   rendertarget->texture = Ref<Graphics::Texture::Texture>(texture);
   rendertarget->blendMode = DefaultBlendMode;
   rendertarget->clearValue = {0.0F, 0.0F, 0.0F, 1.0F};
@@ -272,11 +268,11 @@ auto RenderTargetsFromTexture(lua_State *state, int index)
 }
 
 auto RenderTargetsFromOptions(lua_State *state, int index)
-    -> Result<Ref<Graphics::RenderTarget::RenderTarget>> {
+    -> Result<Ref<Graphics::DynamicRendering::RenderTarget>> {
 
   luaL_checktype(state, index, LUA_TTABLE);
 
-  auto rendertarget = Ref<Graphics::RenderTarget::RenderTarget>::Make();
+  auto rendertarget = Ref<Graphics::DynamicRendering::RenderTarget>::Make();
 
   // check if element table[1] is a texture, if so, error,
   // as we expect it to be a named field
@@ -298,14 +294,8 @@ auto RenderTargetsFromOptions(lua_State *state, int index)
   if (lua_isnoneornil(state, -1) != 0) {
     auto *context = Graphics::GetCurrentGraphicsContext();
 
-    auto swapchainTexturesResult = GetSwapchainTextures(*context);
-
-    if (Error::IsError(swapchainTexturesResult)) {
-      return swapchainTexturesResult.error().AsUnexpected();
-    }
-
-    rendertarget->texture =
-        swapchainTexturesResult.value()[context->swapchainImageIndex];
+    rendertarget->texture = Graphics::DynamicRendering::SwapchainTextures
+        [context->swapchainImageIndex];
   } else {
     auto *texture =
         LuaWrap::ObjectFromLua<Graphics::Texture::Texture>(state, -1);
@@ -434,28 +424,23 @@ auto IsOptionsTable(lua_State *state, int index) -> bool {
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 auto wrap_SetRenderTargets(lua_State *state) -> int {
   auto *ctx = Graphics::GetCurrentGraphicsContext();
-  std::vector<Ref<Graphics::RenderTarget::RenderTarget>> renderTargets;
+  std::vector<Ref<Graphics::DynamicRendering::RenderTarget>> renderTargets;
 
   if (lua_gettop(state) == 0) {
     // No arguments, reset to default
 
-    auto rendertarget = Ref<Graphics::RenderTarget::RenderTarget>::Make();
-
-    auto swapchainTexturesResult = GetSwapchainTextures(*ctx);
-
-    if (Error::IsError(swapchainTexturesResult)) {
-      return luaL_error(state, swapchainTexturesResult.error().message.c_str());
-    }
+    auto rendertarget = Ref<Graphics::DynamicRendering::RenderTarget>::Make();
 
     rendertarget->blendMode = DefaultBlendMode;
     rendertarget->clearValue = {0.0F, 0.0F, 0.0F, 1.0F};
     rendertarget->texture =
-        swapchainTexturesResult.value()[ctx->swapchainImageIndex];
+        Graphics::DynamicRendering::SwapchainTextures[ctx->swapchainImageIndex];
     rendertarget->location = 0;
     rendertarget->layer = 0;
     rendertarget->loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
 
-    auto setResult = Graphics::RenderTarget::SetRenderTargets({rendertarget});
+    auto setResult =
+        Graphics::DynamicRendering::SetRenderTargets({rendertarget});
 
     if (Error::IsError(setResult)) {
       return luaL_error(state, setResult.message.c_str());
@@ -536,10 +521,10 @@ auto wrap_SetRenderTargets(lua_State *state) -> int {
                       "Invalid arguments to RenderTarget.setRenderTargets");
   }
 
-  auto setResult = Graphics::RenderTarget::SetRenderTargets(renderTargets);
+  auto setResult = Graphics::DynamicRendering::SetRenderTargets(renderTargets);
   if (Error::IsError(setResult)) {
     return luaL_error(state, setResult.message.c_str());
   }
   return 0;
 }
-} // namespace Graphics::RenderTarget
+} // namespace Graphics::DynamicRendering

@@ -7,6 +7,9 @@
 
 namespace Wrap::Threading {
 
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+std::vector<Ref<::Threading::Thread>> Threads;
+
 auto wrap_NewThread(lua_State *state) -> int {
   const auto *script = luaL_checkstring(state, 1);
 
@@ -14,6 +17,8 @@ auto wrap_NewThread(lua_State *state) -> int {
   auto thread = ::Threading::Thread::Create(script);
 
   LuaWrap::PushObject(state, ::Threading::Thread::GetType(), thread.get());
+
+  Threads.emplace_back(thread);
 
   return 1;
 }
@@ -36,13 +41,13 @@ auto wrap_StartThread(lua_State *state) -> int {
 
   return 0;
 }
-auto wrap_StopThread(lua_State *state) -> int {
+auto wrap_WaitThread(lua_State *state) -> int {
   auto *thread = LuaWrap::ObjectFromLua<::Threading::Thread>(state, 1);
   if (thread == nullptr) {
     return luaL_error(state, "Invalid Thread object.");
   }
 
-  thread->Stop();
+  thread->Wait();
 
   return 0;
 }

@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
+#include <string>
 
 #include "Graphics/buffer.hpp"
 #include "Graphics/bufferformat.hpp"
@@ -67,10 +69,10 @@ struct StructuredBuffer : Object {
   }
 
   [[nodiscard]] auto UseDeferredDestruction() const -> bool override {
-    return GetDeferredDestructionAllowed();
+    return false;
   }
 
-  auto ScheduleDestroy() -> void override { buffer->ScheduleDestroy(); }
+  auto ScheduleDestroy() -> void override { buffer = {}; }
 
   static auto GetType() -> Type const * { return &type; }
   [[nodiscard]] auto GetInstanceType() const -> Type const * override {
@@ -89,10 +91,18 @@ struct StructuredBuffer : Object {
   Ref<Buffer> buffer;
 };
 
+struct StructuredBufferCreationInfo {
+  VkMemoryPropertyFlags memoryFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+  VkBufferUsageFlags usageFlags =
+      static_cast<uint32_t>(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT) |
+      static_cast<uint32_t>(VK_BUFFER_USAGE_TRANSFER_DST_BIT) |
+      static_cast<uint32_t>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+  std::string debugName;
+};
+
 auto CreateStructuredBuffer(GraphicsContext &context, BufferFormat &format,
                             size_t elementCount,
-                            VkMemoryPropertyFlags memoryFlags,
-                            VkBufferUsageFlags usageFlags)
+                            StructuredBufferCreationInfo const &info)
     -> Result<Ref<StructuredBuffer>>;
 
 } // namespace Graphics::StructuredBuffer

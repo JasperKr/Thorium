@@ -107,12 +107,17 @@ ShaderStageFlagsToPipelineStageFlags(VkShaderStageFlags shaderStages)
 }
 
 struct ShaderModule : Object {
+  ShaderModule() = default;
+  ShaderModule(const ShaderModule &) = delete;
+  ShaderModule(ShaderModule &&) = delete;
+  auto operator=(const ShaderModule &) -> ShaderModule & = delete;
+  auto operator=(ShaderModule &&) -> ShaderModule & = delete;
   std::string moduleName;
 
-  VkShaderModule module;
+  VkShaderModule module{};
   std::vector<VkShaderStageFlagBits> stages;
 
-  uint64_t modTime;
+  uint64_t modTime{};
 
   std::string name;
   std::vector<ShaderExtern> externs;
@@ -139,6 +144,13 @@ struct ShaderModule : Object {
   Math::Uvec3 threadgroupSize{1, 1, 1};
   uint32_t waveSize = 0;
 
+  ~ShaderModule() override {
+    auto *ctx = GetCurrentGraphicsContext();
+
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+    vkDestroyShaderModule(ctx->device, module, nullptr);
+  }
+
   static auto Create(Graphics::GraphicsContext &context,
                      const std::string &modulename, const std::string &name)
       -> Result<Ref<ShaderModule>>;
@@ -164,7 +176,6 @@ struct ShaderModule : Object {
   auto GetWaveSize() const -> uint32_t;
 
   void Destroy(VkDevice &device);
-  void ReloadMaybe(Graphics::GraphicsContext &context);
 
   auto operator==(const ShaderModule &other) const -> bool {
     return externs == other.externs && moduleName == other.moduleName &&

@@ -28,31 +28,14 @@
 #include <unordered_map>
 #include <utility>
 
-namespace Graphics::RenderTarget {
+namespace Graphics::DynamicRendering {
 
 thread_local std::unordered_map<State, std::pair<VkPipeline, VkPipelineLayout>,
                                 StateHash> // NOLINTNEXTLINE Pipeline cache
     PipelineCache = {};
 
-inline auto GetSwapchainRendertarget(const GraphicsContext &context)
-    -> Result<Ref<RenderTarget>> {
-  static Ref<RenderTarget> swapchainRendertarget = Ref<RenderTarget>::Make();
-
-  auto swapchainTexturesResult = GetSwapchainTextures(context);
-
-  if (Error::IsError(swapchainTexturesResult)) {
-    return swapchainTexturesResult.error().AsUnexpected();
-  }
-
-  auto texture = swapchainTexturesResult.value()[context.swapchainImageIndex];
-
-  swapchainRendertarget->texture = texture;
-  swapchainRendertarget->location = 0;
-  swapchainRendertarget->blendMode = DefaultBlendMode;
-  swapchainRendertarget->clearValue = {0.0F, 0.0F, 0.0F, 1.0F};
-  swapchainRendertarget->loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-  return swapchainRendertarget;
-}
+// NOLINTNEXTLINE
+std::vector<Ref<Texture::Texture>> SwapchainTextures{};
 
 inline auto GetRenderExtent(const GraphicsContext &context, const State &state)
     -> VkExtent2D {
@@ -63,29 +46,25 @@ inline auto GetRenderExtent(const GraphicsContext &context, const State &state)
   };
 }
 
-auto GetSwapchainTextures(const GraphicsContext &context)
-    -> Result<std::vector<Ref<Graphics::Texture::Texture>>> {
-  static std::vector<Ref<Graphics::Texture::Texture>> textures = {};
+auto GetSwapchainTextures(const GraphicsContext &context) -> Error {
+  Graphics::DynamicRendering::SwapchainTextures.resize(
+      context.swapchainInfo.imageCount);
 
-  if (textures.empty()) {
-    textures.reserve(context.swapchainInfo.imageCount);
+  for (uint32_t i = 0; i < context.swapchainInfo.imageCount; i++) {
+    auto textureResult = Graphics::Texture::FromSwapchainTexture(
+        context, context.swapchainInfo.images[i],
+        context.swapchainInfo.imageViews[i], context.swapchainInfo.format,
+        context.swapchainInfo.extent.width,
+        context.swapchainInfo.extent.height);
 
-    for (uint32_t i = 0; i < context.swapchainInfo.imageCount; i++) {
-      auto textureResult = Graphics::Texture::FromSwapchainTexture(
-          context, context.swapchainInfo.images[i],
-          context.swapchainInfo.imageViews[i], context.swapchainInfo.format,
-          context.swapchainInfo.extent.width,
-          context.swapchainInfo.extent.height);
-
-      if (Error::IsError(textureResult)) {
-        return textureResult.error().AsUnexpected();
-      }
-
-      textures.emplace_back(textureResult.value());
+    if (Error::IsError(textureResult)) {
+      return textureResult.error();
     }
+
+    Graphics::DynamicRendering::SwapchainTextures.at(i) = textureResult.value();
   }
 
-  return textures;
+  return Error::Success();
 }
 
 auto GetPipelineLayout(const GraphicsContext &context,
@@ -747,12 +726,19 @@ inline auto SetupDefaultState(GraphicsContext &context) -> Result<State> {
 
   defaultState.shader = Shader::DefaultShaderModule;
 
-  auto targetResult = GetSwapchainRendertarget(context);
-  if (Error::IsError(targetResult)) {
-    return targetResult.error().AsUnexpected();
-  }
+  auto &texture =
+      Graphics::DynamicRendering::SwapchainTextures[context
+                                                        .swapchainImageIndex];
 
-  defaultState.renderTargets = {targetResult.value()};
+  auto swapchainRendertarget = Ref<RenderTarget>::Make();
+
+  swapchainRendertarget->texture = texture;
+  swapchainRendertarget->location = 0;
+  swapchainRendertarget->blendMode = DefaultBlendMode;
+  swapchainRendertarget->clearValue = {0.0F, 0.0F, 0.0F, 1.0F};
+  swapchainRendertarget->loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+
+  defaultState.renderTargets = {swapchainRendertarget};
 
   return defaultState;
 }
@@ -950,6 +936,7 @@ auto Destroy(GraphicsContext &context) -> void {
     vkDestroyPipeline(context.device, pair.second.first, nullptr);
   }
   PipelineCache.clear();
+  StateStack.clear();
 }
 
 inline auto BeginRendering(GraphicsContext &context) -> Error {
@@ -1189,15 +1176,8 @@ auto PrepareRendering(GraphicsContext &context) -> Error {
 auto IsSwapchainTexture(const GraphicsContext &context,
                         const Graphics::Texture::Texture &texture)
     -> Result<bool> {
-  auto swapchainTexturesResult = GetSwapchainTextures(context);
-
-  if (Error::IsError(swapchainTexturesResult)) {
-    return swapchainTexturesResult.error().AsUnexpected();
-  }
-
-  const auto &swapchainTextures = swapchainTexturesResult.value();
-
-  for (const auto &swapchainTexture : swapchainTextures) {
+  for (const auto &swapchainTexture :
+       Graphics::DynamicRendering::SwapchainTextures) {
     if (swapchainTexture.get() == &texture) {
       return true;
     }
@@ -1562,4 +1542,4 @@ auto Clear(GraphicsContext &context, const ClearInfo &clearInfo) -> Error {
   return Error::Success();
 }
 
-} // namespace Graphics::RenderTarget
+} // namespace Graphics::DynamicRendering

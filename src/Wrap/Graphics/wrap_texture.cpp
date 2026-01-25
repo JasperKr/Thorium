@@ -849,15 +849,4 @@ auto wrap_GetID(lua_State *state) -> int {
   return 1;
 }
 
-auto wrap_Release(lua_State *state) -> int {
-  auto *texture = LuaWrap::ObjectFromLua<Texture>(state, 1);
-
-  if (texture == nullptr) {
-    return luaL_error(state, "Expected Texture as first argument");
-  }
-
-  texture->ScheduleDestroy();
-  return 0;
-}
-
 } // namespace Graphics::Texture

@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <unordered_map>
+#include <vector>
 #define VK_NO_PROTOTYPES
 #include <vulkan/vulkan_core.h>
 
@@ -19,10 +20,12 @@ namespace Shader {
 struct ShaderModule;
 }
 
-namespace RenderTarget {
+namespace DynamicRendering {
 
-auto GetSwapchainTextures(const GraphicsContext &context)
-    -> Result<std::vector<Ref<Graphics::Texture::Texture>>>;
+// NOLINTNEXTLINE
+extern std::vector<Ref<Texture::Texture>> SwapchainTextures;
+
+auto GetSwapchainTextures(const GraphicsContext &context) -> Error;
 
 const static Type type = Type("RenderTarget");
 
@@ -293,5 +296,5 @@ struct ClearInfo {
 
 auto Clear(GraphicsContext &context, const ClearInfo &clearInfo) -> Error;
 
-} // namespace RenderTarget
+} // namespace DynamicRendering
 } // namespace Graphics

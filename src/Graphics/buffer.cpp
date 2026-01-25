@@ -9,6 +9,7 @@
 #include "graphics.hpp"
 #include <algorithm>
 #include <atomic>
+#include <cassert>
 #include <cstdint>
 #include <mutex>
 #include <vector>
@@ -29,23 +30,18 @@ struct StagingBufferInfo {
 
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
 
-thread_local inline std::array<Ref<Buffer>, FRAMES_IN_FLIGHT> UploadBuffers;
+thread_local inline std::vector<Ref<Buffer>> UploadBuffers{FRAMES_IN_FLIGHT};
 thread_local inline std::array<size_t, FRAMES_IN_FLIGHT> UploadBufferOffsets;
 
 // we'll use staging buffers until upload buffers are initialized
 thread_local inline std::vector<StagingBufferInfo> StagingBuffers;
 inline std::mutex uploadSemaphoreMutex{};
 inline VkSemaphore uploadSemaphore = nullptr;
-inline bool moduleInitialized = false;
 inline std::atomic<uint64_t> currentTimelineValue = 0;
 
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
 auto LoadBufferModule(GraphicsContext &context) -> Error {
-  if (moduleInitialized) {
-    return Error::Success();
-  }
-
   VkSemaphoreTypeCreateInfo timelineInfo = {
       .sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
       .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
@@ -67,42 +63,26 @@ auto LoadBufferModule(GraphicsContext &context) -> Error {
     }
   }
 
-  moduleInitialized = true;
+  return Error::Success();
+}
+
+auto UnloadLocalBufferModule(GraphicsContext &context) -> Error {
+  StagingBuffers.clear();
+
+  PrintAlways("Destroying upload buffers: " + Graphics::ContextDebugname);
+
+  UploadBuffers.clear();
 
   return Error::Success();
 }
 
-auto UnloadBufferModule(GraphicsContext &context) -> Error {
-  if (!moduleInitialized) {
-    return Error::Success();
-  }
-
-  for (auto &stagingBuffer : StagingBuffers) {
-    if (stagingBuffer.buffer != VK_NULL_HANDLE) {
-      if (stagingBuffer.memory != VK_NULL_HANDLE) {
-        vmaUnmapMemory(context.vmaAllocator, stagingBuffer.memory);
-      }
-
-      vmaDestroyBuffer(context.vmaAllocator, stagingBuffer.buffer,
-                       stagingBuffer.memory);
-    }
-  }
-  StagingBuffers.clear();
-
-  for (auto &uploadBuffer : UploadBuffers) {
-    if (uploadBuffer.get() != nullptr) {
-      uploadBuffer->Destroy(context);
-    }
-  }
-
+auto UnloadBufferModule(const GraphicsContext &context) -> Error {
   if (uploadSemaphore != nullptr) {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
     std::lock_guard<std::mutex> lock2(uploadSemaphoreMutex);
     vkDestroySemaphore(context.device, uploadSemaphore, nullptr);
     uploadSemaphore = nullptr;
   }
-
-  moduleInitialized = false;
 
   return Error::Success();
 }
@@ -124,6 +104,9 @@ auto FlushBufferUploads(GraphicsContext &context) -> Error {
   auto stagingBufferIterator = StagingBuffers.begin();
   while (stagingBufferIterator != StagingBuffers.end()) {
     if (stagingBufferIterator->timelineValue <= completedValue) {
+      std::lock_guard<std::mutex> lock(
+          Graphics::GraphicsContext::mutexes.vmaAllocator);
+
       // Upload completed, destroy staging buffer
       if (stagingBufferIterator->memory != VK_NULL_HANDLE) {
         vmaUnmapMemory(context.vmaAllocator, stagingBufferIterator->memory);
@@ -154,6 +137,9 @@ auto Buffer::MapMemory(GraphicsContext &context) -> Error {
                          "mappedData is null.");
   }
 
+  std::lock_guard<std::mutex> lock(
+      Graphics::GraphicsContext::mutexes.vmaAllocator);
+
   auto result = Error::Create(
       vmaMapMemory(context.vmaAllocator, this->memory, &mappedData));
   if (Error::IsError(result)) {
@@ -167,6 +153,9 @@ auto Buffer::UnmapMemory(GraphicsContext &context) -> void {
   if (persistentMapping) {
     return;
   }
+
+  std::lock_guard<std::mutex> lock(
+      Graphics::GraphicsContext::mutexes.vmaAllocator);
 
   vmaUnmapMemory(context.vmaAllocator, this->memory);
   mappedData = nullptr;
@@ -200,22 +189,38 @@ auto Buffer::UploadLarge(GraphicsContext &context,
       static_cast<uint32_t>(VMA_ALLOCATION_CREATE_MAPPED_BIT);
   VkBuffer stagingBuffer = nullptr;
   VmaAllocation stagingMemory = nullptr;
-  VkResult result = vmaCreateBuffer(context.vmaAllocator, &stagingBufferInfo,
-                                    &stagingAllocInfo, &stagingBuffer,
-                                    &stagingMemory, nullptr);
-  if (result != VK_SUCCESS) {
-    return Error::Create(result);
+
+  {
+    std::lock_guard<std::mutex> lock(
+        Graphics::GraphicsContext::mutexes.vmaAllocator);
+
+    VkResult result = vmaCreateBuffer(context.vmaAllocator, &stagingBufferInfo,
+                                      &stagingAllocInfo, &stagingBuffer,
+                                      &stagingMemory, nullptr);
+    if (result != VK_SUCCESS) {
+      return Error::Create(result);
+    }
   }
 
   void *mapped = nullptr;
-  result = vmaMapMemory(context.vmaAllocator, stagingMemory, &mapped);
-  if (result != VK_SUCCESS) {
-    vmaDestroyBuffer(context.vmaAllocator, stagingBuffer, stagingMemory);
-    return Error::Create(result);
+  {
+    std::lock_guard<std::mutex> lock(
+        Graphics::GraphicsContext::mutexes.vmaAllocator);
+
+    VkResult result =
+        vmaMapMemory(context.vmaAllocator, stagingMemory, &mapped);
+    if (result != VK_SUCCESS) {
+      vmaDestroyBuffer(context.vmaAllocator, stagingBuffer, stagingMemory);
+      return Error::Create(result);
+    }
   }
 
   std::memcpy(static_cast<uint8_t *>(mapped), data.data(), uploadSize);
-  vmaUnmapMemory(context.vmaAllocator, stagingMemory);
+  {
+    std::lock_guard<std::mutex> lock(
+        Graphics::GraphicsContext::mutexes.vmaAllocator);
+    vmaUnmapMemory(context.vmaAllocator, stagingMemory);
+  }
 
   auto *commandBuffer = GetCommandBuffer();
 
@@ -250,11 +255,6 @@ auto Buffer::UploadRing(GraphicsContext &context,
   size_t &uploadOffset = UploadBufferOffsets.at(context.frameIndex);
   if (uploadBuffer.get() == nullptr ||
       uploadBuffer->sizeInBytes < uploadSize + uploadOffset) {
-    // Create or resize upload buffer
-    if (uploadBuffer.get() != nullptr) {
-      uploadBuffer->ScheduleDestroy();
-    }
-
     size_t newSize = UploadBufferSize;
     while (newSize < uploadSize + uploadOffset) {
       newSize *= 2;
@@ -267,16 +267,20 @@ auto Buffer::UploadRing(GraphicsContext &context,
     bufferInfo.properties =
         static_cast<uint32_t>(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) |
         static_cast<uint32_t>(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-    bufferInfo.PersistentMapping = true;
+    bufferInfo.persistentMapping = true;
+    bufferInfo.debugName = "Upload Buffer";
+
+    PrintAlways("--------- Creating new upload buffer! ---------");
 
     auto result = Graphics::Buffer::Create(context, bufferInfo);
     if (Error::IsError(result)) {
       return result.error();
     }
 
-    uploadBuffer = result.value();
-    UploadBuffers.at(context.frameIndex) = uploadBuffer;
+    UploadBuffers.at(context.frameIndex) = result.value();
   }
+
+  uploadBuffer = UploadBuffers.at(context.frameIndex);
 
   // Copy data to upload buffer
   auto result = uploadBuffer->MapMemory(context);
@@ -368,7 +372,7 @@ auto Buffer::Upload(GraphicsContext &context,
   return Error::Success();
 }
 
-auto Buffer::Create(GraphicsContext &context, BufferCreationInfo info)
+auto Buffer::Create(GraphicsContext &context, const BufferCreationInfo &info)
     -> Result<Ref<Buffer>> {
   if (info.size == 0) {
     return Error::Unexpected("Cannot create buffer with size 0.");
@@ -378,10 +382,14 @@ auto Buffer::Create(GraphicsContext &context, BufferCreationInfo info)
     return Error::Unexpected("Cannot create buffer with size VK_WHOLE_SIZE.");
   }
 
+  auto debugname = Graphics::ContextDebugname + "_" + info.debugName;
+
   auto buffer = Ref<Buffer>::Make();
 
-  buffer->isStagingBuffer = info.IsStagingBuffer;
-  buffer->persistentMapping = info.PersistentMapping;
+  PrintInfo("Creating buffer, refcount: {}", buffer->getReferenceCount());
+
+  buffer->isStagingBuffer = info.stagingBuffer;
+  buffer->persistentMapping = info.persistentMapping;
 
   VkBufferCreateInfo bufferInfo = {};
   bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -396,12 +404,42 @@ auto Buffer::Create(GraphicsContext &context, BufferCreationInfo info)
                     static_cast<uint32_t>(
                         VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
 
-  VkResult result =
-      vmaCreateBuffer(context.vmaAllocator, &bufferInfo, &allocInfo,
-                      &buffer->handle, &buffer->memory, nullptr);
+  {
+    std::lock_guard<std::mutex> lock(
+        Graphics::GraphicsContext::mutexes.vmaAllocator);
+    VkResult result =
+        vmaCreateBuffer(context.vmaAllocator, &bufferInfo, &allocInfo,
+                        &buffer->handle, &buffer->memory, nullptr);
 
-  if (result != VK_SUCCESS) {
-    return Error::Unexpected(result);
+    if (result != VK_SUCCESS) {
+      return Error::Unexpected(result);
+    }
+  }
+
+  if (!debugname.empty()) {
+    VkDebugUtilsObjectNameInfoEXT debugNameInfo{
+        .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+        .objectType = VK_OBJECT_TYPE_BUFFER,
+        .objectHandle = static_cast<uint64_t>(
+            reinterpret_cast<uintptr_t>(buffer->handle)), // NOLINT
+        .pObjectName = debugname.c_str(),
+    };
+    auto result = Error::Create(
+        vkSetDebugUtilsObjectNameEXT(context.device, &debugNameInfo));
+
+    if (Error::IsError(result)) {
+      return result.AsUnexpected();
+    }
+
+    {
+      std::lock_guard<std::mutex> lock(
+          Graphics::GraphicsContext::mutexes.vmaAllocator);
+
+      vmaSetAllocationName(context.vmaAllocator, buffer->memory,
+                           debugname.c_str());
+    }
+  } else {
+    PrintWarning("No debug name set for buffer.");
   }
 
   buffer->size = info.size;
@@ -411,16 +449,24 @@ auto Buffer::Create(GraphicsContext &context, BufferCreationInfo info)
   PrintDebug("Buffer created with handle {}", (void *)buffer->handle);
 
   VmaAllocationInfo memRequirements;
-  vmaGetAllocationInfo(context.vmaAllocator, buffer->memory, &memRequirements);
+  {
+    std::lock_guard<std::mutex> lock(
+        Graphics::GraphicsContext::mutexes.vmaAllocator);
+
+    vmaGetAllocationInfo(context.vmaAllocator, buffer->memory,
+                         &memRequirements);
+  }
   buffer->sizeInBytes = memRequirements.size;
 
-  if (info.PersistentMapping) {
+  if (info.persistentMapping) {
     PrintDebug("Persistently mapping buffer memory.");
 
-    result =
+    std::lock_guard<std::mutex> lock(
+        Graphics::GraphicsContext::mutexes.vmaAllocator);
+
+    VkResult result =
         vmaMapMemory(context.vmaAllocator, buffer->memory, &buffer->mappedData);
     if (result != VK_SUCCESS) {
-      buffer->Destroy(context);
       return Error::Unexpected(result);
     }
   }
@@ -441,24 +487,16 @@ auto Buffer::SetData(GraphicsContext &context,
 
   auto timelineValue = GetCPUTimelineSemaphoreValue(context);
 
-  MarkUse(0, timelineValue); // TODO: Support multiple queues
+  MarkUse(0, timelineValue);
 
   return Error::Success();
 }
 
-auto Buffer::Destroy(GraphicsContext &context) const -> void {
-  if (persistentMapping && mappedData != nullptr) {
-    vmaUnmapMemory(context.vmaAllocator, memory);
-  }
-
-  PrintAlways("Destroying buffer with handle {}", (void *)handle);
-  vmaDestroyBuffer(context.vmaAllocator, handle, memory);
-}
-
 auto Buffer::ScheduleDestroy() -> void {
-  if (released) {
-    return;
-  }
+  assert(!released);
+  assert(handle != nullptr);
+
+  PrintAlways("Scheduling buffer for destruction, handle {}", (void *)handle);
 
   ScheduleDestruction(this);
   released = true;

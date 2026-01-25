@@ -1,4 +1,5 @@
 #include "wrap_channel.hpp"
+#include "Modules/channel.hpp"
 #include "Modules/console.hpp"
 #include "Wrap/lua_data.hpp"
 #include "Wrap/wrap.hpp"
@@ -10,12 +11,18 @@ auto wrap_NewChannel(lua_State *state) -> int {
   // NOLINTNEXTLINE
   auto channel = Ref<::Threading::Channel>::Make();
 
+  ::Threading::Channels.emplace_back(channel);
+
   LuaWrap::PushObject(state, ::Threading::Channel::GetType(), channel.get());
 
   return 1;
 }
+
 auto wrap_Push(lua_State *state) -> int {
   auto *channel = LuaWrap::ObjectFromLua<::Threading::Channel>(state, 1);
+
+  PrintInfo("Channel refcount at push start {}", channel->getReferenceCount());
+
   if (channel == nullptr) {
     return luaL_error(state, "Invalid Channel object.");
   }
@@ -31,10 +38,12 @@ auto wrap_Push(lua_State *state) -> int {
                       encodedMessage.error().message.c_str());
   }
 
+  ::Threading::AddReferences(encodedMessage.value());
   channel->Push(encodedMessage.value());
 
   return 0;
 }
+
 auto wrap_Pop(lua_State *state) -> int {
   auto *channel = LuaWrap::ObjectFromLua<::Threading::Channel>(state, 1);
   if (channel == nullptr) {
@@ -49,6 +58,7 @@ auto wrap_Pop(lua_State *state) -> int {
   }
 
   auto error = LuaWrap::Data::ToStack(state, message.value());
+  ::Threading::RemoveReferences(message.value());
 
   if (Error::IsError(error)) {
     return luaL_error(state, "Failed to deserialize message: %s",
@@ -57,6 +67,7 @@ auto wrap_Pop(lua_State *state) -> int {
 
   return 1;
 }
+
 auto wrap_Peek(lua_State *state) -> int {
   auto *channel = LuaWrap::ObjectFromLua<::Threading::Channel>(state, 1);
   if (channel == nullptr) {
@@ -115,6 +126,7 @@ auto wrap_Demand(lua_State *state) -> int {
 
   auto &message = messageResult.value();
   auto error = LuaWrap::Data::ToStack(state, message);
+  ::Threading::RemoveReferences(message);
 
   if (Error::IsError(error)) {
     return luaL_error(state, "Failed to deserialize message: %s",

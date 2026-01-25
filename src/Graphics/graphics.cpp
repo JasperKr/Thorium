@@ -10,6 +10,7 @@
 #include <cassert>
 #include <cstdint>
 #include <mutex>
+#include <string>
 #include <vector>
 
 namespace Graphics {
@@ -18,9 +19,12 @@ GraphicsMutexes GraphicsContext::mutexes = {};
 
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
 
+GraphicsContext *g_ctx = nullptr;
 inline VkSemaphore globalTimelineSemaphore = nullptr;
 std::mutex globalTimelineSemaphoreMutex{};
 inline std::atomic<uint64_t> currentCPUTimelineValue = 1;
+
+thread_local std::string ContextDebugname{};
 
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
@@ -443,8 +447,7 @@ static auto CreateSwapchain(GraphicsContext &context) -> Error {
   context.swapchainInfo.extent = swapchainInfo.imageExtent;
   context.swapchainInfo.imageCount = swapchainInfo.minImageCount;
 
-  context.swapchainInfo.images =
-      std::vector<VkImage>(context.swapchainInfo.imageCount);
+  context.swapchainInfo.images.resize(context.swapchainInfo.imageCount);
 
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
@@ -457,8 +460,7 @@ static auto CreateSwapchain(GraphicsContext &context) -> Error {
     }
   }
 
-  context.swapchainInfo.imageViews =
-      std::vector<VkImageView>(context.swapchainInfo.imageCount);
+  context.swapchainInfo.imageViews.resize(context.swapchainInfo.imageCount);
 
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
@@ -573,12 +575,16 @@ static auto CreateFences(GraphicsContext &context) -> Error {
 
 static auto CreateVmaAllocator(GraphicsContext &context) -> Error {
   std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+  std::lock_guard<std::mutex> lock2(
+      Graphics::GraphicsContext::mutexes.vmaAllocator);
+
   VmaAllocatorCreateInfo allocatorInfo = {0};
   allocatorInfo.physicalDevice = context.physicalDevice;
   allocatorInfo.device = context.device;
   allocatorInfo.instance = context.instance;
   allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_4;
   allocatorInfo.pAllocationCallbacks = nullptr;
+  allocatorInfo.flags = VMA_ALLOCATOR_CREATE_EXTERNALLY_SYNCHRONIZED_BIT;
 
   VmaVulkanFunctions vulkanFunctions;
   Error error = Error::Create(
@@ -701,6 +707,15 @@ auto Initialize(GraphicsContext &context, Config::ApplicationConfig &config)
     return Error::Create("Failed to get Vulkan instance extensions.");
   }
 
+  std::vector<const char *> extensionList;
+
+  extensionList.reserve(extCount);
+  for (Uint32 i = 0; i < extCount; i++) {
+    extensionList.emplace_back(extensions[i]); // NOLINT
+  }
+
+  extensionList.emplace_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+
   VkApplicationInfo appInfo = {};
   appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
   appInfo.pApplicationName = "Thallium Engine";
@@ -711,8 +726,9 @@ auto Initialize(GraphicsContext &context, Config::ApplicationConfig &config)
 
   VkInstanceCreateInfo createInfo = {};
   createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-  createInfo.enabledExtensionCount = extCount;
-  createInfo.ppEnabledExtensionNames = extensions;
+  createInfo.enabledExtensionCount =
+      static_cast<uint32_t>(extensionList.size());
+  createInfo.ppEnabledExtensionNames = extensionList.data();
   createInfo.pApplicationInfo = &appInfo;
 
   error =
@@ -802,6 +818,8 @@ auto Initialize(GraphicsContext &context, Config::ApplicationConfig &config)
 
 void Deinitialize(GraphicsContext &context) {
   std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+  std::lock_guard<std::mutex> lock2(
+      Graphics::GraphicsContext::mutexes.vmaAllocator);
   vkDeviceWaitIdle(context.device);
 
   vmaDestroyAllocator(context.vmaAllocator);

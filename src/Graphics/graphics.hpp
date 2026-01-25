@@ -54,6 +54,7 @@ struct SwapchainInfo {
 
 struct GraphicsMutexes {
   std::mutex device;
+  std::mutex vmaAllocator;
 };
 
 struct GraphicsContext {
@@ -101,8 +102,8 @@ auto BeginSingleTimeCommands(GraphicsContext &context) -> VkCommandBuffer;
 auto EndSingleTimeCommands(GraphicsContext &context,
                            VkCommandBuffer commandBuffer) -> void;
 
-// Graphics context  NOLINTNEXTLINE
-static GraphicsContext *g_ctx = nullptr;
+// Graphics context NOLINTNEXTLINE
+extern GraphicsContext *g_ctx;
 void SetCurrentGraphicsContext(GraphicsContext *ctx);
 auto GetCurrentGraphicsContext() -> GraphicsContext *;
 
@@ -119,5 +120,8 @@ auto GetDeferredDestructionAllowed() -> bool &;
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 extern std::mutex globalTimelineSemaphoreMutex;
+
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+thread_local extern std::string ContextDebugname;
 
 } // namespace Graphics

@@ -9,10 +9,10 @@
 #include "Modules/Editor/gui.hpp"
 #include "Modules/Peripherals/keyboard.hpp"
 #include "Modules/Peripherals/mouse.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/imagedata.hpp"
 #include "Modules/object.hpp"
-#include "Modules/utils.hpp"
 #include "imgui.h"
 #include "vulkan/vulkan_core.h"
 #include <cstddef>
@@ -125,16 +125,15 @@ inline auto HandleImguiCreateTextureEvent(Graphics::GraphicsContext &context,
     return textureCreationResult.error();
   }
 
-  auto *texture = textureCreationResult.value().get();
+  auto texture = textureCreationResult.value();
 
   tex->SetTexID( // NOLINTNEXTLINE reinterpret-cast
-      reinterpret_cast<ImTextureID>(texture));
+      reinterpret_cast<ImTextureID>(texture.get()));
 
-  texture->retain(); // Owned by ImGui now
   texture->SetFilter(VK_FILTER_NEAREST, VK_FILTER_NEAREST,
                      VK_SAMPLER_MIPMAP_MODE_NEAREST);
 
-  Gui::ImGuiTextures.emplace_back(texture);
+  Gui::ImGuiTextures.emplace(tex->GetTexID(), texture);
 
   auto pixelSpan = std::span<uint8_t>(
       tex->Pixels,
@@ -171,14 +170,12 @@ inline auto HandleImguiDestroyTextureEvent(ImTextureData *tex) -> Error {
     return Error::Create("Attempted to destroy null ImGui texture.");
   }
 
-  texture->release(); // Release ImGui reference
+  auto iter = Gui::ImGuiTextures.find(tex->GetTexID());
+  if (iter != Gui::ImGuiTextures.end()) {
+    Gui::ImGuiTextures.erase(iter);
+  }
+
   tex->SetTexID(0);
-
-  Utils::UnorderedErase(Gui::ImGuiTextures,
-                        [&](Graphics::Texture::Texture *current) -> bool {
-                          return current == texture;
-                        });
-
   tex->SetStatus(ImTextureStatus_Destroyed);
 
   return Error::Success();
@@ -227,16 +224,21 @@ inline auto HandleImguiUpdateTextureEvent(Graphics::GraphicsContext &context,
   return Error::Success();
 }
 
-inline auto SetupTemporaryCommandLists(
-    ImDrawData *drawData, Graphics::GraphicsContext &ctx,
-    std::vector<TemporaryCommandList> &temporaryCommandLists) -> Error {
-  for (int i = 0; drawData->CmdListsCount > i; ++i) {
-    auto *commandList = drawData->CmdLists[i];
-    if (temporaryCommandLists.size() <= i) {
-      temporaryCommandLists.emplace_back();
-    }
+static inline std::vector<TemporaryCommandList> TemporaryCommandLists; // NOLINT
 
-    auto &temporaryCommandList = temporaryCommandLists[i];
+inline auto SetupTemporaryCommandLists(ImDrawData *drawData,
+                                       Graphics::GraphicsContext &ctx)
+    -> Error {
+
+  TemporaryCommandLists.reserve(drawData->CmdListsCount);
+  if (TemporaryCommandLists.size() < drawData->CmdListsCount) {
+    TemporaryCommandLists.resize(drawData->CmdListsCount);
+  }
+
+  for (int i = 0; i < drawData->CmdListsCount; ++i) {
+    auto *commandList = drawData->CmdLists[i];
+
+    auto &temporaryCommandList = TemporaryCommandLists[i];
     temporaryCommandList.DrawList = commandList;
 
     auto vertexCount = commandList->VtxBuffer.Size;
@@ -249,12 +251,8 @@ inline auto SetupTemporaryCommandLists(
     if (vertexCount > temporaryCommandList.MaxVertexCount) {
       temporaryCommandList.MaxVertexCount = vertexCount;
 
-      if (temporaryCommandList.Mesh.get() != nullptr) {
-        temporaryCommandList.Mesh->release();
-      }
-
       auto meshCreationResult =
-          Graphics::Mesh::Create(ctx, format, vertexCount);
+          Graphics::Mesh::Create(ctx, format, vertexCount, "Imgui UI Mesh");
 
       if (Error::IsError(meshCreationResult)) {
         return meshCreationResult.error();
@@ -292,14 +290,13 @@ inline auto SetupTemporaryCommandLists(
   return Error::Success();
 }
 
-inline auto DrawTemporaryCommandLists(
-    Graphics::GraphicsContext &ctx, ImDrawData *drawData,
-    const std::vector<TemporaryCommandList> &temporaryCommandLists) -> Error {
+inline auto DrawTemporaryCommandLists(Graphics::GraphicsContext &ctx,
+                                      ImDrawData *drawData) -> Error {
 
-  Graphics::RenderTarget::SetShader(::Gui::ImGuiShaderRGBA8);
+  Graphics::DynamicRendering::SetShader(::Gui::ImGuiShaderRGBA8);
 
   for (int i = 0; drawData->CmdListsCount > i; ++i) {
-    const auto &temporaryCommandList = temporaryCommandLists[i];
+    const auto &temporaryCommandList = TemporaryCommandLists[i];
     auto *commandList = temporaryCommandList.DrawList;
 
     for (int cmd_i = 0; commandList->CmdBuffer.Size > cmd_i; ++cmd_i) {
@@ -320,7 +317,7 @@ inline auto DrawTemporaryCommandLists(
                     static_cast<uint32_t>(pcmd.ClipRect.w - pcmd.ClipRect.y),
             },
         };
-        Graphics::RenderTarget::SetScissor(&scissorRect);
+        Graphics::DynamicRendering::SetScissor(&scissorRect);
 
         auto *texture = // NOLINTNEXTLINE
             reinterpret_cast<Graphics::Texture::Texture *>(pcmd.GetTexID());
@@ -353,14 +350,12 @@ inline auto DrawTemporaryCommandLists(
 }
 
 auto Draw(lua_State *state) -> int {
-  static std::vector<TemporaryCommandList> temporaryCommandLists;
-
   ImGui::Render();
 
   auto ctx = *Graphics::GetCurrentGraphicsContext();
 
   auto inout = ImGui::GetIO();
-  Graphics::RenderTarget::SetCullMode(VK_CULL_MODE_NONE);
+  Graphics::DynamicRendering::SetCullMode(VK_CULL_MODE_NONE);
 
   auto changeResult = ChangeMouseState(inout);
   if (Error::IsError(changeResult)) {
@@ -374,7 +369,7 @@ auto Draw(lua_State *state) -> int {
     return luaL_error(state, "ImGui draw data is null");
   }
 
-  Graphics::RenderTarget::EndRendering(ctx);
+  Graphics::DynamicRendering::EndRendering(ctx);
 
   for (ImTextureData *tex : *drawData->Textures) {
     if (tex->Status == ImTextureStatus_WantCreate) {
@@ -398,8 +393,7 @@ auto Draw(lua_State *state) -> int {
     }
   }
 
-  auto setupResult =
-      SetupTemporaryCommandLists(drawData, ctx, temporaryCommandLists);
+  auto setupResult = SetupTemporaryCommandLists(drawData, ctx);
 
   if (Error::IsError(setupResult)) {
     return luaL_error(state,
@@ -407,8 +401,7 @@ auto Draw(lua_State *state) -> int {
                       setupResult.message.c_str());
   }
 
-  auto drawResult =
-      DrawTemporaryCommandLists(ctx, drawData, temporaryCommandLists);
+  auto drawResult = DrawTemporaryCommandLists(ctx, drawData);
 
   if (Error::IsError(drawResult)) {
     return luaL_error(state, "Failed to draw ImGui temporary command lists: %s",
@@ -543,6 +536,24 @@ auto MouseWheelMoved(lua_State *state) -> int {
   inout.AddMouseWheelEvent(x_scroll, y_scroll);
 
   return 0;
+}
+
+auto Shutdown() -> Error {
+  auto shutdownResult = Gui::ShutdownImGui();
+  if (Error::IsError(shutdownResult)) {
+    return shutdownResult;
+  }
+
+  // Debug log reference counts of meshes
+
+  for (auto &temporaryCommandList : TemporaryCommandLists) {
+    PrintInfo("Imgui Temporary Mesh Ref Count: {}",
+              temporaryCommandList.Mesh->getReferenceCount());
+  }
+
+  TemporaryCommandLists.clear();
+
+  return Error::Success();
 }
 
 } // namespace Wrap::Imgui

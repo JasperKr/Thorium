@@ -1,4 +1,6 @@
 #include "resource.hpp"
+#include "Graphics/buffer.hpp"
+#include "Modules/utils.hpp"
 
 namespace Graphics {
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
@@ -17,6 +19,68 @@ auto ScheduleDestruction(Texture::Texture *texture) -> void {
 auto ScheduleDestruction(Buffer *buffer) -> void {
   std::lock_guard<std::mutex> lock(ReleasedBuffersMutex);
   ReleasedBuffers.emplace_back(buffer);
+}
+
+inline auto CanBeDestroyed( // NOLINTNEXTLINE
+    const std::unordered_map<QueueID, uint64_t> &completedTimelineValues,
+    const std::unordered_map<QueueID, uint64_t> &resourceTimelineValues)
+    -> bool {
+
+  if (!GetDeferredDestructionAllowed()) {
+    return true;
+  }
+
+  // NOLINTNEXTLINE
+  for (const auto &[queueID, timelineValue] : resourceTimelineValues) {
+    auto iterator = completedTimelineValues.find(queueID);
+    if (iterator == completedTimelineValues.end() ||
+        iterator->second <= timelineValue) {
+      return false;
+    }
+  }
+  return true;
+}
+
+auto ProcessReleasedResources(
+    GraphicsContext &context,
+    const std::unordered_map<QueueID, uint64_t> &completedTimelineValues)
+    -> void {
+
+  {
+    std::lock_guard<std::mutex> lock(ReleasedTexturesMutex);
+
+    auto size = static_cast<int64_t>(ReleasedTextures.size());
+    for (int64_t i = size - 1; i >= 0; i--) {
+      auto &resource = ReleasedTextures.at(i);
+
+      if (CanBeDestroyed(completedTimelineValues,
+                         resource->GetTimelineValues())) {
+        Utils::UnorderedErase(
+            ReleasedTextures,
+            [&resource](const Ref<Graphics::Texture::Texture> &res) -> auto {
+              return resource.get() == res.get();
+            });
+      }
+    }
+  }
+
+  {
+    std::lock_guard<std::mutex> lock(ReleasedBuffersMutex);
+
+    auto size = static_cast<int64_t>(ReleasedBuffers.size());
+    for (int64_t i = size - 1; i >= 0; i--) {
+      const auto &resource = ReleasedBuffers.at(i);
+
+      if (CanBeDestroyed(completedTimelineValues,
+                         resource->GetTimelineValues())) {
+        Utils::UnorderedErase(
+            ReleasedBuffers,
+            [&resource](const Ref<Graphics::Buffer> &res) -> auto {
+              return resource.get() == res.get();
+            });
+      }
+    }
+  }
 }
 
 } // namespace Graphics

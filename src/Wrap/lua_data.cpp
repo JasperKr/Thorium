@@ -1,4 +1,5 @@
 #include "lua_data.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Wrap/proxy.hpp"
@@ -25,6 +26,8 @@ auto ToStack(lua_State *state, const LuaType &data) -> Error {
     lua_pushlstring(state, str.c_str(), str.size());
   } else if (std::holds_alternative<Proxy>(data)) {
     const auto &proxy = std::get<Proxy>(data);
+    PrintAlways("ToStack: Type: {}, Object ptr: {}", proxy.type->GetName(),
+                (void *)proxy.object);
     LuaWrap::PushObject(state, proxy.type, proxy.object);
   } else if (std::holds_alternative<std::vector<LuaData>>(data)) {
     lua_newtable(state);

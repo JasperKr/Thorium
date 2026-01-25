@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Modules/error.hpp"
 #include "Wrap/wrap.hpp"
 extern "C" {
 #include <lauxlib.h>
@@ -21,6 +22,8 @@ auto MouseWheelMoved(lua_State *state) -> int;
 auto KeyPressed(lua_State *state) -> int;
 auto KeyReleased(lua_State *state) -> int;
 auto TextInput(lua_State *state) -> int;
+
+auto Shutdown() -> Error;
 
 // NOLINTNEXTLINE
 static const luaL_Reg ImGuiLib[] = {

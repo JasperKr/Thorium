@@ -1,5 +1,6 @@
 #include "mesh.hpp"
 #include <algorithm>
+#include <string>
 #include <sys/types.h>
 
 #include "Graphics/barrier.hpp"
@@ -62,17 +63,15 @@ auto Mesh::UploadIndices(GraphicsContext &context,
 }
 
 auto Mesh::Create(GraphicsContext &context, VertexFormat vertexFormat,
-                  const std::span<uint8_t> &vertexData) -> Result<Ref<Mesh>> {
+                  const std::span<uint8_t> &vertexData,
+                  const std::string &debugName) -> Result<Ref<Mesh>> {
 
-  auto meshData = Ref<Mesh>::Make();
-  auto *mesh = meshData.get();
+  auto mesh = Ref<Mesh>::Make();
 
   assert(vertexData.size() % VertexFormatSize(vertexFormat, 0) == 0);
 
   mesh->VertexCount = vertexData.size() / VertexFormatSize(vertexFormat, 0);
-
   mesh->IndexCount = 0;
-
   mesh->Format = vertexFormat;
 
   VkMemoryPropertyFlags properties =
@@ -87,6 +86,8 @@ auto Mesh::Create(GraphicsContext &context, VertexFormat vertexFormat,
 
   vboCreationInfo.properties = properties;
   vboCreationInfo.size = vertexData.size();
+  vboCreationInfo.debugName = debugName + " Vertex Buffer";
+  mesh->DebugName = debugName;
 
   auto bufferResult = Buffer::Create(context, vboCreationInfo);
 
@@ -99,19 +100,18 @@ auto Mesh::Create(GraphicsContext &context, VertexFormat vertexFormat,
   mesh->DrawRange.Offset = 0;
   mesh->DrawRange.Count = mesh->VertexCount;
 
-  PrintAlways("Uploading {} bytes of vertex data.", vertexData.size());
-
   Error error = mesh->UploadVertices(context, vertexData, 0);
 
   if (Error::IsError(error)) {
     return error.AsUnexpected();
   }
 
-  return meshData;
+  return mesh;
 }
 
 auto Mesh::Create(GraphicsContext &context, VertexFormat vertexFormat,
-                  uint64_t vertexCount) // NOLINT
+                  uint64_t vertexCount,
+                  const std::string &debugName) // NOLINT
     -> Result<Ref<Mesh>> {
   auto size = VertexFormatSize(vertexFormat, 0);
 
@@ -124,8 +124,8 @@ auto Mesh::Create(GraphicsContext &context, VertexFormat vertexFormat,
 
   std::vector<uint32_t> indexData;
 
-  auto meshData = Ref<Mesh>::Make();
-  auto *mesh = meshData.get();
+  auto mesh = Ref<Mesh>::Make();
+  PrintInfo("Info mesh refcount: {}", mesh->getReferenceCount());
 
   mesh->VertexCount = vertexCount;
 
@@ -143,6 +143,8 @@ auto Mesh::Create(GraphicsContext &context, VertexFormat vertexFormat,
 
   vboCreationInfo.properties = properties;
   vboCreationInfo.size = vertexDataSize;
+  vboCreationInfo.debugName = debugName + " Vertex Buffer";
+  mesh->DebugName = debugName;
 
   auto bufferResult = Buffer::Create(context, vboCreationInfo);
 
@@ -155,7 +157,7 @@ auto Mesh::Create(GraphicsContext &context, VertexFormat vertexFormat,
   mesh->DrawRange.Offset = 0;
   mesh->DrawRange.Count = mesh->VertexCount;
 
-  return meshData;
+  return mesh;
 }
 
 [[nodiscard]] auto Mesh::GetVertexFormat() const -> VertexFormat {
@@ -195,10 +197,6 @@ auto Mesh::SetIndices(GraphicsContext &context,
   auto newCount = indexData.size() / GetIndexFormatSize(format);
 
   if (IndexBuffer.get() == nullptr || IndexBuffer->size < indexData.size()) {
-    if (IndexBuffer.get() != nullptr) {
-      IndexBuffer->ScheduleDestroy();
-    }
-
     Graphics::BufferCreationInfo iboCreationInfo = {};
     iboCreationInfo.usage =
         static_cast<uint32_t>(VK_BUFFER_USAGE_INDEX_BUFFER_BIT) |
@@ -211,6 +209,7 @@ auto Mesh::SetIndices(GraphicsContext &context,
 
     iboCreationInfo.properties = properties;
     iboCreationInfo.size = indexData.size();
+    iboCreationInfo.debugName = DebugName + " Index Buffer";
 
     auto bufferResult = Buffer::Create(context, iboCreationInfo);
 

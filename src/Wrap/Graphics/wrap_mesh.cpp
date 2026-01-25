@@ -606,15 +606,4 @@ auto wrap_GetIndexCount(lua_State *state) -> int {
   lua_pushinteger(state, static_cast<lua_Integer>(mesh->GetIndexCount()));
   return 1;
 }
-
-auto wrap_Release(lua_State *state) -> int {
-  auto *mesh = LuaWrap::ObjectFromLua<Mesh>(state, 1);
-
-  if (mesh == nullptr) {
-    return luaL_error(state, "Expected Mesh as first argument");
-  }
-
-  mesh->ScheduleDestroy();
-  return 0;
-}
 } // namespace Graphics

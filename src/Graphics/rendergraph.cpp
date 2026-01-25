@@ -1357,9 +1357,14 @@ auto inline AllocateResourceMemory(GraphicsContext &context, RenderGraph &graph,
     allocInfo.usage = VMA_MEMORY_USAGE_AUTO; // Let VMA decide
     allocInfo.requiredFlags = buffer->properties;
 
-    VkResult result =
-        vmaCreateBuffer(context.vmaAllocator, &bufferInfo, &allocInfo,
-                        &buffer->handle, &buffer->memory, nullptr);
+    {
+      std::lock_guard<std::mutex> lock(
+          Graphics::GraphicsContext::mutexes.vmaAllocator);
+
+      VkResult result =
+          vmaCreateBuffer(context.vmaAllocator, &bufferInfo, &allocInfo,
+                          &buffer->handle, &buffer->memory, nullptr);
+    }
   }
 
   return Error::Success();

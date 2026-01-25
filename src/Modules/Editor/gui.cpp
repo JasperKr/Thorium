@@ -1,9 +1,10 @@
 #include "gui.hpp"
-#include "Modules/console.hpp"
 #include "Modules/filesystem.hpp"
+#include "Modules/object.hpp"
 #include "SDL3/SDL_mouse.h"
 #include "imgui.h"
 #include <array>
+#include <unordered_map>
 
 namespace Gui {
 
@@ -146,15 +147,12 @@ auto LoadImGuiCursorMap() -> Error {
   return Error::Success();
 }
 
-// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
-std::vector<Graphics::Texture::Texture *> ImGuiTextures{};
+std::unordered_map<ImTextureID, Ref<Graphics::Texture::Texture>>
+    ImGuiTextures{}; // NOLINT
 
 auto ShutdownImGui() -> Error {
   ImGui::DestroyContext();
-
-  for (auto *texture : ImGuiTextures) {
-    texture->release();
-  }
+  ImGuiTextures.clear();
 
   return Error::Success();
 }

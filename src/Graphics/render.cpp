@@ -10,6 +10,7 @@
 #include "dynamicRendering.hpp"
 #include "graphics.hpp"
 #include <cassert>
+#include <cstddef>
 #include <mutex>
 #define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
@@ -392,6 +393,8 @@ GetOrderedCommands(GraphicsContext &context,
             });
       }
     } else {
+      PrintWarning("No recorded command buffer found for key {}", key);
+
 #ifndef NDEBUG
       return Error::Createf("Missing command buffer for '{}' (key: {})",
                             GlobalStitchInfo.orderingNames.at(idx), key);
@@ -491,35 +494,19 @@ inline auto SubmitBarriers(
   }
 
   GlobalStitchInfo.orderingKeys.clear();
+
+#ifndef NDEBUG
   GlobalStitchInfo.orderingNames.clear();
+#endif
 
   return Error::Success();
 }
 
-auto Present(Graphics::GraphicsContext &context) -> Error {
-  auto validateResult = RenderTarget::FinalizeFrame(context);
-  if (Error::IsError(validateResult)) {
-    return validateResult;
-  }
-
-  // Do note that the user must have started all async recording before calling this
-  // If the user tries to start recording after this point it will be part of the next frame
-  DisallowThreadRendering();
-
-  std::vector<Threading::RenderThreadData> threadRenderdatas{};
-
-  auto orderResult = GetOrderedCommands(context, threadRenderdatas);
-  if (Error::IsError(orderResult)) {
-    return orderResult;
-  }
-
-  auto barrierResult = SubmitBarriers(context, threadRenderdatas);
-  if (Error::IsError(barrierResult)) {
-    return barrierResult;
-  }
-
-  std::vector<VkCommandBuffer> finalCommandBuffers;
-
+inline auto GetFinalCommandBuffers(
+    const GraphicsContext &context,
+    std::vector<VkCommandBuffer> &finalCommandBuffers,
+    const std::vector<Threading::RenderThreadData> &threadRenderdatas)
+    -> size_t {
   // all thread command buffers + barrier command buffers + 1 present transition
   finalCommandBuffers.resize((threadRenderdatas.size() * 2) + 1);
 
@@ -550,6 +537,36 @@ auto Present(Graphics::GraphicsContext &context) -> Error {
   finalCommandBuffers.at(index) =
       GlobalStitchInfo.commandBuffers.at(context.frameIndex)
           .at(threadRenderdatas.size());
+
+  return index;
+}
+
+auto Present(Graphics::GraphicsContext &context) -> Error {
+  auto validateResult = DynamicRendering::FinalizeFrame(context);
+  if (Error::IsError(validateResult)) {
+    return validateResult;
+  }
+
+  // Do note that the user must have started all async recording before calling this
+  // If the user tries to start recording after this point it will be part of the next frame
+  DisallowThreadRendering();
+
+  std::vector<Threading::RenderThreadData> threadRenderdatas{};
+
+  auto orderResult = GetOrderedCommands(context, threadRenderdatas);
+  if (Error::IsError(orderResult)) {
+    return orderResult;
+  }
+
+  auto barrierResult = SubmitBarriers(context, threadRenderdatas);
+  if (Error::IsError(barrierResult)) {
+    return barrierResult;
+  }
+
+  std::vector<VkCommandBuffer> finalCommandBuffers;
+
+  size_t index =
+      GetFinalCommandBuffers(context, finalCommandBuffers, threadRenderdatas);
 
   // Start present transition command buffer
   auto *presentTransitionBuffer = finalCommandBuffers.at(index);
@@ -612,7 +629,7 @@ auto Present(Graphics::GraphicsContext &context) -> Error {
   }
 
   Graphics::SetDirtyState();
-  error = RenderTarget::BeginFrame(context);
+  error = DynamicRendering::BeginFrame(context);
   if (Error::IsError(error)) {
     return error;
   }

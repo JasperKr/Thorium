@@ -11,6 +11,7 @@
 #include <unordered_map>
 
 #if defined(LOG_ERRORS)
+#include "Modules/console.hpp"
 #endif
 #include <string>
 #define VK_NO_PROTOTYPES
@@ -235,8 +236,14 @@ struct [[nodiscard]] Error {
 
   [[nodiscard]] auto ToString() const {
     std::ostringstream oss;
-    oss << "Error: " << message << " (code " << code << ")\n";
-    oss << "Backtrace:\n" << backtrace;
+    if (code >= 0) {
+      oss << "Success: " << message;
+      return oss.str();
+    }
+    oss << "Error: " << message << " (code " << code << ")";
+    if (!backtrace.empty()) {
+      oss << "\nBacktrace:\n" << backtrace;
+    }
     return oss.str();
   }
 
@@ -254,11 +261,8 @@ struct [[nodiscard]] Error {
     Error err = Error{
         .message = message, .code = code, .backtrace = GetStackTrace(level)};
 #if defined(LOG_ERRORS)
-    if (code != 0) {
-      std::cerr << "Error: " << message << "\n"
-                << "Code: " << code << "\n"
-                << "Backtrace:\n"
-                << err.backtrace << "\n";
+    if (code < 0) {
+      PrintError("{}", err.ToString());
     }
 #endif
     return err;

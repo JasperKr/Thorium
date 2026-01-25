@@ -23,9 +23,6 @@ auto InitializeUniformBufferModule(GraphicsContext &context) -> Error {
 }
 
 auto DeInitializeUniformBufferModule(GraphicsContext &context) -> void {
-  for (auto &bufferObj : ThreadUniformBuffers) {
-    bufferObj.Destroy(context);
-  }
   ThreadUniformBuffers.clear();
 }
 

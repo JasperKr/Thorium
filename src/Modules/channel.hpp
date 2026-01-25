@@ -27,12 +27,12 @@ const static Type channelType = Type("Channel");
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 extern std::vector<Ref<struct Channel>> Channels;
 
+auto AddReferences(const LuaWrap::Data::LuaType &data) -> void;
+auto RemoveReferences(const LuaWrap::Data::LuaType &data) -> void;
+
 struct Channel : Object {
 public:
-  Channel() {
-    Channels.emplace_back(this);
-    this->release(); // The channels vector does not own a reference
-  }
+  Channel() = default;
   Channel(const Channel &) = delete;
   Channel(Channel &&) = delete;
   auto operator=(const Channel &) -> Channel & = delete;
@@ -64,6 +64,17 @@ public:
 
   auto DestroyImmediately() -> void {
     PrintDebug("Destroying channel immediately.");
+
+    {
+      std::lock_guard<std::mutex> lock(mutex);
+      // Iterate through messages and release references
+      while (!messages.empty()) {
+        RemoveReferences(messages.front());
+
+        messages.pop();
+      }
+    }
+
     std::lock_guard<std::mutex> lock(isDestroyedMutex);
     isDestroyed = true;
 
@@ -71,7 +82,7 @@ public:
     condition.notify_all();
   }
 
-  ~Channel() override = default;
+  ~Channel() override { DestroyImmediately(); };
 
 private:
   std::queue<LuaWrap::Data::LuaType> messages;

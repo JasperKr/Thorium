@@ -7,6 +7,7 @@
 #include "Wrap/lua_data.hpp"
 #include "Wrap/wrap.hpp"
 #include "event.hpp"
+#include <cstdint>
 #include <mutex>
 #include <thread>
 #include <vector>
@@ -33,12 +34,15 @@ auto Thread::Create(const std::string &script) -> Ref<Thread> {
 }
 
 auto Thread::Close(ThreadStatus status, const std::string &message) -> void {
+  PrintAlways("Deinitializing graphics thread module...");
+  Graphics::Threading::Deinitialize(*Graphics::GetCurrentGraphicsContext());
+
+  PrintAlways("Closing thread...");
   if (state != nullptr) {
     lua_close(state);
-    state = nullptr;
   }
 
-  Graphics::Threading::Deinitialize(*Graphics::GetCurrentGraphicsContext());
+  PrintAlways("Thread closed");
 
   {
     std::lock_guard<std::mutex> lock(statusMutex);
@@ -53,6 +57,10 @@ auto Thread::Close(ThreadStatus status, const std::string &message) -> void {
         .Values = {message},
     });
   }
+
+  statusCV.notify_all();
+
+  this->release(); // Releases self-ownership
 }
 
 auto Thread::Run(Thread *thread,
@@ -61,6 +69,8 @@ auto Thread::Run(Thread *thread,
   lua_State *state = luaL_newstate();
   luaL_openlibs(state);
   thread->state = state;
+  thread->debugname = // NOLINTNEXTLINE
+      "Thread_" + std::to_string(reinterpret_cast<uintptr_t>(thread));
 
   lua_getglobal(state, "package");
   lua_getfield(state, -1, "path");
@@ -74,6 +84,10 @@ auto Thread::Run(Thread *thread,
   lua_pop(state, 1); // remove package table
 
   LuaWrap::RegisterModules(state);
+
+  Graphics::ContextDebugname = thread->debugname;
+  PrintInfo("Initializing graphics with debug name: {}",
+            Graphics::ContextDebugname);
 
   auto err =
       Graphics::Threading::Initialize(*Graphics::GetCurrentGraphicsContext());
@@ -94,6 +108,7 @@ auto Thread::Run(Thread *thread,
     std::lock_guard<std::mutex> lock(thread->statusMutex);
     thread->status = ThreadStatus::Running;
   }
+  thread->statusCV.notify_all();
 
   int result = 0;
 
@@ -102,8 +117,6 @@ auto Thread::Run(Thread *thread,
   } else {
     result = luaL_loadstring(state, thread->script.c_str());
   }
-
-  PrintAlways("Thread script load result: {}", result);
 
   if (result == LUA_OK) {
     auto error = LuaWrap::PushVarargs(state, launchArguments, count);
@@ -116,6 +129,7 @@ auto Thread::Run(Thread *thread,
     result = lua_pcall(state, count, 0, 0);
   }
 
+  // Stop rendering if still active (crashed or user error, for example)
   if (Graphics::Threading::CurrentRenderThreadInfo.get() != nullptr) {
     {
       std::lock_guard<std::mutex> lock(
@@ -123,6 +137,8 @@ auto Thread::Run(Thread *thread,
       Graphics::Threading::CurrentRenderThreadInfo->currentlyRecording = false;
     }
     Graphics::Threading::CurrentRenderThreadInfo->availabilityCV.notify_all();
+
+    PrintWarning("thread was still rendering when exiting.");
   }
 
   if (result != LUA_OK) {
@@ -142,7 +158,12 @@ auto Thread::Run(Thread *thread,
 
 auto Thread::Start(const std::vector<LuaWrap::Data::LuaType> &launchArguments,
                    int count) -> void {
+
+  this->retain(); // Owns itself
+
   handle = std::thread(Threading::Thread::Run, this, launchArguments, count);
+
+  handle.detach();
 }
 
 auto Thread::GetStatus() const -> ThreadStatus {
@@ -150,16 +171,11 @@ auto Thread::GetStatus() const -> ThreadStatus {
   return status;
 }
 
-auto Thread::Stop() -> void {
-  if (status != ThreadStatus::Running) {
-    return;
-  }
-
-  if (handle.joinable()) {
-    handle.join();
-  }
-
-  status = ThreadStatus::Stopped;
+auto Thread::Wait() -> void {
+  // Wait until status is not Running
+  std::unique_lock<std::mutex> lock(statusMutex);
+  statusCV.wait(
+      lock, [this]() -> bool { return this->status != ThreadStatus::Running; });
 }
 
 auto Thread::GetErrorMessage() const -> std::string {

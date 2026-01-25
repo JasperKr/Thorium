@@ -6,10 +6,10 @@ local threadDoneChannel = Thorium.thread.newChannel()
 local startThreadChannel = Thorium.thread.newChannel()
 thread:start(threadDoneChannel, startThreadChannel)
 
-local secondThread = Thorium.thread.newThread("src/Engine/thread2.lua")
-local secondThreadDoneChannel = Thorium.thread.newChannel()
-local startSecondThreadChannel = Thorium.thread.newChannel()
-secondThread:start(secondThreadDoneChannel, startSecondThreadChannel)
+-- local secondThread = Thorium.thread.newThread("src/Engine/thread2.lua")
+-- local secondThreadDoneChannel = Thorium.thread.newChannel()
+-- local startSecondThreadChannel = Thorium.thread.newChannel()
+-- secondThread:start(secondThreadDoneChannel, startSecondThreadChannel)
 
 function Thorium.update(dt)
   i = i + 1
@@ -60,6 +60,12 @@ function Thorium.wheelmoved(x, y)
 end
 
 function Thorium.quit()
+  -- startThreadChannel:push(false)
+  -- startSecondThreadChannel:push(false)
+
+  -- thread:wait()
+  -- secondThread:wait()
+
   print("Quitting the application.")
   return 1
 end
@@ -71,17 +77,17 @@ local firstFrame = true
 function Thorium.draw()
   if (firstFrame) then
     firstFrame = false
-    Thorium.graphics.useCommands("load")
+    -- Thorium.graphics.useCommands("load")
   end
 
   startThreadChannel:push(true)
-  startSecondThreadChannel:push(true)
+  -- startSecondThreadChannel:push(true)
 
-  threadDoneChannel:demand(5)
-  secondThreadDoneChannel:demand(5)
+  threadDoneChannel:demand(1)
+  -- secondThreadDoneChannel:demand(5)
 
   Thorium.graphics.useCommands("gui")
-  for i = 1, 4 do
-    Thorium.graphics.useCommands("square-" .. tostring(i))
-  end
+  -- for i = 1, 4 do
+  --   Thorium.graphics.useCommands("square-" .. tostring(i))
+  -- end
 end

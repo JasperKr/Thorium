@@ -8,7 +8,6 @@
 #include "guiState.h"
 #include "imgui.h"
 #include <string>
-#include <vector>
 
 extern "C" {
 #include <lauxlib.h>
@@ -343,8 +342,8 @@ inline auto GetImGuiCursorMap()
   return imgui_cursor_to_mouse_cursor;
 }
 
-// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
-extern std::vector<Graphics::Texture::Texture *> ImGuiTextures;
+extern std::unordered_map<ImTextureID, Ref<Graphics::Texture::Texture>>
+    ImGuiTextures; // NOLINT
 
 auto LoadImGuiCursorMap() -> Error;
 auto ShutdownImGui() -> Error;

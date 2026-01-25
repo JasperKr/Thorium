@@ -24,8 +24,6 @@ auto BindMesh(GraphicsContext &context, VkCommandBuffer cmdBuffer,
                            .access = VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT,
                        });
 
-  PrintDebug("Validating mesh topology with {} vertices", count);
-
   switch (mesh.GetTopology()) {
   case VK_PRIMITIVE_TOPOLOGY_LINE_LIST:
     if (count % 2 != 0) {
@@ -58,7 +56,6 @@ auto BindMesh(GraphicsContext &context, VkCommandBuffer cmdBuffer,
   std::vector<VkBuffer> vertexBuffers = {mesh.GetVertexBuffer()->handle};
   std::vector<VkDeviceSize> offsets = {0};
 
-  PrintDebug("Binding vertex buffer");
   vkCmdBindVertexBuffers(cmdBuffer, 0, 1, vertexBuffers.data(), offsets.data());
 
   if (mesh.GetIndexCount() > 0) {
@@ -102,12 +99,12 @@ auto Draw(GraphicsContext &context, const Mesh &mesh, uint32_t instanceCount)
     return bindResult;
   }
 
-  RenderTarget::SetBindPoint(VK_PIPELINE_BIND_POINT_GRAPHICS);
-  RenderTarget::SetVertexFormat(format);
-  RenderTarget::SetTopology(mesh.GetTopology());
+  DynamicRendering::SetBindPoint(VK_PIPELINE_BIND_POINT_GRAPHICS);
+  DynamicRendering::SetVertexFormat(format);
+  DynamicRendering::SetTopology(mesh.GetTopology());
 
   PrintDebug("Preparing rendering");
-  auto error = RenderTarget::PrepareRendering(context);
+  auto error = DynamicRendering::PrepareRendering(context);
   if (Error::IsError(error)) {
     return error;
   }
@@ -131,8 +128,8 @@ auto Dispatch(GraphicsContext &context, const Math::Uvec3 &threadgroups)
     -> Error {
   auto *commandBuffer = GetCommandBuffer();
 
-  RenderTarget::SetBindPoint(VK_PIPELINE_BIND_POINT_COMPUTE);
-  auto error = RenderTarget::PrepareRendering(context);
+  DynamicRendering::SetBindPoint(VK_PIPELINE_BIND_POINT_COMPUTE);
+  auto error = DynamicRendering::PrepareRendering(context);
   if (Error::IsError(error)) {
     return error;
   }
@@ -147,8 +144,8 @@ auto DispatchIndirect(GraphicsContext &context,
     -> Error {
   auto *commandBuffer = GetCommandBuffer();
 
-  RenderTarget::SetBindPoint(VK_PIPELINE_BIND_POINT_COMPUTE);
-  auto error = RenderTarget::PrepareRendering(context);
+  DynamicRendering::SetBindPoint(VK_PIPELINE_BIND_POINT_COMPUTE);
+  auto error = DynamicRendering::PrepareRendering(context);
   if (Error::IsError(error)) {
     return error;
   }
@@ -169,11 +166,11 @@ auto DrawIndirect(GraphicsContext &context, const Mesh &mesh,
     return bindResult;
   }
 
-  RenderTarget::SetBindPoint(VK_PIPELINE_BIND_POINT_GRAPHICS);
-  RenderTarget::SetVertexFormat(mesh.GetVertexFormat());
-  RenderTarget::SetTopology(mesh.GetTopology());
+  DynamicRendering::SetBindPoint(VK_PIPELINE_BIND_POINT_GRAPHICS);
+  DynamicRendering::SetVertexFormat(mesh.GetVertexFormat());
+  DynamicRendering::SetTopology(mesh.GetTopology());
 
-  auto error = RenderTarget::PrepareRendering(context);
+  auto error = DynamicRendering::PrepareRendering(context);
   if (Error::IsError(error)) {
     return error;
   }
@@ -200,11 +197,11 @@ auto Draw(GraphicsContext &context, const VkPrimitiveTopology &topology,
           uint32_t vertexCount, uint32_t instanceCount) -> Error { // NOLINT
   auto *commandBuffer = GetCommandBuffer();
 
-  RenderTarget::SetBindPoint(VK_PIPELINE_BIND_POINT_GRAPHICS);
-  RenderTarget::SetVertexFormat({});
-  RenderTarget::SetTopology(topology);
+  DynamicRendering::SetBindPoint(VK_PIPELINE_BIND_POINT_GRAPHICS);
+  DynamicRendering::SetVertexFormat({});
+  DynamicRendering::SetTopology(topology);
 
-  auto error = RenderTarget::PrepareRendering(context);
+  auto error = DynamicRendering::PrepareRendering(context);
   if (Error::IsError(error)) {
     return error;
   }
@@ -219,11 +216,11 @@ auto Draw(GraphicsContext &context, const Ref<Buffer> &indexBuffer,
           uint32_t instanceCount) -> Error {
   auto *commandBuffer = GetCommandBuffer();
 
-  RenderTarget::SetBindPoint(VK_PIPELINE_BIND_POINT_GRAPHICS);
-  RenderTarget::SetVertexFormat({});
-  RenderTarget::SetTopology(topology);
+  DynamicRendering::SetBindPoint(VK_PIPELINE_BIND_POINT_GRAPHICS);
+  DynamicRendering::SetVertexFormat({});
+  DynamicRendering::SetTopology(topology);
 
-  auto error = RenderTarget::PrepareRendering(context);
+  auto error = DynamicRendering::PrepareRendering(context);
   if (Error::IsError(error)) {
     return error;
   }

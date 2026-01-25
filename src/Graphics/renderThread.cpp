@@ -145,7 +145,7 @@ auto AquireCommandBuffer(Graphics::GraphicsContext &context,
 }
 
 auto SubmitCommands(Graphics::GraphicsContext &context) -> Error {
-  auto validateResult = RenderTarget::FinalizeFrame(context);
+  auto validateResult = DynamicRendering::FinalizeFrame(context);
   if (Error::IsError(validateResult)) {
     return validateResult;
   }
@@ -207,20 +207,21 @@ auto Initialize(Graphics::GraphicsContext &context) -> Error {
   auto &tcontext = GetThreadContext();
   tcontext.graphicsContext = &context;
 
+  PrintDebug("Creating command pool for render thread...");
+
   auto poolCreationResult = CreateCommandPool(tcontext);
   if (Error::IsError(poolCreationResult)) {
     return poolCreationResult;
   }
 
-  // auto error = Graphics::LoadBufferModule(context);
-  // if (Error::IsError(error)) {
-  //   return error;
-  // }
+  PrintDebug("Initializing uniform buffer module...");
 
   auto error = InitializeUniformBufferModule(context);
   if (Error::IsError(error)) {
     return error;
   }
+
+  PrintDebug("Loading shader modules...");
 
   auto shaderModuleLoadResult = Graphics::Shader::LoadModule();
 
@@ -230,7 +231,7 @@ auto Initialize(Graphics::GraphicsContext &context) -> Error {
 
   PrintDebug("Shader modules loaded successfully.");
 
-  auto rendertargetLoadError = Graphics::RenderTarget::Load(context);
+  auto rendertargetLoadError = Graphics::DynamicRendering::Load(context);
 
   if (Error::IsError(rendertargetLoadError)) {
     return rendertargetLoadError;
@@ -240,13 +241,12 @@ auto Initialize(Graphics::GraphicsContext &context) -> Error {
 }
 
 auto Deinitialize(Graphics::GraphicsContext &context) -> void {
-  // DeInitializeUniformBufferModule(context);
-  ThreadUniformBuffers.clear();
-  // auto err = Graphics::UnloadBufferModule(context);
+  DeInitializeUniformBufferModule(context);
+  auto err = Graphics::UnloadLocalBufferModule(context);
 
-  // if (Error::IsError(err)) {
-  //   PrintAlways("Error deinitializing buffer module: {}", err.message);
-  // }
+  if (Error::IsError(err)) {
+    PrintAlways("Error deinitializing buffer module: {}", err.message);
+  }
 }
 
 auto GetGeneratedCommands() -> std::vector<std::string> {

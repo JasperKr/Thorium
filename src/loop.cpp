@@ -6,15 +6,21 @@
 #include "Graphics/render.hpp"
 #include "Graphics/resource.hpp"
 #include "Graphics/shader.hpp"
+#include "Graphics/texture.hpp"
 #include "Modules/Editor/gui.hpp"
 #include "Modules/config.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/filesystem.hpp"
 #include "Modules/thread.hpp"
+#include "Wrap/Modules/Editor/wrap_imgui.hpp"
+#include <cstdint>
 #include <filesystem>
 #include <string>
 #include <vector>
+
+// Enable if encountering C++ exceptions
+// #define DEBUG_CPP_EXCEPTION
 
 #define VK_NO_PROTOTYPES
 #include <vulkan/vulkan.h>
@@ -237,6 +243,12 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
 
   Graphics::SetCurrentGraphicsContext(&context);
 
+  auto texturesResult =
+      Graphics::DynamicRendering::GetSwapchainTextures(context);
+  if (Error::IsError(texturesResult)) {
+    return texturesResult;
+  }
+
   auto error = Graphics::InitializeGlobalTimelineSemaphore(context);
   if (Error::IsError(error)) {
     return error;
@@ -252,7 +264,7 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
 
   PrintDebug("Shader modules loaded successfully.");
 
-  auto rendertargetLoadError = Graphics::RenderTarget::Load(context);
+  auto rendertargetLoadError = Graphics::DynamicRendering::Load(context);
 
   if (Error::IsError(rendertargetLoadError)) {
     return rendertargetLoadError;
@@ -302,6 +314,8 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
   lua_remove(state, -2); // remove debug table
   auto tracebackIndex = lua_gettop(state);
 
+  auto mainLoopResult = Error::Success();
+
   while (Event::MainLoopRunning) {
     runCallback.push();
 
@@ -311,7 +325,7 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
       Event::MainLoopRunning = false;
       Event::ExitCode = 1;
 
-      return Error::Create(luaErrorMessage);
+      mainLoopResult = Error::Create(luaErrorMessage);
     }
 
     // returned value nil == continue, non-nil == exit with code
@@ -326,6 +340,11 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
     }
   }
 
+  // Uses internal lua state so we must do this before closing lua
+  runCallback.reset();
+
+  Graphics::DynamicRendering::SwapchainTextures.clear();
+
   PrintInfo("Waiting on device idle...");
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
@@ -335,22 +354,15 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
   // Force all deferred destructions to happen now
   Graphics::GetDeferredDestructionAllowed() = false;
 
-  auto shutdownResult = Gui::ShutdownImGui();
+  auto shutdownResult = Wrap::Imgui::Shutdown();
   if (Error::IsError(shutdownResult)) {
     PrintError("Error during ImGui shutdown: {}", shutdownResult.message);
   }
 
-  auto currentTimelineResult =
-      Graphics::GetCurrentTimelineSemaphoreValue(context);
-
-  if (Error::IsError(currentTimelineResult)) {
-    return currentTimelineResult.error();
-  }
-
-  uint64_t completedValue = currentTimelineResult.value();
+  Graphics::Texture::UnloadModule();
 
   std::unordered_map<Graphics::QueueID, uint64_t> completedTimelineValues = {
-      {0, completedValue},
+      {0, Graphics::GetCPUTimelineSemaphoreValue(context) + 1},
   };
 
   Graphics::ProcessReleasedResources(context, completedTimelineValues);
@@ -360,11 +372,6 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
 
   PrintInfo("Deinitializing threading module...");
 
-  // result = FlushBufferUploads(context);
-  // if (Error::IsError(result)) {
-  //   return result;
-  // }
-
   Threading::UnloadModule();
 
   PrintInfo("Deinitializing graphics...");
@@ -372,6 +379,11 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
   Graphics::DeInitializeUniformBufferModule(context);
 
   PrintInfo("Unloading buffer module...");
+
+  result = Graphics::UnloadLocalBufferModule(context);
+  if (Error::IsError(result)) {
+    return result;
+  }
 
   result = Graphics::UnloadBufferModule(context);
   if (Error::IsError(result)) {
@@ -387,7 +399,7 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
   Graphics::Shader::UnloadModule(context);
 
   PrintInfo("Destroying rendertargets...");
-  Graphics::RenderTarget::Destroy(context);
+  Graphics::DynamicRendering::Destroy(context);
 
   PrintInfo("Destroying graphics context...");
 
@@ -395,5 +407,5 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
 
   PrintInfo("App shutdown complete.");
 
-  return Error::Success();
+  return mainLoopResult;
 }
