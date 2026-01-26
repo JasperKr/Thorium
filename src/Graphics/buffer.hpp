@@ -7,8 +7,8 @@
 #include "Modules/object.hpp"
 #include "graphics.hpp"
 #include <cstdint>
+#include <mutex>
 #include <span>
-#include <unordered_map>
 #define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
 namespace Graphics {
@@ -37,6 +37,8 @@ auto UnloadBufferModule(const GraphicsContext &context) -> Error;
 static const Type bufferType = Type("Internal Buffer");
 
 struct Buffer : Object, Barrier::GraphicsResource {
+  std::mutex mutex;
+
   VkBuffer handle = VK_NULL_HANDLE;
   VmaAllocation memory = VK_NULL_HANDLE;
   VkDeviceSize size = 0;
@@ -58,15 +60,12 @@ struct Buffer : Object, Barrier::GraphicsResource {
   Buffer(Buffer &&) noexcept = delete;
   auto operator=(Buffer &&) noexcept -> Buffer & = delete;
 
-  std::unordered_map<QueueID, uint64_t> lastUsedTimelineValues;
+  uint64_t lastUsedTimestamp{};
   bool released{false};
 
-  auto GetTimelineValues() const
-      -> const std::unordered_map<QueueID, uint64_t> & {
-    return lastUsedTimelineValues;
-  }
+  auto GetTimestamp() const -> uint64_t { return lastUsedTimestamp; }
 
-  auto MarkUse(QueueID queueID, uint64_t timelineValue) -> void;
+  auto MarkUse() -> void;
 
   static auto Create(Graphics::GraphicsContext &context,
                      const Graphics::BufferCreationInfo &info)

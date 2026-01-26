@@ -1,5 +1,6 @@
 #include "mesh.hpp"
 #include <algorithm>
+#include <mutex>
 #include <string>
 #include <sys/types.h>
 
@@ -21,15 +22,8 @@
 namespace Graphics {
 
 auto Mesh::ScheduleDestroy() -> void {
-  if (VertexBuffer.get() == nullptr || IndexBuffer.get() == nullptr) {
-    PrintError("Mesh resources already released or were never allocated.");
-    return;
-  }
-
-  PrintAlways("Scheduling mesh for destruction.");
-
-  VertexBuffer->release();
-  IndexBuffer->release();
+  VertexBuffer.reset();
+  IndexBuffer.reset();
 }
 
 static auto VertexFormatSize(VertexFormat &format, uint32_t binding)
@@ -47,17 +41,21 @@ auto Mesh::UploadVertices(GraphicsContext &context,
                            .access = VK_ACCESS_2_TRANSFER_WRITE_BIT,
                        });
 
+  std::lock_guard<std::mutex> lock(VertexBuffer->mutex);
+
   return VertexBuffer->SetData(context, vertices, offset);
 }
 
 auto Mesh::UploadIndices(GraphicsContext &context,
                          const std::span<uint8_t> &indices, uint64_t offset,
-                         IndexFormat format) -> Error {
+                         VkIndexType format) -> Error {
   Barrier::UpdateUsage(context, *IndexBuffer,
                        Barrier::ResourceState{
                            .stages = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
                            .access = VK_ACCESS_2_TRANSFER_WRITE_BIT,
                        });
+
+  std::lock_guard<std::mutex> lock(IndexBuffer->mutex);
 
   return IndexBuffer->SetData(context, indices, offset);
 }
@@ -187,11 +185,12 @@ auto Mesh::SetVertices(GraphicsContext &context,
   return UploadVertices(context, vertexData, offset);
 }
 auto Mesh::SetIndices(GraphicsContext &context,
-                      const std::span<uint8_t> &indexData, IndexFormat format)
+                      const std::span<uint8_t> &indexData, VkIndexType format)
     -> Error {
 
-  if (format == IndexFormat::None) {
-    return Error::Create("Invalid Index Format: None");
+  if (format != VK_INDEX_TYPE_UINT16 && format != VK_INDEX_TYPE_UINT32 &&
+      format != VK_INDEX_TYPE_UINT8) {
+    return Error::Create("Invalid Index Type");
   }
 
   auto newCount = indexData.size() / GetIndexFormatSize(format);
@@ -233,11 +232,12 @@ auto Mesh::SetIndices(GraphicsContext &context,
 auto Mesh::SetVertexBuffer(const Ref<Buffer> &buffer) -> void {
   VertexBuffer = buffer;
 }
-auto Mesh::SetIndexBuffer(const Ref<Buffer> &buffer, IndexFormat format)
+auto Mesh::SetIndexBuffer(const Ref<Buffer> &buffer, VkIndexType format)
     -> Error {
 
-  if (format == IndexFormat::None) {
-    return Error::Create("Invalid Index Format: None");
+  if (format != VK_INDEX_TYPE_UINT16 && format != VK_INDEX_TYPE_UINT32 &&
+      format != VK_INDEX_TYPE_UINT8) {
+    return Error::Create("Invalid Index Type");
   }
 
   IndexBuffer = buffer;
@@ -246,7 +246,7 @@ auto Mesh::SetIndexBuffer(const Ref<Buffer> &buffer, IndexFormat format)
   return Error::Success();
 }
 
-auto Mesh::GetIndexFormat() const -> IndexFormat { return IndicesFormat; }
+auto Mesh::GetIndexFormat() const -> VkIndexType { return IndicesFormat; }
 
 auto Mesh::GetVertexBuffer() const -> Ref<Buffer> { return VertexBuffer; }
 auto Mesh::GetIndexBuffer() const -> Ref<Buffer> { return IndexBuffer; }

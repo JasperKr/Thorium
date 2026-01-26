@@ -472,6 +472,7 @@ auto Buffer::Create(GraphicsContext &context, const BufferCreationInfo &info)
   }
 
   PrintDebug("Buffer size in bytes: {}", buffer->sizeInBytes);
+  buffer->lastUsedTimestamp = GetCPUTimelineSemaphoreValue();
 
   return buffer;
 }
@@ -485,9 +486,7 @@ auto Buffer::SetData(GraphicsContext &context,
     return result;
   }
 
-  auto timelineValue = GetCPUTimelineSemaphoreValue(context);
-
-  MarkUse(0, timelineValue);
+  MarkUse();
 
   return Error::Success();
 }
@@ -496,20 +495,13 @@ auto Buffer::ScheduleDestroy() -> void {
   assert(!released);
   assert(handle != nullptr);
 
-  PrintAlways("Scheduling buffer for destruction, handle {}", (void *)handle);
-
   ScheduleDestruction(this);
   released = true;
 }
 
-auto Buffer::MarkUse(const QueueID queueID, const uint64_t timelineValue)
-    -> void {
-  uint64_t previousValue{};
-  if (lastUsedTimelineValues.contains(queueID)) {
-    previousValue = lastUsedTimelineValues.at(queueID);
-  }
-
-  lastUsedTimelineValues[queueID] = (std::max)(previousValue, timelineValue);
+auto Buffer::MarkUse() -> void {
+  lastUsedTimestamp =
+      (std::max)(lastUsedTimestamp, GetCPUTimelineSemaphoreValue());
 }
 
 // NOLINTNEXTLINE

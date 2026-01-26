@@ -21,7 +21,6 @@ GraphicsMutexes GraphicsContext::mutexes = {};
 
 GraphicsContext *g_ctx = nullptr;
 inline VkSemaphore globalTimelineSemaphore = nullptr;
-std::mutex globalTimelineSemaphoreMutex{};
 inline std::atomic<uint64_t> currentCPUTimelineValue = 1;
 
 thread_local std::string ContextDebugname{};
@@ -47,7 +46,6 @@ auto InitializeGlobalTimelineSemaphore(GraphicsContext &context) -> Error {
 
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    std::lock_guard<std::mutex> lock2(globalTimelineSemaphoreMutex);
     auto result = Error::Create(vkCreateSemaphore(
         context.device, &semInfo, nullptr, &globalTimelineSemaphore));
     if (Error::IsError(result)) {
@@ -61,7 +59,6 @@ auto InitializeGlobalTimelineSemaphore(GraphicsContext &context) -> Error {
 auto DeInitializeGlobalTimelineSemaphore(GraphicsContext &context) -> void {
   if (globalTimelineSemaphore != VK_NULL_HANDLE) {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    std::lock_guard<std::mutex> lock2(globalTimelineSemaphoreMutex);
     vkDestroySemaphore(context.device, globalTimelineSemaphore, nullptr);
     globalTimelineSemaphore = VK_NULL_HANDLE;
   }
@@ -71,26 +68,20 @@ auto GetGlobalTimelineSemaphore(GraphicsContext &context) -> VkSemaphore {
   return globalTimelineSemaphore;
 }
 
-auto GetCPUTimelineSemaphoreValue(GraphicsContext &context) -> uint64_t {
+auto GetCPUTimelineSemaphoreValue() -> uint64_t {
   return currentCPUTimelineValue.load();
-}
-
-auto SetCPUTimelineSemaphoreValue(GraphicsContext &context, uint64_t newValue)
-    -> void {
-  currentCPUTimelineValue.store(newValue);
 }
 
 auto IncrementCPUTimelineSemaphoreValue(GraphicsContext &context) -> uint64_t {
   return currentCPUTimelineValue.fetch_add(1) + 1;
 }
 
-auto GetCurrentTimelineSemaphoreValue(GraphicsContext &context)
+auto GetCurrentTimelineSemaphoreValue(const GraphicsContext &context)
     -> Result<uint64_t> {
   uint64_t completedValue = UINT64_MAX;
 
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    std::lock_guard<std::mutex> lock2(globalTimelineSemaphoreMutex);
     auto result = Error::Create(vkGetSemaphoreCounterValue(
         context.device, globalTimelineSemaphore, &completedValue));
 
@@ -145,15 +136,16 @@ static auto FindSurfaceFormat(GraphicsContext &context)
   return Error::Unexpected("No suitable surface format found", -2);
 }
 
-// Prefer:
-// Vsync >
-// No cap & tearing >
-// FPS capped, late frames allowed >
-// Everything else
-static const std::vector<VkPresentModeKHR> PresentModeScores = {
+static const std::vector<VkPresentModeKHR> PresentModeScoresVsync = {
     VK_PRESENT_MODE_FIFO_KHR,
-    VK_PRESENT_MODE_MAILBOX_KHR,
     VK_PRESENT_MODE_FIFO_RELAXED_KHR,
+};
+
+static const std::vector<VkPresentModeKHR> PresentModeScoresNoVsync = {
+    VK_PRESENT_MODE_MAILBOX_KHR,
+    VK_PRESENT_MODE_IMMEDIATE_KHR,
+    VK_PRESENT_MODE_FIFO_RELAXED_KHR,
+    VK_PRESENT_MODE_FIFO_KHR,
 };
 
 static auto FindPhysicalDevice(GraphicsContext &context) -> Error {
@@ -271,7 +263,7 @@ static auto FindPresentMode(GraphicsContext &context)
                                             context.surface, &presentModeCount,
                                             presentModes.data());
 
-  for (const auto &preferredMode : PresentModeScores) {
+  for (const auto &preferredMode : PresentModeScoresVsync) {
     for (const auto &availableMode : presentModes) {
       if (preferredMode == availableMode) {
         return preferredMode;

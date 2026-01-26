@@ -6,6 +6,7 @@
 #include "Modules/object.hpp"
 #include "Modules/type.hpp"
 #include "graphics.hpp"
+#include <mutex>
 #include <span>
 
 #define VK_NO_PROTOTYPES
@@ -48,6 +49,8 @@ extern std::unordered_map<std::pair<VkFormat, TextureType>, Ref<struct Texture>,
 auto UnloadModule() -> void;
 
 struct Texture : Object, Barrier::GraphicsResource {
+  std::mutex mutex;
+
   VkExtent3D size{};
   VkFormat format = VK_FORMAT_UNDEFINED;
   VkImage image = VK_NULL_HANDLE;
@@ -66,7 +69,7 @@ struct Texture : Object, Barrier::GraphicsResource {
   bool released = false;
   bool isSwapchainView = false;
 
-  std::unordered_map<QueueID, uint64_t> lastUsedTimelineValues;
+  uint64_t lastUsedTimestamp{};
   VkImageLayout currentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
   TextureUsage lastUsage = TextureUsage::Unknown;
   VkPipelineStageFlagBits2 lastPipelineStage =
@@ -83,18 +86,11 @@ struct Texture : Object, Barrier::GraphicsResource {
   auto UseAsStorage(GraphicsContext &context, VkPipelineStageFlags2 stage)
       -> Error;
 
-  auto GetTimelineValues() const
-      -> const std::unordered_map<QueueID, uint64_t> & {
-    return lastUsedTimelineValues;
-  }
+  auto GetTimestamp() const -> uint64_t { return lastUsedTimestamp; }
 
-  auto MarkUse(QueueID queueID, uint64_t timelineValue) -> void {
-    uint64_t previousValue{};
-    if (lastUsedTimelineValues.contains(queueID)) {
-      previousValue = lastUsedTimelineValues.at(queueID);
-    }
-
-    lastUsedTimelineValues[queueID] = (std::max)(previousValue, timelineValue);
+  auto MarkUse() -> void {
+    lastUsedTimestamp =
+        (std::max)(lastUsedTimestamp, GetCPUTimelineSemaphoreValue());
   }
 
   auto ScheduleDestroy() -> void override;

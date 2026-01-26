@@ -8,12 +8,12 @@
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "vulkan/vulkan_core.h"
-#include <array>
 #include <cassert>
 #include <cstdint>
 #include <functional>
 #include <mutex>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace Graphics::Threading {
@@ -41,13 +41,33 @@ auto DemandRenderingPermission() -> void {
 
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
 thread_local Ref<RenderThreadInfo> CurrentRenderThreadInfo;
-thread_local inline std::array<std::vector<VkCommandBuffer>, FRAMES_IN_FLIGHT>
+thread_local inline std::vector<std::pair<uint64_t, VkCommandBuffer>>
     ThreadCommandBuffers;
-thread_local inline uint64_t lastThreadFrame;
-thread_local inline std::vector<VkCommandBuffer> frameCommandBufferCache;
 inline std::atomic<uint64_t> threadDataIDCounter = 0;
 
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
+
+auto GetCachedCommandBuffer(const GraphicsContext &context)
+    -> std::optional<VkCommandBuffer> {
+  auto timelineValueResult = GetCurrentTimelineSemaphoreValue(context);
+
+  if (Error::IsError(timelineValueResult)) {
+    return std::nullopt;
+  }
+
+  uint64_t timelineValue = timelineValueResult.value();
+
+  for (auto it = ThreadCommandBuffers.begin(); it != ThreadCommandBuffers.end();
+       ++it) {
+    if (it->first < timelineValue) {
+      auto *commandBuffer = it->second;
+      ThreadCommandBuffers.erase(it);
+      return commandBuffer;
+    }
+  }
+
+  return std::nullopt;
+}
 
 auto AquireCommandBuffer(Graphics::GraphicsContext &context,
                          const AquireInfo &info)
@@ -61,11 +81,6 @@ auto AquireCommandBuffer(Graphics::GraphicsContext &context,
   if (CurrentRenderThreadInfo.get() != nullptr) {
     return Error::Unexpected(
         "Current thread already has an aquired command buffer");
-  }
-
-  if (context.currentFrame != lastThreadFrame) {
-    frameCommandBufferCache = ThreadCommandBuffers.at(context.frameIndex);
-    lastThreadFrame = context.currentFrame;
   }
 
   auto threadInfo = Ref<RenderThreadInfo>::Make();
@@ -91,7 +106,9 @@ auto AquireCommandBuffer(Graphics::GraphicsContext &context,
     return Error::Unexpected("Invalid device when aquiring command buffer");
   }
 
-  if (frameCommandBufferCache.empty()) {
+  auto cachedCmdBuffer = GetCachedCommandBuffer(context);
+
+  if (!cachedCmdBuffer.has_value()) {
     VkCommandBufferAllocateInfo allocInfo = {};
     allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
     allocInfo.commandPool = tcontext.commandPool;
@@ -106,14 +123,20 @@ auto AquireCommandBuffer(Graphics::GraphicsContext &context,
       return allocationResult.AsUnexpected();
     }
   } else {
-    threadInfo->threadData.commandBuffer = frameCommandBufferCache.back();
-    frameCommandBufferCache.pop_back();
+    threadInfo->threadData.commandBuffer = cachedCmdBuffer.value();
   }
 
   // Reset old command buffer
   VkCommandBufferResetFlags resetFlags{};
   auto resetResult = Error::Create(
       vkResetCommandBuffer(threadInfo->threadData.commandBuffer, resetFlags));
+
+  if (Error::IsError(resetResult)) {
+    return resetResult.AsUnexpected();
+  }
+
+  PrintAlways("Aquired command buffer {} for thread '{}'",
+              (void *)threadInfo->threadData.commandBuffer, info.name.c_str());
 
   VkCommandBufferBeginInfo beginInfo = {};
   beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -170,8 +193,10 @@ auto SubmitCommands(Graphics::GraphicsContext &context) -> Error {
   threadInfo.threadData.resourceSyncs = Barrier::GlobalResourceSyncTimeline;
   threadInfo.threadData.usageUpdates = Barrier::GlobalResourceStateUpdates;
 
-  ThreadCommandBuffers.at(context.frameIndex)
-      .emplace_back(threadInfo.threadData.commandBuffer);
+  auto timelineValue = GetCPUTimelineSemaphoreValue();
+
+  ThreadCommandBuffers.emplace_back(timelineValue,
+                                    threadInfo.threadData.commandBuffer);
 
   GetThreadContext().commandBuffer = VK_NULL_HANDLE;
 
@@ -180,7 +205,7 @@ auto SubmitCommands(Graphics::GraphicsContext &context) -> Error {
     threadInfo.currentlyRecording = false;
   }
   threadInfo.availabilityCV.notify_all();
-  CurrentRenderThreadInfo = {};
+  CurrentRenderThreadInfo.reset();
 
   return Error::Success();
 }

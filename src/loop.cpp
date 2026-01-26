@@ -14,7 +14,6 @@
 #include "Modules/filesystem.hpp"
 #include "Modules/thread.hpp"
 #include "Wrap/Modules/Editor/wrap_imgui.hpp"
-#include <cstdint>
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -361,11 +360,8 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
 
   Graphics::Texture::UnloadModule();
 
-  std::unordered_map<Graphics::QueueID, uint64_t> completedTimelineValues = {
-      {0, Graphics::GetCPUTimelineSemaphoreValue(context) + 1},
-  };
-
-  Graphics::ProcessReleasedResources(context, completedTimelineValues);
+  Graphics::ProcessReleasedResources(
+      context, Graphics::GetCPUTimelineSemaphoreValue() + 1);
 
   PrintInfo("Closing Lua state...");
   lua_close(state);

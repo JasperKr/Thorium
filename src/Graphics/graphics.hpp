@@ -107,13 +107,11 @@ extern GraphicsContext *g_ctx;
 void SetCurrentGraphicsContext(GraphicsContext *ctx);
 auto GetCurrentGraphicsContext() -> GraphicsContext *;
 
-auto GetCurrentTimelineSemaphoreValue(GraphicsContext &context)
+auto GetCurrentTimelineSemaphoreValue(const GraphicsContext &context)
     -> Result<uint64_t>;
 auto InitializeGlobalTimelineSemaphore(GraphicsContext &context) -> Error;
 auto DeInitializeGlobalTimelineSemaphore(GraphicsContext &context) -> void;
-auto GetCPUTimelineSemaphoreValue(GraphicsContext &context) -> uint64_t;
-auto SetCPUTimelineSemaphoreValue(GraphicsContext &context, uint64_t newValue)
-    -> void;
+auto GetCPUTimelineSemaphoreValue() -> uint64_t;
 auto IncrementCPUTimelineSemaphoreValue(GraphicsContext &context) -> uint64_t;
 auto GetGlobalTimelineSemaphore(GraphicsContext &context) -> VkSemaphore;
 auto GetDeferredDestructionAllowed() -> bool &;

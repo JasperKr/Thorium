@@ -179,6 +179,25 @@ target_link_libraries(fastgltf
     PUBLIC simdjson
 )
 
+# -------------------------------
+# Tracy
+# -------------------------------
+
+find_package(Threads REQUIRED)
+add_library(tracy STATIC ${CMAKE_CURRENT_SOURCE_DIR}/external/tracy/public/TracyClient.cpp)
+
+target_include_directories(tracy
+    SYSTEM PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/tracy
+)
+
+target_compile_definitions(tracy
+    PUBLIC TRACY_ENABLE
+)
+
+target_link_libraries(tracy
+    PUBLIC Threads::Threads
+)
+
 
 # -------------------------------
 # Slang
@@ -319,6 +338,7 @@ target_link_libraries(Thorium
         LuaJIT::LuaJIT
         ${SLANG_LIBS}
         fastgltf
+        tracy
 )
 
 target_link_options(Thorium PRIVATE

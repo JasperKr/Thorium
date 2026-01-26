@@ -38,6 +38,8 @@ local function draw()
   end
 end
 
+local t = Thorium.timer.getTime()
+
 while true do
   if not (canStartChannel:demand(1)) then
     break
@@ -46,7 +48,10 @@ while true do
   Thorium.graphics.demandRenderingPermission()
   Thorium.graphics.aquireGraphics("gui")
 
-  Thorium.gui.newFrame(1 / 60)
+  local dt = Thorium.timer.getTime() - t
+  t = Thorium.timer.getTime()
+
+  Thorium.gui.newFrame(dt)
 
   draw()
   doneChannel:push(true)

@@ -7,7 +7,6 @@
 #include <cassert>
 #include <cstdint>
 #include <mutex>
-#include <unordered_map>
 
 namespace Graphics {
 
@@ -20,10 +19,8 @@ extern std::mutex ReleasedBuffersMutex;
 
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
-auto ProcessReleasedResources(
-    GraphicsContext &context,
-    const std::unordered_map<QueueID, uint64_t> &completedTimelineValues)
-    -> void;
+auto ProcessReleasedResources(GraphicsContext &context,
+                              uint64_t completedTimelineValues) -> void;
 
 auto ScheduleDestruction(Texture::Texture *texture) -> void;
 auto ScheduleDestruction(Buffer *buffer) -> void;

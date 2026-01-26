@@ -1,5 +1,6 @@
 #include "resource.hpp"
 #include "Graphics/buffer.hpp"
+#include "Modules/console.hpp"
 #include "Modules/utils.hpp"
 
 namespace Graphics {
@@ -22,29 +23,18 @@ auto ScheduleDestruction(Buffer *buffer) -> void {
 }
 
 inline auto CanBeDestroyed( // NOLINTNEXTLINE
-    const std::unordered_map<QueueID, uint64_t> &completedTimelineValues,
-    const std::unordered_map<QueueID, uint64_t> &resourceTimelineValues)
-    -> bool {
+    const uint64_t &completedTimelineValue,
+    const uint64_t &resourceTimelineValue) -> bool {
 
   if (!GetDeferredDestructionAllowed()) {
     return true;
   }
 
-  // NOLINTNEXTLINE
-  for (const auto &[queueID, timelineValue] : resourceTimelineValues) {
-    auto iterator = completedTimelineValues.find(queueID);
-    if (iterator == completedTimelineValues.end() ||
-        iterator->second <= timelineValue) {
-      return false;
-    }
-  }
-  return true;
+  return completedTimelineValue > resourceTimelineValue;
 }
 
-auto ProcessReleasedResources(
-    GraphicsContext &context,
-    const std::unordered_map<QueueID, uint64_t> &completedTimelineValues)
-    -> void {
+auto ProcessReleasedResources(GraphicsContext &context,
+                              uint64_t completedTimelineValue) -> void {
 
   {
     std::lock_guard<std::mutex> lock(ReleasedTexturesMutex);
@@ -53,8 +43,7 @@ auto ProcessReleasedResources(
     for (int64_t i = size - 1; i >= 0; i--) {
       auto &resource = ReleasedTextures.at(i);
 
-      if (CanBeDestroyed(completedTimelineValues,
-                         resource->GetTimelineValues())) {
+      if (CanBeDestroyed(completedTimelineValue, resource->GetTimestamp())) {
         Utils::UnorderedErase(
             ReleasedTextures,
             [&resource](const Ref<Graphics::Texture::Texture> &res) -> auto {
@@ -71,8 +60,9 @@ auto ProcessReleasedResources(
     for (int64_t i = size - 1; i >= 0; i--) {
       const auto &resource = ReleasedBuffers.at(i);
 
-      if (CanBeDestroyed(completedTimelineValues,
-                         resource->GetTimelineValues())) {
+      if (CanBeDestroyed(completedTimelineValue, resource->GetTimestamp())) {
+        PrintAlways("Destroying buffer resource with timestamp {}; Handle: {}",
+                    resource->GetTimestamp(), (void *)resource->handle);
         Utils::UnorderedErase(
             ReleasedBuffers,
             [&resource](const Ref<Graphics::Buffer> &res) -> auto {

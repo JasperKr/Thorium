@@ -102,11 +102,10 @@ static auto EndRecording(Graphics::GraphicsContext &context,
 
   uint64_t completedValue = currentTimelineResult.value();
 
-  std::unordered_map<QueueID, uint64_t> completedTimelineValues = {
-      {0, completedValue},
-  };
+  PrintAlways("Processing released resources up to timeline value {}",
+              completedValue);
 
-  Graphics::ProcessReleasedResources(context, completedTimelineValues);
+  Graphics::ProcessReleasedResources(context, completedValue);
 
   return Error::Success();
 }
@@ -249,10 +248,9 @@ auto SubmitCommandBuffers(Graphics::GraphicsContext &context,
   }
 
   {
-    std::lock_guard<std::mutex> lock(Graphics::globalTimelineSemaphoreMutex);
     VkSemaphore globalTimelineSemaphore = GetGlobalTimelineSemaphore(context);
     if (globalTimelineSemaphore != VK_NULL_HANDLE) {
-      uint64_t timelineValue = GetCPUTimelineSemaphoreValue(context);
+      uint64_t timelineValue = GetCPUTimelineSemaphoreValue();
 
       VkTimelineSemaphoreSubmitInfo timelineInfo{};
       timelineInfo.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO;

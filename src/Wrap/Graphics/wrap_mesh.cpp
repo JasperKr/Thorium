@@ -86,15 +86,17 @@ auto wrap_SetIndices(lua_State *state) -> int {
     return luaL_error(state, "Expected ByteData as second argument");
   }
 
-  auto format = IndexFormat::Uint32;
+  auto format = VK_INDEX_TYPE_UINT32;
 
   if (lua_gettop(state) >= 4) {
     const auto *luaStrFormat = luaL_checkstring(state, 4);
 
     if (std::strcmp(luaStrFormat, "uint32_t") == 0) {
-      format = IndexFormat::Uint32;
+      format = VK_INDEX_TYPE_UINT32;
     } else if (std::strcmp(luaStrFormat, "uint16_t") == 0) {
-      format = IndexFormat::Uint16;
+      format = VK_INDEX_TYPE_UINT16;
+    } else if (std::strcmp(luaStrFormat, "uint8_t") == 0) {
+      format = VK_INDEX_TYPE_UINT8;
     } else {
       return luaL_error(state, "Unknown index data format: %s", luaStrFormat);
     }
@@ -150,15 +152,17 @@ auto wrap_SetIndexBuffer(lua_State *state) -> int {
 
   auto *buffer = LuaWrap::ObjectFromLua<Buffer>(state, 2);
 
-  auto format = IndexFormat::Uint32;
+  auto format = VK_INDEX_TYPE_UINT32;
 
   if (lua_gettop(state) >= 3) {
     const auto *luaStrFormat = luaL_checkstring(state, 3);
 
     if (std::strcmp(luaStrFormat, "uint32_t") == 0) {
-      format = IndexFormat::Uint32;
+      format = VK_INDEX_TYPE_UINT32;
     } else if (std::strcmp(luaStrFormat, "uint16_t") == 0) {
-      format = IndexFormat::Uint16;
+      format = VK_INDEX_TYPE_UINT16;
+    } else if (std::strcmp(luaStrFormat, "uint8_t") == 0) {
+      format = VK_INDEX_TYPE_UINT8;
     } else {
       return luaL_error(state, "Unknown index data format: %s", luaStrFormat);
     }

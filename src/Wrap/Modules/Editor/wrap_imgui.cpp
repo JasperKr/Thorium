@@ -18,6 +18,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <mutex>
 #include <span>
 #include <unordered_map>
 #include <vector>
@@ -191,6 +192,8 @@ inline auto HandleImguiUpdateTextureEvent(Graphics::GraphicsContext &context,
   auto *texture = // NOLINTNEXTLINE reinterpret-cast
       reinterpret_cast<Graphics::Texture::Texture *>(tex->GetTexID());
 
+  std::lock_guard<std::mutex> lock(texture->mutex);
+
   for (ImTextureRect &currentRect : tex->Updates) {
 
     VkRect2D sourceRect{
@@ -280,8 +283,8 @@ inline auto SetupTemporaryCommandLists(ImDrawData *drawData,
         reinterpret_cast<uint8_t *>(commandList->IdxBuffer.Data),
         static_cast<size_t>(commandList->IdxBuffer.size() * 2));
 
-    setResult = temporaryCommandList.Mesh->SetIndices(
-        ctx, indexSpan, Graphics::IndexFormat::Uint16);
+    setResult = temporaryCommandList.Mesh->SetIndices(ctx, indexSpan,
+                                                      VK_INDEX_TYPE_UINT16);
     if (Error::IsError(setResult)) {
       return setResult;
     }

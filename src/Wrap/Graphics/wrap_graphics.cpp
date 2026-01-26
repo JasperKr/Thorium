@@ -484,10 +484,10 @@ inline auto GetQuadMesh(GraphicsContext &context, const VkRect2D size,
 
   auto indexSpan = std::span<uint8_t>( // NOLINTNEXTLINE
       reinterpret_cast<uint8_t *>(indices.data()),
-      indices.size() * GetIndexFormatSize(IndexFormat::Uint32));
+      indices.size() * GetIndexFormatSize(VK_INDEX_TYPE_UINT32));
 
   setDataError =
-      mesh->get()->SetIndices(context, indexSpan, IndexFormat::Uint32);
+      mesh->get()->SetIndices(context, indexSpan, VK_INDEX_TYPE_UINT32);
   if (Error::IsError(setDataError)) {
     return setDataError.AsUnexpected();
   }

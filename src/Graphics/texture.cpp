@@ -882,8 +882,6 @@ auto Texture::GetSampler(GraphicsContext &context) -> VkSampler {
     sampler = GetOrCreateSampler(context, samplerDescription);
     samplerDirty = false;
 
-    PrintDebug("Created new sampler for texture");
-
     return sampler;
   }
 
@@ -941,6 +939,8 @@ auto Texture::SetPixels(GraphicsContext &context, Image::ImageData &imageData,
 
   auto buffer = bufferResult.value();
 
+  PrintAlways("Created staging buffer: {}", (void *)buffer->handle);
+
   // auto error = buffer->SetData(context, imageData.GetDataSpan());
   // also sets the buffer usage semaphore value
 
@@ -997,10 +997,9 @@ auto Texture::SetPixels(GraphicsContext &context, Image::ImageData &imageData,
     return error;
   }
 
-  auto timelineValue = GetCPUTimelineSemaphoreValue(context);
-
-  buffer->MarkUse(0, timelineValue);
-  MarkUse(0, timelineValue);
+  // TODO: Check lifetime
+  buffer->MarkUse();
+  MarkUse();
 
   return Error::Success();
 }
@@ -1078,6 +1077,9 @@ auto Texture::SetPixels(GraphicsContext &context,
                                  });
 
   auto buffer = bufferResult.value();
+
+  PrintAlways("Created staging buffer: {}", (void *)buffer->handle);
+
   for (size_t row = 0; row < rowCount; ++row) {
     size_t sourceOffset =
         ((row + source.offset.y) * dataWidth + source.offset.x) *
@@ -1121,10 +1123,10 @@ auto Texture::SetPixels(GraphicsContext &context,
     return error;
   }
 
-  auto timelineValue = GetCPUTimelineSemaphoreValue(context);
+  buffer->MarkUse();
+  MarkUse();
 
-  buffer->MarkUse(0, timelineValue);
-  MarkUse(0, timelineValue);
+  PrintAlways("CPU Timestamp: {}", GetCPUTimelineSemaphoreValue());
 
   return Error::Success();
 }
