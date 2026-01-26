@@ -35,7 +35,11 @@ auto Thread::Create(const std::string &script) -> Ref<Thread> {
 
 auto Thread::Close(ThreadStatus status, const std::string &message) -> void {
   PrintAlways("Deinitializing graphics thread module...");
-  Graphics::Threading::Deinitialize(*Graphics::GetCurrentGraphicsContext());
+  auto err =
+      Graphics::Threading::Deinitialize(*Graphics::GetCurrentGraphicsContext());
+  if (Error::IsError(err)) {
+    PrintError("Error deinitializing graphics thread module: {}", err.message);
+  }
 
   PrintAlways("Closing thread...");
   if (state != nullptr) {

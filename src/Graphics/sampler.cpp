@@ -4,14 +4,14 @@
 
 namespace Graphics::Texture {
 
+std::unordered_map<SamplerDescription, VkSampler, SamplerDescHash>
+    SamplerCache; // NOLINT
+
 auto GetOrCreateSampler(GraphicsContext &context,
                         const SamplerDescription &description) -> VkSampler {
-  static std::unordered_map<SamplerDescription, VkSampler, SamplerDescHash>
-      samplerCache;
-  samplerCache = {};
 
-  auto sampler = samplerCache.find(description);
-  if (sampler != samplerCache.end()) {
+  auto sampler = SamplerCache.find(description);
+  if (sampler != SamplerCache.end()) {
     return sampler->second; // Return cached sampler
   }
 
@@ -47,8 +47,16 @@ auto GetOrCreateSampler(GraphicsContext &context,
     }
   }
 
-  samplerCache[description] = vkSampler;
+  SamplerCache[description] = vkSampler;
   return vkSampler;
+}
+
+auto DestroySamplers(GraphicsContext &context) -> void {
+  std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+  for (auto &pair : SamplerCache) {
+    vkDestroySampler(context.device, pair.second, nullptr);
+  }
+  SamplerCache.clear();
 }
 
 } // namespace Graphics::Texture

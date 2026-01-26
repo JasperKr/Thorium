@@ -399,7 +399,15 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
   Graphics::Shader::UnloadModule(context);
 
   PrintInfo("Destroying rendertargets...");
+  result = Graphics::DynamicRendering::Shutdown(context);
+  if (Error::IsError(result)) {
+    return result;
+  }
   Graphics::DynamicRendering::Destroy(context);
+
+  PrintInfo("Destroying samplers...");
+
+  Graphics::Texture::DestroySamplers(context);
 
   PrintInfo("Destroying graphics context...");
 

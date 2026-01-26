@@ -118,10 +118,13 @@ auto IncrementCPUTimelineSemaphoreValue(GraphicsContext &context) -> uint64_t;
 auto GetGlobalTimelineSemaphore(GraphicsContext &context) -> VkSemaphore;
 auto GetDeferredDestructionAllowed() -> bool &;
 
-// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+// NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
 extern std::mutex globalTimelineSemaphoreMutex;
-
-// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 thread_local extern std::string ContextDebugname;
+
+extern std::vector<VkCommandPool> CommandPools;
+extern std::mutex CommandPoolsMutex;
+
+// NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
 } // namespace Graphics

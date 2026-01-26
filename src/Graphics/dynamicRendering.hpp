@@ -250,7 +250,13 @@ auto Pop(GraphicsContext &context) -> Error;
 auto Reset(GraphicsContext &context) -> Error;
 auto FlushGraphics(GraphicsContext &context) -> Result<bool>;
 auto Load(GraphicsContext &context) -> Error;
+
+// Destroys all created pipelines and layouts
 auto Destroy(GraphicsContext &context) -> void;
+
+// Shuts down the local dynamic rendering module
+auto Shutdown(GraphicsContext &context) -> Error;
+
 auto PrepareRendering(GraphicsContext &context) -> Error;
 
 auto EndRendering(GraphicsContext &context) -> void;

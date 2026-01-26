@@ -14,6 +14,7 @@
 #include "slang/slang.h"
 #include "tl/expected.hpp"
 #include <mutex>
+#include <vector>
 #define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
 #include <algorithm>
@@ -30,12 +31,23 @@
 
 namespace Graphics::DynamicRendering {
 
+// NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
+
 thread_local std::unordered_map<State, std::pair<VkPipeline, VkPipelineLayout>,
-                                StateHash> // NOLINTNEXTLINE Pipeline cache
+                                StateHash>
     PipelineCache = {};
 
-// NOLINTNEXTLINE
+// Only used for cleanup
+std::mutex PipelinesMutex;
+std::vector<VkPipeline> Pipelines;
+
+// Only used for cleanup
+std::mutex PipelineLayoutsMutex;
+std::vector<VkPipelineLayout> PipelineLayouts;
+
 std::vector<Ref<Texture::Texture>> SwapchainTextures{};
+
+// NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
 inline auto GetRenderExtent(const GraphicsContext &context, const State &state)
     -> VkExtent2D {
@@ -237,6 +249,8 @@ auto BindDefaultTextures(GraphicsContext &context, Shader::ShaderModule *shader)
   return Error::Success();
 }
 
+// TODO: This should be part of the shader module class
+// It never changes per shader anyways
 auto CreateDescriptorSets(GraphicsContext &context,
                           Shader::ShaderModule *shader) -> Error {
   std::unordered_map<uint32_t, std::vector<VkDescriptorSetLayoutBinding>>
@@ -248,6 +262,10 @@ auto CreateDescriptorSets(GraphicsContext &context,
       FillDescriptorSets(context, shader, descriptorSetLayoutBindings);
   if (Error::IsError(fillResult)) {
     return fillResult;
+  }
+
+  for (const auto &descriptorSet : shader->descriptorSetLayouts) {
+    vkDestroyDescriptorSetLayout(context.device, descriptorSet.second, nullptr);
   }
 
   shader->descriptorSets.clear();
@@ -629,6 +647,15 @@ inline auto CreateGraphicsPipeline(const GraphicsContext &context, State &state)
   }
   PipelineCache[state] = {pipeline, layoutResult.value()};
 
+  {
+    std::lock_guard<std::mutex> lock(PipelinesMutex);
+    Pipelines.emplace_back(pipeline);
+  }
+  {
+    std::lock_guard<std::mutex> lock(PipelineLayoutsMutex);
+    PipelineLayouts.emplace_back(layoutResult.value());
+  }
+
   return std::pair<VkPipeline, VkPipelineLayout>(pipeline,
                                                  layoutResult.value());
 }
@@ -786,8 +813,6 @@ auto Pop(GraphicsContext &context) -> Error {
 }
 
 auto Reset(GraphicsContext &context) -> Error {
-  PrintAlways("Resetting RenderTarget state stack.");
-
   StateStack.clear();
 
   auto defaultStateResult = SetupDefaultState(context);
@@ -797,6 +822,13 @@ auto Reset(GraphicsContext &context) -> Error {
 
   StateStack.emplace_back(defaultStateResult.value());
 
+  LastState = State();
+
+  return Error::Success();
+}
+
+auto Shutdown(GraphicsContext &context) -> Error {
+  StateStack.clear();
   LastState = State();
 
   return Error::Success();
@@ -934,12 +966,21 @@ auto Flush(GraphicsContext &context) -> Result<bool> {
 }
 
 auto Destroy(GraphicsContext &context) -> void {
-  std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-  for (const auto &pair : PipelineCache) {
-    vkDestroyPipeline(context.device, pair.second.first, nullptr);
+
+  {
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+    std::lock_guard<std::mutex> lock2(PipelinesMutex);
+    for (const auto &pipeline : Pipelines) {
+      vkDestroyPipeline(context.device, pipeline, nullptr);
+    }
   }
-  PipelineCache.clear();
-  StateStack.clear();
+  {
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+    std::lock_guard<std::mutex> lock2(PipelineLayoutsMutex);
+    for (const auto &layout : PipelineLayouts) {
+      vkDestroyPipelineLayout(context.device, layout, nullptr);
+    }
+  }
 }
 
 inline auto BeginRendering(GraphicsContext &context) -> Error {

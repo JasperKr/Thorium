@@ -4,8 +4,7 @@
 #define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
 
-namespace Graphics {
-namespace Texture {
+namespace Graphics::Texture {
 
 struct SamplerDescription {
   VkFilter magFilter;
@@ -59,8 +58,12 @@ struct SamplerDescHash {
   }
 };
 
+extern std::unordered_map<SamplerDescription, VkSampler, SamplerDescHash>
+    SamplerCache; // NOLINT
+
 auto GetOrCreateSampler(GraphicsContext &context,
                         const SamplerDescription &description) -> VkSampler;
 
-}; // namespace Texture
-} // namespace Graphics
+auto DestroySamplers(GraphicsContext &context) -> void;
+
+}; // namespace Graphics::Texture

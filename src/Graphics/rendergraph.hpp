@@ -16,12 +16,6 @@ namespace Graphics::Rendergraph {
 
 using ResourceHandle = uint16_t;
 
-auto inline GetSamplerCache()
-    -> std::unordered_map<ResourceHandle, VkSampler> & {
-  static std::unordered_map<ResourceHandle, VkSampler> samplerCache = {};
-  return samplerCache;
-}
-
 enum class ResourceLifetime : uint8_t {
   Transient, // Created and destroyed within a single frame, preffered
   Persistent // Created once and reused across frames

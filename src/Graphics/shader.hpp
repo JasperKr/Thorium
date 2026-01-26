@@ -148,7 +148,14 @@ struct ShaderModule : Object {
     auto *ctx = GetCurrentGraphicsContext();
 
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    vkDestroyShaderModule(ctx->device, module, nullptr);
+    for (auto &pair : descriptorSetLayouts) {
+      vkDestroyDescriptorSetLayout(ctx->device, pair.second, nullptr);
+    }
+
+    if (module != VK_NULL_HANDLE) {
+      vkDestroyShaderModule(ctx->device, module, nullptr);
+      module = VK_NULL_HANDLE;
+    }
   }
 
   static auto Create(Graphics::GraphicsContext &context,
@@ -174,8 +181,6 @@ struct ShaderModule : Object {
 
   auto GetThreadgroupSize() const -> Result<Math::Uvec3>;
   auto GetWaveSize() const -> uint32_t;
-
-  void Destroy(VkDevice &device);
 
   auto operator==(const ShaderModule &other) const -> bool {
     return externs == other.externs && moduleName == other.moduleName &&

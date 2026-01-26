@@ -4,7 +4,6 @@
 #include "Graphics/dynamicRendering.hpp"
 #include "Graphics/graphics.hpp"
 #include "Graphics/graphicsState.hpp"
-#include "Graphics/shader.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
@@ -47,6 +46,7 @@ thread_local inline std::array<std::vector<VkCommandBuffer>, FRAMES_IN_FLIGHT>
 thread_local inline uint64_t lastThreadFrame;
 thread_local inline std::vector<VkCommandBuffer> frameCommandBufferCache;
 inline std::atomic<uint64_t> threadDataIDCounter = 0;
+
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
 auto AquireCommandBuffer(Graphics::GraphicsContext &context,
@@ -204,6 +204,11 @@ inline auto CreateCommandPool(ThreadContext &tcontext) -> Error {
     }
   }
 
+  {
+    std::lock_guard<std::mutex> lock(CommandPoolsMutex);
+    CommandPools.emplace_back(tcontext.commandPool);
+  }
+
   return Error::Success();
 }
 
@@ -225,16 +230,6 @@ auto Initialize(Graphics::GraphicsContext &context) -> Error {
     return error;
   }
 
-  PrintDebug("Loading shader modules...");
-
-  auto shaderModuleLoadResult = Graphics::Shader::LoadModule();
-
-  if (Error::IsError(shaderModuleLoadResult)) {
-    return shaderModuleLoadResult;
-  }
-
-  PrintDebug("Shader modules loaded successfully.");
-
   auto rendertargetLoadError = Graphics::DynamicRendering::Load(context);
 
   if (Error::IsError(rendertargetLoadError)) {
@@ -244,13 +239,21 @@ auto Initialize(Graphics::GraphicsContext &context) -> Error {
   return Error::Success();
 }
 
-auto Deinitialize(Graphics::GraphicsContext &context) -> void {
+auto Deinitialize(Graphics::GraphicsContext &context) -> Error {
   DeInitializeUniformBufferModule(context);
   auto err = Graphics::UnloadLocalBufferModule(context);
 
   if (Error::IsError(err)) {
-    PrintAlways("Error deinitializing buffer module: {}", err.message);
+    return err;
   }
+
+  err = DynamicRendering::Shutdown(context);
+
+  if (Error::IsError(err)) {
+    return err;
+  }
+
+  return Error::Success();
 }
 
 auto GetGeneratedCommands() -> std::vector<std::string> {

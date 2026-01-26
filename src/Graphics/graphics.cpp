@@ -26,6 +26,9 @@ inline std::atomic<uint64_t> currentCPUTimelineValue = 1;
 
 thread_local std::string ContextDebugname{};
 
+std::vector<VkCommandPool> CommandPools{};
+std::mutex CommandPoolsMutex{};
+
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
 auto InitializeGlobalTimelineSemaphore(GraphicsContext &context) -> Error {
@@ -837,6 +840,12 @@ void Deinitialize(GraphicsContext &context) {
   }
 
   vkDestroyCommandPool(context.device, GetThreadContext().commandPool, nullptr);
+  {
+    std::lock_guard<std::mutex> lock(CommandPoolsMutex);
+    for (auto &pool : CommandPools) {
+      vkDestroyCommandPool(context.device, pool, nullptr);
+    }
+  }
 
   for (VkImageView imageView : context.swapchainInfo.imageViews) {
     vkDestroyImageView(context.device, imageView, nullptr);

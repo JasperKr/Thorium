@@ -154,6 +154,9 @@ auto ShutdownImGui() -> Error {
   ImGui::DestroyContext();
   ImGuiTextures.clear();
 
+  ImGuiShaderRGBA8.reset(); // Release reference
+  ImGuiShaderA8.reset();
+
   return Error::Success();
 }
 

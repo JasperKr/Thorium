@@ -86,7 +86,7 @@ auto LoadModule() -> Error {
 }
 
 void UnloadModule(Graphics::GraphicsContext &context) {
-  DefaultShaderModule->Destroy(context.device);
+  DefaultShaderModule.reset();
 
   if (GlobalSlangSession != nullptr) {
     GlobalSlangSession->release();
@@ -918,18 +918,6 @@ auto ShaderModule::GetThreadgroupSize() const -> Result<Math::Uvec3> {
 }
 
 auto ShaderModule::GetWaveSize() const -> uint32_t { return waveSize; }
-
-void ShaderModule::Destroy(VkDevice &device) {
-  std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-  for (auto &pair : descriptorSetLayouts) {
-    vkDestroyDescriptorSetLayout(device, pair.second, nullptr);
-  }
-
-  if (module != VK_NULL_HANDLE) {
-    vkDestroyShaderModule(device, module, nullptr);
-    module = VK_NULL_HANDLE;
-  }
-}
 
 auto ShaderModule::GetSlotDescription(uint32_t set, uint32_t binding) // NOLINT
     -> Result<const ResourceInfo> {

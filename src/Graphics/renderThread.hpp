@@ -84,7 +84,7 @@ auto SubmitCommands(Graphics::GraphicsContext &context) -> Error;
 auto Initialize(Graphics::GraphicsContext &context) -> Error;
 
 // Deinitialize the render threading module
-auto Deinitialize(Graphics::GraphicsContext &context) -> void;
+auto Deinitialize(Graphics::GraphicsContext &context) -> Error;
 
 // Get all generated command names
 auto GetGeneratedCommands() -> std::vector<std::string>;

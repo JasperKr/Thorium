@@ -86,6 +86,13 @@ public:
   auto operator*() const -> T & { return *ptr; }
   [[nodiscard]] auto isValid() const -> bool { return ptr != nullptr; }
 
+  auto reset() -> void {
+    if (ptr != nullptr) {
+      ptr->release();
+      ptr = nullptr;
+    }
+  }
+
   template <typename... Args> static auto Make(Args &&...args) -> Ref<T> {
     return Ref<T>(new T(std::forward<Args>(args)...));
   }

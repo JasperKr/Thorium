@@ -184,18 +184,6 @@ auto wrap_Send(lua_State *state) -> int {
   return 0;
 }
 
-auto wrap_Release(lua_State *state) -> int {
-  auto *shader = LuaWrap::ObjectFromLua<Shader::ShaderModule>(state, 1);
-  if (shader == nullptr) {
-    lua_pushboolean(state, 0);
-    return 1;
-  }
-
-  std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-  shader->Destroy(Graphics::GetCurrentGraphicsContext()->device);
-  return 0;
-}
-
 auto wrap_HasUniform(lua_State *state) -> int {
   auto *shader = LuaWrap::ObjectFromLua<Shader::ShaderModule>(state, 1);
 
