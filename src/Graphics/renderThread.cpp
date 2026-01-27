@@ -180,12 +180,6 @@ auto AquireCommandBuffer(Graphics::GraphicsContext &context,
     threadInfo->threadData.commandBuffer = cachedCmdBuffer.value();
   }
 
-  PrintAlways("New semaphore value: {}",
-              NewSemaphoreValue(threadInfo->threadData.commandBuffer));
-
-  PrintAlways("Resetting command buffer: {}",
-              (void *)threadInfo->threadData.commandBuffer);
-
   // Reset old command buffer
   VkCommandBufferResetFlags resetFlags{};
   auto resetResult = Error::Create(

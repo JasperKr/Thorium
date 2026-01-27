@@ -71,6 +71,7 @@ static auto FindSurfaceFormat(GraphicsContext &context)
 }
 
 static const std::vector<VkPresentModeKHR> PresentModeScoresVsync = {
+    VK_PRESENT_MODE_MAILBOX_KHR,
     VK_PRESENT_MODE_FIFO_KHR,
     VK_PRESENT_MODE_FIFO_RELAXED_KHR,
 };
@@ -374,7 +375,9 @@ static auto CreateSwapchain(GraphicsContext &context) -> Error {
   context.swapchainInfo.swapchain = swapchain;
   context.swapchainInfo.format = surfaceFormat.format;
   context.swapchainInfo.extent = swapchainInfo.imageExtent;
-  context.swapchainInfo.imageCount = swapchainInfo.minImageCount;
+
+  vkGetSwapchainImagesKHR(context.device, swapchain,
+                          &context.swapchainInfo.imageCount, nullptr);
 
   context.swapchainInfo.images.resize(context.swapchainInfo.imageCount);
 

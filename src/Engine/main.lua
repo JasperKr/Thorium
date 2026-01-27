@@ -1,10 +1,14 @@
 local i = 0
 Thorium.threaderror = error
 
+print("Starting thread 1")
+
 local thread = Thorium.thread.newThread("src/Engine/thread.lua")
 local threadDoneChannel = Thorium.thread.newChannel()
 local startThreadChannel = Thorium.thread.newChannel()
 thread:start(threadDoneChannel, startThreadChannel)
+
+print("Starting thread 2")
 
 local secondThread = Thorium.thread.newThread("src/Engine/thread2.lua")
 local secondThreadDoneChannel = Thorium.thread.newChannel()
@@ -79,6 +83,7 @@ local firstFrame = true
 
 function Thorium.draw()
   if (firstFrame) then
+    print("First frame draw")
     firstFrame = false
     secondThreadDoneChannel:demand(1)
     Thorium.graphics.useCommands("load")

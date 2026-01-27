@@ -35,7 +35,7 @@ constexpr VkPipelineColorBlendAttachmentState DefaultBlendMode = {
 };
 
 constexpr uint32_t FRAMES_IN_FLIGHT = 2;
-constexpr uint32_t MAX_SWAPCHAIN_IMAGES = 3;
+constexpr uint32_t MAX_SWAPCHAIN_IMAGES = 4;
 
 struct SurfaceInfo {
   VkSurfaceFormatKHR format;

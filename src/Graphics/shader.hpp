@@ -5,8 +5,10 @@
 #include "Graphics/buffer.hpp"
 #include "Graphics/texture.hpp"
 #include "Modules/Math/vector.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
+#include "Modules/thread.hpp"
 #include "Modules/type.hpp"
 #include "graphics.hpp"
 #include "reflect.hpp"
@@ -116,8 +118,10 @@ struct BoundState {
   std::vector<ImageTransitionInfo> pendingImageTransitions;
 };
 
-static std::unordered_map<uint32_t,
-                          std::unordered_map<struct ShaderModule *, BoundState>>
+static std::mutex
+    BoundStatesMutex{}; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+static std::unordered_map<
+    uint32_t, std::unordered_map<const struct ShaderModule *, BoundState>>
     BoundStates; // NOLINT
 
 struct ShaderModule : Object {
@@ -146,9 +150,10 @@ struct ShaderModule : Object {
   std::vector<PushBuffer> pushBuffers;
 
   auto GetState() const -> BoundState & {
+    std::lock_guard<std::mutex> lock(BoundStatesMutex);
+
     // TODO: Give shader module it's own ID to avoid pointer issues
-    static thread_local std::unordered_map<const ShaderModule *, BoundState>
-        states;
+    auto &states = BoundStates[::Threading::CurrentThreadID];
 
     return states[this];
   }

@@ -63,6 +63,9 @@ auto Thread::Close(ThreadStatus status, const std::string &message) -> void {
   this->release(); // Releases self-ownership
 }
 
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+thread_local ThreadID CurrentThreadID = 0;
+
 auto Thread::Run(Thread *thread,
                  const std::vector<LuaWrap::Data::LuaType> &launchArguments,
                  int count, ThreadID identifier) -> void { // NOLINT
@@ -153,7 +156,7 @@ auto Thread::Start(const std::vector<LuaWrap::Data::LuaType> &launchArguments,
   this->retain(); // Owns itself
 
   handle = std::thread(Threading::Thread::Run, this, launchArguments, count,
-                       ++ThreadIDCounter);
+                       ThreadIDCounter.fetch_add(1) + 1);
 
   handle.detach();
 }

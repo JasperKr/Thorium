@@ -39,9 +39,6 @@ auto NewSemaphoreValue(VkCommandBuffer cmdBuffer) -> uint64_t {
 
 auto IsInUse(uint64_t value) -> bool {
   std::shared_lock lock(timelineSetsMutex);
-  PrintAlways("Checking if timeline value {} is in use: {}", value,
-              uncompletedTimelineValues.contains(value) ||
-                  pendingTimelineValueInv.contains(value));
   return uncompletedTimelineValues.contains(value) ||
          pendingTimelineValueInv.contains(value);
 }
@@ -61,10 +58,6 @@ auto SetPendingTimelineValues(const std::vector<uint64_t> &values) -> void {
 // And returns the latest queued timeline value for signalling with a semaphore
 auto UpdateSemaphoreValues(const GraphicsContext &context) -> Result<uint64_t> {
 
-  PrintAlways("Sorted pending timeline values to update:");
-  for (const auto &value : sortedPendingTimelineValues) {
-    PrintAlways("  - Pending timeline value: {}", value);
-  }
   std::lock_guard lock(timelineSetsMutex);
 
   if (sortedPendingTimelineValues.empty()) {
@@ -115,8 +108,6 @@ auto UpdateSemaphoreValues(const GraphicsContext &context) -> Result<uint64_t> {
     }
   }
 
-  PrintAlways("Timeline semaphore completed value: {}", completedValue);
-
   // Find the index of the completed value
   // This will have been ordered so all values less than or equal to the completed value
   // Will be considered completed and can be removed from the uncompleted set
@@ -130,17 +121,12 @@ auto UpdateSemaphoreValues(const GraphicsContext &context) -> Result<uint64_t> {
   }
 
   if (newStart == -1) {
-    for (const auto &value : sortedUncompletedTimelineValues) {
-      PrintAlways("  - Uncompleted timeline value: {}", value);
-    }
-
     // No values completed
     return latestValue;
   }
 
   // Remove completed values from the uncompleted set
   for (int i = 0; i < newStart; i++) {
-    PrintAlways("  - Completed: {}", sortedUncompletedTimelineValues[i]);
     uncompletedTimelineValues.erase(sortedUncompletedTimelineValues[i]);
   }
 
@@ -148,10 +134,6 @@ auto UpdateSemaphoreValues(const GraphicsContext &context) -> Result<uint64_t> {
   sortedUncompletedTimelineValues.erase(
       sortedUncompletedTimelineValues.begin(),
       sortedUncompletedTimelineValues.begin() + newStart);
-
-  for (const auto &value : sortedUncompletedTimelineValues) {
-    PrintAlways("  - Uncompleted timeline value: {}", value);
-  }
 
   return latestValue;
 }

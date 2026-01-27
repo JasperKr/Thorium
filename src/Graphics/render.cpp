@@ -158,10 +158,18 @@ auto AquireNextSwapchainImage(Graphics::GraphicsContext &context) -> Error {
                     UINT64_MAX);
   }
 
-  return Error::Create(vkAcquireNextImageKHR(
+  auto result = Error::Create(vkAcquireNextImageKHR(
       context.device, context.swapchainInfo.swapchain, UINT64_MAX,
       context.swapchainImageReady[context.frameIndex], VK_NULL_HANDLE,
       &context.swapchainImageIndex));
+
+  if (Error::IsError(result)) {
+    return result;
+  }
+
+  PrintFatal("Acquired swapchain image index: {}", context.swapchainImageIndex);
+
+  return Error::Success();
 }
 
 auto PrepareRecording(Graphics::GraphicsContext &context) -> Error {
@@ -174,6 +182,11 @@ auto PrepareRecording(Graphics::GraphicsContext &context) -> Error {
   }
 
   auto *cmdBuffer = GetCommandBuffer();
+
+  PrintAlways("{}, {}", context.swapchainImageIndex,
+              context.swapchainInfo.images.size());
+
+  assert(context.swapchainImageIndex < context.swapchainInfo.images.size());
 
   TransitionPresentToColor(
       cmdBuffer, context.swapchainInfo.images[context.swapchainImageIndex]);

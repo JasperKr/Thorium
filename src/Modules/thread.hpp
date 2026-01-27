@@ -28,10 +28,10 @@ namespace Threading {
 using ThreadID = uint32_t;
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
-thread_local static ThreadID CurrentThreadID = 0;
+thread_local extern ThreadID CurrentThreadID;
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
-static ThreadID ThreadIDCounter = 0;
+static std::atomic<ThreadID> ThreadIDCounter = 0;
 
 auto UnloadModule() -> void;
 
