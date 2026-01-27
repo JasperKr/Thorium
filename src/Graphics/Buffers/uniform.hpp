@@ -124,7 +124,7 @@ public:
     return resized;
   }
 
-  auto ScheduleDestroy() -> void { buffer = {}; }
+  auto ScheduleDestroy() -> void { buffer.reset(); }
 
   [[nodiscard]] auto GetOffset() const -> uint32_t { return offset; }
   [[nodiscard]] auto GetSize() const -> uint32_t { return size; }

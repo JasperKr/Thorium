@@ -51,29 +51,39 @@ auto UnloadModule() -> void;
 struct Texture : Object, Barrier::GraphicsResource {
   std::mutex mutex;
 
+  SamplerDescription samplerDescription{};
   VkExtent3D size{};
-  VkFormat format = VK_FORMAT_UNDEFINED;
+
   VkImage image = VK_NULL_HANDLE;
   VkImageView view = VK_NULL_HANDLE;
   VmaAllocation memory = VK_NULL_HANDLE;
-  uint64_t sizeInBytes = 0;
-
   VkSampler sampler = VK_NULL_HANDLE;
-  SamplerDescription samplerDescription{};
-  bool samplerDirty = false;
 
+  uint64_t sizeInBytes = 0;
+  uint64_t lastUsedTimestamp{};
+
+  VkFormat format = VK_FORMAT_UNDEFINED;
   size_t mipmapcount{};
   size_t arrayLayers{1};
   VkImageUsageFlags usage{};
 
-  bool released = false;
-  bool isSwapchainView = false;
-
-  uint64_t lastUsedTimestamp{};
-  VkImageLayout currentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-  TextureUsage lastUsage = TextureUsage::Unknown;
   VkPipelineStageFlagBits2 lastPipelineStage =
       VK_PIPELINE_STAGE_NONE_KHR; // NOLINT
+
+  VkImageLayout currentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+  TextureUsage lastUsage = TextureUsage::Unknown;
+
+  // Flag to indicate if the sampler needs to be updated
+  bool samplerDirty = false;
+
+  // Safety flag to prevent double releases
+  bool released = false;
+
+  // Indicate if the texture has been destroyed, to avoid calling defer release multiple times
+  bool isDestroyed = false;
+
+  // Indicates if this texture is a swapchain view, which should not be destroyed
+  bool isSwapchainView = false;
 
   auto UseAs(GraphicsContext &context, TextureUsage newUsage,
              VkPipelineStageFlags2 stage) -> Error;
@@ -95,7 +105,7 @@ struct Texture : Object, Barrier::GraphicsResource {
 
   auto ScheduleDestroy() -> void override;
   auto UseDeferredDestruction() const -> bool override {
-    return GetDeferredDestructionAllowed() && !released;
+    return GetDeferredDestructionAllowed() && !isDestroyed;
   }
 
   Texture() = default;

@@ -10,12 +10,6 @@ auto GetTimerInfo() -> TimerFrameInfo & {
   return timerInfo;
 }
 
-const double NANO_TO_SECONDS = 1.0 / 1000000000.0;
-const double SECONDS_TO_NANO = 1000000000.0;
-
-const double MILLI_TO_SECONDS = 1.0 / 1000.0;
-const double SECONDS_TO_MILLI = 1000.0;
-
 inline auto NanoToSeconds(uint64_t nanoseconds) -> double {
   return static_cast<double>(nanoseconds) * NANO_TO_SECONDS;
 }
@@ -68,23 +62,17 @@ void Step() {
   timerInfo.lastTime = currentTime;
 
   // Store delta time for averaging
-  timerInfo.deltaTimes.at(timerInfo.deltaTimeBufferIndex) = timerInfo.deltaTime;
+  timerInfo.accumulatedTime += timerInfo.deltaTime;
+  timerInfo.sampleCount += 1;
 
-  timerInfo.deltaTimeBufferIndex =
-      (timerInfo.deltaTimeBufferIndex + 1) % DeltaTimeBufferSize;
+  if ((currentTime - timerInfo.lastAveragingTime) >= BufferingTimeNS) {
+    timerInfo.lastAveragingTime = currentTime;
 
-  if (timerInfo.deltaTimeBufferCount < DeltaTimeBufferSize) {
-    timerInfo.deltaTimeBufferCount++;
-  }
+    timerInfo.averageDeltaTime =
+        timerInfo.accumulatedTime / timerInfo.sampleCount;
 
-  // Calculate average delta time
-  uint64_t totalDelta = 0;
-  for (int i = 0; i < timerInfo.deltaTimeBufferCount; i++) {
-    totalDelta += timerInfo.deltaTimes[i];
-  }
-
-  if (timerInfo.deltaTimeBufferIndex == 0) {
-    timerInfo.averageDeltaTime = totalDelta / timerInfo.deltaTimeBufferCount;
+    timerInfo.sampleCount = 0;
+    timerInfo.accumulatedTime = 0;
   }
 }
 } // namespace Timer

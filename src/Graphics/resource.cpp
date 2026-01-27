@@ -1,5 +1,6 @@
 #include "resource.hpp"
 #include "Graphics/buffer.hpp"
+#include "Graphics/texture.hpp"
 #include "Modules/console.hpp"
 #include "Modules/utils.hpp"
 
@@ -14,11 +15,34 @@ std::mutex ReleasedBuffersMutex{};
 
 auto ScheduleDestruction(Texture::Texture *texture) -> void {
   std::lock_guard<std::mutex> lock(ReleasedTexturesMutex);
+
+#ifndef NDEBUG
+  // Debug check to ensure we are not double-releasing a texture
+  for (const auto &releasedTexture : ReleasedTextures) {
+    if (releasedTexture.get() == texture) {
+      PrintError("Texture resource double release detected! Handle: {}",
+                 (void *)texture->image);
+      assert(false && "Texture resource double release detected!");
+    }
+  }
+#endif
+
   ReleasedTextures.emplace_back(texture);
 }
 
 auto ScheduleDestruction(Buffer *buffer) -> void {
   std::lock_guard<std::mutex> lock(ReleasedBuffersMutex);
+
+#ifndef NDEBUG
+  // Debug check to ensure we are not double-releasing a buffer
+  for (const auto &releasedBuffer : ReleasedBuffers) {
+    if (releasedBuffer.get() == buffer) {
+      PrintError("Buffer resource double release detected! Handle: {}",
+                 (void *)buffer->handle);
+      assert(false && "Buffer resource double release detected!");
+    }
+  }
+#endif
   ReleasedBuffers.emplace_back(buffer);
 }
 
@@ -39,37 +63,30 @@ auto ProcessReleasedResources(GraphicsContext &context,
   {
     std::lock_guard<std::mutex> lock(ReleasedTexturesMutex);
 
-    auto size = static_cast<int64_t>(ReleasedTextures.size());
-    for (int64_t i = size - 1; i >= 0; i--) {
-      auto &resource = ReleasedTextures.at(i);
-
-      if (CanBeDestroyed(completedTimelineValue, resource->GetTimestamp())) {
-        Utils::UnorderedErase(
-            ReleasedTextures,
-            [&resource](const Ref<Graphics::Texture::Texture> &res) -> auto {
-              return resource.get() == res.get();
-            });
-      }
-    }
+    Utils::UnorderedErase(
+        ReleasedTextures,
+        [&completedTimelineValue](
+            const Ref<Graphics::Texture::Texture> &res) -> auto {
+          if (CanBeDestroyed(completedTimelineValue, res->GetTimestamp())) {
+            res->isDestroyed = true;
+            return true;
+          }
+          return false;
+        });
   }
 
   {
     std::lock_guard<std::mutex> lock(ReleasedBuffersMutex);
 
-    auto size = static_cast<int64_t>(ReleasedBuffers.size());
-    for (int64_t i = size - 1; i >= 0; i--) {
-      const auto &resource = ReleasedBuffers.at(i);
-
-      if (CanBeDestroyed(completedTimelineValue, resource->GetTimestamp())) {
-        PrintAlways("Destroying buffer resource with timestamp {}; Handle: {}",
-                    resource->GetTimestamp(), (void *)resource->handle);
-        Utils::UnorderedErase(
-            ReleasedBuffers,
-            [&resource](const Ref<Graphics::Buffer> &res) -> auto {
-              return resource.get() == res.get();
-            });
-      }
-    }
+    Utils::UnorderedErase(
+        ReleasedBuffers,
+        [&completedTimelineValue](const Ref<Graphics::Buffer> &res) -> auto {
+          if (CanBeDestroyed(completedTimelineValue, res->GetTimestamp())) {
+            res->isDestroyed = true;
+            return true;
+          }
+          return false;
+        });
   }
 }
 

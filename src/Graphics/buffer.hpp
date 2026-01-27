@@ -37,22 +37,6 @@ auto UnloadBufferModule(const GraphicsContext &context) -> Error;
 static const Type bufferType = Type("Internal Buffer");
 
 struct Buffer : Object, Barrier::GraphicsResource {
-  std::mutex mutex;
-
-  VkBuffer handle = VK_NULL_HANDLE;
-  VmaAllocation memory = VK_NULL_HANDLE;
-  VkDeviceSize size = 0;
-  uint64_t sizeInBytes = 0;
-  VkBufferUsageFlags usage = 0;
-  VkMemoryPropertyFlags properties = 0;
-  bool isStagingBuffer = false;
-  bool persistentMapping = false;
-  mutable void *mappedData = nullptr;
-
-  VkAccessFlags2 unsynchronisedWriteBits{};
-  VkAccessFlags2 unsynchronisedReadBits{};
-  VkPipelineStageFlags2 unsynchronisedReadStages{};
-
   Buffer() = default;
   Buffer(const Buffer &) = delete;
   auto operator=(const Buffer &) -> Buffer & = delete;
@@ -60,11 +44,32 @@ struct Buffer : Object, Barrier::GraphicsResource {
   Buffer(Buffer &&) noexcept = delete;
   auto operator=(Buffer &&) noexcept -> Buffer & = delete;
 
+  std::mutex mutex;
+
+  VkBuffer handle = VK_NULL_HANDLE;
+  VmaAllocation memory = VK_NULL_HANDLE;
+  VkDeviceSize size = 0;
+  uint64_t sizeInBytes = 0;
+  mutable void *mappedData = nullptr;
+
   uint64_t lastUsedTimestamp{};
-  bool released{false};
+
+  VkMemoryPropertyFlags properties = 0;
+  VkBufferUsageFlags usage = 0;
+
+  // Indicates if this is a staging buffer, meaning it is used for temporary uploads
+  bool isStagingBuffer = false;
+
+  // Indicates if this buffer is persistently mapped, can be used to optimize frequent updates
+  bool persistentMapping = false;
+
+  // Safety flag to prevent double releases
+  bool released = false;
+
+  // Set by cleanup function otherwise we'll try to defer destruction again
+  bool isDestroyed = false;
 
   auto GetTimestamp() const -> uint64_t { return lastUsedTimestamp; }
-
   auto MarkUse() -> void;
 
   static auto Create(Graphics::GraphicsContext &context,
@@ -74,7 +79,7 @@ struct Buffer : Object, Barrier::GraphicsResource {
   // Release the resources for safe automatic destruction later
   auto ScheduleDestroy() -> void override;
   auto UseDeferredDestruction() const -> bool override {
-    return GetDeferredDestructionAllowed() && !released;
+    return GetDeferredDestructionAllowed() && !isDestroyed;
   }
 
   ~Buffer() override {

@@ -72,7 +72,7 @@ struct StructuredBuffer : Object {
     return false;
   }
 
-  auto ScheduleDestroy() -> void override { buffer = {}; }
+  auto ScheduleDestroy() -> void override { buffer.reset(); }
 
   static auto GetType() -> Type const * { return &type; }
   [[nodiscard]] auto GetInstanceType() const -> Type const * override {

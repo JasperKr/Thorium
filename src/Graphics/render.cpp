@@ -102,9 +102,6 @@ static auto EndRecording(Graphics::GraphicsContext &context,
 
   uint64_t completedValue = currentTimelineResult.value();
 
-  PrintAlways("Processing released resources up to timeline value {}",
-              completedValue);
-
   Graphics::ProcessReleasedResources(context, completedValue);
 
   return Error::Success();

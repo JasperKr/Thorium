@@ -939,8 +939,6 @@ auto Texture::SetPixels(GraphicsContext &context, Image::ImageData &imageData,
 
   auto buffer = bufferResult.value();
 
-  PrintAlways("Created staging buffer: {}", (void *)buffer->handle);
-
   // auto error = buffer->SetData(context, imageData.GetDataSpan());
   // also sets the buffer usage semaphore value
 
@@ -1078,8 +1076,6 @@ auto Texture::SetPixels(GraphicsContext &context,
 
   auto buffer = bufferResult.value();
 
-  PrintAlways("Created staging buffer: {}", (void *)buffer->handle);
-
   for (size_t row = 0; row < rowCount; ++row) {
     size_t sourceOffset =
         ((row + source.offset.y) * dataWidth + source.offset.x) *
@@ -1125,8 +1121,6 @@ auto Texture::SetPixels(GraphicsContext &context,
 
   buffer->MarkUse();
   MarkUse();
-
-  PrintAlways("CPU Timestamp: {}", GetCPUTimelineSemaphoreValue());
 
   return Error::Success();
 }

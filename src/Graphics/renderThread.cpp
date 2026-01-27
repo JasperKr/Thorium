@@ -135,9 +135,6 @@ auto AquireCommandBuffer(Graphics::GraphicsContext &context,
     return resetResult.AsUnexpected();
   }
 
-  PrintAlways("Aquired command buffer {} for thread '{}'",
-              (void *)threadInfo->threadData.commandBuffer, info.name.c_str());
-
   VkCommandBufferBeginInfo beginInfo = {};
   beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
   auto beginResult = Error::Create(

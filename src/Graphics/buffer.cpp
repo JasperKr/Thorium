@@ -69,8 +69,6 @@ auto LoadBufferModule(GraphicsContext &context) -> Error {
 auto UnloadLocalBufferModule(GraphicsContext &context) -> Error {
   StagingBuffers.clear();
 
-  PrintAlways("Destroying upload buffers: " + Graphics::ContextDebugname);
-
   UploadBuffers.clear();
 
   return Error::Success();
@@ -269,8 +267,6 @@ auto Buffer::UploadRing(GraphicsContext &context,
         static_cast<uint32_t>(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
     bufferInfo.persistentMapping = true;
     bufferInfo.debugName = "Upload Buffer";
-
-    PrintAlways("--------- Creating new upload buffer! ---------");
 
     auto result = Graphics::Buffer::Create(context, bufferInfo);
     if (Error::IsError(result)) {
