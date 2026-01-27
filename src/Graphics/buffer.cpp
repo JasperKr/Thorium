@@ -468,7 +468,7 @@ auto Buffer::Create(GraphicsContext &context, const BufferCreationInfo &info)
   }
 
   PrintDebug("Buffer size in bytes: {}", buffer->sizeInBytes);
-  buffer->lastUsedTimestamp = GetCPUTimelineSemaphoreValue();
+  buffer->lastUsedTimestamp = GetSemaphoreValue();
 
   return buffer;
 }
@@ -496,8 +496,7 @@ auto Buffer::ScheduleDestroy() -> void {
 }
 
 auto Buffer::MarkUse() -> void {
-  lastUsedTimestamp =
-      (std::max)(lastUsedTimestamp, GetCPUTimelineSemaphoreValue());
+  lastUsedTimestamp = (std::max)(lastUsedTimestamp, GetSemaphoreValue());
 }
 
 // NOLINTNEXTLINE

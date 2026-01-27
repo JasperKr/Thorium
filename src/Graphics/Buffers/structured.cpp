@@ -3,12 +3,9 @@
 #include "Graphics/buffer.hpp"
 #include "Graphics/bufferformat.hpp"
 #include "Graphics/graphics.hpp"
-#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "tl/expected.hpp"
-#define VK_NO_PROTOTYPES
-#include "vulkan/vulkan_core.h"
 
 namespace Graphics::StructuredBuffer {
 

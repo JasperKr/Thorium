@@ -5,7 +5,6 @@
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Modules/type.hpp"
-#include <condition_variable>
 #include <cstdint>
 #include <mutex>
 #include <string>
@@ -39,11 +38,6 @@ const Type renderInfoType = Type("Internal RenderThreadInfo");
 struct RenderThreadInfo : Object {
   RenderThreadData threadData;
 
-  // Protects the `currentlyRecording` flag
-  std::mutex availabilityMutex;
-  std::condition_variable availabilityCV;
-  bool currentlyRecording = false;
-
   auto GetInstanceType() const -> Type const * override {
     return &renderInfoType;
   }
@@ -53,9 +47,6 @@ struct RenderThreadInfo : Object {
 
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
 
-extern std::mutex CanStartNewCommandsMutex;
-extern bool CanStartNewCommands;
-extern std::condition_variable CanStartNewCommandsCV;
 extern std::mutex ResultsMutex;
 extern std::vector<Ref<RenderThreadInfo>> Results;
 
@@ -63,9 +54,6 @@ extern std::vector<Ref<RenderThreadInfo>> Results;
 extern thread_local Ref<RenderThreadInfo> CurrentRenderThreadInfo;
 
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
-
-auto HasRenderingPermission() -> bool;
-auto DemandRenderingPermission() -> void;
 
 struct AquireInfo {
   std::string name;

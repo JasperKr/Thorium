@@ -14,6 +14,7 @@
 #include "slang/slang.h"
 #include "tl/expected.hpp"
 #include <mutex>
+#include <unordered_set>
 #include <vector>
 #define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
@@ -21,7 +22,6 @@
 #include <array>
 #include <cassert>
 #include <cstdint>
-#include <set>
 #ifdef WIN32
 #include <cstddef>
 #include <stdint.h>
@@ -105,7 +105,7 @@ auto GetPipelineLayout(const GraphicsContext &context,
   std::vector<VkDescriptorSetLayout> setLayouts{};
 
   auto maxSet = 0U;
-  for (const auto &pair : shader->descriptorSetLayouts) {
+  for (const auto &pair : shader->GetState().descriptorSetLayouts) {
     maxSet = (std::max)(maxSet, pair.first);
   }
 
@@ -113,7 +113,7 @@ auto GetPipelineLayout(const GraphicsContext &context,
 
   setLayouts.resize(maxSet + 1);
 
-  for (const auto &pair : shader->descriptorSetLayouts) {
+  for (const auto &pair : shader->GetState().descriptorSetLayouts) {
     setLayouts[pair.first] = pair.second;
   }
 
@@ -225,7 +225,8 @@ auto BindDefaultTextures(GraphicsContext &context, Shader::ShaderModule *shader)
       imageInfo.sampler = defaultTexture->GetSampler(context);
       VkWriteDescriptorSet descriptorWrite{};
       descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-      descriptorWrite.dstSet = shader->descriptorSets[samplerInfo.set];
+      descriptorWrite.dstSet =
+          shader->GetState().descriptorSets[samplerInfo.set];
 
       if (descriptorWrite.dstSet == VK_NULL_HANDLE) {
         return Error::Create(
@@ -264,12 +265,12 @@ auto CreateDescriptorSets(GraphicsContext &context,
     return fillResult;
   }
 
-  for (const auto &descriptorSet : shader->descriptorSetLayouts) {
+  for (const auto &descriptorSet : shader->GetState().descriptorSetLayouts) {
     vkDestroyDescriptorSetLayout(context.device, descriptorSet.second, nullptr);
   }
 
-  shader->descriptorSets.clear();
-  shader->descriptorSetLayouts.clear();
+  shader->GetState().descriptorSets.clear();
+  shader->GetState().descriptorSetLayouts.clear();
 
   for (const auto &setBinding : descriptorSetLayoutBindings) {
     uint32_t setIndex = setBinding.first;
@@ -291,11 +292,11 @@ auto CreateDescriptorSets(GraphicsContext &context,
       }
     }
 
-    shader->descriptorSetLayouts[setIndex] = descriptorSetLayout;
+    shader->GetState().descriptorSetLayouts[setIndex] = descriptorSetLayout;
 
     VkDescriptorSetAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    allocInfo.descriptorPool = context.descriptorPools.at(context.frameIndex);
+    allocInfo.descriptorPool = GetThreadContext().descriptorPool;
     allocInfo.descriptorSetCount = 1;
     allocInfo.pSetLayouts = &descriptorSetLayout;
 
@@ -303,7 +304,8 @@ auto CreateDescriptorSets(GraphicsContext &context,
       std::lock_guard<std::mutex> lock(
           Graphics::GraphicsContext::mutexes.device);
       auto error = Error::Create(vkAllocateDescriptorSets(
-          context.device, &allocInfo, &shader->descriptorSets[setIndex]));
+          context.device, &allocInfo,
+          &shader->GetState().descriptorSets[setIndex]));
       if (Error::IsError(error)) {
         return error;
       }
@@ -415,7 +417,7 @@ auto inline GetColorBlendAttachmentState(const GraphicsContext &context,
 
   // Determine Expected Output Attachments //
 
-  std::set<uint32_t> expectedAttachments = {};
+  std::unordered_set<uint32_t> expectedAttachments = {};
   for (uint32_t i = 0;
        i < outputVariableLayout->getTypeLayout()->getFieldCount(); ++i) {
     auto *outVar = outputVariableLayout->getTypeLayout()->getFieldByIndex(i);
@@ -1112,7 +1114,7 @@ auto InsertResourceBarriers(GraphicsContext &context) -> Error {
   auto &currentState = StateStack.back();
   auto &shader = currentState.shader;
 
-  for (auto &bufferPair : shader->boundBuffers) {
+  for (auto &bufferPair : shader->GetState().boundBuffers) {
     auto &buffer = bufferPair.second;
     auto key = bufferPair.first;
 

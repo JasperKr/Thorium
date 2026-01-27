@@ -1,5 +1,4 @@
 #include "lua_data.hpp"
-#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Wrap/proxy.hpp"

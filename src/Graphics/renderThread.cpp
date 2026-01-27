@@ -4,6 +4,7 @@
 #include "Graphics/dynamicRendering.hpp"
 #include "Graphics/graphics.hpp"
 #include "Graphics/graphicsState.hpp"
+#include "Graphics/semaphoreManager.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
@@ -20,26 +21,9 @@ namespace Graphics::Threading {
 
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
 
-std::mutex CanStartNewCommandsMutex{};
-bool CanStartNewCommands{};
-std::condition_variable CanStartNewCommandsCV{};
 std::mutex ResultsMutex{};
 std::vector<Ref<RenderThreadInfo>> Results{};
 
-// NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
-
-auto HasRenderingPermission() -> bool {
-  std::lock_guard<std::mutex> lock(CanStartNewCommandsMutex);
-  return CanStartNewCommands;
-}
-
-auto DemandRenderingPermission() -> void {
-  std::unique_lock<std::mutex> lock(CanStartNewCommandsMutex);
-  CanStartNewCommandsCV.wait(lock,
-                             [&]() -> bool { return CanStartNewCommands; });
-}
-
-// NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
 thread_local Ref<RenderThreadInfo> CurrentRenderThreadInfo;
 thread_local inline std::vector<std::pair<uint64_t, VkCommandBuffer>>
     ThreadCommandBuffers;
@@ -49,17 +33,9 @@ inline std::atomic<uint64_t> threadDataIDCounter = 0;
 
 auto GetCachedCommandBuffer(const GraphicsContext &context)
     -> std::optional<VkCommandBuffer> {
-  auto timelineValueResult = GetCurrentTimelineSemaphoreValue(context);
-
-  if (Error::IsError(timelineValueResult)) {
-    return std::nullopt;
-  }
-
-  uint64_t timelineValue = timelineValueResult.value();
-
   for (auto it = ThreadCommandBuffers.begin(); it != ThreadCommandBuffers.end();
        ++it) {
-    if (it->first < timelineValue) {
+    if (!IsInUse(it->first)) {
       auto *commandBuffer = it->second;
       ThreadCommandBuffers.erase(it);
       return commandBuffer;
@@ -69,14 +45,98 @@ auto GetCachedCommandBuffer(const GraphicsContext &context)
   return std::nullopt;
 }
 
+inline auto CreateDescriptorPool(ThreadContext &tcontext)
+    -> Result<VkDescriptorPool> {
+  constexpr uint32_t poolSize = 4096;
+
+  std::vector<VkDescriptorPoolSize> poolSizes = {
+      {.type = VK_DESCRIPTOR_TYPE_SAMPLER, .descriptorCount = poolSize},
+      {.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+       .descriptorCount = poolSize},
+      {.type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, .descriptorCount = poolSize},
+      {.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .descriptorCount = poolSize},
+      {.type = VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER,
+       .descriptorCount = poolSize},
+      {.type = VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
+       .descriptorCount = poolSize},
+      {.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, .descriptorCount = poolSize},
+      {.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .descriptorCount = poolSize},
+      {.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
+       .descriptorCount = poolSize},
+      {.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC,
+       .descriptorCount = poolSize},
+      {.type = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
+       .descriptorCount = poolSize},
+  };
+
+  VkDescriptorPoolCreateInfo poolInfo = {};
+  poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+  poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+  poolInfo.maxSets = poolSize * static_cast<uint32_t>(poolSizes.size());
+  poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
+  poolInfo.pPoolSizes = poolSizes.data();
+
+  VkDescriptorPool descriptorPool = VK_NULL_HANDLE;
+
+  {
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+
+    Error error = Error::Create(vkCreateDescriptorPool(
+        tcontext.graphicsContext->device, &poolInfo, nullptr, &descriptorPool));
+
+    if (Error::IsError(error)) {
+      return error.AsUnexpected();
+    }
+  }
+
+  return descriptorPool;
+}
+
+inline auto GetDescriptorPool(ThreadContext &tcontext) -> Error {
+  // Reset descriptor sets and other per-frame data
+  auto &context = *tcontext.graphicsContext;
+
+  VkDescriptorPool pool = VK_NULL_HANDLE;
+
+  for (auto &descriptorPoolInfo : tcontext.descriptorPools) {
+    if (!IsInUse(descriptorPoolInfo.lastUsedTimestamp)) {
+      pool = descriptorPoolInfo.descriptorPool;
+      descriptorPoolInfo.lastUsedTimestamp = GetSemaphoreValue();
+      break;
+    }
+  }
+
+  if (pool == VK_NULL_HANDLE) {
+    auto createResult = CreateDescriptorPool(tcontext);
+
+    if (Error::IsError(createResult)) {
+      return createResult.error();
+    }
+
+    pool = createResult.value();
+
+    tcontext.descriptorPools.push_back(
+        {pool, GetSemaphoreValue()}); // Add new pool to the list
+  }
+
+  tcontext.descriptorPool = pool;
+
+  {
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+    auto resetResult = Error::Create(
+        vkResetDescriptorPool(context.device, tcontext.descriptorPool, 0));
+
+    if (Error::IsError(resetResult)) {
+      return resetResult;
+    }
+  }
+
+  return Error::Success();
+}
+
 auto AquireCommandBuffer(Graphics::GraphicsContext &context,
                          const AquireInfo &info)
     -> Result<Ref<RenderThreadInfo>> {
-
-  if (!HasRenderingPermission()) {
-    return Error::Unexpected(
-        "Cannot aquire command buffer without rendering permission");
-  }
 
   if (CurrentRenderThreadInfo.get() != nullptr) {
     return Error::Unexpected(
@@ -84,16 +144,10 @@ auto AquireCommandBuffer(Graphics::GraphicsContext &context,
   }
 
   auto threadInfo = Ref<RenderThreadInfo>::Make();
-  threadInfo->currentlyRecording = true;
   threadInfo->threadData.key = std::hash<std::string>()(info.name);
   threadInfo->threadData.priority = info.priority;
   threadInfo->threadData.name = info.name;
   threadInfo->threadData.id = threadDataIDCounter.fetch_add(1);
-
-  {
-    std::lock_guard<std::mutex> lock(ResultsMutex);
-    Results.emplace_back(threadInfo);
-  }
 
   auto &tcontext = GetThreadContext();
 
@@ -126,6 +180,12 @@ auto AquireCommandBuffer(Graphics::GraphicsContext &context,
     threadInfo->threadData.commandBuffer = cachedCmdBuffer.value();
   }
 
+  PrintAlways("New semaphore value: {}",
+              NewSemaphoreValue(threadInfo->threadData.commandBuffer));
+
+  PrintAlways("Resetting command buffer: {}",
+              (void *)threadInfo->threadData.commandBuffer);
+
   // Reset old command buffer
   VkCommandBufferResetFlags resetFlags{};
   auto resetResult = Error::Create(
@@ -133,6 +193,12 @@ auto AquireCommandBuffer(Graphics::GraphicsContext &context,
 
   if (Error::IsError(resetResult)) {
     return resetResult.AsUnexpected();
+  }
+
+  auto getDescriptorPoolResult = GetDescriptorPool(tcontext);
+
+  if (Error::IsError(getDescriptorPoolResult)) {
+    return getDescriptorPoolResult.AsUnexpected();
   }
 
   VkCommandBufferBeginInfo beginInfo = {};
@@ -190,7 +256,7 @@ auto SubmitCommands(Graphics::GraphicsContext &context) -> Error {
   threadInfo.threadData.resourceSyncs = Barrier::GlobalResourceSyncTimeline;
   threadInfo.threadData.usageUpdates = Barrier::GlobalResourceStateUpdates;
 
-  auto timelineValue = GetCPUTimelineSemaphoreValue();
+  auto timelineValue = GetSemaphoreValue();
 
   ThreadCommandBuffers.emplace_back(timelineValue,
                                     threadInfo.threadData.commandBuffer);
@@ -198,10 +264,10 @@ auto SubmitCommands(Graphics::GraphicsContext &context) -> Error {
   GetThreadContext().commandBuffer = VK_NULL_HANDLE;
 
   {
-    std::lock_guard<std::mutex> lock(threadInfo.availabilityMutex);
-    threadInfo.currentlyRecording = false;
+    std::lock_guard<std::mutex> lock(ResultsMutex);
+    Results.emplace_back(&threadInfo);
   }
-  threadInfo.availabilityCV.notify_all();
+
   CurrentRenderThreadInfo.reset();
 
   return Error::Success();
@@ -273,6 +339,15 @@ auto Deinitialize(Graphics::GraphicsContext &context) -> Error {
 
   if (Error::IsError(err)) {
     return err;
+  }
+
+  {
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+
+    vkDeviceWaitIdle(context.device);
+
+    vkDestroyDescriptorPool(context.device, GetThreadContext().descriptorPool,
+                            nullptr);
   }
 
   return Error::Success();

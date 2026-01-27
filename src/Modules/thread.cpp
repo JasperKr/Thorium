@@ -65,7 +65,10 @@ auto Thread::Close(ThreadStatus status, const std::string &message) -> void {
 
 auto Thread::Run(Thread *thread,
                  const std::vector<LuaWrap::Data::LuaType> &launchArguments,
-                 int count) -> void {
+                 int count, ThreadID identifier) -> void { // NOLINT
+
+  CurrentThreadID = identifier;
+
   lua_State *state = luaL_newstate();
   luaL_openlibs(state);
   thread->state = state;
@@ -128,13 +131,6 @@ auto Thread::Run(Thread *thread,
 
   // Stop rendering if still active (crashed or user error, for example)
   if (Graphics::Threading::CurrentRenderThreadInfo.get() != nullptr) {
-    {
-      std::lock_guard<std::mutex> lock(
-          Graphics::Threading::CurrentRenderThreadInfo->availabilityMutex);
-      Graphics::Threading::CurrentRenderThreadInfo->currentlyRecording = false;
-    }
-    Graphics::Threading::CurrentRenderThreadInfo->availabilityCV.notify_all();
-
     PrintWarning("thread was still rendering when exiting.");
   }
 
@@ -156,7 +152,8 @@ auto Thread::Start(const std::vector<LuaWrap::Data::LuaType> &launchArguments,
 
   this->retain(); // Owns itself
 
-  handle = std::thread(Threading::Thread::Run, this, launchArguments, count);
+  handle = std::thread(Threading::Thread::Run, this, launchArguments, count,
+                       ++ThreadIDCounter);
 
   handle.detach();
 }

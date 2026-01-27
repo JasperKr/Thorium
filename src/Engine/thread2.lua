@@ -1,10 +1,8 @@
 print("AAAAAAAAAAAA - 2")
 
-do return end
-
 Imgui = require("cimgui.init")
 
-local doneChannel, canStartChannel = ...
+local doneChannel, stopChannel = ...
 
 local meshes = {}
 local colors = {
@@ -18,7 +16,6 @@ local drawCount = 4
 
 print("Creating meshes...")
 
-Thorium.graphics.demandRenderingPermission()
 Thorium.graphics.aquireGraphics("load")
 
 for i = 1, drawCount do
@@ -62,26 +59,31 @@ for i = 1, drawCount do
   print(" - Mesh has " .. tostring(meshes[i]:getIndexCount()) .. " indices.")
 end
 
+print("Meshes created.")
 Thorium.graphics.submitGraphics()
+doneChannel:push(true)
+
+Thorium.timer.sleep(0.1)
 
 local function draw(i)
   Thorium.graphics.draw(meshes[i])
 end
 
 while true do
-  if not (canStartChannel:demand(5)) then
+  if stopChannel:pop() then
     break
   end
 
-  Thorium.graphics.demandRenderingPermission()
+  -- for i = 1, drawCount do
+  --   print("THREAD #2 drawing " .. tostring(i))
+  --   Thorium.graphics.aquireGraphics("square-" .. tostring(i))
 
-  for i = 1, drawCount do
-    Thorium.graphics.aquireGraphics("square-" .. tostring(i))
+  --   Thorium.timer.sleep(0.1)
 
-    draw(i)
-    Thorium.graphics.submitGraphics()
-  end
-  doneChannel:push(true)
+  --   draw(i)
+  --   Thorium.graphics.submitGraphics()
+  --   doneChannel:push(i)
+  -- end
 end
 
 print("THREAD #2 EXITING")

@@ -106,6 +106,20 @@ ShaderStageFlagsToPipelineStageFlags(VkShaderStageFlags shaderStages)
   return pipelineStages;
 }
 
+struct BoundState {
+  std::unordered_map<uint64_t, Buffer *> boundBuffers;
+  std::unordered_map<uint64_t, Texture::Texture *> boundTextures;
+
+  std::unordered_map<uint32_t, VkDescriptorSetLayout> descriptorSetLayouts;
+  std::unordered_map<uint32_t, VkDescriptorSet> descriptorSets;
+  std::vector<DescriptorWriteInfo> pendingDescriptorWrites;
+  std::vector<ImageTransitionInfo> pendingImageTransitions;
+};
+
+static std::unordered_map<uint32_t,
+                          std::unordered_map<struct ShaderModule *, BoundState>>
+    BoundStates; // NOLINT
+
 struct ShaderModule : Object {
   ShaderModule() = default;
   ShaderModule(const ShaderModule &) = delete;
@@ -131,13 +145,13 @@ struct ShaderModule : Object {
   ShaderReflection reflection;
   std::vector<PushBuffer> pushBuffers;
 
-  std::unordered_map<uint64_t, Buffer *> boundBuffers;
-  std::unordered_map<uint64_t, Texture::Texture *> boundTextures;
+  auto GetState() const -> BoundState & {
+    // TODO: Give shader module it's own ID to avoid pointer issues
+    static thread_local std::unordered_map<const ShaderModule *, BoundState>
+        states;
 
-  std::unordered_map<uint32_t, VkDescriptorSetLayout> descriptorSetLayouts;
-  std::unordered_map<uint32_t, VkDescriptorSet> descriptorSets;
-  std::vector<DescriptorWriteInfo> pendingDescriptorWrites;
-  std::vector<ImageTransitionInfo> pendingImageTransitions;
+    return states[this];
+  }
 
   std::vector<uint8_t> globalUniforms;
 
@@ -148,7 +162,7 @@ struct ShaderModule : Object {
     auto *ctx = GetCurrentGraphicsContext();
 
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    for (auto &pair : descriptorSetLayouts) {
+    for (auto &pair : GetState().descriptorSetLayouts) {
       vkDestroyDescriptorSetLayout(ctx->device, pair.second, nullptr);
     }
 

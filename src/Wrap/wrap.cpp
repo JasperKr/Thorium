@@ -10,6 +10,7 @@
 #include <iostream>
 #include <set>
 #include <string>
+#include <unordered_set>
 extern "C" {
 #include <lauxlib.h>
 #include <lua.h>
@@ -331,7 +332,7 @@ auto RegisterLuaType(lua_State *state, const Type *type,
   lua_pushcfunction(state, wrap_release);
   lua_setfield(state, -2, "release"); // mt.release = wrap_release [mt]
 
-  static const std::set<std::string> ReservedNames = {
+  static const std::unordered_set<std::string> ReservedNames = {
       "__gc", "__index", "__tostring", "type", "typeof", "__eq", "release",
   };
 

@@ -25,6 +25,14 @@ extern "C" {
 
 namespace Threading {
 
+using ThreadID = uint32_t;
+
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+thread_local static ThreadID CurrentThreadID = 0;
+
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+static ThreadID ThreadIDCounter = 0;
+
 auto UnloadModule() -> void;
 
 enum class ThreadStatus : uint8_t { Running, Stopped, Error };
@@ -54,7 +62,7 @@ public:
 private:
   static auto Run(Thread *thread,
                   const std::vector<LuaWrap::Data::LuaType> &launchArguments,
-                  int count) -> void;
+                  int count, ThreadID identifier) -> void;
   auto Close(ThreadStatus status, const std::string &message) -> void;
 
   std::string script;

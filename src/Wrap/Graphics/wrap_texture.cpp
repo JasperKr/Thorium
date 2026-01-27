@@ -5,8 +5,8 @@
 #include "Modules/image.hpp"
 #include "Wrap/wrap.hpp"
 #include <imgui.h>
-#include <set>
 #include <string>
+#include <unordered_set>
 
 #define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
@@ -428,7 +428,7 @@ static inline auto TextureUsageToVkImageUsage(VkFormat format,
 
 constexpr VkFormat DefaultFormat = VK_FORMAT_R8G8B8A8_UNORM;
 
-const std::set<std::string> ValidOptionKeys = {
+const std::unordered_set<std::string> ValidOptionKeys = {
     "type",    "format",      "mipmaps",     "sampler", "rendertarget",
     "storage", "mipmapcount", "mipmapstart", "linear",
 };

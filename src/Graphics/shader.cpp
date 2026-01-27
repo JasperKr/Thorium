@@ -17,13 +17,13 @@
 #include "tl/expected.hpp"
 #include <array>
 #include <span>
+#include <unordered_set>
 #include <utility>
 #define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
-#include <set>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -524,7 +524,7 @@ inline auto ValidateBuffers(const ShaderModule *shader) -> Error {
 
     auto locationKey = SetBindingToSlot(bufferInfo.set, bufferInfo.binding);
 
-    if (!shader->boundBuffers.contains(locationKey)) {
+    if (!shader->GetState().boundBuffers.contains(locationKey)) {
       return Error::Create("Storage buffer '" + resource.name +
                            "' not set up in shader.");
     }
@@ -622,11 +622,7 @@ auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
     if (bufferInfo.name == *key.begin()) {
       auto locationKey = SetBindingToSlot(bufferInfo.set, bufferInfo.binding);
 
-      // if (boundBuffers[locationKey] == buffer->buffer.get()) {
-      //   return Error::Success(); // No need to update or dirty state
-      // }
-
-      boundBuffers[locationKey] = buffer->buffer.get();
+      GetState().boundBuffers[locationKey] = buffer->buffer.get();
 
       VkDescriptorBufferInfo vkBufferInfo{};
       vkBufferInfo.buffer = buffer->buffer->handle;
@@ -662,7 +658,7 @@ auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
         break;
       };
 
-      pendingDescriptorWrites.emplace_back(descriptorWrite);
+      GetState().pendingDescriptorWrites.emplace_back(descriptorWrite);
 
       Graphics::SetDirtyState();
 
@@ -692,11 +688,7 @@ auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
     if (resource.name == *key.begin()) {
       auto key = SetBindingToSlot(samplerInfo.set, samplerInfo.binding);
 
-      // if (boundTextures[key] == texture) {
-      //   return Error::Success(); // No need to update or dirty state
-      // }
-
-      boundTextures[key] = texture;
+      GetState().boundTextures[key] = texture;
 
       // Create descriptor set for this texture
       VkDescriptorImageInfo imageInfo{};
@@ -715,8 +707,8 @@ auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
       descriptorWrite.pImageInfo = imageInfo;
       descriptorWrite.imagePtr = texture;
 
-      pendingDescriptorWrites.emplace_back(descriptorWrite);
-      pendingImageTransitions.emplace_back(ImageTransitionInfo{
+      GetState().pendingDescriptorWrites.emplace_back(descriptorWrite);
+      GetState().pendingImageTransitions.emplace_back(ImageTransitionInfo{
           .texture = texture,
           .newUsage = Texture::TextureUsage::Sampler,
           .newStage = ShaderStageFlagsToPipelineStageFlags(resource.stages),
@@ -772,7 +764,7 @@ auto ShaderModule::FlushGlobals(GraphicsContext &context,
 
     VkWriteDescriptorSet descriptorWrite{};
     descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    descriptorWrite.dstSet = descriptorSets[reflection.globals.set];
+    descriptorWrite.dstSet = GetState().descriptorSets[reflection.globals.set];
     descriptorWrite.dstBinding = reflection.globals.binding;
     descriptorWrite.dstArrayElement = 0;
     descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -805,14 +797,15 @@ auto ShaderModule::FlushBuffers(GraphicsContext &context,
   }
 
   std::vector<VkWriteDescriptorSet> writes;
-  std::set<uint64_t> updatedSets;
+  std::unordered_set<uint64_t> updatedSets;
 
-  auto writeCount = static_cast<int32_t>(pendingDescriptorWrites.size());
+  auto writeCount =
+      static_cast<int32_t>(GetState().pendingDescriptorWrites.size());
   writes.reserve(writeCount);
 
   // Loop over writes in reverse to prioritize later writes
   for (int32_t i = writeCount - 1; i >= 0; i--) {
-    auto &write = pendingDescriptorWrites.at(i);
+    auto &write = GetState().pendingDescriptorWrites.at(i);
 
     if (write.bufferPtr == nullptr && write.imagePtr == nullptr) {
       return Error::Create("Descriptor write has no buffer or image info set.");
@@ -825,10 +818,10 @@ auto ShaderModule::FlushBuffers(GraphicsContext &context,
     }
     updatedSets.insert(key);
 
-    writes.emplace_back(write.GetWrite(descriptorSets));
+    writes.emplace_back(write.GetWrite(GetState().descriptorSets));
   }
 
-  for (auto &transition : pendingImageTransitions) {
+  for (auto &transition : GetState().pendingImageTransitions) {
     Error result;
 
     switch (transition.newUsage) {
@@ -857,14 +850,14 @@ auto ShaderModule::FlushBuffers(GraphicsContext &context,
       return result;
     }
   }
-  pendingImageTransitions.clear();
+  GetState().pendingImageTransitions.clear();
 
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
     vkUpdateDescriptorSets(context.device, static_cast<uint32_t>(writes.size()),
                            writes.data(), 0, nullptr);
   }
-  pendingDescriptorWrites.clear();
+  GetState().pendingDescriptorWrites.clear();
 
   auto *commandBuffer = GetCommandBuffer();
 
@@ -882,9 +875,9 @@ auto ShaderModule::FlushBuffers(GraphicsContext &context,
   }
 
   std::vector<VkDescriptorSet> descriptorSetList;
-  descriptorSetList.reserve(this->descriptorSets.size());
+  descriptorSetList.reserve(this->GetState().descriptorSets.size());
   uint32_t set = 0;
-  for (const auto &setPair : this->descriptorSets) {
+  for (const auto &setPair : this->GetState().descriptorSets) {
     // I assume slang will always output sets in order
     // Unless the user manually assigns set numbers out of order
     // In that case, don't, lol

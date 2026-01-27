@@ -2,6 +2,7 @@
 
 #include "Graphics/barrier.hpp"
 #include "Graphics/sampler.hpp"
+#include "Graphics/semaphoreManager.hpp"
 #include "Modules/imagedata.hpp"
 #include "Modules/object.hpp"
 #include "Modules/type.hpp"
@@ -99,8 +100,7 @@ struct Texture : Object, Barrier::GraphicsResource {
   auto GetTimestamp() const -> uint64_t { return lastUsedTimestamp; }
 
   auto MarkUse() -> void {
-    lastUsedTimestamp =
-        (std::max)(lastUsedTimestamp, GetCPUTimelineSemaphoreValue());
+    lastUsedTimestamp = (std::max)(lastUsedTimestamp, GetSemaphoreValue());
   }
 
   auto ScheduleDestroy() -> void override;

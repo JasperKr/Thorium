@@ -73,7 +73,6 @@ struct GraphicsContext {
   SwapchainInfo swapchainInfo;
   SurfaceInfo surfaceInfo;
   VkPhysicalDeviceProperties deviceProperties;
-  std::vector<VkDescriptorPool> descriptorPools;
 
   std::vector<VkSemaphore> swapchainImageReady;
   std::vector<VkSemaphore> renderingFinished;
@@ -85,10 +84,18 @@ struct GraphicsContext {
   uint32_t swapchainImageIndex;
 };
 
+struct DescriptorPoolInfo {
+  VkDescriptorPool descriptorPool;
+  uint64_t lastUsedTimestamp;
+};
+
 struct ThreadContext {
   GraphicsContext *graphicsContext; // Global graphics context
   VkCommandPool commandPool;        // Per-thread command pool
   VkCommandBuffer commandBuffer;    // Current command buffer
+
+  std::vector<DescriptorPoolInfo> descriptorPools; // Descriptor pool info
+  VkDescriptorPool descriptorPool;                 // Current descriptor pool
 };
 
 auto Initialize(GraphicsContext &context, Config::ApplicationConfig &config)
@@ -107,13 +114,6 @@ extern GraphicsContext *g_ctx;
 void SetCurrentGraphicsContext(GraphicsContext *ctx);
 auto GetCurrentGraphicsContext() -> GraphicsContext *;
 
-auto GetCurrentTimelineSemaphoreValue(const GraphicsContext &context)
-    -> Result<uint64_t>;
-auto InitializeGlobalTimelineSemaphore(GraphicsContext &context) -> Error;
-auto DeInitializeGlobalTimelineSemaphore(GraphicsContext &context) -> void;
-auto GetCPUTimelineSemaphoreValue() -> uint64_t;
-auto IncrementCPUTimelineSemaphoreValue(GraphicsContext &context) -> uint64_t;
-auto GetGlobalTimelineSemaphore(GraphicsContext &context) -> VkSemaphore;
 auto GetDeferredDestructionAllowed() -> bool &;
 
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)

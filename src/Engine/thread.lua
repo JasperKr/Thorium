@@ -45,8 +45,8 @@ while true do
     break
   end
 
-  Thorium.graphics.demandRenderingPermission()
   Thorium.graphics.aquireGraphics("gui")
+  Thorium.graphics.setRenderTarget({ loadas = "clear" })
 
   local dt = Thorium.timer.getTime() - t
   t = Thorium.timer.getTime()
@@ -54,9 +54,9 @@ while true do
   Thorium.gui.newFrame(dt)
 
   draw()
-  doneChannel:push(true)
-
   Thorium.graphics.submitGraphics()
+
+  doneChannel:push(true)
 end
 
 print("THREAD #1 EXITING")

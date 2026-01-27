@@ -6,7 +6,6 @@
 #include "SDL3/SDL_vulkan.h"
 #include "tl/expected.hpp"
 #include "vulkan/vulkan_core.h"
-#include <atomic>
 #include <cassert>
 #include <cstdint>
 #include <mutex>
@@ -20,8 +19,6 @@ GraphicsMutexes GraphicsContext::mutexes = {};
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
 
 GraphicsContext *g_ctx = nullptr;
-inline VkSemaphore globalTimelineSemaphore = nullptr;
-inline std::atomic<uint64_t> currentCPUTimelineValue = 1;
 
 thread_local std::string ContextDebugname{};
 
@@ -29,69 +26,6 @@ std::vector<VkCommandPool> CommandPools{};
 std::mutex CommandPoolsMutex{};
 
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
-
-auto InitializeGlobalTimelineSemaphore(GraphicsContext &context) -> Error {
-  PrintDebug("Initializing global timeline semaphore...");
-
-  VkSemaphoreTypeCreateInfo timelineInfo = {
-      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
-      .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
-      .initialValue = 0,
-  };
-
-  VkSemaphoreCreateInfo semInfo = {
-      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-      .pNext = &timelineInfo,
-  };
-
-  {
-    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    auto result = Error::Create(vkCreateSemaphore(
-        context.device, &semInfo, nullptr, &globalTimelineSemaphore));
-    if (Error::IsError(result)) {
-      return result;
-    }
-  }
-
-  return Error::Success();
-}
-
-auto DeInitializeGlobalTimelineSemaphore(GraphicsContext &context) -> void {
-  if (globalTimelineSemaphore != VK_NULL_HANDLE) {
-    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    vkDestroySemaphore(context.device, globalTimelineSemaphore, nullptr);
-    globalTimelineSemaphore = VK_NULL_HANDLE;
-  }
-}
-
-auto GetGlobalTimelineSemaphore(GraphicsContext &context) -> VkSemaphore {
-  return globalTimelineSemaphore;
-}
-
-auto GetCPUTimelineSemaphoreValue() -> uint64_t {
-  return currentCPUTimelineValue.load();
-}
-
-auto IncrementCPUTimelineSemaphoreValue(GraphicsContext &context) -> uint64_t {
-  return currentCPUTimelineValue.fetch_add(1) + 1;
-}
-
-auto GetCurrentTimelineSemaphoreValue(const GraphicsContext &context)
-    -> Result<uint64_t> {
-  uint64_t completedValue = UINT64_MAX;
-
-  {
-    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    auto result = Error::Create(vkGetSemaphoreCounterValue(
-        context.device, globalTimelineSemaphore, &completedValue));
-
-    if (Error::IsError(result)) {
-      return result.AsUnexpected();
-    }
-  }
-
-  return completedValue;
-}
 
 auto GetDeferredDestructionAllowed() -> bool & {
   static bool deferredDestructionAllowed = true;
@@ -597,53 +531,6 @@ static auto CreateVmaAllocator(GraphicsContext &context) -> Error {
   return Error::Success();
 }
 
-static auto CreateDescriptorPool(GraphicsContext &context) -> Error {
-  constexpr uint32_t poolSize = 4096;
-
-  std::vector<VkDescriptorPoolSize> poolSizes = {
-      {.type = VK_DESCRIPTOR_TYPE_SAMPLER, .descriptorCount = poolSize},
-      {.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-       .descriptorCount = poolSize},
-      {.type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, .descriptorCount = poolSize},
-      {.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .descriptorCount = poolSize},
-      {.type = VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER,
-       .descriptorCount = poolSize},
-      {.type = VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
-       .descriptorCount = poolSize},
-      {.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, .descriptorCount = poolSize},
-      {.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .descriptorCount = poolSize},
-      {.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
-       .descriptorCount = poolSize},
-      {.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC,
-       .descriptorCount = poolSize},
-      {.type = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
-       .descriptorCount = poolSize},
-  };
-
-  VkDescriptorPoolCreateInfo poolInfo = {};
-  poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-  poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-  poolInfo.maxSets = poolSize * static_cast<uint32_t>(poolSizes.size());
-  poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
-  poolInfo.pPoolSizes = poolSizes.data();
-
-  {
-    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    for (uint32_t i = 0; i < FRAMES_IN_FLIGHT; i++) {
-      context.descriptorPools.push_back(VK_NULL_HANDLE);
-      auto *pool = &context.descriptorPools.back();
-
-      auto result = Error::Create(
-          vkCreateDescriptorPool(context.device, &poolInfo, nullptr, pool));
-      if (Error::IsError(result)) {
-        return result;
-      }
-    }
-  }
-
-  return Error::Success();
-}
-
 inline auto CreateCommandPool(ThreadContext &tcontext) -> Error {
   VkCommandPoolCreateInfo poolInfo = {};
   poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
@@ -802,11 +689,6 @@ auto Initialize(GraphicsContext &context, Config::ApplicationConfig &config)
     return error;
   }
   PrintDebug("called: CreateFences.");
-  error = CreateDescriptorPool(context);
-  if (Error::IsError(error)) {
-    return error;
-  }
-  PrintDebug("called: CreateDescriptorPool.");
 
   return Error::Success();
 }
@@ -841,10 +723,6 @@ void Deinitialize(GraphicsContext &context) {
 
   for (VkImageView imageView : context.swapchainInfo.imageViews) {
     vkDestroyImageView(context.device, imageView, nullptr);
-  }
-
-  for (VkDescriptorPool pool : context.descriptorPools) {
-    vkDestroyDescriptorPool(context.device, pool, nullptr);
   }
 
   vkDestroySwapchainKHR(context.device, context.swapchainInfo.swapchain,

@@ -247,6 +247,7 @@ add_executable(Thorium
     src/Graphics/barrier.cpp
     src/Graphics/gltfLoader.cpp
     src/Graphics/renderThread.cpp
+    src/Graphics/semaphoreManager.cpp
 
 # Graphics Buffers
     src/Graphics/Buffers/push.cpp

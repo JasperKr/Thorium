@@ -360,8 +360,7 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
 
   Graphics::Texture::UnloadModule();
 
-  Graphics::ProcessReleasedResources(
-      context, Graphics::GetCPUTimelineSemaphoreValue() + 1);
+  Graphics::ProcessReleasedResources(context);
 
   PrintInfo("Closing Lua state...");
   lua_close(state);

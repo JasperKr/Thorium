@@ -1,5 +1,6 @@
 #include "resource.hpp"
 #include "Graphics/buffer.hpp"
+#include "Graphics/semaphoreManager.hpp"
 #include "Graphics/texture.hpp"
 #include "Modules/console.hpp"
 #include "Modules/utils.hpp"
@@ -47,27 +48,24 @@ auto ScheduleDestruction(Buffer *buffer) -> void {
 }
 
 inline auto CanBeDestroyed( // NOLINTNEXTLINE
-    const uint64_t &completedTimelineValue,
     const uint64_t &resourceTimelineValue) -> bool {
 
   if (!GetDeferredDestructionAllowed()) {
     return true;
   }
 
-  return completedTimelineValue > resourceTimelineValue;
+  return !IsInUse(resourceTimelineValue);
 }
 
-auto ProcessReleasedResources(GraphicsContext &context,
-                              uint64_t completedTimelineValue) -> void {
+auto ProcessReleasedResources(GraphicsContext &context) -> void {
 
   {
     std::lock_guard<std::mutex> lock(ReleasedTexturesMutex);
 
     Utils::UnorderedErase(
         ReleasedTextures,
-        [&completedTimelineValue](
-            const Ref<Graphics::Texture::Texture> &res) -> auto {
-          if (CanBeDestroyed(completedTimelineValue, res->GetTimestamp())) {
+        [&](const Ref<Graphics::Texture::Texture> &res) -> auto {
+          if (CanBeDestroyed(res->GetTimestamp())) {
             res->isDestroyed = true;
             return true;
           }
@@ -78,15 +76,14 @@ auto ProcessReleasedResources(GraphicsContext &context,
   {
     std::lock_guard<std::mutex> lock(ReleasedBuffersMutex);
 
-    Utils::UnorderedErase(
-        ReleasedBuffers,
-        [&completedTimelineValue](const Ref<Graphics::Buffer> &res) -> auto {
-          if (CanBeDestroyed(completedTimelineValue, res->GetTimestamp())) {
-            res->isDestroyed = true;
-            return true;
-          }
-          return false;
-        });
+    Utils::UnorderedErase(ReleasedBuffers,
+                          [&](const Ref<Graphics::Buffer> &res) -> auto {
+                            if (CanBeDestroyed(res->GetTimestamp())) {
+                              res->isDestroyed = true;
+                              return true;
+                            }
+                            return false;
+                          });
   }
 }
 

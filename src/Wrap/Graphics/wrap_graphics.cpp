@@ -746,16 +746,6 @@ auto wrap_SubmitCommandBuffer(lua_State *state) -> int {
   return 0;
 }
 
-auto wrap_HasRenderingPermission(lua_State *state) -> int {
-  lua_pushboolean(state, Graphics::Threading::HasRenderingPermission() ? 1 : 0);
-  return 1;
-}
-
-auto wrap_DemandRenderingPermission(lua_State *state) -> int {
-  Graphics::Threading::DemandRenderingPermission();
-  return 0;
-}
-
 auto wrap_UseCommands(lua_State *state) -> int {
 
   if (lua_type(state, 1) == LUA_TNUMBER) {

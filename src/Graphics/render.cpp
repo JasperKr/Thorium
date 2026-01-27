@@ -3,6 +3,7 @@
 #include "Graphics/graphicsState.hpp"
 #include "Graphics/renderThread.hpp"
 #include "Graphics/resource.hpp"
+#include "Graphics/semaphoreManager.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/utils.hpp"
@@ -93,16 +94,7 @@ static auto StartRecording(Graphics::GraphicsContext &context) -> Error {
 static auto EndRecording(Graphics::GraphicsContext &context,
                          uint32_t frameIndex) -> Error {
 
-  auto currentTimelineResult =
-      Graphics::GetCurrentTimelineSemaphoreValue(context);
-
-  if (Error::IsError(currentTimelineResult)) {
-    return currentTimelineResult.error();
-  }
-
-  uint64_t completedValue = currentTimelineResult.value();
-
-  Graphics::ProcessReleasedResources(context, completedValue);
+  Graphics::ProcessReleasedResources(context);
 
   return Error::Success();
 }
@@ -175,12 +167,6 @@ auto AquireNextSwapchainImage(Graphics::GraphicsContext &context) -> Error {
 auto PrepareRecording(Graphics::GraphicsContext &context) -> Error {
   ResetCommandBuffers(context);
 
-  {
-    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    vkResetDescriptorPool(context.device,
-                          context.descriptorPools.at(context.frameIndex), 0);
-  }
-
   auto result = StartRecording(context);
 
   if (Error::IsError(result)) {
@@ -204,13 +190,6 @@ auto WaitOnFrame(Graphics::GraphicsContext &context) -> Error {
                   &context.inFlightFences[context.frameIndex], VK_TRUE,
                   UINT64_MAX);
   vkResetFences(context.device, 1, &context.inFlightFences[context.frameIndex]);
-
-  // Wait for in-flight fence for this frame
-  // if (context.imagesInFlight[context.swapchainImageIndex] != VK_NULL_HANDLE) {
-  //   vkWaitForFences(context.device, 1,
-  //                   &context.imagesInFlight[context.swapchainImageIndex],
-  //                   VK_TRUE, UINT64_MAX);
-  // }
 
   return Error::Success();
 }
@@ -244,11 +223,17 @@ auto SubmitCommandBuffers(Graphics::GraphicsContext &context,
     return err;
   }
 
-  {
-    VkSemaphore globalTimelineSemaphore = GetGlobalTimelineSemaphore(context);
-    if (globalTimelineSemaphore != VK_NULL_HANDLE) {
-      uint64_t timelineValue = GetCPUTimelineSemaphoreValue();
+  auto updateResult = UpdateSemaphoreValues(context);
 
+  if (Error::IsError(updateResult)) {
+    return updateResult.error();
+  }
+
+  auto timelineValue = updateResult.value();
+
+  {
+    VkSemaphore globalTimelineSemaphore = Graphics::globalTimelineSemaphore;
+    if (globalTimelineSemaphore != VK_NULL_HANDLE) {
       VkTimelineSemaphoreSubmitInfo timelineInfo{};
       timelineInfo.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO;
       timelineInfo.signalSemaphoreValueCount = 1;
@@ -269,8 +254,6 @@ auto SubmitCommandBuffers(Graphics::GraphicsContext &context,
       }
     }
   }
-
-  IncrementCPUTimelineSemaphoreValue(context);
 
   return Error::Success();
 }
@@ -294,21 +277,6 @@ auto PresentFrame(Graphics::GraphicsContext &context) -> Error {
   }
 
   return Error::Success();
-}
-
-inline auto DisallowThreadRendering() -> void {
-  {
-    std::lock_guard<std::mutex> lock(Threading::CanStartNewCommandsMutex);
-    Threading::CanStartNewCommands = false;
-  }
-}
-
-inline auto AllowThreadRendering() -> void {
-  {
-    std::lock_guard<std::mutex> lock(Threading::CanStartNewCommandsMutex);
-    Threading::CanStartNewCommands = true;
-  }
-  Threading::CanStartNewCommandsCV.notify_all();
 }
 
 auto InitializeGraphics(Graphics::GraphicsContext &context) -> Error {
@@ -335,8 +303,6 @@ auto InitializeGraphics(Graphics::GraphicsContext &context) -> Error {
                   &context.inFlightFences[context.frameIndex]);
   }
 
-  AllowThreadRendering();
-
   return Error::Success();
 }
 
@@ -348,22 +314,15 @@ GetOrderedCommands(GraphicsContext &context,
       unorderedThreadRenderdatas;
 
   {
-    std::vector<Ref<Threading::RenderThreadInfo>> tempResults;
-    {
-      std::lock_guard<std::mutex> lock(Threading::ResultsMutex);
-      tempResults = Threading::Results;
-    }
+    std::lock_guard<std::mutex> lock(Threading::ResultsMutex);
     for (auto &threadInfo : Threading::Results) {
-      // Wait for thread to finish recording
-      std::unique_lock<std::mutex> lock(threadInfo->availabilityMutex);
-      while (threadInfo->currentlyRecording) {
-        threadInfo->availabilityCV.wait(lock);
-      }
-
       unorderedThreadRenderdatas[threadInfo->threadData.key].emplace_back(
           threadInfo->threadData);
     }
   }
+
+  auto unorderedSemaphoreValues = Graphics::GetPendingTimelineValues();
+  std::vector<uint64_t> orderedSemaphoreValues = {};
 
   int idx = 0;
   for (auto key : GlobalStitchInfo.orderingKeys) {
@@ -380,6 +339,12 @@ GetOrderedCommands(GraphicsContext &context,
 
       for (auto &data : found->second) {
         threadRenderdatas.emplace_back(data);
+
+        auto semaphoreIter = unorderedSemaphoreValues.find(data.commandBuffer);
+        if (semaphoreIter != unorderedSemaphoreValues.end()) {
+          orderedSemaphoreValues.emplace_back(semaphoreIter->second);
+          unorderedSemaphoreValues.erase(semaphoreIter);
+        }
 
         Utils::UnorderedErase(
             Threading::Results,
@@ -400,6 +365,8 @@ GetOrderedCommands(GraphicsContext &context,
 
     idx++;
   }
+
+  Graphics::SetPendingTimelineValues(orderedSemaphoreValues);
 
   // Insert a command buffer before each recorded command buffer to handle resource barriers
   // And one at the end to transition the swapchain image to present
@@ -542,10 +509,6 @@ auto Present(Graphics::GraphicsContext &context) -> Error {
     return validateResult;
   }
 
-  // Do note that the user must have started all async recording before calling this
-  // If the user tries to start recording after this point it will be part of the next frame
-  DisallowThreadRendering();
-
   std::vector<Threading::RenderThreadData> threadRenderdatas{};
 
   auto orderResult = GetOrderedCommands(context, threadRenderdatas);
@@ -634,8 +597,6 @@ auto Present(Graphics::GraphicsContext &context) -> Error {
   if (Error::IsError(result)) {
     return result;
   }
-
-  AllowThreadRendering();
 
   return Error::Success();
 }

@@ -5,7 +5,6 @@
 #include "Graphics/texture.hpp"
 #include "Modules/object.hpp"
 #include <cassert>
-#include <cstdint>
 #include <mutex>
 
 namespace Graphics {
@@ -19,8 +18,7 @@ extern std::mutex ReleasedBuffersMutex;
 
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
-auto ProcessReleasedResources(GraphicsContext &context,
-                              uint64_t completedTimelineValues) -> void;
+auto ProcessReleasedResources(GraphicsContext &context) -> void;
 
 auto ScheduleDestruction(Texture::Texture *texture) -> void;
 auto ScheduleDestruction(Buffer *buffer) -> void;
