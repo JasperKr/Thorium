@@ -16,6 +16,7 @@
 #include "slang/slang.h"
 #include "tl/expected.hpp"
 #include <array>
+#include <public/tracy/Tracy.hpp>
 #include <span>
 #include <unordered_set>
 #include <utility>
@@ -582,6 +583,8 @@ auto ShaderModule::GetUniform(const ResourceKey &key) const
 
 auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
                         const std::span<const uint8_t> &data) -> Error {
+  ZoneScopedN("ShaderModule::Send data span");
+
   for (auto &pushBuffer : pushBuffers) {
     PrintDebug("Checking push buffer {} for key: {}...",
                pushBuffer.GetLayout().name, ResourceKeyToString(key));
@@ -618,6 +621,7 @@ auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
 
 auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
                         StructuredBuffer::StructuredBuffer *buffer) -> Error {
+  ZoneScopedN("ShaderModule::Send structured buffer");
 
   if (buffer == nullptr) {
     return Error::Create("Buffer is null.");
@@ -681,6 +685,8 @@ auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
 
 auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
                         Graphics::Texture::Texture *texture) -> Error {
+  ZoneScopedN("ShaderModule::Send texture");
+
   if (texture == nullptr) {
     return Error::Create("Texture is null.");
   }
@@ -794,6 +800,8 @@ auto ShaderModule::FlushGlobals(GraphicsContext &context,
 auto ShaderModule::FlushBuffers(GraphicsContext &context,
                                 VkPipelineLayout layout,
                                 VkPipelineStageFlags2 dstStage) -> Error {
+  ZoneScoped;
+
   auto validateResult = ValidateBuffers(this);
   if (Error::IsError(validateResult)) {
     return validateResult;

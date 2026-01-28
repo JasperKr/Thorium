@@ -29,6 +29,8 @@
 #include <unordered_map>
 #include <utility>
 
+#include "../external/tracy/public/tracy/Tracy.hpp"
+
 namespace Graphics::DynamicRendering {
 
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
@@ -82,6 +84,7 @@ auto GetSwapchainTextures(const GraphicsContext &context) -> Error {
 auto GetPipelineLayout(const GraphicsContext &context,
                        const Shader::ShaderModule *shader)
     -> Result<VkPipelineLayout> {
+  ZoneScoped;
   auto pushConstantRanges = std::vector<VkPushConstantRange>{};
 
   for (const auto &buffer : shader->pushBuffers) {
@@ -143,6 +146,7 @@ auto FillDescriptorSets(
     GraphicsContext &context, Shader::ShaderModule *shader,
     std::unordered_map<uint32_t, std::vector<VkDescriptorSetLayoutBinding>>
         &descriptorSetLayoutBindings) -> Error {
+  ZoneScoped;
   for (auto &layout : shader->reflection.resources) {
     if (layout.IsBuffer()) {
       auto &bufferInfo = std::get<BufferInfo>(layout.info);
@@ -194,6 +198,7 @@ auto FillDescriptorSets(
 
 auto BindDefaultTextures(GraphicsContext &context, Shader::ShaderModule *shader)
     -> Error {
+  ZoneScoped;
   for (const auto &resource : shader->reflection.resources) {
     if (resource.IsSampler()) {
 
@@ -254,6 +259,7 @@ auto BindDefaultTextures(GraphicsContext &context, Shader::ShaderModule *shader)
 // It never changes per shader anyways
 auto CreateDescriptorSets(GraphicsContext &context,
                           Shader::ShaderModule *shader) -> Error {
+  ZoneScoped;
   std::unordered_map<uint32_t, std::vector<VkDescriptorSetLayoutBinding>>
       descriptorSetLayoutBindings;
 
@@ -324,6 +330,7 @@ auto CreateDescriptorSets(GraphicsContext &context,
 
 inline auto GetShaderStages(const State &state)
     -> Result<std::vector<VkPipelineShaderStageCreateInfo>> {
+  ZoneScoped;
 
   static std::unordered_map<Shader::ShaderModule *,
                             std::vector<VkPipelineShaderStageCreateInfo>>
@@ -494,6 +501,7 @@ auto inline GetRenderFormatInfo(const GraphicsContext &context,
 
 inline auto CreateGraphicsPipeline(const GraphicsContext &context, State &state)
     -> Result<std::pair<VkPipeline, VkPipelineLayout>> {
+  ZoneScoped;
   if (state.bindPoint != VK_PIPELINE_BIND_POINT_GRAPHICS) {
     return Error::Unexpected(
         "Attempted to create graphics pipeline with non-graphics bind point.");
@@ -664,6 +672,8 @@ inline auto CreateGraphicsPipeline(const GraphicsContext &context, State &state)
 
 inline auto CreateComputePipeline(const GraphicsContext &context, State &state)
     -> Result<std::pair<VkPipeline, VkPipelineLayout>> {
+  ZoneScoped;
+
   // Currently not implemented
   // return Error::Unexpected("Compute pipeline creation not implemented.");
 
@@ -707,6 +717,7 @@ inline auto CreateComputePipeline(const GraphicsContext &context, State &state)
 
 inline auto CreatePipeline(const GraphicsContext &context, State &state)
     -> Result<std::pair<VkPipeline, VkPipelineLayout>> {
+  ZoneScoped;
   if (state.bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS) {
     return CreateGraphicsPipeline(context, state);
   }
@@ -719,6 +730,7 @@ inline auto CreatePipeline(const GraphicsContext &context, State &state)
 
 inline auto GetPipeline(const GraphicsContext &context, State &state)
     -> Result<std::pair<VkPipeline, VkPipelineLayout>> {
+  ZoneScoped;
 
   PrintDebug("Getting pipeline from cache");
 
@@ -837,6 +849,7 @@ auto Shutdown(GraphicsContext &context) -> Error {
 }
 
 auto FlushCompute(GraphicsContext &context) -> Result<bool> {
+  ZoneScoped;
   auto &currentState = StateStack.back();
 
   if (currentState.bindPoint != VK_PIPELINE_BIND_POINT_COMPUTE) {
@@ -884,6 +897,7 @@ auto FlushCompute(GraphicsContext &context) -> Result<bool> {
 }
 
 auto FlushGraphics(GraphicsContext &context) -> Result<bool> {
+  ZoneScoped;
   auto &currentState = StateStack.back();
 
   if (currentState.bindPoint != VK_PIPELINE_BIND_POINT_GRAPHICS) {
@@ -942,13 +956,18 @@ auto FlushGraphics(GraphicsContext &context) -> Result<bool> {
 
   PrintDebug("Binding pipeline");
 
-  vkCmdBindPipeline(commandBuffer, currentState.bindPoint,
-                    pipelineResult.value().first);
+  {
+    ZoneScopedN("vkCmdBindPipeline");
+    vkCmdBindPipeline(commandBuffer, currentState.bindPoint,
+                      pipelineResult.value().first);
+  }
 
   return true;
 }
 
 auto Flush(GraphicsContext &context) -> Result<bool> {
+  ZoneScoped;
+
   if (StateStack.back() == LastState && !Graphics::GetIsStateDirty() &&
       GetIsCurrentlyRendering()) {
     return false;
@@ -958,10 +977,12 @@ auto Flush(GraphicsContext &context) -> Result<bool> {
   Graphics::GetIsStateDirty() = false;
 
   if (StateStack.back().bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS) {
-    return FlushGraphics(context);
+    auto result = FlushGraphics(context);
+    return result;
   }
   if (StateStack.back().bindPoint == VK_PIPELINE_BIND_POINT_COMPUTE) {
-    return FlushCompute(context);
+    auto result = FlushCompute(context);
+    return result;
   }
 
   return Error::Unexpected("Unsupported pipeline bind point in Flush.");
@@ -986,6 +1007,7 @@ auto Destroy(GraphicsContext &context) -> void {
 }
 
 inline auto BeginRendering(GraphicsContext &context) -> Error {
+  ZoneScoped;
   auto &currentState = StateStack.back();
 
   VkRenderingInfo renderingInfo = {};
@@ -1182,6 +1204,8 @@ auto InsertResourceBarriers(GraphicsContext &context) -> Error {
 }
 
 auto PrepareRendering(GraphicsContext &context) -> Error {
+  ZoneScoped;
+
   auto flushResult = Flush(context);
 
   if (Error::IsError(flushResult)) {
@@ -1209,6 +1233,8 @@ auto PrepareRendering(GraphicsContext &context) -> Error {
   }
 
   if (currentState.bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS) {
+    ZoneScopedN("Set Viewport And Scissor");
+
     auto viewport = GetClippedViewport();
     auto scissor = GetScissor();
 
@@ -1509,6 +1535,7 @@ auto GetBindPoint() -> VkPipelineBindPoint {
 }
 
 auto Clear(GraphicsContext &context, const ClearInfo &clearInfo) -> Error {
+  ZoneScoped;
   auto &currentState = StateStack.back();
 
   auto *commandBuffer = Graphics::GetCommandBuffer();

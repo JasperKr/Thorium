@@ -10,12 +10,15 @@ Checks: >
   readability-*,
   concurrency-*,
   -cppcoreguidelines-pro-type-vararg,
-  -hicpp-vararg
+  -hicpp-vararg,
+  -bugprone-reserved-identifier
 
 # -cppcoreguidelines-pro-type-reinterpret-cast
 # -hicpp-no-array-decay
 
 WarningsAsErrors: '*'
+
+HeaderFilterRegex: '^(?!.*tracy).*'
 
 CheckOptions:
   # Disallow raw owning pointers
@@ -26,3 +29,4 @@ CheckOptions:
 
   # Require override
   - { key: modernize-use-override.EnableOverride, value: 1 }
+

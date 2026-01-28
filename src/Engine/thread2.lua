@@ -74,16 +74,16 @@ while true do
     break
   end
 
-  -- for i = 1, drawCount do
-  --   print("THREAD #2 drawing " .. tostring(i))
-  --   Thorium.graphics.aquireGraphics("square-" .. tostring(i))
+  for i = 1, drawCount do
+    print("THREAD #2 drawing " .. tostring(i))
+    Thorium.graphics.aquireGraphics("square-" .. tostring(i))
 
-  --   Thorium.timer.sleep(0.1)
+    Thorium.timer.sleep(0.1)
 
-  --   draw(i)
-  --   Thorium.graphics.submitGraphics()
-  --   doneChannel:push(i)
-  -- end
+    draw(i)
+    Thorium.graphics.submitGraphics()
+    doneChannel:push(i)
+  end
 end
 
 print("THREAD #2 EXITING")

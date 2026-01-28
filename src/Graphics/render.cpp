@@ -21,6 +21,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include "../external/tracy/public/tracy/Tracy.hpp"
+
 namespace Graphics {
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
@@ -167,8 +169,6 @@ auto AquireNextSwapchainImage(Graphics::GraphicsContext &context) -> Error {
     return result;
   }
 
-  PrintFatal("Acquired swapchain image index: {}", context.swapchainImageIndex);
-
   return Error::Success();
 }
 
@@ -182,9 +182,6 @@ auto PrepareRecording(Graphics::GraphicsContext &context) -> Error {
   }
 
   auto *cmdBuffer = GetCommandBuffer();
-
-  PrintAlways("{}, {}", context.swapchainImageIndex,
-              context.swapchainInfo.images.size());
 
   assert(context.swapchainImageIndex < context.swapchainInfo.images.size());
 
@@ -337,6 +334,15 @@ GetOrderedCommands(GraphicsContext &context,
   auto unorderedSemaphoreValues = Graphics::GetPendingTimelineValues();
   std::vector<uint64_t> orderedSemaphoreValues = {};
 
+  // PrintAlways("Ordering command buffers for {} keys",
+  //             GlobalStitchInfo.orderingKeys.size());
+  // PrintAlways("Unordered command buffer sets: {}",
+  //             unorderedSemaphoreValues.size());
+
+  // for (const auto &pair : unorderedSemaphoreValues) {
+  //   PrintAlways("Cmd buffers for key {}: {}", (void *)pair.first, pair.second);
+  // }
+
   int idx = 0;
   for (auto key : GlobalStitchInfo.orderingKeys) {
     auto found = unorderedThreadRenderdatas.find(key);
@@ -357,6 +363,9 @@ GetOrderedCommands(GraphicsContext &context,
         if (semaphoreIter != unorderedSemaphoreValues.end()) {
           orderedSemaphoreValues.emplace_back(semaphoreIter->second);
           unorderedSemaphoreValues.erase(semaphoreIter);
+        } else {
+          PrintError("No pending timeline value found for command buffer {}",
+                     (void *)data.commandBuffer);
         }
 
         Utils::UnorderedErase(
@@ -482,6 +491,7 @@ inline auto GetFinalCommandBuffers(
     std::vector<VkCommandBuffer> &finalCommandBuffers,
     const std::vector<Threading::RenderThreadData> &threadRenderdatas)
     -> size_t {
+
   // all thread command buffers + barrier command buffers + 1 present transition
   finalCommandBuffers.resize((threadRenderdatas.size() * 2) + 1);
 
@@ -517,6 +527,8 @@ inline auto GetFinalCommandBuffers(
 }
 
 auto Present(Graphics::GraphicsContext &context) -> Error {
+  FrameMarkStart("Present");
+
   auto validateResult = DynamicRendering::FinalizeFrame(context);
   if (Error::IsError(validateResult)) {
     return validateResult;
@@ -610,6 +622,8 @@ auto Present(Graphics::GraphicsContext &context) -> Error {
   if (Error::IsError(result)) {
     return result;
   }
+
+  FrameMarkEnd("Present");
 
   return Error::Success();
 }

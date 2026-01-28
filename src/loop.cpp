@@ -15,6 +15,7 @@
 #include "Modules/thread.hpp"
 #include "Wrap/Modules/Editor/wrap_imgui.hpp"
 #include <filesystem>
+#include <public/tracy/Tracy.hpp>
 #include <string>
 #include <vector>
 
@@ -318,6 +319,7 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
   while (Event::MainLoopRunning) {
     runCallback.push();
 
+    FrameMarkStart("Frame");
     if (lua_pcall(state, 0, 1, tracebackIndex) != LUA_OK) {
       std::string luaErrorMessage = lua_tostring(state, -1);
       lua_pop(state, 1); // Remove error message from stack
@@ -326,6 +328,7 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
 
       mainLoopResult = Error::Create(luaErrorMessage);
     }
+    FrameMarkEnd("Frame");
 
     // returned value nil == continue, non-nil == exit with code
     if (lua_isnoneornil(state, -1)) {

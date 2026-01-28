@@ -1,10 +1,12 @@
 #include "Graphics/semaphoreManager.hpp"
 #include "Modules/console.hpp"
 #include "vulkan/vulkan_core.h"
+#include <algorithm>
 #include <atomic>
 #include <cstdint>
 #include <mutex>
 #include <shared_mutex>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -13,14 +15,27 @@ namespace Graphics {
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
 
 VkSemaphore globalTimelineSemaphore{};
+
+// Current CPU timeline value for generating unique semaphore values
 std::atomic<uint64_t> currentCPUTimelineValue{};
 
+// Mutex to protect timeline sets
 std::shared_mutex timelineSetsMutex{};
+
+// Timeline values that have been submitted but not yet completed
 std::unordered_set<uint64_t> uncompletedTimelineValues{};
 std::vector<uint64_t> sortedUncompletedTimelineValues{};
+
+// Pending timeline values mapped to command buffers, not yet submitted
 std::unordered_map<VkCommandBuffer, uint64_t> pendingTimelineValues{};
 std::unordered_map<uint64_t, VkCommandBuffer> pendingTimelineValueInv{};
+
+// Sorted pending timeline values for submission
 std::vector<uint64_t> sortedPendingTimelineValues{};
+
+// Semaphore values may be remapped since they must be incrementing each submit
+// but command buffers may be submitted out of order
+std::unordered_map<uint64_t, uint64_t> semaphoreValueMap{};
 
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
@@ -88,11 +103,19 @@ auto UpdateSemaphoreValues(const GraphicsContext &context) -> Result<uint64_t> {
     return GetSemaphoreValue();
   }
 
+  uint64_t maxValue = GetSemaphoreValue();
   for (const auto &value : sortedUncompletedTimelineValues) {
     uncompletedTimelineValues.insert(value);
+    maxValue = (std::max)(value, maxValue);
   }
 
   auto latestValue = sortedUncompletedTimelineValues.back();
+
+  if (latestValue != maxValue) {
+    semaphoreValueMap[maxValue] = latestValue;
+  }
+
+  latestValue = maxValue;
 
   sortedPendingTimelineValues.clear();
 
@@ -112,6 +135,15 @@ auto UpdateSemaphoreValues(const GraphicsContext &context) -> Result<uint64_t> {
   // This will have been ordered so all values less than or equal to the completed value
   // Will be considered completed and can be removed from the uncompleted set
   auto newStart = -1;
+
+  // If some values were remapped, get the original value
+  // For example: we submit [1], [3], [4, 2], [5]
+  // We remap 2 -> 4, so when we get completed value 4, we need to map it back to 2
+  auto iter = semaphoreValueMap.find(completedValue);
+  if (iter != semaphoreValueMap.end()) {
+    completedValue = iter->second;
+    semaphoreValueMap.erase(iter);
+  }
 
   for (size_t i = 0; i < sortedUncompletedTimelineValues.size(); i++) {
     if (sortedUncompletedTimelineValues[i] == completedValue) {

@@ -71,7 +71,6 @@ static auto FindSurfaceFormat(GraphicsContext &context)
 }
 
 static const std::vector<VkPresentModeKHR> PresentModeScoresVsync = {
-    VK_PRESENT_MODE_MAILBOX_KHR,
     VK_PRESENT_MODE_FIFO_KHR,
     VK_PRESENT_MODE_FIFO_RELAXED_KHR,
 };

@@ -180,6 +180,8 @@ auto AquireCommandBuffer(Graphics::GraphicsContext &context,
     threadInfo->threadData.commandBuffer = cachedCmdBuffer.value();
   }
 
+  NewSemaphoreValue(threadInfo->threadData.commandBuffer);
+
   // Reset old command buffer
   VkCommandBufferResetFlags resetFlags{};
   auto resetResult = Error::Create(
@@ -340,8 +342,10 @@ auto Deinitialize(Graphics::GraphicsContext &context) -> Error {
 
     vkDeviceWaitIdle(context.device);
 
-    vkDestroyDescriptorPool(context.device, GetThreadContext().descriptorPool,
-                            nullptr);
+    for (auto &descriptorPoolInfo : GetThreadContext().descriptorPools) {
+      vkDestroyDescriptorPool(context.device, descriptorPoolInfo.descriptorPool,
+                              nullptr);
+    }
   }
 
   return Error::Success();
