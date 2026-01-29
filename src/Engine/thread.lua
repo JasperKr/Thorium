@@ -1,5 +1,3 @@
-print("AAAAAAAAAAAA")
-
 Imgui = require("cimgui.init")
 
 local lastDrawTime = 0

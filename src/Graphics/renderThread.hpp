@@ -20,7 +20,7 @@ struct RenderThreadData {
   // The usage updates recorded for all worker threads
   // We will append resource barriers after each command buffer recording
   // After reordering at the end of the frame
-  std::vector<std::pair<Barrier::GraphicsResource, Barrier::ResourceState>>
+  std::vector<std::pair<Barrier::BarrierSynced, Barrier::ResourceState>>
       usageUpdates;
   std::vector<Barrier::ResourceSync> resourceSyncs;
 
@@ -28,6 +28,8 @@ struct RenderThreadData {
   int64_t priority = 0; // Tie-breaker for overlapping keys
 
   VkCommandBuffer commandBuffer = nullptr;
+  bool drawsToSwapchain = false;
+  uint64_t aquiredAtFrame = 0;
 
   std::string name;
   uint64_t id;

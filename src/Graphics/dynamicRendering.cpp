@@ -81,6 +81,41 @@ auto GetSwapchainTextures(const GraphicsContext &context) -> Error {
   return Error::Success();
 }
 
+std::unordered_map<DescriptorSetLayoutKey, VkDescriptorSetLayout,
+                   DescriptorSetLayoutKeyHash>
+    DescriptorSetLayoutCache; // NOLINT
+
+auto GetDescriptorSetLayout(const DescriptorSetLayoutKey &layoutKey,
+                            const GraphicsContext &context)
+    -> Result<VkDescriptorSetLayout> {
+  ZoneScoped;
+
+  const auto &bindings = layoutKey.bindings;
+  VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
+
+  if (DescriptorSetLayoutCache.contains(layoutKey)) {
+    descriptorSetLayout = DescriptorSetLayoutCache.at(layoutKey);
+  } else {
+    VkDescriptorSetLayoutCreateInfo layoutInfo = {};
+    layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
+    layoutInfo.pBindings = bindings.data();
+
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+
+    auto error = Error::Create(vkCreateDescriptorSetLayout(
+        context.device, &layoutInfo, nullptr, &descriptorSetLayout));
+
+    if (Error::IsError(error)) {
+      return error.AsUnexpected();
+    }
+
+    DescriptorSetLayoutCache[layoutKey] = descriptorSetLayout;
+  }
+
+  return descriptorSetLayout;
+}
+
 auto GetPipelineLayout(const GraphicsContext &context,
                        const Shader::ShaderModule *shader)
     -> Result<VkPipelineLayout> {
@@ -108,7 +143,7 @@ auto GetPipelineLayout(const GraphicsContext &context,
   std::vector<VkDescriptorSetLayout> setLayouts{};
 
   auto maxSet = 0U;
-  for (const auto &pair : shader->GetState().descriptorSetLayouts) {
+  for (const auto &pair : shader->bindingInfos) {
     maxSet = (std::max)(maxSet, pair.first);
   }
 
@@ -116,8 +151,19 @@ auto GetPipelineLayout(const GraphicsContext &context,
 
   setLayouts.resize(maxSet + 1);
 
-  for (const auto &pair : shader->GetState().descriptorSetLayouts) {
-    setLayouts[pair.first] = pair.second;
+  for (const auto &pair : shader->bindingInfos) {
+    DescriptorSetLayoutKey layoutKey{};
+    layoutKey.flags = 0;
+    layoutKey.bindings = pair.second;
+    // No binding flags for now
+    layoutKey.bindingFlags = {};
+
+    auto layoutResult = GetDescriptorSetLayout(layoutKey, context);
+    if (Error::IsError(layoutResult)) {
+      return layoutResult.error().AsUnexpected();
+    }
+
+    setLayouts[pair.first] = layoutResult.value();
   }
 
   VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
@@ -142,11 +188,15 @@ auto GetPipelineLayout(const GraphicsContext &context,
   return pipelineLayout;
 }
 
-auto FillDescriptorSets(
-    GraphicsContext &context, Shader::ShaderModule *shader,
-    std::unordered_map<uint32_t, std::vector<VkDescriptorSetLayoutBinding>>
-        &descriptorSetLayoutBindings) -> Error {
+auto FillDescriptorSets(GraphicsContext &context, Shader::ShaderModule *shader)
+    -> Error {
   ZoneScoped;
+
+  // No need to fill if already done
+  if (!shader->bindingInfos.empty()) {
+    return Error::Success();
+  }
+
   for (auto &layout : shader->reflection.resources) {
     if (layout.IsBuffer()) {
       auto &bufferInfo = std::get<BufferInfo>(layout.info);
@@ -163,7 +213,7 @@ auto FillDescriptorSets(
             .pImmutableSamplers = nullptr,
         };
 
-        descriptorSetLayoutBindings[bufferInfo.set].emplace_back(layoutBinding);
+        shader->bindingInfos[bufferInfo.set].emplace_back(layoutBinding);
       }
     } else if (layout.IsSampler()) {
       auto &imageInfo = std::get<SamplerInfo>(layout.info);
@@ -176,7 +226,7 @@ auto FillDescriptorSets(
           .pImmutableSamplers = nullptr,
       };
 
-      descriptorSetLayoutBindings[imageInfo.set].emplace_back(layoutBinding);
+      shader->bindingInfos[imageInfo.set].emplace_back(layoutBinding);
     }
   }
 
@@ -189,7 +239,7 @@ auto FillDescriptorSets(
         .pImmutableSamplers = nullptr,
     };
 
-    descriptorSetLayoutBindings[shader->reflection.globals.set].emplace_back(
+    shader->bindingInfos[shader->reflection.globals.set].emplace_back(
         layoutBinding);
   }
 
@@ -255,70 +305,65 @@ auto BindDefaultTextures(GraphicsContext &context, Shader::ShaderModule *shader)
   return Error::Success();
 }
 
-// TODO: This should be part of the shader module class
-// It never changes per shader anyways
 auto CreateDescriptorSets(GraphicsContext &context,
                           Shader::ShaderModule *shader) -> Error {
   ZoneScoped;
-  std::unordered_map<uint32_t, std::vector<VkDescriptorSetLayoutBinding>>
-      descriptorSetLayoutBindings;
 
   PrintDebug("Creating descriptor sets...");
 
-  auto fillResult =
-      FillDescriptorSets(context, shader, descriptorSetLayoutBindings);
+  auto fillResult = FillDescriptorSets(context, shader);
   if (Error::IsError(fillResult)) {
     return fillResult;
   }
 
-  for (const auto &descriptorSet : shader->GetState().descriptorSetLayouts) {
-    vkDestroyDescriptorSetLayout(context.device, descriptorSet.second, nullptr);
-  }
+  std::vector<VkDescriptorSetLayout> AllocationLayouts{};
+  std::unordered_map<uint32_t, uint32_t> IndexToSet;
 
-  shader->GetState().descriptorSets.clear();
-  shader->GetState().descriptorSetLayouts.clear();
-
-  for (const auto &setBinding : descriptorSetLayoutBindings) {
+  for (const auto &setBinding : shader->bindingInfos) {
     uint32_t setIndex = setBinding.first;
     const auto &bindings = setBinding.second;
-    VkDescriptorSetLayoutCreateInfo layoutInfo = {};
-    layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
-    layoutInfo.pBindings = bindings.data();
 
-    VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
-    {
-      std::lock_guard<std::mutex> lock(
-          Graphics::GraphicsContext::mutexes.device);
-      auto error = Error::Create(vkCreateDescriptorSetLayout(
-          context.device, &layoutInfo, nullptr, &descriptorSetLayout));
+    DescriptorSetLayoutKey layoutKey{};
+    layoutKey.flags = 0;
+    layoutKey.bindings = bindings;
+    layoutKey.bindingFlags = {};
 
-      if (Error::IsError(error)) {
-        return error;
-      }
+    auto layoutResult = GetDescriptorSetLayout(layoutKey, context);
+    if (Error::IsError(layoutResult)) {
+      return layoutResult.error();
     }
 
-    shader->GetState().descriptorSetLayouts[setIndex] = descriptorSetLayout;
+    auto *descriptorSetLayout = layoutResult.value();
 
-    VkDescriptorSetAllocateInfo allocInfo{};
-    allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    allocInfo.descriptorPool = GetThreadContext().descriptorPool;
-    allocInfo.descriptorSetCount = 1;
-    allocInfo.pSetLayouts = &descriptorSetLayout;
+    IndexToSet[AllocationLayouts.size()] = setIndex;
+    AllocationLayouts.emplace_back(descriptorSetLayout);
+  }
 
-    {
-      std::lock_guard<std::mutex> lock(
-          Graphics::GraphicsContext::mutexes.device);
-      auto error = Error::Create(vkAllocateDescriptorSets(
-          context.device, &allocInfo,
-          &shader->GetState().descriptorSets[setIndex]));
-      if (Error::IsError(error)) {
-        return error;
-      }
+  VkDescriptorSetAllocateInfo allocInfo{};
+  allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+  allocInfo.descriptorPool = GetThreadContext().descriptorPool;
+  allocInfo.descriptorSetCount =
+      static_cast<uint32_t>(AllocationLayouts.size());
+  allocInfo.pSetLayouts = AllocationLayouts.data();
+
+  std::vector<VkDescriptorSet> allocatedSets(AllocationLayouts.size());
+
+  {
+    ZoneScopedN("Allocate descriptor sets");
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+
+    auto error = Error::Create(vkAllocateDescriptorSets(
+        context.device, &allocInfo, allocatedSets.data()));
+    if (Error::IsError(error)) {
+      return error;
     }
   }
 
-  PrintDebug("Buffer descriptor sets created successfully.");
+  for (size_t i = 0; i < allocatedSets.size(); i++) {
+    auto setIndex = IndexToSet.at(static_cast<uint32_t>(i));
+
+    shader->GetState().descriptorSets[setIndex] = allocatedSets.at(i);
+  }
 
   auto bindResult = BindDefaultTextures(context, shader);
   if (Error::IsError(bindResult)) {
@@ -759,6 +804,12 @@ thread_local static std::vector<State> StateStack{};
 // NOLINTNEXTLINE, to keep track of last applied state
 thread_local static State LastState{};
 
+// All commands queued to swapchain must happen while the swapchain is bound
+// Thus if this is true and a command is used at frame count != queued frame count
+// we have an error
+// NOLINTNEXTLINE
+thread_local bool DrawnToSwapchain = false;
+
 inline auto SetupDefaultState(const GraphicsContext &context) -> Result<State> {
   auto defaultState = State();
 
@@ -896,12 +947,31 @@ auto FlushCompute(GraphicsContext &context) -> Result<bool> {
   return true;
 }
 
+auto IsSwapchainTexture(const GraphicsContext &context,
+                        const Graphics::Texture::Texture &texture) -> bool {
+  for (const auto &swapchainTexture :
+       Graphics::DynamicRendering::SwapchainTextures) {
+    if (swapchainTexture.get() == &texture) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 auto FlushGraphics(GraphicsContext &context) -> Result<bool> {
   ZoneScoped;
   auto &currentState = StateStack.back();
 
   if (currentState.bindPoint != VK_PIPELINE_BIND_POINT_GRAPHICS) {
     return Error::Unexpected("Current state is not a graphics pipeline.");
+  }
+
+  for (const auto &rendertarget : currentState.renderTargets) {
+    if (IsSwapchainTexture(context, *rendertarget->texture)) {
+      DrawnToSwapchain = true;
+      break;
+    }
   }
 
   auto result = CreateDescriptorSets(context, currentState.shader.get());
@@ -1002,6 +1072,12 @@ auto Destroy(GraphicsContext &context) -> void {
     std::lock_guard<std::mutex> lock2(PipelineLayoutsMutex);
     for (const auto &layout : PipelineLayouts) {
       vkDestroyPipelineLayout(context.device, layout, nullptr);
+    }
+  }
+  {
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+    for (auto &layouts : DynamicRendering::DescriptorSetLayoutCache) {
+      vkDestroyDescriptorSetLayout(context.device, layouts.second, nullptr);
     }
   }
 }
@@ -1133,6 +1209,8 @@ auto EndRendering(GraphicsContext &context) -> void {
 }
 
 auto InsertResourceBarriers(GraphicsContext &context) -> Error {
+  ZoneScoped;
+
   auto &currentState = StateStack.back();
   auto &shader = currentState.shader;
 
@@ -1245,19 +1323,6 @@ auto PrepareRendering(GraphicsContext &context) -> Error {
   return Error::Success();
 }
 
-auto IsSwapchainTexture(const GraphicsContext &context,
-                        const Graphics::Texture::Texture &texture)
-    -> Result<bool> {
-  for (const auto &swapchainTexture :
-       Graphics::DynamicRendering::SwapchainTextures) {
-    if (swapchainTexture.get() == &texture) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
 auto FinalizeFrame(GraphicsContext &context) -> Error {
   if (StateStack.size() != 1) {
     return Error::Create("More pushes than pops.");
@@ -1285,6 +1350,7 @@ auto BeginFrame(GraphicsContext &context) -> Error {
   }
 
   StateStack.emplace_back(defaultStateResult.value());
+  DrawnToSwapchain = false;
 
   return Error::Success();
 }

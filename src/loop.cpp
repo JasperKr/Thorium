@@ -108,8 +108,13 @@ auto LoadLua(lua_State *state, const std::vector<std::string> &launchArgs)
                                .c_str());
 
   if (luaLoadErr != LUA_OK) {
-    if (lua_isstring(state, -1) != 0) {
-      std::string luaErrorMessage = lua_tostring(state, -1);
+    if (lua_type(state, -1) == LUA_TSTRING) {
+      std::string luaErrorMessage;
+      if (lua_objlen(state, -1) == 0) {
+        luaErrorMessage = "";
+      } else {
+        luaErrorMessage = lua_tostring(state, -1);
+      }
       lua_pop(state, 1); // Remove error message from stack
       return Error::Create(luaErrorMessage);
     }
@@ -124,6 +129,16 @@ auto LoadLua(lua_State *state, const std::vector<std::string> &launchArgs)
 
   // Call the loaded chunk
   if (lua_pcall(state, static_cast<int>(launchArgs.size()), 0, 0) != LUA_OK) {
+    if (lua_type(state, -1) != LUA_TSTRING) {
+      lua_pop(state, 1); // Remove non-string error from stack
+      return Error::Create("Failed to run main Lua script: Unknown error");
+    }
+
+    if (lua_objlen(state, -1) == 0) {
+      lua_pop(state, 1); // Remove error message from stack
+      return Error::Create("Unknown Lua error in main script.");
+    }
+
     std::string luaErrorMessage = lua_tostring(state, -1);
     lua_pop(state, 1); // Remove error message from stack
     return Error::Create(luaErrorMessage);
@@ -171,6 +186,7 @@ auto LoadLua(lua_State *state, const std::vector<std::string> &launchArgs)
   return Error::Success();
 }
 
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 auto MainLoop(const std::vector<std::string> &arguments) -> Error {
   Error::SetupTraceback();
 
@@ -321,7 +337,12 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
 
     FrameMarkStart("Frame");
     if (lua_pcall(state, 0, 1, tracebackIndex) != LUA_OK) {
-      std::string luaErrorMessage = lua_tostring(state, -1);
+      std::string luaErrorMessage;
+      if (lua_objlen(state, -1) == 0) {
+        luaErrorMessage = "";
+      } else {
+        luaErrorMessage = lua_tostring(state, -1);
+      }
       lua_pop(state, 1); // Remove error message from stack
       Event::MainLoopRunning = false;
       Event::ExitCode = 1;

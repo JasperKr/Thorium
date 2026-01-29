@@ -36,7 +36,7 @@ auto UnloadBufferModule(const GraphicsContext &context) -> Error;
 
 static const Type bufferType = Type("Internal Buffer");
 
-struct Buffer : Object, Barrier::GraphicsResource {
+struct Buffer : Object, Barrier::BarrierSynced {
   Buffer() = default;
   Buffer(const Buffer &) = delete;
   auto operator=(const Buffer &) -> Buffer & = delete;

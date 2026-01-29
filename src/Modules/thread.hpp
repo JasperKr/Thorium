@@ -59,6 +59,8 @@ public:
   auto GetInstanceType() const -> Type const * override { return &threadType; }
   static auto GetType() -> Type const * { return &threadType; }
 
+  auto SetDebugName(const std::string &name) -> void { debugname = name; }
+
 private:
   static auto Run(Thread *thread,
                   const std::vector<LuaWrap::Data::LuaType> &launchArguments,

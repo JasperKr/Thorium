@@ -16,6 +16,12 @@ auto wrap_NewThread(lua_State *state) -> int {
   // NOLINTNEXTLINE
   auto thread = ::Threading::Thread::Create(script);
 
+  // Optional name parameter
+  if (lua_gettop(state) >= 2) {
+    const auto *name = luaL_checkstring(state, 2);
+    thread->SetDebugName(name);
+  }
+
   LuaWrap::PushObject(state, ::Threading::Thread::GetType(), thread.get());
 
   Threads.emplace_back(thread);

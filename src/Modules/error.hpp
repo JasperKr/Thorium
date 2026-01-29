@@ -240,7 +240,7 @@ struct [[nodiscard]] Error {
       oss << "Success: " << message;
       return oss.str();
     }
-    oss << "Error: " << message << " (code " << code << ")";
+    oss << message << "\n(code " << code << ")";
     if (!backtrace.empty()) {
       oss << "\nBacktrace:\n" << backtrace;
     }

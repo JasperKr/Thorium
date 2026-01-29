@@ -326,6 +326,17 @@ GetOrderedCommands(GraphicsContext &context,
   {
     std::lock_guard<std::mutex> lock(Threading::ResultsMutex);
     for (auto &threadInfo : Threading::Results) {
+      if (threadInfo->threadData.drawsToSwapchain &&
+          threadInfo->threadData.aquiredAtFrame != context.currentFrame) {
+        return Error::Createf(
+            "Thread {} tried to submit a command buffer that was recorded "
+            "in frame {}, but the current frame is {}. Command buffers "
+            "that draw to the swapchain must be recorded and submitted "
+            "in the same frame.",
+            threadInfo->threadData.name, threadInfo->threadData.aquiredAtFrame,
+            context.currentFrame);
+      }
+
       unorderedThreadRenderdatas[threadInfo->threadData.key].emplace_back(
           threadInfo->threadData);
     }
@@ -333,15 +344,6 @@ GetOrderedCommands(GraphicsContext &context,
 
   auto unorderedSemaphoreValues = Graphics::GetPendingTimelineValues();
   std::vector<uint64_t> orderedSemaphoreValues = {};
-
-  // PrintAlways("Ordering command buffers for {} keys",
-  //             GlobalStitchInfo.orderingKeys.size());
-  // PrintAlways("Unordered command buffer sets: {}",
-  //             unorderedSemaphoreValues.size());
-
-  // for (const auto &pair : unorderedSemaphoreValues) {
-  //   PrintAlways("Cmd buffers for key {}: {}", (void *)pair.first, pair.second);
-  // }
 
   int idx = 0;
   for (auto key : GlobalStitchInfo.orderingKeys) {
@@ -371,7 +373,8 @@ GetOrderedCommands(GraphicsContext &context,
         Utils::UnorderedErase(
             Threading::Results,
             [&](const Ref<Threading::RenderThreadInfo> &info) -> bool {
-              return info->threadData.id == data.id;
+              return info->threadData.id ==
+                     data.id; // Crashes here: Invalid memory reference
             });
       }
     } else {

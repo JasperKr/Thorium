@@ -1,5 +1,3 @@
-print("AAAAAAAAAAAA - 2")
-
 Imgui = require("cimgui.init")
 
 local doneChannel, stopChannel = ...

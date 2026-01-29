@@ -38,8 +38,7 @@ thread_local extern uint64_t FrameBarrierCount;
 // NOLINTNEXTLINE
 thread_local extern std::vector<ResourceSync> GlobalResourceSyncTimeline;
 
-thread_local extern std::vector<
-    std::pair<struct GraphicsResource, ResourceState>>
+thread_local extern std::vector<std::pair<struct BarrierSynced, ResourceState>>
     GlobalResourceStateUpdates; // NOLINT
 
 /*
@@ -63,7 +62,7 @@ to see if we need to sync by checking our last usage and looking back in time if
 */
 
 // base class for buffers and textures
-struct GraphicsResource {
+struct BarrierSynced {
 
   // Now, for future me.
   /*
@@ -106,12 +105,12 @@ struct GraphicsResource {
 };
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
-static thread_local std::vector<GraphicsResource> GraphicsResources;
+static thread_local std::vector<BarrierSynced> GraphicsResources;
 
-auto UpdateUsage(const GraphicsContext &context, GraphicsResource &resource,
+auto UpdateUsage(const GraphicsContext &context, BarrierSynced &resource,
                  const ResourceState &usage) -> void;
 
-auto UpdateUsageVirtual(GraphicsResource &resource, const ResourceState &usage)
+auto UpdateUsageVirtual(BarrierSynced &resource, const ResourceState &usage)
     -> std::optional<ResourceSync>;
 
 inline auto InsertBarrier(ResourceSync &barrier) {

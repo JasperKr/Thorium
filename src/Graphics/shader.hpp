@@ -5,7 +5,6 @@
 #include "Graphics/buffer.hpp"
 #include "Graphics/texture.hpp"
 #include "Modules/Math/vector.hpp"
-#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Modules/thread.hpp"
@@ -112,7 +111,6 @@ struct BoundState {
   std::unordered_map<uint64_t, Buffer *> boundBuffers;
   std::unordered_map<uint64_t, Texture::Texture *> boundTextures;
 
-  std::unordered_map<uint32_t, VkDescriptorSetLayout> descriptorSetLayouts;
   std::unordered_map<uint32_t, VkDescriptorSet> descriptorSets;
   std::vector<DescriptorWriteInfo> pendingDescriptorWrites;
   std::vector<ImageTransitionInfo> pendingImageTransitions;
@@ -145,6 +143,9 @@ struct ShaderModule : Object {
   Slang::ComPtr<slang::IComponentType> linkedProgram;
 
   std::unordered_map<SlangStage, size_t> entryPointToStageIndex;
+  std::unordered_map<uint32_t, std::vector<VkDescriptorSetLayoutBinding>>
+      bindingInfos;
+  std::unordered_map<uint32_t, VkDescriptorSetLayout> descriptorSetLayouts;
 
   ShaderReflection reflection;
   std::vector<PushBuffer> pushBuffers;
@@ -167,9 +168,9 @@ struct ShaderModule : Object {
     auto *ctx = GetCurrentGraphicsContext();
 
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    for (auto &pair : GetState().descriptorSetLayouts) {
-      vkDestroyDescriptorSetLayout(ctx->device, pair.second, nullptr);
-    }
+    // for (auto &pair : GetState().descriptorSetLayouts) {
+    //   vkDestroyDescriptorSetLayout(ctx->device, pair.second, nullptr);
+    // }
 
     if (module != VK_NULL_HANDLE) {
       vkDestroyShaderModule(ctx->device, module, nullptr);

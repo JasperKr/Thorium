@@ -148,6 +148,7 @@ auto AquireCommandBuffer(Graphics::GraphicsContext &context,
   threadInfo->threadData.priority = info.priority;
   threadInfo->threadData.name = info.name;
   threadInfo->threadData.id = threadDataIDCounter.fetch_add(1);
+  threadInfo->threadData.aquiredAtFrame = context.currentFrame;
 
   auto &tcontext = GetThreadContext();
 
@@ -251,6 +252,8 @@ auto SubmitCommands(Graphics::GraphicsContext &context) -> Error {
 
   threadInfo.threadData.resourceSyncs = Barrier::GlobalResourceSyncTimeline;
   threadInfo.threadData.usageUpdates = Barrier::GlobalResourceStateUpdates;
+  threadInfo.threadData.drawsToSwapchain =
+      Graphics::DynamicRendering::DrawnToSwapchain;
 
   auto timelineValue = GetSemaphoreValue();
 

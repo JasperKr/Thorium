@@ -49,7 +49,7 @@ extern std::unordered_map<std::pair<VkFormat, TextureType>, Ref<struct Texture>,
 
 auto UnloadModule() -> void;
 
-struct Texture : Object, Barrier::GraphicsResource {
+struct Texture : Object, Barrier::BarrierSynced {
   std::mutex mutex;
 
   SamplerDescription samplerDescription{};

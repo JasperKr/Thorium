@@ -9,6 +9,7 @@
 #include "event.hpp"
 #include <cstdint>
 #include <mutex>
+#include <public/common/TracySystem.hpp>
 #include <thread>
 #include <vector>
 
@@ -71,6 +72,7 @@ auto Thread::Run(Thread *thread,
                  int count, ThreadID identifier) -> void { // NOLINT
 
   CurrentThreadID = identifier;
+  tracy::SetThreadName(thread->debugname.c_str());
 
   lua_State *state = luaL_newstate();
   luaL_openlibs(state);

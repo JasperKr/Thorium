@@ -94,16 +94,6 @@ void UnloadModule(Graphics::GraphicsContext &context) {
   }
 
   slang::shutdown();
-
-  for (auto &threadStateMaps : BoundStates) {
-    for (auto &shaderStatePair : threadStateMaps.second) {
-      for (auto &descriptorSetLayout :
-           shaderStatePair.second.descriptorSetLayouts) {
-        vkDestroyDescriptorSetLayout(context.device, descriptorSetLayout.second,
-                                     nullptr);
-      }
-    }
-  }
 }
 
 static inline auto GetGlobalShaderExterns() -> std::vector<ShaderExtern> & {

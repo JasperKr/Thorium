@@ -4,6 +4,7 @@
 #include <array>
 #include <cassert>
 #include <cstdint>
+#include <public/tracy/Tracy.hpp>
 #include <utility>
 #include <vector>
 
@@ -24,7 +25,7 @@ thread_local uint64_t FrameBarrierCount = 0;
 // NOLINTNEXTLINE
 thread_local std::vector<ResourceSync> GlobalResourceSyncTimeline{};
 
-thread_local std::vector<std::pair<GraphicsResource, ResourceState>>
+thread_local std::vector<std::pair<BarrierSynced, ResourceState>>
     GlobalResourceStateUpdates{}; // NOLINT
 
 inline auto IsHazard(const ResourceState &oldState,
@@ -193,8 +194,10 @@ inline auto TimelineLookback(uint64_t currentTimelineIndex,
   return false; // All bits satisfied, no barrier needed
 }
 
-auto UpdateUsage(const GraphicsContext &context, GraphicsResource &resource,
+auto UpdateUsage(const GraphicsContext &context, BarrierSynced &resource,
                  const ResourceState &usage) -> void {
+  ZoneScoped;
+
   auto &previousAccess = resource.lastUsedAccess;
   auto &previousStages = resource.lastUsedStages;
 
@@ -251,7 +254,7 @@ auto UpdateUsage(const GraphicsContext &context, GraphicsResource &resource,
 }
 
 // The same as Update Usage but doesn't insert any barriers
-auto UpdateUsageVirtual(GraphicsResource &resource, const ResourceState &usage)
+auto UpdateUsageVirtual(BarrierSynced &resource, const ResourceState &usage)
     -> std::optional<ResourceSync> {
   auto &previousAccess = resource.lastUsedAccess;
   auto &previousStages = resource.lastUsedStages;
