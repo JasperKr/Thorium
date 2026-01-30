@@ -7,6 +7,7 @@
 #include "Modules/Math/vector.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
+#include "Modules/thread.hpp"
 #include "Modules/type.hpp"
 #include "graphics.hpp"
 #include "reflect.hpp"
@@ -106,13 +107,33 @@ ShaderStageFlagsToPipelineStageFlags(VkShaderStageFlags shaderStages)
   return pipelineStages;
 }
 
+struct BoundState {
+  std::unordered_map<uint64_t, Buffer *> boundBuffers;
+  std::unordered_map<uint64_t, Texture::Texture *> boundTextures;
+
+  std::unordered_map<uint32_t, VkDescriptorSet> descriptorSets;
+  std::vector<DescriptorWriteInfo> pendingDescriptorWrites;
+  std::vector<ImageTransitionInfo> pendingImageTransitions;
+};
+
+static std::mutex
+    BoundStatesMutex{}; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+static std::unordered_map<
+    uint32_t, std::unordered_map<const struct ShaderModule *, BoundState>>
+    BoundStates; // NOLINT
+
 struct ShaderModule : Object {
+  ShaderModule() = default;
+  ShaderModule(const ShaderModule &) = delete;
+  ShaderModule(ShaderModule &&) = delete;
+  auto operator=(const ShaderModule &) -> ShaderModule & = delete;
+  auto operator=(ShaderModule &&) -> ShaderModule & = delete;
   std::string moduleName;
 
-  VkShaderModule module;
+  VkShaderModule module{};
   std::vector<VkShaderStageFlagBits> stages;
 
-  uint64_t modTime;
+  uint64_t modTime{};
 
   std::string name;
   std::vector<ShaderExtern> externs;
@@ -122,22 +143,40 @@ struct ShaderModule : Object {
   Slang::ComPtr<slang::IComponentType> linkedProgram;
 
   std::unordered_map<SlangStage, size_t> entryPointToStageIndex;
+  std::unordered_map<uint32_t, std::vector<VkDescriptorSetLayoutBinding>>
+      bindingInfos;
+  std::unordered_map<uint32_t, VkDescriptorSetLayout> descriptorSetLayouts;
 
   ShaderReflection reflection;
   std::vector<PushBuffer> pushBuffers;
 
-  std::unordered_map<uint64_t, Buffer *> boundBuffers;
-  std::unordered_map<uint64_t, Texture::Texture *> boundTextures;
+  auto GetState() const -> BoundState & {
+    std::lock_guard<std::mutex> lock(BoundStatesMutex);
 
-  std::unordered_map<uint32_t, VkDescriptorSetLayout> descriptorSetLayouts;
-  std::unordered_map<uint32_t, VkDescriptorSet> descriptorSets;
-  std::vector<DescriptorWriteInfo> pendingDescriptorWrites;
-  std::vector<ImageTransitionInfo> pendingImageTransitions;
+    // TODO: Give shader module it's own ID to avoid pointer issues
+    auto &states = BoundStates[::Threading::CurrentThreadID];
+
+    return states[this];
+  }
 
   std::vector<uint8_t> globalUniforms;
 
   Math::Uvec3 threadgroupSize{1, 1, 1};
   uint32_t waveSize = 0;
+
+  ~ShaderModule() override {
+    auto *ctx = GetCurrentGraphicsContext();
+
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+    // for (auto &pair : GetState().descriptorSetLayouts) {
+    //   vkDestroyDescriptorSetLayout(ctx->device, pair.second, nullptr);
+    // }
+
+    if (module != VK_NULL_HANDLE) {
+      vkDestroyShaderModule(ctx->device, module, nullptr);
+      module = VK_NULL_HANDLE;
+    }
+  }
 
   static auto Create(Graphics::GraphicsContext &context,
                      const std::string &modulename, const std::string &name)
@@ -162,9 +201,6 @@ struct ShaderModule : Object {
 
   auto GetThreadgroupSize() const -> Result<Math::Uvec3>;
   auto GetWaveSize() const -> uint32_t;
-
-  void Destroy(VkDevice &device);
-  void ReloadMaybe(Graphics::GraphicsContext &context);
 
   auto operator==(const ShaderModule &other) const -> bool {
     return externs == other.externs && moduleName == other.moduleName &&

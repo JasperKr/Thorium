@@ -179,6 +179,25 @@ target_link_libraries(fastgltf
     PUBLIC simdjson
 )
 
+# -------------------------------
+# Tracy
+# -------------------------------
+
+find_package(Threads REQUIRED)
+add_library(tracy STATIC ${CMAKE_CURRENT_SOURCE_DIR}/external/tracy/public/TracyClient.cpp)
+
+target_include_directories(tracy
+    SYSTEM PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/tracy
+)
+
+target_compile_definitions(tracy
+    PUBLIC TRACY_ENABLE
+)
+
+target_link_libraries(tracy
+    PUBLIC Threads::Threads
+)
+
 
 # -------------------------------
 # Slang
@@ -227,6 +246,8 @@ add_executable(Thorium
     src/Graphics/draw.cpp
     src/Graphics/barrier.cpp
     src/Graphics/gltfLoader.cpp
+    src/Graphics/renderThread.cpp
+    src/Graphics/semaphoreManager.cpp
 
 # Graphics Buffers
     src/Graphics/Buffers/push.cpp
@@ -244,6 +265,7 @@ add_executable(Thorium
     src/Modules/Peripherals/mouse.cpp
     src/Modules/Peripherals/keyboard.cpp
     src/Modules/thread.cpp
+    src/Modules/channel.cpp
 
 # Math Modules
     src/Modules/Math/vector.cpp
@@ -273,6 +295,7 @@ add_executable(Thorium
     src/Wrap/Modules/wrap_thread.cpp
     src/Wrap/Modules/wrap_channel.cpp
     src/Wrap/wrap.cpp
+    src/Wrap/lua_data.cpp
 
 # Libraries
     src/Libraries/vma.cpp
@@ -316,6 +339,11 @@ target_link_libraries(Thorium
         LuaJIT::LuaJIT
         ${SLANG_LIBS}
         fastgltf
+        tracy
+)
+
+target_link_options(Thorium PRIVATE
+    $<$<CONFIG:Debug>:-rdynamic>
 )
 
 if (WIN32)

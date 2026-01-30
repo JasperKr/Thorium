@@ -370,8 +370,13 @@ auto wrap_NewBuffer(lua_State *state) -> int {
         VK_BUFFER_USAGE_TRANSFER_DST_BIT; // allow data upload if not gpu only
   }
 
+  Graphics::StructuredBuffer::StructuredBufferCreationInfo info;
+  info.memoryFlags = memoryFlags;
+  info.usageFlags = usageFlags;
+  info.debugName = "Structured Buffer";
+
   auto result = Graphics::StructuredBuffer::CreateStructuredBuffer(
-      *ctx, format, elementCount, memoryFlags, usageFlags);
+      *ctx, format, elementCount, info);
 
   if (Error::IsError(result)) {
     return luaL_error(state, "Failed to create Buffer: %s",
@@ -384,21 +389,6 @@ auto wrap_NewBuffer(lua_State *state) -> int {
                       Graphics::StructuredBuffer::StructuredBuffer::GetType(),
                       buffer.get());
 
-  // buffer->release(); // Lua now owns the reference
-
   return 1;
-}
-
-auto wrap_Release(lua_State *state) -> int {
-  auto *buffer =
-      LuaWrap::ObjectFromLua<Graphics::StructuredBuffer::StructuredBuffer>(
-          state, 1);
-
-  if (buffer == nullptr) {
-    return luaL_error(state, "Expected Buffer as first argument");
-  }
-
-  buffer->ScheduleDestroy();
-  return 0;
 }
 } // namespace Graphics::StructuredBuffer

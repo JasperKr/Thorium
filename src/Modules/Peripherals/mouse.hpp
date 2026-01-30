@@ -26,12 +26,7 @@ struct MouseCursor : Object {
   explicit MouseCursor(SDL_Cursor *sdlCursor) : sdlCursor(sdlCursor) {}
   SDL_Cursor *sdlCursor;
 
-  ~MouseCursor() override {
-    if (sdlCursor != nullptr) {
-      SDL_DestroyCursor(sdlCursor);
-      sdlCursor = nullptr;
-    }
-  }
+  ~MouseCursor() override { SDL_DestroyCursor(sdlCursor); }
 
   [[nodiscard]] static auto GetType() -> Type const * { return &type; }
 

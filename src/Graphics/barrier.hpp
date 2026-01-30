@@ -3,6 +3,7 @@
 #include "Graphics/graphics.hpp"
 #include "vulkan/vulkan_core.h"
 #include <cstdint>
+#include <utility>
 #include <vector>
 namespace Graphics::Barrier {
 
@@ -18,12 +19,27 @@ struct ResourceSync {
   VkAccessFlags2 dstAccess;
 };
 
+// As every thread will be recording commands async,
+// and these command buffers may be reordered before submission,
+// All barriers are thread-local and recorded as needed.
+
 // Per-Frame global timeline index
 // NOLINTNEXTLINE
-extern uint64_t GlobalTimelineIndex;
+thread_local extern uint64_t GlobalTimelineIndex;
+
+// Timeline index offset for this frame
+// NOLINTNEXTLINE
+thread_local extern uint64_t GlobalTimelineOffset;
+
+// The number of barriers issued this frame
+// NOLINTNEXTLINE
+thread_local extern uint64_t FrameBarrierCount;
 
 // NOLINTNEXTLINE
-extern std::vector<ResourceSync> GlobalResourceSyncTimeline;
+thread_local extern std::vector<ResourceSync> GlobalResourceSyncTimeline;
+
+thread_local extern std::vector<std::pair<struct BarrierSynced, ResourceState>>
+    GlobalResourceStateUpdates; // NOLINT
 
 /*
 For example.
@@ -46,7 +62,7 @@ to see if we need to sync by checking our last usage and looking back in time if
 */
 
 // base class for buffers and textures
-struct GraphicsResource {
+struct BarrierSynced {
 
   // Now, for future me.
   /*
@@ -79,17 +95,47 @@ struct GraphicsResource {
   // CS read from buffer 2
   // We need to know when stuff was synced last
   uint64_t lastUsedTimelineIndex = 0;
+
+  // Whether this is the first usage recorded for this resource in the frame
+  // When using it for async work.
+  // We need to make sure to never add a barrier on first usage since we will insert this later
+  // Before the command buffer is stitched together with others. Because the usage is unknown at the time of recording.
+  // Due to async recording and reordering.
+  bool firstAsyncUsage = false;
 };
 
-// NOLINTNEXTLINE global bullshit
-extern std::vector<GraphicsResource> Resources;
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+static thread_local std::vector<BarrierSynced> GraphicsResources;
 
-auto UpdateUsage(GraphicsContext &context, GraphicsResource &resource,
+auto UpdateUsage(const GraphicsContext &context, BarrierSynced &resource,
                  const ResourceState &usage) -> void;
 
+auto UpdateUsageVirtual(BarrierSynced &resource, const ResourceState &usage)
+    -> std::optional<ResourceSync>;
+
+inline auto InsertBarrier(ResourceSync &barrier) {
+  GlobalResourceSyncTimeline.push_back(barrier);
+  FrameBarrierCount++;
+}
+
 inline auto ResetFrameTimeline() -> void {
-  GlobalTimelineIndex = 0;
+  GlobalTimelineOffset += FrameBarrierCount;
   GlobalResourceSyncTimeline.clear();
+  GlobalResourceStateUpdates.clear();
+
+  FrameBarrierCount = 0;
+}
+
+inline auto ResetModule() -> void {
+  GlobalTimelineIndex = 0;
+  GlobalTimelineOffset = 0;
+  FrameBarrierCount = 0;
+  GlobalResourceSyncTimeline.clear();
+  GlobalResourceStateUpdates.clear();
+
+  for (auto &res : GraphicsResources) {
+    res.firstAsyncUsage = true;
+  }
 }
 
 } // namespace Graphics::Barrier

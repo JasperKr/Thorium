@@ -1,6 +1,5 @@
 #include "reflect.hpp"
 #include "Graphics/graphics.hpp"
-#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "slang/slang.h"
 #define VK_NO_PROTOTYPES
@@ -550,15 +549,16 @@ auto ReflectGlobals(Graphics::GraphicsContext &context,
   layoutCreateInfo.bindingCount = 1;
   layoutCreateInfo.pBindings = &binding;
   VkDescriptorSetLayout descriptorSetLayout = {};
-  auto result = Error::Create(vkCreateDescriptorSetLayout(
-      context.device, &layoutCreateInfo, nullptr, &descriptorSetLayout));
-  if (Error::IsError(result)) {
-    return result;
+  {
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+    auto result = Error::Create(vkCreateDescriptorSetLayout(
+        context.device, &layoutCreateInfo, nullptr, &descriptorSetLayout));
+    if (Error::IsError(result)) {
+      return result;
+    }
   }
 
   return Error::Success();
-
-  // return descriptorSetLayout;
 }
 
 auto ReflectShader(Graphics::GraphicsContext &context,

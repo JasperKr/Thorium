@@ -3,6 +3,7 @@
 #include "Graphics/barrier.hpp"
 #include "Graphics/buffer.hpp"
 #include "Graphics/graphics.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "tl/expected.hpp"
@@ -27,21 +28,23 @@ public:
 
     BufferCreationInfo info{};
     info.size = obj.size;
-    info.PersistentMapping = true;
-    info.IsStagingBuffer = true;
+    info.persistentMapping = true;
+    info.stagingBuffer = true;
     info.properties =
         static_cast<uint32_t>(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) |
         static_cast<uint32_t>(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) |
         static_cast<uint32_t>(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
     info.usage = static_cast<uint32_t>(VK_BUFFER_USAGE_TRANSFER_DST_BIT) |
                  static_cast<uint32_t>(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+    info.debugName = "Frame Uniform Buffer";
 
     auto result = Buffer::Create(context, info);
     if (Error::IsError(result)) {
       return result.error().AsUnexpected();
     }
-
     obj.buffer = result.value();
+
+    PrintDebug("REFCOUNT {}", obj.buffer->getReferenceCount());
 
     return obj;
   }
@@ -64,9 +67,6 @@ public:
 
     bool resized = false;
     if (localData.size() + offset > size) {
-      if (buffer.get() != nullptr) {
-        buffer->ScheduleDestroy();
-      }
       while (localData.size() + offset > size) {
         size *= 2;
         if (size > MaximumUniformBufferSize) {
@@ -77,14 +77,15 @@ public:
 
       Graphics::BufferCreationInfo info{};
       info.size = size;
-      info.PersistentMapping = true;
-      info.IsStagingBuffer = true;
+      info.persistentMapping = true;
+      info.stagingBuffer = true;
       info.properties =
           static_cast<uint32_t>(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) |
           static_cast<uint32_t>(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) |
           static_cast<uint32_t>(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
       info.usage = static_cast<uint32_t>(VK_BUFFER_USAGE_TRANSFER_DST_BIT) |
                    static_cast<uint32_t>(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+      info.debugName = "Frame Uniform Buffer";
 
       auto result = Graphics::Buffer::Create(context, info);
       if (Error::IsError(result)) {
@@ -123,17 +124,7 @@ public:
     return resized;
   }
 
-  auto ScheduleDestroy() -> void {
-    if (buffer.get() != nullptr) {
-      buffer->ScheduleDestroy();
-    }
-  }
-
-  auto Destroy(GraphicsContext &context) -> void {
-    if (buffer.get() != nullptr) {
-      buffer->Destroy(context);
-    }
-  }
+  auto ScheduleDestroy() -> void { buffer.reset(); }
 
   [[nodiscard]] auto GetOffset() const -> uint32_t { return offset; }
   [[nodiscard]] auto GetSize() const -> uint32_t { return size; }
@@ -157,7 +148,7 @@ private:
   uint32_t offset{};
 };
 
-extern thread_local std::vector<std::vector<FrameUniformBufferObject>>
+extern thread_local std::vector<FrameUniformBufferObject>
     ThreadUniformBuffers; // NOLINT
 auto InitializeUniformBufferModule(GraphicsContext &context) -> Error;
 auto GetGlobalUniformBuffer(uint32_t frameIndex) -> FrameUniformBufferObject &;

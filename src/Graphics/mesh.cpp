@@ -1,5 +1,7 @@
 #include "mesh.hpp"
 #include <algorithm>
+#include <mutex>
+#include <string>
 #include <sys/types.h>
 
 #include "Graphics/barrier.hpp"
@@ -20,8 +22,8 @@
 namespace Graphics {
 
 auto Mesh::ScheduleDestroy() -> void {
-  VertexBuffer->ScheduleDestroy();
-  IndexBuffer->ScheduleDestroy();
+  VertexBuffer.reset();
+  IndexBuffer.reset();
 }
 
 static auto VertexFormatSize(VertexFormat &format, uint32_t binding)
@@ -39,33 +41,35 @@ auto Mesh::UploadVertices(GraphicsContext &context,
                            .access = VK_ACCESS_2_TRANSFER_WRITE_BIT,
                        });
 
+  std::lock_guard<std::mutex> lock(VertexBuffer->mutex);
+
   return VertexBuffer->SetData(context, vertices, offset);
 }
 
 auto Mesh::UploadIndices(GraphicsContext &context,
                          const std::span<uint8_t> &indices, uint64_t offset,
-                         IndexFormat format) -> Error {
+                         VkIndexType format) -> Error {
   Barrier::UpdateUsage(context, *IndexBuffer,
                        Barrier::ResourceState{
                            .stages = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
                            .access = VK_ACCESS_2_TRANSFER_WRITE_BIT,
                        });
 
+  std::lock_guard<std::mutex> lock(IndexBuffer->mutex);
+
   return IndexBuffer->SetData(context, indices, offset);
 }
 
 auto Mesh::Create(GraphicsContext &context, VertexFormat vertexFormat,
-                  const std::span<uint8_t> &vertexData) -> Result<Ref<Mesh>> {
+                  const std::span<uint8_t> &vertexData,
+                  const std::string &debugName) -> Result<Ref<Mesh>> {
 
-  auto meshData = Ref<Mesh>::Make();
-  auto *mesh = meshData.get();
+  auto mesh = Ref<Mesh>::Make();
 
   assert(vertexData.size() % VertexFormatSize(vertexFormat, 0) == 0);
 
   mesh->VertexCount = vertexData.size() / VertexFormatSize(vertexFormat, 0);
-
   mesh->IndexCount = 0;
-
   mesh->Format = vertexFormat;
 
   VkMemoryPropertyFlags properties =
@@ -80,6 +84,8 @@ auto Mesh::Create(GraphicsContext &context, VertexFormat vertexFormat,
 
   vboCreationInfo.properties = properties;
   vboCreationInfo.size = vertexData.size();
+  vboCreationInfo.debugName = debugName + " Vertex Buffer";
+  mesh->DebugName = debugName;
 
   auto bufferResult = Buffer::Create(context, vboCreationInfo);
 
@@ -98,11 +104,12 @@ auto Mesh::Create(GraphicsContext &context, VertexFormat vertexFormat,
     return error.AsUnexpected();
   }
 
-  return meshData;
+  return mesh;
 }
 
 auto Mesh::Create(GraphicsContext &context, VertexFormat vertexFormat,
-                  uint64_t vertexCount) // NOLINT
+                  uint64_t vertexCount,
+                  const std::string &debugName) // NOLINT
     -> Result<Ref<Mesh>> {
   auto size = VertexFormatSize(vertexFormat, 0);
 
@@ -113,12 +120,10 @@ auto Mesh::Create(GraphicsContext &context, VertexFormat vertexFormat,
 
   auto vertexDataSize = vertexCount * size;
 
-  PrintAlways("vertex data size: {}", vertexDataSize);
-
   std::vector<uint32_t> indexData;
 
-  auto meshData = Ref<Mesh>::Make();
-  auto *mesh = meshData.get();
+  auto mesh = Ref<Mesh>::Make();
+  PrintInfo("Info mesh refcount: {}", mesh->getReferenceCount());
 
   mesh->VertexCount = vertexCount;
 
@@ -136,8 +141,8 @@ auto Mesh::Create(GraphicsContext &context, VertexFormat vertexFormat,
 
   vboCreationInfo.properties = properties;
   vboCreationInfo.size = vertexDataSize;
-
-  PrintAlways("Creating VBO of size {}", vboCreationInfo.size);
+  vboCreationInfo.debugName = debugName + " Vertex Buffer";
+  mesh->DebugName = debugName;
 
   auto bufferResult = Buffer::Create(context, vboCreationInfo);
 
@@ -150,12 +155,7 @@ auto Mesh::Create(GraphicsContext &context, VertexFormat vertexFormat,
   mesh->DrawRange.Offset = 0;
   mesh->DrawRange.Count = mesh->VertexCount;
 
-  return meshData;
-}
-
-auto Mesh::Release() const -> void {
-  VertexBuffer->ScheduleDestroy();
-  IndexBuffer->ScheduleDestroy();
+  return mesh;
 }
 
 [[nodiscard]] auto Mesh::GetVertexFormat() const -> VertexFormat {
@@ -185,20 +185,17 @@ auto Mesh::SetVertices(GraphicsContext &context,
   return UploadVertices(context, vertexData, offset);
 }
 auto Mesh::SetIndices(GraphicsContext &context,
-                      const std::span<uint8_t> &indexData, IndexFormat format)
+                      const std::span<uint8_t> &indexData, VkIndexType format)
     -> Error {
 
-  if (format == IndexFormat::None) {
-    return Error::Create("Invalid Index Format: None");
+  if (format != VK_INDEX_TYPE_UINT16 && format != VK_INDEX_TYPE_UINT32 &&
+      format != VK_INDEX_TYPE_UINT8) {
+    return Error::Create("Invalid Index Type");
   }
 
   auto newCount = indexData.size() / GetIndexFormatSize(format);
 
   if (IndexBuffer.get() == nullptr || IndexBuffer->size < indexData.size()) {
-    if (IndexBuffer.get() != nullptr) {
-      IndexBuffer->ScheduleDestroy();
-    }
-
     Graphics::BufferCreationInfo iboCreationInfo = {};
     iboCreationInfo.usage =
         static_cast<uint32_t>(VK_BUFFER_USAGE_INDEX_BUFFER_BIT) |
@@ -211,6 +208,7 @@ auto Mesh::SetIndices(GraphicsContext &context,
 
     iboCreationInfo.properties = properties;
     iboCreationInfo.size = indexData.size();
+    iboCreationInfo.debugName = DebugName + " Index Buffer";
 
     auto bufferResult = Buffer::Create(context, iboCreationInfo);
 
@@ -234,11 +232,12 @@ auto Mesh::SetIndices(GraphicsContext &context,
 auto Mesh::SetVertexBuffer(const Ref<Buffer> &buffer) -> void {
   VertexBuffer = buffer;
 }
-auto Mesh::SetIndexBuffer(const Ref<Buffer> &buffer, IndexFormat format)
+auto Mesh::SetIndexBuffer(const Ref<Buffer> &buffer, VkIndexType format)
     -> Error {
 
-  if (format == IndexFormat::None) {
-    return Error::Create("Invalid Index Format: None");
+  if (format != VK_INDEX_TYPE_UINT16 && format != VK_INDEX_TYPE_UINT32 &&
+      format != VK_INDEX_TYPE_UINT8) {
+    return Error::Create("Invalid Index Type");
   }
 
   IndexBuffer = buffer;
@@ -247,7 +246,7 @@ auto Mesh::SetIndexBuffer(const Ref<Buffer> &buffer, IndexFormat format)
   return Error::Success();
 }
 
-auto Mesh::GetIndexFormat() const -> IndexFormat { return IndicesFormat; }
+auto Mesh::GetIndexFormat() const -> VkIndexType { return IndicesFormat; }
 
 auto Mesh::GetVertexBuffer() const -> Ref<Buffer> { return VertexBuffer; }
 auto Mesh::GetIndexBuffer() const -> Ref<Buffer> { return IndexBuffer; }

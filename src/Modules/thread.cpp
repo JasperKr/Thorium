@@ -1,11 +1,17 @@
 #include "thread.hpp"
+#include "Graphics/graphics.hpp"
+#include "Graphics/renderThread.hpp"
 #include "Modules/console.hpp"
-#include "Modules/error.hpp"
+#include "Modules/filesystem.hpp"
+#include "Modules/object.hpp"
+#include "Wrap/lua_data.hpp"
 #include "Wrap/wrap.hpp"
 #include "event.hpp"
+#include <cstdint>
 #include <mutex>
-#include <optional>
+#include <public/common/TracySystem.hpp>
 #include <thread>
+#include <vector>
 
 extern "C" {
 #include <lauxlib.h>
@@ -13,10 +19,12 @@ extern "C" {
 #include <lualib.h>
 }
 
+#include "channel.hpp"
+
 namespace Threading {
 
-inline auto GetThreadStatusChannel() -> Channel & {
-  static Channel threadStatusChannel;
+inline auto GetThreadStatusChannel() -> Ref<Channel> & {
+  static auto threadStatusChannel = Ref<Channel>::Make();
   return threadStatusChannel;
 }
 
@@ -26,10 +34,76 @@ auto Thread::Create(const std::string &script) -> Ref<Thread> {
   return thread;
 }
 
-auto Thread::Run(Thread *thread, const EncodedLuaData &launchArguments,
-                 int count) -> void {
+auto Thread::Close(ThreadStatus status, const std::string &message) -> void {
+  auto err =
+      Graphics::Threading::Deinitialize(*Graphics::GetCurrentGraphicsContext());
+  if (Error::IsError(err)) {
+    PrintError("Error deinitializing graphics thread module: {}", err.message);
+  }
+
+  if (state != nullptr) {
+    lua_close(state);
+  }
+
+  {
+    std::lock_guard<std::mutex> lock(statusMutex);
+    this->status = status;
+    this->errorMessage = message;
+  }
+
+  if (status == ThreadStatus::Error) {
+    PrintWarning("Thread encountered an error: {}", message);
+    Event::Push(Event::Event{
+        .Name = "threaderror",
+        .Values = {message},
+    });
+  }
+
+  statusCV.notify_all();
+
+  this->release(); // Releases self-ownership
+}
+
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+thread_local ThreadID CurrentThreadID = 0;
+
+auto Thread::Run(Thread *thread,
+                 const std::vector<LuaWrap::Data::LuaType> &launchArguments,
+                 int count, ThreadID identifier) -> void { // NOLINT
+
+  CurrentThreadID = identifier;
+  tracy::SetThreadName(thread->debugname.c_str());
+
   lua_State *state = luaL_newstate();
   luaL_openlibs(state);
+  thread->state = state;
+  thread->debugname = // NOLINTNEXTLINE
+      "Thread_" + std::to_string(reinterpret_cast<uintptr_t>(thread));
+
+  lua_getglobal(state, "package");
+  lua_getfield(state, -1, "path");
+  std::string currentPath = lua_tostring(state, -1);
+  lua_pop(state, 1); // remove original path
+  std::string newPath =
+      Path::Join(Filesystem::GetSourceDirectory(), std::string("?.lua;")) +
+      currentPath;
+  lua_pushstring(state, newPath.c_str());
+  lua_setfield(state, -2, "path");
+  lua_pop(state, 1); // remove package table
+
+  LuaWrap::RegisterModules(state);
+
+  Graphics::ContextDebugname = thread->debugname;
+  PrintInfo("Initializing graphics with debug name: {}",
+            Graphics::ContextDebugname);
+
+  auto err =
+      Graphics::Threading::Initialize(*Graphics::GetCurrentGraphicsContext());
+
+  if (Error::IsError(err)) {
+    thread->Close(ThreadStatus::Error, err.message);
+    return;
+  }
 
   bool isPath = (thread->script.size() > 4 &&
                  (thread->script.substr(thread->script.size() - 4) == ".lua" ||
@@ -39,6 +113,7 @@ auto Thread::Run(Thread *thread, const EncodedLuaData &launchArguments,
     std::lock_guard<std::mutex> lock(thread->statusMutex);
     thread->status = ThreadStatus::Running;
   }
+  thread->statusCV.notify_all();
 
   int result = 0;
 
@@ -49,54 +124,43 @@ auto Thread::Run(Thread *thread, const EncodedLuaData &launchArguments,
   }
 
   if (result == LUA_OK) {
-    auto error = LuaWrap::PushVarargsFromString(state, launchArguments, count);
+    auto error = LuaWrap::PushVarargs(state, launchArguments, count);
 
     if (Error::IsError(error)) {
-      PrintAlways("Error pushing launch arguments: {}", error.message);
-
-      {
-        std::lock_guard<std::mutex> lock(thread->statusMutex);
-        thread->status = ThreadStatus::Error;
-        thread->errorMessage = error.message;
-      }
-
-      Event::Push(Event::Event{
-          .Name = "threaderror",
-          .Values = {thread->errorMessage},
-      });
-
-      lua_close(state);
+      thread->Close(ThreadStatus::Error, error.message);
       return;
     }
 
     result = lua_pcall(state, count, 0, 0);
   }
 
+  // Stop rendering if still active (crashed or user error, for example)
+  if (Graphics::Threading::CurrentRenderThreadInfo.get() != nullptr) {
+    PrintWarning("thread was still rendering when exiting.");
+  }
+
   if (result != LUA_OK) {
     const auto *luaErrorMessage = lua_tostring(state, -1);
     lua_pop(state, 1);
 
-    {
-      std::lock_guard<std::mutex> lock(thread->statusMutex);
-      thread->status = ThreadStatus::Error;
-      thread->errorMessage =
-          (luaErrorMessage != nullptr) ? luaErrorMessage : "Unknown Lua error";
-    }
-
-    Event::Push(Event::Event{
-        .Name = "threaderror",
-        .Values = {thread->errorMessage},
-    });
+    thread->Close(ThreadStatus::Error, luaErrorMessage != nullptr
+                                           ? std::string(luaErrorMessage)
+                                           : "Unknown Lua error occurred.");
+    return;
   }
 
-  {
-    std::lock_guard<std::mutex> lock(thread->statusMutex);
-    thread->status = ThreadStatus::Stopped;
-  }
+  thread->Close(ThreadStatus::Stopped, "");
 }
 
-auto Thread::Start(const EncodedLuaData &launchArguments, int count) -> void {
-  handle = std::thread(Threading::Thread::Run, this, launchArguments, count);
+auto Thread::Start(const std::vector<LuaWrap::Data::LuaType> &launchArguments,
+                   int count) -> void {
+
+  this->retain(); // Owns itself
+
+  handle = std::thread(Threading::Thread::Run, this, launchArguments, count,
+                       ThreadIDCounter.fetch_add(1) + 1);
+
+  handle.detach();
 }
 
 auto Thread::GetStatus() const -> ThreadStatus {
@@ -104,57 +168,16 @@ auto Thread::GetStatus() const -> ThreadStatus {
   return status;
 }
 
-auto Thread::Stop() -> void {
-  if (status != ThreadStatus::Running) {
-    return;
-  }
-
-  if (handle.joinable()) {
-    handle.join();
-  }
-
-  status = ThreadStatus::Stopped;
+auto Thread::Wait() -> void {
+  // Wait until status is not Running
+  std::unique_lock<std::mutex> lock(statusMutex);
+  statusCV.wait(
+      lock, [this]() -> bool { return this->status != ThreadStatus::Running; });
 }
 
 auto Thread::GetErrorMessage() const -> std::string {
   std::lock_guard<std::mutex> lock(statusMutex);
   return errorMessage;
-}
-
-auto Channel::Push(const EncodedLuaData &message) -> void {
-  std::lock_guard<std::mutex> lock(mutex);
-  messages.push(message);
-}
-
-auto Channel::Pop() -> std::optional<EncodedLuaData> {
-  std::lock_guard<std::mutex> lock(mutex);
-  if (messages.empty()) {
-    return std::nullopt;
-  }
-  EncodedLuaData message = messages.front();
-  messages.pop();
-  return message;
-}
-
-auto Channel::Peek() const -> std::optional<EncodedLuaData> {
-  std::lock_guard<std::mutex> lock(mutex);
-  if (messages.empty()) {
-    return std::nullopt;
-  }
-  return messages.front();
-}
-
-auto Channel::GetCount() const -> size_t {
-  std::lock_guard<std::mutex> lock(mutex);
-  return messages.size();
-}
-
-auto Channel::Demand() -> EncodedLuaData {
-  std::unique_lock<std::mutex> lock(mutex);
-  condition.wait(lock, [this]() -> bool { return !messages.empty(); });
-  EncodedLuaData message = messages.front();
-  messages.pop();
-  return message;
 }
 
 } // namespace Threading

@@ -4,9 +4,10 @@
 #include <atomic>
 
 class Object {
-public:
+protected:
   Object() = default;
 
+public:
   Object(const Object &) = delete;
   Object(Object &&) = delete;
 
@@ -22,12 +23,12 @@ public:
   [[nodiscard]] virtual auto GetInstanceType() const -> Type const * = 0;
 
   void retain() const;
-  void release();
+  auto release() -> bool;
 
   [[nodiscard]] auto getReferenceCount() const -> int;
 
 private:
-  mutable std::atomic<int> count{1};
+  mutable std::atomic<int> count{0};
 };
 
 template <typename T> class Ref {
@@ -63,7 +64,7 @@ public:
     reference.ptr = nullptr;
   }
   auto operator=(Ref &&reference) noexcept -> Ref & {
-    if (this != &reference && ptr != reference.ptr) {
+    if (this != &reference) {
       if (ptr != nullptr) {
         ptr->release();
       }
@@ -84,6 +85,13 @@ public:
   auto get() const -> T * { return ptr; }
   auto operator*() const -> T & { return *ptr; }
   [[nodiscard]] auto isValid() const -> bool { return ptr != nullptr; }
+
+  auto reset() -> void {
+    if (ptr != nullptr) {
+      ptr->release();
+      ptr = nullptr;
+    }
+  }
 
   template <typename... Args> static auto Make(Args &&...args) -> Ref<T> {
     return Ref<T>(new T(std::forward<Args>(args)...));

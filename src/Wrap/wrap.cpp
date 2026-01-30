@@ -4,9 +4,13 @@
 #include "Wrap/Modules/wrap_data.hpp"
 #include "Wrap/Modules/wrap_mouse.hpp"
 #include "Wrap/Modules/wrap_thread.hpp"
+#include "Wrap/proxy.hpp"
 
 #include <cstdint>
 #include <iostream>
+#include <set>
+#include <string>
+#include <unordered_set>
 extern "C" {
 #include <lauxlib.h>
 #include <lua.h>
@@ -25,15 +29,22 @@ namespace LuaWrap {
 static auto wrap_gc(lua_State *state) -> int {
   // Get lua traceback from debug library
 
-  Proxy *proxy = ProxyFromLua(state, 1);
+  // NOLINTNEXTLINE
+  auto *proxy = static_cast<Proxy *>(lua_touserdata(state, 1));
 
   if (proxy != nullptr) {
-    if (proxy->type == nullptr) { // Collecting module.
+    if (proxy->object == nullptr) {
       return 0;
     }
 
+    PrintDebug("Releasing object of type {} in Lua GC",
+               proxy->type != nullptr ? proxy->type->GetName() : "Unknown");
     proxy->object->release();
     proxy->object = nullptr;
+
+    if (proxy->type == nullptr) { // Collecting module.
+      return 0;
+    }
   }
   return 0;
 }
@@ -96,8 +107,7 @@ static auto wrap_eq(lua_State *state) -> int {
 }
 
 static auto wrap_release(lua_State *state) -> int {
-  PrintAlways("Releasing object");
-  Proxy *proxy = ProxyFromLua(state, 1);
+  auto *proxy = static_cast<Proxy *>(lua_touserdata(state, 1));
 
   if (proxy == nullptr) {
     lua_pushboolean(state, 0);
@@ -107,8 +117,8 @@ static auto wrap_release(lua_State *state) -> int {
   Object *object = proxy->object;
 
   if (object != nullptr) {
-    proxy->object = nullptr;
     object->release();
+    proxy->object = nullptr;
 
     // load object storage table
     LoadStorageTable(state, "ThoriumObjectStorage"); // [storage]
@@ -174,6 +184,27 @@ auto LogStack(lua_State *state) -> void {
   }
 }
 
+using LuaFn = int (*)(lua_State *);
+
+auto LuaTrampoline(lua_State *state) -> int {
+  auto func = // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+      reinterpret_cast<LuaFn>(lua_touserdata(state, lua_upvalueindex(1)));
+
+  try {
+    return func(state);
+  } catch (const std::exception &e) {
+    return luaL_error(state, "C++ exception: %s", e.what());
+  } catch (const char *str) {
+    return luaL_error(state, "C++ exception: %s", str);
+  } catch (int val) {
+    return luaL_error(state, "C++ exception: int %d", val);
+  } catch (...) {
+    return luaL_error(state, "Unknown C++ exception");
+  }
+}
+
+static const Type moduleType("MODULE");
+
 auto RegisterLuaModule(lua_State *state, const LuaModule &module) -> void {
   if (module.Functions == nullptr) {
     std::cerr << "Module " << module.Name << " has no functions to register."
@@ -185,8 +216,8 @@ auto RegisterLuaModule(lua_State *state, const LuaModule &module) -> void {
 
   // Create userdata for the module NOLINTNEXTLINE
   auto *proxy = (Proxy *)lua_newuserdata(state, sizeof(Proxy));
-  proxy->type = nullptr;
-  // proxy->object = m.module; // TODO: idk...
+  proxy->type = &moduleType;
+  proxy->object = nullptr;
 
   const auto *name = module.Name.c_str();
 
@@ -208,8 +239,20 @@ auto RegisterLuaModule(lua_State *state, const LuaModule &module) -> void {
   if (module.Functions != nullptr) {
     const luaL_Reg *func = module.Functions;
     while (func->name != nullptr) {
-      lua_pushcfunction(state, func->func); // [Thorium, module, func]
-      lua_setfield(state, -2, func->name);  // [Thorium, module]
+      // lua_pushcfunction(state, func->func); // [Thorium, module, func]
+
+#if !defined(NDEBUG) && DEBUG_CPP_EXCEPTION // If debug build
+      // Wrap function in trampoline to catch exceptions
+      lua_pushlightuserdata(
+          state, // NOLINTNEXTLINE(cppcoreguidelines-pro-type-cstyle-cast)
+          (void *)func->func); // [mt, lightuserdata with function pointer]
+      lua_pushcclosure(state, LuaTrampoline,
+                       1); // [mt, cclosure that calls function pointer]
+#else
+      lua_pushcfunction(state, func->func); // [mt, func]
+#endif
+
+      lua_setfield(state, -2, func->name); // [Thorium, module]
       func++; // NOLINT, functions are nullptr-terminated
     }
   }
@@ -262,7 +305,7 @@ auto RegisterLuaType(lua_State *state, const Type *type,
                      const luaL_Reg *functions) -> void {
 
   if (type == nullptr) {
-    std::cerr << "Cannot register Lua type: type is null" << "\n";
+    PrintError("Cannot register Lua type: type is null");
     return;
   }
 
@@ -289,12 +332,33 @@ auto RegisterLuaType(lua_State *state, const Type *type,
   lua_pushcfunction(state, wrap_release);
   lua_setfield(state, -2, "release"); // mt.release = wrap_release [mt]
 
+  static const std::unordered_set<std::string> ReservedNames = {
+      "__gc", "__index", "__tostring", "type", "typeof", "__eq", "release",
+  };
+
   // Register functions
   if (functions != nullptr) {
     const luaL_Reg *func = functions;
     while (func->name != nullptr) {
+      // Check for reserved names
+      if (ReservedNames.contains(func->name)) {
+        PrintError("Cannot register Lua type {}: function name '{}' is "
+                   "reserved.",
+                   type->GetName(), func->name);
+        func++; // NOLINT, functions are nullptr-terminated
+        continue;
+      }
+#if !defined(NDEBUG) && DEBUG_CPP_EXCEPTION // If debug build
+      // Wrap function in trampoline to catch exceptions
+      lua_pushlightuserdata(
+          state, // NOLINTNEXTLINE(cppcoreguidelines-pro-type-cstyle-cast)
+          (void *)func->func); // [mt, lightuserdata with function pointer]
+      lua_pushcclosure(state, LuaTrampoline,
+                       1); // [mt, cclosure that calls function pointer]
+#else
       lua_pushcfunction(state, func->func); // [mt, func]
-      lua_setfield(state, -2, func->name);  // [mt]
+#endif
+      lua_setfield(state, -2, func->name); // [mt]
       func++; // NOLINT, functions are nullptr-terminated
     }
   }
@@ -303,6 +367,12 @@ auto RegisterLuaType(lua_State *state, const Type *type,
 }
 
 auto SetupLuaType(lua_State *state, const Type *type, Object *object) -> void {
+
+  if (object == nullptr) {
+    lua_pushnil(state);
+    return;
+  }
+
   // NOLINTNEXTLINE
   auto *proxy = (Proxy *)lua_newuserdata(state, sizeof(Proxy)); // [userdata]
   proxy->type = type;
@@ -339,14 +409,16 @@ auto PushObject(lua_State *state, const Type *type, Object *object) -> void {
   }
 
   // fetch permanent object storage table
-  LoadStorageTable(state, "ThoriumObjectStorage"); // [storage]
+  LoadOrCreateStorageTable(state, "ThoriumObjectStorage"); // [storage]
 
   if (lua_isnoneornil(state, -1)) {
     // No storage table
 
     lua_pop(state, 1); // Remove nil [empty]
 
-    SetupLuaType(state, type, object); // [userdata]
+    lua_pushnil(state); // Push nil since we cannot store the object
+
+    PrintError("PushObject: storage table missing, cannot store object.");
     return;
   }
 
@@ -355,7 +427,8 @@ auto PushObject(lua_State *state, const Type *type, Object *object) -> void {
   lua_pushlightuserdata(state, (void *)key); // [storage, key] NOLINT
   lua_gettable(state, -2);                   // [storage, value]
 
-  if (lua_type(state, -1) != LUA_TUSERDATA) {
+  if (lua_type(state, -1) != LUA_TLIGHTUSERDATA &&
+      lua_type(state, -1) != LUA_TUSERDATA) {
     // No existing userdata
     lua_pop(state, 1); // Remove nil [storage]
 

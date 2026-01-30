@@ -6,6 +6,7 @@
 #include "graphics.hpp"
 #include <cstdint>
 #include <span>
+#include <string>
 #define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
 
@@ -17,19 +18,15 @@ struct MeshDrawRange {
   uint32_t Offset, Count;
 };
 
-enum class IndexFormat : uint8_t {
-  None,
-  Uint16,
-  Uint32,
-};
-
-inline auto GetIndexFormatSize(IndexFormat format) -> size_t {
+inline auto GetIndexFormatSize(VkIndexType format) -> size_t {
   switch (format) {
-  case IndexFormat::Uint16:
+  case VK_INDEX_TYPE_UINT8:
+    return 1;
+  case VK_INDEX_TYPE_UINT16:
     return 2;
-  case IndexFormat::Uint32:
+  case VK_INDEX_TYPE_UINT32:
     return 4;
-  case IndexFormat::None:
+  default:
     return 0;
   }
 }
@@ -38,14 +35,19 @@ static const Type meshType = Type("Mesh");
 
 struct Mesh : Object {
   auto ScheduleDestroy() -> void override;
+  auto UseDeferredDestruction() const -> bool override {
+    return Graphics::GetDeferredDestructionAllowed();
+  }
 
   static auto Create(GraphicsContext &context, VertexFormat vertexFormat,
-                     const std::span<uint8_t> &vertexData) -> Result<Ref<Mesh>>;
+                     const std::span<uint8_t> &vertexData,
+                     const std::string &debugName = "Mesh")
+      -> Result<Ref<Mesh>>;
 
   static auto Create(GraphicsContext &context, VertexFormat vertexFormat,
-                     uint64_t vertexCount) -> Result<Ref<Mesh>>;
-
-  auto Release() const -> void;
+                     uint64_t vertexCount,
+                     const std::string &debugName = "Mesh")
+      -> Result<Ref<Mesh>>;
 
   [[nodiscard]] auto GetVertexFormat() const -> VertexFormat;
 
@@ -54,7 +56,7 @@ struct Mesh : Object {
 
   [[nodiscard]] auto GetIndexCount() const -> uint32_t;
   [[nodiscard]] auto GetIndexData() -> void *;
-  [[nodiscard]] auto GetIndexFormat() const -> IndexFormat;
+  [[nodiscard]] auto GetIndexFormat() const -> VkIndexType;
 
   void SetDrawRange(MeshDrawRange range);
   [[nodiscard]] auto GetDrawRange() const -> MeshDrawRange;
@@ -66,10 +68,10 @@ struct Mesh : Object {
                    const std::span<uint8_t> &vertexData, uint64_t offset = 0)
       -> Error;
   auto SetIndices(GraphicsContext &context, const std::span<uint8_t> &indexData,
-                  IndexFormat format) -> Error;
+                  VkIndexType format) -> Error;
 
   auto SetVertexBuffer(const Ref<Buffer> &buffer) -> void;
-  auto SetIndexBuffer(const Ref<Buffer> &buffer, IndexFormat format) -> Error;
+  auto SetIndexBuffer(const Ref<Buffer> &buffer, VkIndexType format) -> Error;
 
   [[nodiscard]] auto GetVertexBuffer() const -> Ref<Buffer>;
   [[nodiscard]] auto GetIndexBuffer() const -> Ref<Buffer>;
@@ -86,7 +88,7 @@ private:
       -> Error;
   auto UploadIndices(GraphicsContext &context,
                      const std::span<uint8_t> &indices, uint64_t offset,
-                     IndexFormat format) -> Error;
+                     VkIndexType format) -> Error;
 
   VertexFormat Format;
 
@@ -96,7 +98,8 @@ private:
   MeshDrawRange DrawRange = {.Offset = 0, .Count = 0};
   uint64_t VertexCount;
   uint64_t IndexCount;
-  IndexFormat IndicesFormat;
+  VkIndexType IndicesFormat;
+  std::string DebugName;
 
   VkPrimitiveTopology Topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 };

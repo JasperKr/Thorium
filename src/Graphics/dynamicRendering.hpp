@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Graphics/graphics.hpp"
+#include "Graphics/hash.hpp"
 #include "Graphics/texture.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
@@ -10,6 +11,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <unordered_map>
+#include <vector>
 #define VK_NO_PROTOTYPES
 #include <vulkan/vulkan_core.h>
 
@@ -19,10 +21,104 @@ namespace Shader {
 struct ShaderModule;
 }
 
-namespace RenderTarget {
+namespace DynamicRendering {
 
-auto GetSwapchainTextures(const GraphicsContext &context)
-    -> Result<std::vector<Ref<Graphics::Texture::Texture>>>;
+struct DescriptorSetLayoutKey {
+  VkDescriptorSetLayoutCreateFlags flags;
+  std::vector<VkDescriptorSetLayoutBinding> bindings;
+  std::vector<VkDescriptorBindingFlags> bindingFlags;
+
+  auto operator==(const DescriptorSetLayoutKey &other) const -> bool {
+    if (flags != other.flags) {
+      return false;
+    }
+
+    if (bindings.size() != other.bindings.size()) {
+      return false;
+    }
+
+    for (size_t i = 0; i < bindings.size(); ++i) {
+      const auto &firstBinding = bindings[i];
+      const auto &secondBinding = other.bindings[i];
+
+      if (firstBinding.binding != secondBinding.binding ||
+          firstBinding.descriptorType != secondBinding.descriptorType ||
+          firstBinding.descriptorCount != secondBinding.descriptorCount ||
+          firstBinding.stageFlags != secondBinding.stageFlags) {
+        return false;
+      }
+
+      // Compare immutable samplers if they exist
+      if (firstBinding.pImmutableSamplers != nullptr &&
+          secondBinding.pImmutableSamplers != nullptr) {
+        for (uint32_t j = 0; j < firstBinding.descriptorCount; ++j) {
+          // NOLINTBEGIN
+          if (firstBinding.pImmutableSamplers[j] !=
+              secondBinding.pImmutableSamplers[j]) {
+            return false;
+          }
+          // NOLINTEND
+        }
+      } else if (firstBinding.pImmutableSamplers !=
+                 secondBinding.pImmutableSamplers) {
+        // One is null, the other is not
+        return false;
+      }
+    }
+
+    if (bindingFlags.size() != other.bindingFlags.size()) {
+      return false;
+    }
+
+    for (size_t i = 0; i < bindingFlags.size(); ++i) {
+      if (bindingFlags[i] != other.bindingFlags[i]) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+};
+
+struct DescriptorSetLayoutKeyHash {
+  auto operator()(DescriptorSetLayoutKey const &key) const noexcept -> size_t {
+    Hash::Hasher hasher{};
+
+    hasher.add(key.flags);
+
+    for (const auto &binding : key.bindings) {
+      hasher.add(binding.binding);
+      hasher.add(binding.descriptorType);
+      hasher.add(binding.descriptorCount);
+      hasher.add(binding.stageFlags);
+
+      if (binding.pImmutableSamplers != nullptr) {
+        for (uint32_t i = 0; i < binding.descriptorCount; ++i) {
+          // NOLINTNEXTLINE, reinterpret cast And pointer arithmetic
+          hasher.add(reinterpret_cast<size_t>(binding.pImmutableSamplers[i]));
+        }
+      }
+    }
+
+    for (VkDescriptorBindingFlags flag : key.bindingFlags) {
+      hasher.add(flag);
+    }
+
+    return hasher.get();
+  }
+};
+
+extern std::unordered_map<DescriptorSetLayoutKey, VkDescriptorSetLayout,
+                          DescriptorSetLayoutKeyHash>
+    DescriptorSetLayoutCache; // NOLINT
+
+// NOLINTNEXTLINE
+extern std::vector<Ref<Texture::Texture>> SwapchainTextures;
+
+// NOLINTNEXTLINE
+extern thread_local bool DrawnToSwapchain;
+
+auto GetSwapchainTextures(const GraphicsContext &context) -> Error;
 
 const static Type type = Type("RenderTarget");
 
@@ -111,9 +207,6 @@ struct State {
     }
 
     if (renderTargets.size() != other.renderTargets.size()) {
-      PrintAlways("Render target size mismatch in state equality comparison");
-      PrintAlways("This size: {}, Other size: {}", renderTargets.size(),
-                  other.renderTargets.size());
       return false;
     }
 
@@ -237,7 +330,7 @@ struct StateHash {
   }
 };
 
-extern std::unordered_map<
+extern thread_local std::unordered_map<
     State, std::pair<VkPipeline, VkPipelineLayout>,
     StateHash> // NOLINTNEXTLINE Pipeline cacheBegunRendering
     PipelineCache;
@@ -250,7 +343,13 @@ auto Pop(GraphicsContext &context) -> Error;
 auto Reset(GraphicsContext &context) -> Error;
 auto FlushGraphics(GraphicsContext &context) -> Result<bool>;
 auto Load(GraphicsContext &context) -> Error;
+
+// Destroys all created pipelines and layouts
 auto Destroy(GraphicsContext &context) -> void;
+
+// Shuts down the local dynamic rendering module
+auto Shutdown(GraphicsContext &context) -> Error;
+
 auto PrepareRendering(GraphicsContext &context) -> Error;
 
 auto EndRendering(GraphicsContext &context) -> void;
@@ -296,5 +395,5 @@ struct ClearInfo {
 
 auto Clear(GraphicsContext &context, const ClearInfo &clearInfo) -> Error;
 
-} // namespace RenderTarget
+} // namespace DynamicRendering
 } // namespace Graphics

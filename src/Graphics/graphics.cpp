@@ -8,66 +8,28 @@
 #include "vulkan/vulkan_core.h"
 #include <cassert>
 #include <cstdint>
+#include <mutex>
+#include <string>
 #include <vector>
 
 namespace Graphics {
 
+GraphicsMutexes GraphicsContext::mutexes = {};
+
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
 
-thread_local inline VkSemaphore globalTimelineSemaphore = nullptr;
-thread_local inline uint64_t currentCPUTimelineValue = 1;
+GraphicsContext *g_ctx = nullptr;
+
+thread_local std::string ContextDebugname{};
+
+std::vector<VkCommandPool> CommandPools{};
+std::mutex CommandPoolsMutex{};
 
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
-auto InitializeGlobalTimelineSemaphore(GraphicsContext &context) -> Error {
-
-  VkSemaphoreTypeCreateInfo timelineInfo = {
-      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
-      .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
-      .initialValue = 0,
-  };
-
-  VkSemaphoreCreateInfo semInfo = {
-      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-      .pNext = &timelineInfo,
-  };
-
-  auto result = Error::Create(vkCreateSemaphore(
-      context.device, &semInfo, nullptr, &globalTimelineSemaphore));
-  if (Error::IsError(result)) {
-    return result;
-  }
-
-  return Error::Success();
-}
-
-auto DeInitializeGlobalTimelineSemaphore(GraphicsContext &context) -> void {
-  if (globalTimelineSemaphore != VK_NULL_HANDLE) {
-    vkDestroySemaphore(context.device, globalTimelineSemaphore, nullptr);
-    globalTimelineSemaphore = VK_NULL_HANDLE;
-  }
-}
-
-auto GetGlobalTimelineSemaphore(GraphicsContext &context) -> VkSemaphore {
-  return globalTimelineSemaphore;
-}
-
-auto GetCPUTimelineSemaphoreValue(GraphicsContext &context) -> uint64_t & {
-  return currentCPUTimelineValue;
-}
-
-auto GetCurrentTimelineSemaphoreValue(GraphicsContext &context)
-    -> Result<uint64_t> {
-  uint64_t completedValue = UINT64_MAX;
-
-  auto result = Error::Create(vkGetSemaphoreCounterValue(
-      context.device, globalTimelineSemaphore, &completedValue));
-
-  if (Error::IsError(result)) {
-    return result.AsUnexpected();
-  }
-
-  return completedValue;
+auto GetDeferredDestructionAllowed() -> bool & {
+  static bool deferredDestructionAllowed = true;
+  return deferredDestructionAllowed;
 }
 
 static auto FindSurfaceFormat(GraphicsContext &context)
@@ -108,15 +70,16 @@ static auto FindSurfaceFormat(GraphicsContext &context)
   return Error::Unexpected("No suitable surface format found", -2);
 }
 
-// Prefer:
-// Vsync >
-// No cap & tearing >
-// FPS capped, late frames allowed >
-// Everything else
-static const std::vector<VkPresentModeKHR> PresentModeScores = {
+static const std::vector<VkPresentModeKHR> PresentModeScoresVsync = {
     VK_PRESENT_MODE_FIFO_KHR,
-    VK_PRESENT_MODE_MAILBOX_KHR,
     VK_PRESENT_MODE_FIFO_RELAXED_KHR,
+};
+
+static const std::vector<VkPresentModeKHR> PresentModeScoresNoVsync = {
+    VK_PRESENT_MODE_MAILBOX_KHR,
+    VK_PRESENT_MODE_IMMEDIATE_KHR,
+    VK_PRESENT_MODE_FIFO_RELAXED_KHR,
+    VK_PRESENT_MODE_FIFO_KHR,
 };
 
 static auto FindPhysicalDevice(GraphicsContext &context) -> Error {
@@ -234,7 +197,7 @@ static auto FindPresentMode(GraphicsContext &context)
                                             context.surface, &presentModeCount,
                                             presentModes.data());
 
-  for (const auto &preferredMode : PresentModeScores) {
+  for (const auto &preferredMode : PresentModeScoresVsync) {
     for (const auto &availableMode : presentModes) {
       if (preferredMode == availableMode) {
         return preferredMode;
@@ -319,6 +282,7 @@ static auto CreateDevice(GraphicsContext &context) -> Error {
       static_cast<uint32_t>(deviceExtensions.size());
   createInfo.ppEnabledExtensionNames = deviceExtensions.data();
 
+  std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
   Error error = Error::Create(vkCreateDevice(
       context.physicalDevice, &createInfo, nullptr, &context.device));
 
@@ -336,7 +300,6 @@ static auto CreateDevice(GraphicsContext &context) -> Error {
 }
 
 static void InitializeSwapchainTextures(GraphicsContext &context) {
-  // Allocate a temporary command buffer
   auto *commandBuffer = BeginSingleTimeCommands(context);
 
   // Transition each image from UNDEFINED -> COLOR_ATTACHMENT_OPTIMAL
@@ -398,54 +361,63 @@ static auto CreateSwapchain(GraphicsContext &context) -> Error {
 
   VkSwapchainKHR swapchain = VK_NULL_HANDLE;
 
-  Error error = Error::Create(vkCreateSwapchainKHR(
-      context.device, &swapchainInfo, nullptr, &swapchain));
+  {
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+    Error error = Error::Create(vkCreateSwapchainKHR(
+        context.device, &swapchainInfo, nullptr, &swapchain));
 
-  if (Error::IsError(error)) {
-    return error;
+    if (Error::IsError(error)) {
+      return error;
+    }
   }
 
   context.swapchainInfo.swapchain = swapchain;
   context.swapchainInfo.format = surfaceFormat.format;
   context.swapchainInfo.extent = swapchainInfo.imageExtent;
-  context.swapchainInfo.imageCount = swapchainInfo.minImageCount;
 
-  context.swapchainInfo.images =
-      std::vector<VkImage>(context.swapchainInfo.imageCount);
+  vkGetSwapchainImagesKHR(context.device, swapchain,
+                          &context.swapchainInfo.imageCount, nullptr);
 
-  error = Error::Create(vkGetSwapchainImagesKHR(
-      context.device, swapchain, &context.swapchainInfo.imageCount,
-      context.swapchainInfo.images.data()));
+  context.swapchainInfo.images.resize(context.swapchainInfo.imageCount);
 
-  if (Error::IsError(error)) {
-    return error;
+  {
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+    Error error = Error::Create(vkGetSwapchainImagesKHR(
+        context.device, swapchain, &context.swapchainInfo.imageCount,
+        context.swapchainInfo.images.data()));
+
+    if (Error::IsError(error)) {
+      return error;
+    }
   }
 
-  context.swapchainInfo.imageViews =
-      std::vector<VkImageView>(context.swapchainInfo.imageCount);
+  context.swapchainInfo.imageViews.resize(context.swapchainInfo.imageCount);
 
-  for (uint32_t i = 0; i < context.swapchainInfo.imageCount; i++) {
-    VkImageViewCreateInfo imageViewInfo = {};
+  {
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+    for (uint32_t i = 0; i < context.swapchainInfo.imageCount; i++) {
+      VkImageViewCreateInfo imageViewInfo = {};
 
-    imageViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-    imageViewInfo.image = context.swapchainInfo.images[i];
-    imageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    imageViewInfo.format = context.swapchainInfo.format;
-    imageViewInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-    imageViewInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-    imageViewInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-    imageViewInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-    imageViewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    imageViewInfo.subresourceRange.baseMipLevel = 0;
-    imageViewInfo.subresourceRange.levelCount = 1;
-    imageViewInfo.subresourceRange.baseArrayLayer = 0;
-    imageViewInfo.subresourceRange.layerCount = 1;
+      imageViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+      imageViewInfo.image = context.swapchainInfo.images[i];
+      imageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+      imageViewInfo.format = context.swapchainInfo.format;
+      imageViewInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+      imageViewInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+      imageViewInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+      imageViewInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+      imageViewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+      imageViewInfo.subresourceRange.baseMipLevel = 0;
+      imageViewInfo.subresourceRange.levelCount = 1;
+      imageViewInfo.subresourceRange.baseArrayLayer = 0;
+      imageViewInfo.subresourceRange.layerCount = 1;
 
-    VkImageView imageView = VK_NULL_HANDLE;
-    error = Error::Create(
-        vkCreateImageView(context.device, &imageViewInfo, nullptr, &imageView));
+      VkImageView imageView = VK_NULL_HANDLE;
+      Error error = Error::Create(vkCreateImageView(
+          context.device, &imageViewInfo, nullptr, &imageView));
 
-    context.swapchainInfo.imageViews[i] = imageView;
+      context.swapchainInfo.imageViews[i] = imageView;
+    }
   }
 
   // Initialize swapchain images to COLOR_ATTACHMENT_OPTIMAL layout
@@ -457,54 +429,17 @@ static auto CreateSwapchain(GraphicsContext &context) -> Error {
   return Error::Success();
 }
 
-static auto CreateRenderData(GraphicsContext &context) -> Error {
-  context.renderData = std::vector<RenderData>(context.renderThreadCount);
+auto GetThreadContext() -> ThreadContext & {
+  static thread_local ThreadContext threadContext;
+  return threadContext;
+}
 
-  for (RenderData &renderData : context.renderData) {
-
-    VkCommandPoolCreateInfo poolInfo = {};
-    poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-    poolInfo.queueFamilyIndex = context.graphicsQueueFamily;
-    poolInfo.flags =
-        static_cast<uint32_t>(VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT) |
-        static_cast<uint32_t>(VK_COMMAND_POOL_CREATE_TRANSIENT_BIT);
-
-    Error error = Error::Create(vkCreateCommandPool(context.device, &poolInfo,
-                                                    nullptr, &renderData.pool));
-
-    if (Error::IsError(error)) {
-      return error;
-    }
-
-    renderData.commandBuffers = std::vector<VkCommandBuffer>(FRAMES_IN_FLIGHT);
-    renderData.frameReady = std::vector<bool>(FRAMES_IN_FLIGHT, false);
-
-    VkCommandBufferAllocateInfo allocInfo = {};
-    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    allocInfo.commandPool = renderData.pool;
-    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    allocInfo.commandBufferCount = FRAMES_IN_FLIGHT;
-
-    error = Error::Create(vkAllocateCommandBuffers(
-        context.device, &allocInfo, renderData.commandBuffers.data()));
-
-    if (Error::IsError(error)) {
-      return error;
-    }
+auto GetCommandBuffer() -> VkCommandBuffer {
+  auto *commandBuffer = GetThreadContext().commandBuffer;
+  if (commandBuffer == nullptr) {
+    throw std::runtime_error("No command buffer aquired for current thread.");
   }
-
-  return Error::Success();
-}
-
-auto GetRenderData(GraphicsContext &context, uint32_t threadIndex)
-    -> RenderData {
-  return context.renderData.at(threadIndex);
-}
-
-auto GetCommandBuffer(GraphicsContext &context, uint32_t threadIndex)
-    -> VkCommandBuffer {
-  RenderData renderData = GetRenderData(context, threadIndex);
-  return renderData.commandBuffers.at(context.frameIndex);
+  return commandBuffer;
 }
 
 static auto CreateSemaphores(GraphicsContext &context) -> Error {
@@ -514,23 +449,26 @@ static auto CreateSemaphores(GraphicsContext &context) -> Error {
   context.swapchainImageReady = std::vector<VkSemaphore>(MAX_SWAPCHAIN_IMAGES);
   context.renderingFinished = std::vector<VkSemaphore>(MAX_SWAPCHAIN_IMAGES);
 
-  for (int i = 0; i < MAX_SWAPCHAIN_IMAGES; i++) {
-    Error error =
-        Error::Create(vkCreateSemaphore(context.device, &semaphoreInfo, nullptr,
-                                        &context.swapchainImageReady.at(i)));
+  {
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+    for (int i = 0; i < MAX_SWAPCHAIN_IMAGES; i++) {
+      Error error = Error::Create(
+          vkCreateSemaphore(context.device, &semaphoreInfo, nullptr,
+                            &context.swapchainImageReady.at(i)));
 
-    if (Error::IsError(error)) {
-      return error;
+      if (Error::IsError(error)) {
+        return error;
+      }
     }
-  }
 
-  for (int i = 0; i < MAX_SWAPCHAIN_IMAGES; i++) {
-    Error error =
-        Error::Create(vkCreateSemaphore(context.device, &semaphoreInfo, nullptr,
-                                        &context.renderingFinished.at(i)));
+    for (int i = 0; i < MAX_SWAPCHAIN_IMAGES; i++) {
+      Error error = Error::Create(
+          vkCreateSemaphore(context.device, &semaphoreInfo, nullptr,
+                            &context.renderingFinished.at(i)));
 
-    if (Error::IsError(error)) {
-      return error;
+      if (Error::IsError(error)) {
+        return error;
+      }
     }
   }
 
@@ -544,9 +482,12 @@ static auto CreateFences(GraphicsContext &context) -> Error {
 
   context.inFlightFences = std::vector<VkFence>(FRAMES_IN_FLIGHT);
 
-  for (int i = 0; i < FRAMES_IN_FLIGHT; i++) {
-    Error error = Error::Create(vkCreateFence(
-        context.device, &fenceInfo, nullptr, &context.inFlightFences.at(i)));
+  {
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+    for (int i = 0; i < FRAMES_IN_FLIGHT; i++) {
+      Error error = Error::Create(vkCreateFence(
+          context.device, &fenceInfo, nullptr, &context.inFlightFences.at(i)));
+    }
   }
 
   if (context.swapchainInfo.imageCount <= 0) {
@@ -564,12 +505,17 @@ static auto CreateFences(GraphicsContext &context) -> Error {
 }
 
 static auto CreateVmaAllocator(GraphicsContext &context) -> Error {
+  std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+  std::lock_guard<std::mutex> lock2(
+      Graphics::GraphicsContext::mutexes.vmaAllocator);
+
   VmaAllocatorCreateInfo allocatorInfo = {0};
   allocatorInfo.physicalDevice = context.physicalDevice;
   allocatorInfo.device = context.device;
   allocatorInfo.instance = context.instance;
   allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_4;
   allocatorInfo.pAllocationCallbacks = nullptr;
+  allocatorInfo.flags = VMA_ALLOCATOR_CREATE_EXTERNALLY_SYNCHRONIZED_BIT;
 
   VmaVulkanFunctions vulkanFunctions;
   Error error = Error::Create(
@@ -587,47 +533,22 @@ static auto CreateVmaAllocator(GraphicsContext &context) -> Error {
   return Error::Success();
 }
 
-static auto CreateDescriptorPool(GraphicsContext &context) -> Error {
-  constexpr uint32_t poolSize = 4096;
+inline auto CreateCommandPool(ThreadContext &tcontext) -> Error {
+  VkCommandPoolCreateInfo poolInfo = {};
+  poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+  poolInfo.queueFamilyIndex = tcontext.graphicsContext->graphicsQueueFamily;
+  poolInfo.flags =
+      static_cast<uint32_t>(VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT) |
+      static_cast<uint32_t>(VK_COMMAND_POOL_CREATE_TRANSIENT_BIT);
 
-  std::vector<VkDescriptorPoolSize> poolSizes = {
-      {.type = VK_DESCRIPTOR_TYPE_SAMPLER, .descriptorCount = poolSize},
-      {.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-       .descriptorCount = poolSize},
-      {.type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, .descriptorCount = poolSize},
-      {.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .descriptorCount = poolSize},
-      {.type = VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER,
-       .descriptorCount = poolSize},
-      {.type = VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER,
-       .descriptorCount = poolSize},
-      {.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, .descriptorCount = poolSize},
-      {.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .descriptorCount = poolSize},
-      {.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
-       .descriptorCount = poolSize},
-      {.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC,
-       .descriptorCount = poolSize},
-      {.type = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
-       .descriptorCount = poolSize},
-  };
+  {
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+    Error error = Error::Create(
+        vkCreateCommandPool(tcontext.graphicsContext->device, &poolInfo,
+                            nullptr, &tcontext.commandPool));
 
-  VkDescriptorPoolCreateInfo poolInfo = {};
-  poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-  poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-  poolInfo.maxSets = poolSize * static_cast<uint32_t>(poolSizes.size());
-  poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
-  poolInfo.pPoolSizes = poolSizes.data();
-
-  for (uint32_t i = 0; i < FRAMES_IN_FLIGHT; i++) {
-    {
-
-      context.descriptorPools.push_back(VK_NULL_HANDLE);
-      auto *pool = &context.descriptorPools.back();
-
-      auto result = Error::Create(
-          vkCreateDescriptorPool(context.device, &poolInfo, nullptr, pool));
-      if (Error::IsError(result)) {
-        return result;
-      }
+    if (Error::IsError(error)) {
+      return error;
     }
   }
 
@@ -647,9 +568,9 @@ auto Initialize(GraphicsContext &context, Config::ApplicationConfig &config)
   SDL_Window *window = SDL_CreateWindow(config.Title.c_str(), config.Size.width,
                                         config.Size.height, SDL_WINDOW_VULKAN);
 
-  PrintDebug("Created SDL window with title '", config.Title, "' and size ",
-             std::to_string(config.Size.width) + "x" +
-                 std::to_string(config.Size.height));
+  PrintDebug("Created SDL window with title '{}', Size: ({} x {})",
+             config.Title, std::to_string(config.Size.width),
+             std::to_string(config.Size.height));
 
   if (window == nullptr) {
     return Error::Create("Failed to create SDL window.");
@@ -670,6 +591,15 @@ auto Initialize(GraphicsContext &context, Config::ApplicationConfig &config)
     return Error::Create("Failed to get Vulkan instance extensions.");
   }
 
+  std::vector<const char *> extensionList;
+
+  extensionList.reserve(extCount);
+  for (Uint32 i = 0; i < extCount; i++) {
+    extensionList.emplace_back(extensions[i]); // NOLINT
+  }
+
+  extensionList.emplace_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+
   VkApplicationInfo appInfo = {};
   appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
   appInfo.pApplicationName = "Thallium Engine";
@@ -680,8 +610,9 @@ auto Initialize(GraphicsContext &context, Config::ApplicationConfig &config)
 
   VkInstanceCreateInfo createInfo = {};
   createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-  createInfo.enabledExtensionCount = extCount;
-  createInfo.ppEnabledExtensionNames = extensions;
+  createInfo.enabledExtensionCount =
+      static_cast<uint32_t>(extensionList.size());
+  createInfo.ppEnabledExtensionNames = extensionList.data();
   createInfo.pApplicationInfo = &appInfo;
 
   error =
@@ -731,42 +662,43 @@ auto Initialize(GraphicsContext &context, Config::ApplicationConfig &config)
   if (Error::IsError(error)) {
     return error;
   }
-  PrintDebug("calling: CreateDevice...");
+  PrintDebug("called: CreateDevice...");
   error = CreateVmaAllocator(context);
   if (Error::IsError(error)) {
     return error;
   }
-  PrintDebug("calling: CreateVmaAllocator...");
-  error = CreateRenderData(context);
+  PrintDebug("called: CreateVmaAllocator...");
+
+  GetThreadContext().graphicsContext = &context;
+
+  error = CreateCommandPool(GetThreadContext());
   if (Error::IsError(error)) {
     return error;
   }
-  PrintDebug("calling: CreateRenderData...");
+  PrintDebug("called: CreateCommandPool...");
   error = CreateSwapchain(context);
   if (Error::IsError(error)) {
     return error;
   }
-  PrintDebug("calling: CreateSwapchain...");
+  PrintDebug("called: CreateSwapchain...");
   error = CreateSemaphores(context);
   if (Error::IsError(error)) {
     return error;
   }
-  PrintDebug("calling: CreateSemaphores...");
+  PrintDebug("called: CreateSemaphores...");
   error = CreateFences(context);
   if (Error::IsError(error)) {
     return error;
   }
-  PrintDebug("calling: CreateFences.");
-  error = CreateDescriptorPool(context);
-  if (Error::IsError(error)) {
-    return error;
-  }
-  PrintDebug("calling: CreateDescriptorPool.");
+  PrintDebug("called: CreateFences.");
 
   return Error::Success();
 }
 
 void Deinitialize(GraphicsContext &context) {
+  std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+  std::lock_guard<std::mutex> lock2(
+      Graphics::GraphicsContext::mutexes.vmaAllocator);
   vkDeviceWaitIdle(context.device);
 
   vmaDestroyAllocator(context.vmaAllocator);
@@ -783,16 +715,16 @@ void Deinitialize(GraphicsContext &context) {
     vkDestroySemaphore(context.device, semaphore, nullptr);
   }
 
-  for (RenderData &renderData : context.renderData) {
-    vkDestroyCommandPool(context.device, renderData.pool, nullptr);
+  vkDestroyCommandPool(context.device, GetThreadContext().commandPool, nullptr);
+  {
+    std::lock_guard<std::mutex> lock(CommandPoolsMutex);
+    for (auto &pool : CommandPools) {
+      vkDestroyCommandPool(context.device, pool, nullptr);
+    }
   }
 
   for (VkImageView imageView : context.swapchainInfo.imageViews) {
     vkDestroyImageView(context.device, imageView, nullptr);
-  }
-
-  for (VkDescriptorPool pool : context.descriptorPools) {
-    vkDestroyDescriptorPool(context.device, pool, nullptr);
   }
 
   vkDestroySwapchainKHR(context.device, context.swapchainInfo.swapchain,
@@ -810,11 +742,17 @@ auto BeginSingleTimeCommands(GraphicsContext &context) -> VkCommandBuffer {
   VkCommandBufferAllocateInfo allocInfo = {};
   allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
   allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-  allocInfo.commandPool = GetRenderData(context, 0).pool;
+
+  auto &tcontext = GetThreadContext();
+
+  allocInfo.commandPool = tcontext.commandPool;
   allocInfo.commandBufferCount = 1;
 
   VkCommandBuffer commandBuffer = nullptr;
-  vkAllocateCommandBuffers(context.device, &allocInfo, &commandBuffer);
+  {
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+    vkAllocateCommandBuffers(context.device, &allocInfo, &commandBuffer);
+  }
 
   VkCommandBufferBeginInfo beginInfo = {};
   beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -837,8 +775,9 @@ auto EndSingleTimeCommands(GraphicsContext &context,
   vkQueueSubmit(context.graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
   vkQueueWaitIdle(context.graphicsQueue);
 
-  vkFreeCommandBuffers(context.device, GetRenderData(context, 0).pool, 1,
-                       &commandBuffer);
+  auto &tcontext = GetThreadContext();
+
+  vkFreeCommandBuffers(context.device, tcontext.commandPool, 1, &commandBuffer);
 }
 
 void SetCurrentGraphicsContext(GraphicsContext *ctx) { g_ctx = ctx; }

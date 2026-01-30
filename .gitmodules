@@ -10,3 +10,6 @@
 [submodule "external/luajit"]
 	path = external/luajit
 	url = https://luajit.org/git/luajit.git
+[submodule "external/tracy"]
+	path = external/tracy
+	url = https://github.com/wolfpld/tracy

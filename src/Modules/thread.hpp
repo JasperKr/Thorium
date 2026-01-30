@@ -2,12 +2,13 @@
 
 #include "Modules/object.hpp"
 #include "Modules/type.hpp"
+#include "Wrap/lua_data.hpp"
 #include <condition_variable>
 #include <cstdint>
 #include <mutex>
-#include <optional>
-#include <queue>
 #include <string>
+#include <thread>
+#include <vector>
 
 extern "C" {
 #include <lauxlib.h>
@@ -23,8 +24,18 @@ extern "C" {
 // numbers, strings, booleans, tables, but not functions or userdata except for any engine-defined types
 
 namespace Threading {
+
+using ThreadID = uint32_t;
+
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+thread_local extern ThreadID CurrentThreadID;
+
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+static std::atomic<ThreadID> ThreadIDCounter = 0;
+
+auto UnloadModule() -> void;
+
 enum class ThreadStatus : uint8_t { Running, Stopped, Error };
-using EncodedLuaData = std::string;
 
 const static Type threadType = Type("Thread");
 
@@ -39,57 +50,35 @@ public:
 
   static auto Create(const std::string &script) -> Ref<Thread>;
 
-  auto Start(const EncodedLuaData &launchArguments, int count) -> void;
+  auto Start(const std::vector<LuaWrap::Data::LuaType> &launchArguments,
+             int count) -> void;
   [[nodiscard]] auto GetStatus() const -> ThreadStatus;
   [[nodiscard]] auto GetErrorMessage() const -> std::string;
-  auto Stop() -> void;
+  auto Wait() -> void;
 
   auto GetInstanceType() const -> Type const * override { return &threadType; }
   static auto GetType() -> Type const * { return &threadType; }
 
+  auto SetDebugName(const std::string &name) -> void { debugname = name; }
+
 private:
-  static auto Run(Thread *thread, const EncodedLuaData &launchArguments,
-                  int count) -> void;
+  static auto Run(Thread *thread,
+                  const std::vector<LuaWrap::Data::LuaType> &launchArguments,
+                  int count, ThreadID identifier) -> void;
+  auto Close(ThreadStatus status, const std::string &message) -> void;
 
   std::string script;
   lua_State *luaState = nullptr;
   std::thread handle;
 
   mutable std::mutex statusMutex;
+  mutable std::condition_variable statusCV;
   ThreadStatus status{ThreadStatus::Stopped};
   std::string errorMessage;
-};
+  lua_State *state = nullptr;
 
-const static Type channelType = Type("Channel");
-
-struct Channel : Object {
-public:
-  // Push a message to the channel
-  auto Push(const EncodedLuaData &message) -> void;
-
-  // Pop a message from the channel
-  auto Pop() -> std::optional<EncodedLuaData>;
-
-  // Peek at the next message without removing it
-  [[nodiscard]]
-  auto Peek() const -> std::optional<EncodedLuaData>;
-
-  [[nodiscard]]
-  auto GetCount() const -> size_t;
-
-  // Demand a message, blocking until one is available
-  auto Demand() -> EncodedLuaData;
-
-  auto GetInstanceType() const -> Type const * override { return &channelType; }
-  static auto GetType() -> Type const * { return &channelType; }
-
-private:
-  std::queue<EncodedLuaData> messages;
-
-  // Mutex for thread safety
-  mutable std::mutex mutex;
-
-  mutable std::condition_variable condition;
+  // Auto-generated name for the thread
+  std::string debugname;
 };
 
 } // namespace Threading

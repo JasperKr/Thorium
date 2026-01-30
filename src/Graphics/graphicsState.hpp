@@ -3,12 +3,12 @@
 namespace Graphics {
 
 inline auto GetIsCurrentlyRendering() -> bool & {
-  static bool CurrentlyRendering = false;
+  static thread_local bool CurrentlyRendering = false;
   return CurrentlyRendering;
 }
 
 inline auto GetIsStateDirty() -> bool & {
-  static bool StateDirty = true;
+  static thread_local bool StateDirty = true;
   return StateDirty;
 }
 

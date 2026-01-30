@@ -1,19 +1,29 @@
 #pragma once
 
 #include <cstdint>
-#include <vector>
 namespace Timer {
-const int DeltaTimeBufferSize = 64;
+
+// Amount of seconds to buffer for delta time averaging
+const double DeltaTimeBuffering = 0.5;
+
+const double NANO_TO_SECONDS = 1.0 / 1000000000.0;
+const double SECONDS_TO_NANO = 1000000000.0;
+
+const double MILLI_TO_SECONDS = 1.0 / 1000.0;
+const double SECONDS_TO_MILLI = 1000.0;
+
+const uint64_t BufferingTimeNS =
+    static_cast<uint64_t>(DeltaTimeBuffering * SECONDS_TO_NANO);
 
 struct TimerFrameInfo {
-  std::uint64_t lastTime = 0ULL;
+  uint64_t lastTime = 0;
   uint64_t deltaTime = 0;
-  std::vector<uint64_t> deltaTimes =
-      std::vector<uint64_t>(DeltaTimeBufferSize, 0);
-  uint64_t averageDeltaTime = 0;
 
-  uint32_t deltaTimeBufferIndex = 0;
-  uint32_t deltaTimeBufferCount = 0;
+  uint64_t accumulatedTime = 0;
+  uint64_t sampleCount = 0;
+  uint64_t lastAveragingTime = 0;
+
+  uint64_t averageDeltaTime = 0;
 };
 
 auto GetFPS() -> double;

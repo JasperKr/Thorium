@@ -5,10 +5,12 @@
 #include "Graphics/graphics.hpp"
 #include "Graphics/mesh.hpp"
 #include "Graphics/render.hpp"
+#include "Graphics/renderThread.hpp"
 #include "Graphics/shader.hpp"
 #include "Graphics/texture.hpp"
 #include "Graphics/vertexformat.hpp"
 #include "Modules/color.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Wrap/Graphics/wrap_color.hpp"
@@ -28,8 +30,8 @@ extern "C" {
 
 namespace Graphics {
 auto wrap_Present(lua_State *state) -> int {
-  auto *ctx = GetCurrentGraphicsContext();
-  auto result = Present(*ctx);
+  auto &ctx = *GetCurrentGraphicsContext();
+  auto result = Present(ctx);
 
   if (Error::IsError(result)) {
     return luaL_error(state, "%s", result.ToString().c_str());
@@ -41,7 +43,7 @@ auto wrap_Present(lua_State *state) -> int {
 // RenderTarget functions
 auto wrap_Push(lua_State *state) -> int {
   auto *ctx = GetCurrentGraphicsContext();
-  auto pushError = RenderTarget::Push(*ctx);
+  auto pushError = DynamicRendering::Push(*ctx);
   if (Error::IsError(pushError)) {
     return luaL_error(state, "%s", pushError.ToString().c_str());
   }
@@ -49,7 +51,7 @@ auto wrap_Push(lua_State *state) -> int {
 }
 auto wrap_Pop(lua_State *state) -> int {
   auto *ctx = GetCurrentGraphicsContext();
-  auto error = RenderTarget::Pop(*ctx);
+  auto error = DynamicRendering::Pop(*ctx);
   if (Error::IsError(error)) {
     return luaL_error(state, "%s", error.ToString().c_str());
   }
@@ -58,7 +60,7 @@ auto wrap_Pop(lua_State *state) -> int {
 }
 auto wrap_Reset(lua_State *state) -> int {
   auto *ctx = GetCurrentGraphicsContext();
-  auto resetError = RenderTarget::Reset(*ctx);
+  auto resetError = DynamicRendering::Reset(*ctx);
   if (Error::IsError(resetError)) {
     return luaL_error(state, "%s", resetError.ToString().c_str());
   }
@@ -99,7 +101,7 @@ auto wrap_SetDepthMode(lua_State *state) -> int {
   auto enableRead =
       compareOp != VK_COMPARE_OP_ALWAYS && compareOp != VK_COMPARE_OP_NEVER;
 
-  RenderTarget::SetDepthMode(enableRead, writeEnable, compareOp);
+  DynamicRendering::SetDepthMode(enableRead, writeEnable, compareOp);
   return 0;
 }
 
@@ -122,7 +124,7 @@ auto wrap_SetCullMode(lua_State *state) -> int {
     return luaL_error(state, "Invalid cull mode: %s", cullModeStr);
   }
 
-  RenderTarget::SetCullMode(cullMode);
+  DynamicRendering::SetCullMode(cullMode);
   return 0;
 }
 
@@ -143,14 +145,14 @@ auto wrap_SetPolygonMode(lua_State *state) -> int {
     return luaL_error(state, "Invalid polygon mode: %s", polygonModeStr);
   }
 
-  RenderTarget::SetPolygonMode(polygonMode);
+  DynamicRendering::SetPolygonMode(polygonMode);
   return 0;
 }
 
 auto wrap_SetViewport(lua_State *state) -> int {
   auto *ctx = GetCurrentGraphicsContext();
   if (lua_gettop(state) == 0) {
-    RenderTarget::SetViewport(nullptr);
+    DynamicRendering::SetViewport(nullptr);
     return 0;
   }
   VkViewport viewport{};
@@ -162,7 +164,7 @@ auto wrap_SetViewport(lua_State *state) -> int {
       static_cast<float>(luaL_optnumber(state, 5, 0.0)); // NOLINT
   viewport.maxDepth =
       static_cast<float>(luaL_optnumber(state, 6, 1.0)); // NOLINT
-  RenderTarget::SetViewport(&viewport);
+  DynamicRendering::SetViewport(&viewport);
   return 0;
 }
 
@@ -170,7 +172,7 @@ auto wrap_SetScissor(lua_State *state) -> int {
   auto *ctx = GetCurrentGraphicsContext();
 
   if (lua_gettop(state) == 0) {
-    RenderTarget::SetScissor(nullptr);
+    DynamicRendering::SetScissor(nullptr);
     return 0;
   }
 
@@ -179,7 +181,7 @@ auto wrap_SetScissor(lua_State *state) -> int {
   scissor.offset.y = static_cast<int32_t>(luaL_checkinteger(state, 2));
   scissor.extent.width = static_cast<uint32_t>(luaL_checkinteger(state, 3));
   scissor.extent.height = static_cast<uint32_t>(luaL_checkinteger(state, 4));
-  RenderTarget::SetScissor(&scissor);
+  DynamicRendering::SetScissor(&scissor);
   return 0;
 }
 
@@ -190,7 +192,7 @@ auto wrap_ClipScissor(lua_State *state) -> int {
   scissor.offset.y = static_cast<int32_t>(luaL_checkinteger(state, 2));
   scissor.extent.width = static_cast<uint32_t>(luaL_checkinteger(state, 3));
   scissor.extent.height = static_cast<uint32_t>(luaL_checkinteger(state, 4));
-  RenderTarget::ClipScissor(scissor);
+  DynamicRendering::ClipScissor(scissor);
   return 0;
 }
 
@@ -198,7 +200,7 @@ auto wrap_SetShader(lua_State *state) -> int {
   auto *ctx = GetCurrentGraphicsContext();
   auto *shaderHandle =
       LuaWrap::ObjectFromLua<Graphics::Shader::ShaderModule>(state, 1);
-  RenderTarget::SetShader(Ref<Shader::ShaderModule>(shaderHandle));
+  DynamicRendering::SetShader(Ref<Shader::ShaderModule>(shaderHandle));
   return 0;
 }
 
@@ -208,7 +210,7 @@ auto wrap_SetLineWidth(lua_State *state) -> int {
   if (lineWidth <= 0.0F) {
     return luaL_error(state, "Line width must be greater than 0.");
   }
-  RenderTarget::SetLineWidth(lineWidth);
+  DynamicRendering::SetLineWidth(lineWidth);
   return 0;
 }
 
@@ -226,7 +228,7 @@ auto wrap_SetWindingOrder(lua_State *state) -> int {
     return luaL_error(state, "Invalid winding order: %s", order);
   }
 
-  RenderTarget::SetWindingOrder(frontFace);
+  DynamicRendering::SetWindingOrder(frontFace);
   return 0;
 }
 
@@ -238,7 +240,8 @@ auto wrap_GetDepthMode(lua_State *state) -> int {
   bool enableRead = false;
   bool writeEnable = false;
   VkCompareOp compareOp = VK_COMPARE_OP_MAX_ENUM;
-  std::tie(enableRead, writeEnable, compareOp) = RenderTarget::GetDepthMode();
+  std::tie(enableRead, writeEnable, compareOp) =
+      DynamicRendering::GetDepthMode();
 
   const char *compareOpStr = "unknown";
   switch (compareOp) {
@@ -278,7 +281,7 @@ auto wrap_GetDepthMode(lua_State *state) -> int {
 // Options: none, front, back, always
 auto wrap_GetCullMode(lua_State *state) -> int {
   auto *ctx = GetCurrentGraphicsContext();
-  auto cullMode = RenderTarget::GetCullMode();
+  auto cullMode = DynamicRendering::GetCullMode();
 
   const char *cullModeStr = "unknown";
   switch (cullMode) {
@@ -305,7 +308,7 @@ auto wrap_GetCullMode(lua_State *state) -> int {
 // Options: fill, line, point
 auto wrap_GetPolygonMode(lua_State *state) -> int {
   auto *ctx = GetCurrentGraphicsContext();
-  auto polygonMode = RenderTarget::GetPolygonMode();
+  auto polygonMode = DynamicRendering::GetPolygonMode();
 
   const char *polygonModeStr = "unknown";
   switch (polygonMode) {
@@ -329,7 +332,7 @@ auto wrap_GetPolygonMode(lua_State *state) -> int {
 // Options: x, y, width, height, minDepth, maxDepth
 auto wrap_GetViewport(lua_State *state) -> int {
   auto *ctx = GetCurrentGraphicsContext();
-  auto viewport = RenderTarget::GetViewport();
+  auto viewport = DynamicRendering::GetViewport();
 
   lua_pushnumber(state, static_cast<lua_Number>(viewport.x));
   lua_pushnumber(state, static_cast<lua_Number>(viewport.y));
@@ -343,7 +346,7 @@ auto wrap_GetViewport(lua_State *state) -> int {
 // Options: offsetX, offsetY, extentWidth, extentHeight
 auto wrap_GetScissor(lua_State *state) -> int {
   auto *ctx = GetCurrentGraphicsContext();
-  auto scissor = RenderTarget::GetScissor();
+  auto scissor = DynamicRendering::GetScissor();
 
   lua_pushinteger(state, static_cast<lua_Integer>(scissor.offset.x));
   lua_pushinteger(state, static_cast<lua_Integer>(scissor.offset.y));
@@ -355,7 +358,7 @@ auto wrap_GetScissor(lua_State *state) -> int {
 // Returns shader handle as integer
 auto wrap_GetShader(lua_State *state) -> int {
   auto *ctx = GetCurrentGraphicsContext();
-  auto ref = RenderTarget::GetShader();
+  auto ref = DynamicRendering::GetShader();
 
   const auto *type = Shader::ShaderModule::GetType();
 
@@ -366,12 +369,12 @@ auto wrap_GetShader(lua_State *state) -> int {
 
 auto wrap_GetRenderTargets(lua_State *state) -> int {
   auto *ctx = GetCurrentGraphicsContext();
-  auto renderTargets = RenderTarget::GetRenderTargets();
+  auto renderTargets = DynamicRendering::GetRenderTargets();
 
   lua_newtable(state);
   for (size_t i = 0; i < renderTargets.size(); ++i) {
     auto &renderTarget = renderTargets[i];
-    const auto *type = RenderTarget::RenderTarget::GetType();
+    const auto *type = DynamicRendering::RenderTarget::GetType();
 
     LuaWrap::PushObject(state, type, renderTarget.get());
     lua_rawseti(state, -2, static_cast<int>(i + 1));
@@ -381,13 +384,13 @@ auto wrap_GetRenderTargets(lua_State *state) -> int {
 }
 auto wrap_GetLineWidth(lua_State *state) -> int {
   auto *ctx = GetCurrentGraphicsContext();
-  auto lineWidth = RenderTarget::GetLineWidth();
+  auto lineWidth = DynamicRendering::GetLineWidth();
   lua_pushnumber(state, static_cast<lua_Number>(lineWidth));
   return 1;
 }
 auto wrap_GetWindingOrder(lua_State *state) -> int {
   auto *ctx = GetCurrentGraphicsContext();
-  auto frontFace = RenderTarget::GetWindingOrder();
+  auto frontFace = DynamicRendering::GetWindingOrder();
 
   const char *order = "unknown";
   if (frontFace == VK_FRONT_FACE_CLOCKWISE) {
@@ -470,7 +473,7 @@ inline auto GetQuadMesh(GraphicsContext &context, const VkRect2D size,
 
   assert(sizeof(FormatDefault2D) == vertexFormat.GetBindings()[0].stride);
 
-  RenderTarget::EndRendering(context);
+  DynamicRendering::EndRendering(context);
 
   const static auto mesh = Mesh::Create(context, vertexFormat, span);
 
@@ -481,10 +484,10 @@ inline auto GetQuadMesh(GraphicsContext &context, const VkRect2D size,
 
   auto indexSpan = std::span<uint8_t>( // NOLINTNEXTLINE
       reinterpret_cast<uint8_t *>(indices.data()),
-      indices.size() * GetIndexFormatSize(IndexFormat::Uint32));
+      indices.size() * GetIndexFormatSize(VK_INDEX_TYPE_UINT32));
 
   setDataError =
-      mesh->get()->SetIndices(context, indexSpan, IndexFormat::Uint32);
+      mesh->get()->SetIndices(context, indexSpan, VK_INDEX_TYPE_UINT32);
   if (Error::IsError(setDataError)) {
     return setDataError.AsUnexpected();
   }
@@ -512,7 +515,7 @@ auto wrap_Draw(lua_State *state) -> int {
     }
 
     if (texture != nullptr) {
-      auto shader = RenderTarget::GetShader();
+      auto shader = DynamicRendering::GetShader();
       if (shader.get() == nullptr) {
         shader = Shader::DefaultShaderModule;
       }
@@ -542,6 +545,7 @@ auto wrap_Draw(lua_State *state) -> int {
     instanceCount = static_cast<uint32_t>(luaL_checkinteger(state, 2));
   }
 
+  PrintDebug("Drawing mesh with {} instances", instanceCount);
   auto drawResult = Draw(*ctx, *mesh, instanceCount);
 
   if (Error::IsError(drawResult)) {
@@ -620,7 +624,7 @@ auto wrap_DrawIndirect(lua_State *state) -> int {
 auto wrap_Clear(lua_State *state) -> int {
   auto *ctx = GetCurrentGraphicsContext();
 
-  RenderTarget::ClearInfo clearInfo{};
+  DynamicRendering::ClearInfo clearInfo{};
 
   if (lua_isboolean(state, 1) != 0) {
     // bool version
@@ -670,7 +674,7 @@ auto wrap_Clear(lua_State *state) -> int {
     }
   }
 
-  auto result = RenderTarget::Clear(*ctx, clearInfo);
+  auto result = DynamicRendering::Clear(*ctx, clearInfo);
 
   if (Error::IsError(result)) {
     return luaL_error(state, "%s", result.ToString().c_str());
@@ -706,6 +710,74 @@ auto wrap_GetDimensions(lua_State *state) -> int {
   lua_pushinteger(state, static_cast<lua_Integer>(extent.width));
   lua_pushinteger(state, static_cast<lua_Integer>(extent.height));
   return 2;
+}
+
+auto wrap_AquireCommandBuffer(lua_State *state) -> int {
+  auto *ctx = GetCurrentGraphicsContext();
+
+  if (ctx == nullptr) {
+    return luaL_error(state, "No current graphics context.");
+  }
+
+  Threading::AquireInfo info{};
+  info.name = luaL_checkstring(state, 1);
+  info.priority = static_cast<int>(luaL_optinteger(state, 2, 0));
+
+  auto result = Threading::AquireCommandBuffer(*ctx, info);
+  if (Error::IsError(result)) {
+    return luaL_error(state, "%s", result.error().message.c_str());
+  }
+
+  return 0;
+}
+
+auto wrap_SubmitCommandBuffer(lua_State *state) -> int {
+  auto *ctx = GetCurrentGraphicsContext();
+
+  if (ctx == nullptr) {
+    return luaL_error(state, "No current graphics context.");
+  }
+
+  auto submitResult = Threading::SubmitCommands(*ctx);
+  if (Error::IsError(submitResult)) {
+    return luaL_error(state, "%s", submitResult.ToString().c_str());
+  }
+
+  return 0;
+}
+
+auto wrap_UseCommands(lua_State *state) -> int {
+
+  if (lua_type(state, 1) == LUA_TNUMBER) {
+    Graphics::UseCommands(static_cast<uint64_t>(luaL_checkinteger(state, 1)));
+  } else if (lua_type(state, 1) == LUA_TSTRING) {
+    Graphics::UseCommands(luaL_checkstring(state, 1));
+  } else {
+    return luaL_error(state, "Invalid argument to useCommands.");
+  }
+
+  return 0;
+}
+
+// Get a list of command buffer names
+// Optionally a table to fill
+auto wrap_GetGeneratedCommands(lua_State *state) -> int {
+  if (lua_gettop(state) == 1 && lua_istable(state, 1) == 0) {
+    return luaL_error(state, "Expected table as argument.");
+  }
+
+  if (lua_gettop(state) == 0) {
+    lua_newtable(state); // Create new table
+  }
+
+  auto commands = Graphics::Threading::GetGeneratedCommands();
+
+  for (size_t i = 0; i < commands.size(); ++i) {
+    lua_pushstring(state, commands[i].c_str());
+    lua_rawseti(state, -2, static_cast<int>(i + 1));
+  }
+
+  return 1;
 }
 
 } // namespace Graphics

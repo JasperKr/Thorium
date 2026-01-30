@@ -2,19 +2,31 @@
 #include "Graphics/graphicsState.hpp"
 #include "vulkan/vulkan_core.h"
 #include <array>
+#include <cassert>
 #include <cstdint>
+#include <public/tracy/Tracy.hpp>
+#include <utility>
+#include <vector>
 
 namespace Graphics::Barrier {
 
-// NOLINTNEXTLINE global bullshit
-std::vector<GraphicsResource> Resources;
-
 // Per-Frame global timeline index
 // NOLINTNEXTLINE
-uint64_t GlobalTimelineIndex = 0;
+thread_local uint64_t GlobalTimelineIndex = 0;
+
+// Timeline index offset for this frame
+// NOLINTNEXTLINE
+thread_local uint64_t GlobalTimelineOffset = 0;
+
+// The number of barriers issued this frame
+// NOLINTNEXTLINE
+thread_local uint64_t FrameBarrierCount = 0;
 
 // NOLINTNEXTLINE
-std::vector<ResourceSync> GlobalResourceSyncTimeline{};
+thread_local std::vector<ResourceSync> GlobalResourceSyncTimeline{};
+
+thread_local std::vector<std::pair<BarrierSynced, ResourceState>>
+    GlobalResourceStateUpdates{}; // NOLINT
 
 inline auto IsHazard(const ResourceState &oldState,
                      const ResourceState &newState) -> bool {
@@ -22,6 +34,19 @@ inline auto IsHazard(const ResourceState &oldState,
           (VK_ACCESS_2_SHADER_WRITE_BIT | VK_ACCESS_2_TRANSFER_WRITE_BIT |
            VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT |
            VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT)) != 0U;
+}
+
+// Count trailing bits set in a 64-bit integer
+// Staring from least significant bit to most significant bit
+inline auto TrailingBitCount(uint64_t bits) -> uint32_t {
+  if (bits == 0U) {
+    return 64U; // No bits set NOLINT
+  }
+#if defined(_MSC_VER)
+  return static_cast<uint32_t>(__tzcnt_u64(bits));
+#else
+  return __builtin_ctzll(bits);
+#endif
 }
 
 /*
@@ -106,29 +131,37 @@ inline auto TimelineLookback(uint64_t currentTimelineIndex,
     auto bit = mask & -mask; // negative of a number isolates the lowest set bit
 
     // count trailing zeros after removing the latest bit to get index
-    uint32_t bitIndex = __builtin_ctzll(bit);
+    uint32_t bitIndex = TrailingBitCount(bit);
     mask &= ~bit; // clear the lowest set bit
 
-    if ((desiredSynchronization.stages & bit) != 0U) {
+    // NOLINTNEXTLINE
+    if ((desiredSynchronization.stages & bit) != 0U && bitIndex != 64U) {
       maskBits.at(bitIndex) = desiredSynchronization.access;
     }
   }
 
-  if (GlobalTimelineIndex == 0 || currentTimelineIndex >= GlobalTimelineIndex) {
+  uint64_t LocalTimelineIndex = GlobalTimelineIndex - GlobalTimelineOffset;
+
+  if (LocalTimelineIndex == 0 || currentTimelineIndex >= LocalTimelineIndex) {
     return true; // No barriers yet, need to sync
   }
 
   // current timeline index meaning the last barrier that affected this resource
   // and global timeline index the actual current barrier index
   for (uint64_t i = GlobalTimelineIndex - 1ULL; i > currentTimelineIndex; i--) {
-
-    auto &sync = GlobalResourceSyncTimeline[i];
+    assert(i - GlobalTimelineOffset < GlobalResourceSyncTimeline.size() &&
+           "Timeline index out of bounds in lookback");
+    auto &sync = GlobalResourceSyncTimeline[i - GlobalTimelineOffset];
 
     auto mask = sync.dstStages;
-    // for (uint32_t bitIndex = 0; bitIndex < 64; bitIndex++) {
     while (mask != 0U) {
       auto bit = mask & -mask;
-      uint32_t bitIndex = __builtin_ctzll(bit);
+      uint32_t bitIndex = TrailingBitCount(bit);
+
+      if (bitIndex == 64U) { // NOLINT
+        break;               // No bits set
+      }
+
       mask &= ~bit;
       // If this stage bit is active in this sync and we still need it
 
@@ -151,7 +184,7 @@ inline auto TimelineLookback(uint64_t currentTimelineIndex,
   mask = desiredSynchronization.stages;
   while (mask != 0U) {
     auto bit = mask & -mask;
-    uint32_t bitIndex = __builtin_ctzll(bit);
+    uint32_t bitIndex = TrailingBitCount(bit);
     mask &= ~bit;
     if (maskBits.at(bitIndex) != 0U) {
       return true; // Still need barrier
@@ -161,12 +194,20 @@ inline auto TimelineLookback(uint64_t currentTimelineIndex,
   return false; // All bits satisfied, no barrier needed
 }
 
-auto UpdateUsage(GraphicsContext &context, GraphicsResource &resource,
+auto UpdateUsage(const GraphicsContext &context, BarrierSynced &resource,
                  const ResourceState &usage) -> void {
+  ZoneScoped;
+
   auto &previousAccess = resource.lastUsedAccess;
   auto &previousStages = resource.lastUsedStages;
 
-  if (TimelineLookback(resource.lastUsedTimelineIndex, // NOLINT
+  // Keep track of first usage for async recording so we can barrier later
+  if (resource.firstAsyncUsage) {
+    GlobalResourceStateUpdates.emplace_back(resource, usage);
+  }
+
+  if (!resource.firstAsyncUsage &&
+      TimelineLookback(resource.lastUsedTimelineIndex, // NOLINT
                        {.stages = previousStages, .access = previousAccess},
                        usage)) {
     // Insert barrier
@@ -184,13 +225,11 @@ auto UpdateUsage(GraphicsContext &context, GraphicsResource &resource,
 
     if (GetIsCurrentlyRendering()) {
       // End rendering before doing a barrier
-      vkCmdEndRendering(
-          Graphics::GetCommandBuffer(context, GetCurrentThreadIndex()));
+      vkCmdEndRendering(Graphics::GetCommandBuffer());
       GetIsCurrentlyRendering() = false;
     }
 
-    vkCmdPipelineBarrier2(
-        Graphics::GetCommandBuffer(context, GetCurrentThreadIndex()), &depInfo);
+    vkCmdPipelineBarrier2(Graphics::GetCommandBuffer(), &depInfo);
 
     // Update to new usage
     previousAccess = usage.access;
@@ -201,6 +240,7 @@ auto UpdateUsage(GraphicsContext &context, GraphicsResource &resource,
                                           .dstStages = barrier.dstStageMask,
                                           .dstAccess = barrier.dstAccessMask});
     GlobalTimelineIndex++;
+    FrameBarrierCount++;
   } else {
     // Only used to accumulate read access/stages
     // Since anything involving writes would have caused a hazard and barrier above
@@ -209,6 +249,53 @@ auto UpdateUsage(GraphicsContext &context, GraphicsResource &resource,
     previousStages |= usage.stages;
     resource.lastUsedTimelineIndex = GlobalTimelineIndex;
   }
+
+  resource.firstAsyncUsage = false;
+}
+
+// The same as Update Usage but doesn't insert any barriers
+auto UpdateUsageVirtual(BarrierSynced &resource, const ResourceState &usage)
+    -> std::optional<ResourceSync> {
+  auto &previousAccess = resource.lastUsedAccess;
+  auto &previousStages = resource.lastUsedStages;
+
+  // Keep track of first usage for async recording so we can barrier later
+  if (resource.firstAsyncUsage) {
+    GlobalResourceStateUpdates.emplace_back(resource, usage);
+  }
+
+  if (!resource.firstAsyncUsage &&
+      TimelineLookback(resource.lastUsedTimelineIndex, // NOLINT
+                       {.stages = previousStages, .access = previousAccess},
+                       usage)) {
+    resource.lastUsedTimelineIndex = GlobalTimelineIndex;
+
+    auto sync = ResourceSync{.srcStages = previousStages,
+                             .srcAccess = previousAccess,
+                             .dstStages = usage.stages,
+                             .dstAccess = usage.access};
+
+    // Update to new usage
+    previousAccess = usage.access;
+    previousStages = usage.stages;
+
+    GlobalResourceSyncTimeline.emplace_back(sync);
+    GlobalTimelineIndex++;
+    FrameBarrierCount++;
+
+    return sync;
+  }
+
+  // Only used to accumulate read access/stages
+  // Since anything involving writes would have caused a hazard and barrier above
+  // Not doing this might miss some necessary stages/accesses
+  previousAccess |= usage.access;
+  previousStages |= usage.stages;
+  resource.lastUsedTimelineIndex = GlobalTimelineIndex;
+
+  resource.firstAsyncUsage = false;
+
+  return std::nullopt;
 }
 
 } // namespace Graphics::Barrier

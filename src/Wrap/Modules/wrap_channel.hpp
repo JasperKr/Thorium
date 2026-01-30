@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Modules/thread.hpp"
+#include "Modules/channel.hpp"
 #include "Wrap/wrap.hpp"
 extern "C" {
 #include <lauxlib.h>

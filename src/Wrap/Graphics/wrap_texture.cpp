@@ -5,8 +5,8 @@
 #include "Modules/image.hpp"
 #include "Wrap/wrap.hpp"
 #include <imgui.h>
-#include <set>
 #include <string>
+#include <unordered_set>
 
 #define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
@@ -428,7 +428,7 @@ static inline auto TextureUsageToVkImageUsage(VkFormat format,
 
 constexpr VkFormat DefaultFormat = VK_FORMAT_R8G8B8A8_UNORM;
 
-const std::set<std::string> ValidOptionKeys = {
+const std::unordered_set<std::string> ValidOptionKeys = {
     "type",    "format",      "mipmaps",     "sampler", "rendertarget",
     "storage", "mipmapcount", "mipmapstart", "linear",
 };
@@ -832,7 +832,6 @@ auto wrap_NewTexture(lua_State *state) -> int {
   auto texture = result.value();
 
   LuaWrap::PushObject(state, type, texture.get());
-  // texture->release(); // Retained by lua now
 
   return 1;
 }
@@ -848,17 +847,6 @@ auto wrap_GetID(lua_State *state) -> int {
 
   LuaWrap::PushPointer(state, texture);
   return 1;
-}
-
-auto wrap_Release(lua_State *state) -> int {
-  auto *texture = LuaWrap::ObjectFromLua<Texture>(state, 1);
-
-  if (texture == nullptr) {
-    return luaL_error(state, "Expected Texture as first argument");
-  }
-
-  texture->ScheduleDestroy();
-  return 0;
 }
 
 } // namespace Graphics::Texture

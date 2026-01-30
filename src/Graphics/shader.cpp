@@ -1,7 +1,6 @@
 #include "shader.hpp"
 #include "Buffers/uniform.hpp"
 #include "Graphics/Buffers/push.hpp"
-#include "Graphics/barrier.hpp"
 #include "Graphics/graphicsState.hpp"
 #include "Graphics/reflect.hpp"
 #include "Modules/Math/vector.hpp"
@@ -17,14 +16,15 @@
 #include "slang/slang.h"
 #include "tl/expected.hpp"
 #include <array>
+#include <public/tracy/Tracy.hpp>
 #include <span>
+#include <unordered_set>
 #include <utility>
 #define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
-#include <set>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -33,7 +33,7 @@ namespace Graphics::Shader {
 
 static slang::IGlobalSession *GlobalSlangSession = nullptr; // NOLINT
 
-const std::vector<slang::CompilerOptionEntry> CompilerOptions = {
+static const std::vector<slang::CompilerOptionEntry> CompilerOptions = {
     slang::CompilerOptionEntry{
         .name = slang::CompilerOptionName::Optimization,
         .value =
@@ -87,12 +87,13 @@ auto LoadModule() -> Error {
 }
 
 void UnloadModule(Graphics::GraphicsContext &context) {
-  DefaultShaderModule->Destroy(context.device);
+  DefaultShaderModule.reset();
 
   if (GlobalSlangSession != nullptr) {
     GlobalSlangSession->release();
-    GlobalSlangSession = nullptr;
   }
+
+  slang::shutdown();
 }
 
 static inline auto GetGlobalShaderExterns() -> std::vector<ShaderExtern> & {
@@ -345,30 +346,25 @@ static inline auto LoadSlang(GraphicsContext &context,
   }
 
   Slang::ComPtr<slang::IComponentType> composedProgram;
-  {
-    PrintDebug("Composing program...");
-    SlangResult result = session->createCompositeComponentType(
-        componentTypes.data(), static_cast<SlangInt>(componentTypes.size()),
-        composedProgram.writeRef(), diagnosticsBlob.writeRef());
 
-    auto err =
-        Error::Create(result, diagnosticsBlob, composedProgram.readRef());
-    if (Error::IsError(err)) {
-      return err;
-    }
+  PrintDebug("Composing program...");
+  result = session->createCompositeComponentType(
+      componentTypes.data(), static_cast<SlangInt>(componentTypes.size()),
+      composedProgram.writeRef(), diagnosticsBlob.writeRef());
+
+  auto err = Error::Create(result, diagnosticsBlob, composedProgram.readRef());
+  if (Error::IsError(err)) {
+    return err;
   }
 
-  {
-    PrintDebug("Linking program...");
+  PrintDebug("Linking program...");
 
-    SlangResult result = composedProgram->link(shader->linkedProgram.writeRef(),
-                                               diagnosticsBlob.writeRef());
+  result = composedProgram->link(shader->linkedProgram.writeRef(),
+                                 diagnosticsBlob.writeRef());
 
-    auto err =
-        Error::Create(result, diagnosticsBlob, shader->linkedProgram.readRef());
-    if (Error::IsError(err)) {
-      return err;
-    }
+  err = Error::Create(result, diagnosticsBlob, shader->linkedProgram.readRef());
+  if (Error::IsError(err)) {
+    return err;
   }
 
   PrintDebug("Getting program layout...");
@@ -376,7 +372,7 @@ static inline auto LoadSlang(GraphicsContext &context,
   shader->programLayout =
       shader->linkedProgram->getLayout(0, diagnosticsBlob.writeRef());
 
-  auto err = Error::Create(result, diagnosticsBlob, shader->programLayout);
+  err = Error::Create(result, diagnosticsBlob, shader->programLayout);
   if (Error::IsError(err)) {
     return err;
   }
@@ -454,21 +450,18 @@ static inline auto LoadSlang(GraphicsContext &context,
   std::span<uint8_t> spirvCodeSpan(reinterpret_cast<uint8_t *>(data.data()),
                                    codeSize);
 
-  auto fserr = Filesystem::CreateDirectory(SpirvDirectory);
-
-  if (Error::IsError(fserr)) {
-    return fserr;
-  }
-
   VkShaderModuleCreateInfo moduleCreateInfo = {};
   moduleCreateInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
   moduleCreateInfo.codeSize = data.size() * sizeof(uint32_t);
   moduleCreateInfo.pCode = data.data();
-  Error error = Error::Create(vkCreateShaderModule(
-      context.device, &moduleCreateInfo, nullptr, &shader->module));
+  {
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+    Error error = Error::Create(vkCreateShaderModule(
+        context.device, &moduleCreateInfo, nullptr, &shader->module));
 
-  if (Error::IsError(error)) {
-    return error;
+    if (Error::IsError(error)) {
+      return error;
+    }
   }
 
   PrintDebug("Shader module created successfully.");
@@ -532,7 +525,7 @@ inline auto ValidateBuffers(const ShaderModule *shader) -> Error {
 
     auto locationKey = SetBindingToSlot(bufferInfo.set, bufferInfo.binding);
 
-    if (!shader->boundBuffers.contains(locationKey)) {
+    if (!shader->GetState().boundBuffers.contains(locationKey)) {
       return Error::Create("Storage buffer '" + resource.name +
                            "' not set up in shader.");
     }
@@ -580,6 +573,8 @@ auto ShaderModule::GetUniform(const ResourceKey &key) const
 
 auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
                         const std::span<const uint8_t> &data) -> Error {
+  ZoneScopedN("ShaderModule::Send data span");
+
   for (auto &pushBuffer : pushBuffers) {
     PrintDebug("Checking push buffer {} for key: {}...",
                pushBuffer.GetLayout().name, ResourceKeyToString(key));
@@ -616,6 +611,7 @@ auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
 
 auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
                         StructuredBuffer::StructuredBuffer *buffer) -> Error {
+  ZoneScopedN("ShaderModule::Send structured buffer");
 
   if (buffer == nullptr) {
     return Error::Create("Buffer is null.");
@@ -630,11 +626,7 @@ auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
     if (bufferInfo.name == *key.begin()) {
       auto locationKey = SetBindingToSlot(bufferInfo.set, bufferInfo.binding);
 
-      // if (boundBuffers[locationKey] == buffer->buffer.get()) {
-      //   return Error::Success(); // No need to update or dirty state
-      // }
-
-      boundBuffers[locationKey] = buffer->buffer.get();
+      GetState().boundBuffers[locationKey] = buffer->buffer.get();
 
       VkDescriptorBufferInfo vkBufferInfo{};
       vkBufferInfo.buffer = buffer->buffer->handle;
@@ -670,7 +662,7 @@ auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
         break;
       };
 
-      pendingDescriptorWrites.emplace_back(descriptorWrite);
+      GetState().pendingDescriptorWrites.emplace_back(descriptorWrite);
 
       Graphics::SetDirtyState();
 
@@ -683,6 +675,8 @@ auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
 
 auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
                         Graphics::Texture::Texture *texture) -> Error {
+  ZoneScopedN("ShaderModule::Send texture");
+
   if (texture == nullptr) {
     return Error::Create("Texture is null.");
   }
@@ -700,11 +694,7 @@ auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
     if (resource.name == *key.begin()) {
       auto key = SetBindingToSlot(samplerInfo.set, samplerInfo.binding);
 
-      // if (boundTextures[key] == texture) {
-      //   return Error::Success(); // No need to update or dirty state
-      // }
-
-      boundTextures[key] = texture;
+      GetState().boundTextures[key] = texture;
 
       // Create descriptor set for this texture
       VkDescriptorImageInfo imageInfo{};
@@ -723,8 +713,8 @@ auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
       descriptorWrite.pImageInfo = imageInfo;
       descriptorWrite.imagePtr = texture;
 
-      pendingDescriptorWrites.emplace_back(descriptorWrite);
-      pendingImageTransitions.emplace_back(ImageTransitionInfo{
+      GetState().pendingDescriptorWrites.emplace_back(descriptorWrite);
+      GetState().pendingImageTransitions.emplace_back(ImageTransitionInfo{
           .texture = texture,
           .newUsage = Texture::TextureUsage::Sampler,
           .newStage = ShaderStageFlagsToPipelineStageFlags(resource.stages),
@@ -780,14 +770,18 @@ auto ShaderModule::FlushGlobals(GraphicsContext &context,
 
     VkWriteDescriptorSet descriptorWrite{};
     descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    descriptorWrite.dstSet = descriptorSets[reflection.globals.set];
+    descriptorWrite.dstSet = GetState().descriptorSets[reflection.globals.set];
     descriptorWrite.dstBinding = reflection.globals.binding;
     descriptorWrite.dstArrayElement = 0;
     descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     descriptorWrite.descriptorCount = 1;
     descriptorWrite.pBufferInfo = &bufferInfo;
 
-    vkUpdateDescriptorSets(context.device, 1, &descriptorWrite, 0, nullptr);
+    {
+      std::lock_guard<std::mutex> lock(
+          Graphics::GraphicsContext::mutexes.device);
+      vkUpdateDescriptorSets(context.device, 1, &descriptorWrite, 0, nullptr);
+    }
   }
 
   return Error::Success();
@@ -796,6 +790,8 @@ auto ShaderModule::FlushGlobals(GraphicsContext &context,
 auto ShaderModule::FlushBuffers(GraphicsContext &context,
                                 VkPipelineLayout layout,
                                 VkPipelineStageFlags2 dstStage) -> Error {
+  ZoneScoped;
+
   auto validateResult = ValidateBuffers(this);
   if (Error::IsError(validateResult)) {
     return validateResult;
@@ -809,14 +805,15 @@ auto ShaderModule::FlushBuffers(GraphicsContext &context,
   }
 
   std::vector<VkWriteDescriptorSet> writes;
-  std::set<uint64_t> updatedSets;
+  std::unordered_set<uint64_t> updatedSets;
 
-  auto writeCount = static_cast<int32_t>(pendingDescriptorWrites.size());
+  auto writeCount =
+      static_cast<int32_t>(GetState().pendingDescriptorWrites.size());
   writes.reserve(writeCount);
 
   // Loop over writes in reverse to prioritize later writes
   for (int32_t i = writeCount - 1; i >= 0; i--) {
-    auto &write = pendingDescriptorWrites.at(i);
+    auto &write = GetState().pendingDescriptorWrites.at(i);
 
     if (write.bufferPtr == nullptr && write.imagePtr == nullptr) {
       return Error::Create("Descriptor write has no buffer or image info set.");
@@ -829,10 +826,10 @@ auto ShaderModule::FlushBuffers(GraphicsContext &context,
     }
     updatedSets.insert(key);
 
-    writes.emplace_back(write.GetWrite(descriptorSets));
+    writes.emplace_back(write.GetWrite(GetState().descriptorSets));
   }
 
-  for (auto &transition : pendingImageTransitions) {
+  for (auto &transition : GetState().pendingImageTransitions) {
     Error result;
 
     switch (transition.newUsage) {
@@ -861,13 +858,16 @@ auto ShaderModule::FlushBuffers(GraphicsContext &context,
       return result;
     }
   }
-  pendingImageTransitions.clear();
+  GetState().pendingImageTransitions.clear();
 
-  vkUpdateDescriptorSets(context.device, static_cast<uint32_t>(writes.size()),
-                         writes.data(), 0, nullptr);
-  pendingDescriptorWrites.clear();
+  {
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+    vkUpdateDescriptorSets(context.device, static_cast<uint32_t>(writes.size()),
+                           writes.data(), 0, nullptr);
+  }
+  GetState().pendingDescriptorWrites.clear();
 
-  auto *commandBuffer = GetCommandBuffer(context, GetCurrentThreadIndex());
+  auto *commandBuffer = GetCommandBuffer();
 
   VkPipelineBindPoint bindpoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
 
@@ -883,9 +883,9 @@ auto ShaderModule::FlushBuffers(GraphicsContext &context,
   }
 
   std::vector<VkDescriptorSet> descriptorSetList;
-  descriptorSetList.reserve(this->descriptorSets.size());
+  descriptorSetList.reserve(this->GetState().descriptorSets.size());
   uint32_t set = 0;
-  for (const auto &setPair : this->descriptorSets) {
+  for (const auto &setPair : this->GetState().descriptorSets) {
     // I assume slang will always output sets in order
     // Unless the user manually assigns set numbers out of order
     // In that case, don't, lol
@@ -919,17 +919,6 @@ auto ShaderModule::GetThreadgroupSize() const -> Result<Math::Uvec3> {
 }
 
 auto ShaderModule::GetWaveSize() const -> uint32_t { return waveSize; }
-
-void ShaderModule::Destroy(VkDevice &device) {
-  for (auto &pair : descriptorSetLayouts) {
-    vkDestroyDescriptorSetLayout(device, pair.second, nullptr);
-  }
-
-  if (module != VK_NULL_HANDLE) {
-    vkDestroyShaderModule(device, module, nullptr);
-    module = VK_NULL_HANDLE;
-  }
-}
 
 auto ShaderModule::GetSlotDescription(uint32_t set, uint32_t binding) // NOLINT
     -> Result<const ResourceInfo> {

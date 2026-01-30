@@ -1,7 +1,6 @@
 #include "wrap_bytedata.hpp"
 #include "Modules/bytedata.hpp"
 #include "Modules/color.hpp"
-#include "Modules/imagedata.hpp"
 #include "Wrap/wrap.hpp"
 #include <cstdint>
 extern "C" {
@@ -16,12 +15,6 @@ auto GetBytedataFromLua(lua_State *state, int index) -> ::Data::ByteData * {
   if (LuaWrap::IsType<::Data::ByteData>(state, index)) {
     return LuaWrap::ObjectFromLua<::Data::ByteData>(state, index);
   }
-
-  if (LuaWrap::IsType<Image::ImageData>(state, index)) {
-    auto *imagedata = LuaWrap::ObjectFromLua<Image::ImageData>(state, index);
-    return static_cast<::Data::ByteData *>(imagedata);
-  }
-
   return nullptr;
 }
 
@@ -259,8 +252,6 @@ auto wrap_NewBytedata(lua_State *state) -> int {
   auto bytedata = Ref<::Data::ByteData>::Make(size);
 
   LuaWrap::PushObject(state, ::Data::ByteData::GetType(), bytedata.get());
-  // bytedata->release(); // Release C++ reference, Lua now owns it
-
   return 1;
 }
 

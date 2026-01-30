@@ -5,6 +5,7 @@
 
 #include "Modules/error.hpp"
 #include <cstdint>
+#include <mutex>
 #include <vector>
 
 #include "volk/volk.h"
@@ -34,13 +35,7 @@ constexpr VkPipelineColorBlendAttachmentState DefaultBlendMode = {
 };
 
 constexpr uint32_t FRAMES_IN_FLIGHT = 2;
-constexpr uint32_t MAX_SWAPCHAIN_IMAGES = 3;
-
-struct RenderData {
-  VkCommandPool pool = VK_NULL_HANDLE;
-  std::vector<VkCommandBuffer> commandBuffers;
-  std::vector<bool> frameReady;
-};
+constexpr uint32_t MAX_SWAPCHAIN_IMAGES = 4;
 
 struct SurfaceInfo {
   VkSurfaceFormatKHR format;
@@ -57,7 +52,14 @@ struct SwapchainInfo {
   std::vector<VkImageView> imageViews;
 };
 
+struct GraphicsMutexes {
+  std::mutex device;
+  std::mutex vmaAllocator;
+};
+
 struct GraphicsContext {
+  static GraphicsMutexes mutexes;
+
   VkInstance instance;
   VkSurfaceKHR surface;
   VkPhysicalDevice physicalDevice;
@@ -71,7 +73,6 @@ struct GraphicsContext {
   SwapchainInfo swapchainInfo;
   SurfaceInfo surfaceInfo;
   VkPhysicalDeviceProperties deviceProperties;
-  std::vector<VkDescriptorPool> descriptorPools;
 
   std::vector<VkSemaphore> swapchainImageReady;
   std::vector<VkSemaphore> renderingFinished;
@@ -81,39 +82,47 @@ struct GraphicsContext {
   uint64_t currentFrame;
   uint32_t frameIndex;
   uint32_t swapchainImageIndex;
+};
 
-  int32_t renderThreadCount;
-  std::vector<RenderData> renderData;
+struct DescriptorPoolInfo {
+  VkDescriptorPool descriptorPool;
+  uint64_t lastUsedTimestamp;
+};
+
+struct ThreadContext {
+  GraphicsContext *graphicsContext; // Global graphics context
+  VkCommandPool commandPool;        // Per-thread command pool
+  VkCommandBuffer commandBuffer;    // Current command buffer
+
+  std::vector<DescriptorPoolInfo> descriptorPools; // Descriptor pool info
+  VkDescriptorPool descriptorPool;                 // Current descriptor pool
 };
 
 auto Initialize(GraphicsContext &context, Config::ApplicationConfig &config)
     -> Error;
-auto GetRenderData(GraphicsContext &context, uint32_t threadIndex)
-    -> RenderData;
-auto GetCommandBuffer(GraphicsContext &context, uint32_t threadIndex)
-    -> VkCommandBuffer;
+auto GetThreadContext() -> ThreadContext &;
+auto GetCommandBuffer() -> VkCommandBuffer;
 void Deinitialize(GraphicsContext &context);
-
-inline auto GetCurrentThreadIndex() -> int8_t & {
-  thread_local static int8_t current = -1; // Default to invalid
-  return current;
-}
 
 auto BeginSingleTimeCommands(GraphicsContext &context) -> VkCommandBuffer;
 
 auto EndSingleTimeCommands(GraphicsContext &context,
                            VkCommandBuffer commandBuffer) -> void;
 
-// Graphics context for the current thread NOLINTNEXTLINE
-static thread_local GraphicsContext *g_ctx = nullptr;
+// Graphics context NOLINTNEXTLINE
+extern GraphicsContext *g_ctx;
 void SetCurrentGraphicsContext(GraphicsContext *ctx);
 auto GetCurrentGraphicsContext() -> GraphicsContext *;
 
-auto GetCurrentTimelineSemaphoreValue(GraphicsContext &context)
-    -> Result<uint64_t>;
-auto InitializeGlobalTimelineSemaphore(GraphicsContext &context) -> Error;
-auto DeInitializeGlobalTimelineSemaphore(GraphicsContext &context) -> void;
-auto GetCPUTimelineSemaphoreValue(GraphicsContext &context) -> uint64_t &;
-auto GetGlobalTimelineSemaphore(GraphicsContext &context) -> VkSemaphore;
+auto GetDeferredDestructionAllowed() -> bool &;
+
+// NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
+extern std::mutex globalTimelineSemaphoreMutex;
+thread_local extern std::string ContextDebugname;
+
+extern std::vector<VkCommandPool> CommandPools;
+extern std::mutex CommandPoolsMutex;
+
+// NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
 } // namespace Graphics

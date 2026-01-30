@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Graphics/shader.hpp"
+#include "Graphics/texture.hpp"
 #include "Modules/Peripherals/mouse.hpp"
 #include "Modules/error.hpp"
 #include "SDL3/SDL_keycode.h"
@@ -341,6 +342,10 @@ inline auto GetImGuiCursorMap()
   return imgui_cursor_to_mouse_cursor;
 }
 
+extern std::unordered_map<ImTextureID, Ref<Graphics::Texture::Texture>>
+    ImGuiTextures; // NOLINT
+
 auto LoadImGuiCursorMap() -> Error;
+auto ShutdownImGui() -> Error;
 
 } // namespace Gui

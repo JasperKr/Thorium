@@ -46,7 +46,6 @@ auto wrap_NewShader(lua_State *state) -> int {
   }
 
   LuaWrap::PushObject(state, type, result.value().get());
-  // result.value()->release(); // Retained by lua now
 
   return 1;
 }
@@ -182,17 +181,6 @@ auto wrap_Send(lua_State *state) -> int {
                       luaL_typename(state, valueOffset));
   }
 
-  return 0;
-}
-
-auto wrap_Release(lua_State *state) -> int {
-  auto *shader = LuaWrap::ObjectFromLua<Shader::ShaderModule>(state, 1);
-  if (shader == nullptr) {
-    lua_pushboolean(state, 0);
-    return 1;
-  }
-
-  shader->Destroy(Graphics::GetCurrentGraphicsContext()->device);
   return 0;
 }
 

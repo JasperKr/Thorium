@@ -3,25 +3,22 @@
 #include "Graphics/buffer.hpp"
 #include "Graphics/bufferformat.hpp"
 #include "Graphics/graphics.hpp"
-#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "tl/expected.hpp"
-#define VK_NO_PROTOTYPES
-#include "vulkan/vulkan_core.h"
 
 namespace Graphics::StructuredBuffer {
 
 auto CreateStructuredBuffer(GraphicsContext &context, BufferFormat &format,
                             size_t elementCount,
-                            VkMemoryPropertyFlags memoryFlags,
-                            VkBufferUsageFlags usageFlags)
+                            StructuredBufferCreationInfo const &info)
     -> Result<Ref<StructuredBuffer>> {
 
   Graphics::BufferCreationInfo bufferCreateInfo{
       .size = format.GetSize() * elementCount,
-      .usage = usageFlags,
-      .properties = memoryFlags,
+      .usage = info.usageFlags,
+      .properties = info.memoryFlags,
+      .debugName = info.debugName,
   };
 
   auto result = Buffer::Create(context, bufferCreateInfo);

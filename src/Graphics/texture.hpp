@@ -2,11 +2,12 @@
 
 #include "Graphics/barrier.hpp"
 #include "Graphics/sampler.hpp"
-#include "Modules/console.hpp"
+#include "Graphics/semaphoreManager.hpp"
 #include "Modules/imagedata.hpp"
 #include "Modules/object.hpp"
 #include "Modules/type.hpp"
 #include "graphics.hpp"
+#include <mutex>
 #include <span>
 
 #define VK_NO_PROTOTYPES
@@ -42,28 +43,48 @@ enum class TextureUsage : uint8_t {
   Unknown,
 };
 
-struct Texture : Object, Barrier::GraphicsResource {
+extern std::unordered_map<std::pair<VkFormat, TextureType>, Ref<struct Texture>,
+                          struct VkFormatTextureTypeHash>
+    DefaultTextureCache; // NOLINT
+
+auto UnloadModule() -> void;
+
+struct Texture : Object, Barrier::BarrierSynced {
+  std::mutex mutex;
+
+  SamplerDescription samplerDescription{};
   VkExtent3D size{};
-  VkFormat format = VK_FORMAT_UNDEFINED;
+
   VkImage image = VK_NULL_HANDLE;
   VkImageView view = VK_NULL_HANDLE;
   VmaAllocation memory = VK_NULL_HANDLE;
-  uint64_t sizeInBytes = 0;
-
   VkSampler sampler = VK_NULL_HANDLE;
-  SamplerDescription samplerDescription{};
-  bool samplerDirty = false;
 
+  uint64_t sizeInBytes = 0;
+  uint64_t lastUsedTimestamp{};
+
+  VkFormat format = VK_FORMAT_UNDEFINED;
   size_t mipmapcount{};
   size_t arrayLayers{1};
   VkImageUsageFlags usage{};
 
-  bool released = false;
-  std::unordered_map<QueueID, uint64_t> lastUsedTimelineValues;
-  VkImageLayout currentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-  TextureUsage lastUsage = TextureUsage::Unknown;
   VkPipelineStageFlagBits2 lastPipelineStage =
       VK_PIPELINE_STAGE_NONE_KHR; // NOLINT
+
+  VkImageLayout currentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+  TextureUsage lastUsage = TextureUsage::Unknown;
+
+  // Flag to indicate if the sampler needs to be updated
+  bool samplerDirty = false;
+
+  // Safety flag to prevent double releases
+  bool released = false;
+
+  // Indicate if the texture has been destroyed, to avoid calling defer release multiple times
+  bool isDestroyed = false;
+
+  // Indicates if this texture is a swapchain view, which should not be destroyed
+  bool isSwapchainView = false;
 
   auto UseAs(GraphicsContext &context, TextureUsage newUsage,
              VkPipelineStageFlags2 stage) -> Error;
@@ -76,23 +97,16 @@ struct Texture : Object, Barrier::GraphicsResource {
   auto UseAsStorage(GraphicsContext &context, VkPipelineStageFlags2 stage)
       -> Error;
 
-  auto GetTimelineValues() const
-      -> const std::unordered_map<QueueID, uint64_t> & {
-    return lastUsedTimelineValues;
-  }
+  auto GetTimestamp() const -> uint64_t { return lastUsedTimestamp; }
 
-  auto MarkUse(QueueID queueID, uint64_t timelineValue) -> void {
-    uint64_t previousValue{};
-    if (lastUsedTimelineValues.contains(queueID)) {
-      previousValue = lastUsedTimelineValues.at(queueID);
-    }
-
-    lastUsedTimelineValues[queueID] = (std::max)(previousValue, timelineValue);
+  auto MarkUse() -> void {
+    lastUsedTimestamp = (std::max)(lastUsedTimestamp, GetSemaphoreValue());
   }
 
   auto ScheduleDestroy() -> void override;
-  auto UseDeferredDestruction() const -> bool override { return true; }
-  auto Destroy(GraphicsContext &context) const -> void;
+  auto UseDeferredDestruction() const -> bool override {
+    return GetDeferredDestructionAllowed() && !isDestroyed;
+  }
 
   Texture() = default;
   Texture(const Texture &) = delete;
@@ -101,12 +115,17 @@ struct Texture : Object, Barrier::GraphicsResource {
   auto operator=(Texture &&) noexcept -> Texture & = delete;
 
   ~Texture() override {
-    if (!released) {
-      auto *context = GetCurrentGraphicsContext();
-      vkQueueWaitIdle(context->graphicsQueue);
-      Destroy(*context);
-      PrintWarning("Texture destroyed without being queued for destruction!");
+    if (isSwapchainView) { // Not owned, don't destroy
+      return;
     }
+
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+    std::lock_guard<std::mutex> lock2(
+        Graphics::GraphicsContext::mutexes.vmaAllocator);
+
+    auto *context = GetCurrentGraphicsContext();
+    vkDestroyImageView(context->device, view, nullptr);
+    vmaDestroyImage(context->vmaAllocator, image, memory);
   }
 
   enum TextureType textureType = TextureType::DEFAULT;
@@ -171,21 +190,22 @@ struct TextureCreationInfo {
   VkFormat format = VK_FORMAT_UNDEFINED; // Texture format
   VkImageUsageFlags usage{};             // Vulkan usage flags
   int mipmapCount{};                     // Number of mipmap levels
+  std::string debugName;                 // Debug name
 };
 
-auto Create2D(const GraphicsContext &context, TextureCreationInfo info)
+auto Create2D(const GraphicsContext &context, const TextureCreationInfo &info)
     -> Result<Ref<Texture>>;
 auto FromSwapchainTexture(const GraphicsContext &context,
                           VkImage swapchainImage,
                           VkImageView swapchainImageView, VkFormat format,
                           uint32_t width, uint32_t height)
     -> Result<Ref<Texture>>;
-auto CreateCubeMap(const GraphicsContext &context, TextureCreationInfo info)
-    -> Result<Ref<Texture>>;
-auto CreateVolume(const GraphicsContext &context, TextureCreationInfo info)
-    -> Result<Ref<Texture>>;
-auto CreateArray(const GraphicsContext &context, TextureCreationInfo info)
-    -> Result<Ref<Texture>>;
+auto CreateCubeMap(const GraphicsContext &context,
+                   const TextureCreationInfo &info) -> Result<Ref<Texture>>;
+auto CreateVolume(const GraphicsContext &context,
+                  const TextureCreationInfo &info) -> Result<Ref<Texture>>;
+auto CreateArray(const GraphicsContext &context,
+                 const TextureCreationInfo &info) -> Result<Ref<Texture>>;
 
 auto TransitionLayout(GraphicsContext &context, Texture *texture,
                       VkImageLayout oldLayout, VkImageLayout newLayout)

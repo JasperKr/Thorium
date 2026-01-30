@@ -52,7 +52,6 @@ static const luaL_Reg TextureLib[] = {
     {"getMipmapCount", wrap_GetMipmapCount},
     {"getFormat", wrap_GetFormat},
     {"getID", wrap_GetID},
-    {"release", wrap_Release},
     {nullptr, nullptr} // terminate with nullptr
 };
 

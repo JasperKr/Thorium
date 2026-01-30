@@ -4,14 +4,14 @@
 
 namespace Graphics::Texture {
 
+std::unordered_map<SamplerDescription, VkSampler, SamplerDescHash>
+    SamplerCache; // NOLINT
+
 auto GetOrCreateSampler(GraphicsContext &context,
                         const SamplerDescription &description) -> VkSampler {
-  static std::unordered_map<SamplerDescription, VkSampler, SamplerDescHash>
-      samplerCache;
-  samplerCache = {};
 
-  auto sampler = samplerCache.find(description);
-  if (sampler != samplerCache.end()) {
+  auto sampler = SamplerCache.find(description);
+  if (sampler != SamplerCache.end()) {
     return sampler->second; // Return cached sampler
   }
 
@@ -35,16 +35,28 @@ auto GetOrCreateSampler(GraphicsContext &context,
   samplerInfo.unnormalizedCoordinates = VK_FALSE;
 
   VkSampler vkSampler = VK_NULL_HANDLE;
-  VkResult result =
-      vkCreateSampler(context.device, &samplerInfo, nullptr, &vkSampler);
+  {
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+    VkResult result =
+        vkCreateSampler(context.device, &samplerInfo, nullptr, &vkSampler);
 
-  if (result != VK_SUCCESS) {
-    PrintError("Failed to create sampler: {}\n", Error::Create(result).message);
-    return VK_NULL_HANDLE; // Failed to create sampler
+    if (result != VK_SUCCESS) {
+      PrintError("Failed to create sampler: {}\n",
+                 Error::Create(result).message);
+      return VK_NULL_HANDLE; // Failed to create sampler
+    }
   }
 
-  samplerCache[description] = vkSampler;
+  SamplerCache[description] = vkSampler;
   return vkSampler;
+}
+
+auto DestroySamplers(GraphicsContext &context) -> void {
+  std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+  for (auto &pair : SamplerCache) {
+    vkDestroySampler(context.device, pair.second, nullptr);
+  }
+  SamplerCache.clear();
 }
 
 } // namespace Graphics::Texture

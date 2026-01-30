@@ -15,6 +15,7 @@
 #include "sampler.hpp"
 #include "stb/stb_image.h"
 #include "tl/expected.hpp"
+#include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <span>
@@ -49,7 +50,35 @@ auto GetAspectFlagsForFormat(VkFormat format) -> VkImageAspectFlagBits {
   }
 }
 
-auto Create2D(const GraphicsContext &context, TextureCreationInfo info)
+inline auto SetDebugName(const std::string &debugName, Texture *texture,
+                         const GraphicsContext &context) -> Error {
+
+  auto debugname = Graphics::ContextDebugname + "_" + debugName;
+
+  VkDebugUtilsObjectNameInfoEXT nameInfo = {};
+  nameInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
+  nameInfo.objectType = VK_OBJECT_TYPE_IMAGE;
+  nameInfo.objectHandle = static_cast<uint64_t>(
+      reinterpret_cast<uintptr_t>(texture->image)), // NOLINT
+      nameInfo.pObjectName = debugname.c_str();
+  auto error =
+      Error::Create(vkSetDebugUtilsObjectNameEXT(context.device, &nameInfo));
+  if (Error::IsError(error)) {
+    return error;
+  }
+
+  {
+    std::lock_guard<std::mutex> lock(
+        Graphics::GraphicsContext::mutexes.vmaAllocator);
+
+    vmaSetAllocationName(context.vmaAllocator, texture->memory,
+                         debugname.c_str());
+  }
+
+  return Error::Success();
+}
+
+auto Create2D(const GraphicsContext &context, const TextureCreationInfo &info)
     -> Result<Ref<Texture>> {
 
   Ref<Texture> texture = Ref<Texture>::Make();
@@ -82,12 +111,22 @@ auto Create2D(const GraphicsContext &context, TextureCreationInfo info)
   allocInfo.requiredFlags = 0;
   allocInfo.preferredFlags = 0;
 
-  Error error =
-      Error::Create(vmaCreateImage(context.vmaAllocator, &imageInfo, &allocInfo,
-                                   &texture->image, &texture->memory, nullptr));
+  {
+    std::lock_guard<std::mutex> lock(
+        Graphics::GraphicsContext::mutexes.vmaAllocator);
 
-  if (Error::IsError(error)) {
-    return error.AsUnexpected();
+    Error error = Error::Create(vmaCreateImage(context.vmaAllocator, &imageInfo,
+                                               &allocInfo, &texture->image,
+                                               &texture->memory, nullptr));
+
+    if (Error::IsError(error)) {
+      return error.AsUnexpected();
+    }
+  }
+
+  auto setNameResult = SetDebugName(info.debugName, texture.get(), context);
+  if (Error::IsError(setNameResult)) {
+    return setNameResult.AsUnexpected();
   }
 
   VkImageViewCreateInfo viewInfo = {};
@@ -105,15 +144,24 @@ auto Create2D(const GraphicsContext &context, TextureCreationInfo info)
                          .b = VK_COMPONENT_SWIZZLE_IDENTITY,
                          .a = VK_COMPONENT_SWIZZLE_IDENTITY};
 
-  error = Error::Create(
-      vkCreateImageView(context.device, &viewInfo, nullptr, &texture->view));
+  {
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+    auto error = Error::Create(
+        vkCreateImageView(context.device, &viewInfo, nullptr, &texture->view));
 
-  if (Error::IsError(error)) {
-    return error.AsUnexpected();
+    if (Error::IsError(error)) {
+      return error.AsUnexpected();
+    }
   }
 
   VmaAllocationInfo memRequirements;
-  vmaGetAllocationInfo(context.vmaAllocator, texture->memory, &memRequirements);
+  {
+    std::lock_guard<std::mutex> lock(
+        Graphics::GraphicsContext::mutexes.vmaAllocator);
+
+    vmaGetAllocationInfo(context.vmaAllocator, texture->memory,
+                         &memRequirements);
+  }
   texture->sizeInBytes = memRequirements.size;
 
   return texture;
@@ -134,6 +182,7 @@ auto FromSwapchainTexture(const GraphicsContext &context,
   texture->mipmapcount = 1;
   texture->arrayLayers = 1;
   texture->samplerDirty = true;
+  texture->isSwapchainView = true;
 
   VkSurfaceCapabilitiesKHR surfaceCapabilities;
 
@@ -154,8 +203,8 @@ auto FromSwapchainTexture(const GraphicsContext &context,
   return texture;
 }
 
-auto CreateCubeMap(const GraphicsContext &context, TextureCreationInfo info)
-    -> Result<Ref<Texture>> {
+auto CreateCubeMap(const GraphicsContext &context,
+                   const TextureCreationInfo &info) -> Result<Ref<Texture>> {
 
   if (info.width != info.height) {
     return Error::Unexpected(
@@ -194,12 +243,22 @@ auto CreateCubeMap(const GraphicsContext &context, TextureCreationInfo info)
   allocInfo.requiredFlags = 0;
   allocInfo.preferredFlags = 0;
 
-  Error error =
-      Error::Create(vmaCreateImage(context.vmaAllocator, &imageInfo, &allocInfo,
-                                   &texture->image, &texture->memory, nullptr));
+  {
+    std::lock_guard<std::mutex> lock(
+        Graphics::GraphicsContext::mutexes.vmaAllocator);
 
-  if (Error::IsError(error)) {
-    return error.AsUnexpected();
+    Error error = Error::Create(vmaCreateImage(context.vmaAllocator, &imageInfo,
+                                               &allocInfo, &texture->image,
+                                               &texture->memory, nullptr));
+
+    if (Error::IsError(error)) {
+      return error.AsUnexpected();
+    }
+  }
+
+  auto setNameResult = SetDebugName(info.debugName, texture.get(), context);
+  if (Error::IsError(setNameResult)) {
+    return setNameResult.AsUnexpected();
   }
 
   VkImageViewCreateInfo viewInfo = {};
@@ -213,22 +272,31 @@ auto CreateCubeMap(const GraphicsContext &context, TextureCreationInfo info)
   viewInfo.subresourceRange.baseArrayLayer = 0;
   viewInfo.subresourceRange.layerCount = CubeFaceCount;
 
-  error = Error::Create(
-      vkCreateImageView(context.device, &viewInfo, nullptr, &texture->view));
+  {
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+    auto error = Error::Create(
+        vkCreateImageView(context.device, &viewInfo, nullptr, &texture->view));
 
-  if (Error::IsError(error)) {
-    return error.AsUnexpected();
+    if (Error::IsError(error)) {
+      return error.AsUnexpected();
+    }
   }
 
   VmaAllocationInfo memRequirements;
-  vmaGetAllocationInfo(context.vmaAllocator, texture->memory, &memRequirements);
+  {
+    std::lock_guard<std::mutex> lock(
+        Graphics::GraphicsContext::mutexes.vmaAllocator);
+
+    vmaGetAllocationInfo(context.vmaAllocator, texture->memory,
+                         &memRequirements);
+  }
   texture->sizeInBytes = memRequirements.size;
 
   return texture;
 }
 
-auto CreateVolume(const GraphicsContext &context, TextureCreationInfo info)
-    -> Result<Ref<Texture>> {
+auto CreateVolume(const GraphicsContext &context,
+                  const TextureCreationInfo &info) -> Result<Ref<Texture>> {
 
   Ref<Texture> texture = Ref<Texture>::Make();
 
@@ -260,12 +328,22 @@ auto CreateVolume(const GraphicsContext &context, TextureCreationInfo info)
   allocInfo.requiredFlags = 0;
   allocInfo.preferredFlags = 0;
 
-  Error error =
-      Error::Create(vmaCreateImage(context.vmaAllocator, &imageInfo, &allocInfo,
-                                   &texture->image, &texture->memory, nullptr));
+  {
+    std::lock_guard<std::mutex> lock(
+        Graphics::GraphicsContext::mutexes.vmaAllocator);
 
-  if (Error::IsError(error)) {
-    return error.AsUnexpected();
+    Error error = Error::Create(vmaCreateImage(context.vmaAllocator, &imageInfo,
+                                               &allocInfo, &texture->image,
+                                               &texture->memory, nullptr));
+
+    if (Error::IsError(error)) {
+      return error.AsUnexpected();
+    }
+  }
+
+  auto setNameResult = SetDebugName(info.debugName, texture.get(), context);
+  if (Error::IsError(setNameResult)) {
+    return setNameResult.AsUnexpected();
   }
 
   VkImageViewCreateInfo viewInfo = {};
@@ -279,22 +357,31 @@ auto CreateVolume(const GraphicsContext &context, TextureCreationInfo info)
   viewInfo.subresourceRange.baseArrayLayer = 0;
   viewInfo.subresourceRange.layerCount = 1;
 
-  error = Error::Create(
-      vkCreateImageView(context.device, &viewInfo, nullptr, &texture->view));
+  {
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+    auto error = Error::Create(
+        vkCreateImageView(context.device, &viewInfo, nullptr, &texture->view));
 
-  if (Error::IsError(error)) {
-    return error.AsUnexpected();
+    if (Error::IsError(error)) {
+      return error.AsUnexpected();
+    }
   }
 
   VmaAllocationInfo memRequirements;
-  vmaGetAllocationInfo(context.vmaAllocator, texture->memory, &memRequirements);
+  {
+    std::lock_guard<std::mutex> lock(
+        Graphics::GraphicsContext::mutexes.vmaAllocator);
+
+    vmaGetAllocationInfo(context.vmaAllocator, texture->memory,
+                         &memRequirements);
+  }
   texture->sizeInBytes = memRequirements.size;
 
   return texture;
 }
 
-auto CreateArray(const GraphicsContext &context, TextureCreationInfo info)
-    -> Result<Ref<Texture>> {
+auto CreateArray(const GraphicsContext &context,
+                 const TextureCreationInfo &info) -> Result<Ref<Texture>> {
 
   Ref<Texture> texture = Ref<Texture>::Make();
 
@@ -326,12 +413,22 @@ auto CreateArray(const GraphicsContext &context, TextureCreationInfo info)
   allocInfo.requiredFlags = 0;
   allocInfo.preferredFlags = 0;
 
-  Error error =
-      Error::Create(vmaCreateImage(context.vmaAllocator, &imageInfo, &allocInfo,
-                                   &texture->image, &texture->memory, nullptr));
+  {
+    std::lock_guard<std::mutex> lock(
+        Graphics::GraphicsContext::mutexes.vmaAllocator);
 
-  if (Error::IsError(error)) {
-    return error.AsUnexpected();
+    Error error = Error::Create(vmaCreateImage(context.vmaAllocator, &imageInfo,
+                                               &allocInfo, &texture->image,
+                                               &texture->memory, nullptr));
+
+    if (Error::IsError(error)) {
+      return error.AsUnexpected();
+    }
+  }
+
+  auto setNameResult = SetDebugName(info.debugName, texture.get(), context);
+  if (Error::IsError(setNameResult)) {
+    return setNameResult.AsUnexpected();
   }
 
   VkImageViewCreateInfo viewInfo = {};
@@ -345,15 +442,24 @@ auto CreateArray(const GraphicsContext &context, TextureCreationInfo info)
   viewInfo.subresourceRange.baseArrayLayer = 0;
   viewInfo.subresourceRange.layerCount = info.depth;
 
-  error = Error::Create(
-      vkCreateImageView(context.device, &viewInfo, nullptr, &texture->view));
+  {
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+    auto error = Error::Create(
+        vkCreateImageView(context.device, &viewInfo, nullptr, &texture->view));
 
-  if (Error::IsError(error)) {
-    return error.AsUnexpected();
+    if (Error::IsError(error)) {
+      return error.AsUnexpected();
+    }
   }
 
   VmaAllocationInfo memRequirements;
-  vmaGetAllocationInfo(context.vmaAllocator, texture->memory, &memRequirements);
+  {
+    std::lock_guard<std::mutex> lock(
+        Graphics::GraphicsContext::mutexes.vmaAllocator);
+
+    vmaGetAllocationInfo(context.vmaAllocator, texture->memory,
+                         &memRequirements);
+  }
   texture->sizeInBytes = memRequirements.size;
 
   return texture;
@@ -387,6 +493,7 @@ auto LoadFromFile(GraphicsContext &context, const char *path,
                    .usage = usage | static_cast<uint32_t>(
                                         VK_IMAGE_USAGE_TRANSFER_DST_BIT),
                    .mipmapCount = 1,
+                   .debugName = "Image_" + std::string(path),
                });
 
   if (Error::IsError(texture)) {
@@ -662,7 +769,7 @@ auto Texture::TransitionLayout(GraphicsContext &context, VkImageLayout layout,
     return Error::Success();
   }
 
-  auto *commandBuffer = GetCommandBuffer(context, GetCurrentThreadIndex());
+  auto *commandBuffer = GetCommandBuffer();
 
   VkImageMemoryBarrier2 barrier = {};
   barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
@@ -775,8 +882,6 @@ auto Texture::GetSampler(GraphicsContext &context) -> VkSampler {
     sampler = GetOrCreateSampler(context, samplerDescription);
     samplerDirty = false;
 
-    PrintDebug("Created new sampler for texture");
-
     return sampler;
   }
 
@@ -817,7 +922,7 @@ auto Texture::SetPixels(GraphicsContext &context, Image::ImageData &imageData,
       VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
   bufferCreationInfo.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
                                   VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-  bufferCreationInfo.IsStagingBuffer = true;
+  bufferCreationInfo.stagingBuffer = true;
 
   if (imageData.GetWidth() > size.width ||
       imageData.GetHeight() > size.height) {
@@ -825,6 +930,7 @@ auto Texture::SetPixels(GraphicsContext &context, Image::ImageData &imageData,
         "ImageData dimensions exceed texture dimensions in SetPixels.");
   }
 
+  bufferCreationInfo.debugName = "Texture Staging Buffer for SetPixels";
   auto bufferResult = Buffer::Create(context, bufferCreationInfo);
 
   if (Error::IsError(bufferResult)) {
@@ -856,7 +962,6 @@ auto Texture::SetPixels(GraphicsContext &context, Image::ImageData &imageData,
     auto error = buffer->SetData(context, rowSpan, row * rowSize);
 
     if (Error::IsError(error)) {
-      buffer->ScheduleDestroy();
       return error;
     }
   }
@@ -876,11 +981,10 @@ auto Texture::SetPixels(GraphicsContext &context, Image::ImageData &imageData,
   auto error = UseAsTransferDst(context);
 
   if (Error::IsError(error)) {
-    buffer->Destroy(context); // Not used yet so we can destroy immediately
     return error;
   }
 
-  auto *commandBuffer = GetCommandBuffer(context, GetCurrentThreadIndex());
+  auto *commandBuffer = GetCommandBuffer();
 
   vkCmdCopyBufferToImage(commandBuffer, buffer->handle, image,
                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
@@ -888,16 +992,12 @@ auto Texture::SetPixels(GraphicsContext &context, Image::ImageData &imageData,
   error = UseAsSampler(context, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT);
 
   if (Error::IsError(error)) {
-    buffer->ScheduleDestroy();
     return error;
   }
 
-  auto timelineValue = GetCPUTimelineSemaphoreValue(context);
-
-  buffer->MarkUse(0, timelineValue);
-  MarkUse(0, timelineValue);
-
-  buffer->ScheduleDestroy();
+  // TODO: Check lifetime
+  buffer->MarkUse();
+  MarkUse();
 
   return Error::Success();
 }
@@ -950,12 +1050,13 @@ auto Texture::SetPixels(GraphicsContext &context,
       VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
   bufferCreationInfo.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
                                   VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-  bufferCreationInfo.IsStagingBuffer = true;
+  bufferCreationInfo.stagingBuffer = true;
 
   if (dataWidth > size.width || dataHeight > size.height) {
     return Error::Create(
         "provided source dimensions exceed texture dimensions in SetPixels.");
   }
+  bufferCreationInfo.debugName = "Texture Staging Buffer for SetPixels";
 
   auto bufferResult = Buffer::Create(context, bufferCreationInfo);
 
@@ -974,6 +1075,7 @@ auto Texture::SetPixels(GraphicsContext &context,
                                  });
 
   auto buffer = bufferResult.value();
+
   for (size_t row = 0; row < rowCount; ++row) {
     size_t sourceOffset =
         ((row + source.offset.y) * dataWidth + source.offset.x) *
@@ -984,7 +1086,6 @@ auto Texture::SetPixels(GraphicsContext &context,
     auto error = buffer->SetData(context, rowSpan, row * rowSize);
 
     if (Error::IsError(error)) {
-      buffer->ScheduleDestroy();
       return error;
     }
   }
@@ -1004,11 +1105,10 @@ auto Texture::SetPixels(GraphicsContext &context,
   auto error = UseAsTransferDst(context);
 
   if (Error::IsError(error)) {
-    buffer->Destroy(context); // Not used yet so we can destroy immediately
     return error;
   }
 
-  auto *commandBuffer = GetCommandBuffer(context, GetCurrentThreadIndex());
+  auto *commandBuffer = GetCommandBuffer();
 
   vkCmdCopyBufferToImage(commandBuffer, buffer->handle, image,
                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
@@ -1016,31 +1116,19 @@ auto Texture::SetPixels(GraphicsContext &context,
   error = UseAsSampler(context, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT);
 
   if (Error::IsError(error)) {
-    buffer->ScheduleDestroy();
     return error;
   }
 
-  auto timelineValue = GetCPUTimelineSemaphoreValue(context);
-
-  buffer->MarkUse(0, timelineValue);
-  MarkUse(0, timelineValue);
-
-  buffer->ScheduleDestroy();
+  buffer->MarkUse();
+  MarkUse();
 
   return Error::Success();
 }
 
-auto Texture::Destroy(GraphicsContext &context) const -> void {
-  vkDestroyImageView(context.device, view, nullptr);
-  vmaDestroyImage(context.vmaAllocator, image, memory);
-}
-
 auto Texture::ScheduleDestroy() -> void {
-  if (released) {
-    return;
-  }
+  assert(!released);
 
-  ReleasedTextures.emplace_back(this);
+  ScheduleDestruction(this);
   released = true;
 }
 
@@ -1052,16 +1140,19 @@ struct VkFormatTextureTypeHash {
   }
 };
 
+std::unordered_map<std::pair<VkFormat, TextureType>, Ref<struct Texture>,
+                   struct VkFormatTextureTypeHash>
+    DefaultTextureCache; // NOLINT
+
+auto UnloadModule() -> void { DefaultTextureCache.clear(); }
+
 auto GetDefaultTexture(GraphicsContext &context, VkFormat format,
                        Graphics::Texture::TextureType textureType)
     -> Result<Ref<Graphics::Texture::Texture>> {
-  static std::unordered_map<std::pair<VkFormat, TextureType>, Ref<Texture>,
-                            VkFormatTextureTypeHash>
-      textureCache;
 
   auto key = std::make_pair(format, textureType);
-  auto textureIterator = textureCache.find(key);
-  if (textureIterator != textureCache.end()) {
+  auto textureIterator = DefaultTextureCache.find(key);
+  if (textureIterator != DefaultTextureCache.end()) {
     return textureIterator->second;
   }
 
@@ -1072,6 +1163,25 @@ auto GetDefaultTexture(GraphicsContext &context, VkFormat format,
   texInfo.format = format;
   texInfo.usage = static_cast<uint32_t>(VK_IMAGE_USAGE_SAMPLED_BIT) |
                   static_cast<uint32_t>(VK_IMAGE_USAGE_TRANSFER_DST_BIT);
+  texInfo.debugName =
+      "Default_Texture_" + Format::ImageFormatToString(format) + "_";
+  switch (textureType) {
+  case TextureType::DEFAULT:
+    texInfo.debugName += "2D";
+    break;
+  case TextureType::CUBEMAP:
+    texInfo.debugName += "Cubemap";
+    break;
+  case TextureType::VOLUME:
+    texInfo.debugName += "Volume";
+    break;
+  case TextureType::ARRAY:
+    texInfo.debugName += "Array";
+    break;
+  default:
+    return Error::Unexpected("Unsupported texture type for default texture");
+  }
+
   if (textureType == TextureType::CUBEMAP) {
     texInfo.depth = 6; // NOLINT
   }
@@ -1118,7 +1228,7 @@ auto GetDefaultTexture(GraphicsContext &context, VkFormat format,
     return setPixelsResult.AsUnexpected();
   }
 
-  textureCache[key] = texture;
+  DefaultTextureCache[key] = texture;
 
   return texture;
 }

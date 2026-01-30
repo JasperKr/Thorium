@@ -1,5 +1,4 @@
 function Thorium.config(config)
-  print("Configuring...")
   config.window.width = 1200
   config.window.height = 1000
 
@@ -9,5 +8,5 @@ function Thorium.config(config)
   config.filesystem.identity = "ConfiguredIdentity"
 
   -- "debug" > "info" > "warning" > "error" > "fatal"
-  config.loglevel = "info"
+  config.loglevel = "warning"
 end

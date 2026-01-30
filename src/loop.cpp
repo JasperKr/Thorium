@@ -1,20 +1,26 @@
 #include "Graphics/Buffers/uniform.hpp"
 #include "Graphics/buffer.hpp"
 #include "Graphics/dynamicRendering.hpp"
-#include "Graphics/gltfLoader.hpp"
 #include "Graphics/graphics.hpp"
 #include "Graphics/info.hpp"
 #include "Graphics/render.hpp"
+#include "Graphics/resource.hpp"
 #include "Graphics/shader.hpp"
+#include "Graphics/texture.hpp"
 #include "Modules/Editor/gui.hpp"
 #include "Modules/config.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/filesystem.hpp"
-#include "Modules/model.hpp"
+#include "Modules/thread.hpp"
+#include "Wrap/Modules/Editor/wrap_imgui.hpp"
 #include <filesystem>
+#include <public/tracy/Tracy.hpp>
 #include <string>
 #include <vector>
+
+// Enable if encountering C++ exceptions
+// #define DEBUG_CPP_EXCEPTION
 
 #define VK_NO_PROTOTYPES
 #include <vulkan/vulkan.h>
@@ -102,8 +108,13 @@ auto LoadLua(lua_State *state, const std::vector<std::string> &launchArgs)
                                .c_str());
 
   if (luaLoadErr != LUA_OK) {
-    if (lua_isstring(state, -1) != 0) {
-      std::string luaErrorMessage = lua_tostring(state, -1);
+    if (lua_type(state, -1) == LUA_TSTRING) {
+      std::string luaErrorMessage;
+      if (lua_objlen(state, -1) == 0) {
+        luaErrorMessage = "";
+      } else {
+        luaErrorMessage = lua_tostring(state, -1);
+      }
       lua_pop(state, 1); // Remove error message from stack
       return Error::Create(luaErrorMessage);
     }
@@ -118,6 +129,16 @@ auto LoadLua(lua_State *state, const std::vector<std::string> &launchArgs)
 
   // Call the loaded chunk
   if (lua_pcall(state, static_cast<int>(launchArgs.size()), 0, 0) != LUA_OK) {
+    if (lua_type(state, -1) != LUA_TSTRING) {
+      lua_pop(state, 1); // Remove non-string error from stack
+      return Error::Create("Failed to run main Lua script: Unknown error");
+    }
+
+    if (lua_objlen(state, -1) == 0) {
+      lua_pop(state, 1); // Remove error message from stack
+      return Error::Create("Unknown Lua error in main script.");
+    }
+
     std::string luaErrorMessage = lua_tostring(state, -1);
     lua_pop(state, 1); // Remove error message from stack
     return Error::Create(luaErrorMessage);
@@ -165,8 +186,8 @@ auto LoadLua(lua_State *state, const std::vector<std::string> &launchArgs)
   return Error::Success();
 }
 
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 auto MainLoop(const std::vector<std::string> &arguments) -> Error {
-  Graphics::GetCurrentThreadIndex() = 0;
   Error::SetupTraceback();
 
   PrintDebug("Initializing Lua state...");
@@ -225,7 +246,6 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
   }
 
   Graphics::GraphicsContext context = {};
-  context.renderThreadCount = 1;
 
   PrintDebug("Initializing graphics...");
 
@@ -239,6 +259,19 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
 
   Graphics::SetCurrentGraphicsContext(&context);
 
+  auto texturesResult =
+      Graphics::DynamicRendering::GetSwapchainTextures(context);
+  if (Error::IsError(texturesResult)) {
+    return texturesResult;
+  }
+
+  auto error = Graphics::InitializeGlobalTimelineSemaphore(context);
+  if (Error::IsError(error)) {
+    return error;
+  }
+
+  PrintDebug("Loading shader modules...");
+
   auto shaderModuleLoadResult = Graphics::Shader::LoadModule();
 
   if (Error::IsError(shaderModuleLoadResult)) {
@@ -247,7 +280,7 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
 
   PrintDebug("Shader modules loaded successfully.");
 
-  auto rendertargetLoadError = Graphics::RenderTarget::Load(context);
+  auto rendertargetLoadError = Graphics::DynamicRendering::Load(context);
 
   if (Error::IsError(rendertargetLoadError)) {
     return rendertargetLoadError;
@@ -259,11 +292,6 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
 
   if (Error::IsError(result)) {
     return result;
-  }
-
-  auto error = Graphics::InitializeGlobalTimelineSemaphore(context);
-  if (Error::IsError(error)) {
-    return error;
   }
 
   error = Graphics::LoadBufferModule(context);
@@ -288,12 +316,12 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
     return luaLoadErr;
   }
 
-  Engine::Scene scene;
+  // Engine::Scene scene;
 
-  auto gltfresult = glTF::LoadGltfModel(context, "assets/testscene.glb", scene);
-  if (Error::IsError(gltfresult)) {
-    return gltfresult;
-  }
+  // auto gltfresult = glTF::LoadGltfModel(context, "assets/testscene.glb", scene);
+  // if (Error::IsError(gltfresult)) {
+  //   return gltfresult;
+  // }
 
   PrintDebug("Entering main loop...");
 
@@ -302,20 +330,29 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
   lua_remove(state, -2); // remove debug table
   auto tracebackIndex = lua_gettop(state);
 
+  auto mainLoopResult = Error::Success();
+
   while (Event::MainLoopRunning) {
     runCallback.push();
 
+    FrameMarkStart("Frame");
     if (lua_pcall(state, 0, 1, tracebackIndex) != LUA_OK) {
-      std::string luaErrorMessage = lua_tostring(state, -1);
+      std::string luaErrorMessage;
+      if (lua_objlen(state, -1) == 0) {
+        luaErrorMessage = "";
+      } else {
+        luaErrorMessage = lua_tostring(state, -1);
+      }
       lua_pop(state, 1); // Remove error message from stack
       Event::MainLoopRunning = false;
       Event::ExitCode = 1;
 
-      return Error::Create(luaErrorMessage);
+      mainLoopResult = Error::Create(luaErrorMessage);
     }
+    FrameMarkEnd("Frame");
 
     // returned value nil == continue, non-nil == exit with code
-    if (lua_isnil(state, -1)) {
+    if (lua_isnoneornil(state, -1)) {
       lua_pop(state, 1); // pop nil
     } else {
       int exitCode = static_cast<int>(lua_tointeger(state, -1));
@@ -326,30 +363,76 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
     }
   }
 
+  // Uses internal lua state so we must do this before closing lua
+  runCallback.reset();
+
+  Graphics::DynamicRendering::SwapchainTextures.clear();
+
+  PrintInfo("Waiting on device idle...");
+  {
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+    vkDeviceWaitIdle(context.device);
+  }
+
+  // Force all deferred destructions to happen now
+  Graphics::GetDeferredDestructionAllowed() = false;
+
+  auto shutdownResult = Wrap::Imgui::Shutdown();
+  if (Error::IsError(shutdownResult)) {
+    PrintError("Error during ImGui shutdown: {}", shutdownResult.message);
+  }
+
+  Graphics::Texture::UnloadModule();
+
+  Graphics::ProcessReleasedResources(context);
+
+  PrintInfo("Closing Lua state...");
   lua_close(state);
 
-  vkDeviceWaitIdle(context.device);
+  PrintInfo("Deinitializing threading module...");
 
-  result = FlushBufferUploads(context);
+  Threading::UnloadModule();
+
+  PrintInfo("Deinitializing graphics...");
+
+  Graphics::DeInitializeUniformBufferModule(context);
+
+  PrintInfo("Unloading buffer module...");
+
+  result = Graphics::UnloadLocalBufferModule(context);
   if (Error::IsError(result)) {
     return result;
   }
-
-  Graphics::DeInitializeUniformBufferModule(context);
 
   result = Graphics::UnloadBufferModule(context);
   if (Error::IsError(result)) {
     return result;
   }
 
+  PrintInfo("Deinitializing global timeline semaphore...");
+
   DeInitializeGlobalTimelineSemaphore(context);
+
+  PrintInfo("Unloading shader modules...");
 
   Graphics::Shader::UnloadModule(context);
 
+  PrintInfo("Destroying rendertargets...");
+  result = Graphics::DynamicRendering::Shutdown(context);
+  if (Error::IsError(result)) {
+    return result;
+  }
+  Graphics::DynamicRendering::Destroy(context);
+
+  PrintInfo("Destroying samplers...");
+
+  Graphics::Texture::DestroySamplers(context);
+
+  PrintInfo("Destroying graphics context...");
+
   Graphics::Deinitialize(context);
-  Graphics::RenderTarget::Destroy(context);
 
   PrintInfo("App shutdown complete.");
 
-  return Error::Success();
+  return mainLoopResult;
 }

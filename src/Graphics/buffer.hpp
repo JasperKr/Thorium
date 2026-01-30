@@ -7,8 +7,8 @@
 #include "Modules/object.hpp"
 #include "graphics.hpp"
 #include <cstdint>
+#include <mutex>
 #include <span>
-#include <unordered_map>
 #define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
 namespace Graphics {
@@ -19,34 +19,24 @@ struct BufferCreationInfo {
   VkMemoryPropertyFlags properties{};
 
   // Staging buffers are assumed to be used only once and for large uploads
-  bool IsStagingBuffer = false;
+  bool stagingBuffer = false;
 
   // Persistent mapping keeps the buffer mapped to cpu memory for its entire lifetime
   // Useful for dynamic buffers that are updated frequently, like UBO's
-  bool PersistentMapping = false;
+  bool persistentMapping = false;
+
+  // Debug name for the buffer
+  std::string debugName;
 };
 
 auto FlushBufferUploads(GraphicsContext &context) -> Error;
 auto LoadBufferModule(GraphicsContext &context) -> Error;
-auto UnloadBufferModule(GraphicsContext &context) -> Error;
+auto UnloadLocalBufferModule(GraphicsContext &context) -> Error;
+auto UnloadBufferModule(const GraphicsContext &context) -> Error;
 
 static const Type bufferType = Type("Internal Buffer");
 
-struct Buffer : Object, Barrier::GraphicsResource {
-  VkBuffer handle = VK_NULL_HANDLE;
-  VmaAllocation memory = VK_NULL_HANDLE;
-  VkDeviceSize size = 0;
-  uint64_t sizeInBytes = 0;
-  VkBufferUsageFlags usage = 0;
-  VkMemoryPropertyFlags properties = 0;
-  bool isStagingBuffer = false;
-  bool persistentMapping = false;
-  void *mappedData = nullptr;
-
-  VkAccessFlags2 unsynchronisedWriteBits{};
-  VkAccessFlags2 unsynchronisedReadBits{};
-  VkPipelineStageFlags2 unsynchronisedReadStages{};
-
+struct Buffer : Object, Barrier::BarrierSynced {
   Buffer() = default;
   Buffer(const Buffer &) = delete;
   auto operator=(const Buffer &) -> Buffer & = delete;
@@ -54,34 +44,57 @@ struct Buffer : Object, Barrier::GraphicsResource {
   Buffer(Buffer &&) noexcept = delete;
   auto operator=(Buffer &&) noexcept -> Buffer & = delete;
 
-  std::unordered_map<QueueID, uint64_t> lastUsedTimelineValues;
-  bool released{false};
+  std::mutex mutex;
 
-  auto GetTimelineValues() const
-      -> const std::unordered_map<QueueID, uint64_t> & {
-    return lastUsedTimelineValues;
-  }
+  VkBuffer handle = VK_NULL_HANDLE;
+  VmaAllocation memory = VK_NULL_HANDLE;
+  VkDeviceSize size = 0;
+  uint64_t sizeInBytes = 0;
+  mutable void *mappedData = nullptr;
 
-  auto MarkUse(QueueID queueID, uint64_t timelineValue) -> void;
+  uint64_t lastUsedTimestamp{};
+
+  VkMemoryPropertyFlags properties = 0;
+  VkBufferUsageFlags usage = 0;
+
+  // Indicates if this is a staging buffer, meaning it is used for temporary uploads
+  bool isStagingBuffer = false;
+
+  // Indicates if this buffer is persistently mapped, can be used to optimize frequent updates
+  bool persistentMapping = false;
+
+  // Safety flag to prevent double releases
+  bool released = false;
+
+  // Set by cleanup function otherwise we'll try to defer destruction again
+  bool isDestroyed = false;
+
+  auto GetTimestamp() const -> uint64_t { return lastUsedTimestamp; }
+  auto MarkUse() -> void;
 
   static auto Create(Graphics::GraphicsContext &context,
-                     Graphics::BufferCreationInfo info)
+                     const Graphics::BufferCreationInfo &info)
       -> Result<Ref<Graphics::Buffer>>;
 
   // Release the resources for safe automatic destruction later
   auto ScheduleDestroy() -> void override;
-  auto UseDeferredDestruction() const -> bool override { return true; }
-
-  // Destroy the buffer immediately, use with caution
-  auto Destroy(GraphicsContext &context) const -> void;
+  auto UseDeferredDestruction() const -> bool override {
+    return GetDeferredDestructionAllowed() && !isDestroyed;
+  }
 
   ~Buffer() override {
-    if (!released) {
-      PrintWarning("Buffer destroyed without being queued for destruction!");
-      auto *context = GetCurrentGraphicsContext();
-      vkQueueWaitIdle(context->graphicsQueue);
-      Destroy(*context);
+    PrintDebug("Destroying buffer with handle {}", (void *)handle);
+    auto *context = GetCurrentGraphicsContext();
+
+    std::lock_guard<std::mutex> lock(
+        Graphics::GraphicsContext::mutexes.vmaAllocator);
+
+    if (persistentMapping && mappedData != nullptr) {
+      vmaUnmapMemory(context->vmaAllocator, memory);
+      mappedData = nullptr;
     }
+
+    vmaDestroyBuffer(context->vmaAllocator, handle, memory);
   }
 
   // Set data into the buffer at the given offset
