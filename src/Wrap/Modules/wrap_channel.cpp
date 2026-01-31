@@ -136,4 +136,15 @@ auto wrap_Demand(lua_State *state) -> int {
   return 1;
 }
 
+auto wrap_Clear(lua_State *state) -> int {
+  auto *channel = LuaWrap::ObjectFromLua<::Threading::Channel>(state, 1);
+  if (channel == nullptr) {
+    return luaL_error(state, "Invalid Channel object.");
+  }
+
+  channel->Clear();
+
+  return 0;
+}
+
 } // namespace Wrap::Threading

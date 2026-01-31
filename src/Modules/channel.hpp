@@ -54,6 +54,9 @@ public:
   auto Demand(double timeout = INFINITY)
       -> std::optional<LuaWrap::Data::LuaType>;
 
+  // Clear all messages from the channel
+  auto Clear() -> void;
+
   auto GetInstanceType() const -> Type const * override { return &channelType; }
   static auto GetType() -> Type const * { return &channelType; }
 

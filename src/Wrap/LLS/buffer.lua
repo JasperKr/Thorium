@@ -1,4 +1,4 @@
----@meta
+---@meta Buffer
 
 error("Do not require this file")
 

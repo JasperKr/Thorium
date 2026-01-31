@@ -115,4 +115,17 @@ auto Channel::Demand(double timeout) -> std::optional<LuaWrap::Data::LuaType> {
   return message;
 }
 
+auto Channel::Clear() -> void {
+  if (IsDestroyed()) {
+    return;
+  }
+
+  std::lock_guard<std::mutex> lock(mutex);
+  while (!messages.empty()) {
+    // Remove references to the message being cleared
+    ::Threading::RemoveReferences(messages.front());
+    messages.pop();
+  }
+}
+
 } // namespace Threading

@@ -1,4 +1,4 @@
----@meta
+---@meta Data
 
 error("Do not require this file")
 

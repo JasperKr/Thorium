@@ -1,4 +1,4 @@
----@meta
+---@meta Mesh
 
 error("Do not require this file")
 
@@ -34,3 +34,11 @@ function Mesh:setDrawRange(offset, range) end
 ---@return number offset The offset to start drawing from.
 ---@return number range The number of vertices or indices to draw.
 function Mesh:getDrawRange() end
+
+--- Gets the number of vertices in the mesh.
+---@return number count The number of vertices.
+function Mesh:getVertexCount() end
+
+--- Gets the number of indices in the mesh. Vertex count if no indices are set.
+---@return number count The number of indices.
+function Mesh:getIndexCount() end

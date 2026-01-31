@@ -1,4 +1,4 @@
----@meta
+---@meta Shader
 
 error("Do not require this file")
 

@@ -2,7 +2,7 @@ Imgui = require("cimgui.init")
 
 local doneChannel, stopChannel = ...
 
-local meshes = {}
+local meshes = {} ---@type Thorium.Mesh[]
 local colors = {
   { 1, 0, 0, 1 },
   { 0, 1, 0, 1 },

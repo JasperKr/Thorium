@@ -1,4 +1,4 @@
----@meta
+---@meta Keyboard
 
 error("Do not require this file")
 

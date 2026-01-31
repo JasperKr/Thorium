@@ -1,4 +1,4 @@
----@meta
+---@meta Graphics
 
 error("Do not require this file")
 
@@ -179,6 +179,26 @@ function Thorium.graphics.getFrontFace() end
 --- @return Thorium.RenderTarget ... The currently set rendertargets
 function Thorium.graphics.getRenderTargets() end
 
+--- Sets the rendertargets.
+---@overload fun() Sets the backbuffer as the rendertarget.
+---@overload fun(targets: Thorium.RenderTarget[]) Sets multiple rendertargets.
+---@overload fun(target: Thorium.Texture) Sets a single texture as the rendertarget, using default settings.
+---@overload fun(targets: Thorium.Texture[]) Sets multiple textures as rendertargets, using default settings.
+---@param ... Thorium.RenderTarget The rendertargets to set.
+function Thorium.graphics.setRenderTarget(...) end
+
+--- Aquires a local graphics context for the current thread.
+--- @param identifier string | integer The identifier of the graphics context to aquire.
+--- @param priority number? The priority, Tie-breaker for commands with matching identifiers. Higher priority contexts are executed first.
+function Thorium.graphics.aquireGraphics(identifier, priority) end
+
+--- Submits the current thread's graphics commands.
+function Thorium.graphics.submitGraphics() end
+
+--- Uses commands created by aquire - submit graphics events.
+--- @param identifier string | integer The identifier of the graphics context to use.
+function Thorium.graphics.useGraphics(identifier) end
+
 --- Draws the mesh or texture.
 --- @param mesh Thorium.Mesh|Thorium.Texture The mesh or texture to draw.
 function Thorium.graphics.draw(mesh, instanceCount) end
@@ -281,9 +301,17 @@ function Thorium.graphics.clear(r, g, b, a, depth, stencil) end
 ---| "snorm16vec3"
 ---| "snorm16vec4"
 
+-- I was hoping these descriptions would show up when hovering over the types in an IDE, but alas.
+-- I'll leave them here for reference.
+
+---@alias VertexAttributeName string Name for buffer formats
+
+---@alias VertexAttributeLocation
+---| integer Location index for vertex formats, must match vertex input struct definition order in shader code.
+
 --- An object defining a vertex attribute.
 ---@alias Thorium.VertexAttribute
----| {name: string, format: Thorium.VertexComponentFormat, location: integer}
+---| {name: VertexAttributeName, format: Thorium.VertexComponentFormat, location: VertexAttributeLocation}
 
 --- An object defining a vertex format.
 ---@alias Thorium.VertexFormat

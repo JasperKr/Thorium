@@ -1,4 +1,4 @@
----@meta
+---@meta Texture
 
 error("Do not require this file")
 
