@@ -113,29 +113,8 @@ auto UpdateUsage(const GraphicsContext &context, BarrierSynced &resource,
 auto UpdateUsageVirtual(BarrierSynced &resource, const ResourceState &usage)
     -> std::optional<ResourceSync>;
 
-inline auto InsertBarrier(ResourceSync &barrier) {
-  GlobalResourceSyncTimeline.push_back(barrier);
-  FrameBarrierCount++;
-}
-
-inline auto ResetFrameTimeline() -> void {
-  GlobalTimelineOffset += FrameBarrierCount;
-  GlobalResourceSyncTimeline.clear();
-  GlobalResourceStateUpdates.clear();
-
-  FrameBarrierCount = 0;
-}
-
-inline auto ResetModule() -> void {
-  GlobalTimelineIndex = 0;
-  GlobalTimelineOffset = 0;
-  FrameBarrierCount = 0;
-  GlobalResourceSyncTimeline.clear();
-  GlobalResourceStateUpdates.clear();
-
-  for (auto &res : GraphicsResources) {
-    res.firstAsyncUsage = true;
-  }
-}
+auto InsertBarrier(ResourceSync &barrier) -> void;
+auto ResetFrameTimeline() -> void;
+auto ResetModule() -> void;
 
 } // namespace Graphics::Barrier

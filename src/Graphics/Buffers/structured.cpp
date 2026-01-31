@@ -7,11 +7,11 @@
 #include "Modules/object.hpp"
 #include "tl/expected.hpp"
 
-namespace Graphics::StructuredBuffer {
+namespace Graphics {
 
-auto CreateStructuredBuffer(GraphicsContext &context, BufferFormat &format,
-                            size_t elementCount,
-                            StructuredBufferCreationInfo const &info)
+auto StructuredBuffer::Create(GraphicsContext &context, BufferFormat &format,
+                              size_t elementCount,
+                              StructuredBufferCreationInfo const &info)
     -> Result<Ref<StructuredBuffer>> {
 
   Graphics::BufferCreationInfo bufferCreateInfo{
@@ -37,4 +37,18 @@ auto CreateStructuredBuffer(GraphicsContext &context, BufferFormat &format,
   return buffer;
 }
 
-} // namespace Graphics::StructuredBuffer
+auto StructuredBuffer::GetElementStride() const -> size_t {
+  return elementStride;
+}
+
+auto StructuredBuffer::GetFormat() const -> BufferFormat const & {
+  return format;
+}
+
+auto StructuredBuffer::Clear(GraphicsContext &context, uint32_t value,
+                             VkDeviceSize offset, VkDeviceSize size) const
+    -> Error {
+  return buffer->Clear(context, value, offset, size);
+}
+
+} // namespace Graphics

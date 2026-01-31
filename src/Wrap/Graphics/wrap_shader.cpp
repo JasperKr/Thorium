@@ -74,11 +74,9 @@ auto wrap_Send(lua_State *state) -> int {
     if (Error::IsError(result)) {
       return luaL_error(state, "%s", result.message.c_str());
     }
-  } else if (LuaWrap::IsType<Graphics::StructuredBuffer::StructuredBuffer>(
-                 state, valueOffset)) {
+  } else if (LuaWrap::IsType<Graphics::StructuredBuffer>(state, valueOffset)) {
     auto *buffer =
-        LuaWrap::ObjectFromLua<Graphics::StructuredBuffer::StructuredBuffer>(
-            state, valueOffset);
+        LuaWrap::ObjectFromLua<Graphics::StructuredBuffer>(state, valueOffset);
     auto result =
         shader->Send(*Graphics::GetCurrentGraphicsContext(), key, buffer);
     if (Error::IsError(result)) {

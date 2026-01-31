@@ -514,4 +514,18 @@ auto Buffer::Clear(GraphicsContext &context, uint32_t value,
   return Error::Success();
 }
 
+Buffer::~Buffer() {
+  auto *context = GetCurrentGraphicsContext();
+
+  std::lock_guard<std::mutex> lock(
+      Graphics::GraphicsContext::mutexes.vmaAllocator);
+
+  if (persistentMapping && mappedData != nullptr) {
+    vmaUnmapMemory(context->vmaAllocator, memory);
+    mappedData = nullptr;
+  }
+
+  vmaDestroyBuffer(context->vmaAllocator, handle, memory);
+}
+
 } // namespace Graphics

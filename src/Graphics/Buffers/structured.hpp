@@ -7,66 +7,31 @@
 #include "Graphics/buffer.hpp"
 #include "Graphics/bufferformat.hpp"
 #include "Graphics/graphics.hpp"
-#include "Graphics/reflect.hpp"
 #include "Modules/error.hpp"
 #include "Modules/type.hpp"
 
-namespace Graphics::StructuredBuffer {
+namespace Graphics {
 
 const Type type = Type("Buffer");
+
+struct StructuredBufferCreationInfo {
+  VkMemoryPropertyFlags memoryFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+  VkBufferUsageFlags usageFlags =
+      static_cast<uint32_t>(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT) |
+      static_cast<uint32_t>(VK_BUFFER_USAGE_TRANSFER_DST_BIT) |
+      static_cast<uint32_t>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+  std::string debugName;
+};
 
 struct StructuredBuffer : Object {
   [[nodiscard]] auto GetBuffer() const -> Ref<Buffer> { return buffer; }
   [[nodiscard]] auto GetElementCount() const -> size_t { return elementCount; }
-  [[nodiscard]] auto GetElementStride() const -> size_t {
-    return elementStride;
-  }
-  [[nodiscard]] auto GetFormat() const -> BufferFormat const & {
-    return format;
-  }
+  [[nodiscard]] auto GetElementStride() const -> size_t;
+  [[nodiscard]] auto GetFormat() const -> BufferFormat const &;
 
   // NOLINTNEXTLINE
   auto Clear(GraphicsContext &context, uint32_t value, VkDeviceSize offset = 0,
-             VkDeviceSize size = VK_WHOLE_SIZE) -> Error {
-    return buffer->Clear(context, value, offset, size);
-  }
-
-  auto IsCompatible(BufferInfo &layout) const -> Error {
-    for (const auto &component : format.GetComponents()) {
-      const auto *field =
-          layout.ResolvePath(component.name.begin(), component.name.end());
-      if (field == nullptr) {
-        return Error(
-            "StructuredBuffer: Incompatible buffer layout (missing component " +
-            ResourceKeyToString(component.name) + ").");
-      }
-
-      if (field->GetOffset() != component.offset) {
-        return Error(
-            "StructuredBuffer: Incompatible buffer layout (component " +
-            ResourceKeyToString(component.name) +
-            " has incorrect offset, expected: " +
-            std::to_string(component.offset) + ").");
-      }
-
-      if (field->GetSize() != Graphics::Format::GetSize(component.format)) {
-        return Error(
-            "StructuredBuffer: Incompatible buffer layout (component " +
-            ResourceKeyToString(component.name) +
-            " has incorrect size, expected: " +
-            std::to_string(Graphics::Format::GetSize(component.format)) + ").");
-      }
-    }
-
-    if (layout.size != elementStride) {
-      return Error(
-          "StructuredBuffer: Incompatible buffer layout size; expected " +
-          std::to_string(elementStride) + ", got " +
-          std::to_string(layout.size) + ".");
-    }
-
-    return Error::Success();
-  }
+             VkDeviceSize size = VK_WHOLE_SIZE) const -> Error;
 
   [[nodiscard]] auto UseDeferredDestruction() const -> bool override {
     return false;
@@ -85,24 +50,18 @@ struct StructuredBuffer : Object {
 
   [[nodiscard]] auto GetStride() const -> size_t { return elementStride; }
 
+  [[nodiscard]] auto GetBuffer() -> Ref<Buffer> { return buffer; }
+
+  static auto Create(GraphicsContext &context, BufferFormat &format,
+                     size_t elementCount,
+                     StructuredBufferCreationInfo const &info)
+      -> Result<Ref<StructuredBuffer>>;
+
+private:
   BufferFormat format;
   size_t elementCount;
   size_t elementStride;
   Ref<Buffer> buffer;
 };
 
-struct StructuredBufferCreationInfo {
-  VkMemoryPropertyFlags memoryFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-  VkBufferUsageFlags usageFlags =
-      static_cast<uint32_t>(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT) |
-      static_cast<uint32_t>(VK_BUFFER_USAGE_TRANSFER_DST_BIT) |
-      static_cast<uint32_t>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
-  std::string debugName;
-};
-
-auto CreateStructuredBuffer(GraphicsContext &context, BufferFormat &format,
-                            size_t elementCount,
-                            StructuredBufferCreationInfo const &info)
-    -> Result<Ref<StructuredBuffer>>;
-
-} // namespace Graphics::StructuredBuffer
+} // namespace Graphics

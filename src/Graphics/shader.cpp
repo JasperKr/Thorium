@@ -610,7 +610,7 @@ auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
 }
 
 auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
-                        StructuredBuffer::StructuredBuffer *buffer) -> Error {
+                        StructuredBuffer *buffer) -> Error {
   ZoneScopedN("ShaderModule::Send structured buffer");
 
   if (buffer == nullptr) {
@@ -626,12 +626,14 @@ auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
     if (bufferInfo.name == *key.begin()) {
       auto locationKey = SetBindingToSlot(bufferInfo.set, bufferInfo.binding);
 
-      GetState().boundBuffers[locationKey] = buffer->buffer.get();
+      auto *bufferHandle = buffer->GetBuffer().get();
+
+      GetState().boundBuffers[locationKey] = bufferHandle;
 
       VkDescriptorBufferInfo vkBufferInfo{};
-      vkBufferInfo.buffer = buffer->buffer->handle;
+      vkBufferInfo.buffer = bufferHandle->handle;
       vkBufferInfo.offset = 0;
-      vkBufferInfo.range = buffer->buffer->size;
+      vkBufferInfo.range = bufferHandle->size;
 
       DescriptorWriteInfo descriptorWrite{};
       descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -644,7 +646,7 @@ auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
                : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
       descriptorWrite.descriptorCount = 1;
       descriptorWrite.pBufferInfo = vkBufferInfo;
-      descriptorWrite.bufferPtr = buffer->buffer.get();
+      descriptorWrite.bufferPtr = bufferHandle;
 
       switch (bufferInfo.access) {
       case SLANG_RESOURCE_ACCESS_READ:

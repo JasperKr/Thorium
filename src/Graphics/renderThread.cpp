@@ -222,11 +222,7 @@ auto AquireCommandBuffer(Graphics::GraphicsContext &context,
     return frameBeginResult.AsUnexpected();
   }
 
-  auto result = GetGlobalUniformBuffer(context.frameIndex).NewFrame(context);
-
-  if (Error::IsError(result)) {
-    return result.AsUnexpected();
-  }
+  GetGlobalUniformBuffer(context.frameIndex).NewFrame(context);
 
   return threadInfo;
 }

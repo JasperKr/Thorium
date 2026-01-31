@@ -15,11 +15,13 @@ extern "C" {
 #include <lualib.h>
 }
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wc23-extensions"
 // NOLINTNEXTLINE
 constexpr unsigned char data[] = {
-// NOLINTNEXTLINE
 #embed "guiState.h"
 };
+#pragma clang diagnostic pop
 
 // NOLINTNEXTLINE
 const std::string dataView{reinterpret_cast<const char *>(data), sizeof(data)};

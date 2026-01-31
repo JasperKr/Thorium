@@ -248,6 +248,7 @@ add_executable(Thorium
     src/Graphics/gltfLoader.cpp
     src/Graphics/renderThread.cpp
     src/Graphics/semaphoreManager.cpp
+    src/Graphics/bufferformat.cpp
 
 # Graphics Buffers
     src/Graphics/Buffers/push.cpp
@@ -266,6 +267,8 @@ add_executable(Thorium
     src/Modules/Peripherals/keyboard.cpp
     src/Modules/thread.cpp
     src/Modules/channel.cpp
+    src/Modules/utils.cpp
+    src/Modules/error.cpp
 
 # Math Modules
     src/Modules/Math/vector.cpp

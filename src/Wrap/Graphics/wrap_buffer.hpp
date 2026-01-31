@@ -8,12 +8,12 @@ extern "C" {
 #include <lua.h>
 #include <lualib.h>
 }
-namespace Graphics::StructuredBuffer {
+namespace Graphics {
 
 auto wrap_GetSize(lua_State *state) -> int;
 auto wrap_GetElementCount(lua_State *state) -> int;
 auto wrap_GetElementStride(lua_State *state) -> int;
-auto wrap_Clear(lua_State *state) -> int;
+auto wrap_ClearBuffer(lua_State *state) -> int;
 auto wrap_GetFormat(lua_State *state) -> int;
 auto wrap_SetData(lua_State *state) -> int;
 
@@ -27,17 +27,16 @@ static const luaL_Reg BufferLib[] = {
     {"getElementStride", wrap_GetElementStride},
     {"getFormat", wrap_GetFormat},
     {"setData", wrap_SetData},
-    {"clear", wrap_Clear},
+    {"clear", wrap_ClearBuffer},
     {nullptr, nullptr} // terminate with nullptr
 };
 
 extern "C" inline auto luaopen_buffer(lua_State *state) -> int {
   PrintDebug("Registering Buffer Lua type.");
 
-  LuaWrap::RegisterLuaType(
-      state, Graphics::StructuredBuffer::StructuredBuffer::GetType(),
-      BufferLib); // NOLINT
+  LuaWrap::RegisterLuaType(state, Graphics::StructuredBuffer::GetType(),
+                           BufferLib); // NOLINT
 
   return 1;
 }
-} // namespace Graphics::StructuredBuffer
+} // namespace Graphics

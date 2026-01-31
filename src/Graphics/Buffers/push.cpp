@@ -1,8 +1,42 @@
 #include "push.hpp"
 #include "Graphics/reflect.hpp"
+#include "Modules/console.hpp"
+#include <cstring>
 #include <vector>
 
 namespace Graphics {
+
+PushBuffer::PushBuffer(const ResourceInfo &layout, VkShaderStageFlags stage)
+    : layout(layout), stageFlags(stage) {
+
+  if (!layout.IsBuffer()) {
+    PrintError("PushBuffer layout must be a buffer.");
+    return;
+  }
+
+  const auto &bufferInfo = std::get<BufferInfo>(layout.info);
+
+  if (std::holds_alternative<ScalarInfo>(bufferInfo.info)) {
+    data.resize(std::get<ScalarInfo>(bufferInfo.info).size);
+  } else if (std::holds_alternative<VectorInfo>(bufferInfo.info)) {
+    data.resize(std::get<VectorInfo>(bufferInfo.info).size);
+  } else if (std::holds_alternative<MatrixInfo>(bufferInfo.info)) {
+    data.resize(std::get<MatrixInfo>(bufferInfo.info).size);
+  } else if (std::holds_alternative<StructInfo>(bufferInfo.info)) {
+    data.resize(std::get<StructInfo>(bufferInfo.info).size);
+  }
+}
+
+auto PushBuffer::GetBufferSize() const -> size_t {
+  const auto &bufferInfo = std::get<BufferInfo>(layout.info);
+  if (std::holds_alternative<StructInfo>(bufferInfo.info)) {
+    return std::get<StructInfo>(bufferInfo.info).size;
+  }
+  return bufferInfo.size;
+}
+
+auto PushBuffer::GetLayout() const -> const ResourceInfo & { return layout; }
+
 auto PushBuffer::FlushData(FlushInfo &info) -> void {
   auto &bufferInfo = std::get<BufferInfo>(layout.info);
   auto bufferSize = bufferInfo.size;
@@ -42,4 +76,63 @@ auto PushBuffer::GetUniform(ResourceKey::const_iterator iterator,
 
   return bufferInfo.ResolvePath(iterator, end);
 }
+
+auto PushBuffer::GetStageFlags() const -> VkShaderStageFlags {
+  return stageFlags;
+}
+
+auto PushBuffer::GetBufferOffset() const -> size_t {
+  // const auto &bufferInfo = std::get<BufferInfo>(layout.info); // TODO: Use this?
+  return layout.offset;
+}
+
+auto PushBuffer::SetData(const ResourceKey &key,
+                         const std::span<const uint8_t> &values) -> Error {
+
+  auto &bufferInfo = std::get<BufferInfo>(layout.info);
+
+  if (!std::holds_alternative<StructInfo>(bufferInfo.info)) {
+    return Error::Create(
+        "SetData with key only supported for struct push buffers");
+  }
+
+  const auto *result = GetUniform(key.begin(), key.end());
+  if (result == nullptr) {
+    return Error::Create("Uniform not found in push buffer.");
+  }
+
+  size_t offset = result->GetOffset();
+
+  if (result->GetSize() != values.size()) {
+    return Error::Create("Data size does not match field size");
+  }
+
+  if (offset + values.size() > data.size()) {
+    return Error::Create("Data exceeds buffer size");
+  }
+
+  // NOLINTNEXTLINE
+  std::memcpy(data.data() + offset, values.data(), values.size());
+
+  return Error::Success();
+}
+
+auto PushBuffer::SetData(const std::span<const uint8_t> &values) -> Error {
+  auto &bufferInfo = std::get<BufferInfo>(layout.info);
+
+  if (!bufferInfo.IsScalar() && !bufferInfo.IsVector() &&
+      !bufferInfo.IsMatrix()) {
+    return Error::Create("SetData without name only supported for scalar, "
+                         "vector, and matrix push buffers");
+  }
+
+  if (values.size() > data.size()) {
+    return Error::Create("Data exceeds buffer size");
+  }
+
+  std::memcpy(data.data(), values.data(), values.size());
+
+  return Error::Success();
+}
+
 } // namespace Graphics

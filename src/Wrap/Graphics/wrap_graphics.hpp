@@ -83,7 +83,7 @@ static const luaL_Reg GraphicsLib[] = {
     {"newTexture", Texture::wrap_NewTexture},
     {"newMesh", Graphics::wrap_NewMesh},
     {"newShader", Graphics::Shader::wrap_NewShader},
-    {"newBuffer", Graphics::StructuredBuffer::wrap_NewBuffer},
+    {"newBuffer", Graphics::wrap_NewBuffer},
     {"draw", wrap_Draw},
     {"dispatch", wrap_Dispatch},
     {"dispatchIndirect", wrap_DispatchIndirect},
@@ -103,7 +103,7 @@ const static lua_CFunction childrenInitFunctions[] = {
     Texture::luaopen_texture,
     Graphics::luaopen_mesh,
     Graphics::Shader::luaopen_shader,
-    Graphics::StructuredBuffer::luaopen_buffer,
+    Graphics::luaopen_buffer,
     nullptr,
 };
 

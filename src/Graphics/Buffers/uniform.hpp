@@ -1,14 +1,9 @@
 #pragma once
 
-#include "Graphics/barrier.hpp"
 #include "Graphics/buffer.hpp"
 #include "Graphics/graphics.hpp"
-#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
-#include "tl/expected.hpp"
-#define VK_NO_PROTOTYPES
-#include "vulkan/vulkan_core.h"
 #include <cstdint>
 
 constexpr size_t InitialUniformBufferSize = 64L * 1024; // 64 KB
@@ -21,108 +16,12 @@ namespace Graphics {
 struct FrameUniformBufferObject {
 public:
   static auto Create(GraphicsContext &context)
-      -> Result<FrameUniformBufferObject> {
-
-    FrameUniformBufferObject obj{};
-    obj.size = InitialUniformBufferSize;
-
-    BufferCreationInfo info{};
-    info.size = obj.size;
-    info.persistentMapping = true;
-    info.stagingBuffer = true;
-    info.properties =
-        static_cast<uint32_t>(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) |
-        static_cast<uint32_t>(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) |
-        static_cast<uint32_t>(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-    info.usage = static_cast<uint32_t>(VK_BUFFER_USAGE_TRANSFER_DST_BIT) |
-                 static_cast<uint32_t>(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
-    info.debugName = "Frame Uniform Buffer";
-
-    auto result = Buffer::Create(context, info);
-    if (Error::IsError(result)) {
-      return result.error().AsUnexpected();
-    }
-    obj.buffer = result.value();
-
-    PrintDebug("REFCOUNT {}", obj.buffer->getReferenceCount());
-
-    return obj;
-  }
+      -> Result<FrameUniformBufferObject>;
 
   void SetData(Graphics::GraphicsContext &context,
-               const std::span<const uint8_t> &data, uint32_t atOffset) {
-    if (atOffset + data.size() > localData.size()) {
-      localData.resize(atOffset + data.size());
-    }
+               const std::span<const uint8_t> &data, uint32_t atOffset);
 
-    // NOLINTNEXTLINE, pointer arithmetic
-    memcpy(localData.data() + atOffset, data.data(), data.size());
-  }
-
-  auto Flush(Graphics::GraphicsContext &context) -> Result<bool> {
-    if (localData.size() > MaximumUniformBufferSize) {
-      return Error::Unexpected(
-          "Tried to set uniform buffer data larger than maximum. (holy shit)");
-    }
-
-    bool resized = false;
-    if (localData.size() + offset > size) {
-      while (localData.size() + offset > size) {
-        size *= 2;
-        if (size > MaximumUniformBufferSize) {
-          return Error::Unexpected(
-              "Uniform buffer exceeded maximum allowed size.");
-        }
-      }
-
-      Graphics::BufferCreationInfo info{};
-      info.size = size;
-      info.persistentMapping = true;
-      info.stagingBuffer = true;
-      info.properties =
-          static_cast<uint32_t>(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) |
-          static_cast<uint32_t>(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) |
-          static_cast<uint32_t>(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-      info.usage = static_cast<uint32_t>(VK_BUFFER_USAGE_TRANSFER_DST_BIT) |
-                   static_cast<uint32_t>(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
-      info.debugName = "Frame Uniform Buffer";
-
-      auto result = Graphics::Buffer::Create(context, info);
-      if (Error::IsError(result)) {
-        return result.error().AsUnexpected();
-      }
-
-      buffer = result.value();
-      resized = true;
-    }
-
-    Barrier::UpdateUsage(context, *buffer,
-                         Graphics::Barrier::ResourceState{
-                             .stages = VK_PIPELINE_STAGE_2_HOST_BIT,
-                             .access = VK_ACCESS_2_HOST_WRITE_BIT,
-                         });
-
-    auto result = buffer->SetData(context, localData, offset);
-    auto initialOffset = offset;
-
-    offset += static_cast<uint32_t>(localData.size());
-
-    auto alignment =
-        context.deviceProperties.limits.minUniformBufferOffsetAlignment;
-
-    // Align offset to minUniformBufferOffsetAlignment
-    offset = (offset + alignment - 1) & ~(alignment - 1);
-
-    lastFlushSize =
-        offset - initialOffset; // Use the difference as flushed size
-    localData.clear();
-
-    if (Error::IsError(result)) {
-      return result.AsUnexpected();
-    }
-
-    return resized;
-  }
+  auto Flush(Graphics::GraphicsContext &context) -> Result<bool>;
 
   auto ScheduleDestroy() -> void { buffer.reset(); }
 
@@ -134,10 +33,7 @@ public:
   [[nodiscard]] auto GetBuffer() const -> Ref<Graphics::Buffer> {
     return buffer;
   }
-  [[nodiscard]] auto NewFrame(Graphics::GraphicsContext &context) -> Error {
-    offset = 0;
-    return Error::Success();
-  }
+  auto NewFrame(Graphics::GraphicsContext &context) -> void { offset = 0; }
 
 private:
   Ref<Graphics::Buffer> buffer;

@@ -620,11 +620,7 @@ auto Present(Graphics::GraphicsContext &context) -> Error {
     return error;
   }
 
-  auto result = GetGlobalUniformBuffer(context.frameIndex).NewFrame(context);
-
-  if (Error::IsError(result)) {
-    return result;
-  }
+  GetGlobalUniformBuffer(context.frameIndex).NewFrame(context);
 
   FrameMarkEnd("Present");
 

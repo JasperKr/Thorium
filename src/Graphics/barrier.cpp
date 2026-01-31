@@ -298,4 +298,29 @@ auto UpdateUsageVirtual(BarrierSynced &resource, const ResourceState &usage)
   return std::nullopt;
 }
 
+auto InsertBarrier(ResourceSync &barrier) -> void {
+  GlobalResourceSyncTimeline.push_back(barrier);
+  FrameBarrierCount++;
+}
+
+auto ResetFrameTimeline() -> void {
+  GlobalTimelineOffset += FrameBarrierCount;
+  GlobalResourceSyncTimeline.clear();
+  GlobalResourceStateUpdates.clear();
+
+  FrameBarrierCount = 0;
+}
+
+auto ResetModule() -> void {
+  GlobalTimelineIndex = 0;
+  GlobalTimelineOffset = 0;
+  FrameBarrierCount = 0;
+  GlobalResourceSyncTimeline.clear();
+  GlobalResourceStateUpdates.clear();
+
+  for (auto &res : GraphicsResources) {
+    res.firstAsyncUsage = true;
+  }
+}
+
 } // namespace Graphics::Barrier

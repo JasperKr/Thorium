@@ -2,7 +2,6 @@
 
 #include "Graphics/barrier.hpp"
 #include "Graphics/graphics.hpp"
-#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "graphics.hpp"
@@ -82,20 +81,7 @@ struct Buffer : Object, Barrier::BarrierSynced {
     return GetDeferredDestructionAllowed() && !isDestroyed;
   }
 
-  ~Buffer() override {
-    PrintDebug("Destroying buffer with handle {}", (void *)handle);
-    auto *context = GetCurrentGraphicsContext();
-
-    std::lock_guard<std::mutex> lock(
-        Graphics::GraphicsContext::mutexes.vmaAllocator);
-
-    if (persistentMapping && mappedData != nullptr) {
-      vmaUnmapMemory(context->vmaAllocator, memory);
-      mappedData = nullptr;
-    }
-
-    vmaDestroyBuffer(context->vmaAllocator, handle, memory);
-  }
+  ~Buffer() override;
 
   // Set data into the buffer at the given offset
   auto SetData(GraphicsContext &context, const std::span<const uint8_t> &data,

@@ -186,7 +186,7 @@ struct ShaderModule : Object {
             const std::span<const uint8_t> &data) -> Error;
 
   auto Send(GraphicsContext &context, const ResourceKey &key,
-            StructuredBuffer::StructuredBuffer *buffer) -> Error;
+            StructuredBuffer *buffer) -> Error;
 
   auto Send(GraphicsContext &context, const ResourceKey &key,
             Graphics::Texture::Texture *texture) -> Error;

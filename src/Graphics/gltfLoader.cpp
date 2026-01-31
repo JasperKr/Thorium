@@ -1,5 +1,3 @@
-#pragma once
-
 #include "gltfLoader.hpp"
 #include "Graphics/graphics.hpp"
 #include "Graphics/texture.hpp"
