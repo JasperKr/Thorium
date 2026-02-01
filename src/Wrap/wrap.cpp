@@ -4,11 +4,11 @@
 #include "Wrap/Modules/wrap_data.hpp"
 #include "Wrap/Modules/wrap_mouse.hpp"
 #include "Wrap/Modules/wrap_thread.hpp"
+#include "Wrap/Modules/wrap_window.hpp"
 #include "Wrap/proxy.hpp"
 
 #include <cstdint>
 #include <iostream>
-#include <set>
 #include <string>
 #include <unordered_set>
 extern "C" {
@@ -497,6 +497,7 @@ static const luaL_Reg ThoriumModules[] = {
     {"keyboard", Wrap::Keyboard::luaopen_keyboard},
     {"mouse", Wrap::Mouse::luaopen_mouse},
     {"gui", Wrap::Imgui::luaopen_gui},
+    {"window", Wrap::Window::luaopen_window},
     {nullptr, nullptr},
 };
 

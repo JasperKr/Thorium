@@ -269,6 +269,7 @@ add_executable(Thorium
     src/Modules/channel.cpp
     src/Modules/utils.cpp
     src/Modules/error.cpp
+    src/Modules/window.cpp
 
 # Math Modules
     src/Modules/Math/vector.cpp
@@ -297,6 +298,7 @@ add_executable(Thorium
     src/Wrap/Modules/Editor/wrap_gui.cpp
     src/Wrap/Modules/wrap_thread.cpp
     src/Wrap/Modules/wrap_channel.cpp
+    src/Wrap/Modules/wrap_window.cpp
     src/Wrap/wrap.cpp
     src/Wrap/lua_data.cpp
 

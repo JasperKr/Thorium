@@ -2,10 +2,12 @@
 #include "Modules/config.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
+#include "Modules/window.hpp"
 #include "SDL3/SDL_init.h"
 #include "SDL3/SDL_vulkan.h"
 #include "tl/expected.hpp"
 #include "vulkan/vulkan_core.h"
+#include <array>
 #include <cassert>
 #include <cstdint>
 #include <mutex>
@@ -32,7 +34,81 @@ auto GetDeferredDestructionAllowed() -> bool & {
   return deferredDestructionAllowed;
 }
 
-static auto FindSurfaceFormat(GraphicsContext &context)
+inline auto
+FindHDRColorspaceSupport(const GraphicsContext &context,
+                         const std::vector<VkSurfaceFormatKHR> &formats)
+    -> Result<VkSurfaceFormatKHR> {
+  constexpr std::array<VkFormat, 2> AllowedFormats = {
+      VK_FORMAT_A2B10G10R10_UNORM_PACK32, VK_FORMAT_A2R10G10B10_UNORM_PACK32};
+  constexpr std::array<VkColorSpaceKHR, 2> AllowedColorSpaces = {
+      VK_COLOR_SPACE_HDR10_HLG_EXT, VK_COLOR_SPACE_HDR10_ST2084_EXT};
+
+  constexpr std::array Preferred = {
+      VK_FORMAT_R16G16B16A16_SFLOAT,
+      VK_FORMAT_A2B10G10R10_UNORM_PACK32,
+      VK_FORMAT_A2R10G10B10_UNORM_PACK32,
+  };
+
+  for (VkFormat preferredFormat : Preferred) {
+    for (VkColorSpaceKHR colorspace : AllowedColorSpaces) {
+      for (const auto &format : formats) {
+        if (format.format == preferredFormat &&
+            format.colorSpace == colorspace) {
+          return format;
+        }
+      }
+    }
+  }
+
+  return Error::Unexpected("No suitable HDR surface format found", -1);
+}
+
+inline auto
+FindSRGBColorspaceSupport(const GraphicsContext &context,
+                          const std::vector<VkSurfaceFormatKHR> &formats)
+    -> Result<VkSurfaceFormatKHR> {
+  constexpr std::array<VkFormat, 2> AllowedFormats = {VK_FORMAT_R8G8B8A8_SRGB,
+                                                      VK_FORMAT_B8G8R8A8_SRGB};
+
+  for (const auto &format : formats) {
+    if (format.colorSpace != VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
+      continue;
+    }
+
+    for (const auto &allowedFormat : AllowedFormats) {
+      if (format.format == allowedFormat) {
+        return format;
+      }
+    }
+  }
+
+  return Error::Unexpected("No suitable sRGB surface format found", -1);
+}
+
+inline auto
+FindLinearColorspaceSupport(const GraphicsContext &context,
+                            const std::vector<VkSurfaceFormatKHR> &formats)
+    -> Result<VkSurfaceFormatKHR> {
+  constexpr std::array<VkFormat, 2> AllowedFormats = {VK_FORMAT_R8G8B8A8_UNORM,
+                                                      VK_FORMAT_B8G8R8A8_UNORM};
+
+  for (const auto &format : formats) {
+    if (format.colorSpace != VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
+      continue;
+    }
+
+    for (const auto &allowedFormat : AllowedFormats) {
+      if (format.format == allowedFormat) {
+        return format;
+      }
+    }
+  }
+
+  return Error::Unexpected("No suitable linear surface format found", -1);
+}
+
+static auto FindSurfaceFormat(Window::ColorSpace colorspace,
+                              GraphicsContext &context)
     -> Result<VkSurfaceFormatKHR> {
   // Surface format finding code here
 
@@ -48,39 +124,17 @@ static auto FindSurfaceFormat(GraphicsContext &context)
   vkGetPhysicalDeviceSurfaceFormatsKHR(context.physicalDevice, context.surface,
                                        &formatCount, formats.data());
 
-  // 37 -> rgba8 - unorm
-  // 44 -> bgra8 - unorm
-  // 64 -> a2bgr10 - unorm
-  // 43 -> rgba8 -  nonlinear
-  // 50 -> bgra8 - nonlinear
-
-  bool found = false;
-  VkSurfaceFormatKHR selectedFormat;
-
-  // just use rgba8 - unorm for now
-
-  for (const auto &format : formats) {
-    if (format.format == VK_FORMAT_R8G8B8A8_UNORM ||
-        format.format == VK_FORMAT_B8G8R8A8_UNORM) {
-      found = true;
-      return format;
-    }
+  switch (colorspace) {
+  case Window::ColorSpace::GammaCorrect:
+    return FindSRGBColorspaceSupport(context, formats);
+  case Window::ColorSpace::Linear:
+    return FindLinearColorspaceSupport(context, formats);
+  case Window::ColorSpace::HDR:
+    return FindHDRColorspaceSupport(context, formats);
+  default:
+    return Error::Unexpected("No suitable surface format found", -2);
   }
-
-  return Error::Unexpected("No suitable surface format found", -2);
 }
-
-static const std::vector<VkPresentModeKHR> PresentModeScoresVsync = {
-    VK_PRESENT_MODE_FIFO_KHR,
-    VK_PRESENT_MODE_FIFO_RELAXED_KHR,
-};
-
-static const std::vector<VkPresentModeKHR> PresentModeScoresNoVsync = {
-    VK_PRESENT_MODE_MAILBOX_KHR,
-    VK_PRESENT_MODE_IMMEDIATE_KHR,
-    VK_PRESENT_MODE_FIFO_RELAXED_KHR,
-    VK_PRESENT_MODE_FIFO_KHR,
-};
 
 static auto FindPhysicalDevice(GraphicsContext &context) -> Error {
   uint32_t gpuCount = 0;
@@ -182,7 +236,47 @@ static auto FindQueueFamilies(GraphicsContext &context) -> Error {
   return Error::Success();
 }
 
-static auto FindPresentMode(GraphicsContext &context)
+using PM = VkPresentModeKHR;
+
+// If this is ever edited, make sure the present modes are in the same order as
+// The VkPresentModeKHR enum, Immediate = 0, Mailbox = 1, FIFO = 2, FIFO_Relaxed = 3
+constexpr std::array<std::array<PM, 6>, 4> PreferencePerPresentMode = {{
+    {
+        PM::VK_PRESENT_MODE_IMMEDIATE_KHR,
+        PM::VK_PRESENT_MODE_MAILBOX_KHR,
+        PM::VK_PRESENT_MODE_FIFO_KHR,
+        PM::VK_PRESENT_MODE_FIFO_RELAXED_KHR,
+        PM::VK_PRESENT_MODE_SHARED_DEMAND_REFRESH_KHR,
+        PM::VK_PRESENT_MODE_SHARED_CONTINUOUS_REFRESH_KHR,
+    },
+    {
+        PM::VK_PRESENT_MODE_MAILBOX_KHR,
+        PM::VK_PRESENT_MODE_IMMEDIATE_KHR,
+        PM::VK_PRESENT_MODE_FIFO_KHR,
+        PM::VK_PRESENT_MODE_FIFO_RELAXED_KHR,
+        PM::VK_PRESENT_MODE_SHARED_DEMAND_REFRESH_KHR,
+        PM::VK_PRESENT_MODE_SHARED_CONTINUOUS_REFRESH_KHR,
+    },
+    {
+        PM::VK_PRESENT_MODE_FIFO_KHR,
+        PM::VK_PRESENT_MODE_FIFO_RELAXED_KHR,
+        PM::VK_PRESENT_MODE_MAILBOX_KHR,
+        PM::VK_PRESENT_MODE_IMMEDIATE_KHR,
+        PM::VK_PRESENT_MODE_SHARED_DEMAND_REFRESH_KHR,
+        PM::VK_PRESENT_MODE_SHARED_CONTINUOUS_REFRESH_KHR,
+    },
+    {
+        PM::VK_PRESENT_MODE_FIFO_RELAXED_KHR,
+        PM::VK_PRESENT_MODE_FIFO_KHR,
+        PM::VK_PRESENT_MODE_MAILBOX_KHR,
+        PM::VK_PRESENT_MODE_IMMEDIATE_KHR,
+        PM::VK_PRESENT_MODE_SHARED_DEMAND_REFRESH_KHR,
+        PM::VK_PRESENT_MODE_SHARED_CONTINUOUS_REFRESH_KHR,
+    },
+}};
+
+static auto FindPresentMode(Window::WindowContext &wcontext,
+                            GraphicsContext &context)
     -> Result<VkPresentModeKHR> {
   uint32_t presentModeCount = 0;
   vkGetPhysicalDeviceSurfacePresentModesKHR(
@@ -197,10 +291,28 @@ static auto FindPresentMode(GraphicsContext &context)
                                             context.surface, &presentModeCount,
                                             presentModes.data());
 
-  for (const auto &preferredMode : PresentModeScoresVsync) {
+  auto Preferred = VK_PRESENT_MODE_MAX_ENUM_KHR;
+
+  switch (wcontext.vsync) {
+  case Window::VsyncMode::Immediate:
+    Preferred = VK_PRESENT_MODE_IMMEDIATE_KHR;
+    break;
+  case Window::VsyncMode::Replace:
+    Preferred = VK_PRESENT_MODE_MAILBOX_KHR;
+    break;
+  case Window::VsyncMode::Enabled:
+    Preferred = VK_PRESENT_MODE_FIFO_KHR;
+    break;
+  case Window::VsyncMode::Adaptive:
+    Preferred = VK_PRESENT_MODE_FIFO_RELAXED_KHR;
+    break;
+  }
+
+  const auto &preferenceList = PreferencePerPresentMode.at(Preferred);
+  for (const auto &preferredMode : preferenceList) {
     for (const auto &availableMode : presentModes) {
       if (preferredMode == availableMode) {
-        return preferredMode;
+        return availableMode;
       }
     }
   }
@@ -555,6 +667,30 @@ inline auto CreateCommandPool(ThreadContext &tcontext) -> Error {
   return Error::Success();
 }
 
+inline auto CreateSwapchain(GraphicsContext &context,
+                            Window::WindowContext &wcontext) -> Error {
+  auto presentResult = FindPresentMode(wcontext, context);
+  if (Error::IsError(presentResult)) {
+    return presentResult.error();
+  }
+  VkPresentModeKHR presentMode = presentResult.value();
+
+  context.surfaceInfo.presentMode = presentMode;
+
+  VkSurfaceCapabilitiesKHR surfaceCapabilities;
+  vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
+      context.physicalDevice, context.surface, &surfaceCapabilities);
+
+  auto surfaceResult = FindSurfaceFormat(wcontext.colorSpace, context);
+  if (Error::IsError(surfaceResult)) {
+    return surfaceResult.error();
+  }
+  VkSurfaceFormatKHR surfaceFormat = surfaceResult.value();
+
+  context.surfaceInfo.format = surfaceFormat;
+  context.surfaceInfo.capabilities = surfaceCapabilities;
+}
+
 auto Initialize(GraphicsContext &context, Config::ApplicationConfig &config)
     -> Error {
   PrintDebug("Initializing Volk...");
@@ -637,26 +773,11 @@ auto Initialize(GraphicsContext &context, Config::ApplicationConfig &config)
     return error;
   }
 
-  VkSurfaceCapabilitiesKHR surfaceCapabilities;
-  vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
-      context.physicalDevice, context.surface, &surfaceCapabilities);
+  auto *windowContext = Window::GetWindowContext();
 
-  auto surfaceResult = FindSurfaceFormat(context);
-  if (Error::IsError(surfaceResult)) {
-    return surfaceResult.error();
+  if (windowContext == nullptr) {
+    return Error::Create("No current window context found.");
   }
-  VkSurfaceFormatKHR surfaceFormat = surfaceResult.value();
-
-  // Pick a present mode
-  auto presentResult = FindPresentMode(context);
-  if (Error::IsError(presentResult)) {
-    return presentResult.error();
-  }
-  VkPresentModeKHR presentMode = presentResult.value();
-
-  context.surfaceInfo.format = surfaceFormat;
-  context.surfaceInfo.presentMode = presentMode;
-  context.surfaceInfo.capabilities = surfaceCapabilities;
 
   error = CreateDevice(context);
   if (Error::IsError(error)) {

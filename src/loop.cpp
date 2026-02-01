@@ -13,6 +13,7 @@
 #include "Modules/error.hpp"
 #include "Modules/filesystem.hpp"
 #include "Modules/thread.hpp"
+#include "Modules/window.hpp"
 #include "Wrap/Modules/Editor/wrap_imgui.hpp"
 #include <filesystem>
 #include <public/tracy/Tracy.hpp>
@@ -189,6 +190,9 @@ auto LoadLua(lua_State *state, const std::vector<std::string> &launchArgs)
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 auto MainLoop(const std::vector<std::string> &arguments) -> Error {
   Error::SetupTraceback();
+
+  Window::WindowContext wcontext = {};
+  Window::SetWindowContext(wcontext);
 
   PrintDebug("Initializing Lua state...");
 

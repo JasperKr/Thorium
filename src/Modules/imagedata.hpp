@@ -69,6 +69,10 @@ public:
     return ImageData::GetType();
   }
 
+  auto GetPitch() const -> size_t {
+    return width * static_cast<size_t>(Graphics::Format::GetSize(format));
+  }
+
 private:
   uint32_t width;
   uint32_t height;

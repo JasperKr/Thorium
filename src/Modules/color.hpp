@@ -5,7 +5,7 @@
 
 static constexpr float uint8_max_as_float = 255.0F;
 
-// 32-bit RGBA color representation
+// 32-bit per channel RGBA color representation
 struct Color {
   float r;
   float g;
