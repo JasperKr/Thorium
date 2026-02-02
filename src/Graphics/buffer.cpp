@@ -382,8 +382,6 @@ auto Buffer::Create(GraphicsContext &context, const BufferCreationInfo &info)
 
   auto buffer = Ref<Buffer>::Make();
 
-  PrintInfo("Creating buffer, refcount: {}", buffer->getReferenceCount());
-
   buffer->isStagingBuffer = info.stagingBuffer;
   buffer->persistentMapping = info.persistentMapping;
 

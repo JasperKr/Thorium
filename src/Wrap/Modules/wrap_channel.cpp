@@ -21,8 +21,6 @@ auto wrap_NewChannel(lua_State *state) -> int {
 auto wrap_Push(lua_State *state) -> int {
   auto *channel = LuaWrap::ObjectFromLua<::Threading::Channel>(state, 1);
 
-  PrintInfo("Channel refcount at push start {}", channel->getReferenceCount());
-
   if (channel == nullptr) {
     return luaL_error(state, "Invalid Channel object.");
   }

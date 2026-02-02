@@ -116,11 +116,12 @@ struct BoundState {
   std::vector<ImageTransitionInfo> pendingImageTransitions;
 };
 
-static std::mutex
-    BoundStatesMutex{}; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-static std::unordered_map<
+// NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
+extern std::mutex BoundStatesMutex;
+extern std::unordered_map<
     uint32_t, std::unordered_map<const struct ShaderModule *, BoundState>>
-    BoundStates; // NOLINT
+    BoundStates;
+// NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
 struct ShaderModule : Object {
   ShaderModule() = default;

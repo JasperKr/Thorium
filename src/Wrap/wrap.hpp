@@ -85,7 +85,7 @@ inline auto ObjectFromLua(lua_State *state, int index) -> T * {
     return nullptr;
   }
 
-  auto *obj = dynamic_cast<T *>(proxy->object);
+  auto *obj = static_cast<T *>(proxy->object);
   return obj;
 }
 

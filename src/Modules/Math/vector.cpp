@@ -1,8 +1,8 @@
 #include "vector.hpp"
 #include "Modules/Math/math.hpp"
+#include <cassert>
 #include <cmath>
 #include <cstdint>
-#include <stdexcept>
 
 namespace Math {
 // Index operator overloads for all vector types
@@ -17,7 +17,8 @@ auto Vec3::operator[](uint32_t index) const -> Scalar {
   case 2:
     return z;
   default:
-    throw std::out_of_range("Vec3 index out of range");
+    assert(false && "Vec3 index out of range");
+    return 0;
   }
 }
 
@@ -33,7 +34,8 @@ auto Vec4::operator[](uint32_t index) const -> Scalar {
   case 3:
     return w;
   default:
-    throw std::out_of_range("Vec4 index out of range");
+    assert(false && "Vec4 index out of range");
+    return 0;
   }
 }
 
@@ -45,7 +47,8 @@ auto Uvec2::operator[](uint32_t index) const -> uint32_t {
   case 1:
     return y;
   default:
-    throw std::out_of_range("Uvec2 index out of range");
+    assert(false && "Uvec2 index out of range");
+    return 0;
   }
 }
 
@@ -59,7 +62,8 @@ auto Uvec3::operator[](uint32_t index) const -> uint32_t {
   case 2:
     return z;
   default:
-    throw std::out_of_range("Uvec3 index out of range");
+    assert(false && "Uvec3 index out of range");
+    return 0;
   }
 }
 
@@ -75,7 +79,8 @@ auto Uvec4::operator[](uint32_t index) const -> uint32_t {
   case 3:
     return w;
   default:
-    throw std::out_of_range("Uvec4 index out of range");
+    assert(false && "Uvec4 index out of range");
+    return 0;
   }
 }
 
@@ -87,7 +92,8 @@ auto Ivec2::operator[](uint32_t index) const -> int32_t {
   case 1:
     return y;
   default:
-    throw std::out_of_range("Ivec2 index out of range");
+    assert(false && "Ivec2 index out of range");
+    return 0;
   }
 }
 
@@ -101,7 +107,8 @@ auto Ivec3::operator[](uint32_t index) const -> int32_t {
   case 2:
     return z;
   default:
-    throw std::out_of_range("Ivec3 index out of range");
+    assert(false && "Ivec3 index out of range");
+    return 0;
   }
 }
 
@@ -117,7 +124,8 @@ auto Ivec4::operator[](uint32_t index) const -> int32_t {
   case 3:
     return w;
   default:
-    throw std::out_of_range("Ivec4 index out of range");
+    assert(false && "Ivec4 index out of range");
+    return 0;
   }
 }
 
@@ -251,7 +259,8 @@ auto Vec2::operator[](uint32_t index) const -> Scalar {
   case 1:
     return y;
   default:
-    throw std::out_of_range("Vec2 index out of range");
+    assert(false && "Vec2 index out of range");
+    return 0;
   }
 }
 

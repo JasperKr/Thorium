@@ -1,6 +1,7 @@
 #pragma once
 
-#include "Modules/config.hpp"
+#include "Modules/object.hpp"
+#include "Modules/window.hpp"
 #include "SDL3/SDL_video.h"
 
 #include "Modules/error.hpp"
@@ -43,11 +44,16 @@ struct SurfaceInfo {
   VkSurfaceCapabilitiesKHR capabilities;
 };
 
+namespace Texture {
+struct Texture;
+}
+
 struct SwapchainInfo {
   VkSwapchainKHR swapchain;
   VkFormat format;
   VkExtent2D extent;
   uint32_t imageCount;
+  std::vector<Ref<Texture::Texture>> textures;
   std::vector<VkImage> images;
   std::vector<VkImageView> imageViews;
 };
@@ -98,7 +104,7 @@ struct ThreadContext {
   VkDescriptorPool descriptorPool;                 // Current descriptor pool
 };
 
-auto Initialize(GraphicsContext &context, Config::ApplicationConfig &config)
+auto Initialize(GraphicsContext &context, Window::WindowContext &wcontext)
     -> Error;
 auto GetThreadContext() -> ThreadContext &;
 auto GetCommandBuffer() -> VkCommandBuffer;
@@ -108,6 +114,9 @@ auto BeginSingleTimeCommands(GraphicsContext &context) -> VkCommandBuffer;
 
 auto EndSingleTimeCommands(GraphicsContext &context,
                            VkCommandBuffer commandBuffer) -> void;
+
+auto CreateSwapchain(GraphicsContext &context, Window::WindowContext &wcontext)
+    -> Error;
 
 // Graphics context NOLINTNEXTLINE
 extern GraphicsContext *g_ctx;

@@ -253,9 +253,7 @@ auto RenderTargetsFromTexture(lua_State *state, int index)
   if (texture == nullptr) {
     auto *ctx = Graphics::GetCurrentGraphicsContext();
 
-    texture =
-        Graphics::DynamicRendering::SwapchainTextures[ctx->swapchainImageIndex]
-            .get();
+    texture = ctx->swapchainInfo.textures[ctx->swapchainImageIndex].get();
   }
 
   auto rendertarget = Ref<Graphics::DynamicRendering::RenderTarget>::Make();
@@ -294,8 +292,8 @@ auto RenderTargetsFromOptions(lua_State *state, int index)
   if (lua_isnoneornil(state, -1) != 0) {
     auto *context = Graphics::GetCurrentGraphicsContext();
 
-    rendertarget->texture = Graphics::DynamicRendering::SwapchainTextures
-        [context->swapchainImageIndex];
+    rendertarget->texture =
+        context->swapchainInfo.textures[context->swapchainImageIndex];
   } else {
     auto *texture =
         LuaWrap::ObjectFromLua<Graphics::Texture::Texture>(state, -1);
@@ -434,7 +432,7 @@ auto wrap_SetRenderTargets(lua_State *state) -> int {
     rendertarget->blendMode = DefaultBlendMode;
     rendertarget->clearValue = {0.0F, 0.0F, 0.0F, 1.0F};
     rendertarget->texture =
-        Graphics::DynamicRendering::SwapchainTextures[ctx->swapchainImageIndex];
+        ctx->swapchainInfo.textures[ctx->swapchainImageIndex];
     rendertarget->location = 0;
     rendertarget->layer = 0;
     rendertarget->loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;

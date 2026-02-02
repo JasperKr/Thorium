@@ -724,6 +724,8 @@ auto ImageLayoutToString(VkImageLayout layout) -> const char * {
     return "TRANSFER_SRC_OPTIMAL";
   case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
     return "TRANSFER_DST_OPTIMAL";
+  case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR:
+    return "PRESENT_SRC_KHR";
   default:
     return "UNKNOWN_LAYOUT";
   }
@@ -1233,8 +1235,7 @@ auto GetDefaultTexture(GraphicsContext &context, VkFormat format,
   return texture;
 }
 
-constexpr auto GetAccessFlagsForUsage(TextureUsage usage,
-                                      VkImageLayout currentLayout)
+auto GetAccessFlagsForUsage(TextureUsage usage, VkImageLayout currentLayout)
     -> VkAccessFlags2 {
   switch (usage) {
   case TextureUsage::Sampler:

@@ -4,9 +4,12 @@
 #include "Graphics/renderThread.hpp"
 #include "Graphics/resource.hpp"
 #include "Graphics/semaphoreManager.hpp"
+#include "Graphics/texture.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
+#include "Modules/object.hpp"
 #include "Modules/utils.hpp"
+#include "Modules/window.hpp"
 #include "buffer.hpp"
 #include "dynamicRendering.hpp"
 #include "graphics.hpp"
@@ -101,54 +104,59 @@ static auto EndRecording(Graphics::GraphicsContext &context,
   return Error::Success();
 }
 
-void TransitionColorToPresent(VkCommandBuffer cmd, VkImage image) {
-  VkImageMemoryBarrier barrier = {
-      .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-      .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-      .dstAccessMask = 0,
-      .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-      .newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-      .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-      .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-      .image = image,
-      .subresourceRange =
-          {
-              .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-              .baseMipLevel = 0,
-              .levelCount = 1,
-              .baseArrayLayer = 0,
-              .layerCount = 1,
-          },
-  };
+void TransitionColorToPresent(VkCommandBuffer cmd,
+                              Ref<Texture::Texture> &texture) {
 
-  vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                       VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0, nullptr, 0,
-                       nullptr, 1, &barrier);
+  VkImageMemoryBarrier2 barrier2 = {};
+  barrier2.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+  barrier2.srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+  barrier2.srcAccessMask = Texture::GetAccessFlagsForUsage(
+      texture->lastUsage, texture->currentLayout);
+  barrier2.dstStageMask = VK_PIPELINE_STAGE_2_NONE;
+  barrier2.dstAccessMask = 0;
+  barrier2.oldLayout = texture->currentLayout;
+  barrier2.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+  barrier2.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  barrier2.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  barrier2.image = texture->image;
+  barrier2.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  barrier2.subresourceRange.baseMipLevel = 0;
+  barrier2.subresourceRange.levelCount = 1;
+  barrier2.subresourceRange.baseArrayLayer = 0;
+  barrier2.subresourceRange.layerCount = 1;
+
+  VkDependencyInfo depInfo = {};
+  depInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+  depInfo.imageMemoryBarrierCount = 1;
+  depInfo.pImageMemoryBarriers = &barrier2;
+
+  vkCmdPipelineBarrier2(cmd, &depInfo);
 }
 
 void TransitionPresentToColor(VkCommandBuffer cmd, VkImage image) {
-  VkImageMemoryBarrier barrier = {
-      .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-      .srcAccessMask = 0,
-      .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-      .oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-      .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-      .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-      .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-      .image = image,
-      .subresourceRange =
-          {
-              .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-              .baseMipLevel = 0,
-              .levelCount = 1,
-              .baseArrayLayer = 0,
-              .layerCount = 1,
-          },
-  };
+  VkImageMemoryBarrier2 barrier2 = {};
+  barrier2.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+  barrier2.srcStageMask = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT;
+  barrier2.srcAccessMask = 0;
+  barrier2.dstStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+  barrier2.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+  barrier2.oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+  barrier2.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+  barrier2.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  barrier2.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  barrier2.image = image;
+  barrier2.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  barrier2.subresourceRange.baseMipLevel = 0;
+  barrier2.subresourceRange.levelCount = 1;
+  barrier2.subresourceRange.baseArrayLayer = 0;
+  barrier2.subresourceRange.layerCount = 1;
 
-  vkCmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                       VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0, 0,
-                       nullptr, 0, nullptr, 1, &barrier);
+  VkDependencyInfo depInfo = {};
+  depInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+  depInfo.imageMemoryBarrierCount = 1;
+  depInfo.pImageMemoryBarriers = &barrier2;
+
+  vkCmdPipelineBarrier2(cmd, &depInfo);
 }
 
 auto AquireNextSwapchainImage(Graphics::GraphicsContext &context) -> Error {
@@ -187,6 +195,12 @@ auto PrepareRecording(Graphics::GraphicsContext &context) -> Error {
 
   TransitionPresentToColor(
       cmdBuffer, context.swapchainInfo.images[context.swapchainImageIndex]);
+  context.swapchainInfo.textures[context.swapchainImageIndex]->currentLayout =
+      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+  context.swapchainInfo.textures[context.swapchainImageIndex]->lastUsage =
+      Texture::TextureUsage::Attachment;
+  context.swapchainInfo.textures[context.swapchainImageIndex]
+      ->lastPipelineStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
   vkEndCommandBuffer(cmdBuffer);
 
@@ -301,9 +315,38 @@ auto InitializeGraphics(Graphics::GraphicsContext &context) -> Error {
     return result;
   }
 
-  TransitionPresentToColor(
-      GetCommandBuffer(),
-      context.swapchainInfo.images[context.swapchainImageIndex]);
+  for (VkImage image : context.swapchainInfo.images) {
+    VkImageMemoryBarrier2 barrier2 = {};
+    barrier2.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+    barrier2.srcStageMask = 0;
+    barrier2.srcAccessMask = 0;
+    barrier2.dstStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+    barrier2.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    barrier2.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    barrier2.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    barrier2.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier2.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier2.image = image;
+    barrier2.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    barrier2.subresourceRange.baseMipLevel = 0;
+    barrier2.subresourceRange.levelCount = 1;
+    barrier2.subresourceRange.baseArrayLayer = 0;
+    barrier2.subresourceRange.layerCount = 1;
+
+    VkDependencyInfo depInfo = {};
+    depInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+    depInfo.imageMemoryBarrierCount = 1;
+    depInfo.pImageMemoryBarriers = &barrier2;
+
+    vkCmdPipelineBarrier2(GetCommandBuffer(), &depInfo);
+
+    context.swapchainInfo.textures[context.swapchainImageIndex]->currentLayout =
+        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    context.swapchainInfo.textures[context.swapchainImageIndex]->lastUsage =
+        Texture::TextureUsage::Unknown;
+    context.swapchainInfo.textures[context.swapchainImageIndex]
+        ->lastPipelineStage = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT;
+  }
 
   vkEndCommandBuffer(GetCommandBuffer());
 
@@ -567,7 +610,7 @@ auto Present(Graphics::GraphicsContext &context) -> Error {
 
   TransitionColorToPresent(
       presentTransitionBuffer,
-      context.swapchainInfo.images[context.swapchainImageIndex]);
+      context.swapchainInfo.textures[context.swapchainImageIndex]);
 
   vkEndCommandBuffer(presentTransitionBuffer);
 
@@ -596,6 +639,18 @@ auto Present(Graphics::GraphicsContext &context) -> Error {
   context.currentFrame++;
   context.frameIndex = context.currentFrame % FRAMES_IN_FLIGHT;
   Barrier::ResetFrameTimeline();
+
+  auto *windowContext = Window::GetWindowContext();
+  if (windowContext == nullptr) {
+    return Error::Create("No current window context found.");
+  }
+
+  if (windowContext->swapchainOutOfDate) {
+    auto error = CreateSwapchain(context, *windowContext);
+    if (Error::IsError(error)) {
+      return error;
+    }
+  }
 
   auto error = AquireNextSwapchainImage(context);
   if (Error::IsError(error)) {

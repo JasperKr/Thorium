@@ -22,6 +22,7 @@ auto wrap_SetIcon(lua_State *state) -> int;
 auto wrap_GetSettings(lua_State *state) -> int;
 auto wrap_SetSettings(lua_State *state) -> int;
 auto wrap_UpdateSettings(lua_State *state) -> int;
+auto wrap_SetInitialSettings(lua_State *state) -> int;
 auto wrap_GetTitle(lua_State *state) -> int;
 auto wrap_SetTitle(lua_State *state) -> int;
 auto wrap_GetPosition(lua_State *state) -> int;

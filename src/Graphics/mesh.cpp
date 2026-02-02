@@ -123,7 +123,6 @@ auto Mesh::Create(GraphicsContext &context, VertexFormat vertexFormat,
   std::vector<uint32_t> indexData;
 
   auto mesh = Ref<Mesh>::Make();
-  PrintInfo("Info mesh refcount: {}", mesh->getReferenceCount());
 
   mesh->VertexCount = vertexCount;
 

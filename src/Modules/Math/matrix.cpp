@@ -1,9 +1,6 @@
 #include "matrix.hpp"
+#include <cassert>
 #include <cmath>
-
-#ifndef NDEBUG
-#include <stdexcept>
-#endif
 
 namespace Math {
 
@@ -13,36 +10,28 @@ auto Matrix4x4::FromRows(std::initializer_list<Scalar> init) -> Matrix4x4 {
 
 auto Matrix4x4::At(size_t row, size_t col) -> Scalar & {
 #ifndef NDEBUG
-  if (row >= 4 || col >= 4) {
-    throw std::out_of_range("Matrix4x4::At - Index out of range");
-  }
+  assert(row < 4 && col < 4);
 #endif
   return elements.at((row * Cols) + col);
 }
 
 auto Matrix4x4::At(size_t row, size_t col) const -> Scalar {
 #ifndef NDEBUG
-  if (row >= 4 || col >= 4) {
-    throw std::out_of_range("Matrix4x4::At - Index out of range");
-  }
+  assert(row < 4 && col < 4);
 #endif
   return elements.at((row * Cols) + col);
 }
 
 auto Matrix4x4::At(size_t index) -> Scalar & {
 #ifndef NDEBUG
-  if (index >= Size) {
-    throw std::out_of_range("Matrix4x4::At - Index out of range");
-  }
+  assert(index < Size);
 #endif
   return elements.at(index);
 }
 
 auto Matrix4x4::At(size_t index) const -> Scalar {
 #ifndef NDEBUG
-  if (index >= Size) {
-    throw std::out_of_range("Matrix4x4::At - Index out of range");
-  }
+  assert(index < Size);
 #endif
   return elements.at(index);
 }
@@ -229,18 +218,14 @@ auto Matrix4x4::operator!=(const Matrix4x4 &other) const -> bool {
 
 auto Matrix4x4::operator[](size_t index) -> Scalar & {
 #ifndef NDEBUG
-  if (index >= Size) {
-    throw std::out_of_range("Matrix4x4::operator[] - Index out of range");
-  }
+  assert(index < Size);
 #endif
   return elements.at(index);
 }
 
 auto Matrix4x4::operator[](size_t index) const -> Scalar {
 #ifndef NDEBUG
-  if (index >= Size) {
-    throw std::out_of_range("Matrix4x4::operator[] - Index out of range");
-  }
+  assert(index < Size);
 #endif
   return elements.at(index);
 }

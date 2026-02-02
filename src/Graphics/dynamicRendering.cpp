@@ -47,8 +47,6 @@ std::vector<VkPipeline> Pipelines;
 std::mutex PipelineLayoutsMutex;
 std::vector<VkPipelineLayout> PipelineLayouts;
 
-std::vector<Ref<Texture::Texture>> SwapchainTextures{};
-
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
 inline auto GetRenderExtent(const GraphicsContext &context, const State &state)
@@ -58,27 +56,6 @@ inline auto GetRenderExtent(const GraphicsContext &context, const State &state)
       .width = state.renderTargets.at(0).get()->texture->size.width,
       .height = state.renderTargets.at(0).get()->texture->size.height,
   };
-}
-
-auto GetSwapchainTextures(const GraphicsContext &context) -> Error {
-  Graphics::DynamicRendering::SwapchainTextures.resize(
-      context.swapchainInfo.imageCount);
-
-  for (uint32_t i = 0; i < context.swapchainInfo.imageCount; i++) {
-    auto textureResult = Graphics::Texture::FromSwapchainTexture(
-        context, context.swapchainInfo.images[i],
-        context.swapchainInfo.imageViews[i], context.swapchainInfo.format,
-        context.swapchainInfo.extent.width,
-        context.swapchainInfo.extent.height);
-
-    if (Error::IsError(textureResult)) {
-      return textureResult.error();
-    }
-
-    Graphics::DynamicRendering::SwapchainTextures.at(i) = textureResult.value();
-  }
-
-  return Error::Success();
 }
 
 std::unordered_map<DescriptorSetLayoutKey, VkDescriptorSetLayout,
@@ -308,8 +285,6 @@ auto BindDefaultTextures(GraphicsContext &context, Shader::ShaderModule *shader)
 auto CreateDescriptorSets(GraphicsContext &context,
                           Shader::ShaderModule *shader) -> Error {
   ZoneScoped;
-
-  PrintDebug("Creating descriptor sets...");
 
   auto fillResult = FillDescriptorSets(context, shader);
   if (Error::IsError(fillResult)) {
@@ -819,8 +794,7 @@ inline auto SetupDefaultState(const GraphicsContext &context) -> Result<State> {
   defaultState.shader = Shader::DefaultShaderModule;
 
   auto const &texture =
-      Graphics::DynamicRendering::SwapchainTextures[context
-                                                        .swapchainImageIndex];
+      context.swapchainInfo.textures[context.swapchainImageIndex];
 
   auto swapchainRendertarget = Ref<RenderTarget>::Make();
 
@@ -949,8 +923,7 @@ auto FlushCompute(GraphicsContext &context) -> Result<bool> {
 
 auto IsSwapchainTexture(const GraphicsContext &context,
                         const Graphics::Texture::Texture &texture) -> bool {
-  for (const auto &swapchainTexture :
-       Graphics::DynamicRendering::SwapchainTextures) {
+  for (const auto &swapchainTexture : context.swapchainInfo.textures) {
     if (swapchainTexture.get() == &texture) {
       return true;
     }

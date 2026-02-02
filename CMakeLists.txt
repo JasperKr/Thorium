@@ -351,6 +351,8 @@ target_link_options(Thorium PRIVATE
     $<$<CONFIG:Debug>:-rdynamic>
 )
 
+target_compile_options(Thorium PRIVATE -fno-exceptions -fno-rtti)
+
 if (WIN32)
     target_link_libraries(Thorium PRIVATE dbghelp)
 endif()

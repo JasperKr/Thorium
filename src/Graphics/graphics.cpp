@@ -1,5 +1,5 @@
 #include "graphics.hpp"
-#include "Modules/config.hpp"
+#include "Graphics/texture.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/window.hpp"
@@ -411,136 +411,6 @@ static auto CreateDevice(GraphicsContext &context) -> Error {
   return Error::Success();
 }
 
-static void InitializeSwapchainTextures(GraphicsContext &context) {
-  auto *commandBuffer = BeginSingleTimeCommands(context);
-
-  // Transition each image from UNDEFINED -> COLOR_ATTACHMENT_OPTIMAL
-  for (uint32_t i = 0; i < context.swapchainInfo.imageCount; i++) {
-    VkImageMemoryBarrier barrier = {
-        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        .srcAccessMask = 0,
-        .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-        .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-        .newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .image = context.swapchainInfo.images[i],
-        .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
-    };
-
-    vkCmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                         VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0, 0,
-                         nullptr, 0, nullptr, 1, &barrier);
-  }
-
-  EndSingleTimeCommands(context, commandBuffer);
-}
-
-static auto CreateSwapchain(GraphicsContext &context) -> Error {
-  VkSwapchainCreateInfoKHR swapchainInfo = {};
-  swapchainInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-  swapchainInfo.surface = context.surface;
-
-  VkSurfaceCapabilitiesKHR surfaceCapabilities =
-      context.surfaceInfo.capabilities;
-  VkSurfaceFormatKHR surfaceFormat = context.surfaceInfo.format;
-  VkPresentModeKHR presentMode = context.surfaceInfo.presentMode;
-
-  swapchainInfo.minImageCount = surfaceCapabilities.minImageCount;
-
-  if (surfaceCapabilities.maxImageCount > 0 &&
-      swapchainInfo.minImageCount > surfaceCapabilities.maxImageCount) {
-    swapchainInfo.minImageCount = surfaceCapabilities.maxImageCount;
-  }
-
-  int width = 0;
-  int height = 0;
-  SDL_GetWindowSizeInPixels(context.sdlWindow, &width, &height);
-
-  VkExtent2D extent = {(uint32_t)width, (uint32_t)height};
-
-  swapchainInfo.imageFormat = surfaceFormat.format;
-  swapchainInfo.imageColorSpace = surfaceFormat.colorSpace;
-  swapchainInfo.imageExtent = extent;
-  swapchainInfo.imageArrayLayers = 1;
-  swapchainInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-  swapchainInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-  swapchainInfo.preTransform = surfaceCapabilities.currentTransform;
-  swapchainInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-  swapchainInfo.presentMode = presentMode;
-  swapchainInfo.clipped = VK_TRUE;
-  swapchainInfo.oldSwapchain = VK_NULL_HANDLE;
-
-  VkSwapchainKHR swapchain = VK_NULL_HANDLE;
-
-  {
-    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    Error error = Error::Create(vkCreateSwapchainKHR(
-        context.device, &swapchainInfo, nullptr, &swapchain));
-
-    if (Error::IsError(error)) {
-      return error;
-    }
-  }
-
-  context.swapchainInfo.swapchain = swapchain;
-  context.swapchainInfo.format = surfaceFormat.format;
-  context.swapchainInfo.extent = swapchainInfo.imageExtent;
-
-  vkGetSwapchainImagesKHR(context.device, swapchain,
-                          &context.swapchainInfo.imageCount, nullptr);
-
-  context.swapchainInfo.images.resize(context.swapchainInfo.imageCount);
-
-  {
-    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    Error error = Error::Create(vkGetSwapchainImagesKHR(
-        context.device, swapchain, &context.swapchainInfo.imageCount,
-        context.swapchainInfo.images.data()));
-
-    if (Error::IsError(error)) {
-      return error;
-    }
-  }
-
-  context.swapchainInfo.imageViews.resize(context.swapchainInfo.imageCount);
-
-  {
-    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    for (uint32_t i = 0; i < context.swapchainInfo.imageCount; i++) {
-      VkImageViewCreateInfo imageViewInfo = {};
-
-      imageViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-      imageViewInfo.image = context.swapchainInfo.images[i];
-      imageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-      imageViewInfo.format = context.swapchainInfo.format;
-      imageViewInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-      imageViewInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-      imageViewInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-      imageViewInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-      imageViewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-      imageViewInfo.subresourceRange.baseMipLevel = 0;
-      imageViewInfo.subresourceRange.levelCount = 1;
-      imageViewInfo.subresourceRange.baseArrayLayer = 0;
-      imageViewInfo.subresourceRange.layerCount = 1;
-
-      VkImageView imageView = VK_NULL_HANDLE;
-      Error error = Error::Create(vkCreateImageView(
-          context.device, &imageViewInfo, nullptr, &imageView));
-
-      context.swapchainInfo.imageViews[i] = imageView;
-    }
-  }
-
-  // Initialize swapchain images to COLOR_ATTACHMENT_OPTIMAL layout
-  InitializeSwapchainTextures(context);
-
-  PrintInfo("Swapchain has " +
-            std::to_string(context.swapchainInfo.imageCount) + " images.");
-
-  return Error::Success();
-}
-
 auto GetThreadContext() -> ThreadContext & {
   static thread_local ThreadContext threadContext;
   return threadContext;
@@ -548,9 +418,7 @@ auto GetThreadContext() -> ThreadContext & {
 
 auto GetCommandBuffer() -> VkCommandBuffer {
   auto *commandBuffer = GetThreadContext().commandBuffer;
-  if (commandBuffer == nullptr) {
-    throw std::runtime_error("No command buffer aquired for current thread.");
-  }
+  assert(commandBuffer != nullptr && "Command buffer is null!");
   return commandBuffer;
 }
 
@@ -667,8 +535,140 @@ inline auto CreateCommandPool(ThreadContext &tcontext) -> Error {
   return Error::Success();
 }
 
-inline auto CreateSwapchain(GraphicsContext &context,
-                            Window::WindowContext &wcontext) -> Error {
+auto GetSwapchainTextures(GraphicsContext &context) -> Error {
+  context.swapchainInfo.textures.clear();
+  context.swapchainInfo.textures.resize(context.swapchainInfo.imageCount);
+
+  for (uint32_t i = 0; i < context.swapchainInfo.imageCount; i++) {
+    auto textureResult = Graphics::Texture::FromSwapchainTexture(
+        context, context.swapchainInfo.images[i],
+        context.swapchainInfo.imageViews[i], context.swapchainInfo.format,
+        context.swapchainInfo.extent.width,
+        context.swapchainInfo.extent.height);
+
+    if (Error::IsError(textureResult)) {
+      return textureResult.error();
+    }
+
+    context.swapchainInfo.textures.at(i) = textureResult.value();
+  }
+
+  return Error::Success();
+}
+
+inline auto CreateVkSwapchain(GraphicsContext &context) -> Error {
+  VkSwapchainCreateInfoKHR swapchainInfo = {};
+  swapchainInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+  swapchainInfo.surface = context.surface;
+
+  VkSurfaceCapabilitiesKHR surfaceCapabilities =
+      context.surfaceInfo.capabilities;
+  VkSurfaceFormatKHR surfaceFormat = context.surfaceInfo.format;
+  VkPresentModeKHR presentMode = context.surfaceInfo.presentMode;
+
+  swapchainInfo.minImageCount = surfaceCapabilities.minImageCount;
+
+  if (surfaceCapabilities.maxImageCount > 0 &&
+      swapchainInfo.minImageCount > surfaceCapabilities.maxImageCount) {
+    swapchainInfo.minImageCount = surfaceCapabilities.maxImageCount;
+  }
+
+  int width = 0;
+  int height = 0;
+  SDL_GetWindowSizeInPixels(context.sdlWindow, &width, &height);
+
+  PrintAlways("Creating swapchain with resolution {}x{}.", width, height);
+
+  VkExtent2D extent = {(uint32_t)width, (uint32_t)height};
+
+  swapchainInfo.imageFormat = surfaceFormat.format;
+  swapchainInfo.imageColorSpace = surfaceFormat.colorSpace;
+  swapchainInfo.imageExtent = extent;
+  swapchainInfo.imageArrayLayers = 1;
+  swapchainInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+  swapchainInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+  swapchainInfo.preTransform = surfaceCapabilities.currentTransform;
+  swapchainInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+  swapchainInfo.presentMode = presentMode;
+  swapchainInfo.clipped = VK_TRUE;
+  swapchainInfo.oldSwapchain = VK_NULL_HANDLE;
+
+  VkSwapchainKHR swapchain = VK_NULL_HANDLE;
+
+  {
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+    Error error = Error::Create(vkCreateSwapchainKHR(
+        context.device, &swapchainInfo, nullptr, &swapchain));
+
+    if (Error::IsError(error)) {
+      return error;
+    }
+  }
+
+  context.swapchainInfo.swapchain = swapchain;
+  context.swapchainInfo.format = surfaceFormat.format;
+  context.swapchainInfo.extent = swapchainInfo.imageExtent;
+
+  vkGetSwapchainImagesKHR(context.device, swapchain,
+                          &context.swapchainInfo.imageCount, nullptr);
+
+  context.swapchainInfo.images.resize(context.swapchainInfo.imageCount);
+
+  {
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+    Error error = Error::Create(vkGetSwapchainImagesKHR(
+        context.device, swapchain, &context.swapchainInfo.imageCount,
+        context.swapchainInfo.images.data()));
+
+    if (Error::IsError(error)) {
+      return error;
+    }
+  }
+
+  context.swapchainInfo.imageViews.resize(context.swapchainInfo.imageCount);
+
+  {
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+    for (uint32_t i = 0; i < context.swapchainInfo.imageCount; i++) {
+      VkImageViewCreateInfo imageViewInfo = {};
+
+      imageViewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+      imageViewInfo.image = context.swapchainInfo.images[i];
+      imageViewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+      imageViewInfo.format = context.swapchainInfo.format;
+      imageViewInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+      imageViewInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+      imageViewInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+      imageViewInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+      imageViewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+      imageViewInfo.subresourceRange.baseMipLevel = 0;
+      imageViewInfo.subresourceRange.levelCount = 1;
+      imageViewInfo.subresourceRange.baseArrayLayer = 0;
+      imageViewInfo.subresourceRange.layerCount = 1;
+
+      VkImageView imageView = VK_NULL_HANDLE;
+      Error error = Error::Create(vkCreateImageView(
+          context.device, &imageViewInfo, nullptr, &imageView));
+
+      context.swapchainInfo.imageViews[i] = imageView;
+    }
+  }
+
+  auto result = GetSwapchainTextures(context);
+  if (Error::IsError(result)) {
+    return result;
+  }
+
+  PrintInfo("Swapchain has " +
+            std::to_string(context.swapchainInfo.imageCount) + " images.");
+
+  return Error::Success();
+}
+
+auto CreateSwapchain(GraphicsContext &context, Window::WindowContext &wcontext)
+    -> Error {
+  PrintWarning("Creating swapchain...");
+
   auto presentResult = FindPresentMode(wcontext, context);
   if (Error::IsError(presentResult)) {
     return presentResult.error();
@@ -689,9 +689,37 @@ inline auto CreateSwapchain(GraphicsContext &context,
 
   context.surfaceInfo.format = surfaceFormat;
   context.surfaceInfo.capabilities = surfaceCapabilities;
+
+  for (auto *const fence : context.imagesInFlight) {
+    if (fence == VK_NULL_HANDLE) {
+      continue;
+    }
+
+    vkWaitForFences(context.device, 1, &fence, VK_TRUE, UINT64_MAX);
+  }
+
+  for (auto *const view : context.swapchainInfo.imageViews) {
+    vkDestroyImageView(context.device, view, nullptr);
+  }
+  context.swapchainInfo.imageViews.clear();
+
+  if (context.swapchainInfo.swapchain != VK_NULL_HANDLE) {
+    vkDestroySwapchainKHR(context.device, context.swapchainInfo.swapchain,
+                          nullptr);
+    context.swapchainInfo.swapchain = VK_NULL_HANDLE;
+  }
+
+  auto result = CreateVkSwapchain(context);
+  if (Error::IsError(result)) {
+    return result;
+  }
+
+  wcontext.swapchainOutOfDate = false;
+
+  return Error::Success();
 }
 
-auto Initialize(GraphicsContext &context, Config::ApplicationConfig &config)
+auto Initialize(GraphicsContext &context, Window::WindowContext &wcontext)
     -> Error {
   PrintDebug("Initializing Volk...");
   Error error = Error::Create(volkInitialize());
@@ -701,18 +729,18 @@ auto Initialize(GraphicsContext &context, Config::ApplicationConfig &config)
     return Error::Create(SDL_GetError());
   }
 
-  SDL_Window *window = SDL_CreateWindow(config.Title.c_str(), config.Size.width,
-                                        config.Size.height, SDL_WINDOW_VULKAN);
-
-  PrintDebug("Created SDL window with title '{}', Size: ({} x {})",
-             config.Title, std::to_string(config.Size.width),
-             std::to_string(config.Size.height));
+  SDL_Window *window = SDL_CreateWindow(
+      wcontext.initialSettings.title.c_str(), wcontext.initialSettings.width,
+      wcontext.initialSettings.height,
+      SDL_WINDOW_VULKAN | wcontext.initialSettings.GetSDLWindowFlags());
 
   if (window == nullptr) {
     return Error::Create("Failed to create SDL window.");
   }
 
   context.sdlWindow = window;
+
+  Window::SetSettings(wcontext, wcontext.initialSettings);
 
   // Get vulkan instance extensions required by SDL
   unsigned int extensionCount = 0;
@@ -797,7 +825,7 @@ auto Initialize(GraphicsContext &context, Config::ApplicationConfig &config)
     return error;
   }
   PrintDebug("called: CreateCommandPool...");
-  error = CreateSwapchain(context);
+  error = CreateSwapchain(context, *windowContext);
   if (Error::IsError(error)) {
     return error;
   }

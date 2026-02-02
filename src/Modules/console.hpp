@@ -197,21 +197,21 @@ inline void PrintAlways(std::string_view format, Args &&...args) {
 }
 
 inline void PrintDebug(const std::string &message) {
-#ifndef NDEBUG
+  // #ifndef NDEBUG
   if (LogLevel::Debug >= CurrentLogLevel) {
     std::cout << ColorText("[DEBUG] ", ConsoleColor::Cyan) << message << '\n';
   }
-#endif
+  // #endif
 }
 
 template <typename... Args> // NOLINTNEXTLINE args forwarding
 inline void PrintDebug(std::string_view format, Args &&...args) {
-#ifndef NDEBUG
+  // #ifndef NDEBUG
   if (LogLevel::Debug >= CurrentLogLevel) {
     std::cout << ColorText("[DEBUG] ", ConsoleColor::Cyan)
               << std::vformat(format, std::make_format_args(args...)) << '\n';
   }
-#endif
+  // #endif
 }
 
 inline void PrintInfo(const std::string &message) {

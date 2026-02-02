@@ -5,6 +5,7 @@
 #include "Modules/object.hpp"
 #include "SDL3/SDL_video.h"
 #include <cstdint>
+#include <optional>
 #include <string>
 namespace Window {
 
@@ -45,6 +46,7 @@ enum class VsyncMode : uint8_t {
 };
 
 struct Settings {
+  std::string title{"Thorium Application"};
   bool resizable{true};
   bool borderless{false};
   bool fullscreen{false};
@@ -57,9 +59,24 @@ struct Settings {
   int minimumHeight{1};
   int xPosition{SDL_WINDOWPOS_CENTERED}; // NOLINT
   int yPosition{SDL_WINDOWPOS_CENTERED}; // NOLINT
+
+  [[nodiscard]] auto GetSDLWindowFlags() const -> Uint32 {
+    Uint32 flags = SDL_WINDOW_VULKAN;
+    if (resizable) {
+      flags |= SDL_WINDOW_RESIZABLE;
+    }
+    if (borderless) {
+      flags |= SDL_WINDOW_BORDERLESS;
+    }
+    if (fullscreen) {
+      flags |= SDL_WINDOW_FULLSCREEN;
+    }
+    return flags;
+  }
 };
 
 struct SettingsUpdate {
+  std::optional<std::string> title;
   std::optional<bool> resizable;
   std::optional<bool> borderless;
   std::optional<bool> fullscreen;
@@ -83,6 +100,7 @@ struct WindowContext {
   ColorSpace colorSpace{ColorSpace::GammaCorrect};
 
   bool swapchainOutOfDate{false};
+  Settings initialSettings{};
 };
 
 auto GetSettings(WindowContext &wcontext) -> Settings;

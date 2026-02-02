@@ -186,6 +186,8 @@ auto LogStack(lua_State *state) -> void {
 
 using LuaFn = int (*)(lua_State *);
 
+// Exceptions must be enabled for this to work!
+#ifdef DEBUG_CPP_EXCEPTION
 auto LuaTrampoline(lua_State *state) -> int {
   auto func = // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
       reinterpret_cast<LuaFn>(lua_touserdata(state, lua_upvalueindex(1)));
@@ -202,6 +204,7 @@ auto LuaTrampoline(lua_State *state) -> int {
     return luaL_error(state, "Unknown C++ exception");
   }
 }
+#endif
 
 static const Type moduleType("MODULE");
 

@@ -113,12 +113,7 @@ extern std::unordered_map<DescriptorSetLayoutKey, VkDescriptorSetLayout,
     DescriptorSetLayoutCache; // NOLINT
 
 // NOLINTNEXTLINE
-extern std::vector<Ref<Texture::Texture>> SwapchainTextures;
-
-// NOLINTNEXTLINE
 extern thread_local bool DrawnToSwapchain;
-
-auto GetSwapchainTextures(const GraphicsContext &context) -> Error;
 
 const static Type type = Type("RenderTarget");
 

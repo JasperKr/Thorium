@@ -86,23 +86,6 @@ auto SetIcon(SDL_Window *window, const Ref<Image::ImageData> &icon) -> void {
   }
 }
 
-/*
-struct Settings {
-  bool resizable{true};
-  bool borderless{false};
-  bool fullscreen{false};
-  int displayIndex{0};
-  int width{};
-  int height{};
-  VsyncMode vsync{VsyncMode::Enabled};
-  FullscreenMode fullscreenMode{FullscreenMode::Windowed};
-  int minimumWidth{};
-  int minimumHeight{};
-  int xPosition{SDL_WINDOWPOS_CENTERED}; // NOLINT
-  int yPosition{SDL_WINDOWPOS_CENTERED}; // NOLINT
-};
-*/
-
 auto GetSettings(WindowContext &wcontext) -> Settings {
   SDL_Window *window = wcontext.window;
 

@@ -219,9 +219,8 @@ auto wrap_GetSettings(lua_State *state) -> int {
 
   return 1;
 }
-auto wrap_SetSettings(lua_State *state) -> int {
-  SDL_Window *window = ::Window::GetWindowContext()->window;
 
+inline auto SettingsFromStack(lua_State *state) -> Result<::Window::Settings> {
   ::Window::Settings settings;
 
   lua_getfield(state, 1, "resizable");
@@ -264,7 +263,7 @@ auto wrap_SetSettings(lua_State *state) -> int {
   if (!lua_isnoneornil(state, -1)) {
     auto vsyncModeResult = StringToVsyncMode(luaL_checkstring(state, -1));
     if (Error::IsError(vsyncModeResult)) {
-      return luaL_error(state, "%s", vsyncModeResult.error().message.c_str());
+      return vsyncModeResult.error().AsUnexpected();
     }
     settings.vsync = vsyncModeResult.value();
   }
@@ -275,8 +274,7 @@ auto wrap_SetSettings(lua_State *state) -> int {
     auto fullscreenModeResult =
         StringToFullscreenMode(luaL_checkstring(state, -1));
     if (Error::IsError(fullscreenModeResult)) {
-      return luaL_error(state, "%s",
-                        fullscreenModeResult.error().message.c_str());
+      return fullscreenModeResult.error().AsUnexpected();
     }
     settings.fullscreenMode = fullscreenModeResult.value();
   }
@@ -306,9 +304,19 @@ auto wrap_SetSettings(lua_State *state) -> int {
   }
   lua_pop(state, 1);
 
+  return settings;
+}
+
+auto wrap_SetSettings(lua_State *state) -> int {
+
   auto *wcontext = ::Window::GetWindowContext();
 
-  ::Window::SetSettings(*wcontext, settings);
+  auto settingsResult = SettingsFromStack(state);
+  if (Error::IsError(settingsResult)) {
+    return luaL_error(state, "%s", settingsResult.error().message.c_str());
+  }
+
+  ::Window::SetSettings(*wcontext, settingsResult.value());
   return 0;
 }
 
@@ -405,6 +413,20 @@ auto wrap_UpdateSettings(lua_State *state) -> int {
   return 0;
 }
 
+// For the config file.
+// Does not call SDL functions as the window is not yet created.
+auto wrap_SetInitialSettings(lua_State *state) -> int {
+  auto *wcontext = ::Window::GetWindowContext();
+
+  auto settingsResult = SettingsFromStack(state);
+  if (Error::IsError(settingsResult)) {
+    return luaL_error(state, "%s", settingsResult.error().message.c_str());
+  }
+
+  wcontext->initialSettings = settingsResult.value();
+  return 0;
+}
+
 auto wrap_GetTitle(lua_State *state) -> int {
   SDL_Window *window = ::Window::GetWindowContext()->window;
 
@@ -412,6 +434,7 @@ auto wrap_GetTitle(lua_State *state) -> int {
   lua_pushstring(state, title.c_str());
   return 1;
 }
+
 auto wrap_SetTitle(lua_State *state) -> int {
   SDL_Window *window = ::Window::GetWindowContext()->window;
 
@@ -419,6 +442,7 @@ auto wrap_SetTitle(lua_State *state) -> int {
   ::Window::SetTitle(window, std::string(title));
   return 0;
 }
+
 auto wrap_GetPosition(lua_State *state) -> int {
   SDL_Window *window = ::Window::GetWindowContext()->window;
 

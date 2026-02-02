@@ -12,8 +12,10 @@ FLAGS=""
 
 if [ "$CONFIG" == "Debug" ]; then
   FLAGS="$FLAGS -D$ENABLE_TRACY=1 -g -O0"
-else
+elif [ "$CONFIG" == "Release" ]; then
   FLAGS="$FLAGS -O3"
+elif [ "$CONFIG" == "RelWithDebInfo" ]; then
+  FLAGS="$FLAGS -D$ENABLE_TRACY=1 -O0 -g"
 fi
 
 cmake -G Ninja -DCMAKE_CXX_COMPILER=clang++ -B build \

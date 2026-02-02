@@ -96,6 +96,7 @@ struct Texture : Object, Barrier::BarrierSynced {
   auto UseAsTransferDst(GraphicsContext &context) -> Error;
   auto UseAsStorage(GraphicsContext &context, VkPipelineStageFlags2 stage)
       -> Error;
+  auto UseAsPresentSrc(GraphicsContext &context) -> Error;
 
   auto GetTimestamp() const -> uint64_t { return lastUsedTimestamp; }
 
@@ -234,5 +235,8 @@ auto LoadFromMemory(GraphicsContext &context,
 auto GetDefaultTexture(GraphicsContext &context, VkFormat format,
                        Graphics::Texture::TextureType textureType)
     -> Result<Ref<Graphics::Texture::Texture>>;
+
+auto GetAccessFlagsForUsage(TextureUsage usage, VkImageLayout currentLayout)
+    -> VkAccessFlags2;
 
 } // namespace Graphics::Texture

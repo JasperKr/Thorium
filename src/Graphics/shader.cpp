@@ -31,7 +31,14 @@
 
 namespace Graphics::Shader {
 
-static slang::IGlobalSession *GlobalSlangSession = nullptr; // NOLINT
+// NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
+std::mutex BoundStatesMutex;
+std::unordered_map<uint32_t,
+                   std::unordered_map<const struct ShaderModule *, BoundState>>
+    BoundStates;
+static slang::IGlobalSession *GlobalSlangSession = nullptr;
+
+// NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
 static const std::vector<slang::CompilerOptionEntry> CompilerOptions = {
     slang::CompilerOptionEntry{
@@ -772,7 +779,16 @@ auto ShaderModule::FlushGlobals(GraphicsContext &context,
 
     VkWriteDescriptorSet descriptorWrite{};
     descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    descriptorWrite.dstSet = GetState().descriptorSets[reflection.globals.set];
+
+    auto dstSetIter = GetState().descriptorSets.find(reflection.globals.set);
+    if (dstSetIter != GetState().descriptorSets.end()) {
+      descriptorWrite.dstSet = dstSetIter->second;
+    } else {
+      return Error::Createf(
+          "Global UBO descriptor set {} not found in shader descriptor sets.",
+          reflection.globals.set);
+    }
+
     descriptorWrite.dstBinding = reflection.globals.binding;
     descriptorWrite.dstArrayElement = 0;
     descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -829,6 +845,11 @@ auto ShaderModule::FlushBuffers(GraphicsContext &context,
     updatedSets.insert(key);
 
     writes.emplace_back(write.GetWrite(GetState().descriptorSets));
+
+    if (writes.back().dstSet == VK_NULL_HANDLE) {
+      return Error::Create(
+          "Descriptor set not found in shader descriptor sets.");
+    }
   }
 
   for (auto &transition : GetState().pendingImageTransitions) {

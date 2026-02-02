@@ -253,7 +253,7 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
 
   PrintDebug("Initializing graphics...");
 
-  auto result = Graphics::Initialize(context, config);
+  auto result = Graphics::Initialize(context, wcontext);
   if (Error::IsError(result)) {
     return result;
   }
@@ -262,12 +262,6 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
   PrintAlways(Graphics::Info::GetGpuInfoString(context.physicalDevice));
 
   Graphics::SetCurrentGraphicsContext(&context);
-
-  auto texturesResult =
-      Graphics::DynamicRendering::GetSwapchainTextures(context);
-  if (Error::IsError(texturesResult)) {
-    return texturesResult;
-  }
 
   auto error = Graphics::InitializeGlobalTimelineSemaphore(context);
   if (Error::IsError(error)) {
@@ -369,8 +363,6 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
 
   // Uses internal lua state so we must do this before closing lua
   runCallback.reset();
-
-  Graphics::DynamicRendering::SwapchainTextures.clear();
 
   PrintInfo("Waiting on device idle...");
   {

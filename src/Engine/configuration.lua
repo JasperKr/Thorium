@@ -3,7 +3,7 @@ function Thorium.config(config)
   config.window.height = 1000
 
   config.window.title = "Configured Title"
-  config.window.vsync = true
+  config.window.resizable = true
 
   config.filesystem.identity = "ConfiguredIdentity"
 
