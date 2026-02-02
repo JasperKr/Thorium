@@ -40,6 +40,7 @@ enum class TextureUsage : uint8_t {
   Attachment,
   TransferSrc,
   TransferDst,
+  PresentSrc,
   Unknown,
 };
 
@@ -86,17 +87,17 @@ struct Texture : Object, Barrier::BarrierSynced {
   // Indicates if this texture is a swapchain view, which should not be destroyed
   bool isSwapchainView = false;
 
-  auto UseAs(GraphicsContext &context, TextureUsage newUsage,
+  auto UseAs(const GraphicsContext &context, TextureUsage newUsage,
              VkPipelineStageFlags2 stage) -> Error;
 
-  auto UseAsAttachment(GraphicsContext &context) -> Error;
-  auto UseAsSampler(GraphicsContext &context, VkPipelineStageFlags2 stage)
+  auto UseAsAttachment(const GraphicsContext &context) -> Error;
+  auto UseAsSampler(const GraphicsContext &context, VkPipelineStageFlags2 stage)
       -> Error;
-  auto UseAsTransferSrc(GraphicsContext &context) -> Error;
-  auto UseAsTransferDst(GraphicsContext &context) -> Error;
-  auto UseAsStorage(GraphicsContext &context, VkPipelineStageFlags2 stage)
+  auto UseAsTransferSrc(const GraphicsContext &context) -> Error;
+  auto UseAsTransferDst(const GraphicsContext &context) -> Error;
+  auto UseAsStorage(const GraphicsContext &context, VkPipelineStageFlags2 stage)
       -> Error;
-  auto UseAsPresentSrc(GraphicsContext &context) -> Error;
+  auto UseAsPresentSrc(const GraphicsContext &context) -> Error;
 
   auto GetTimestamp() const -> uint64_t { return lastUsedTimestamp; }
 
@@ -170,7 +171,7 @@ struct Texture : Object, Barrier::BarrierSynced {
 
   static auto GetType() -> Type const * { return &type; }
   auto TransitionLayout(
-      GraphicsContext &context, VkImageLayout layout,
+      const GraphicsContext &context, VkImageLayout layout,
       VkPipelineStageFlags2 sourceStage = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT |
                                           VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
       VkPipelineStageFlags2 destinationStage =

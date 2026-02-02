@@ -173,6 +173,35 @@ inline auto StringToVsyncMode(const char *str) -> Result<::Window::VsyncMode> {
   return Error::Unexpectedf("Invalid vsync mode '{}'", str);
 }
 
+inline auto ColorSpaceToString(::Window::ColorSpace colorSpace) -> const
+    char * {
+  switch (colorSpace) {
+  case ::Window::ColorSpace::GammaCorrect:
+    return "gammacorrect";
+  case ::Window::ColorSpace::Linear:
+    return "linear";
+  case ::Window::ColorSpace::HDR:
+    return "hdr";
+  default:
+    return "unknown";
+  }
+}
+
+inline auto StringToColorSpace(const char *str)
+    -> Result<::Window::ColorSpace> {
+  if (std::string(str) == "gammacorrect") {
+    return ::Window::ColorSpace::GammaCorrect;
+  }
+  if (std::string(str) == "linear") {
+    return ::Window::ColorSpace::Linear;
+  }
+  if (std::string(str) == "hdr") {
+    return ::Window::ColorSpace::HDR;
+  }
+
+  return Error::Unexpectedf("Invalid color space '{}'", str);
+}
+
 auto wrap_GetSettings(lua_State *state) -> int {
   auto *wcontext = ::Window::GetWindowContext();
 
@@ -216,6 +245,10 @@ auto wrap_GetSettings(lua_State *state) -> int {
 
   lua_pushinteger(state, static_cast<lua_Integer>(settings.yPosition));
   lua_setfield(state, -2, "yPosition");
+
+  const auto *colorSpace = ColorSpaceToString(settings.colorSpace);
+  lua_pushstring(state, colorSpace);
+  lua_setfield(state, -2, "colorspace");
 
   return 1;
 }
@@ -301,6 +334,16 @@ inline auto SettingsFromStack(lua_State *state) -> Result<::Window::Settings> {
   lua_getfield(state, 1, "yPosition");
   if (!lua_isnoneornil(state, -1)) {
     settings.yPosition = static_cast<int>(luaL_checkinteger(state, -1));
+  }
+  lua_pop(state, 1);
+
+  lua_getfield(state, 1, "colorspace");
+  if (!lua_isnoneornil(state, -1)) {
+    auto colorSpaceResult = StringToColorSpace(luaL_checkstring(state, -1));
+    if (Error::IsError(colorSpaceResult)) {
+      return colorSpaceResult.error().AsUnexpected();
+    }
+    settings.colorSpace = colorSpaceResult.value();
   }
   lua_pop(state, 1);
 
@@ -404,6 +447,16 @@ auto wrap_UpdateSettings(lua_State *state) -> int {
   lua_getfield(state, 1, "yPosition");
   if (!lua_isnoneornil(state, -1)) {
     update.yPosition = static_cast<int>(luaL_checkinteger(state, -1));
+  }
+  lua_pop(state, 1);
+
+  lua_getfield(state, 1, "colorspace");
+  if (!lua_isnoneornil(state, -1)) {
+    auto colorSpaceResult = StringToColorSpace(luaL_checkstring(state, -1));
+    if (Error::IsError(colorSpaceResult)) {
+      return luaL_error(state, "%s", colorSpaceResult.error().message.c_str());
+    }
+    update.colorSpace = colorSpaceResult.value();
   }
   lua_pop(state, 1);
 
@@ -560,36 +613,7 @@ auto wrap_RequestAttention(lua_State *state) -> int {
   return 0;
 }
 
-inline auto ColorSpaceToString(::Window::ColorSpace colorSpace) -> const
-    char * {
-  switch (colorSpace) {
-  case ::Window::ColorSpace::GammaCorrect:
-    return "gammaCorrect";
-  case ::Window::ColorSpace::Linear:
-    return "linear";
-  case ::Window::ColorSpace::HDR:
-    return "hdr";
-  default:
-    return "unknown";
-  }
-}
-
-inline auto StringToColorSpace(const char *str)
-    -> Result<::Window::ColorSpace> {
-  if (std::string(str) == "gammaCorrect") {
-    return ::Window::ColorSpace::GammaCorrect;
-  }
-  if (std::string(str) == "linear") {
-    return ::Window::ColorSpace::Linear;
-  }
-  if (std::string(str) == "hdr") {
-    return ::Window::ColorSpace::HDR;
-  }
-
-  return Error::Unexpectedf("Invalid color space '{}'", str);
-}
-
-auto wrap_SetColorspace(lua_State *state) -> int {
+auto wrap_SetColorSpace(lua_State *state) -> int {
   auto *wcontext = ::Window::GetWindowContext();
 
   auto colorSpaceResult = StringToColorSpace(luaL_checkstring(state, 1));
@@ -598,14 +622,14 @@ auto wrap_SetColorspace(lua_State *state) -> int {
   }
   auto colorSpace = colorSpaceResult.value();
 
-  ::Window::SetColorspace(*wcontext, colorSpace);
+  ::Window::SetColorSpace(*wcontext, colorSpace);
   return 0;
 }
 
-auto wrap_GetColorspace(lua_State *state) -> int {
+auto wrap_GetColorSpace(lua_State *state) -> int {
   auto *wcontext = ::Window::GetWindowContext();
 
-  ::Window::ColorSpace colorSpace = ::Window::GetColorspace(*wcontext);
+  ::Window::ColorSpace colorSpace = ::Window::GetColorSpace(*wcontext);
   const auto *colorSpaceStr = ColorSpaceToString(colorSpace);
   lua_pushstring(state, colorSpaceStr);
   return 1;

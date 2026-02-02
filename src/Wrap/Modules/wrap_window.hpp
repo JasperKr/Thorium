@@ -40,8 +40,8 @@ auto wrap_Restore(lua_State *state) -> int;
 auto wrap_EnableDisplaySleep(lua_State *state) -> int;
 auto wrap_IsDisplaySleepEnabled(lua_State *state) -> int;
 auto wrap_RequestAttention(lua_State *state) -> int;
-auto wrap_SetColorspace(lua_State *state) -> int;
-auto wrap_GetColorspace(lua_State *state) -> int;
+auto wrap_SetColorSpace(lua_State *state) -> int;
+auto wrap_GetColorSpace(lua_State *state) -> int;
 
 // NOLINTNEXTLINE
 static const luaL_Reg WindowLib[] = {
@@ -76,8 +76,8 @@ static const luaL_Reg WindowLib[] = {
     {"enableDisplaySleep", wrap_EnableDisplaySleep},
     {"isDisplaySleepEnabled", wrap_IsDisplaySleepEnabled},
     {"requestAttention", wrap_RequestAttention},
-    {"setColorspace", wrap_SetColorspace},
-    {"getColorspace", wrap_GetColorspace},
+    {"setColorSpace", wrap_SetColorSpace},
+    {"getColorSpace", wrap_GetColorSpace},
     {nullptr, nullptr},
 };
 

@@ -196,6 +196,12 @@ auto FromSwapchainTexture(const GraphicsContext &context,
   texture->usage = surfaceCapabilities.supportedUsageFlags;
   texture->view = swapchainImageView;
 
+  // Setup texture flags for unused swapchain textures
+  texture->lastUsedAccess = 0;
+  texture->lastUsedStages = 0;
+  texture->currentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+  texture->lastUsage = TextureUsage::Unknown;
+
   if (Error::IsError(error)) {
     return error.AsUnexpected();
   }
@@ -756,7 +762,8 @@ auto GetAccessMask(VkImageLayout layout) -> VkAccessFlags {
   }
 }
 
-auto Texture::TransitionLayout(GraphicsContext &context, VkImageLayout layout,
+auto Texture::TransitionLayout(const GraphicsContext &context,
+                               VkImageLayout layout,
                                VkPipelineStageFlags2 sourceStage, // NOLINT
                                VkPipelineStageFlags2 destinationStage,
                                VkAccessFlags2 srcAccessMask, // NOLINT
@@ -1253,6 +1260,8 @@ auto GetAccessFlagsForUsage(TextureUsage usage, VkImageLayout currentLayout)
     return VK_ACCESS_2_TRANSFER_READ_BIT;
   case TextureUsage::TransferDst:
     return VK_ACCESS_2_TRANSFER_WRITE_BIT;
+  case TextureUsage::PresentSrc:
+    return VK_ACCESS_2_MEMORY_READ_BIT;
   case TextureUsage::Unknown:
     return VK_ACCESS_2_NONE;
   default:
@@ -1288,6 +1297,8 @@ constexpr auto GetRequiredTextureLayout(TextureUsage usage, VkFormat format)
     return VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
   case TextureUsage::Unknown:
     return VK_IMAGE_LAYOUT_UNDEFINED;
+  case TextureUsage::PresentSrc:
+    return VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
   default:
     PrintError("GetRequiredTextureLayout: Unknown texture usage: {}",
                static_cast<int>(usage));
@@ -1326,7 +1337,7 @@ constexpr auto IsStageAllowed(VkPipelineStageFlags2 stage) -> bool {
   }
 }
 
-auto Texture::UseAs(GraphicsContext &context, TextureUsage newUsage,
+auto Texture::UseAs(const GraphicsContext &context, TextureUsage newUsage,
                     VkPipelineStageFlags2 stage) -> Error {
 
   if (newUsage == TextureUsage::Unknown) {
@@ -1363,26 +1374,30 @@ auto Texture::UseAs(GraphicsContext &context, TextureUsage newUsage,
   return result;
 }
 
-auto Texture::UseAsAttachment(GraphicsContext &context) -> Error {
+auto Texture::UseAsAttachment(const GraphicsContext &context) -> Error {
   auto newPipelineStage = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
   return UseAs(context, TextureUsage::Attachment, newPipelineStage);
 }
 
-auto Texture::UseAsSampler(GraphicsContext &context,
+auto Texture::UseAsSampler(const GraphicsContext &context,
                            VkPipelineStageFlags2 stage) -> Error {
   return UseAs(context, TextureUsage::Sampler, stage);
 }
-auto Texture::UseAsTransferSrc(GraphicsContext &context) -> Error {
+auto Texture::UseAsTransferSrc(const GraphicsContext &context) -> Error {
   return UseAs(context, TextureUsage::TransferSrc,
                VK_PIPELINE_STAGE_TRANSFER_BIT);
 }
-auto Texture::UseAsTransferDst(GraphicsContext &context) -> Error {
+auto Texture::UseAsTransferDst(const GraphicsContext &context) -> Error {
   return UseAs(context, TextureUsage::TransferDst,
                VK_PIPELINE_STAGE_TRANSFER_BIT);
 }
-auto Texture::UseAsStorage(GraphicsContext &context,
+auto Texture::UseAsStorage(const GraphicsContext &context,
                            VkPipelineStageFlags2 stage) -> Error {
   return UseAs(context, TextureUsage::Storage, stage);
+}
+auto Texture::UseAsPresentSrc(const GraphicsContext &context) -> Error {
+  return UseAs(context, TextureUsage::PresentSrc,
+               VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT);
 }
 
 } // namespace Graphics::Texture

@@ -4,6 +4,7 @@ function Thorium.config(config)
 
   config.window.title = "Configured Title"
   config.window.resizable = true
+  config.window.colorspace = "hdr"
 
   config.filesystem.identity = "ConfiguredIdentity"
 

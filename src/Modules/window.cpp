@@ -135,6 +135,8 @@ auto SetSettings(WindowContext &wcontext, const Settings &settings) -> void {
   SDL_SetWindowMinimumSize(window, settings.minimumWidth,
                            settings.minimumHeight);
   SDL_SetWindowPosition(window, settings.xPosition, settings.yPosition);
+
+  SetColorSpace(wcontext, settings.colorSpace);
 }
 
 auto UpdateSettings(WindowContext &wcontext, const SettingsUpdate &update)
@@ -262,11 +264,11 @@ auto SetWindowContext(WindowContext &context) -> void {
   global_window_context = &context;
 }
 
-auto SetColorspace(WindowContext &window, ColorSpace colorSpace) -> void {
+auto SetColorSpace(WindowContext &window, ColorSpace colorSpace) -> void {
   window.colorSpace = colorSpace;
   window.swapchainOutOfDate = true;
 }
-auto GetColorspace(WindowContext &window) -> ColorSpace {
+auto GetColorSpace(WindowContext &window) -> ColorSpace {
   return window.colorSpace;
 }
 

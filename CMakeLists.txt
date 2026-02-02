@@ -249,6 +249,7 @@ add_executable(Thorium
     src/Graphics/renderThread.cpp
     src/Graphics/semaphoreManager.cpp
     src/Graphics/bufferformat.cpp
+    src/Graphics/swapchainManager.cpp
 
 # Graphics Buffers
     src/Graphics/Buffers/push.cpp

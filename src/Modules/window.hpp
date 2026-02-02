@@ -45,6 +45,8 @@ enum class VsyncMode : uint8_t {
   Adaptive, // AKA: VK_PRESENT_MODE_FIFO_RELAXED_KHR
 };
 
+enum class ColorSpace : uint8_t { GammaCorrect, Linear, HDR };
+
 struct Settings {
   std::string title{"Thorium Application"};
   bool resizable{true};
@@ -59,6 +61,8 @@ struct Settings {
   int minimumHeight{1};
   int xPosition{SDL_WINDOWPOS_CENTERED}; // NOLINT
   int yPosition{SDL_WINDOWPOS_CENTERED}; // NOLINT
+
+  ColorSpace colorSpace{ColorSpace::GammaCorrect};
 
   [[nodiscard]] auto GetSDLWindowFlags() const -> Uint32 {
     Uint32 flags = SDL_WINDOW_VULKAN;
@@ -90,9 +94,9 @@ struct SettingsUpdate {
   std::optional<int> minimumHeight;
   std::optional<int> xPosition;
   std::optional<int> yPosition;
-};
 
-enum class ColorSpace : uint8_t { GammaCorrect, Linear, HDR };
+  std::optional<ColorSpace> colorSpace;
+};
 
 struct WindowContext {
   SDL_Window *window{nullptr};
@@ -108,8 +112,8 @@ auto SetSettings(WindowContext &wcontext, const Settings &settings) -> void;
 auto UpdateSettings(WindowContext &wcontext, const SettingsUpdate &update)
     -> void;
 
-auto SetColorspace(WindowContext &window, ColorSpace colorSpace) -> void;
-auto GetColorspace(WindowContext &window) -> ColorSpace;
+auto SetColorSpace(WindowContext &window, ColorSpace colorSpace) -> void;
+auto GetColorSpace(WindowContext &window) -> ColorSpace;
 
 auto GetTitle(SDL_Window *window) -> std::string;
 auto SetTitle(SDL_Window *window, const std::string &title) -> void;

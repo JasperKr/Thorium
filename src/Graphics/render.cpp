@@ -4,6 +4,7 @@
 #include "Graphics/renderThread.hpp"
 #include "Graphics/resource.hpp"
 #include "Graphics/semaphoreManager.hpp"
+#include "Graphics/swapchainManager.hpp"
 #include "Graphics/texture.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
@@ -303,8 +304,15 @@ auto PresentFrame(Graphics::GraphicsContext &context) -> Error {
   return Error::Success();
 }
 
-auto InitializeGraphics(Graphics::GraphicsContext &context) -> Error {
-  auto error = AquireNextSwapchainImage(context);
+auto InitializeGraphics(Graphics::GraphicsContext &context,
+                        Window::WindowContext &windowContext) -> Error {
+  auto error =
+      SwapchainManager::SwapchainManager::Initialize(context, windowContext);
+  if (Error::IsError(error)) {
+    return error;
+  }
+
+  error = AquireNextSwapchainImage(context);
   if (Error::IsError(error)) {
     return error;
   }
