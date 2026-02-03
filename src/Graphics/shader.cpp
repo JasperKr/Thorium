@@ -871,6 +871,9 @@ auto ShaderModule::FlushBuffers(GraphicsContext &context,
     case Texture::TextureUsage::TransferDst:
       result = transition.texture->UseAsTransferDst(context);
       break;
+    case Texture::TextureUsage::PresentSrc:
+      result = transition.texture->UseAsPresentSrc(context);
+      break;
     case Texture::TextureUsage::Unknown:
       result = Error::Create(
           "Cannot transition image with unknown usage in shader flush.");

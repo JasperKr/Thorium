@@ -237,59 +237,29 @@ static auto CreateSemaphores(GraphicsContext &context) -> Error {
   VkSemaphoreCreateInfo semaphoreInfo = {};
   semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
-  context.swapchainImageReady = std::vector<VkSemaphore>(MAX_SWAPCHAIN_IMAGES);
-  context.renderingFinished = std::vector<VkSemaphore>(MAX_SWAPCHAIN_IMAGES);
-
-  {
-    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    for (int i = 0; i < MAX_SWAPCHAIN_IMAGES; i++) {
-      Error error = Error::Create(
-          vkCreateSemaphore(context.device, &semaphoreInfo, nullptr,
-                            &context.swapchainImageReady.at(i)));
-
-      if (Error::IsError(error)) {
-        return error;
-      }
-    }
-
-    for (int i = 0; i < MAX_SWAPCHAIN_IMAGES; i++) {
-      Error error = Error::Create(
-          vkCreateSemaphore(context.device, &semaphoreInfo, nullptr,
-                            &context.renderingFinished.at(i)));
-
-      if (Error::IsError(error)) {
-        return error;
-      }
-    }
-  }
-
-  return Error::Success();
-}
-
-static auto CreateFences(GraphicsContext &context) -> Error {
   VkFenceCreateInfo fenceInfo = {};
   fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
   fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
-  context.inFlightFences = std::vector<VkFence>(FRAMES_IN_FLIGHT);
+  context.imageAvailable.resize(FRAMES_IN_FLIGHT);
+  context.inFlight.resize(FRAMES_IN_FLIGHT);
 
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
     for (int i = 0; i < FRAMES_IN_FLIGHT; i++) {
-      Error error = Error::Create(vkCreateFence(
-          context.device, &fenceInfo, nullptr, &context.inFlightFences.at(i)));
+      Error error = Error::Create(
+          vkCreateSemaphore(context.device, &semaphoreInfo, nullptr,
+                            &context.imageAvailable.at(i)));
+      if (Error::IsError(error)) {
+        return error;
+      }
+
+      error = Error::Create(vkCreateFence(context.device, &fenceInfo, nullptr,
+                                          &context.inFlight.at(i)));
+      if (Error::IsError(error)) {
+        return error;
+      }
     }
-  }
-
-  if (context.swapchainInfo.imageCount <= 0) {
-    return Error::Create("Swapchain image count is zero.");
-  }
-
-  context.imagesInFlight =
-      std::vector<VkFence>(context.swapchainInfo.imageCount);
-
-  for (int i = 0; i < (int32_t)context.swapchainInfo.imageCount; i++) {
-    context.imagesInFlight.at(i) = VK_NULL_HANDLE;
   }
 
   return Error::Success();
@@ -452,21 +422,11 @@ auto Initialize(GraphicsContext &context, Window::WindowContext &wcontext)
     return error;
   }
   PrintDebug("called: CreateCommandPool...");
-  error = CreateSwapchain(context, *windowContext);
-  if (Error::IsError(error)) {
-    return error;
-  }
-  PrintDebug("called: CreateSwapchain...");
   error = CreateSemaphores(context);
   if (Error::IsError(error)) {
     return error;
   }
   PrintDebug("called: CreateSemaphores...");
-  error = CreateFences(context);
-  if (Error::IsError(error)) {
-    return error;
-  }
-  PrintDebug("called: CreateFences.");
 
   return Error::Success();
 }
@@ -479,16 +439,12 @@ void Deinitialize(GraphicsContext &context) {
 
   vmaDestroyAllocator(context.vmaAllocator);
 
-  for (VkFence fence : context.inFlightFences) {
+  for (VkSemaphore semaphore : context.imageAvailable) {
+    vkDestroySemaphore(context.device, semaphore, nullptr);
+  }
+
+  for (VkFence fence : context.inFlight) {
     vkDestroyFence(context.device, fence, nullptr);
-  }
-
-  for (VkSemaphore semaphore : context.renderingFinished) {
-    vkDestroySemaphore(context.device, semaphore, nullptr);
-  }
-
-  for (VkSemaphore semaphore : context.swapchainImageReady) {
-    vkDestroySemaphore(context.device, semaphore, nullptr);
   }
 
   vkDestroyCommandPool(context.device, GetThreadContext().commandPool, nullptr);
@@ -498,13 +454,6 @@ void Deinitialize(GraphicsContext &context) {
       vkDestroyCommandPool(context.device, pool, nullptr);
     }
   }
-
-  for (VkImageView imageView : context.swapchainInfo.imageViews) {
-    vkDestroyImageView(context.device, imageView, nullptr);
-  }
-
-  vkDestroySwapchainKHR(context.device, context.swapchainInfo.swapchain,
-                        nullptr);
 
   vkDestroyDevice(context.device, nullptr);
   vkDestroySurfaceKHR(context.instance, context.surface, nullptr);

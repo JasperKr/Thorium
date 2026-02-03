@@ -903,16 +903,6 @@ auto FlushCompute(GraphicsContext &context) -> Result<bool> {
     return error.AsUnexpected();
   }
 
-  // Loop over all attachments
-  // Swapchain cannot be used as sampler, so we never have to transition it here
-  for (const auto &rendertarget : currentState.renderTargets) {
-    auto result = rendertarget->texture->UseAsAttachment(context);
-
-    if (Error::IsError(result)) {
-      return result.AsUnexpected();
-    }
-  }
-
   PrintDebug("Binding pipeline");
 
   vkCmdBindPipeline(commandBuffer, currentState.bindPoint,
@@ -985,16 +975,6 @@ auto FlushGraphics(GraphicsContext &context) -> Result<bool> {
           VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT);
   if (Error::IsError(error)) {
     return error.AsUnexpected();
-  }
-
-  // Loop over all attachments
-  // Swapchain cannot be used as sampler, so we never have to transition it here
-  for (const auto &rendertarget : currentState.renderTargets) {
-    auto result = rendertarget->texture->UseAsAttachment(context);
-
-    if (Error::IsError(result)) {
-      return result.AsUnexpected();
-    }
   }
 
   PrintDebug("Binding pipeline");
@@ -1090,6 +1070,11 @@ inline auto BeginRendering(GraphicsContext &context) -> Error {
   bool hasStencil = false;
 
   for (const auto &rendertarget : currentState.renderTargets) {
+    auto useResult = rendertarget->texture->UseAsAttachment(context);
+    if (Error::IsError(useResult)) {
+      return useResult;
+    }
+
     VkRenderingAttachmentInfo attachmentInfo = {};
     attachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
     attachmentInfo.imageView = rendertarget->texture->view;
@@ -1297,6 +1282,7 @@ auto PrepareRendering(GraphicsContext &context) -> Error {
 }
 
 auto FinalizeFrame(GraphicsContext &context) -> Error {
+  ZoneScoped;
   if (StateStack.size() != 1) {
     return Error::Create("More pushes than pops.");
   }

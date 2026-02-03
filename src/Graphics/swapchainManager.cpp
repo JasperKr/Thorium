@@ -4,7 +4,9 @@
 #include "Graphics/texture.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
+#include "Modules/utils.hpp"
 #include "Modules/window.hpp"
+#include <public/tracy/Tracy.hpp>
 
 #define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
@@ -221,54 +223,128 @@ inline auto GetSwapchainTextures(GraphicsContext &context) -> Error {
 
 auto SwapchainManager::Initialize(GraphicsContext &context,
                                   Window::WindowContext &windowContext)
-    -> Error {
+    -> Result<SwapchainManager> {
+  SwapchainManager manager;
 
-  auto result = CreateVkSwapchain(context, windowContext);
+  auto result = manager.CreateVkSwapchain(context, windowContext);
   if (Error::IsError(result)) {
-    return result;
+    return result.AsUnexpected();
   }
 
-  return Error::Success();
+  manager.currentSwapchain = context.swapchainInfo.swapchain;
+  manager.currentTextures = context.swapchainInfo.textures;
+  manager.lastFrameUsed = 0;
+  manager.isDirty = false;
+
+  return manager;
 }
 
-auto SwapchainManager::Deinitialize(GraphicsContext &context) -> void {}
+auto SwapchainManager::Deinitialize(GraphicsContext &context) -> void {
+  for (auto &texture : currentTextures) {
+    auto *image = texture->image;
+    auto *view = texture->view;
+
+    {
+      std::lock_guard<std::mutex> lock(
+          Graphics::GraphicsContext::mutexes.device);
+      vkDestroyImageView(context.device, view, nullptr);
+    }
+  }
+
+  currentTextures.clear();
+
+  {
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+    vkDestroySwapchainKHR(context.device, currentSwapchain, nullptr);
+  }
+
+  {
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+    for (auto &fence : context.imageInFlight) {
+      vkDestroyFence(context.device, fence, nullptr);
+    }
+
+    for (auto &semaphore : context.imageReady) {
+      vkDestroySemaphore(context.device, semaphore, nullptr);
+    }
+  }
+
+  currentSwapchain = VK_NULL_HANDLE;
+
+  CleanupOldSwapchains(context, UINT64_MAX);
+}
 auto SwapchainManager::RecreateSwapchain(GraphicsContext &context,
                                          Window::WindowContext &wcontext)
     -> Error {
+  ZoneScoped;
+
   OldSwapchain oldSwapchain{
       .swapchain = currentSwapchain,
       .textures = currentTextures,
       .lastFrameUsed = lastFrameUsed,
+      .imageReady = context.imageReady,
+      .imageInFlight = context.imageInFlight,
   };
 
   oldSwapchains.emplace_back(oldSwapchain);
 
-  return CreateVkSwapchain(context, wcontext);
+  context.imageReady.clear();
+  context.imageInFlight.clear();
+
+  auto createResult = CreateVkSwapchain(context, wcontext);
+  if (Error::IsError(createResult)) {
+    return createResult;
+  }
+
+  currentSwapchain = context.swapchainInfo.swapchain;
+  currentTextures = context.swapchainInfo.textures;
+  isDirty = false;
+
+  context.frameIndex = 0;
+
+  return Error::Success();
 }
 auto SwapchainManager::CleanupOldSwapchains(GraphicsContext &context,
                                             uint64_t currentFrame) -> void {
-  for (auto &oldSwapchain : oldSwapchains) {
-    auto swapchainImageCount = oldSwapchain.textures.size();
-    if (currentFrame - oldSwapchain.lastFrameUsed > swapchainImageCount + 1) {
-      for (auto &texture : oldSwapchain.textures) {
-        auto *image = texture->image;
-        auto *view = texture->view;
+  Utils::UnorderedErase(
+      oldSwapchains,
+      [&context, &currentFrame](OldSwapchain &oldSwapchain) -> bool {
+        auto swapchainImageCount = oldSwapchain.textures.size();
+        if (currentFrame - oldSwapchain.lastFrameUsed >
+            swapchainImageCount * 2) {
+          for (const auto &texture : oldSwapchain.textures) {
+            auto *image = texture->image;
+            auto *view = texture->view;
 
-        {
+            {
+              std::lock_guard<std::mutex> lock(
+                  Graphics::GraphicsContext::mutexes.device);
+              vkDestroyImageView(context.device, view, nullptr);
+            }
+          }
+
+          oldSwapchain.textures.clear();
+
           std::lock_guard<std::mutex> lock(
               Graphics::GraphicsContext::mutexes.device);
-          vkDestroyImageView(context.device, view, nullptr);
+          vkDestroySwapchainKHR(context.device, oldSwapchain.swapchain,
+                                nullptr);
+
+          for (auto &fence : oldSwapchain.imageInFlight) {
+            vkDestroyFence(context.device, fence, nullptr);
+          }
+
+          for (auto &semaphore : oldSwapchain.imageReady) {
+            vkDestroySemaphore(context.device, semaphore, nullptr);
+          }
+
+          return true;
         }
-      }
 
-      oldSwapchain.textures.clear();
-
-      std::lock_guard<std::mutex> lock(
-          Graphics::GraphicsContext::mutexes.device);
-      vkDestroySwapchainKHR(context.device, oldSwapchain.swapchain, nullptr);
-    }
-  }
+        return false;
+      });
 }
+
 auto SwapchainManager::GetCurrentSwapchain() -> VkSwapchainKHR {
   return currentSwapchain;
 }
@@ -280,6 +356,8 @@ auto SwapchainManager::GetCurrentSwapchainTexture(
 auto SwapchainManager::NewFrame(GraphicsContext &context,
                                 Window::WindowContext &windowContext,
                                 uint64_t currentFrame) -> Error {
+  ZoneScoped;
+
   if (isDirty) {
     isDirty = false;
 
@@ -289,11 +367,14 @@ auto SwapchainManager::NewFrame(GraphicsContext &context,
     }
   }
 
+  CleanupOldSwapchains(context, currentFrame);
+
   lastFrameUsed = currentFrame;
 
   return Error::Success();
 }
 auto SwapchainManager::EndFrame(const GraphicsContext &context) -> Error {
+  ZoneScoped;
   auto error = GetCurrentSwapchainTexture(context)->UseAsPresentSrc(context);
   if (Error::IsError(error)) {
     return error;
@@ -302,9 +383,47 @@ auto SwapchainManager::EndFrame(const GraphicsContext &context) -> Error {
   return Error::Success();
 }
 
+inline auto CreateFences(GraphicsContext &context) -> Error {
+  ZoneScoped;
+
+  VkFenceCreateInfo fenceInfo = {};
+  fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+  fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+  VkSemaphoreCreateInfo semaphoreInfo = {};
+  semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+  context.imageInFlight.resize(MAX_SWAPCHAIN_IMAGES);
+  context.imageReady.resize(MAX_SWAPCHAIN_IMAGES);
+
+  {
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+    for (int i = 0; i < MAX_SWAPCHAIN_IMAGES; i++) {
+      Error error = Error::Create(vkCreateFence(
+          context.device, &fenceInfo, nullptr, &context.imageInFlight.at(i)));
+      if (Error::IsError(error)) {
+        return error;
+      }
+
+      error = Error::Create(vkCreateSemaphore(
+          context.device, &semaphoreInfo, nullptr, &context.imageReady.at(i)));
+      if (Error::IsError(error)) {
+        return error;
+      }
+    }
+  }
+
+  if (context.swapchainInfo.imageCount <= 0) {
+    return Error::Create("Swapchain image count is zero.");
+  }
+
+  return Error::Success();
+}
+
 auto SwapchainManager::CreateVkSwapchain(GraphicsContext &context,
                                          Window::WindowContext &windowContext)
     -> Error {
+  ZoneScoped;
 
   auto presentResult = FindPresentMode(windowContext, context);
   if (Error::IsError(presentResult)) {
@@ -327,25 +446,6 @@ auto SwapchainManager::CreateVkSwapchain(GraphicsContext &context,
   context.surfaceInfo.format = surfaceFormat;
   context.surfaceInfo.capabilities = surfaceCapabilities;
 
-  for (auto *const fence : context.imagesInFlight) {
-    if (fence == VK_NULL_HANDLE) {
-      continue;
-    }
-
-    vkWaitForFences(context.device, 1, &fence, VK_TRUE, UINT64_MAX);
-  }
-
-  for (auto *const view : context.swapchainInfo.imageViews) {
-    vkDestroyImageView(context.device, view, nullptr);
-  }
-  context.swapchainInfo.imageViews.clear();
-
-  if (context.swapchainInfo.swapchain != VK_NULL_HANDLE) {
-    vkDestroySwapchainKHR(context.device, context.swapchainInfo.swapchain,
-                          nullptr);
-    context.swapchainInfo.swapchain = VK_NULL_HANDLE;
-  }
-
   VkSwapchainCreateInfoKHR swapchainInfo = {};
   swapchainInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
   swapchainInfo.surface = context.surface;
@@ -361,8 +461,6 @@ auto SwapchainManager::CreateVkSwapchain(GraphicsContext &context,
   int height = 0;
   SDL_GetWindowSizeInPixels(context.sdlWindow, &width, &height);
 
-  PrintAlways("Creating swapchain with resolution {}x{}.", width, height);
-
   VkExtent2D extent = {(uint32_t)width, (uint32_t)height};
 
   swapchainInfo.imageFormat = surfaceFormat.format;
@@ -375,33 +473,34 @@ auto SwapchainManager::CreateVkSwapchain(GraphicsContext &context,
   swapchainInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
   swapchainInfo.presentMode = presentMode;
   swapchainInfo.clipped = VK_TRUE;
-  swapchainInfo.oldSwapchain = VK_NULL_HANDLE;
-
-  VkSwapchainKHR swapchain = VK_NULL_HANDLE;
+  swapchainInfo.oldSwapchain = currentSwapchain;
 
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
     Error error = Error::Create(vkCreateSwapchainKHR(
-        context.device, &swapchainInfo, nullptr, &swapchain));
+        context.device, &swapchainInfo, nullptr, &currentSwapchain));
 
     if (Error::IsError(error)) {
       return error;
     }
   }
 
-  context.swapchainInfo.swapchain = swapchain;
+  context.swapchainInfo.swapchain = currentSwapchain;
   context.swapchainInfo.format = surfaceFormat.format;
   context.swapchainInfo.extent = swapchainInfo.imageExtent;
 
-  vkGetSwapchainImagesKHR(context.device, swapchain,
-                          &context.swapchainInfo.imageCount, nullptr);
+  {
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+    vkGetSwapchainImagesKHR(context.device, currentSwapchain,
+                            &context.swapchainInfo.imageCount, nullptr);
+  }
 
   context.swapchainInfo.images.resize(context.swapchainInfo.imageCount);
 
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
     Error error = Error::Create(vkGetSwapchainImagesKHR(
-        context.device, swapchain, &context.swapchainInfo.imageCount,
+        context.device, currentSwapchain, &context.swapchainInfo.imageCount,
         context.swapchainInfo.images.data()));
 
     if (Error::IsError(error)) {
@@ -443,7 +542,17 @@ auto SwapchainManager::CreateVkSwapchain(GraphicsContext &context,
     return result;
   }
 
+  if (context.imageReady.empty() ||
+      context.imageReady.at(0) == VK_NULL_HANDLE) {
+    result = CreateFences(context);
+    if (Error::IsError(result)) {
+      return result;
+    }
+  }
+
   return Error::Success();
 }
+
+auto SwapchainManager::MakeDirty() -> void { isDirty = true; }
 
 } // namespace Graphics::SwapchainManager

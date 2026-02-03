@@ -4,7 +4,11 @@ function Thorium.config(config)
 
   config.window.title = "Configured Title"
   config.window.resizable = true
-  config.window.colorspace = "hdr"
+  config.window.colorspace = "linear"
+
+  -- "adaptive" | "immediate" | "replace" | "enabled"
+  ---@type Thorium.VsyncMode
+  config.window.vsync = "adaptive"
 
   config.filesystem.identity = "ConfiguredIdentity"
 

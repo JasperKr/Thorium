@@ -278,6 +278,12 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
 
   PrintDebug("Shader modules loaded successfully.");
 
+  result = Graphics::InitializeRendering(context, wcontext);
+
+  if (Error::IsError(result)) {
+    return result;
+  }
+
   auto rendertargetLoadError = Graphics::DynamicRendering::Load(context);
 
   if (Error::IsError(rendertargetLoadError)) {
@@ -285,12 +291,6 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
   }
 
   PrintDebug("Rendertargets loaded successfully.");
-
-  result = Graphics::InitializeGraphics(context);
-
-  if (Error::IsError(result)) {
-    return result;
-  }
 
   error = Graphics::LoadBufferModule(context);
   if (Error::IsError(error)) {
@@ -377,6 +377,8 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
   if (Error::IsError(shutdownResult)) {
     PrintError("Error during ImGui shutdown: {}", shutdownResult.message);
   }
+
+  Graphics::DeinitilizeRendering(context);
 
   Graphics::Texture::UnloadModule();
 

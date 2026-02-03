@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Graphics/swapchainManager.hpp"
 #include "Modules/error.hpp"
 #include "graphics.hpp"
 #include <string>
@@ -20,8 +21,13 @@ struct StitchInfo {
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 extern StitchInfo GlobalStitchInfo;
 
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+extern SwapchainManager::SwapchainManager swapchainManager;
+
 auto Present(GraphicsContext &context) -> Error;
-auto InitializeGraphics(GraphicsContext &context) -> Error;
+auto InitializeRendering(GraphicsContext &context,
+                         Window::WindowContext &windowContext) -> Error;
+auto DeinitilizeRendering(GraphicsContext &context) -> void;
 auto UseCommands(uint64_t key) -> void;
 auto UseCommands(const std::string &name) -> void;
 

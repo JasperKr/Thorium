@@ -5,6 +5,9 @@
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Modules/window.hpp"
+
+#define VK_NO_PROTOTYPES
+#include "vulkan/vulkan_core.h"
 #include <cstdint>
 #include <vector>
 namespace Graphics::SwapchainManager {
@@ -13,6 +16,9 @@ struct OldSwapchain {
   VkSwapchainKHR swapchain = VK_NULL_HANDLE;
   std::vector<Ref<Texture::Texture>> textures;
   uint64_t lastFrameUsed = 0;
+
+  std::vector<VkSemaphore> imageReady;
+  std::vector<VkFence> imageInFlight;
 };
 
 class SwapchainManager {
@@ -36,8 +42,8 @@ public:
   auto MakeDirty() -> void;
 
 private:
-  static auto CreateVkSwapchain(GraphicsContext &context,
-                                Window::WindowContext &windowContext) -> Error;
+  auto CreateVkSwapchain(GraphicsContext &context,
+                         Window::WindowContext &windowContext) -> Error;
 
   // To be used when recreating swapchains to avoid destroying in-use swapchains
   std::vector<OldSwapchain> oldSwapchains;

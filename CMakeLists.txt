@@ -1,7 +1,8 @@
 cmake_minimum_required(VERSION 3.25)
 project(Thorium LANGUAGES C CXX)
 
-set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD 23)
+set(CMAKE_C_STANDARD_REQUIRED ON)
 
 if(MSVC)
     add_compile_options(/Zc:__cplusplus)
@@ -82,6 +83,8 @@ add_library(physfs STATIC ${PHYSFS_SOURCES})
 target_include_directories(physfs
     SYSTEM PRIVATE external/physfs/src/
 )
+
+target_compile_definitions(physfs PRIVATE _POSIX_C_SOURCE=200809L)
 
 set(BINARIES_DIR "${CMAKE_CURRENT_SOURCE_DIR}/bin/")
 set(LIBRARIES_DIR "${CMAKE_CURRENT_SOURCE_DIR}/lib/")

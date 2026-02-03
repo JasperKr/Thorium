@@ -80,10 +80,13 @@ struct GraphicsContext {
   SurfaceInfo surfaceInfo;
   VkPhysicalDeviceProperties deviceProperties;
 
-  std::vector<VkSemaphore> swapchainImageReady;
-  std::vector<VkSemaphore> renderingFinished;
-  std::vector<VkFence> inFlightFences;
-  std::vector<VkFence> imagesInFlight;
+  // per frame-in-flight
+  std::vector<VkSemaphore> imageAvailable;
+  std::vector<VkFence> inFlight;
+
+  // per swapchain image
+  std::vector<VkSemaphore> imageReady;
+  std::vector<VkFence> imageInFlight;
 
   uint64_t currentFrame;
   uint32_t frameIndex;
@@ -114,9 +117,6 @@ auto BeginSingleTimeCommands(GraphicsContext &context) -> VkCommandBuffer;
 
 auto EndSingleTimeCommands(GraphicsContext &context,
                            VkCommandBuffer commandBuffer) -> void;
-
-auto CreateSwapchain(GraphicsContext &context, Window::WindowContext &wcontext)
-    -> Error;
 
 // Graphics context NOLINTNEXTLINE
 extern GraphicsContext *g_ctx;
