@@ -4,6 +4,8 @@ function Thorium.config(config)
 
   config.window.title = "Configured Title"
   config.window.resizable = true
+
+  -- "linear" | "gammacorrect" | "hdr"
   config.window.colorspace = "linear"
 
   -- "adaptive" | "immediate" | "replace" | "enabled"
