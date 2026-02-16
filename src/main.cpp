@@ -1,7 +1,10 @@
 #include "Modules/console.hpp"
 #include "Modules/errorhandler.hpp"
 #include "loop.hpp"
+#include <chrono>
+#include <public/client/TracyProfiler.hpp>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "Modules/event.hpp"
@@ -14,6 +17,15 @@ auto main(int argCount, char **argValues) -> int {
   for (int i = 1; i < argCount; ++i) {
     args.emplace_back(argValues[i]); // NOLINT
   }
+
+#ifdef TRACY_WAIT_FOR_CLIENT
+  // Wait for the Tracy client to connect before starting the main loop
+  PrintInfo("Waiting for Tracy client to connect...");
+  while (!tracy::GetProfiler().IsConnected()) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  }
+  PrintInfo("Tracy client connected. Starting main loop.");
+#endif
 
   auto err = MainLoop(args);
   if (Error::IsError(err)) {

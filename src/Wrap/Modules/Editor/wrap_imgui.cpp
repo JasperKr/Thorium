@@ -2,6 +2,7 @@
 #include "Graphics/draw.hpp"
 #include "Graphics/dynamicRendering.hpp"
 #include "Graphics/graphics.hpp"
+#include "Graphics/graphicsState.hpp"
 #include "Graphics/mesh.hpp"
 #include "Graphics/shader.hpp"
 #include "Graphics/texture.hpp"
@@ -114,7 +115,7 @@ inline auto HandleImguiCreateTextureEvent(Graphics::GraphicsContext &context,
       .height = static_cast<uint32_t>(tex->Height),
       .depth = 1,
       .format = tex->BytesPerPixel == 1 ? VK_FORMAT_R8_UNORM
-                                        : VK_FORMAT_R8G8B8A8_UNORM,
+                                        : Graphics::DefaultPixelFormat,
       .usage = static_cast<uint32_t>(VK_IMAGE_USAGE_SAMPLED_BIT) |
                static_cast<uint32_t>(VK_IMAGE_USAGE_TRANSFER_DST_BIT),
       .mipmapCount = 1,

@@ -106,21 +106,22 @@ function Thorium.graphics.setPolygonMode(mode) end
 function Thorium.graphics.setViewport(x, y, width, height, minDepth, maxDepth) end
 
 --- Sets the scissor rectangle.
+---@overload fun() Disables scissor testing.
 ---@param x number The x coordinate of the scissor rectangle.
 ---@param y number The y coordinate of the scissor rectangle.
 ---@param width number The width of the scissor rectangle.
 ---@param height number The height of the scissor rectangle.
-function Thorium.graphics.setScissorRect(x, y, width, height) end
+function Thorium.graphics.setScissor(x, y, width, height) end
 
 --- Clips the scissor rectangle.
 ---@param x number The x coordinate of the scissor rectangle.
 ---@param y number The y coordinate of the scissor rectangle.
 ---@param width number The width of the scissor rectangle.
 ---@param height number The height of the scissor rectangle.
-function Thorium.graphics.clipScissorRect(x, y, width, height) end
+function Thorium.graphics.clipScissor(x, y, width, height) end
 
 --- Sets the shader used for rendering.
---- @param shader Thorium.Shader The shader to set.
+--- @param shader Thorium.Shader? The shader to set.
 function Thorium.graphics.setShader(shader) end
 
 --- Sets the line width.

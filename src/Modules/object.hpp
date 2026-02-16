@@ -33,6 +33,8 @@ private:
 
 template <typename T> class Ref {
 public:
+  using element_type = T;
+
   Ref() = default;
   explicit Ref(T *pointer) : ptr(pointer) {
     if (ptr != nullptr) {

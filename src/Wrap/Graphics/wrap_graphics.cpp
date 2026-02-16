@@ -409,6 +409,11 @@ struct FormatDefault2D {
   uint32_t color;
 };
 
+// NOLINTNEXTLINE; Cache quad mesh to avoid recreating it every frame
+thread_local static Ref<Mesh> QuadMeshCache;
+
+auto ShutdownWrapGraphics() -> void { QuadMeshCache.reset(); };
+
 inline auto GetQuadMesh(GraphicsContext &context, const VkRect2D size,
                         Color color) -> Result<Ref<Mesh>> {
   // Create a quad mesh covering the given size NOLINTNEXTLINE
@@ -475,9 +480,19 @@ inline auto GetQuadMesh(GraphicsContext &context, const VkRect2D size,
 
   DynamicRendering::EndRendering(context);
 
-  const static auto mesh = Mesh::Create(context, vertexFormat, span);
+  if (QuadMeshCache.get() == nullptr) {
+    auto meshResult = Mesh::Create(context, vertexFormat, span);
 
-  auto setDataError = mesh->get()->SetVertices(context, span);
+    if (Error::IsError(meshResult)) {
+      return meshResult.error().AsUnexpected();
+    }
+
+    QuadMeshCache = meshResult.value();
+  }
+
+  auto mesh = QuadMeshCache;
+
+  auto setDataError = mesh->SetVertices(context, span);
   if (Error::IsError(setDataError)) {
     return setDataError.AsUnexpected();
   }
@@ -486,8 +501,7 @@ inline auto GetQuadMesh(GraphicsContext &context, const VkRect2D size,
       reinterpret_cast<uint8_t *>(indices.data()),
       indices.size() * GetIndexFormatSize(VK_INDEX_TYPE_UINT32));
 
-  setDataError =
-      mesh->get()->SetIndices(context, indexSpan, VK_INDEX_TYPE_UINT32);
+  setDataError = mesh->SetIndices(context, indexSpan, VK_INDEX_TYPE_UINT32);
   if (Error::IsError(setDataError)) {
     return setDataError.AsUnexpected();
   }

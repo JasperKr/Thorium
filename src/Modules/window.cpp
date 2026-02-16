@@ -1,5 +1,6 @@
 #include "window.hpp"
 
+#include "Graphics/graphicsState.hpp"
 #include "Modules/Math/vector.hpp"
 #include "Modules/imagedata.hpp"
 #include "Modules/object.hpp"
@@ -267,6 +268,10 @@ auto SetWindowContext(WindowContext &context) -> void {
 auto SetColorSpace(WindowContext &window, ColorSpace colorSpace) -> void {
   window.colorSpace = colorSpace;
   window.swapchainOutOfDate = true;
+
+  Graphics::DefaultPixelFormat = (colorSpace == ColorSpace::Linear)
+                                     ? VK_FORMAT_R8G8B8A8_UNORM
+                                     : VK_FORMAT_R8G8B8A8_SRGB;
 }
 auto GetColorSpace(WindowContext &window) -> ColorSpace {
   return window.colorSpace;

@@ -487,7 +487,7 @@ auto LoadGltfModel(Graphics::GraphicsContext &context, const std::string &path,
       }
 
       for (auto &sceneObject : nodeResult.value()) {
-        scene.Nodes.emplace_back(std::move(sceneObject));
+        scene.hierarchy.emplace_back(std::move(sceneObject));
       }
     }
   }

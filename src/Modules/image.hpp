@@ -1,4 +1,5 @@
 #pragma once
+#include "Graphics/graphicsState.hpp"
 #include "Modules/error.hpp"
 #include <span>
 #include <variant>
@@ -130,7 +131,7 @@ inline auto FromMemory(const std::span<const uint8_t> &data, int &outWidth,
 
     outWidth = texWidth;
     outHeight = texHeight;
-    outFormat = VK_FORMAT_R8G8B8A8_UNORM;
+    outFormat = Graphics::DefaultPixelFormat;
 
     return pixels;
   }

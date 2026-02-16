@@ -89,9 +89,9 @@ auto inline FromLuaState(lua_State *state)
 
   // assume stack is now [stuff, blendmode table]
 
-  lua_getfield(state, -1, "blendmode");   // get blendmode field
-  if (lua_isstring(state, -1) != 0) {     // Simple blendmode
-    lua_getfield(state, -2, "alphamode"); // get alphamode field
+  lua_getfield(state, -1, "blendmode");     // get blendmode field
+  if (lua_type(state, -1) == LUA_TSTRING) { // Simple blendmode
+    lua_getfield(state, -2, "alphamode");   // get alphamode field
 
     if (lua_isstring(state, -1) == 0) {
       return Error::Unexpected(
@@ -150,28 +150,30 @@ auto inline FromLuaState(lua_State *state)
 
     lua_pop(state, 2); // pop blendmode string and alphamode string
   } else {
+    lua_pop(state, 1); // pop non-string blendmode field
+
     // Detailed blendmode
-    lua_getfield(state, 1, "srccolor");
+    lua_getfield(state, -1, "srccolor");
     const char *srcColorStr = luaL_checkstring(state, -1);
     lua_pop(state, 1);
 
-    lua_getfield(state, 1, "dstcolor");
+    lua_getfield(state, -1, "dstcolor");
     const char *dstColorStr = luaL_checkstring(state, -1);
     lua_pop(state, 1);
 
-    lua_getfield(state, 1, "srcalpha");
+    lua_getfield(state, -1, "srcalpha");
     const char *srcAlphaStr = luaL_checkstring(state, -1);
     lua_pop(state, 1);
 
-    lua_getfield(state, 1, "dstalpha");
+    lua_getfield(state, -1, "dstalpha");
     const char *dstAlphaStr = luaL_checkstring(state, -1);
     lua_pop(state, 1);
 
-    lua_getfield(state, 1, "opcolor");
+    lua_getfield(state, -1, "colorop");
     const char *opColorStr = luaL_checkstring(state, -1);
     lua_pop(state, 1);
 
-    lua_getfield(state, 1, "opalpha");
+    lua_getfield(state, -1, "alphaop");
     const char *opAlphaStr = luaL_checkstring(state, -1);
     lua_pop(state, 1);
 

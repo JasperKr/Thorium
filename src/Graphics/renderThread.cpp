@@ -8,6 +8,7 @@
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
+#include "Wrap/Graphics/wrap_graphics.hpp"
 #include "vulkan/vulkan_core.h"
 #include <cassert>
 #include <cstdint>
@@ -335,6 +336,8 @@ auto Deinitialize(Graphics::GraphicsContext &context) -> Error {
   if (Error::IsError(err)) {
     return err;
   }
+
+  Graphics::ShutdownWrapGraphics();
 
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);

@@ -8,6 +8,7 @@
 #include "Modules/error.hpp"
 #include "Modules/filesystem.hpp"
 #include "Modules/object.hpp"
+#include "Modules/window.hpp"
 #include "graphics.hpp"
 #include "shaderc/shaderc.h"
 #include "shaderc/shaderc.hpp"
@@ -290,6 +291,9 @@ static inline auto LoadSlang(GraphicsContext &context,
   sessionDesc.searchPathCount = static_cast<uint32_t>(searchPaths.size());
   sessionDesc.targets = &SpvTargetDesc;
   sessionDesc.targetCount = 1;
+  sessionDesc.preprocessorMacros = shader->preprocessorMacros.data();
+  sessionDesc.preprocessorMacroCount =
+      static_cast<uint32_t>(shader->preprocessorMacros.size());
 
   slang::ISession *session = nullptr;
   auto result = GlobalSlangSession->createSession(sessionDesc, &session);
@@ -476,13 +480,30 @@ static inline auto LoadSlang(GraphicsContext &context,
   return Error::Success();
 }
 
-auto ShaderModule::Create(Graphics::GraphicsContext &context,
-                          const std::string &modulename,
-                          const std::string &name)
+auto ShaderModule::Create(
+    Graphics::GraphicsContext &context, const std::string &modulename,
+    const std::string &name,
+    const std::vector<slang::PreprocessorMacroDesc> *preprocessorMacros)
     -> Result<Ref<ShaderModule>> {
   Ref<ShaderModule> shader = Ref<ShaderModule>::Make();
   shader->name = name;
   shader->moduleName = modulename;
+
+  if (preprocessorMacros != nullptr) {
+    shader->preprocessorMacros = *preprocessorMacros;
+  }
+
+  switch (Window::GetWindowContext()->colorSpace) {
+  case Window::ColorSpace::GammaCorrect:
+    shader->preprocessorMacros.emplace_back("__COLORSPACE_GAMMA_CORRECT", "1");
+    break;
+  case Window::ColorSpace::Linear:
+    shader->preprocessorMacros.emplace_back("__COLORSPACE_LINEAR", "1");
+    break;
+  case Window::ColorSpace::HDR:
+    shader->preprocessorMacros.emplace_back("__COLORSPACE_HDR", "1");
+    break;
+  }
 
   // Compile Slang to SPIR-V and create shader module
   auto error = LoadSlang(context, shader);
@@ -894,6 +915,10 @@ auto ShaderModule::FlushBuffers(GraphicsContext &context,
   GetState().pendingDescriptorWrites.clear();
 
   auto *commandBuffer = GetCommandBuffer();
+
+  if (commandBuffer == VK_NULL_HANDLE) {
+    return Error::Create("No valid command buffer found for shader flush.");
+  }
 
   VkPipelineBindPoint bindpoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
 

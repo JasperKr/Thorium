@@ -780,6 +780,10 @@ auto Texture::TransitionLayout(const GraphicsContext &context,
 
   auto *commandBuffer = GetCommandBuffer();
 
+  if (commandBuffer == nullptr) {
+    return Error::Create("Failed to get command buffer for layout transition.");
+  }
+
   VkImageMemoryBarrier2 barrier = {};
   barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
   barrier.oldLayout = currentLayout;
@@ -995,6 +999,10 @@ auto Texture::SetPixels(GraphicsContext &context, Image::ImageData &imageData,
 
   auto *commandBuffer = GetCommandBuffer();
 
+  if (commandBuffer == nullptr) {
+    return Error::Create("Failed to get command buffer for SetPixels.");
+  }
+
   vkCmdCopyBufferToImage(commandBuffer, buffer->handle, image,
                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
@@ -1119,6 +1127,10 @@ auto Texture::SetPixels(GraphicsContext &context,
 
   auto *commandBuffer = GetCommandBuffer();
 
+  if (commandBuffer == nullptr) {
+    return Error::Create("Failed to get command buffer for SetPixels.");
+  }
+
   vkCmdCopyBufferToImage(commandBuffer, buffer->handle, image,
                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
@@ -1194,7 +1206,6 @@ auto GetDefaultTexture(GraphicsContext &context, VkFormat format,
   if (textureType == TextureType::CUBEMAP) {
     texInfo.depth = 6; // NOLINT
   }
-  texInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
   texInfo.mipmapCount = 1;
 
   Result<Ref<Texture>> result;
@@ -1228,8 +1239,12 @@ auto GetDefaultTexture(GraphicsContext &context, VkFormat format,
   }
 
   auto imageData = imageDataResult.value();
-  imageData->SetColor(Math::Uvec2{0, 0},
-                      Color(UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX));
+  auto error = imageData->SetColor(
+      Math::Uvec2{0, 0}, Color(UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX));
+
+  if (Error::IsError(error)) {
+    return error.AsUnexpected();
+  }
 
   auto setPixelsResult = texture->SetPixels(context, *imageData);
 

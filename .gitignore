@@ -17,3 +17,5 @@ vgcore.*
 assets/
 *.so.*
 external/
+*.log
+*.tmp

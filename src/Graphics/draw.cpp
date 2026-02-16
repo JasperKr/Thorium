@@ -80,6 +80,10 @@ auto Draw(GraphicsContext &context, const Mesh &mesh, uint32_t instanceCount)
     -> Error {
   auto *commandBuffer = GetCommandBuffer();
 
+  if (commandBuffer == nullptr) {
+    return Error::Create("Failed to get command buffer for draw call.");
+  }
+
   MeshDrawRange range = mesh.GetDrawRange();
 
   auto format = mesh.GetVertexFormat();
@@ -126,6 +130,10 @@ auto Dispatch(GraphicsContext &context, const Math::Uvec3 &threadgroups)
     -> Error {
   auto *commandBuffer = GetCommandBuffer();
 
+  if (commandBuffer == nullptr) {
+    return Error::Create("Failed to get command buffer for dispatch call.");
+  }
+
   DynamicRendering::SetBindPoint(VK_PIPELINE_BIND_POINT_COMPUTE);
   auto error = DynamicRendering::PrepareRendering(context);
   if (Error::IsError(error)) {
@@ -141,6 +149,10 @@ auto DispatchIndirect(GraphicsContext &context,
                       const Ref<Buffer> &indirectBuffer, VkDeviceSize offset)
     -> Error {
   auto *commandBuffer = GetCommandBuffer();
+
+  if (commandBuffer == nullptr) {
+    return Error::Create("Failed to get command buffer for dispatch indirect.");
+  }
 
   DynamicRendering::SetBindPoint(VK_PIPELINE_BIND_POINT_COMPUTE);
   auto error = DynamicRendering::PrepareRendering(context);
@@ -158,6 +170,10 @@ auto DrawIndirect(GraphicsContext &context, const Mesh &mesh,
                   VkDeviceSize offset, // NOLINT
                   uint32_t count) -> Error {
   auto *commandBuffer = GetCommandBuffer();
+
+  if (commandBuffer == nullptr) {
+    return Error::Create("Failed to get command buffer for draw indirect.");
+  }
 
   auto bindResult = BindMesh(context, commandBuffer, mesh);
   if (Error::IsError(bindResult)) {
@@ -203,6 +219,10 @@ auto Draw(GraphicsContext &context, const VkPrimitiveTopology &topology,
           uint32_t vertexCount, uint32_t instanceCount) -> Error { // NOLINT
   auto *commandBuffer = GetCommandBuffer();
 
+  if (commandBuffer == nullptr) {
+    return Error::Create("Failed to get command buffer for draw call.");
+  }
+
   DynamicRendering::SetBindPoint(VK_PIPELINE_BIND_POINT_GRAPHICS);
   DynamicRendering::SetVertexFormat({});
   DynamicRendering::SetTopology(topology);
@@ -221,6 +241,10 @@ auto Draw(GraphicsContext &context, const Ref<Buffer> &indexBuffer,
           const VkPrimitiveTopology &topology, uint32_t indexCount, // NOLINT
           uint32_t instanceCount) -> Error {
   auto *commandBuffer = GetCommandBuffer();
+
+  if (commandBuffer == nullptr) {
+    return Error::Create("Failed to get command buffer for draw call.");
+  }
 
   DynamicRendering::SetBindPoint(VK_PIPELINE_BIND_POINT_GRAPHICS);
   DynamicRendering::SetVertexFormat({});

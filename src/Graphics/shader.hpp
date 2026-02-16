@@ -151,6 +151,8 @@ struct ShaderModule : Object {
   ShaderReflection reflection;
   std::vector<PushBuffer> pushBuffers;
 
+  std::vector<slang::PreprocessorMacroDesc> preprocessorMacros;
+
   auto GetState() const -> BoundState & {
     std::lock_guard<std::mutex> lock(BoundStatesMutex);
 
@@ -179,9 +181,11 @@ struct ShaderModule : Object {
     }
   }
 
-  static auto Create(Graphics::GraphicsContext &context,
-                     const std::string &modulename, const std::string &name)
-      -> Result<Ref<ShaderModule>>;
+  static auto
+  Create(Graphics::GraphicsContext &context, const std::string &modulename,
+         const std::string &name,
+         const std::vector<slang::PreprocessorMacroDesc> *preprocessorMacros =
+             nullptr) -> Result<Ref<ShaderModule>>;
 
   auto Send(GraphicsContext &context, const ResourceKey &key,
             const std::span<const uint8_t> &data) -> Error;

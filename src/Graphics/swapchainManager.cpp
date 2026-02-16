@@ -2,6 +2,7 @@
 
 #include "Graphics/graphics.hpp"
 #include "Graphics/texture.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Modules/utils.hpp"
@@ -193,8 +194,16 @@ inline auto FindSurfaceFormat(Window::ColorSpace colorspace,
     return FindSRGBColorSpaceSupport(context, formats);
   case Window::ColorSpace::Linear:
     return FindLinearColorSpaceSupport(context, formats);
-  case Window::ColorSpace::HDR:
-    return FindHDRColorSpaceSupport(context, formats);
+  case Window::ColorSpace::HDR: {
+    auto result = FindHDRColorSpaceSupport(context, formats);
+    if (Error::IsError(result)) {
+      PrintWarning(
+          "HDR color space requested but not supported. Falling back to sRGB.");
+      return FindSRGBColorSpaceSupport(context, formats);
+    }
+
+    return result;
+  }
   default:
     return Error::Unexpected("No suitable surface format found", -2);
   }

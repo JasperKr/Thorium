@@ -1,5 +1,24 @@
 #pragma once
 
+#include "Modules/Math/eulerAngle.hpp"
+#include "Modules/Math/matrix.hpp"
+#include "Modules/Math/quaternion.hpp"
+
 namespace Math {
-using Scalar = float;
-} // namespace Math
+
+// NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
+namespace Conversions {
+
+auto ToEuler(Quaternion quaternion) -> EulerAngle;
+auto ToEuler(Matrix4x4 matrix) -> EulerAngle;
+
+auto ToQuaternion(EulerAngle euler) -> Quaternion;
+auto ToQuaternion(Matrix4x4 matrix) -> Quaternion;
+
+auto ToMatrix(EulerAngle euler) -> Matrix4x4;
+auto ToMatrix(Quaternion quat) -> Matrix4x4;
+
+}; // namespace Conversions
+// NOLINTEND(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
+
+}; // namespace Math

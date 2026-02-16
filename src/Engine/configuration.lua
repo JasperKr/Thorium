@@ -6,7 +6,7 @@ function Thorium.config(config)
   config.window.resizable = true
 
   -- "linear" | "gammacorrect" | "hdr"
-  config.window.colorspace = "linear"
+  config.window.colorspace = "gammacorrect"
 
   -- "adaptive" | "immediate" | "replace" | "enabled"
   ---@type Thorium.VsyncMode

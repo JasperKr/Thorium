@@ -19,6 +19,11 @@ struct Color {
       : r(red), g(green), b(blue), a(alpha) {}
 
   // NOLINTNEXTLINE
+  Color(double red, double green, double blue, double alpha = 1.0)
+      : r(static_cast<float>(red)), g(static_cast<float>(green)),
+        b(static_cast<float>(blue)), a(static_cast<float>(alpha)) {}
+
+  // NOLINTNEXTLINE
   Color(int red, int green, int blue, int alpha = 255)
       : r(static_cast<float>(red) / uint8_max_as_float),
         g(static_cast<float>(green) / uint8_max_as_float),
@@ -49,4 +54,36 @@ struct Color {
            (static_cast<uint32_t>(blue) << BlueShift) |
            static_cast<uint32_t>(alpha);
   }
+
+  [[nodiscard]] static auto ToGammaCorrect(Color color) -> Color {
+    // sRGB gamma correction
+    static auto GammaCorrectChannel = [](float channel) -> float {
+      // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers, readability-magic-numbers)
+      if (channel <= 0.0031308F) {
+        return 12.92F * channel;
+      }
+
+      return (1.055F * std::pow(channel, 1.0F / 2.4F)) - 0.055F;
+      // NOLINTEND(cppcoreguidelines-avoid-magic-numbers, readability-magic-numbers)
+    };
+
+    return {GammaCorrectChannel(color.r), GammaCorrectChannel(color.g),
+            GammaCorrectChannel(color.b), color.a};
+  };
+
+  [[nodiscard]] static auto ToLinear(Color color) -> Color {
+    // Inverse sRGB gamma correction
+    static auto LinearizeChannel = [](float channel) -> float {
+      // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers, readability-magic-numbers)
+      if (channel <= 0.04045F) {
+        return channel / 12.92F;
+      }
+
+      return std::pow((channel + 0.055F) / 1.055F, 2.4F);
+      // NOLINTEND(cppcoreguidelines-avoid-magic-numbers, readability-magic-numbers)
+    };
+
+    return {LinearizeChannel(color.r), LinearizeChannel(color.g),
+            LinearizeChannel(color.b), color.a};
+  };
 };

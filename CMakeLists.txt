@@ -279,6 +279,7 @@ add_executable(Thorium
     src/Modules/Math/vector.cpp
     src/Modules/Math/matrix.cpp
     src/Modules/Math/quaternion.cpp
+    src/Modules/Math/math.cpp
 
 # Editor
     src/Modules/Editor/gui.cpp
@@ -299,7 +300,6 @@ add_executable(Thorium
     src/Wrap/Modules/wrap_keyboard.cpp
     src/Wrap/Modules/wrap_mouse.cpp
     src/Wrap/Modules/Editor/wrap_imgui.cpp
-    src/Wrap/Modules/Editor/wrap_gui.cpp
     src/Wrap/Modules/wrap_thread.cpp
     src/Wrap/Modules/wrap_channel.cpp
     src/Wrap/Modules/wrap_window.cpp

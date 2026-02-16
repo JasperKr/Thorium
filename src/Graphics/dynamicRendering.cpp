@@ -231,7 +231,7 @@ auto BindDefaultTextures(GraphicsContext &context, Shader::ShaderModule *shader)
 
       const auto &samplerInfo = std::get<SamplerInfo>(resource.info);
 
-      VkFormat format = VK_FORMAT_R8G8B8A8_UNORM;
+      VkFormat format = Graphics::DefaultPixelFormat;
       Texture::TextureType type = Texture::TextureType::DEFAULT;
 
       if (samplerInfo.shape == SLANG_TEXTURE_3D) {
@@ -891,10 +891,11 @@ auto FlushCompute(GraphicsContext &context) -> Result<bool> {
     return pipelineResult.error().AsUnexpected();
   }
 
-  const auto &commandBuffer = Graphics::GetCommandBuffer();
+  auto *commandBuffer = Graphics::GetCommandBuffer();
 
-  // Unset current rendering, otherwise vkCmdPipelineBarrier will fail
-  // EndRendering(context);
+  if (commandBuffer == nullptr) {
+    return Error::Unexpected("Command buffer is null in FlushCompute.");
+  }
 
   auto error =
       currentState.shader->FlushBuffers(context, pipelineResult.value().second,
@@ -947,10 +948,11 @@ auto FlushGraphics(GraphicsContext &context) -> Result<bool> {
     return pipelineResult.error().AsUnexpected();
   }
 
-  const auto &commandBuffer = Graphics::GetCommandBuffer();
+  auto *commandBuffer = Graphics::GetCommandBuffer();
 
-  // Unset current rendering, otherwise vkCmdPipelineBarrier will fail
-  // EndRendering(context);
+  if (commandBuffer == nullptr) {
+    return Error::Unexpected("Command buffer is null in FlushGraphics.");
+  }
 
   auto viewport = GetClippedViewport();
 
@@ -1142,6 +1144,11 @@ inline auto BeginRendering(GraphicsContext &context) -> Error {
 
   PrintDebug("Beginning rendering pass");
 
+  if (Graphics::GetCommandBuffer() == VK_NULL_HANDLE) {
+    return Error::Create(
+        "Tried to begin rendering, but command buffer is null.");
+  }
+
   vkCmdBeginRendering(Graphics::GetCommandBuffer(), &renderingInfo);
 
   GetIsCurrentlyRendering() = true;
@@ -1273,6 +1280,11 @@ auto PrepareRendering(GraphicsContext &context) -> Error {
 
     auto viewport = GetClippedViewport();
     auto scissor = GetScissor();
+
+    if (Graphics::GetCommandBuffer() == VK_NULL_HANDLE) {
+      return Error::Create(
+          "Tried to set viewport and scissor, but command buffer is null.");
+    }
 
     vkCmdSetViewport(Graphics::GetCommandBuffer(), 0, 1, &viewport);
     vkCmdSetScissor(Graphics::GetCommandBuffer(), 0, 1, &scissor);
@@ -1564,6 +1576,10 @@ auto Clear(GraphicsContext &context, const ClearInfo &clearInfo) -> Error {
   auto &currentState = StateStack.back();
 
   auto *commandBuffer = Graphics::GetCommandBuffer();
+
+  if (commandBuffer == nullptr) {
+    return Error::Create("Command buffer is null in Clear.");
+  }
 
   auto count = currentState.renderTargets.size();
 

@@ -14,6 +14,7 @@
 #include "Modules/filesystem.hpp"
 #include "Modules/thread.hpp"
 #include "Modules/window.hpp"
+#include "Wrap/Graphics/wrap_graphics.hpp"
 #include "Wrap/Modules/Editor/wrap_imgui.hpp"
 #include <filesystem>
 #include <public/tracy/Tracy.hpp>
@@ -377,6 +378,8 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
   if (Error::IsError(shutdownResult)) {
     PrintError("Error during ImGui shutdown: {}", shutdownResult.message);
   }
+
+  Graphics::ShutdownWrapGraphics();
 
   Graphics::DeinitilizeRendering(context);
 

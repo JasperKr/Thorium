@@ -4,6 +4,7 @@
 #include "Modules/color.hpp"
 #include "Modules/error.hpp"
 #include "Modules/filesystem.hpp"
+#include <cassert>
 #include <vector>
 #define VK_NO_PROTOTYPES
 #include "stb/stb_image.h"
@@ -170,6 +171,21 @@ static const std::unordered_map<VkFormat, FormatFunctions> formatFunctionMap = {
         outColor.b = static_cast<float>(inData[2]) * FromUint8_t;
         outColor.a = static_cast<float>(inData[3]) * FromUint8_t;
       }}},
+    {VK_FORMAT_R8G8B8A8_SRGB,
+     {// Set function
+      .set = [](const Color &color, uint8_t *outData) -> void {
+        outData[0] = static_cast<uint8_t>(color.r * ToUint8_t);
+        outData[1] = static_cast<uint8_t>(color.g * ToUint8_t);
+        outData[2] = static_cast<uint8_t>(color.b * ToUint8_t);
+        outData[3] = static_cast<uint8_t>(color.a * ToUint8_t);
+      },
+      // Get function
+      .get = [](const uint8_t *inData, Color &outColor) -> void {
+        outColor.r = static_cast<float>(inData[0]) * FromUint8_t;
+        outColor.g = static_cast<float>(inData[1]) * FromUint8_t;
+        outColor.b = static_cast<float>(inData[2]) * FromUint8_t;
+        outColor.a = static_cast<float>(inData[3]) * FromUint8_t;
+      }}},
     {VK_FORMAT_R8_UNORM,
      {.set = [](const Color &color, uint8_t *outData) -> void {
         outData[0] = static_cast<uint8_t>(color.r * ToUint8_t);
@@ -318,7 +334,7 @@ static const std::unordered_map<VkFormat, FormatFunctions> formatFunctionMap = {
       }}}};
 
 namespace Image {
-auto ImageData::SetColor(Math::Uvec2 position, const Color &color) -> void {
+auto ImageData::SetColor(Math::Uvec2 position, const Color &color) -> Error {
   size_t index = (static_cast<size_t>(position.y) * static_cast<size_t>(width) +
                   static_cast<size_t>(position.x)) *
                  GetFormatSize();
@@ -326,12 +342,13 @@ auto ImageData::SetColor(Math::Uvec2 position, const Color &color) -> void {
   if (funcIterator != formatFunctionMap.end()) {
     const FormatFunctions &functions = funcIterator->second;
     functions.set(color, &GetDataPtr()[index]);
-  } else {
-    // Unsupported format, handle error as needed
+    return Error::Success();
   }
+
+  return Error::Create("Unsupported image format.");
 }
 
-auto ImageData::GetColor(Math::Uvec2 position) -> Color & {
+auto ImageData::GetColor(Math::Uvec2 position) -> Result<Color> {
   size_t index = (static_cast<size_t>(position.y) * static_cast<size_t>(width) +
                   static_cast<size_t>(position.x)) *
                  GetFormatSize();
@@ -344,17 +361,19 @@ auto ImageData::GetColor(Math::Uvec2 position) -> Color & {
   }
 
   // Unsupported format, handle error as needed
-  return outColor; // return default color
+  return Error::Create("Unsupported image format.").AsUnexpected();
 }
 
 auto ImageData::Create(uint32_t width, uint32_t height, VkFormat format)
     -> Result<Ref<ImageData>> {
+  assert(Graphics::Format::GetSize(format) != 0);
   return Ref<ImageData>::Make(width, height, format);
 }
 
 auto ImageData::Create(uint32_t width, uint32_t height,
                        const std::span<uint8_t> &srcData, VkFormat format)
     -> Result<Ref<ImageData>> {
+  assert(Graphics::Format::GetSize(format) != 0);
   auto imgdata = Ref<ImageData>::Make(width, height, format);
   std::memcpy(imgdata->GetDataPtr(), srcData.data(), srcData.size());
   return imgdata;
@@ -365,7 +384,7 @@ auto ImageData::Create(uint32_t width, uint32_t height,
     -> Result<Ref<ImageData>> {
   size_t dataSize = static_cast<size_t>(width) * static_cast<size_t>(height) *
                     Graphics::Format::GetSize(format);
-  if (byteData.GetSize() != dataSize) {
+  if (byteData.GetSize() != dataSize && dataSize > 0) {
     return Error::Unexpected("ByteData size does not match image dimensions.");
   }
 

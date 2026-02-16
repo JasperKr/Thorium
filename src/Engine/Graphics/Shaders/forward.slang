@@ -1,6 +1,7 @@
 module Forward;
 
 import camera;
+import utils;
 
 struct VertexStageOutput
 {
@@ -31,8 +32,8 @@ VertexStageOutput vertexMain(VertexInput input)
     float2 uv3 = unpackHalf2x16ToFloat(input.TexCoord.w);
 
     out.TexCoords = float4x2(uv0, uv1, uv2, uv3);
-    out.normal = unpackNormal(input.NormalTangent.x);
-    out.tangent = unpackTangent(input.NormalTangent.y);
+    out.normal = UnpackNormal(input.NormalTangent.x);
+    out.tangent = UnpackTangent(input.NormalTangent.y);
 
     out.color = input.Color;
     return out;

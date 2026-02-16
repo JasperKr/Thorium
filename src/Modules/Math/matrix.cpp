@@ -1,4 +1,5 @@
 #include "matrix.hpp"
+#include "Modules/Math/math.hpp"
 #include <cassert>
 #include <cmath>
 
@@ -41,43 +42,6 @@ Matrix4x4::Matrix4x4() {
   At(1, 1) = 1.0F;
   At(2, 2) = 1.0F;
   At(3, 3) = 1.0F;
-}
-
-Matrix4x4::Matrix4x4(Quaternion quat) {
-  Quaternion nQuat = quat.Normalize();
-  Scalar xMulX = nQuat.x * nQuat.x;
-  Scalar yMulY = nQuat.y * nQuat.y;
-  Scalar zMulZ = nQuat.z * nQuat.z;
-  Scalar xMulY = nQuat.x * nQuat.y;
-  Scalar xMulZ = nQuat.x * nQuat.z;
-  Scalar yMulZ = nQuat.y * nQuat.z;
-  Scalar wMulX = nQuat.w * nQuat.x;
-  Scalar wMulY = nQuat.w * nQuat.y;
-  Scalar wMulZ = nQuat.w * nQuat.z;
-
-  // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers, readability-magic-numbers)
-
-  At(0, 0) = 1.0F - (2.0F * (yMulY + zMulZ));
-  At(0, 1) = 2.0F * (xMulY - wMulZ);
-  At(0, 2) = 2.0F * (xMulZ + wMulY);
-  At(0, 3) = 0.0F;
-
-  At(1, 0) = 2.0F * (xMulY + wMulZ);
-  At(1, 1) = 1.0F - (2.0F * (xMulX + zMulZ));
-  At(1, 2) = 2.0F * (yMulZ - wMulX);
-  At(1, 3) = 0.0F;
-
-  At(2, 0) = 2.0F * (xMulZ - wMulY);
-  At(2, 1) = 2.0F * (yMulZ + wMulX);
-  At(2, 2) = 1.0F - (2.0F * (xMulX + yMulY));
-  At(2, 3) = 0.0F;
-
-  At(3, 0) = 0.0F;
-  At(3, 1) = 0.0F;
-  At(3, 2) = 0.0F;
-  At(3, 3) = 1.0F;
-
-  // NOLINTEND(cppcoreguidelines-avoid-magic-numbers, readability-magic-numbers)
 }
 
 auto Matrix4x4::Determinant() const -> std::pair<Scalar, Matrix4x4> {
@@ -320,16 +284,13 @@ auto Matrix4x4::ScaleMatrix(Vec3 scale) -> Matrix4x4 {
   result.At(2, 2) = scale.z;
   return result;
 }
-auto Matrix4x4::RotationMatrix(Quaternion rotation) -> Matrix4x4 {
-  return Matrix4x4(rotation);
-}
 
 // NOLINTNEXTLINE
 auto Matrix4x4::TransformationMatrix(Vec3 translation, Vec3 scale,
                                      Quaternion rotation) -> Matrix4x4 {
   Matrix4x4 translationMatrix = Matrix4x4::TranslationMatrix(translation);
   Matrix4x4 scaleMatrix = Matrix4x4::ScaleMatrix(scale);
-  Matrix4x4 rotationMatrix = Matrix4x4::RotationMatrix(rotation);
+  Matrix4x4 rotationMatrix = Conversions::ToMatrix(rotation);
   return translationMatrix * rotationMatrix * scaleMatrix;
 }
 

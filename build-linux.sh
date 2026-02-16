@@ -6,17 +6,23 @@ fi
 
 rm -f ./build/Thorium
 
-ENABLE_TRACY="TRACY_ENABLE"
-
 FLAGS=""
 
-if [ "$CONFIG" == "Debug" ]; then
-  FLAGS="$FLAGS -D$ENABLE_TRACY=1 -g -O0"
+if [ "$CONFIG" = "Debug" ] || [ "$CONFIG" = "Profile" ]; then
+  FLAGS="$FLAGS -DTRACY_ENABLE=1 -g -O0"
+  if [ "$CONFIG" == "Profile" ]; then
+    FLAGS="$FLAGS -DTRACY_WAIT_FOR_CLIENT=1"
+  fi
+
+  CONFIG="Debug"
 elif [ "$CONFIG" == "Release" ]; then
   FLAGS="$FLAGS -O3"
 elif [ "$CONFIG" == "RelWithDebInfo" ]; then
-  FLAGS="$FLAGS -D$ENABLE_TRACY=1 -O0 -g"
+  FLAGS="$FLAGS -DTRACY_ENABLE=1 -O0 -g"
 fi
+
+echo "Building with configuration: $CONFIG"
+echo "Using flags: $FLAGS"
 
 cmake -G Ninja -DCMAKE_CXX_COMPILER=clang++ -B build \
   -DCMAKE_BUILD_TYPE=$CONFIG \

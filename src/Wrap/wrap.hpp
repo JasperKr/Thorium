@@ -53,11 +53,15 @@ auto LoadStorageTable(lua_State *state, const char *key) -> void;
 auto LoadOrCreateStorageTable(lua_State *state, const char *key) -> void;
 auto LogStack(lua_State *state) -> void;
 
+// Test if T is a valid Lua userdata C++ object usable with a proxy.
 template <typename T>
+concept LuaObject = std::is_base_of_v<Object, std::remove_cvref_t<T>>;
+
+template <typename T>
+  requires LuaObject<T>
 inline auto ObjectFromLua(lua_State *state, int index) -> T * {
   // Check if userdata
   if (lua_isuserdata(state, index) == 0) {
-    PrintWarning("FromLuaObject: not userdata at index {}", index);
     return nullptr;
   }
 
@@ -83,6 +87,41 @@ inline auto ObjectFromLua(lua_State *state, int index) -> T * {
         "FromLuaObject: type mismatch at index {}, expected: {} got: {}", index,
         expectedTypeName, proxyTypeName);
     return nullptr;
+  }
+
+  auto *obj = static_cast<T *>(proxy->object);
+  return obj;
+}
+
+template <typename T>
+  requires LuaObject<T>
+inline auto ResultFromLua(lua_State *state, int index) -> Result<T *> {
+  // Check if userdata
+  if (lua_isuserdata(state, index) == 0) {
+    return Error::Unexpected("Expected userdata at index " +
+                             std::to_string(index));
+  }
+
+  // NOLINTNEXTLINE
+  auto *proxy = static_cast<Proxy *>(lua_touserdata(state, index));
+  if (proxy == nullptr) {
+    return Error::Unexpected("Proxy is null at index " + std::to_string(index));
+  }
+
+  if (proxy->object == nullptr || proxy->type == nullptr) {
+    return Error::Unexpected("Proxy is invalid at index " +
+                             std::to_string(index));
+  }
+
+  // Do not compare type addresses, they may differ since the types are
+  // Defined inline, so addresses are different for each translation unit
+  if (proxy->type->GetName() != T::GetType()->GetName()) {
+    auto proxyTypeName = proxy->type->GetName();
+    auto expectedTypeName = T::GetType()->GetName();
+
+    return Error::Unexpected("Type mismatch at index " + std::to_string(index) +
+                             ", expected: " + expectedTypeName +
+                             " got: " + proxyTypeName);
   }
 
   auto *obj = static_cast<T *>(proxy->object);

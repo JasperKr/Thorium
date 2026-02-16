@@ -13,6 +13,12 @@ extern "C" {
 namespace Wrap::Image {
 
 auto wrap_NewImagedata(lua_State *state) -> int;
+auto wrap_SetPixel(lua_State *state) -> int;
+auto wrap_GetPixel(lua_State *state) -> int;
+auto wrap_GetWidth(lua_State *state) -> int;
+auto wrap_GetHeight(lua_State *state) -> int;
+auto wrap_GetDimensions(lua_State *state) -> int;
+auto wrap_GetFormat(lua_State *state) -> int;
 
 // NOLINTNEXTLINE
 static const luaL_Reg ImagedataLib[] = {
@@ -32,6 +38,12 @@ static const luaL_Reg ImagedataLib[] = {
     {"getFloat", Data::wrap_GetFloat},
     {"setHalf", Data::wrap_SetHalf},
     {"getHalf", Data::wrap_GetHalf},
+    {"setPixel", wrap_SetPixel},
+    {"getPixel", wrap_GetPixel},
+    {"getWidth", wrap_GetWidth},
+    {"getHeight", wrap_GetHeight},
+    {"getDimensions", wrap_GetDimensions},
+    {"getFormat", wrap_GetFormat},
 
     {"getSize", Data::wrap_GetSize},
     {"getPointer", Data::wrap_GetPointer},

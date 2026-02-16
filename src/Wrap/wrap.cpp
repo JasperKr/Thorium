@@ -64,7 +64,6 @@ static auto wrap_tostring(lua_State *state) -> int {
 }
 
 static auto wrap_type(lua_State *state) -> int {
-  PrintAlways("Getting type of object");
   Proxy *proxy = ProxyFromLua(state, 1);
 
   if (proxy == nullptr) {
@@ -77,7 +76,6 @@ static auto wrap_type(lua_State *state) -> int {
 }
 
 static auto wrap_typeof(lua_State *state) -> int {
-  PrintAlways("Checking type of object");
   Proxy *proxy = ProxyFromLua(state, 1);
 
   if (proxy == nullptr) {

@@ -1,4 +1,5 @@
 #include "Graphics/format.hpp"
+#include "Graphics/graphicsState.hpp"
 #include "Graphics/texture.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
@@ -426,8 +427,6 @@ static inline auto TextureUsageToVkImageUsage(VkFormat format,
   return flags;
 }
 
-constexpr VkFormat DefaultFormat = VK_FORMAT_R8G8B8A8_UNORM;
-
 const std::unordered_set<std::string> ValidOptionKeys = {
     "type",    "format",      "mipmaps",     "sampler", "rendertarget",
     "storage", "mipmapcount", "mipmapstart", "linear",
@@ -457,7 +456,7 @@ auto CheckTopOfStackTableKeys(lua_State *state, int index) -> Result<void> {
 // { type = "2D"|"3D"|"array"|"cube", format = f, mipmaps = bool, usage = int, mipmapcount = n, mipmapstart = n, linear = bool }
 struct LuaOptions {
   Graphics::Texture::TextureType type = Graphics::Texture::TextureType::DEFAULT;
-  VkFormat format = VK_FORMAT_R8G8B8A8_UNORM;
+  VkFormat format = Graphics::DefaultPixelFormat;
   bool mipmaps = false;
   LuaTextureUsage usage = LuaTextureUsage::Sampled;
   uint32_t mipmapCount = 0;
@@ -689,7 +688,7 @@ static inline auto TextureFromWidthAndHeight(lua_State *state)
       Graphics::Texture::TextureCreationInfo{
           .width = width,
           .height = height,
-          .format = VK_FORMAT_R8G8B8A8_UNORM,
+          .format = Graphics::DefaultPixelFormat,
           .usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
           .mipmapCount = 1,
       });

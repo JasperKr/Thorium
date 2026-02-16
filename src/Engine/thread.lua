@@ -1,4 +1,4 @@
-Imgui = require("cimgui.init")
+Imgui = require("Editor.cimgui.init")
 
 local lastDrawTime = 0
 local lastImDrawTime = 0
@@ -7,6 +7,17 @@ local lastShownImDrawTime = 0
 local count = 0
 
 local doneChannel, canStartChannel = ...
+
+local testImgdata = Thorium.data.newImagedata(256, 256)
+for y = 0, 255 do
+  for x = 0, 255 do
+    local r = x / 256
+    local g = x / 256
+    local b = x / 256
+    testImgdata:setPixel(x, y, r, g, b, 1.0)
+  end
+end
+local texture
 
 local function draw()
   local startTime = Thorium.timer.getTime()
@@ -24,6 +35,7 @@ local function draw()
   Thorium.gui.endFrame()
   local imStartTime = Thorium.timer.getTime()
   Thorium.gui.draw()
+  Thorium.graphics.setScissor();
   lastImDrawTime = lastImDrawTime + Thorium.timer.getTime() - imStartTime
   lastDrawTime = lastDrawTime + Thorium.timer.getTime() - startTime
   count = count + 1
@@ -44,7 +56,21 @@ while true do
   end
 
   Thorium.graphics.aquireGraphics("gui")
-  Thorium.graphics.setRenderTarget({ loadas = "clear" })
+  if not texture then
+    texture = Thorium.graphics.newTexture(testImgdata)
+  end
+
+  ---@type Thorium.DetailedBlendMode
+  local blendmode = {
+    srccolor = "one",
+    dstcolor = "oneminussrcalpha",
+    colorop = "add",
+    srcalpha = "one",
+    dstalpha = "zero",
+    alphaop = "add",
+  }
+
+  Thorium.graphics.setRenderTarget({ loadas = "clear", blendmode = blendmode })
 
   local dt = Thorium.timer.getTime() - t
   t = Thorium.timer.getTime()
@@ -52,6 +78,8 @@ while true do
   Thorium.gui.newFrame(dt)
 
   draw()
+  Thorium.graphics.setShader()
+  Thorium.graphics.draw(texture)
   Thorium.graphics.submitGraphics()
 
   doneChannel:push(true)

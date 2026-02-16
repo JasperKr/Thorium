@@ -21,8 +21,8 @@ struct ImageData : Object {
 public:
   ~ImageData() override { internalData = {}; }
 
-  auto SetColor(Math::Uvec2 position, const Color &color) -> void;
-  auto GetColor(Math::Uvec2 position) -> Color &;
+  auto SetColor(Math::Uvec2 position, const Color &color) -> Error;
+  auto GetColor(Math::Uvec2 position) -> Result<Color>;
   auto Copy(const ImageData &source) -> void;
   auto GetDataPtr() -> uint8_t * { return internalData->GetData(); }
   [[nodiscard]] auto GetSize() const -> size_t {

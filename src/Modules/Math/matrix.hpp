@@ -1,5 +1,5 @@
 #pragma once
-#include "math.hpp"
+#include "mathTypes.hpp"
 #include "quaternion.hpp"
 #include "vector.hpp"
 #include <array>
@@ -39,7 +39,16 @@ struct Matrix4x4 {
 
   Matrix4x4();
 
-  explicit Matrix4x4(Quaternion quat);
+  // Same as default constructor, but explicitly named for clarity.
+  static auto Identity() -> Matrix4x4 { return {}; }
+
+  static auto Zero() -> Matrix4x4 {
+    Matrix4x4 result{};
+    for (size_t i = 0; i < Size; ++i) {
+      result.elements.at(i) = 0.0F;
+    }
+    return result;
+  }
 
   auto Transpose() -> Matrix4x4;
 

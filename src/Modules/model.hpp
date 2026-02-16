@@ -39,8 +39,4 @@ struct Model : Selectable {
   std::vector<Shape> Shapes;
 };
 
-struct Scene {
-  std::vector<SceneObject> Nodes;
-};
-
 } // namespace Engine

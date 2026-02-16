@@ -222,6 +222,10 @@ auto Buffer::UploadLarge(GraphicsContext &context,
 
   auto *commandBuffer = GetCommandBuffer();
 
+  if (commandBuffer == nullptr) {
+    return Error::Create("Failed to get command buffer for buffer upload.");
+  }
+
   VkBufferCopy copyRegion = {};
   copyRegion.srcOffset = 0;
   copyRegion.dstOffset = offset;
@@ -292,6 +296,10 @@ auto Buffer::UploadRing(GraphicsContext &context,
 
   // Record copy command
   auto *commandBuffer = GetCommandBuffer();
+
+  if (commandBuffer == nullptr) {
+    return Error::Create("Failed to get command buffer for buffer upload.");
+  }
 
   VkCommandBufferBeginInfo beginInfo = {};
   beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -501,6 +509,10 @@ auto Buffer::MarkUse() -> void {
 auto Buffer::Clear(GraphicsContext &context, uint32_t value,
                    VkDeviceSize offset, VkDeviceSize size) -> Error {
   auto *commandBuffer = GetCommandBuffer();
+
+  if (commandBuffer == nullptr) {
+    return Error::Create("Failed to get command buffer for buffer clear.");
+  }
 
   // Must flush, for WaW hazards
   Barrier::UpdateUsage(context, *this,
