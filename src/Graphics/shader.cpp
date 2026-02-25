@@ -534,6 +534,7 @@ auto ShaderModule::Create(
 }
 
 inline auto ValidateBuffers(const ShaderModule *shader) -> Error {
+  ZoneScoped;
   // Loop over shader->reflection.resources, and check if all buffers are
   // set up in shader->buffers,
   // this is done outside the shader as the user must manage these
@@ -776,6 +777,7 @@ auto ShaderModule::hash() const -> size_t {
 auto ShaderModule::FlushGlobals(GraphicsContext &context,
                                 VkPipelineLayout layout,
                                 VkPipelineStageFlags2 dstStage) -> Error {
+  ZoneScoped;
 
   auto &buffer = GetGlobalUniformBuffer(context.frameIndex);
   buffer.SetData(context, globalUniforms, 0);
@@ -858,12 +860,11 @@ auto ShaderModule::FlushBuffers(GraphicsContext &context,
       return Error::Create("Descriptor write has no buffer or image info set.");
     }
 
-    uint64_t key = write.dstSet;
-    key |= (static_cast<uint64_t>(write.dstBinding) << 32U); // NOLINT
-    if (updatedSets.contains(key)) {
+    uint64_t slot = SetBindingToSlot(write.dstSet, write.dstBinding);
+    if (updatedSets.contains(slot)) {
       continue;
     }
-    updatedSets.insert(key);
+    updatedSets.insert(slot);
 
     writes.emplace_back(write.GetWrite(GetState().descriptorSets));
 
@@ -874,6 +875,7 @@ auto ShaderModule::FlushBuffers(GraphicsContext &context,
   }
 
   for (auto &transition : GetState().pendingImageTransitions) {
+    ZoneScopedN("Update texture usage");
     Error result;
 
     switch (transition.newUsage) {
@@ -908,6 +910,7 @@ auto ShaderModule::FlushBuffers(GraphicsContext &context,
   GetState().pendingImageTransitions.clear();
 
   {
+    ZoneScopedN("Update descriptor sets");
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
     vkUpdateDescriptorSets(context.device, static_cast<uint32_t>(writes.size()),
                            writes.data(), 0, nullptr);
@@ -944,17 +947,23 @@ auto ShaderModule::FlushBuffers(GraphicsContext &context,
     descriptorSetList.emplace_back(setPair.second);
   }
 
-  vkCmdBindDescriptorSets(commandBuffer, bindpoint, layout, 0,
-                          static_cast<uint32_t>(descriptorSetList.size()),
-                          descriptorSetList.data(), 0, nullptr);
+  {
+    ZoneScopedN("Bind descriptor sets")
+        vkCmdBindDescriptorSets(commandBuffer, bindpoint, layout, 0,
+                                static_cast<uint32_t>(descriptorSetList.size()),
+                                descriptorSetList.data(), 0, nullptr);
+  }
 
-  for (auto &pushBuffer : pushBuffers) {
-    FlushInfo info{
-        .commandBuffer = commandBuffer,
-        .pipelineLayout = layout,
-    };
+  {
+    ZoneScopedN("Flush push buffer data");
+    for (auto &pushBuffer : pushBuffers) {
+      FlushInfo info{
+          .commandBuffer = commandBuffer,
+          .pipelineLayout = layout,
+      };
 
-    pushBuffer.FlushData(info);
+      pushBuffer.FlushData(info);
+    }
   }
 
   return Error::Success();

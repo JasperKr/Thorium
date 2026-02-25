@@ -9,7 +9,7 @@ rm -f ./build/Thorium
 FLAGS=""
 
 if [ "$CONFIG" = "Debug" ] || [ "$CONFIG" = "Profile" ]; then
-  FLAGS="$FLAGS -DTRACY_ENABLE=1 -g -O0"
+  FLAGS="$FLAGS -DTRACY_ENABLE=1 -g -O0 -ftime-trace"
   if [ "$CONFIG" == "Profile" ]; then
     FLAGS="$FLAGS -DTRACY_WAIT_FOR_CLIENT=1"
   fi
@@ -18,7 +18,7 @@ if [ "$CONFIG" = "Debug" ] || [ "$CONFIG" = "Profile" ]; then
 elif [ "$CONFIG" == "Release" ]; then
   FLAGS="$FLAGS -O3"
 elif [ "$CONFIG" == "RelWithDebInfo" ]; then
-  FLAGS="$FLAGS -DTRACY_ENABLE=1 -O0 -g"
+  FLAGS="$FLAGS -DTRACY_ENABLE=1 -O0 -g -ftime-trace"
 fi
 
 echo "Building with configuration: $CONFIG"

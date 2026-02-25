@@ -36,19 +36,6 @@ inline auto IsHazard(const ResourceState &oldState,
            VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT)) != 0U;
 }
 
-// Count trailing bits set in a 64-bit integer
-// Staring from least significant bit to most significant bit
-inline auto TrailingBitCount(uint64_t bits) -> uint32_t {
-  if (bits == 0U) {
-    return 64U; // No bits set NOLINT
-  }
-#if defined(_MSC_VER)
-  return static_cast<uint32_t>(__tzcnt_u64(bits));
-#else
-  return __builtin_ctzll(bits);
-#endif
-}
-
 /*
 
 For example.
@@ -131,7 +118,7 @@ inline auto TimelineLookback(uint64_t currentTimelineIndex,
     auto bit = mask & -mask; // negative of a number isolates the lowest set bit
 
     // count trailing zeros after removing the latest bit to get index
-    uint32_t bitIndex = TrailingBitCount(bit);
+    uint32_t bitIndex = std::countr_zero(bit);
     mask &= ~bit; // clear the lowest set bit
 
     // NOLINTNEXTLINE
@@ -156,7 +143,7 @@ inline auto TimelineLookback(uint64_t currentTimelineIndex,
     auto mask = sync.dstStages;
     while (mask != 0U) {
       auto bit = mask & -mask;
-      uint32_t bitIndex = TrailingBitCount(bit);
+      uint32_t bitIndex = std::countr_zero(bit);
 
       if (bitIndex == 64U) { // NOLINT
         break;               // No bits set
@@ -184,7 +171,7 @@ inline auto TimelineLookback(uint64_t currentTimelineIndex,
   mask = desiredSynchronization.stages;
   while (mask != 0U) {
     auto bit = mask & -mask;
-    uint32_t bitIndex = TrailingBitCount(bit);
+    uint32_t bitIndex = std::countr_zero(bit);
     mask &= ~bit;
     if (maskBits.at(bitIndex) != 0U) {
       return true; // Still need barrier

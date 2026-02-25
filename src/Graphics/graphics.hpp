@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Graphics/threadContext.hpp"
 #include "Modules/object.hpp"
 #include "Modules/window.hpp"
 #include "SDL3/SDL_video.h"
@@ -91,20 +92,6 @@ struct GraphicsContext {
   uint64_t currentFrame;
   uint32_t frameIndex;
   uint32_t swapchainImageIndex;
-};
-
-struct DescriptorPoolInfo {
-  VkDescriptorPool descriptorPool;
-  uint64_t lastUsedTimestamp;
-};
-
-struct ThreadContext {
-  GraphicsContext *graphicsContext; // Global graphics context
-  VkCommandPool commandPool;        // Per-thread command pool
-  VkCommandBuffer commandBuffer;    // Current command buffer
-
-  std::vector<DescriptorPoolInfo> descriptorPools; // Descriptor pool info
-  VkDescriptorPool descriptorPool;                 // Current descriptor pool
 };
 
 auto Initialize(GraphicsContext &context, Window::WindowContext &wcontext)

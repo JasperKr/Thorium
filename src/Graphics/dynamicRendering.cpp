@@ -272,7 +272,7 @@ auto BindDefaultTextures(GraphicsContext &context, Shader::ShaderModule *shader)
       descriptorWrite.descriptorCount = 1;
       descriptorWrite.pImageInfo = &imageInfo;
       {
-        std::lock_guard<std::mutex> lock(
+        ZoneScopedN("Update descriptor sets") std::lock_guard<std::mutex> lock(
             Graphics::GraphicsContext::mutexes.device);
         vkUpdateDescriptorSets(context.device, 1, &descriptorWrite, 0, nullptr);
       }
