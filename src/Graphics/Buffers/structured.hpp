@@ -27,7 +27,7 @@ struct StructuredBuffer : Object {
   [[nodiscard]] auto GetBuffer() const -> Ref<Buffer> { return buffer; }
   [[nodiscard]] auto GetElementCount() const -> size_t { return elementCount; }
   [[nodiscard]] auto GetElementStride() const -> size_t;
-  [[nodiscard]] auto GetFormat() const -> BufferFormat const &;
+  [[nodiscard]] auto GetFormat() -> BufferFormat &;
 
   // NOLINTNEXTLINE
   auto Clear(GraphicsContext &context, uint32_t value, VkDeviceSize offset = 0,

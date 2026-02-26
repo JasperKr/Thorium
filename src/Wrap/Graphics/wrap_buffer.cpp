@@ -1,10 +1,14 @@
 #include "Wrap/Graphics/wrap_buffer.hpp"
 #include "Graphics/barrier.hpp"
 #include "Modules/console.hpp"
+#include "Modules/error.hpp"
+#include "Wrap/Graphics/wrap_format.hpp"
 #include "Wrap/Graphics/wrap_reflection.hpp"
 #include "Wrap/wrap.hpp"
 #include "Wrap/wrap_utils.hpp"
 #include <cstdint>
+#include <variant>
+#include <vulkan/vulkan_core.h>
 extern "C" {
 #include <lauxlib.h>
 #include <lua.h>
@@ -102,6 +106,42 @@ auto wrap_ClearBuffer(lua_State *state) -> int {
   return 0;
 }
 
+inline auto BuildBufferFormatTree(lua_State *state, const BufferFormat &format)
+    -> void {
+  lua_newtable(state);
+
+  int tableIndex = 1;
+  for (const auto &component : format.GetComponents()) {
+    lua_newtable(state);
+    // name, list of strings
+    lua_pushstring(state, "name");
+    lua_newtable(state);
+
+    lua_pushstring(state, component.name.c_str());
+    lua_settable(state, -3); // table["name"] = name table
+
+    // offset
+    lua_pushstring(state, "offset");
+    lua_pushinteger(state, static_cast<lua_Integer>(component.offset));
+    lua_settable(state, -3); // table["offset"] = offset
+
+    // format
+    lua_pushstring(state, "format");
+    if (std::holds_alternative<VkFormat>(component.format)) {
+      auto vkFormat = std::get<VkFormat>(component.format);
+      lua_pushstring(state, Format::ToString(vkFormat).c_str());
+    } else if (std::holds_alternative<BufferFormat>(component.format)) {
+      auto bufferFormat = std::get<BufferFormat>(component.format);
+      BuildBufferFormatTree(state, bufferFormat);
+    }
+    lua_settable(state, -3); // table["format"] = format
+
+    lua_pushinteger(state, tableIndex++);
+    lua_insert(state, -2);   // move index below table
+    lua_settable(state, -3); // main table[index] = component table
+  }
+}
+
 // returns:
 // { { name = ..., offset = ..., format = ... } }
 auto wrap_GetFormat(lua_State *state) -> int {
@@ -113,40 +153,7 @@ auto wrap_GetFormat(lua_State *state) -> int {
 
   auto format = buffer->GetFormat();
 
-  lua_newtable(state);
-
-  int tableIndex = 1;
-  for (const auto &component : format.GetComponents()) {
-    lua_newtable(state);
-    // name, list of strings
-    lua_pushstring(state, "name");
-    lua_newtable(state);
-
-    auto begin = component.name.begin();
-    auto end = component.name.end();
-
-    int nameIndex = 1;
-    for (auto it = begin; it != end; ++it) {
-      lua_pushinteger(state, nameIndex++);
-      lua_pushstring(state, it->c_str());
-      lua_settable(state, -3);
-    }
-    lua_settable(state, -3); // table["name"] = name table
-
-    // offset
-    lua_pushstring(state, "offset");
-    lua_pushinteger(state, static_cast<lua_Integer>(component.offset));
-    lua_settable(state, -3); // table["offset"] = offset
-
-    // format
-    lua_pushstring(state, "format");
-    lua_pushstring(state, Format::ToString(component.format).c_str());
-    lua_settable(state, -3); // table["format"] = format
-
-    lua_pushinteger(state, tableIndex++);
-    lua_insert(state, -2);   // move index below table
-    lua_settable(state, -3); // main table[index] = component table
-  }
+  BuildBufferFormatTree(state, format);
 
   return 1;
 }
@@ -326,62 +333,15 @@ auto wrap_GetDebugName(lua_State *state) -> int {
 
 // Buffer format: { { name = ..., format = ... }, ... }
 inline auto BufferFormatFromLua(lua_State *state, int index)
-    -> Graphics::BufferFormat {
+    -> Result<Graphics::BufferFormat> {
   std::vector<Graphics::BufferComponent> components;
 
   if (lua_type(state, index) == LUA_TSTRING) {
     // Single component format
-    const char *formatStr = luaL_checkstring(state, index);
-    auto vkFormat = Graphics::Format::FromString(formatStr);
-    if (vkFormat == VK_FORMAT_UNDEFINED) {
-      luaL_error(state, "Invalid format string: %s", formatStr);
-    }
-    auto arraySize = Graphics::Format::StringToArraySize(formatStr);
-
-    components.emplace_back(Graphics::BufferComponent{
-        .name = {"default"}, .format = vkFormat, .arraySize = arraySize});
-
-    Graphics::BufferFormat format(components);
-
-    if (format.GetElementStride() == 0) {
-      luaL_error(state, "Buffer format has zero size.");
-    }
-
-    return format;
+    return Wrap::Graphics::SimpleFormatFromLua(state, index);
   }
 
-  luaL_checktype(state, index, LUA_TTABLE);
-
-  size_t tableSize = lua_objlen(state, index);
-  for (int i = 0; i < tableSize; ++i) {
-    lua_rawgeti(state, index, i + 1);
-    lua_getfield(state, -1, "name");
-    auto key = ResourceKeyFromSingleLuaObject(state, -1);
-    lua_pop(state, 1);
-
-    lua_getfield(state, -1, "format");
-    const char *formatStr = luaL_checkstring(state, -1);
-    lua_pop(state, 1);
-
-    auto vkFormat = Graphics::Format::FromString(formatStr);
-    auto arraySize = Graphics::Format::StringToArraySize(formatStr);
-    if (vkFormat == VK_FORMAT_UNDEFINED) {
-      luaL_error(state, "Invalid format string: %s", formatStr);
-    }
-
-    components.emplace_back(Graphics::BufferComponent{
-        .name = key, .format = vkFormat, .arraySize = arraySize});
-
-    lua_pop(state, 1); // pop component table
-  }
-
-  Graphics::BufferFormat format(components);
-
-  if (format.GetElementStride() == 0) {
-    luaL_error(state, "Buffer format has zero size.");
-  }
-
-  return format;
+  return Wrap::Graphics::FormatFromLua(state, index);
 }
 
 inline auto ConditionalFlag(lua_State *state, VkBufferUsageFlags flag) {
@@ -408,7 +368,14 @@ auto wrap_NewBuffer(lua_State *state) -> int {
     return luaL_error(state, "No current GraphicsContext set for this thread.");
   }
 
-  auto format = BufferFormatFromLua(state, 1);
+  auto formatResult = BufferFormatFromLua(state, 1);
+
+  if (Error::IsError(formatResult)) {
+    return luaL_error(state, "%s", formatResult.error().message.c_str());
+  }
+
+  auto format = formatResult.value();
+
   auto elementCount = static_cast<size_t>(luaL_checkinteger(state, 2));
 
   VkMemoryPropertyFlags memoryFlags = 0;

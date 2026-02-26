@@ -63,6 +63,20 @@ while true do
   Thorium.graphics.aquireGraphics("gui")
   if not texture then
     texture = Thorium.graphics.newTexture(testImgdata)
+
+    local format = {
+      {
+        name = "test",
+        format = {
+          { name = "position", format = "floatvec2" },
+          { name = "uv",       format = "float" },
+          { name = "color",    format = "float",    arraysize = 4 },
+        }
+      },
+      { name = "test2", format = "uint32" }
+    }
+
+    Thorium.graphics.newBuffer(format, 5)
   end
 
   ---@type Thorium.DetailedBlendMode

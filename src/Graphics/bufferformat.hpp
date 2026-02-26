@@ -5,6 +5,7 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <variant>
 #include <vector>
 #define VK_NO_PROTOTYPES
@@ -12,43 +13,37 @@
 
 namespace Graphics {
 
-struct BufferComponent {
-  ResourceKey name;
-  uint32_t offset;
-  VkFormat format;
-  size_t arraySize = 1; // for arrays of components like float[4] or matrices
-};
+using BufferTreeComponent = std::variant<VkFormat, struct BufferFormat>;
+
+struct BufferComponent;
 
 enum class Standard : uint8_t {
   Std430,
   Std140,
 };
 
-using Component = std::variant<BufferComponent, struct BufferFormat>;
-
 struct BufferFormat {
+  explicit BufferFormat(std::vector<BufferComponent> components,
+                        Standard std = Standard::Std430);
+
+  BufferFormat() = default;
+  BufferFormat(const BufferFormat &other) = default;
+  BufferFormat(BufferFormat &&other) noexcept = default;
+  auto operator=(const BufferFormat &other) -> BufferFormat & = default;
+  auto operator=(BufferFormat &&other) noexcept -> BufferFormat & = default;
+  ~BufferFormat() = default;
+
 private:
-  auto FlattenComponentTree() -> void {
-    for (auto &component : Components) {
-      if (std::holds_alternative<BufferComponent>(component)) {
-        auto &bufferComp = std::get<BufferComponent>(component);
-        FlatComponents.emplace_back(bufferComp);
-      } else if (std::holds_alternative<BufferFormat>(component)) {
-        auto &format = std::get<BufferFormat>(component);
+  auto FlattenComponentTree() -> void;
 
-        if (format.FlatComponents.empty()) {
-          format.FlattenComponentTree();
-        }
+  auto CalculateStride(Standard std) -> void;
 
-        for (auto &comp : format.FlatComponents) {
-          FlatComponents.emplace_back(comp);
-        }
-      }
-    }
-  }
+  [[nodiscard]] auto FindComponent(ResourceKey::const_iterator iterator,
+                                   ResourceKey::const_iterator end) const
+      -> std::optional<BufferComponent>;
 
 public:
-  [[nodiscard]] auto GetComponents() -> const std::vector<BufferComponent> & {
+  [[nodiscard]] auto GetVkComponents() -> const std::vector<VkFormat> & {
     if (FlatComponents.empty()) {
       FlattenComponentTree();
     }
@@ -56,11 +51,13 @@ public:
     return FlatComponents;
   }
 
-  // Assumes components are tightly packed or padded correctly
-  [[nodiscard]] auto GetElementStride() const -> size_t;
+  [[nodiscard]] auto GetComponents() const
+      -> const std::vector<BufferComponent> & {
+    return Components;
+  }
 
-  // Get the stride of the format according to a given standard, which may add padding between components
-  [[nodiscard]] auto GetStride(Standard std) const -> size_t;
+  // Get the calculated stride of the format
+  [[nodiscard]] auto GetStride() const -> size_t { return stride; }
 
   // Get the offset of a component by name
   [[nodiscard]] auto GetComponentOffset(const ResourceKey &name) const
@@ -82,31 +79,34 @@ public:
   // for example:
   // vec4, uvec4, float, uint, uint8[2] will give:
   // vec4, vec4, vec4, vec4, uvec4, uvec4, uvec4, uvec4, float, uint, uint8, uint8
-  [[nodiscard]] auto FormatAt(size_t componentOffset) -> VkFormat {
-    componentOffset %= FormatsAtIndices.size();
+  [[nodiscard]] auto FormatAt(size_t componentOffset) -> VkFormat;
 
-    if (FlatComponents.empty()) {
-      FlattenComponentTree();
-    }
-
-    return FlatComponents[componentOffset].format;
-  }
+  [[nodiscard]] auto ToString(int indentation = 0) const -> std::string;
 
 private:
   // Definition tree
-  std::vector<Component> Components;
+  std::vector<BufferComponent> Components;
 
   // The list of components in the format, inorder flattended structure tree
-  std::vector<BufferComponent> FlatComponents;
-
-  // The format of each component at the corresponding offset in the element, expanded for arrays
-  std::vector<VkFormat> FormatsAtIndices;
-
-  // byte offset of each component within the element
-  std::vector<size_t> ComponentOffsets;
+  std::vector<VkFormat> FlatComponents;
 
   // The stride of the element, including any padding between components
   size_t stride = 0;
+  uint32_t alignment{};
+
+  // Stride and alignment initialized flag
+  bool initialized = false;
+};
+
+struct BufferComponent {
+  std::string name;
+  uint32_t offset;
+  BufferTreeComponent format;
+  size_t arraySize = 1;
+  bool isMatrix;
+
+  // Vertex format only
+  uint32_t location;
 };
 
 struct BufferFormatHash {
@@ -120,9 +120,5 @@ auto GetAlignment(VkFormat format) -> Result<size_t>;
 
 // Get the size of a buffer component according to the given standard
 auto GetAlignment(const BufferComponent &component) -> Result<size_t>;
-
-// Get the alignment of an element according to the given standard at the given index
-auto GetElementStride(const std::vector<BufferComponent> &formats, Standard std,
-                      std::vector<size_t> &offsets) -> Result<size_t>;
 
 } // namespace Graphics

@@ -800,6 +800,15 @@ static auto FromString(const std::string &format) -> VkFormat {
 }
 
 static auto StringToArraySize(const std::string &format) -> size_t {
+  if (format == "floatmat2x2" || format == "floatmat2") {
+    return 2;
+  }
+  if (format == "floatmat3x3" || format == "floatmat3") {
+    return 3;
+  }
+  if (format == "floatmat4x4" || format == "floatmat4") {
+    return 4;
+  }
   if (format == "floatmat2x3") {
     return 3;
   }

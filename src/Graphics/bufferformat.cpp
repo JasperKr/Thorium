@@ -2,65 +2,64 @@
 #include "Graphics/format.hpp"
 #include "Graphics/hash.hpp"
 #include "Graphics/reflect.hpp"
-#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include <algorithm>
+#include <cassert>
 #include <cstddef>
+#include <format>
+#include <iterator>
+#include <optional>
 #include <string>
+#include <variant>
 #include <vector>
+#include <vulkan/vulkan_core.h>
 
 namespace Graphics {
-BufferFormat::BufferFormat(std::vector<BufferComponent> components)
+BufferFormat::BufferFormat(std::vector<BufferComponent> components,
+                           Standard std)
     : Components(std::move(components)) {
-  // calculate offsets
 
-  auto strideResult = ::Graphics::GetElementStride(Components, Standard::Std430,
-                                                   ComponentOffsets);
-  if (Error::IsError(strideResult)) {
-    PrintError("Error calculating buffer format stride: %s",
-               strideResult.error().message.c_str());
-    stride = 0;
-    return;
-  }
-  stride = strideResult.value();
-
-  size_t totalIndices = 0;
-  for (const auto &component : Components) {
-    size_t channelCount = Graphics::Format::GetChannelCount(component.format);
-    totalIndices += channelCount * component.arraySize;
-  }
-
-  FormatsAtIndices.resize(totalIndices, VK_FORMAT_UNDEFINED);
-
-  auto index = 0;
-  for (const auto &component : Components) {
-    size_t channelCount = Graphics::Format::GetChannelCount(component.format);
-
-    for (size_t i = 0; i < channelCount; i++) {
-      for (size_t arrayIndex = 0; arrayIndex < component.arraySize;
-           arrayIndex++) {
-        FormatsAtIndices[index++] = component.format;
-      }
-    }
-  }
-
-  assert(index == FormatsAtIndices.size());
+  CalculateStride(std);
 }
 
-auto BufferFormat::GetElementStride() const -> size_t { return stride; }
 auto BufferFormat::GetComponentOffset(size_t componentIndex) const -> size_t {
   if (componentIndex >= Components.size()) {
     return 0;
   }
 
-  return ComponentOffsets[componentIndex];
+  return Components[componentIndex].offset;
 }
+
+auto BufferFormat::FindComponent(ResourceKey::const_iterator iterator,
+                                 ResourceKey::const_iterator end) const
+    -> std::optional<BufferComponent> {
+
+  if (std::next(iterator) == end) {
+    return std::nullopt;
+  }
+
+  const auto &name = *iterator;
+
+  for (const auto &Component : Components) {
+    if (Component.name == name) {
+      if (std::holds_alternative<BufferFormat>(Component.format)) {
+        const auto &format = std::get<BufferFormat>(Component.format);
+        return format.FindComponent(std::next(iterator), end);
+      }
+
+      return Component;
+    }
+  }
+
+  return std::nullopt;
+}
+
 auto BufferFormat::GetComponentOffset(const ResourceKey &name) const
     -> Result<size_t> {
-  for (size_t i = 0; i < Components.size(); ++i) {
-    if (Components[i].name == name) {
-      return ComponentOffsets[i];
-    }
+  auto component = FindComponent(name.begin(), name.end());
+
+  if (component.has_value()) {
+    return component->offset;
   }
 
   return Error::Unexpected(
@@ -93,10 +92,15 @@ auto BufferFormat::operator==(const BufferFormat &other) const -> bool {
     auto end = attribute.name.end();
 
     for (auto it = begin; it != end; ++it) {
-      hasher.add(std::hash<std::string>()(*it));
+      hasher.add(std::hash<std::string>()(&*it));
     }
 
-    hasher.add(std::hash<uint32_t>()(attribute.format));
+    // hasher.add(std::hash<uint32_t>()(attribute.format));
+    if (std::holds_alternative<VkFormat>(attribute.format)) {
+      hasher.add(std::hash<uint32_t>()(std::get<VkFormat>(attribute.format)));
+    } else {
+      hasher.add(std::get<BufferFormat>(attribute.format).GetHash());
+    }
   }
   return hasher.get();
 }
@@ -172,86 +176,174 @@ auto GetAlignment(VkFormat format) -> Result<size_t> {
   }
 }
 
-auto GetAlignment(const BufferComponent &component) -> Result<size_t> {
-  return GetAlignment(component.format);
-}
-
 inline auto AlignUp(size_t offset, size_t alignment) -> size_t {
   return (offset + alignment - 1) & ~(alignment - 1);
 }
 
-// Get the stride of an element with the given formats according to the specified standard, and fill offsets with the byte offset of each format within the element
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
-auto GetElementStride(const std::vector<BufferComponent> &formats, Standard std,
-                      std::vector<size_t> &offsets) -> Result<size_t> {
-  if (formats.empty()) {
-    return Error::Unexpected(
-        "Format list cannot be empty for alignment calculation.");
+auto BufferFormat::CalculateStride(Standard std) -> void {
+  if (Components.empty()) {
+    return;
   }
 
-  switch (std) {
-  case Standard::Std140: {
-    size_t offset = 0;
-    size_t maxAlignment = 0;
-    for (const auto &format : formats) {
-      // Arrays in std140 use vec4 alignment
+  size_t offset = 0;
+  size_t maxAlignment = 0;
+  for (auto &format : Components) {
+    size_t baseAlign = 0;
+
+    // Get base alignment of component
+    if (std::holds_alternative<VkFormat>(format.format)) {
+      auto vulkanFormat = std::get<VkFormat>(format.format);
       VkFormat alignFormat =
           format.arraySize == 1
-              ? format.format
-              : Graphics::Format::GetVec4Variant(format.format);
+              ? vulkanFormat
+              : Graphics::Format::GetVec4Variant(vulkanFormat);
       auto alignResult = GetAlignment(alignFormat);
       if (Error::IsError(alignResult)) {
-        offsets.clear();
-        return alignResult.error().AsUnexpected();
+        return;
       }
 
-      size_t baseAlign = alignResult.value();
-      size_t alignment = (format.arraySize == 1)
-                             ? baseAlign
-                             : std::max(baseAlign, 16UL); // NOLINT
-      maxAlignment = std::max(maxAlignment, alignment);
-      size_t size = Graphics::Format::GetSize(format.format);
-      offset = AlignUp(offset, alignment);
-      offsets.emplace_back(offset);
-      if (format.arraySize == 1) {
-        offset += size;
-      } else {
-        offset += AlignUp(size, 16) * format.arraySize; // NOLINT
+      baseAlign = alignResult.value();
+    } else if (std::holds_alternative<BufferFormat>(format.format)) {
+      auto bufferFormat = std::get<BufferFormat>(format.format);
+      if (!bufferFormat.initialized) {
+        bufferFormat.CalculateStride(std);
       }
+
+      baseAlign = bufferFormat.alignment;
     }
 
+    size_t compAlignment = 0;
+
+    // Get allowed alignment based on standard
+    switch (std) {
+    case Standard::Std140:
+      compAlignment = (format.arraySize == 1)
+                          ? baseAlign
+                          : std::max(baseAlign, 16UL); // NOLINT
+      break;
+    case Standard::Std430:
+      compAlignment = baseAlign;
+      break;
+    default:
+      assert(false && "Something went very wrong");
+      break;
+    }
+    maxAlignment = std::max(maxAlignment, compAlignment);
+    size_t size = 0;
+
+    // Get size of component
+    if (std::holds_alternative<VkFormat>(format.format)) {
+      auto vulkanFormat = std::get<VkFormat>(format.format);
+      size = Graphics::Format::GetSize(vulkanFormat);
+    } else if (std::holds_alternative<BufferFormat>(format.format)) {
+      auto bufferFormat = std::get<BufferFormat>(format.format);
+      if (!bufferFormat.initialized) {
+        bufferFormat.CalculateStride(std);
+      }
+
+      size = bufferFormat.stride;
+    }
+
+    // Align component
+    offset = AlignUp(offset, compAlignment);
+    format.offset = offset;
+
+    // Add padding
+    if (format.arraySize == 1) {
+      offset += size;
+    } else {
+      switch (std) {
+      case Standard::Std140:
+        offset += AlignUp(size, 16) * format.arraySize; // NOLINT
+        break;
+      case Standard::Std430:
+        offset += AlignUp(size, compAlignment) * format.arraySize;
+        break;
+      default:
+        assert(false && "Something went very wrong");
+        break;
+      }
+    }
+  }
+
+  // Pad final structure
+  switch (std) {
+  case Standard::Std140: {
     size_t finalAlignment = std::max(maxAlignment, 16UL); // NOLINT
-    return AlignUp(offset, finalAlignment);
+    alignment = finalAlignment;
+    stride = AlignUp(offset, finalAlignment);
+    break;
   }
   case Standard::Std430: {
-    size_t offset = 0;
-    size_t maxAlignment = 0;
-    for (const auto &format : formats) {
-      auto alignResult = GetAlignment(format.format);
-      if (Error::IsError(alignResult)) {
-        offsets.clear();
-        return alignResult.error().AsUnexpected();
+    alignment = maxAlignment;
+    stride = AlignUp(offset, maxAlignment);
+    break;
+  }
+  }
+
+  initialized = true;
+}
+
+auto BufferFormat::FlattenComponentTree() -> void {
+  for (auto &component : Components) {
+    if (std::holds_alternative<VkFormat>(component.format)) {
+      auto &bufferComp = std::get<VkFormat>(component.format);
+      // Copy this component for each array element
+      for (int i = 0; i < component.arraySize; i++) {
+        FlatComponents.emplace_back(bufferComp);
+      }
+    } else if (std::holds_alternative<BufferFormat>(component.format)) {
+      auto &format = std::get<BufferFormat>(component.format);
+
+      if (format.FlatComponents.empty()) {
+        format.FlattenComponentTree();
       }
 
-      size_t alignment = alignResult.value();
-      maxAlignment = std::max(maxAlignment, alignment);
-      size_t size = Graphics::Format::GetSize(format.format);
-      offset = AlignUp(offset, alignment);
-      offsets.emplace_back(offset);
-      if (format.arraySize == 1) {
-        offset += size;
-      } else {
-        offset += AlignUp(size, alignment) * format.arraySize;
+      for (auto &comp : format.FlatComponents) {
+        FlatComponents.emplace_back(comp);
       }
     }
+  }
+}
 
-    return AlignUp(offset, maxAlignment);
+[[nodiscard]] auto BufferFormat::FormatAt(size_t componentOffset) -> VkFormat {
+  componentOffset %= FlatComponents.size();
+
+  if (FlatComponents.empty()) {
+    FlattenComponentTree();
   }
-  default:
-    return Error::Unexpected(
-        "Unsupported standard for buffer format alignment: " +
-        std::to_string(static_cast<uint32_t>(std)));
+
+  return FlatComponents[componentOffset];
+}
+
+[[nodiscard]] auto BufferFormat::ToString(int indentation) const
+    -> std::string {
+  auto baseTabs = std::string(indentation * 2UL, ' ');
+  std::ostringstream output;
+  output << baseTabs << "{\n";
+  indentation++;
+
+  for (const auto &component : Components) {
+    auto tabs = std::string(indentation * 2UL, ' ');
+    auto arrayStr = component.arraySize == 1
+                        ? ""
+                        : std::format("[{}]", component.arraySize);
+    if (std::holds_alternative<VkFormat>(component.format)) {
+      auto format = std::get<VkFormat>(component.format);
+      auto formatname = Graphics::Format::ToString(format);
+      output << std::format("{}{} {}{};\n", tabs, component.name, formatname,
+                            arrayStr);
+    } else {
+      auto format = std::get<Graphics::BufferFormat>(component.format);
+      output << std::format("{}{}\n{}{}", tabs, component.name,
+                            format.ToString(indentation), arrayStr);
+    }
   }
+
+  output << baseTabs << "};\n";
+
+  return output.str();
 }
 
 } // namespace Graphics
