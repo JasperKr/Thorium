@@ -24,22 +24,36 @@ enum class Standard : uint8_t {
   Std140,
 };
 
-using Component = std::variant<VkFormat, struct BufferFormat>;
+using Component = std::variant<BufferComponent, struct BufferFormat>;
 
 struct BufferFormat {
-  explicit BufferFormat(std::vector<BufferComponent> components);
+private:
+  auto FlattenComponentTree() -> void {
+    for (auto &component : Components) {
+      if (std::holds_alternative<BufferComponent>(component)) {
+        auto &bufferComp = std::get<BufferComponent>(component);
+        FlatComponents.emplace_back(bufferComp);
+      } else if (std::holds_alternative<BufferFormat>(component)) {
+        auto &format = std::get<BufferFormat>(component);
 
-  BufferFormat() = default;
-  BufferFormat(const BufferFormat &other) = default;
-  BufferFormat(BufferFormat &&other) noexcept = default;
-  auto operator=(const BufferFormat &other) -> BufferFormat & = default;
-  auto operator=(BufferFormat &&other) noexcept -> BufferFormat & = default;
-  ~BufferFormat() = default;
+        if (format.FlatComponents.empty()) {
+          format.FlattenComponentTree();
+        }
+
+        for (auto &comp : format.FlatComponents) {
+          FlatComponents.emplace_back(comp);
+        }
+      }
+    }
+  }
 
 public:
-  [[nodiscard]] auto GetComponents() const
-      -> const std::vector<BufferComponent> & {
-    return Components;
+  [[nodiscard]] auto GetComponents() -> const std::vector<BufferComponent> & {
+    if (FlatComponents.empty()) {
+      FlattenComponentTree();
+    }
+
+    return FlatComponents;
   }
 
   // Assumes components are tightly packed or padded correctly
@@ -68,14 +82,22 @@ public:
   // for example:
   // vec4, uvec4, float, uint, uint8[2] will give:
   // vec4, vec4, vec4, vec4, uvec4, uvec4, uvec4, uvec4, float, uint, uint8, uint8
-  [[nodiscard]] auto FormatAt(size_t componentOffset) const -> VkFormat {
+  [[nodiscard]] auto FormatAt(size_t componentOffset) -> VkFormat {
     componentOffset %= FormatsAtIndices.size();
-    return Components[componentOffset].format;
+
+    if (FlatComponents.empty()) {
+      FlattenComponentTree();
+    }
+
+    return FlatComponents[componentOffset].format;
   }
 
 private:
-  // The list of components in the format, in declaration order
-  std::vector<BufferComponent> Components;
+  // Definition tree
+  std::vector<Component> Components;
+
+  // The list of components in the format, inorder flattended structure tree
+  std::vector<BufferComponent> FlatComponents;
 
   // The format of each component at the corresponding offset in the element, expanded for arrays
   std::vector<VkFormat> FormatsAtIndices;
