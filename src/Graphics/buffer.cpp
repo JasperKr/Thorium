@@ -386,9 +386,9 @@ auto Buffer::Create(GraphicsContext &context, const BufferCreationInfo &info)
     return Error::Unexpected("Cannot create buffer with size VK_WHOLE_SIZE.");
   }
 
-  auto debugname = Graphics::ContextDebugname + "_" + info.debugName;
-
   auto buffer = Ref<Buffer>::Make();
+
+  buffer->debugName = info.debugName;
 
   buffer->isStagingBuffer = info.stagingBuffer;
   buffer->persistentMapping = info.persistentMapping;
@@ -418,13 +418,13 @@ auto Buffer::Create(GraphicsContext &context, const BufferCreationInfo &info)
     }
   }
 
-  if (!debugname.empty()) {
+  if (!buffer->debugName.empty()) {
     VkDebugUtilsObjectNameInfoEXT debugNameInfo{
         .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
         .objectType = VK_OBJECT_TYPE_BUFFER,
         .objectHandle = static_cast<uint64_t>(
             reinterpret_cast<uintptr_t>(buffer->handle)), // NOLINT
-        .pObjectName = debugname.c_str(),
+        .pObjectName = buffer->debugName.c_str(),
     };
     auto result = Error::Create(
         vkSetDebugUtilsObjectNameEXT(context.device, &debugNameInfo));
@@ -438,7 +438,7 @@ auto Buffer::Create(GraphicsContext &context, const BufferCreationInfo &info)
           Graphics::GraphicsContext::mutexes.vmaAllocator);
 
       vmaSetAllocationName(context.vmaAllocator, buffer->memory,
-                           debugname.c_str());
+                           buffer->debugName.c_str());
     }
   } else {
     PrintWarning("No debug name set for buffer.");
@@ -489,6 +489,54 @@ auto Buffer::SetData(GraphicsContext &context,
   }
 
   MarkUse();
+
+  return Error::Success();
+}
+
+auto Buffer::CopyTo(GraphicsContext &context,
+                    Buffer &dstBuffer, // NOLINTNEXTLINE
+                    size_t srcIndex, size_t dstIndex, size_t size) -> Error {
+  if (((usage)&VK_BUFFER_USAGE_TRANSFER_SRC_BIT) == 0) {
+    return Error::Create(
+        "Source buffer was not created with TRANSFER_SRC usage "
+        "flag for copy.");
+  }
+
+  if (((dstBuffer.usage) & VK_BUFFER_USAGE_TRANSFER_DST_BIT) == 0) {
+    return Error::Create("Destination buffer was not created with TRANSFER_DST "
+                         "usage flag for copy.");
+  }
+
+  auto *commandBuffer = GetCommandBuffer();
+
+  if (commandBuffer == nullptr) {
+    return Error::Create("Failed to get command buffer for buffer copy.");
+  }
+
+  if (srcIndex + size > this->size) {
+    return Error::Create("Source index and size exceed buffer size.");
+  }
+
+  if (dstIndex + size > dstBuffer.size) {
+    return Error::Create("Destination index and size exceed buffer size.");
+  }
+
+  if (this == &dstBuffer) { // Check for overlapping self-copies
+    if ((srcIndex < dstIndex && srcIndex + size > dstIndex) ||
+        (dstIndex < srcIndex && dstIndex + size > srcIndex)) {
+      return Error::Create("source and destination regions "
+                           "overlap when copying within the same buffer.");
+    }
+  }
+
+  VkBufferCopy copyRegion = {};
+  copyRegion.srcOffset = srcIndex;
+  copyRegion.dstOffset = dstIndex;
+  copyRegion.size = size;
+  vkCmdCopyBuffer(commandBuffer, handle, dstBuffer.handle, 1, &copyRegion);
+
+  MarkUse();
+  dstBuffer.MarkUse();
 
   return Error::Success();
 }

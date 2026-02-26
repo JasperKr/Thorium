@@ -53,7 +53,7 @@ auto GetAspectFlagsForFormat(VkFormat format) -> VkImageAspectFlagBits {
 inline auto SetDebugName(const std::string &debugName, Texture *texture,
                          const GraphicsContext &context) -> Error {
 
-  auto debugname = Graphics::ContextDebugname + "_" + debugName;
+  auto debugname = debugName;
 
   VkDebugUtilsObjectNameInfoEXT nameInfo = {};
   nameInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
@@ -1276,7 +1276,6 @@ auto GetAccessFlagsForUsage(TextureUsage usage, VkImageLayout currentLayout)
   case TextureUsage::TransferDst:
     return VK_ACCESS_2_TRANSFER_WRITE_BIT;
   case TextureUsage::PresentSrc:
-    return VK_ACCESS_2_MEMORY_READ_BIT;
   case TextureUsage::Unknown:
     return VK_ACCESS_2_NONE;
   default:

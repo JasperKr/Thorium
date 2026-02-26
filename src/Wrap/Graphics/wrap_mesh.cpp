@@ -1,5 +1,6 @@
 #include "Wrap/Graphics/wrap_mesh.hpp"
 #include "Graphics/buffer.hpp"
+#include "Graphics/format.hpp"
 #include "Graphics/mesh.hpp"
 #include "Graphics/vertexformat.hpp"
 #include "Modules/bytedata.hpp"
@@ -243,7 +244,7 @@ inline auto VertexFormatFromLua(lua_State *state, int index,
       return luaL_error(state, "Vertex attribute missing format field.");
     }
     const char *formatStr = luaL_checkstring(state, -1);
-    auto dataFormat = Format::VertexFormatStringToVkFormat(formatStr);
+    auto dataFormat = Format::FromString(formatStr);
     lua_pop(state, 1); // pop format
 
     // Location

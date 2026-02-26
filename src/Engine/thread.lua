@@ -8,16 +8,21 @@ local count = 0
 
 local doneChannel, canStartChannel = ...
 
+local t = Thorium.timer.getTime()
 local testImgdata = Thorium.data.newImagedata(256, 256)
 for y = 0, 255 do
   for x = 0, 255 do
-    local r = x / 256
-    local g = x / 256
-    local b = x / 256
+    -- local value = Thorium.math.noiseWrapped(x / 16, y / 16, 4, 4);
+    -- value = (value + 1) / 2
+    local value = Thorium.math.random()
+    local r = value
+    local g = value
+    local b = value
     testImgdata:setPixel(x, y, r, g, b, 1.0)
   end
 end
 local texture
+print("Generated noise texture in " .. tostring(Thorium.timer.getTime() - t) .. " seconds")
 
 local function draw()
   local startTime = Thorium.timer.getTime()

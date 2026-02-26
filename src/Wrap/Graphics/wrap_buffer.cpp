@@ -1,4 +1,6 @@
+#include "Wrap/Graphics/wrap_buffer.hpp"
 #include "Graphics/barrier.hpp"
+#include "Modules/console.hpp"
 #include "Wrap/Graphics/wrap_reflection.hpp"
 #include "Wrap/wrap.hpp"
 #include "Wrap/wrap_utils.hpp"
@@ -138,8 +140,7 @@ auto wrap_GetFormat(lua_State *state) -> int {
 
     // format
     lua_pushstring(state, "format");
-    lua_pushstring(state,
-                   Format::VertexFormatToString(component.format).c_str());
+    lua_pushstring(state, Format::ToString(component.format).c_str());
     lua_settable(state, -3); // table["format"] = format
 
     lua_pushinteger(state, tableIndex++);
@@ -150,7 +151,9 @@ auto wrap_GetFormat(lua_State *state) -> int {
   return 1;
 }
 
-// data: Bytedata | table of numbers, offset: integer, size: integer
+// data: Bytedata | table of numbers, srcOffset: integer, dstOffset: integer, size: integer
+// So, stack: [buffer, data, srcOffset?, dstOffset?, size?]
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 auto wrap_SetData(lua_State *state) -> int {
   auto *ctx = GetCurrentGraphicsContext();
 
@@ -174,10 +177,24 @@ auto wrap_SetData(lua_State *state) -> int {
 
   if (lua_istable(state, 2)) {
     // table of numbers
+
+    auto sourceOffset = 1;
+
+    if (lua_isnumber(state, 3) != 0) {
+      sourceOffset = static_cast<int>(luaL_checkinteger(state, 3));
+      if (sourceOffset < 1) {
+        return luaL_error(state,
+                          "Source offset cannot be less than 1 for table data");
+      }
+      if (static_cast<size_t>(sourceOffset) > buffer->GetSize()) {
+        return luaL_error(state, "Source offset is out of bounds");
+      }
+    }
+
     size_t tableSize = lua_objlen(state, 2);
     data.resize(tableSize * sizeof(float));
     for (int i = 0; i < tableSize; ++i) {
-      lua_rawgeti(state, 2, i + 1);
+      lua_rawgeti(state, 2, i + sourceOffset);
       auto value = luaL_checknumber(state, -1);
 
       auto result = // NOLINTNEXTLINE; pointer arithmetic
@@ -192,6 +209,19 @@ auto wrap_SetData(lua_State *state) -> int {
       lua_pop(state, 1);
     }
   } else {
+    auto sourceOffset = 0;
+
+    if (lua_isnumber(state, 3) != 0) {
+      sourceOffset = static_cast<int>(luaL_checkinteger(state, 3));
+      if (sourceOffset < 0) {
+        return luaL_error(state,
+                          "Source offset cannot be less than 0 for Bytedata");
+      }
+      if (static_cast<size_t>(sourceOffset) > buffer->GetSize()) {
+        return luaL_error(state, "Source offset is out of bounds");
+      }
+    }
+
     auto *bytedata = LuaWrap::ObjectFromLua<Data::ByteData>(state, 2);
     if (bytedata == nullptr) {
       return luaL_error(state, "Expected ByteData or table as second argument");
@@ -200,7 +230,9 @@ auto wrap_SetData(lua_State *state) -> int {
     const auto dataSpan = bytedata->GetDataSpan();
 
     data.resize(dataSpan.size());
-    std::memcpy(data.data(), dataSpan.data(), dataSpan.size());
+
+    // NOLINTNEXTLINE; pointer arithmetic
+    std::memcpy(data.data(), dataSpan.data() + sourceOffset, dataSpan.size());
   }
 
   VkDeviceSize offset = 0;
@@ -222,6 +254,76 @@ auto wrap_SetData(lua_State *state) -> int {
   return 0;
 }
 
+auto wrap_CopyTo(lua_State *state) -> int {
+  auto *ctx = GetCurrentGraphicsContext();
+
+  if (ctx == nullptr) {
+    return luaL_error(state, "No current GraphicsContext set for this thread.");
+  }
+
+  auto *srcBuffer =
+      LuaWrap::ObjectFromLua<Graphics::StructuredBuffer>(state, 1);
+  auto *dstBuffer =
+      LuaWrap::ObjectFromLua<Graphics::StructuredBuffer>(state, 2);
+
+  if (srcBuffer == nullptr || dstBuffer == nullptr) {
+    return luaL_error(state, "Expected Buffer as first and second argument");
+  }
+
+  auto srcIndex = static_cast<size_t>(luaL_checkinteger(state, 3));
+  auto dstIndex = static_cast<size_t>(luaL_checkinteger(state, 4));
+  auto size = static_cast<size_t>(luaL_checkinteger(state, 5)); // NOLINT
+
+  auto result = srcBuffer->GetBuffer()->CopyTo(*ctx, *dstBuffer->GetBuffer(),
+                                               srcIndex, dstIndex, size);
+  if (Error::IsError(result)) {
+    return luaL_error(state, "Failed to copy buffer data: %s",
+                      result.message.c_str());
+  }
+
+  return 0;
+}
+
+auto wrap_GetComponentOffset(lua_State *state) -> int {
+  auto *buffer = LuaWrap::ObjectFromLua<Graphics::StructuredBuffer>(state, 1);
+
+  if (buffer == nullptr) {
+    return luaL_error(state, "Expected Buffer as first argument");
+  }
+
+  if (lua_type(state, 2) == LUA_TSTRING) {
+    auto [name, keyCount] = ResourceKeyFromLua(state, 2);
+    auto offsetResult = buffer->GetFormat().GetComponentOffset(name);
+    if (Error::IsError(offsetResult)) {
+      return luaL_error(state, "Failed to get component offset: %s",
+                        offsetResult.error().message.c_str());
+    }
+
+    lua_pushinteger(state, static_cast<lua_Integer>(offsetResult.value()));
+    return 1;
+  }
+
+  if (lua_type(state, 2) == LUA_TNUMBER) {
+    auto index = static_cast<size_t>(luaL_checkinteger(state, 2));
+    auto offset = buffer->GetFormat().GetComponentOffset(index);
+    lua_pushinteger(state, static_cast<lua_Integer>(offset));
+    return 1;
+  }
+
+  return luaL_error(state, "Expected string or integer as second argument");
+}
+
+auto wrap_GetDebugName(lua_State *state) -> int {
+  auto *buffer = LuaWrap::ObjectFromLua<Graphics::StructuredBuffer>(state, 1);
+
+  if (buffer == nullptr) {
+    return luaL_error(state, "Expected Buffer as first argument");
+  }
+
+  lua_pushstring(state, buffer->GetBuffer()->debugName.c_str());
+  return 1;
+}
+
 // Buffer format: { { name = ..., format = ... }, ... }
 inline auto BufferFormatFromLua(lua_State *state, int index)
     -> Graphics::BufferFormat {
@@ -230,17 +332,18 @@ inline auto BufferFormatFromLua(lua_State *state, int index)
   if (lua_type(state, index) == LUA_TSTRING) {
     // Single component format
     const char *formatStr = luaL_checkstring(state, index);
-    auto vkFormat = Graphics::Format::VertexFormatStringToVkFormat(formatStr);
+    auto vkFormat = Graphics::Format::FromString(formatStr);
     if (vkFormat == VK_FORMAT_UNDEFINED) {
       luaL_error(state, "Invalid format string: %s", formatStr);
     }
+    auto arraySize = Graphics::Format::StringToArraySize(formatStr);
 
-    components.emplace_back(
-        Graphics::BufferComponent{.name = {"default"}, .format = vkFormat});
+    components.emplace_back(Graphics::BufferComponent{
+        .name = {"default"}, .format = vkFormat, .arraySize = arraySize});
 
     Graphics::BufferFormat format(components);
 
-    if (format.GetSize() == 0) {
+    if (format.GetElementStride() == 0) {
       luaL_error(state, "Buffer format has zero size.");
     }
 
@@ -250,31 +353,31 @@ inline auto BufferFormatFromLua(lua_State *state, int index)
   luaL_checktype(state, index, LUA_TTABLE);
 
   size_t tableSize = lua_objlen(state, index);
-
   for (int i = 0; i < tableSize; ++i) {
     lua_rawgeti(state, index, i + 1);
     lua_getfield(state, -1, "name");
-    auto key = ResourceKeyFromLuaTable(state, -1);
+    auto key = ResourceKeyFromSingleLuaObject(state, -1);
     lua_pop(state, 1);
 
     lua_getfield(state, -1, "format");
     const char *formatStr = luaL_checkstring(state, -1);
     lua_pop(state, 1);
 
-    auto vkFormat = Graphics::Format::VertexFormatStringToVkFormat(formatStr);
+    auto vkFormat = Graphics::Format::FromString(formatStr);
+    auto arraySize = Graphics::Format::StringToArraySize(formatStr);
     if (vkFormat == VK_FORMAT_UNDEFINED) {
       luaL_error(state, "Invalid format string: %s", formatStr);
     }
 
-    components.emplace_back(
-        Graphics::BufferComponent{.name = key, .format = vkFormat});
+    components.emplace_back(Graphics::BufferComponent{
+        .name = key, .format = vkFormat, .arraySize = arraySize});
 
     lua_pop(state, 1); // pop component table
   }
 
   Graphics::BufferFormat format(components);
 
-  if (format.GetSize() == 0) {
+  if (format.GetElementStride() == 0) {
     luaL_error(state, "Buffer format has zero size.");
   }
 

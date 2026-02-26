@@ -46,3 +46,17 @@ inline auto ResourceKeyFromLuaTable(lua_State *state, int index)
 
   return root;
 }
+
+inline auto ResourceKeyFromSingleLuaObject(lua_State *state, int index)
+    -> ResourceKey {
+  // Just a single string, treat it as a key with one part
+  if (lua_type(state, index) == LUA_TSTRING) {
+    return ResourceKey{luaL_checkstring(state, index)};
+  }
+  // A table, treat it as a list of strings
+  if (lua_type(state, index) == LUA_TTABLE) {
+    return ResourceKeyFromLuaTable(state, index);
+  }
+  // Invalid type, return empty key
+  return ResourceKey{};
+}

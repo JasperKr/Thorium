@@ -15,7 +15,7 @@ auto StructuredBuffer::Create(GraphicsContext &context, BufferFormat &format,
     -> Result<Ref<StructuredBuffer>> {
 
   Graphics::BufferCreationInfo bufferCreateInfo{
-      .size = format.GetSize() * elementCount,
+      .size = format.GetElementStride() * elementCount,
       .usage = info.usageFlags,
       .properties = info.memoryFlags,
       .debugName = info.debugName,
@@ -31,7 +31,7 @@ auto StructuredBuffer::Create(GraphicsContext &context, BufferFormat &format,
 
   buffer->format = format;
   buffer->elementCount = elementCount;
-  buffer->elementStride = format.GetSize();
+  buffer->elementStride = format.GetElementStride();
   buffer->buffer = result.value();
 
   return buffer;

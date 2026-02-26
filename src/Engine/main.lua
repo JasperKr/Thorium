@@ -2,11 +2,20 @@ local i = 0
 Thorium.threaderror = error
 
 print("Starting thread 1")
+require("Modules.vec")
+require("Modules.quaternions")
+require("Modules.matrices")
+require("Modules.math")
+require("Graphics.camera")
+require("Graphics.helpers")
 
 local thread = Thorium.thread.newThread("src/Engine/thread.lua", "Render thread 1")
 local threadDoneChannel = Thorium.thread.newChannel()
 local startThreadChannel = Thorium.thread.newChannel()
 thread:start(threadDoneChannel, startThreadChannel)
+
+local camera = Thorium.graphics.newCamera("main camera", vec3(0, 0, 0), vec3(0, 0, 0),
+  vec2(Thorium.graphics.getDimensions()))
 
 function Thorium.update(dt)
   i = i + 1

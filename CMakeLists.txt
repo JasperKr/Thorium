@@ -303,6 +303,7 @@ add_executable(Thorium
     src/Wrap/Modules/wrap_thread.cpp
     src/Wrap/Modules/wrap_channel.cpp
     src/Wrap/Modules/wrap_window.cpp
+    src/Wrap/Modules/wrap_math.cpp
     src/Wrap/wrap.cpp
     src/Wrap/lua_data.cpp
 

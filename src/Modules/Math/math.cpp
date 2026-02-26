@@ -3,11 +3,17 @@
 #include "Modules/Math/eulerAngle.hpp"
 #include "Modules/Math/matrix.hpp"
 #include "Modules/Math/quaternion.hpp"
+#include "SDL3/SDL_timer.h"
+#include "stb/stb_perlin.h"
+#include <algorithm>
 #include <cmath>
 #include <numbers>
+#include <random>
 
 // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
-namespace Math::Conversions {
+namespace Math {
+
+namespace Conversions {
 // See: https://www.euclideanspace.com/maths/geometry/rotations
 
 auto ToEuler(Quaternion quaternion) -> EulerAngle {
@@ -197,6 +203,52 @@ auto ToMatrix(Quaternion quat) -> Matrix4x4 {
   return mat;
 }
 
-} // namespace Math::Conversions
+} // namespace Conversions
+
+// NOLINTNEXTLINE
+thread_local std::mt19937 rng{
+    std::random_device{}() ^
+    SDL_GetTicksNS()}; // Just to be safe, we XOR the ticks as well.
+
+auto Random(int Min, int Max) -> int {
+  Min = std::min(Min, Max);
+
+  std::uniform_int_distribution<int> dist(Min, Max);
+  return dist(rng);
+}
+auto Random(int Max) -> int { return Random(0, Max); }
+auto Random() -> Scalar {
+  std::uniform_real_distribution<Scalar> dist(0.0F, 1.0F);
+  return dist(rng);
+}
+auto RandomNormalDistribution(Scalar mean, Scalar stddev) -> Scalar {
+  std::normal_distribution<Scalar> dist(mean, stddev);
+  return dist(rng);
+}
+
+auto Noise(Scalar x_channel, uint x_wrap) -> Scalar {
+  // remove all but the highest bit of wrap and limit to 256
+  x_wrap = (x_wrap & -x_wrap) % 256U;
+  return stb_perlin_noise3(x_channel, 0.0F, 0.0F, static_cast<int>(x_wrap), 0,
+                           0);
+}
+auto Noise(Scalar x_channel, Scalar y_channel, uint x_wrap, uint y_wrap)
+    -> Scalar {
+  x_wrap = (x_wrap & -x_wrap) % 256U;
+  y_wrap = (y_wrap & -y_wrap) % 256U;
+  return stb_perlin_noise3(x_channel, y_channel, 0.0F, static_cast<int>(x_wrap),
+                           static_cast<int>(y_wrap), 0);
+}
+auto Noise(Scalar x_channel, Scalar y_channel, Scalar z_channel, uint x_wrap,
+           uint y_wrap, uint z_wrap) -> Scalar {
+  x_wrap = (x_wrap & -x_wrap) % 256U;
+  y_wrap = (y_wrap & -y_wrap) % 256U;
+  z_wrap = (z_wrap & -z_wrap) % 256U;
+  return stb_perlin_noise3(x_channel, y_channel, z_channel,
+                           static_cast<int>(x_wrap), static_cast<int>(y_wrap),
+                           static_cast<int>(z_wrap));
+}
+
+} // namespace Math
 
 // NOLINTEND(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)

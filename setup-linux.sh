@@ -19,6 +19,9 @@ curl -L https://raw.githubusercontent.com/zeux/volk/master/volk.c -o include/vol
 # Fetch stb_image
 curl -L https://raw.githubusercontent.com/nothings/stb/master/stb_image.h -o include/stb/stb_image.h
 
+# Fetch stb_perlin
+curl -L https://raw.githubusercontent.com/nothings/stb/master/stb_perlin.h -o include/stb/stb_perlin.h
+
 # Shaderc: clone repository and copy necessary include
 
 # check if the folder is empty, otherwise skip

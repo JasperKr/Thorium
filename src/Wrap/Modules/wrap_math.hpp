@@ -18,6 +18,10 @@ auto wrap_QuaternionToMatrix(lua_State *state) -> int;
 auto wrap_MatrixToEuler(lua_State *state) -> int;
 auto wrap_MatrixToQuaternion(lua_State *state) -> int;
 
+auto wrap_Random(lua_State *state) -> int;
+auto wrap_Noise(lua_State *state) -> int;
+auto wrap_NoiseWrapped(lua_State *state) -> int;
+
 // NOLINTNEXTLINE
 static const luaL_Reg MathLib[] = {
     {"eulerToQuaternion", wrap_EulerToQuaternion},
@@ -26,6 +30,9 @@ static const luaL_Reg MathLib[] = {
     {"quaternionToMatrix", wrap_QuaternionToMatrix},
     {"matrixToEuler", wrap_MatrixToEuler},
     {"matrixToQuaternion", wrap_MatrixToQuaternion},
+    {"random", wrap_Random},
+    {"noise", wrap_Noise},
+    {"noiseWrapped", wrap_NoiseWrapped},
     {nullptr, nullptr},
 };
 

@@ -1,6 +1,208 @@
+---@class Thorium.camera
+---@field position vec3
+---@field rotation vec3
+---@field nextPosition vec3 Next frame's position
+---@field nextRotation vec3 Next frame's rotation
+---@field resolution vec2
+---@field fov number
+---@field near number
+---@field far number
+---@
+---@field projectionMatrix matrix4x4
+---@field inverseProjectionMatrix matrix4x4
+---@field translationMatrix matrix4x4
+---@field rotationMatrix matrix4x4
+---@field viewMatrix matrix4x4
+---@field inverseViewMatrix matrix4x4
+---@field viewProjectionMatrix matrix4x4
+---@field inverseViewProjectionMatrix matrix4x4
+---@field inverseRotationMatrix matrix4x4
+---@field rotationProjectionMatrix matrix4x4
+---@field inverseRotationProjectionMatrix matrix4x4
+---@
+---@field frustum Frustum
+---@field postProcessing boolean
+---@field name string
+---@field id string
+---@field bloom table
+---@field linear boolean
+---@field specular boolean
+---@field buffer Thorium.WrappedBuffer
+---@field textures {static:table, current:table, previous:table, internal:table}
+---@field interactable boolean
+---@field lighting {tileBuffer: Thorium.Texture, indexBuffer: Thorium.Buffer, indexCounterBuffer: Thorium.Buffer, indicesPerVoxel: number, tileWidth: number, tileHeight: number}
+---@field onResizeFunctions function[]
+---@field invalidatedHistory boolean
 local Camera = {}
 Camera.__index = Camera
 
-function Thorium.graphics.newCamera()
+--- Creates a new camera
+---@param name string
+---@param position vec3
+---@param rotation vec3
+---@param resolution vec2
+---@param fov number?
+---@param near number?
+---@param far number?
+---@return Thorium.camera
+function Thorium.graphics.newCamera(name, position, rotation, resolution, fov, near, far)
+  local self = setmetatable({}, Camera)
+
+  -- Enforce that the resolution is a multiple of 32, for tiled lighting
+  resolution.x = math.ceil(resolution.x / 32) * 32
+  resolution.y = math.ceil(resolution.y / 32) * 32
+
+  self.position = position
+  self.rotation = rotation
+  self.resolution = resolution or error("No resolution provided for camera")
+  self.fov = fov or math.rad(90)
+  self.near = near or 0.1
+  self.far = far or 1000
+
+  self.nextPosition = position
+  self.nextRotation = rotation
+
+  local aspectRatio = resolution.x / resolution.y
+
+  local inverseProjectionMatrix = mat4()
+  local viewMatrix = mat4()
+  local inverseViewMatrix = mat4()
+  local viewProjectionMatrix = mat4()
+  local inverseViewProjectionMatrix = mat4()
+  local rotationProjectionMatrix = mat4()
+  local inverseRotationProjectionMatrix = mat4()
+
+  local projectionMatrix = Thorium.graphics.newPerspectiveProjectionMatrixSimple(aspectRatio, self.fov, self.near,
+    self.far)
+
+  projectionMatrix:invertTranspose(inverseProjectionMatrix)
+  local translationMatrix = Thorium.math.newTranslationMatrix(-position)
+  local rotationMatrix = Thorium.math.eulerToMatrix(rotation:get())
+  rotationMatrix:mul(projectionMatrix, rotationProjectionMatrix)
+  rotationMatrix:invertTranspose(inverseRotationProjectionMatrix)
+
+  translationMatrix:mul(rotationMatrix, viewMatrix)
+  viewMatrix:invertTranspose(inverseViewMatrix)
+  viewMatrix:mul(projectionMatrix, viewProjectionMatrix)
+  viewProjectionMatrix:invertTranspose(inverseViewProjectionMatrix)
+
+  self.projectionMatrix = projectionMatrix
+  self.inverseProjectionMatrix = inverseProjectionMatrix
+  self.translationMatrix = translationMatrix
+  self.rotationMatrix = rotationMatrix
+  self.viewMatrix = viewMatrix
+  self.inverseViewMatrix = inverseViewMatrix
+  self.viewProjectionMatrix = viewProjectionMatrix
+  self.inverseViewProjectionMatrix = inverseViewProjectionMatrix
+  self.rotationProjectionMatrix = rotationProjectionMatrix
+  self.inverseRotationProjectionMatrix = inverseRotationProjectionMatrix
+
+  self.textures = {
+    static = { -- textures that don't change every frame
+      geometry = {},
+      gtao = {},
+    },
+    current = {},  -- textures that change every frame, the current frame
+    previous = {}, -- textures that change every frame, the previous frame
+    internal = {   -- internal data for managing texture swaps
+      allScenes = {},
+      allSceneViews = {},
+      allDepths = {},
+      allDepthsLoZ = {},
+      allDepthViews = {},
+      allLoZDepthViews = {},
+      allReflections = {},
+    }
+  }
+
+  self.bloom = {}
+  self.name = name
+
+  self.buffer = Thorium.graphics.newBuffer({
+    { name = "ViewProjectionMatrix",            format = "floatmat4x4" },
+    { name = "InverseViewProjectionMatrix",     format = "floatmat4x4" },
+    { name = "ViewMatrix",                      format = "floatmat4x4" },
+    { name = "InverseViewMatrix",               format = "floatmat4x4" },
+    { name = "ProjectionMatrix",                format = "floatmat4x4" },
+    { name = "InverseProjectionMatrix",         format = "floatmat4x4" },
+    { name = "RotationProjectionMatrix",        format = "floatmat4x4" },
+    { name = "InverseRotationProjectionMatrix", format = "floatmat4x4" },
+    { name = "Position",                        format = "floatvec3" },
+    { name = "Near",                            format = "float" },
+    { name = "Far",                             format = "float" },
+    { name = "NearMulFar",                      format = "float" },
+    { name = "FarMinusNear",                    format = "float" },
+    { name = "HistoryInvalidated",              format = "uint32" },
+    { name = "Jitter",                          format = "floatvec2" },
+    { name = "ProjectionType",                  format = "uint32" },
+    { name = "ShadowCascadeCount",              format = "uint32" },
+  }, 2, { shaderstorage = true, debugname = "Camera [" .. name .. "] buffer", usage = "dynamic" })
+
+  return self
+end
+
+local tempVec3 = vec3()
+
+function Camera:UpdateMatrices()
+  local aspectRatio = self.resolution.x / self.resolution.y
+
+  Thorium.graphics.newPerspectiveProjectionMatrixSimple(aspectRatio, self.fov, self.near,
+    self.far, self.projectionMatrix)
+
+  self.projectionMatrix:invertTranspose(self.inverseProjectionMatrix)
+  Thorium.math.newTranslationMatrix(mathv.unm3(self.position, tempVec3),
+    self.translationMatrix)
+  Thorium.math.eulerToMatrix(self.rotation.x, self.rotation.y, self.rotation.z, self.rotationMatrix)
+  self.rotationMatrix:mul(self.projectionMatrix, self.rotationProjectionMatrix)
+  self.rotationMatrix:invertTranspose(self.inverseRotationProjectionMatrix)
+
+  self.translationMatrix:mul(self.rotationMatrix, self.viewMatrix)
+  self.viewMatrix:invertTranspose(self.inverseViewMatrix)
+  self.viewMatrix:mul(self.projectionMatrix, self.viewProjectionMatrix)
+  self.viewProjectionMatrix:invertTranspose(self.inverseViewProjectionMatrix)
+end
+
+function Camera:Update()
+  if self.nextPosition == self.position and self.nextRotation == self.rotation then
+    return
+  end
+
+  self.position = self.nextPosition
+  self.rotation = self.nextRotation
+end
+
+---@return vec3 forward
+function Camera:GetForward()
+  tempVec3:set(self.inverseRotationMatrix[3][1], self.inverseRotationMatrix[3][2], self.inverseRotationMatrix[3][3])
+  return tempVec3
+end
+
+---@return vec3 right
+function Camera:GetRight()
+  tempVec3:set(self.inverseRotationMatrix[1][1], self.inverseRotationMatrix[1][2], self.inverseRotationMatrix[1][3])
+  return tempVec3
+end
+
+---@return vec3 up
+function Camera:GetUp()
+  tempVec3:set(self.inverseRotationMatrix[2][1], self.inverseRotationMatrix[2][2], self.inverseRotationMatrix[2][3])
+  return tempVec3
+end
+
+local jitterSequence = {
+  { 0,     0 },
+  { 0.5,   0.5 },
+  { 0.5,   -0.5 },
+  { -0.5,  0.5 },
+  { -0.5,  -0.5 },
+  { 0.25,  0.25 },
+  { 0.25,  -0.25 },
+  { -0.25, 0.25 },
+  { -0.25, -0.25 }
+}
+
+local jitter = { 0, 0 }
+
+function Camera:UpdateGpuBuffers()
 
 end

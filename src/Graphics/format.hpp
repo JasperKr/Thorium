@@ -1,4 +1,5 @@
 #pragma once
+#include <cstddef>
 #define VK_NO_PROTOTYPES
 #include <string>
 #include <vulkan/vulkan_core.h>
@@ -463,16 +464,41 @@ static inline auto ImageFormatToString(VkFormat format) -> std::string {
   }
 }
 
-static auto VertexFormatToString(VkFormat format) -> std::string {
+static auto ToString(VkFormat format, size_t arraySize = 1) -> std::string {
   switch (format) {
   case VK_FORMAT_R32_SFLOAT:
     return "float";
   case VK_FORMAT_R32G32_SFLOAT:
-    return "floatvec2";
+    if (arraySize == 1) {
+      return "floatvec2";
+    } else if (arraySize == 2) {
+      return "floatmat2";
+    } else if (arraySize == 3) {
+      return "floatmat2x3";
+    } else if (arraySize == 4) {
+      return "floatmat2x4";
+    }
+    return "unknown";
   case VK_FORMAT_R32G32B32_SFLOAT:
-    return "floatvec3";
+    if (arraySize == 1) {
+      return "floatvec3";
+    } else if (arraySize == 2) {
+      return "floatmat3x2";
+    } else if (arraySize == 3) {
+      return "floatmat3";
+    } else if (arraySize == 4) {
+      return "floatmat3x4";
+    }
   case VK_FORMAT_R32G32B32A32_SFLOAT:
-    return "floatvec4";
+    if (arraySize == 1) {
+      return "floatvec4";
+    } else if (arraySize == 2) {
+      return "floatmat4x2";
+    } else if (arraySize == 3) {
+      return "floatmat4x3";
+    } else if (arraySize == 4) {
+      return "floatmat4";
+    }
   case VK_FORMAT_R16_SFLOAT:
     return "half";
   case VK_FORMAT_R16G16_SFLOAT:
@@ -567,8 +593,7 @@ static auto VertexFormatToString(VkFormat format) -> std::string {
 }
 
 // NOLINTNEXTLINE, cognitive complexity
-static auto VertexFormatStringToVkFormat(const std::string &format)
-    -> VkFormat {
+static auto FromString(const std::string &format) -> VkFormat {
   if (format == "unknown") {
     return VK_FORMAT_UNDEFINED;
   }
@@ -716,7 +741,158 @@ static auto VertexFormatStringToVkFormat(const std::string &format)
   if (format == "snorm16vec4") {
     return VK_FORMAT_R16G16B16A16_SNORM;
   }
+  if (format == "floatmat2" || format == "floatmat2x2") {
+    return VK_FORMAT_R32G32_SFLOAT;
+  }
+  if (format == "floatmat3" || format == "floatmat3x3") {
+    return VK_FORMAT_R32G32B32_SFLOAT;
+  }
+  if (format == "floatmat4" || format == "floatmat4x4") {
+    return VK_FORMAT_R32G32B32A32_SFLOAT;
+  }
+  if (format == "halfmat2" || format == "halfmat2x2") {
+    return VK_FORMAT_R16G16_SFLOAT;
+  }
+  if (format == "halfmat3" || format == "halfmat3x3") {
+    return VK_FORMAT_R16G16B16_SFLOAT;
+  }
+  if (format == "halfmat4" || format == "halfmat4x4") {
+    return VK_FORMAT_R16G16B16A16_SFLOAT;
+  }
+  if (format == "floatmat2x3") {
+    return VK_FORMAT_R32G32B32_SFLOAT;
+  }
+  if (format == "floatmat3x2") {
+    return VK_FORMAT_R32G32_SFLOAT;
+  }
+  if (format == "floatmat2x4") {
+    return VK_FORMAT_R32G32B32A32_SFLOAT;
+  }
+  if (format == "floatmat4x2") {
+    return VK_FORMAT_R32G32_SFLOAT;
+  }
+  if (format == "floatmat3x4") {
+    return VK_FORMAT_R32G32B32A32_SFLOAT;
+  }
+  if (format == "floatmat4x3") {
+    return VK_FORMAT_R32G32B32_SFLOAT;
+  }
+  if (format == "halfmat2x3") {
+    return VK_FORMAT_R16G16B16_SFLOAT;
+  }
+  if (format == "halfmat3x2") {
+    return VK_FORMAT_R16G16_SFLOAT;
+  }
+  if (format == "halfmat2x4") {
+    return VK_FORMAT_R16G16B16A16_SFLOAT;
+  }
+  if (format == "halfmat4x2") {
+    return VK_FORMAT_R16G16_SFLOAT;
+  }
+  if (format == "halfmat3x4") {
+    return VK_FORMAT_R16G16B16A16_SFLOAT;
+  }
+  if (format == "halfmat4x3") {
+    return VK_FORMAT_R16G16B16_SFLOAT;
+  }
+
   return VK_FORMAT_UNDEFINED;
+}
+
+static auto StringToArraySize(const std::string &format) -> size_t {
+  if (format == "floatmat2x3") {
+    return 3;
+  }
+  if (format == "floatmat3x2") {
+    return 2;
+  }
+  if (format == "floatmat2x4") {
+    return 4;
+  }
+  if (format == "floatmat4x2") {
+    return 2;
+  }
+  if (format == "floatmat3x4") {
+    return 4;
+  }
+  if (format == "floatmat4x3") {
+    return 3;
+  }
+  if (format == "halfmat2x3") {
+    return 3;
+  }
+  if (format == "halfmat3x2") {
+    return 2;
+  }
+  if (format == "halfmat2x4") {
+    return 4;
+  }
+  if (format == "halfmat4x2") {
+    return 2;
+  }
+  if (format == "halfmat3x4") {
+    return 4;
+  }
+  if (format == "halfmat4x3") {
+    return 3;
+  }
+
+  return 1; // default array size is 1 for non-matrix types
+}
+
+static auto GetVec4Variant(VkFormat format) -> VkFormat {
+  switch (format) {
+  case VK_FORMAT_R32_SFLOAT:
+  case VK_FORMAT_R32G32_SFLOAT:
+  case VK_FORMAT_R32G32B32_SFLOAT:
+    return VK_FORMAT_R32G32B32A32_SFLOAT;
+  case VK_FORMAT_R16_SFLOAT:
+  case VK_FORMAT_R16G16_SFLOAT:
+  case VK_FORMAT_R16G16B16_SFLOAT:
+    return VK_FORMAT_R16G16B16A16_SFLOAT;
+  case VK_FORMAT_R8_UINT:
+  case VK_FORMAT_R8G8_UINT:
+  case VK_FORMAT_R8G8B8_UINT:
+    return VK_FORMAT_R8G8B8A8_UINT;
+  case VK_FORMAT_R16_UINT:
+  case VK_FORMAT_R16G16_UINT:
+  case VK_FORMAT_R16G16B16_UINT:
+    return VK_FORMAT_R16G16B16A16_UINT;
+  case VK_FORMAT_R32_UINT:
+  case VK_FORMAT_R32G32_UINT:
+  case VK_FORMAT_R32G32B32_UINT:
+    return VK_FORMAT_R32G32B32A32_UINT;
+  case VK_FORMAT_R8_SINT:
+  case VK_FORMAT_R8G8_SINT:
+  case VK_FORMAT_R8G8B8_SINT:
+    return VK_FORMAT_R8G8B8A8_SINT;
+  case VK_FORMAT_R16_SINT:
+  case VK_FORMAT_R16G16_SINT:
+  case VK_FORMAT_R16G16B16_SINT:
+    return VK_FORMAT_R16G16B16A16_SINT;
+  case VK_FORMAT_R32_SINT:
+  case VK_FORMAT_R32G32_SINT:
+  case VK_FORMAT_R32G32B32_SINT:
+    return VK_FORMAT_R32G32B32A32_SINT;
+  case VK_FORMAT_R8_UNORM:
+  case VK_FORMAT_R8G8_UNORM:
+  case VK_FORMAT_R8G8B8_UNORM:
+    return VK_FORMAT_R8G8B8A8_UNORM;
+  case VK_FORMAT_R16_UNORM:
+  case VK_FORMAT_R16G16_UNORM:
+  case VK_FORMAT_R16G16B16_UNORM:
+    return VK_FORMAT_R16G16B16A16_UNORM;
+  case VK_FORMAT_R8_SNORM:
+  case VK_FORMAT_R8G8_SNORM:
+  case VK_FORMAT_R8G8B8_SNORM:
+    return VK_FORMAT_R8G8B8A8_SNORM;
+  case VK_FORMAT_R16_SNORM:
+  case VK_FORMAT_R16G16_SNORM:
+  case VK_FORMAT_R16G16B16_SNORM:
+    return VK_FORMAT_R16G16B16A16_SNORM;
+  default:
+    return format; // If no specific vec4 variant, return the original format
+  }
 }
 
 } // namespace Graphics::Format

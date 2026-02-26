@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <mutex>
 #include <span>
+#include <string>
 #define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
 namespace Graphics {
@@ -88,6 +89,9 @@ struct Buffer : Object, Barrier::BarrierSynced {
                VkDeviceSize offset = 0, VkDeviceSize size = VK_WHOLE_SIZE)
       -> Error;
 
+  auto CopyTo(GraphicsContext &context, Buffer &dstBuffer, size_t srcIndex,
+              size_t dstIndex, size_t size) -> Error;
+
   auto MapMemory(GraphicsContext &context) -> Error;
   auto UnmapMemory(GraphicsContext &context) -> void;
 
@@ -112,5 +116,7 @@ struct Buffer : Object, Barrier::BarrierSynced {
   auto UploadRing(GraphicsContext &context,
                   std::span<const uint8_t> data, // NOLINTNEXTLINE
                   VkDeviceSize offset, VkDeviceSize size) const -> Error;
+
+  std::string debugName;
 };
 } // namespace Graphics

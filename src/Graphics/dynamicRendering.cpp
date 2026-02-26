@@ -1118,11 +1118,12 @@ inline auto BeginRendering(GraphicsContext &context) -> Error {
     } else {
       colorAttachments.emplace_back(attachmentInfo);
 
-      // Barrier::UpdateUsage(
-      //     context, *rendertarget->texture,
-      //     {.stages = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-      //      .access = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT |
-      //                VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT});
+      // TODO: Why is this commented and depth/stencil isn't?
+      Barrier::UpdateUsage(
+          context, *rendertarget->texture,
+          {.stages = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+           .access = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT |
+                     VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT});
     }
   }
 
@@ -1202,12 +1203,7 @@ auto InsertResourceBarriers(GraphicsContext &context) -> Error {
     case SLANG_RESOURCE_ACCESS_WRITE:
       access = VK_ACCESS_2_SHADER_WRITE_BIT;
       break;
-    case SLANG_RESOURCE_ACCESS_RASTER_ORDERED:
-    case SLANG_RESOURCE_ACCESS_APPEND:
-    case SLANG_RESOURCE_ACCESS_CONSUME:
-    case SLANG_RESOURCE_ACCESS_FEEDBACK:
-    case SLANG_RESOURCE_ACCESS_NONE:
-    case SLANG_RESOURCE_ACCESS_UNKNOWN:
+    default:
       break;
     }
 
