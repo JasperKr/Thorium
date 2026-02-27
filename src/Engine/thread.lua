@@ -98,7 +98,9 @@ while true do
 
   draw()
   Thorium.graphics.setShader()
-  Thorium.graphics.draw(texture)
+  for i = 1, 1 do
+    Thorium.graphics.draw(texture)
+  end
   Thorium.graphics.submitGraphics()
 
   doneChannel:push(true)

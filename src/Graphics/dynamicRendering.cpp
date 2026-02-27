@@ -251,6 +251,9 @@ auto BindDefaultTextures(GraphicsContext &context, Shader::ShaderModule *shader)
 
       auto defaultTexture = defaultTextureResult.value();
 
+      auto key = SetBindingToSlot(samplerInfo.set, samplerInfo.binding);
+      shader->GetState().boundTextures[key] = defaultTexture.get();
+
       VkDescriptorImageInfo imageInfo{};
       imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
       imageInfo.imageView = defaultTexture->view;
@@ -993,13 +996,16 @@ auto FlushGraphics(GraphicsContext &context) -> Result<bool> {
 auto Flush(GraphicsContext &context) -> Result<bool> {
   ZoneScoped;
 
+  PrintAlways("Same state? {}, is dirty? {}, currently rendering? {}",
+              StateStack.back() == LastState, Graphics::GetIsStateDirty(),
+              GetIsCurrentlyRendering());
+
   if (StateStack.back() == LastState && !Graphics::GetIsStateDirty() &&
       GetIsCurrentlyRendering()) {
     return false;
   }
 
   LastState = StateStack.back();
-  Graphics::GetIsStateDirty() = false;
 
   if (StateStack.back().bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS) {
     auto result = FlushGraphics(context);
@@ -1010,6 +1016,7 @@ auto Flush(GraphicsContext &context) -> Result<bool> {
     return result;
   }
 
+  Graphics::GetIsStateDirty() = false;
   return Error::Unexpected("Unsupported pipeline bind point in Flush.");
 }
 
@@ -1286,6 +1293,7 @@ auto PrepareRendering(GraphicsContext &context) -> Error {
     vkCmdSetScissor(Graphics::GetCommandBuffer(), 0, 1, &scissor);
   }
 
+  Graphics::GetIsStateDirty() = false;
   return Error::Success();
 }
 

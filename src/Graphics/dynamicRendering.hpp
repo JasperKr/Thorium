@@ -224,8 +224,7 @@ struct State {
            depthCompareOp == other.depthCompareOp &&
            stencilTestEnable == other.stencilTestEnable &&
            polygonMode == other.polygonMode && lineWidth == other.lineWidth &&
-           shader.get() == other.shader.get() &&
-           vertexFormat == other.vertexFormat &&
+           *shader == *other.shader && vertexFormat == other.vertexFormat &&
            primitiveTopology == other.primitiveTopology;
   }
 };

@@ -13,6 +13,8 @@
 #include "reflect.hpp"
 #include "slang/slang.h"
 #include <cstdint>
+#include <public/tracy/Tracy.hpp>
+#include <shared_mutex>
 #include <span>
 #include <string>
 #include <unordered_map>
@@ -117,9 +119,7 @@ struct BoundState {
 };
 
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
-extern std::mutex BoundStatesMutex;
-extern std::unordered_map<
-    uint32_t, std::unordered_map<const struct ShaderModule *, BoundState>>
+extern thread_local std::unordered_map<const struct ShaderModule *, BoundState>
     BoundStates;
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
@@ -154,12 +154,7 @@ struct ShaderModule : Object {
   std::vector<slang::PreprocessorMacroDesc> preprocessorMacros;
 
   auto GetState() const -> BoundState & {
-    std::lock_guard<std::mutex> lock(BoundStatesMutex);
-
-    // TODO: Give shader module it's own ID to avoid pointer issues
-    auto &states = BoundStates[::Threading::CurrentThreadID];
-
-    return states[this];
+    return BoundStates.try_emplace(this).first->second;
   }
 
   std::vector<uint8_t> globalUniforms;
@@ -208,8 +203,7 @@ struct ShaderModule : Object {
   auto GetWaveSize() const -> uint32_t;
 
   auto operator==(const ShaderModule &other) const -> bool {
-    return externs == other.externs && moduleName == other.moduleName &&
-           stages == other.stages;
+    return module == other.module;
   }
 
   auto hash() const -> size_t;
