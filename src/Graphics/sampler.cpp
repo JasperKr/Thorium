@@ -7,7 +7,7 @@ namespace Graphics::Texture {
 std::unordered_map<SamplerDescription, VkSampler, SamplerDescHash>
     SamplerCache; // NOLINT
 
-auto GetOrCreateSampler(GraphicsContext &context,
+auto GetOrCreateSampler(const GraphicsContext &context,
                         const SamplerDescription &description) -> VkSampler {
 
   auto sampler = SamplerCache.find(description);
@@ -51,7 +51,7 @@ auto GetOrCreateSampler(GraphicsContext &context,
   return vkSampler;
 }
 
-auto DestroySamplers(GraphicsContext &context) -> void {
+auto DestroySamplers(const GraphicsContext &context) -> void {
   std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
   for (auto &pair : SamplerCache) {
     vkDestroySampler(context.device, pair.second, nullptr);

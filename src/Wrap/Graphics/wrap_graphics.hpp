@@ -13,6 +13,9 @@ extern "C" {
 }
 namespace Graphics {
 
+// NOLINTNEXTLINE; Cache quad mesh to avoid recreating it every frame
+extern thread_local Ref<Mesh> QuadMeshCache;
+
 auto wrap_Present(lua_State *state) -> int;
 
 // RenderTarget functions

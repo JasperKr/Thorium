@@ -14,8 +14,13 @@ auto StructuredBuffer::Create(GraphicsContext &context, BufferFormat &format,
                               StructuredBufferCreationInfo const &info)
     -> Result<Ref<StructuredBuffer>> {
 
+  if (format.GetStride() == 0) {
+    return Error::Unexpectedf(
+        "Invalid format, Cannot create structured buffer with a stride of 0");
+  }
+
   Graphics::BufferCreationInfo bufferCreateInfo{
-      .size = format.GetSize() * elementCount,
+      .size = format.GetStride() * elementCount,
       .usage = info.usageFlags,
       .properties = info.memoryFlags,
       .debugName = info.debugName,
@@ -31,7 +36,7 @@ auto StructuredBuffer::Create(GraphicsContext &context, BufferFormat &format,
 
   buffer->format = format;
   buffer->elementCount = elementCount;
-  buffer->elementStride = format.GetSize();
+  buffer->elementStride = format.GetStride();
   buffer->buffer = result.value();
 
   return buffer;
@@ -41,9 +46,7 @@ auto StructuredBuffer::GetElementStride() const -> size_t {
   return elementStride;
 }
 
-auto StructuredBuffer::GetFormat() const -> BufferFormat const & {
-  return format;
-}
+auto StructuredBuffer::GetFormat() -> BufferFormat & { return format; }
 
 auto StructuredBuffer::Clear(GraphicsContext &context, uint32_t value,
                              VkDeviceSize offset, VkDeviceSize size) const

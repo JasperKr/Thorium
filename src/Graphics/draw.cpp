@@ -6,7 +6,9 @@
 #include "Graphics/mesh.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
+#include <cassert>
 #include <cstdint>
+#include <public/tracy/Tracy.hpp>
 
 #define VK_NO_PROTOTYPES
 #include <vulkan/vulkan_core.h>
@@ -48,29 +50,32 @@ auto BindMesh(GraphicsContext &context, VkCommandBuffer cmdBuffer,
   }
 
   {
-    std::lock_guard<std::mutex> lock(mesh.GetVertexBuffer()->mutex);
-
-    Barrier::UpdateUsage(context, *mesh.GetVertexBuffer(),
+    auto vertexBuffer = mesh.GetVertexBuffer();
+    Barrier::UpdateUsage(context, *vertexBuffer,
                          Barrier::ResourceState{
                              .stages = VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT,
                              .access = VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT,
                          });
-    std::vector<VkBuffer> vertexBuffers = {mesh.GetVertexBuffer()->handle};
-    std::vector<VkDeviceSize> offsets = {0};
 
-    vkCmdBindVertexBuffers(cmdBuffer, 0, 1, vertexBuffers.data(),
-                           offsets.data());
+    std::lock_guard<std::mutex> lock(vertexBuffer->mutex);
+    auto *vbo = vertexBuffer->handle;
+    VkDeviceSize offset = 0;
+
+    vkCmdBindVertexBuffers(cmdBuffer, 0, 1, &vbo, &offset);
   }
 
   if (mesh.GetIndexCount() > 0) {
-    Barrier::UpdateUsage(context, *mesh.GetIndexBuffer(),
+    auto indexBuffer = mesh.GetIndexBuffer();
+    Barrier::UpdateUsage(context, *indexBuffer,
                          Barrier::ResourceState{
                              .stages = VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT,
                              .access = VK_ACCESS_2_INDEX_READ_BIT,
                          });
 
-    vkCmdBindIndexBuffer(cmdBuffer, mesh.GetIndexBuffer()->handle, 0,
-                         mesh.GetIndexFormat());
+    std::lock_guard<std::mutex> lock(indexBuffer->mutex);
+    auto *ibo = indexBuffer->handle;
+
+    vkCmdBindIndexBuffer(cmdBuffer, ibo, 0, mesh.GetIndexFormat());
   }
 
   return Error::Success();
@@ -78,6 +83,8 @@ auto BindMesh(GraphicsContext &context, VkCommandBuffer cmdBuffer,
 
 auto Draw(GraphicsContext &context, const Mesh &mesh, uint32_t instanceCount)
     -> Error {
+  ZoneScoped;
+
   auto *commandBuffer = GetCommandBuffer();
 
   if (commandBuffer == nullptr) {
@@ -128,6 +135,7 @@ auto Draw(GraphicsContext &context, const Mesh &mesh, uint32_t instanceCount)
 
 auto Dispatch(GraphicsContext &context, const Math::Uvec3 &threadgroups)
     -> Error {
+  ZoneScoped;
   auto *commandBuffer = GetCommandBuffer();
 
   if (commandBuffer == nullptr) {
@@ -148,6 +156,7 @@ auto Dispatch(GraphicsContext &context, const Math::Uvec3 &threadgroups)
 auto DispatchIndirect(GraphicsContext &context,
                       const Ref<Buffer> &indirectBuffer, VkDeviceSize offset)
     -> Error {
+  ZoneScoped;
   auto *commandBuffer = GetCommandBuffer();
 
   if (commandBuffer == nullptr) {
@@ -169,6 +178,7 @@ auto DrawIndirect(GraphicsContext &context, const Mesh &mesh,
                   const Ref<Buffer> &indirectBuffer,
                   VkDeviceSize offset, // NOLINT
                   uint32_t count) -> Error {
+  ZoneScoped;
   auto *commandBuffer = GetCommandBuffer();
 
   if (commandBuffer == nullptr) {
@@ -217,6 +227,7 @@ auto DrawIndirect(GraphicsContext &context, const Mesh &mesh,
 
 auto Draw(GraphicsContext &context, const VkPrimitiveTopology &topology,
           uint32_t vertexCount, uint32_t instanceCount) -> Error { // NOLINT
+  ZoneScoped;
   auto *commandBuffer = GetCommandBuffer();
 
   if (commandBuffer == nullptr) {
@@ -240,6 +251,7 @@ auto Draw(GraphicsContext &context, const VkPrimitiveTopology &topology,
 auto Draw(GraphicsContext &context, const Ref<Buffer> &indexBuffer,
           const VkPrimitiveTopology &topology, uint32_t indexCount, // NOLINT
           uint32_t instanceCount) -> Error {
+  ZoneScoped;
   auto *commandBuffer = GetCommandBuffer();
 
   if (commandBuffer == nullptr) {

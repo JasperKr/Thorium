@@ -16,9 +16,11 @@ auto wrap_GetElementStride(lua_State *state) -> int;
 auto wrap_ClearBuffer(lua_State *state) -> int;
 auto wrap_GetFormat(lua_State *state) -> int;
 auto wrap_SetData(lua_State *state) -> int;
+auto wrap_CopyTo(lua_State *state) -> int;
+auto wrap_GetComponentOffset(lua_State *state) -> int;
+auto wrap_GetDebugName(lua_State *state) -> int;
 
 auto wrap_NewBuffer(lua_State *state) -> int;
-auto wrap_Release(lua_State *state) -> int;
 
 // NOLINTNEXTLINE
 static const luaL_Reg BufferLib[] = {
@@ -28,6 +30,9 @@ static const luaL_Reg BufferLib[] = {
     {"getFormat", wrap_GetFormat},
     {"setData", wrap_SetData},
     {"clear", wrap_ClearBuffer},
+    {"copyTo", wrap_CopyTo},
+    {"getComponentOffset", wrap_GetComponentOffset},
+    {"getDebugName", wrap_GetDebugName},
     {nullptr, nullptr} // terminate with nullptr
 };
 

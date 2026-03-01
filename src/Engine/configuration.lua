@@ -10,7 +10,7 @@ function Thorium.config(config)
 
   -- "adaptive" | "immediate" | "replace" | "enabled"
   ---@type Thorium.VsyncMode
-  config.window.vsync = "adaptive"
+  config.window.vsync = "enabled"
 
   config.filesystem.identity = "ConfiguredIdentity"
 

@@ -37,7 +37,8 @@ namespace Graphics::DynamicRendering {
 
 thread_local std::unordered_map<State, std::pair<VkPipeline, VkPipelineLayout>,
                                 StateHash>
-    PipelineCache = {};
+    PipelineCache{};
+thread_local std::vector<Ref<Shader::ShaderModule>> UsedShaderModules{};
 
 // Only used for cleanup
 std::mutex PipelinesMutex;
@@ -165,8 +166,8 @@ auto GetPipelineLayout(const GraphicsContext &context,
   return pipelineLayout;
 }
 
-auto FillDescriptorSets(GraphicsContext &context, Shader::ShaderModule *shader)
-    -> Error {
+auto FillDescriptorSets(const GraphicsContext &context,
+                        Shader::ShaderModule *shader) -> Error {
   ZoneScoped;
 
   // No need to fill if already done
@@ -223,13 +224,18 @@ auto FillDescriptorSets(GraphicsContext &context, Shader::ShaderModule *shader)
   return Error::Success();
 }
 
-auto BindDefaultTextures(GraphicsContext &context, Shader::ShaderModule *shader)
-    -> Error {
+auto BindDefaultTextures(const GraphicsContext &context,
+                         Shader::ShaderModule *shader) -> Error {
   ZoneScoped;
+  auto &state = shader->GetState();
+
   for (const auto &resource : shader->reflection.resources) {
     if (resource.IsSampler()) {
-
       const auto &samplerInfo = std::get<SamplerInfo>(resource.info);
+      auto key = SetBindingToSlot(samplerInfo.set, samplerInfo.binding);
+      if (state.boundTextures.contains(key)) {
+        continue;
+      }
 
       VkFormat format = Graphics::DefaultPixelFormat;
       Texture::TextureType type = Texture::TextureType::DEFAULT;
@@ -255,34 +261,25 @@ auto BindDefaultTextures(GraphicsContext &context, Shader::ShaderModule *shader)
       imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
       imageInfo.imageView = defaultTexture->view;
       imageInfo.sampler = defaultTexture->GetSampler(context);
-      VkWriteDescriptorSet descriptorWrite{};
-      descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-      descriptorWrite.dstSet =
-          shader->GetState().descriptorSets[samplerInfo.set];
 
-      if (descriptorWrite.dstSet == VK_NULL_HANDLE) {
-        return Error::Create(
-            "Descriptor set is null when binding default texture.");
-      }
-
+      Shader::DescriptorWriteInfo descriptorWrite{};
+      descriptorWrite.dstSet = samplerInfo.set;
       descriptorWrite.dstBinding = samplerInfo.binding;
       descriptorWrite.dstArrayElement = 0;
       descriptorWrite.descriptorType =
           VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
       descriptorWrite.descriptorCount = 1;
-      descriptorWrite.pImageInfo = &imageInfo;
-      {
-        ZoneScopedN("Update descriptor sets") std::lock_guard<std::mutex> lock(
-            Graphics::GraphicsContext::mutexes.device);
-        vkUpdateDescriptorSets(context.device, 1, &descriptorWrite, 0, nullptr);
-      }
+      descriptorWrite.pImageInfo = imageInfo;
+      descriptorWrite.imagePtr = defaultTexture.get();
+
+      state.pendingDescriptorWrites.emplace_back(descriptorWrite);
     }
   }
 
   return Error::Success();
 }
 
-auto CreateDescriptorSets(GraphicsContext &context,
+auto CreateDescriptorSets(const GraphicsContext &context,
                           Shader::ShaderModule *shader) -> Error {
   ZoneScoped;
 
@@ -812,7 +809,7 @@ inline auto SetupDefaultState(const GraphicsContext &context) -> Result<State> {
   return defaultState;
 }
 
-auto Load(GraphicsContext &context) -> Error {
+auto Load(const GraphicsContext &context) -> Error {
   assert(StateStack.size() == 0 &&
          "RenderTarget state stack is not empty on Load.");
 
@@ -826,7 +823,7 @@ auto Load(GraphicsContext &context) -> Error {
   return Error::Success();
 }
 
-auto Push(GraphicsContext &context) -> Error {
+auto Push(const GraphicsContext &context) -> Error {
   if (StateStack.size() == 0) {
     auto defaultStateResult = SetupDefaultState(context);
     if (Error::IsError(defaultStateResult)) {
@@ -841,7 +838,7 @@ auto Push(GraphicsContext &context) -> Error {
   return Error::Success();
 }
 
-auto Pop(GraphicsContext &context) -> Error {
+auto Pop(const GraphicsContext &context) -> Error {
   if (StateStack.size() <= 1 || StateStack.empty()) {
     return Error::Create("More pops than pushes.");
   }
@@ -851,7 +848,7 @@ auto Pop(GraphicsContext &context) -> Error {
   return Error::Success();
 }
 
-auto Reset(GraphicsContext &context) -> Error {
+auto Reset(const GraphicsContext &context) -> Error {
   StateStack.clear();
 
   auto defaultStateResult = SetupDefaultState(context);
@@ -866,14 +863,15 @@ auto Reset(GraphicsContext &context) -> Error {
   return Error::Success();
 }
 
-auto Shutdown(GraphicsContext &context) -> Error {
+auto Shutdown(const GraphicsContext &context) -> Error {
   StateStack.clear();
+  UsedShaderModules.clear();
   LastState = State();
 
   return Error::Success();
 }
 
-auto FlushCompute(GraphicsContext &context) -> Result<bool> {
+auto FlushCompute(const GraphicsContext &context) -> Result<bool> {
   ZoneScoped;
   auto &currentState = StateStack.back();
 
@@ -923,7 +921,7 @@ auto IsSwapchainTexture(const GraphicsContext &context,
   return false;
 }
 
-auto FlushGraphics(GraphicsContext &context) -> Result<bool> {
+auto FlushGraphics(const GraphicsContext &context) -> Result<bool> {
   ZoneScoped;
   auto &currentState = StateStack.back();
 
@@ -986,20 +984,19 @@ auto FlushGraphics(GraphicsContext &context) -> Result<bool> {
     vkCmdBindPipeline(commandBuffer, currentState.bindPoint,
                       pipelineResult.value().first);
   }
+  currentState.shader->ClearBindingCache();
 
   return true;
 }
 
-auto Flush(GraphicsContext &context) -> Result<bool> {
+auto Flush(const GraphicsContext &context) -> Result<bool> {
   ZoneScoped;
 
-  if (StateStack.back() == LastState && !Graphics::GetIsStateDirty() &&
-      GetIsCurrentlyRendering()) {
+  if (StateStack.back() == LastState && !Graphics::GetIsStateDirty()) {
     return false;
   }
 
   LastState = StateStack.back();
-  Graphics::GetIsStateDirty() = false;
 
   if (StateStack.back().bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS) {
     auto result = FlushGraphics(context);
@@ -1010,10 +1007,11 @@ auto Flush(GraphicsContext &context) -> Result<bool> {
     return result;
   }
 
+  Graphics::GetIsStateDirty() = false;
   return Error::Unexpected("Unsupported pipeline bind point in Flush.");
 }
 
-auto Destroy(GraphicsContext &context) -> void {
+auto Destroy(const GraphicsContext &context) -> void {
 
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
@@ -1037,7 +1035,7 @@ auto Destroy(GraphicsContext &context) -> void {
   }
 }
 
-inline auto BeginRendering(GraphicsContext &context) -> Error {
+inline auto BeginRendering(const GraphicsContext &context) -> Error {
   ZoneScoped;
   auto &currentState = StateStack.back();
 
@@ -1118,11 +1116,12 @@ inline auto BeginRendering(GraphicsContext &context) -> Error {
     } else {
       colorAttachments.emplace_back(attachmentInfo);
 
-      // Barrier::UpdateUsage(
-      //     context, *rendertarget->texture,
-      //     {.stages = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-      //      .access = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT |
-      //                VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT});
+      // TODO: Why is this commented and depth/stencil isn't?
+      Barrier::UpdateUsage(
+          context, *rendertarget->texture,
+          {.stages = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+           .access = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT |
+                     VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT});
     }
   }
 
@@ -1150,6 +1149,8 @@ inline auto BeginRendering(GraphicsContext &context) -> Error {
   }
 
   vkCmdBeginRendering(Graphics::GetCommandBuffer(), &renderingInfo);
+  currentState.shader->ClearBindingCache(); // :(
+  UsedShaderModules.emplace_back(currentState.shader);
 
   GetIsCurrentlyRendering() = true;
 
@@ -1161,7 +1162,7 @@ inline auto BeginRendering(GraphicsContext &context) -> Error {
   return Error::Success();
 }
 
-auto EndRendering(GraphicsContext &context) -> void {
+auto EndRendering(const GraphicsContext &context) -> void {
   if (GetIsCurrentlyRendering()) {
     if (Graphics::GetCommandBuffer() == VK_NULL_HANDLE) {
       PrintWarning(
@@ -1173,7 +1174,7 @@ auto EndRendering(GraphicsContext &context) -> void {
   }
 }
 
-auto InsertResourceBarriers(GraphicsContext &context) -> Error {
+auto InsertResourceBarriers(const GraphicsContext &context) -> Error {
   ZoneScoped;
 
   auto &currentState = StateStack.back();
@@ -1202,12 +1203,7 @@ auto InsertResourceBarriers(GraphicsContext &context) -> Error {
     case SLANG_RESOURCE_ACCESS_WRITE:
       access = VK_ACCESS_2_SHADER_WRITE_BIT;
       break;
-    case SLANG_RESOURCE_ACCESS_RASTER_ORDERED:
-    case SLANG_RESOURCE_ACCESS_APPEND:
-    case SLANG_RESOURCE_ACCESS_CONSUME:
-    case SLANG_RESOURCE_ACCESS_FEEDBACK:
-    case SLANG_RESOURCE_ACCESS_NONE:
-    case SLANG_RESOURCE_ACCESS_UNKNOWN:
+    default:
       break;
     }
 
@@ -1246,7 +1242,7 @@ auto InsertResourceBarriers(GraphicsContext &context) -> Error {
   return Error::Success();
 }
 
-auto PrepareRendering(GraphicsContext &context) -> Error {
+auto PrepareRendering(const GraphicsContext &context) -> Error {
   ZoneScoped;
 
   auto flushResult = Flush(context);
@@ -1264,7 +1260,7 @@ auto PrepareRendering(GraphicsContext &context) -> Error {
     return insertionResult;
   }
 
-  if (updatedState) {
+  if (updatedState || !GetIsCurrentlyRendering()) {
     if (currentState.bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS &&
         !GetIsCurrentlyRendering()) {
       auto beginResult = BeginRendering(context);
@@ -1290,10 +1286,11 @@ auto PrepareRendering(GraphicsContext &context) -> Error {
     vkCmdSetScissor(Graphics::GetCommandBuffer(), 0, 1, &scissor);
   }
 
+  Graphics::GetIsStateDirty() = false;
   return Error::Success();
 }
 
-auto FinalizeFrame(GraphicsContext &context) -> Error {
+auto FinalizeFrame(const GraphicsContext &context) -> Error {
   ZoneScoped;
   if (StateStack.size() != 1) {
     return Error::Create("More pushes than pops.");
@@ -1310,7 +1307,16 @@ auto FinalizeFrame(GraphicsContext &context) -> Error {
   return Error::Success();
 }
 
-auto BeginFrame(GraphicsContext &context) -> Error {
+auto UsedInPass(const Texture::Texture &texture) -> bool {
+  auto &state = StateStack.back();
+
+  return std::ranges::any_of(state.renderTargets,
+                             [&](const auto &target) -> auto {
+                               return target->texture->image == texture.image;
+                             });
+}
+
+auto BeginFrame(const GraphicsContext &context) -> Error {
   // Setup stack with new swapchain texture
 
   StateStack.clear();
@@ -1322,6 +1328,11 @@ auto BeginFrame(GraphicsContext &context) -> Error {
 
   StateStack.emplace_back(defaultStateResult.value());
   DrawnToSwapchain = false;
+
+  for (const auto &shader : UsedShaderModules) {
+    shader->ClearBindingCache(); // Clear binding cache of last command buffer
+  }
+  UsedShaderModules.clear();
 
   return Error::Success();
 }
@@ -1571,7 +1582,8 @@ auto GetBindPoint() -> VkPipelineBindPoint {
   return currentState.bindPoint;
 }
 
-auto Clear(GraphicsContext &context, const ClearInfo &clearInfo) -> Error {
+auto Clear(const GraphicsContext &context, const ClearInfo &clearInfo)
+    -> Error {
   ZoneScoped;
   auto &currentState = StateStack.back();
 

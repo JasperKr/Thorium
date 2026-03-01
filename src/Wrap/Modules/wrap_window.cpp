@@ -85,15 +85,11 @@ auto wrap_GetDimensions(lua_State *state) -> int {
   SDL_Window *window = ::Window::GetWindowContext()->window;
 
   Math::Uvec2 dimensions = ::Window::GetDimensions(window);
-  lua_newtable(state);
 
   lua_pushinteger(state, static_cast<lua_Integer>(dimensions.x));
-  lua_setfield(state, -2, "width");
-
   lua_pushinteger(state, static_cast<lua_Integer>(dimensions.y));
-  lua_setfield(state, -2, "height");
 
-  return 1;
+  return 2;
 }
 auto wrap_SetDimensions(lua_State *state) -> int {
   SDL_Window *window = ::Window::GetWindowContext()->window;

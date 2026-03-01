@@ -410,17 +410,16 @@ struct FormatDefault2D {
 };
 
 // NOLINTNEXTLINE; Cache quad mesh to avoid recreating it every frame
-thread_local static Ref<Mesh> QuadMeshCache;
+thread_local Ref<Mesh> QuadMeshCache;
 
 auto ShutdownWrapGraphics() -> void { QuadMeshCache.reset(); };
 
 inline auto GetQuadMesh(GraphicsContext &context, const VkRect2D size,
                         Color color) -> Result<Ref<Mesh>> {
+  ZoneScoped;
   // Create a quad mesh covering the given size NOLINTNEXTLINE
-  static std::vector<FormatDefault2D> vertices = {};
-  static std::vector<uint32_t> indices = {0, 1, 2, 2, 3, 0};
-
-  vertices.resize(4);
+  thread_local std::vector<FormatDefault2D> vertices{4};
+  thread_local std::vector<uint32_t> indices = {0, 1, 2, 2, 3, 0};
 
   vertices[0].position[0] = static_cast<float>(size.offset.x);
   vertices[0].position[1] = static_cast<float>(size.offset.y);
@@ -450,7 +449,7 @@ inline auto GetQuadMesh(GraphicsContext &context, const VkRect2D size,
   vertices[3].texCoord[1] = 1.0F;
   vertices[3].color = color.Pack();
 
-  VertexFormat vertexFormat({
+  static VertexFormat vertexFormat({
       VertexComponent{
           .name = "Position",
           .location = 0,
@@ -477,8 +476,6 @@ inline auto GetQuadMesh(GraphicsContext &context, const VkRect2D size,
                                      vertices.size());
 
   assert(sizeof(FormatDefault2D) == vertexFormat.GetBindings()[0].stride);
-
-  DynamicRendering::EndRendering(context);
 
   if (QuadMeshCache.get() == nullptr) {
     auto meshResult = Mesh::Create(context, vertexFormat, span);
@@ -511,6 +508,7 @@ inline auto GetQuadMesh(GraphicsContext &context, const VkRect2D size,
 
 // texture | mesh
 auto wrap_Draw(lua_State *state) -> int {
+  ZoneScoped;
   auto *ctx = GetCurrentGraphicsContext();
 
   Ref<Mesh> mesh;
@@ -570,6 +568,7 @@ auto wrap_Draw(lua_State *state) -> int {
 }
 
 auto wrap_Dispatch(lua_State *state) -> int {
+  ZoneScoped;
   auto *ctx = GetCurrentGraphicsContext();
 
   Math::Uvec3 threadgroups{1, 1, 1};
@@ -587,6 +586,7 @@ auto wrap_Dispatch(lua_State *state) -> int {
 }
 
 auto wrap_DispatchIndirect(lua_State *state) -> int {
+  ZoneScoped;
   auto *ctx = GetCurrentGraphicsContext();
 
   auto *bufferHandle = LuaWrap::ObjectFromLua<Graphics::Buffer>(state, 1);
@@ -603,6 +603,7 @@ auto wrap_DispatchIndirect(lua_State *state) -> int {
 }
 
 auto wrap_DrawIndirect(lua_State *state) -> int {
+  ZoneScoped;
   auto *ctx = GetCurrentGraphicsContext();
 
   Ref<Mesh> mesh;
@@ -636,6 +637,7 @@ auto wrap_DrawIndirect(lua_State *state) -> int {
 // Or: Color (attachment 1, vararg), value (depth), value (stencil)
 // Or: {[1..]: Color (attachment), depth=value, stencil=value}
 auto wrap_Clear(lua_State *state) -> int {
+  ZoneScoped;
   auto *ctx = GetCurrentGraphicsContext();
 
   DynamicRendering::ClearInfo clearInfo{};

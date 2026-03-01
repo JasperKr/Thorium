@@ -18,10 +18,10 @@ public:
   static auto Create(GraphicsContext &context)
       -> Result<FrameUniformBufferObject>;
 
-  void SetData(Graphics::GraphicsContext &context,
+  void SetData(const Graphics::GraphicsContext &context,
                const std::span<const uint8_t> &data, uint32_t atOffset);
 
-  auto Flush(Graphics::GraphicsContext &context) -> Result<bool>;
+  auto Flush(const Graphics::GraphicsContext &context) -> Result<bool>;
 
   auto ScheduleDestroy() -> void { buffer.reset(); }
 
@@ -33,7 +33,7 @@ public:
   [[nodiscard]] auto GetBuffer() const -> Ref<Graphics::Buffer> {
     return buffer;
   }
-  auto NewFrame(Graphics::GraphicsContext &context) -> void { offset = 0; }
+  auto NewFrame() -> void { offset = 0; }
 
 private:
   Ref<Graphics::Buffer> buffer;

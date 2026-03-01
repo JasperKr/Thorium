@@ -2,6 +2,7 @@
 #include "Modules/console.hpp"
 #include "Wrap/Modules/Editor/wrap_imgui.hpp"
 #include "Wrap/Modules/wrap_data.hpp"
+#include "Wrap/Modules/wrap_math.hpp"
 #include "Wrap/Modules/wrap_mouse.hpp"
 #include "Wrap/Modules/wrap_thread.hpp"
 #include "Wrap/Modules/wrap_window.hpp"
@@ -499,6 +500,7 @@ static const luaL_Reg ThoriumModules[] = {
     {"mouse", Wrap::Mouse::luaopen_mouse},
     {"gui", Wrap::Imgui::luaopen_gui},
     {"window", Wrap::Window::luaopen_window},
+    {"math", Wrap::Math::luaopen_engine_math},
     {nullptr, nullptr},
 };
 

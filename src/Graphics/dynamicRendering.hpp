@@ -224,8 +224,7 @@ struct State {
            depthCompareOp == other.depthCompareOp &&
            stencilTestEnable == other.stencilTestEnable &&
            polygonMode == other.polygonMode && lineWidth == other.lineWidth &&
-           shader.get() == other.shader.get() &&
-           vertexFormat == other.vertexFormat &&
+           *shader == *other.shader && vertexFormat == other.vertexFormat &&
            primitiveTopology == other.primitiveTopology;
   }
 };
@@ -329,26 +328,28 @@ extern thread_local std::unordered_map<
     State, std::pair<VkPipeline, VkPipelineLayout>,
     StateHash> // NOLINTNEXTLINE Pipeline cacheBegunRendering
     PipelineCache;
+extern thread_local std::vector<Ref<Shader::ShaderModule>>
+    UsedShaderModules; // NOLINT
 
-auto FinalizeFrame(GraphicsContext &context) -> Error;
-auto BeginFrame(GraphicsContext &context) -> Error;
+auto FinalizeFrame(const GraphicsContext &context) -> Error;
+auto BeginFrame(const GraphicsContext &context) -> Error;
 
-auto Push(GraphicsContext &context) -> Error;
-auto Pop(GraphicsContext &context) -> Error;
-auto Reset(GraphicsContext &context) -> Error;
-auto FlushGraphics(GraphicsContext &context) -> Result<bool>;
-auto Load(GraphicsContext &context) -> Error;
+auto Push(const GraphicsContext &context) -> Error;
+auto Pop(const GraphicsContext &context) -> Error;
+auto Reset(const GraphicsContext &context) -> Error;
+auto FlushGraphics(const GraphicsContext &context) -> Result<bool>;
+auto Load(const GraphicsContext &context) -> Error;
 
 // Destroys all created pipelines and layouts
-auto Destroy(GraphicsContext &context) -> void;
+auto Destroy(const GraphicsContext &context) -> void;
 
 // Shuts down the local dynamic rendering module
-auto Shutdown(GraphicsContext &context) -> Error;
+auto Shutdown(const GraphicsContext &context) -> Error;
 
-auto PrepareRendering(GraphicsContext &context) -> Error;
+auto PrepareRendering(const GraphicsContext &context) -> Error;
 
-auto EndRendering(GraphicsContext &context) -> void;
-auto BeginRendering(GraphicsContext &context) -> Error;
+auto EndRendering(const GraphicsContext &context) -> void;
+auto BeginRendering(const GraphicsContext &context) -> Error;
 
 auto SetDepthMode(bool enable, bool writeEnable, VkCompareOp compareOp) -> void;
 auto SetCullMode(VkCullModeFlags cullMode) -> void;
@@ -388,7 +389,9 @@ struct ClearInfo {
   bool clearStencil = false;
 };
 
-auto Clear(GraphicsContext &context, const ClearInfo &clearInfo) -> Error;
+auto Clear(const GraphicsContext &context, const ClearInfo &clearInfo) -> Error;
+
+auto UsedInPass(const Texture::Texture &texture) -> bool;
 
 } // namespace DynamicRendering
 } // namespace Graphics

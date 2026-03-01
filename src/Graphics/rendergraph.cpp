@@ -3,7 +3,6 @@
 #include "Modules/error.hpp"
 #include "Modules/image.hpp"
 #include "graphics.hpp"
-#include "shader.hpp"
 #include "texture.hpp"
 #include "tl/expected.hpp"
 #include <unordered_map>

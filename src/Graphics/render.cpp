@@ -102,8 +102,7 @@ void TransitionColorToPresent(VkCommandBuffer cmd,
   VkImageMemoryBarrier2 barrier2 = {};
   barrier2.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
   barrier2.srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
-  barrier2.srcAccessMask = Texture::GetAccessFlagsForUsage(
-      texture->lastUsage, texture->currentLayout);
+  barrier2.srcAccessMask = VK_ACCESS_2_NONE;
   barrier2.dstStageMask = VK_PIPELINE_STAGE_2_NONE;
   barrier2.dstAccessMask = 0;
   barrier2.oldLayout = texture->currentLayout;
@@ -675,7 +674,7 @@ auto Present(Graphics::GraphicsContext &context) -> Error {
     return error;
   }
 
-  GetGlobalUniformBuffer(context.frameIndex).NewFrame(context);
+  GetGlobalUniformBuffer(context.frameIndex).NewFrame();
 
   return Error::Success();
 }

@@ -1,7 +1,6 @@
 #include "buffer.hpp"
 #include "Graphics/barrier.hpp"
 #include "Graphics/graphics.hpp"
-#include "Graphics/graphicsState.hpp"
 #include "Graphics/resource.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
@@ -41,7 +40,7 @@ inline std::atomic<uint64_t> currentTimelineValue = 0;
 
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
-auto LoadBufferModule(GraphicsContext &context) -> Error {
+auto LoadBufferModule(const GraphicsContext &context) -> Error {
   VkSemaphoreTypeCreateInfo timelineInfo = {
       .sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
       .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
@@ -66,7 +65,7 @@ auto LoadBufferModule(GraphicsContext &context) -> Error {
   return Error::Success();
 }
 
-auto UnloadLocalBufferModule(GraphicsContext &context) -> Error {
+auto UnloadLocalBufferModule(const GraphicsContext &context) -> Error {
   StagingBuffers.clear();
 
   UploadBuffers.clear();
@@ -86,7 +85,7 @@ auto UnloadBufferModule(const GraphicsContext &context) -> Error {
 }
 
 // To be called at the end of each frame that uses uploads
-auto FlushBufferUploads(GraphicsContext &context) -> Error {
+auto FlushBufferUploads(const GraphicsContext &context) -> Error {
   // Check staging buffers for completed uploads
   uint64_t completedValue = 0;
   {
@@ -125,7 +124,7 @@ auto FlushBufferUploads(GraphicsContext &context) -> Error {
   return Error::Success();
 }
 
-auto Buffer::MapMemory(GraphicsContext &context) -> Error {
+auto Buffer::MapMemory(const GraphicsContext &context) -> Error {
   if (persistentMapping) {
     if (mappedData != nullptr) {
       return Error::Success();
@@ -147,7 +146,7 @@ auto Buffer::MapMemory(GraphicsContext &context) -> Error {
   return Error::Success();
 }
 
-auto Buffer::UnmapMemory(GraphicsContext &context) -> void {
+auto Buffer::UnmapMemory(const GraphicsContext &context) -> void {
   if (persistentMapping) {
     return;
   }
@@ -159,7 +158,7 @@ auto Buffer::UnmapMemory(GraphicsContext &context) -> void {
   mappedData = nullptr;
 }
 
-auto Buffer::UploadLarge(GraphicsContext &context,
+auto Buffer::UploadLarge(const GraphicsContext &context,
                          std::span<const uint8_t> data, // NOLINTNEXTLINE
                          VkDeviceSize offset, VkDeviceSize size) const
     -> Error {
@@ -241,7 +240,7 @@ auto Buffer::UploadLarge(GraphicsContext &context,
   return Error::Success();
 }
 
-auto Buffer::UploadRing(GraphicsContext &context,
+auto Buffer::UploadRing(const GraphicsContext &context,
                         std::span<const uint8_t> data, // NOLINTNEXTLINE
                         VkDeviceSize offset, VkDeviceSize size) const -> Error {
 
@@ -321,7 +320,7 @@ auto Buffer::UploadRing(GraphicsContext &context,
   return Error::Success();
 }
 
-auto Buffer::Upload(GraphicsContext &context,
+auto Buffer::Upload(const GraphicsContext &context,
                     std::span<const uint8_t> data, // NOLINTNEXTLINE
                     VkDeviceSize offset, VkDeviceSize size) -> Error {
 
@@ -357,10 +356,6 @@ auto Buffer::Upload(GraphicsContext &context,
     return Error::Success();
   }
 
-  if (GetIsCurrentlyRendering()) {
-    return Error::Create("Cannot upload to buffer while rendering.");
-  }
-
   if (uploadSize > LargeUploadThreshold) {
     auto uploadResult = UploadLarge(context, data, offset, size);
     if (Error::IsError(uploadResult)) {
@@ -376,8 +371,8 @@ auto Buffer::Upload(GraphicsContext &context,
   return Error::Success();
 }
 
-auto Buffer::Create(GraphicsContext &context, const BufferCreationInfo &info)
-    -> Result<Ref<Buffer>> {
+auto Buffer::Create(const GraphicsContext &context,
+                    const BufferCreationInfo &info) -> Result<Ref<Buffer>> {
   if (info.size == 0) {
     return Error::Unexpected("Cannot create buffer with size 0.");
   }
@@ -386,9 +381,9 @@ auto Buffer::Create(GraphicsContext &context, const BufferCreationInfo &info)
     return Error::Unexpected("Cannot create buffer with size VK_WHOLE_SIZE.");
   }
 
-  auto debugname = Graphics::ContextDebugname + "_" + info.debugName;
-
   auto buffer = Ref<Buffer>::Make();
+
+  buffer->debugName = info.debugName;
 
   buffer->isStagingBuffer = info.stagingBuffer;
   buffer->persistentMapping = info.persistentMapping;
@@ -418,13 +413,13 @@ auto Buffer::Create(GraphicsContext &context, const BufferCreationInfo &info)
     }
   }
 
-  if (!debugname.empty()) {
+  if (!buffer->debugName.empty()) {
     VkDebugUtilsObjectNameInfoEXT debugNameInfo{
         .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
         .objectType = VK_OBJECT_TYPE_BUFFER,
         .objectHandle = static_cast<uint64_t>(
             reinterpret_cast<uintptr_t>(buffer->handle)), // NOLINT
-        .pObjectName = debugname.c_str(),
+        .pObjectName = buffer->debugName.c_str(),
     };
     auto result = Error::Create(
         vkSetDebugUtilsObjectNameEXT(context.device, &debugNameInfo));
@@ -438,7 +433,7 @@ auto Buffer::Create(GraphicsContext &context, const BufferCreationInfo &info)
           Graphics::GraphicsContext::mutexes.vmaAllocator);
 
       vmaSetAllocationName(context.vmaAllocator, buffer->memory,
-                           debugname.c_str());
+                           buffer->debugName.c_str());
     }
   } else {
     PrintWarning("No debug name set for buffer.");
@@ -479,7 +474,7 @@ auto Buffer::Create(GraphicsContext &context, const BufferCreationInfo &info)
   return buffer;
 }
 
-auto Buffer::SetData(GraphicsContext &context,
+auto Buffer::SetData(const GraphicsContext &context,
                      const std::span<const uint8_t> &data, // NOLINTNEXTLINE
                      VkDeviceSize offset, VkDeviceSize size) -> Error {
 
@@ -489,6 +484,54 @@ auto Buffer::SetData(GraphicsContext &context,
   }
 
   MarkUse();
+
+  return Error::Success();
+}
+
+auto Buffer::CopyTo(const GraphicsContext &context,
+                    Buffer &dstBuffer, // NOLINTNEXTLINE
+                    size_t srcIndex, size_t dstIndex, size_t size) -> Error {
+  if (((usage)&VK_BUFFER_USAGE_TRANSFER_SRC_BIT) == 0) {
+    return Error::Create(
+        "Source buffer was not created with TRANSFER_SRC usage "
+        "flag for copy.");
+  }
+
+  if (((dstBuffer.usage) & VK_BUFFER_USAGE_TRANSFER_DST_BIT) == 0) {
+    return Error::Create("Destination buffer was not created with TRANSFER_DST "
+                         "usage flag for copy.");
+  }
+
+  auto *commandBuffer = GetCommandBuffer();
+
+  if (commandBuffer == nullptr) {
+    return Error::Create("Failed to get command buffer for buffer copy.");
+  }
+
+  if (srcIndex + size > this->size) {
+    return Error::Create("Source index and size exceed buffer size.");
+  }
+
+  if (dstIndex + size > dstBuffer.size) {
+    return Error::Create("Destination index and size exceed buffer size.");
+  }
+
+  if (this == &dstBuffer) { // Check for overlapping self-copies
+    if ((srcIndex < dstIndex && srcIndex + size > dstIndex) ||
+        (dstIndex < srcIndex && dstIndex + size > srcIndex)) {
+      return Error::Create("source and destination regions "
+                           "overlap when copying within the same buffer.");
+    }
+  }
+
+  VkBufferCopy copyRegion = {};
+  copyRegion.srcOffset = srcIndex;
+  copyRegion.dstOffset = dstIndex;
+  copyRegion.size = size;
+  vkCmdCopyBuffer(commandBuffer, handle, dstBuffer.handle, 1, &copyRegion);
+
+  MarkUse();
+  dstBuffer.MarkUse();
 
   return Error::Success();
 }
@@ -506,7 +549,7 @@ auto Buffer::MarkUse() -> void {
 }
 
 // NOLINTNEXTLINE
-auto Buffer::Clear(GraphicsContext &context, uint32_t value,
+auto Buffer::Clear(const GraphicsContext &context, uint32_t value,
                    VkDeviceSize offset, VkDeviceSize size) -> Error {
   auto *commandBuffer = GetCommandBuffer();
 

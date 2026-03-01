@@ -1,11 +1,11 @@
 #include "mesh.hpp"
 #include <algorithm>
 #include <mutex>
+#include <public/tracy/Tracy.hpp>
 #include <string>
 #include <sys/types.h>
 
 #include "Graphics/barrier.hpp"
-#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "buffer.hpp"
@@ -34,6 +34,7 @@ static auto VertexFormatSize(VertexFormat &format, uint32_t binding)
 auto Mesh::UploadVertices(GraphicsContext &context,
                           const std::span<uint8_t> &vertices, uint64_t offset)
     -> Error {
+  ZoneScoped;
 
   Barrier::UpdateUsage(context, *VertexBuffer,
                        Barrier::ResourceState{
@@ -49,6 +50,7 @@ auto Mesh::UploadVertices(GraphicsContext &context,
 auto Mesh::UploadIndices(GraphicsContext &context,
                          const std::span<uint8_t> &indices, uint64_t offset,
                          VkIndexType format) -> Error {
+  ZoneScoped;
   Barrier::UpdateUsage(context, *IndexBuffer,
                        Barrier::ResourceState{
                            .stages = VK_PIPELINE_STAGE_2_TRANSFER_BIT,

@@ -33,9 +33,7 @@
 namespace Graphics::Shader {
 
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
-std::mutex BoundStatesMutex;
-std::unordered_map<uint32_t,
-                   std::unordered_map<const struct ShaderModule *, BoundState>>
+thread_local std::unordered_map<const struct ShaderModule *, BoundState>
     BoundStates;
 static slang::IGlobalSession *GlobalSlangSession = nullptr;
 
@@ -600,7 +598,7 @@ auto ShaderModule::GetUniform(const ResourceKey &key) const
   return *info;
 }
 
-auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
+auto ShaderModule::Send(const GraphicsContext &context, const ResourceKey &key,
                         const std::span<const uint8_t> &data) -> Error {
   ZoneScopedN("ShaderModule::Send data span");
 
@@ -608,7 +606,6 @@ auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
     PrintDebug("Checking push buffer {} for key: {}...",
                pushBuffer.GetLayout().name, ResourceKeyToString(key));
     if (pushBuffer.ContainsUniform(key.begin(), key.end())) {
-      Graphics::SetDirtyState();
       return pushBuffer.SetData(key, data);
     }
   }
@@ -633,12 +630,11 @@ auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
 
   // NOLINTNEXTLINE, pointer arithmetic
   memcpy(globalUniforms.data() + offset, data.data(), data.size());
-  Graphics::SetDirtyState();
 
   return Error::Success();
 }
 
-auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
+auto ShaderModule::Send(const GraphicsContext &context, const ResourceKey &key,
                         StructuredBuffer *buffer) -> Error {
   ZoneScopedN("ShaderModule::Send structured buffer");
 
@@ -665,7 +661,6 @@ auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
       vkBufferInfo.range = bufferHandle->size;
 
       DescriptorWriteInfo descriptorWrite{};
-      descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
       descriptorWrite.dstSet = bufferInfo.set;
       descriptorWrite.dstBinding = bufferInfo.binding;
       descriptorWrite.dstArrayElement = 0;
@@ -695,8 +690,6 @@ auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
 
       GetState().pendingDescriptorWrites.emplace_back(descriptorWrite);
 
-      Graphics::SetDirtyState();
-
       return Error::Success();
     }
   }
@@ -704,7 +697,7 @@ auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
   return Error::Create("Buffer not found in shader reflection: " + name);
 }
 
-auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
+auto ShaderModule::Send(const GraphicsContext &context, const ResourceKey &key,
                         Graphics::Texture::Texture *texture) -> Error {
   ZoneScopedN("ShaderModule::Send texture");
 
@@ -716,16 +709,20 @@ auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
     return Error::Create("Texture has no valid image view.");
   }
 
+  auto &state = GetState();
+
   for (const auto &resource : reflection.resources) {
     if (!std::holds_alternative<SamplerInfo>(resource.info)) {
       continue;
     }
 
     const auto &samplerInfo = std::get<SamplerInfo>(resource.info);
-    if (resource.name == *key.begin()) {
+    if (resource.name == *key.begin()) { // TODO: Fix this search
       auto key = SetBindingToSlot(samplerInfo.set, samplerInfo.binding);
 
-      GetState().boundTextures[key] = texture;
+      if (state.boundTextures[key] == texture) {
+        return Error::Success();
+      }
 
       // Create descriptor set for this texture
       VkDescriptorImageInfo imageInfo{};
@@ -734,7 +731,6 @@ auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
       imageInfo.sampler = texture->GetSampler(context);
 
       DescriptorWriteInfo descriptorWrite{};
-      descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
       descriptorWrite.dstSet = samplerInfo.set;
       descriptorWrite.dstBinding = samplerInfo.binding;
       descriptorWrite.dstArrayElement = 0;
@@ -744,14 +740,12 @@ auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
       descriptorWrite.pImageInfo = imageInfo;
       descriptorWrite.imagePtr = texture;
 
-      GetState().pendingDescriptorWrites.emplace_back(descriptorWrite);
-      GetState().pendingImageTransitions.emplace_back(ImageTransitionInfo{
+      state.pendingDescriptorWrites.emplace_back(descriptorWrite);
+      state.pendingImageTransitions.emplace_back(ImageTransitionInfo{
           .texture = texture,
           .newUsage = Texture::TextureUsage::Sampler,
           .newStage = ShaderStageFlagsToPipelineStageFlags(resource.stages),
       });
-
-      Graphics::SetDirtyState();
 
       return Error::Success();
     }
@@ -774,7 +768,7 @@ auto ShaderModule::hash() const -> size_t {
   return hasher.get();
 }
 
-auto ShaderModule::FlushGlobals(GraphicsContext &context,
+auto ShaderModule::FlushGlobals(const GraphicsContext &context,
                                 VkPipelineLayout layout,
                                 VkPipelineStageFlags2 dstStage) -> Error {
   ZoneScoped;
@@ -828,7 +822,8 @@ auto ShaderModule::FlushGlobals(GraphicsContext &context,
   return Error::Success();
 }
 
-auto ShaderModule::FlushBuffers(GraphicsContext &context,
+// NOLINTNEXTLINE
+auto ShaderModule::FlushBuffers(const GraphicsContext &context,
                                 VkPipelineLayout layout,
                                 VkPipelineStageFlags2 dstStage) -> Error {
   ZoneScoped;
@@ -845,77 +840,94 @@ auto ShaderModule::FlushBuffers(GraphicsContext &context,
     return updateResult;
   }
 
-  std::vector<VkWriteDescriptorSet> writes;
-  std::unordered_set<uint64_t> updatedSets;
+  auto &state = GetState();
 
-  auto writeCount =
-      static_cast<int32_t>(GetState().pendingDescriptorWrites.size());
-  writes.reserve(writeCount);
+  thread_local std::vector<VkWriteDescriptorSet> writes;
+  thread_local std::unordered_set<uint64_t> updatedSets;
+  writes.clear();
+  updatedSets.clear();
 
-  // Loop over writes in reverse to prioritize later writes
-  for (int32_t i = writeCount - 1; i >= 0; i--) {
-    auto &write = GetState().pendingDescriptorWrites.at(i);
+  auto writeCount = static_cast<int32_t>(state.pendingDescriptorWrites.size());
+  writes.resize(writeCount);
 
-    if (write.bufferPtr == nullptr && write.imagePtr == nullptr) {
-      return Error::Create("Descriptor write has no buffer or image info set.");
+  auto index = 0;
+  { // Loop over writes in reverse to prioritize later writes
+    ZoneScopedN("Fill descriptor writes");
+    for (int32_t i = writeCount - 1; i >= 0; i--) {
+      auto &write = state.pendingDescriptorWrites.at(i);
+
+      if (write.bufferPtr == nullptr && write.imagePtr == nullptr) {
+        return Error::Create(
+            "Descriptor write has no buffer or image info set.");
+      }
+
+      uint64_t key = write.dstSet;
+      key |= (static_cast<uint64_t>(write.dstBinding) << 32U); // NOLINT
+      if (updatedSets.contains(key)) {
+        continue;
+      }
+      updatedSets.insert(key);
+
+      auto &dstWrite = writes[index];
+      dstWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+      dstWrite.pNext = nullptr;
+      dstWrite.dstSet = state.descriptorSets.at(write.dstSet);
+      dstWrite.dstBinding = write.dstBinding;
+      dstWrite.dstArrayElement = write.dstArrayElement;
+      dstWrite.descriptorCount = write.descriptorCount;
+      dstWrite.descriptorType = write.descriptorType;
+      dstWrite.pImageInfo = &write.pImageInfo;
+      dstWrite.pBufferInfo = &write.pBufferInfo;
+      dstWrite.pTexelBufferView = &write.pTexelBufferView;
+
+      if (writes[index++].dstSet == VK_NULL_HANDLE) {
+        return Error::Create(
+            "Descriptor set not found in shader descriptor sets.");
+      }
     }
 
-    uint64_t slot = SetBindingToSlot(write.dstSet, write.dstBinding);
-    if (updatedSets.contains(slot)) {
-      continue;
-    }
-    updatedSets.insert(slot);
+    for (auto &transition : GetState().pendingImageTransitions) {
+      Error result;
 
-    writes.emplace_back(write.GetWrite(GetState().descriptorSets));
+      switch (transition.newUsage) {
+      case Texture::TextureUsage::Sampler:
+        result = transition.texture->UseAsSampler(context, transition.newStage);
+        break;
+      case Texture::TextureUsage::Storage:
+        result = transition.texture->UseAsStorage(context, transition.newStage);
+        break;
+      case Texture::TextureUsage::Attachment:
+        result = transition.texture->UseAsAttachment(context);
+        break;
+      case Texture::TextureUsage::TransferSrc:
+        result = transition.texture->UseAsTransferSrc(context);
+        break;
+      case Texture::TextureUsage::TransferDst:
+        result = transition.texture->UseAsTransferDst(context);
+        break;
+      case Texture::TextureUsage::PresentSrc:
+        result = transition.texture->UseAsPresentSrc(context);
+        break;
+      case Texture::TextureUsage::Unknown:
+        result = Error::Create(
+            "Cannot transition image with unknown usage in shader flush.");
+        break;
+      }
 
-    if (writes.back().dstSet == VK_NULL_HANDLE) {
-      return Error::Create(
-          "Descriptor set not found in shader descriptor sets.");
+      if (Error::IsError(result)) {
+        return result;
+      }
     }
   }
-
-  for (auto &transition : GetState().pendingImageTransitions) {
-    ZoneScopedN("Update texture usage");
-    Error result;
-
-    switch (transition.newUsage) {
-    case Texture::TextureUsage::Sampler:
-      result = transition.texture->UseAsSampler(context, transition.newStage);
-      break;
-    case Texture::TextureUsage::Storage:
-      result = transition.texture->UseAsStorage(context, transition.newStage);
-      break;
-    case Texture::TextureUsage::Attachment:
-      result = transition.texture->UseAsAttachment(context);
-      break;
-    case Texture::TextureUsage::TransferSrc:
-      result = transition.texture->UseAsTransferSrc(context);
-      break;
-    case Texture::TextureUsage::TransferDst:
-      result = transition.texture->UseAsTransferDst(context);
-      break;
-    case Texture::TextureUsage::PresentSrc:
-      result = transition.texture->UseAsPresentSrc(context);
-      break;
-    case Texture::TextureUsage::Unknown:
-      result = Error::Create(
-          "Cannot transition image with unknown usage in shader flush.");
-      break;
-    }
-
-    if (Error::IsError(result)) {
-      return result;
-    }
-  }
-  GetState().pendingImageTransitions.clear();
+  state.pendingImageTransitions.clear();
 
   {
     ZoneScopedN("Update descriptor sets");
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    vkUpdateDescriptorSets(context.device, static_cast<uint32_t>(writes.size()),
+    vkUpdateDescriptorSets(context.device, static_cast<uint32_t>(index),
                            writes.data(), 0, nullptr);
   }
-  GetState().pendingDescriptorWrites.clear();
+  state.pendingDescriptorWrites.clear();
 
   auto *commandBuffer = GetCommandBuffer();
 
@@ -936,10 +948,11 @@ auto ShaderModule::FlushBuffers(GraphicsContext &context,
     }
   }
 
-  std::vector<VkDescriptorSet> descriptorSetList;
-  descriptorSetList.reserve(this->GetState().descriptorSets.size());
+  thread_local std::vector<VkDescriptorSet> descriptorSetList;
+  descriptorSetList.clear();
+  descriptorSetList.reserve(state.descriptorSets.size());
   uint32_t set = 0;
-  for (const auto &setPair : this->GetState().descriptorSets) {
+  for (const auto &setPair : state.descriptorSets) {
     // I assume slang will always output sets in order
     // Unless the user manually assigns set numbers out of order
     // In that case, don't, lol

@@ -1,23 +1,30 @@
 #pragma once
 
 #include "Graphics/reflect.hpp"
+#include "Modules/error.hpp"
 #include <cassert>
+#include <cstddef>
 #include <cstdint>
+#include <string>
+#include <variant>
 #include <vector>
 #define VK_NO_PROTOTYPES
-#include "format.hpp"
 #include "vulkan/vulkan_core.h"
 
 namespace Graphics {
 
-struct BufferComponent {
-  ResourceKey name;
-  uint32_t offset;
-  VkFormat format;
+using BufferTreeComponent = std::variant<VkFormat, struct BufferFormat>;
+
+struct BufferComponent;
+
+enum class Standard : uint8_t {
+  Std430,
+  Std140,
 };
 
 struct BufferFormat {
-  explicit BufferFormat(std::vector<BufferComponent> components);
+  explicit BufferFormat(std::vector<BufferComponent> components,
+                        Standard std = Standard::Std430);
 
   BufferFormat() = default;
   BufferFormat(const BufferFormat &other) = default;
@@ -26,14 +33,38 @@ struct BufferFormat {
   auto operator=(BufferFormat &&other) noexcept -> BufferFormat & = default;
   ~BufferFormat() = default;
 
+private:
+  auto FlattenComponentTree() -> void;
+
+  auto CalculateStride(Standard std) -> void;
+
+  [[nodiscard]] auto FindComponent(ResourceKey::const_iterator iterator,
+                                   ResourceKey::const_iterator end) const
+      -> std::optional<BufferComponent>;
+
 public:
+  [[nodiscard]] auto GetVkComponents() -> const std::vector<VkFormat> & {
+    if (FlatComponents.empty()) {
+      FlattenComponentTree();
+    }
+
+    return FlatComponents;
+  }
+
   [[nodiscard]] auto GetComponents() const
       -> const std::vector<BufferComponent> & {
     return Components;
   }
 
-  // Assumes components are tightly packed or padded correctly
-  [[nodiscard]] auto GetSize() const -> size_t;
+  // Get the calculated stride of the format
+  [[nodiscard]] auto GetStride() const -> size_t { return stride; }
+
+  // Get the offset of a component by name
+  [[nodiscard]] auto GetComponentOffset(const ResourceKey &name) const
+      -> Result<size_t>;
+
+  // Get the offset of a component by index
+  [[nodiscard]] auto GetComponentOffset(size_t index) const -> size_t;
 
   auto operator==(const BufferFormat &other) const -> bool;
 
@@ -46,16 +77,36 @@ public:
   // Query the format at a given component offset
   // Useful for writing one component at a time
   // for example:
-  // vec4, uvec4, float, uint will give:
-  // vec4, vec4, vec4, vec4, uvec4, uvec4, uvec4, uvec4, float, uint
-  [[nodiscard]] auto FormatAt(size_t componentOffset) const -> VkFormat {
-    componentOffset %= FormatsAtOffsets.size();
-    return Components[componentOffset].format;
-  }
+  // vec4, uvec4, float, uint, uint8[2] will give:
+  // vec4, vec4, vec4, vec4, uvec4, uvec4, uvec4, uvec4, float, uint, uint8, uint8
+  [[nodiscard]] auto FormatAt(size_t componentOffset) -> VkFormat;
+
+  [[nodiscard]] auto ToString(int indentation = 0) const -> std::string;
 
 private:
+  // Definition tree
   std::vector<BufferComponent> Components;
-  std::vector<VkFormat> FormatsAtOffsets;
+
+  // The list of components in the format, inorder flattended structure tree
+  std::vector<VkFormat> FlatComponents;
+
+  // The stride of the element, including any padding between components
+  size_t stride = 0;
+  uint32_t alignment{};
+
+  // Stride and alignment initialized flag
+  bool initialized = false;
+};
+
+struct BufferComponent {
+  std::string name;
+  uint32_t offset;
+  BufferTreeComponent format;
+  size_t arraySize = 1;
+  bool isMatrix;
+
+  // Vertex format only
+  uint32_t location;
 };
 
 struct BufferFormatHash {
@@ -63,5 +114,11 @@ struct BufferFormatHash {
     return format.GetHash();
   }
 };
+
+// Get the size of a format
+auto GetAlignment(VkFormat format) -> Result<size_t>;
+
+// Get the size of a buffer component according to the given standard
+auto GetAlignment(const BufferComponent &component) -> Result<size_t>;
 
 } // namespace Graphics

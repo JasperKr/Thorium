@@ -7,12 +7,12 @@
 #include "Modules/Math/vector.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
-#include "Modules/thread.hpp"
 #include "Modules/type.hpp"
 #include "graphics.hpp"
 #include "reflect.hpp"
 #include "slang/slang.h"
 #include <cstdint>
+#include <public/tracy/Tracy.hpp>
 #include <span>
 #include <string>
 #include <unordered_map>
@@ -33,28 +33,35 @@ struct ShaderExtern {
   }
 };
 
-struct DescriptorWriteInfo {
-  VkStructureType sType;
-  const void *pNext;
-  uint32_t dstSet;
-  uint32_t dstBinding;
-  uint32_t dstArrayElement;
-  uint32_t descriptorCount;
-  VkDescriptorType descriptorType;
-  VkDescriptorImageInfo pImageInfo;
-  VkDescriptorBufferInfo pBufferInfo;
-  VkBufferView pTexelBufferView;
+struct ImageTransitionInfo {
+  Texture::Texture *texture{};
+  Texture::TextureUsage newUsage = Texture::TextureUsage::Unknown;
+  // Unused for: Attachments, TransferSrc, TransferDst
+  VkPipelineStageFlags2 newStage = VK_PIPELINE_STAGE_2_NONE;
+};
 
-  Buffer *bufferPtr;
-  Texture::Texture *imagePtr;
-  VkAccessFlagBits2 bufferAccessBits;
+struct DescriptorWriteInfo {
+  uint32_t dstSet{};
+  uint32_t dstBinding{};
+  uint32_t dstArrayElement{};
+  uint32_t descriptorCount{};
+  VkDescriptorType descriptorType = VK_DESCRIPTOR_TYPE_MAX_ENUM;
+  VkDescriptorImageInfo pImageInfo{};
+  VkDescriptorBufferInfo pBufferInfo{};
+  VkBufferView pTexelBufferView{};
+
+  Buffer *bufferPtr{};
+  Texture::Texture *imagePtr{};
+  VkAccessFlagBits2 bufferAccessBits{};
+
+  ImageTransitionInfo transition;
 
   [[nodiscard]] auto GetWrite(
       const std::unordered_map<uint32_t, VkDescriptorSet> &descriptorSets) const
       -> VkWriteDescriptorSet {
     VkWriteDescriptorSet write{};
-    write.sType = sType;
-    write.pNext = pNext;
+    write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    write.pNext = nullptr;
     write.dstSet = descriptorSets.at(dstSet);
     write.dstBinding = dstBinding;
     write.dstArrayElement = dstArrayElement;
@@ -65,13 +72,6 @@ struct DescriptorWriteInfo {
     write.pTexelBufferView = &pTexelBufferView;
     return write;
   }
-};
-
-struct ImageTransitionInfo {
-  Texture::Texture *texture{};
-  Texture::TextureUsage newUsage = Texture::TextureUsage::Unknown;
-  // Unused for: Attachments, TransferSrc, TransferDst
-  VkPipelineStageFlags2 newStage = VK_PIPELINE_STAGE_2_NONE;
 };
 
 static const Type type = Type("Shader");
@@ -117,9 +117,7 @@ struct BoundState {
 };
 
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
-extern std::mutex BoundStatesMutex;
-extern std::unordered_map<
-    uint32_t, std::unordered_map<const struct ShaderModule *, BoundState>>
+extern thread_local std::unordered_map<const struct ShaderModule *, BoundState>
     BoundStates;
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
@@ -154,12 +152,7 @@ struct ShaderModule : Object {
   std::vector<slang::PreprocessorMacroDesc> preprocessorMacros;
 
   auto GetState() const -> BoundState & {
-    std::lock_guard<std::mutex> lock(BoundStatesMutex);
-
-    // TODO: Give shader module it's own ID to avoid pointer issues
-    auto &states = BoundStates[::Threading::CurrentThreadID];
-
-    return states[this];
+    return BoundStates.try_emplace(this).first->second;
   }
 
   std::vector<uint8_t> globalUniforms;
@@ -187,13 +180,13 @@ struct ShaderModule : Object {
          const std::vector<slang::PreprocessorMacroDesc> *preprocessorMacros =
              nullptr) -> Result<Ref<ShaderModule>>;
 
-  auto Send(GraphicsContext &context, const ResourceKey &key,
+  auto Send(const GraphicsContext &context, const ResourceKey &key,
             const std::span<const uint8_t> &data) -> Error;
 
-  auto Send(GraphicsContext &context, const ResourceKey &key,
+  auto Send(const GraphicsContext &context, const ResourceKey &key,
             StructuredBuffer *buffer) -> Error;
 
-  auto Send(GraphicsContext &context, const ResourceKey &key,
+  auto Send(const GraphicsContext &context, const ResourceKey &key,
             Graphics::Texture::Texture *texture) -> Error;
 
   auto GetUniform(const ResourceKey &key) const -> Result<const ResourceInfo>;
@@ -201,15 +194,14 @@ struct ShaderModule : Object {
       -> Result<const ResourceInfo>;
   auto GetSlotDescription(uint64_t slot) -> Result<const ResourceInfo>;
 
-  auto FlushBuffers(GraphicsContext &context, VkPipelineLayout layout,
+  auto FlushBuffers(const GraphicsContext &context, VkPipelineLayout layout,
                     VkPipelineStageFlags2 dstStage) -> Error;
 
   auto GetThreadgroupSize() const -> Result<Math::Uvec3>;
   auto GetWaveSize() const -> uint32_t;
 
   auto operator==(const ShaderModule &other) const -> bool {
-    return externs == other.externs && moduleName == other.moduleName &&
-           stages == other.stages;
+    return module == other.module;
   }
 
   auto hash() const -> size_t;
@@ -220,8 +212,14 @@ struct ShaderModule : Object {
     return ShaderModule::GetType();
   }
 
+  auto ClearBindingCache() const -> void {
+    auto &state = GetState();
+    state.boundBuffers.clear();
+    state.boundTextures.clear();
+  }
+
 private:
-  auto FlushGlobals(GraphicsContext &context, VkPipelineLayout layout,
+  auto FlushGlobals(const GraphicsContext &context, VkPipelineLayout layout,
                     VkPipelineStageFlags2 dstStage) -> Error;
 };
 

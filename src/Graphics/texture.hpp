@@ -116,6 +116,11 @@ struct Texture : Object, Barrier::BarrierSynced {
   Texture(Texture &&) noexcept = delete;
   auto operator=(Texture &&) noexcept -> Texture & = delete;
 
+  [[nodiscard]] auto IsTexture() const -> bool override { return true; }
+  [[nodiscard]] auto AsTexture() const -> Texture const * override {
+    return this;
+  }
+
   ~Texture() override {
     if (isSwapchainView) { // Not owned, don't destroy
       return;
@@ -156,16 +161,16 @@ struct Texture : Object, Barrier::BarrierSynced {
     return {size.width, size.height};
   };
   [[nodiscard]] auto GetDepth() const -> uint32_t { return size.depth; };
-  auto GetSampler(GraphicsContext &context) -> VkSampler;
-  auto SetPixels(GraphicsContext &context, Image::ImageData &imageData,
+  auto GetSampler(const GraphicsContext &context) -> VkSampler;
+  auto SetPixels(const GraphicsContext &context, Image::ImageData &imageData,
                  uint32_t mipLevel, uint32_t arrayLayer, VkRect2D source,
                  VkOffset2D target) -> Error;
-  auto SetPixels(GraphicsContext &context, Image::ImageData &imageData,
+  auto SetPixels(const GraphicsContext &context, Image::ImageData &imageData,
                  uint32_t mipLevel = 0, uint32_t arrayLayer = 0) -> Error;
-  auto SetPixels(GraphicsContext &context, const std::span<const uint8_t> &data,
-                 size_t width, size_t height, uint32_t mipLevel,
-                 uint32_t arrayLayer, VkRect2D source, VkOffset2D target)
-      -> Error;
+  auto SetPixels(const GraphicsContext &context,
+                 const std::span<const uint8_t> &data, size_t width,
+                 size_t height, uint32_t mipLevel, uint32_t arrayLayer,
+                 VkRect2D source, VkOffset2D target) -> Error;
   [[nodiscard]] auto GetMipmapCount() const -> size_t { return mipmapcount; }
   [[nodiscard]] auto GetFormat() const -> VkFormat { return format; }
 
@@ -233,7 +238,7 @@ auto LoadFromMemory(GraphicsContext &context,
                     TextureType type, VkImageUsageFlags usage = 0)
     -> Result<Ref<Texture>>;
 
-auto GetDefaultTexture(GraphicsContext &context, VkFormat format,
+auto GetDefaultTexture(const GraphicsContext &context, VkFormat format,
                        Graphics::Texture::TextureType textureType)
     -> Result<Ref<Graphics::Texture::Texture>>;
 
