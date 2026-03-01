@@ -373,8 +373,6 @@ auto Draw(lua_State *state) -> int {
     return luaL_error(state, "ImGui draw data is null");
   }
 
-  Graphics::DynamicRendering::EndRendering(ctx);
-
   for (ImTextureData *tex : *drawData->Textures) {
     if (tex->Status == ImTextureStatus_WantCreate) {
       auto creationResult = HandleImguiCreateTextureEvent(ctx, tex);

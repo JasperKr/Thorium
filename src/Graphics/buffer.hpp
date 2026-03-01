@@ -29,9 +29,9 @@ struct BufferCreationInfo {
   std::string debugName;
 };
 
-auto FlushBufferUploads(GraphicsContext &context) -> Error;
-auto LoadBufferModule(GraphicsContext &context) -> Error;
-auto UnloadLocalBufferModule(GraphicsContext &context) -> Error;
+auto FlushBufferUploads(const GraphicsContext &context) -> Error;
+auto LoadBufferModule(const GraphicsContext &context) -> Error;
+auto UnloadLocalBufferModule(const GraphicsContext &context) -> Error;
 auto UnloadBufferModule(const GraphicsContext &context) -> Error;
 
 static const Type bufferType = Type("Internal Buffer");
@@ -72,7 +72,7 @@ struct Buffer : Object, Barrier::BarrierSynced {
   auto GetTimestamp() const -> uint64_t { return lastUsedTimestamp; }
   auto MarkUse() -> void;
 
-  static auto Create(Graphics::GraphicsContext &context,
+  static auto Create(const Graphics::GraphicsContext &context,
                      const Graphics::BufferCreationInfo &info)
       -> Result<Ref<Graphics::Buffer>>;
 
@@ -85,19 +85,20 @@ struct Buffer : Object, Barrier::BarrierSynced {
   ~Buffer() override;
 
   // Set data into the buffer at the given offset
-  auto SetData(GraphicsContext &context, const std::span<const uint8_t> &data,
-               VkDeviceSize offset = 0, VkDeviceSize size = VK_WHOLE_SIZE)
-      -> Error;
+  auto SetData(const GraphicsContext &context,
+               const std::span<const uint8_t> &data, VkDeviceSize offset = 0,
+               VkDeviceSize size = VK_WHOLE_SIZE) -> Error;
 
-  auto CopyTo(GraphicsContext &context, Buffer &dstBuffer, size_t srcIndex,
-              size_t dstIndex, size_t size) -> Error;
+  auto CopyTo(const GraphicsContext &context, Buffer &dstBuffer,
+              size_t srcIndex, size_t dstIndex, size_t size) -> Error;
 
-  auto MapMemory(GraphicsContext &context) -> Error;
-  auto UnmapMemory(GraphicsContext &context) -> void;
+  auto MapMemory(const GraphicsContext &context) -> Error;
+  auto UnmapMemory(const GraphicsContext &context) -> void;
 
   // NOLINTNEXTLINE
-  auto Clear(GraphicsContext &context, uint32_t value, VkDeviceSize offset = 0,
-             VkDeviceSize size = VK_WHOLE_SIZE) -> Error;
+  auto Clear(const GraphicsContext &context, uint32_t value,
+             VkDeviceSize offset = 0, VkDeviceSize size = VK_WHOLE_SIZE)
+      -> Error;
 
   static auto GetType() -> Type const * { return &bufferType; }
 
@@ -105,15 +106,15 @@ struct Buffer : Object, Barrier::BarrierSynced {
     return Buffer::GetType();
   }
 
-  auto Upload(GraphicsContext &context, std::span<const uint8_t> data,
+  auto Upload(const GraphicsContext &context, std::span<const uint8_t> data,
               VkDeviceSize offset = 0, VkDeviceSize size = VK_WHOLE_SIZE)
       -> Error;
 
   auto RegisterUpload() -> void;
-  auto UploadLarge(GraphicsContext &context,
+  auto UploadLarge(const GraphicsContext &context,
                    std::span<const uint8_t> data, // NOLINTNEXTLINE
                    VkDeviceSize offset, VkDeviceSize size) const -> Error;
-  auto UploadRing(GraphicsContext &context,
+  auto UploadRing(const GraphicsContext &context,
                   std::span<const uint8_t> data, // NOLINTNEXTLINE
                   VkDeviceSize offset, VkDeviceSize size) const -> Error;
 

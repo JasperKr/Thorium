@@ -674,7 +674,7 @@ auto Present(Graphics::GraphicsContext &context) -> Error {
     return error;
   }
 
-  GetGlobalUniformBuffer(context.frameIndex).NewFrame(context);
+  GetGlobalUniformBuffer(context.frameIndex).NewFrame();
 
   return Error::Success();
 }

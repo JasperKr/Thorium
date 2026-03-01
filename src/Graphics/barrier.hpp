@@ -23,23 +23,23 @@ struct ResourceSync {
 // and these command buffers may be reordered before submission,
 // All barriers are thread-local and recorded as needed.
 
+// NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
+
 // Per-Frame global timeline index
-// NOLINTNEXTLINE
 thread_local extern uint64_t GlobalTimelineIndex;
 
 // Timeline index offset for this frame
-// NOLINTNEXTLINE
 thread_local extern uint64_t GlobalTimelineOffset;
 
 // The number of barriers issued this frame
-// NOLINTNEXTLINE
 thread_local extern uint64_t FrameBarrierCount;
 
-// NOLINTNEXTLINE
 thread_local extern std::vector<ResourceSync> GlobalResourceSyncTimeline;
 
 thread_local extern std::vector<std::pair<struct BarrierSynced, ResourceState>>
-    GlobalResourceStateUpdates; // NOLINT
+    GlobalResourceStateUpdates;
+
+// NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
 /*
 For example.
@@ -63,6 +63,12 @@ to see if we need to sync by checking our last usage and looking back in time if
 
 // base class for buffers and textures
 struct BarrierSynced {
+  BarrierSynced() = default;
+  BarrierSynced(const BarrierSynced &) = default;
+  BarrierSynced(BarrierSynced &&) = delete;
+  auto operator=(const BarrierSynced &) -> BarrierSynced & = default;
+  auto operator=(BarrierSynced &&) -> BarrierSynced & = delete;
+  virtual ~BarrierSynced() = default;
 
   // Now, for future me.
   /*
@@ -102,6 +108,11 @@ struct BarrierSynced {
   // Before the command buffer is stitched together with others. Because the usage is unknown at the time of recording.
   // Due to async recording and reordering.
   bool firstAsyncUsage = false;
+
+  [[nodiscard]] virtual auto IsTexture() const -> bool { return false; }
+  [[nodiscard]] virtual auto AsTexture() const -> Texture::Texture const * {
+    return nullptr;
+  }
 };
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)

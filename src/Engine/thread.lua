@@ -9,9 +9,9 @@ local count = 0
 local doneChannel, canStartChannel = ...
 
 local t = Thorium.timer.getTime()
-local testImgdata = Thorium.data.newImagedata(256, 256)
-for y = 0, 255 do
-  for x = 0, 255 do
+local testImgdata = Thorium.data.newImagedata(16, 16)
+for y = 0, 15 do
+  for x = 0, 15 do
     -- local value = Thorium.math.noiseWrapped(x / 16, y / 16, 4, 4);
     -- value = (value + 1) / 2
     local value = Thorium.math.random()
@@ -21,6 +21,24 @@ for y = 0, 255 do
     testImgdata:setPixel(x, y, r, g, b, 1.0)
   end
 end
+
+local vertexformat = {
+  { name = "position", format = "floatvec2",  location = 0 },
+  { name = "uv",       format = "floatvec2",  location = 1 },
+  { name = "color",    format = "unorm8vec4", location = 2 },
+}
+
+local indices = { 1, 2, 3, 1, 3, 4 }
+local vertices = {
+  { 0,   0,   0, 0, 1, 1, 1, 1 },
+  { 100, 0,   1, 0, 1, 1, 1, 1 },
+  { 100, 100, 1, 1, 1, 1, 1, 1 },
+  { 0,   100, 0, 1, 1, 1, 1, 1 },
+}
+local mesh
+
+local shader = Thorium.graphics.newShader("Graphics/Shaders/test.slang")
+
 local texture
 print("Generated noise texture in " .. tostring(Thorium.timer.getTime() - t) .. " seconds")
 
@@ -42,9 +60,17 @@ local function draw()
   Thorium.gui.draw()
   Thorium.graphics.setScissor();
   lastImDrawTime = lastImDrawTime + Thorium.timer.getTime() - imStartTime
+
+  Thorium.graphics.setShader(shader)
+  shader:send("MainTexture", texture)
+  for i = 1, 1000 do
+    Thorium.graphics.draw(mesh)
+  end
+  Thorium.graphics.setShader()
+
   lastDrawTime = lastDrawTime + Thorium.timer.getTime() - startTime
   count = count + 1
-  if (count >= 20) then
+  if (count >= 50) then
     lastShownTime = lastDrawTime / count
     lastShownImDrawTime = lastImDrawTime / count
     count = 0
@@ -76,7 +102,13 @@ while true do
       { name = "test2", format = "uint32" }
     }
 
-    Thorium.graphics.newBuffer(format, 5)
+    mesh = Thorium.graphics.newMesh(vertexformat, vertices, "triangles")
+
+    local indicesData = Thorium.data.newBytedata(#indices * 4)
+    for j = 1, #indices do
+      indicesData:setUInt32((j - 1) * 4, indices[j] - 1)
+    end
+    mesh:setIndices(indicesData)
   end
 
   ---@type Thorium.DetailedBlendMode
@@ -97,10 +129,7 @@ while true do
   Thorium.gui.newFrame(dt)
 
   draw()
-  Thorium.graphics.setShader()
-  for i = 1, 1 do
-    Thorium.graphics.draw(texture)
-  end
+
   Thorium.graphics.submitGraphics()
 
   doneChannel:push(true)

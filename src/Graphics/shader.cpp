@@ -18,7 +18,6 @@
 #include "tl/expected.hpp"
 #include <array>
 #include <public/tracy/Tracy.hpp>
-#include <shared_mutex>
 #include <span>
 #include <unordered_set>
 #include <utility>
@@ -599,7 +598,7 @@ auto ShaderModule::GetUniform(const ResourceKey &key) const
   return *info;
 }
 
-auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
+auto ShaderModule::Send(const GraphicsContext &context, const ResourceKey &key,
                         const std::span<const uint8_t> &data) -> Error {
   ZoneScopedN("ShaderModule::Send data span");
 
@@ -635,7 +634,7 @@ auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
   return Error::Success();
 }
 
-auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
+auto ShaderModule::Send(const GraphicsContext &context, const ResourceKey &key,
                         StructuredBuffer *buffer) -> Error {
   ZoneScopedN("ShaderModule::Send structured buffer");
 
@@ -662,7 +661,6 @@ auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
       vkBufferInfo.range = bufferHandle->size;
 
       DescriptorWriteInfo descriptorWrite{};
-      descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
       descriptorWrite.dstSet = bufferInfo.set;
       descriptorWrite.dstBinding = bufferInfo.binding;
       descriptorWrite.dstArrayElement = 0;
@@ -692,8 +690,6 @@ auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
 
       GetState().pendingDescriptorWrites.emplace_back(descriptorWrite);
 
-      Graphics::SetDirtyState();
-
       return Error::Success();
     }
   }
@@ -701,7 +697,7 @@ auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
   return Error::Create("Buffer not found in shader reflection: " + name);
 }
 
-auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
+auto ShaderModule::Send(const GraphicsContext &context, const ResourceKey &key,
                         Graphics::Texture::Texture *texture) -> Error {
   ZoneScopedN("ShaderModule::Send texture");
 
@@ -713,6 +709,8 @@ auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
     return Error::Create("Texture has no valid image view.");
   }
 
+  auto &state = GetState();
+
   for (const auto &resource : reflection.resources) {
     if (!std::holds_alternative<SamplerInfo>(resource.info)) {
       continue;
@@ -722,9 +720,7 @@ auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
     if (resource.name == *key.begin()) { // TODO: Fix this search
       auto key = SetBindingToSlot(samplerInfo.set, samplerInfo.binding);
 
-      PrintAlways("Bound: {}, Binding {}",
-                  (void *)GetState().boundTextures[key], (void *)texture);
-      if (GetState().boundTextures[key] == texture) {
+      if (state.boundTextures[key] == texture) {
         return Error::Success();
       }
 
@@ -735,7 +731,6 @@ auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
       imageInfo.sampler = texture->GetSampler(context);
 
       DescriptorWriteInfo descriptorWrite{};
-      descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
       descriptorWrite.dstSet = samplerInfo.set;
       descriptorWrite.dstBinding = samplerInfo.binding;
       descriptorWrite.dstArrayElement = 0;
@@ -745,14 +740,12 @@ auto ShaderModule::Send(GraphicsContext &context, const ResourceKey &key,
       descriptorWrite.pImageInfo = imageInfo;
       descriptorWrite.imagePtr = texture;
 
-      GetState().pendingDescriptorWrites.emplace_back(descriptorWrite);
-      GetState().pendingImageTransitions.emplace_back(ImageTransitionInfo{
+      state.pendingDescriptorWrites.emplace_back(descriptorWrite);
+      state.pendingImageTransitions.emplace_back(ImageTransitionInfo{
           .texture = texture,
           .newUsage = Texture::TextureUsage::Sampler,
           .newStage = ShaderStageFlagsToPipelineStageFlags(resource.stages),
       });
-
-      Graphics::SetDirtyState();
 
       return Error::Success();
     }
@@ -775,7 +768,7 @@ auto ShaderModule::hash() const -> size_t {
   return hasher.get();
 }
 
-auto ShaderModule::FlushGlobals(GraphicsContext &context,
+auto ShaderModule::FlushGlobals(const GraphicsContext &context,
                                 VkPipelineLayout layout,
                                 VkPipelineStageFlags2 dstStage) -> Error {
   ZoneScoped;
@@ -829,7 +822,8 @@ auto ShaderModule::FlushGlobals(GraphicsContext &context,
   return Error::Success();
 }
 
-auto ShaderModule::FlushBuffers(GraphicsContext &context,
+// NOLINTNEXTLINE
+auto ShaderModule::FlushBuffers(const GraphicsContext &context,
                                 VkPipelineLayout layout,
                                 VkPipelineStageFlags2 dstStage) -> Error {
   ZoneScoped;
@@ -846,12 +840,12 @@ auto ShaderModule::FlushBuffers(GraphicsContext &context,
     return updateResult;
   }
 
+  auto &state = GetState();
+
   thread_local std::vector<VkWriteDescriptorSet> writes;
   thread_local std::unordered_set<uint64_t> updatedSets;
   writes.clear();
   updatedSets.clear();
-
-  auto &state = GetState();
 
   auto writeCount = static_cast<int32_t>(state.pendingDescriptorWrites.size());
   writes.resize(writeCount);
@@ -874,9 +868,19 @@ auto ShaderModule::FlushBuffers(GraphicsContext &context,
       }
       updatedSets.insert(key);
 
-      writes.emplace_back(write.GetWrite(GetState().descriptorSets));
+      auto &dstWrite = writes[index];
+      dstWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+      dstWrite.pNext = nullptr;
+      dstWrite.dstSet = state.descriptorSets.at(write.dstSet);
+      dstWrite.dstBinding = write.dstBinding;
+      dstWrite.dstArrayElement = write.dstArrayElement;
+      dstWrite.descriptorCount = write.descriptorCount;
+      dstWrite.descriptorType = write.descriptorType;
+      dstWrite.pImageInfo = &write.pImageInfo;
+      dstWrite.pBufferInfo = &write.pBufferInfo;
+      dstWrite.pTexelBufferView = &write.pTexelBufferView;
 
-      if (writes.back().dstSet == VK_NULL_HANDLE) {
+      if (writes[index++].dstSet == VK_NULL_HANDLE) {
         return Error::Create(
             "Descriptor set not found in shader descriptor sets.");
       }

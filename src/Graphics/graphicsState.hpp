@@ -14,6 +14,8 @@ inline auto GetIsStateDirty() -> bool & {
   return StateDirty;
 }
 
+// Use if the state gets invalidated,
+// for example, new command buffer.
 inline auto SetDirtyState() -> void { GetIsStateDirty() = true; }
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)

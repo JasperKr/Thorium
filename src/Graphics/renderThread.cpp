@@ -223,7 +223,7 @@ auto AquireCommandBuffer(Graphics::GraphicsContext &context,
     return frameBeginResult.AsUnexpected();
   }
 
-  GetGlobalUniformBuffer(context.frameIndex).NewFrame(context);
+  GetGlobalUniformBuffer(context.frameIndex).NewFrame();
 
   return threadInfo;
 }

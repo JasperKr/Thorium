@@ -1,12 +1,12 @@
 #include "Wrap/Graphics/wrap_buffer.hpp"
 #include "Graphics/barrier.hpp"
-#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Wrap/Graphics/wrap_format.hpp"
 #include "Wrap/Graphics/wrap_reflection.hpp"
 #include "Wrap/wrap.hpp"
 #include "Wrap/wrap_utils.hpp"
 #include <cstdint>
+#include <public/tracy/Tracy.hpp>
 #include <variant>
 #include <vulkan/vulkan_core.h>
 extern "C" {
@@ -162,6 +162,7 @@ auto wrap_GetFormat(lua_State *state) -> int {
 // So, stack: [buffer, data, srcOffset?, dstOffset?, size?]
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 auto wrap_SetData(lua_State *state) -> int {
+  ZoneScoped;
   auto *ctx = GetCurrentGraphicsContext();
 
   if (ctx == nullptr) {

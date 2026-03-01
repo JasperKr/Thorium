@@ -1,7 +1,6 @@
 #include "buffer.hpp"
 #include "Graphics/barrier.hpp"
 #include "Graphics/graphics.hpp"
-#include "Graphics/graphicsState.hpp"
 #include "Graphics/resource.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
@@ -41,7 +40,7 @@ inline std::atomic<uint64_t> currentTimelineValue = 0;
 
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
-auto LoadBufferModule(GraphicsContext &context) -> Error {
+auto LoadBufferModule(const GraphicsContext &context) -> Error {
   VkSemaphoreTypeCreateInfo timelineInfo = {
       .sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
       .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
@@ -66,7 +65,7 @@ auto LoadBufferModule(GraphicsContext &context) -> Error {
   return Error::Success();
 }
 
-auto UnloadLocalBufferModule(GraphicsContext &context) -> Error {
+auto UnloadLocalBufferModule(const GraphicsContext &context) -> Error {
   StagingBuffers.clear();
 
   UploadBuffers.clear();
@@ -86,7 +85,7 @@ auto UnloadBufferModule(const GraphicsContext &context) -> Error {
 }
 
 // To be called at the end of each frame that uses uploads
-auto FlushBufferUploads(GraphicsContext &context) -> Error {
+auto FlushBufferUploads(const GraphicsContext &context) -> Error {
   // Check staging buffers for completed uploads
   uint64_t completedValue = 0;
   {
@@ -125,7 +124,7 @@ auto FlushBufferUploads(GraphicsContext &context) -> Error {
   return Error::Success();
 }
 
-auto Buffer::MapMemory(GraphicsContext &context) -> Error {
+auto Buffer::MapMemory(const GraphicsContext &context) -> Error {
   if (persistentMapping) {
     if (mappedData != nullptr) {
       return Error::Success();
@@ -147,7 +146,7 @@ auto Buffer::MapMemory(GraphicsContext &context) -> Error {
   return Error::Success();
 }
 
-auto Buffer::UnmapMemory(GraphicsContext &context) -> void {
+auto Buffer::UnmapMemory(const GraphicsContext &context) -> void {
   if (persistentMapping) {
     return;
   }
@@ -159,7 +158,7 @@ auto Buffer::UnmapMemory(GraphicsContext &context) -> void {
   mappedData = nullptr;
 }
 
-auto Buffer::UploadLarge(GraphicsContext &context,
+auto Buffer::UploadLarge(const GraphicsContext &context,
                          std::span<const uint8_t> data, // NOLINTNEXTLINE
                          VkDeviceSize offset, VkDeviceSize size) const
     -> Error {
@@ -241,7 +240,7 @@ auto Buffer::UploadLarge(GraphicsContext &context,
   return Error::Success();
 }
 
-auto Buffer::UploadRing(GraphicsContext &context,
+auto Buffer::UploadRing(const GraphicsContext &context,
                         std::span<const uint8_t> data, // NOLINTNEXTLINE
                         VkDeviceSize offset, VkDeviceSize size) const -> Error {
 
@@ -321,7 +320,7 @@ auto Buffer::UploadRing(GraphicsContext &context,
   return Error::Success();
 }
 
-auto Buffer::Upload(GraphicsContext &context,
+auto Buffer::Upload(const GraphicsContext &context,
                     std::span<const uint8_t> data, // NOLINTNEXTLINE
                     VkDeviceSize offset, VkDeviceSize size) -> Error {
 
@@ -357,10 +356,6 @@ auto Buffer::Upload(GraphicsContext &context,
     return Error::Success();
   }
 
-  if (GetIsCurrentlyRendering()) {
-    return Error::Create("Cannot upload to buffer while rendering.");
-  }
-
   if (uploadSize > LargeUploadThreshold) {
     auto uploadResult = UploadLarge(context, data, offset, size);
     if (Error::IsError(uploadResult)) {
@@ -376,8 +371,8 @@ auto Buffer::Upload(GraphicsContext &context,
   return Error::Success();
 }
 
-auto Buffer::Create(GraphicsContext &context, const BufferCreationInfo &info)
-    -> Result<Ref<Buffer>> {
+auto Buffer::Create(const GraphicsContext &context,
+                    const BufferCreationInfo &info) -> Result<Ref<Buffer>> {
   if (info.size == 0) {
     return Error::Unexpected("Cannot create buffer with size 0.");
   }
@@ -479,7 +474,7 @@ auto Buffer::Create(GraphicsContext &context, const BufferCreationInfo &info)
   return buffer;
 }
 
-auto Buffer::SetData(GraphicsContext &context,
+auto Buffer::SetData(const GraphicsContext &context,
                      const std::span<const uint8_t> &data, // NOLINTNEXTLINE
                      VkDeviceSize offset, VkDeviceSize size) -> Error {
 
@@ -493,7 +488,7 @@ auto Buffer::SetData(GraphicsContext &context,
   return Error::Success();
 }
 
-auto Buffer::CopyTo(GraphicsContext &context,
+auto Buffer::CopyTo(const GraphicsContext &context,
                     Buffer &dstBuffer, // NOLINTNEXTLINE
                     size_t srcIndex, size_t dstIndex, size_t size) -> Error {
   if (((usage)&VK_BUFFER_USAGE_TRANSFER_SRC_BIT) == 0) {
@@ -554,7 +549,7 @@ auto Buffer::MarkUse() -> void {
 }
 
 // NOLINTNEXTLINE
-auto Buffer::Clear(GraphicsContext &context, uint32_t value,
+auto Buffer::Clear(const GraphicsContext &context, uint32_t value,
                    VkDeviceSize offset, VkDeviceSize size) -> Error {
   auto *commandBuffer = GetCommandBuffer();
 

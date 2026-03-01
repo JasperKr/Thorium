@@ -61,9 +61,9 @@ struct SamplerDescHash {
 extern std::unordered_map<SamplerDescription, VkSampler, SamplerDescHash>
     SamplerCache; // NOLINT
 
-auto GetOrCreateSampler(GraphicsContext &context,
+auto GetOrCreateSampler(const GraphicsContext &context,
                         const SamplerDescription &description) -> VkSampler;
 
-auto DestroySamplers(GraphicsContext &context) -> void;
+auto DestroySamplers(const GraphicsContext &context) -> void;
 
 }; // namespace Graphics::Texture

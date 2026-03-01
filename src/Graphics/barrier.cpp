@@ -1,4 +1,6 @@
 #include "Graphics/barrier.hpp"
+#include "Graphics/dynamicRendering.hpp"
+#include "Graphics/graphics.hpp"
 #include "Graphics/graphicsState.hpp"
 #include "vulkan/vulkan_core.h"
 #include <array>
@@ -10,23 +12,23 @@
 
 namespace Graphics::Barrier {
 
+// NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
+
 // Per-Frame global timeline index
-// NOLINTNEXTLINE
 thread_local uint64_t GlobalTimelineIndex = 0;
 
 // Timeline index offset for this frame
-// NOLINTNEXTLINE
 thread_local uint64_t GlobalTimelineOffset = 0;
 
 // The number of barriers issued this frame
-// NOLINTNEXTLINE
 thread_local uint64_t FrameBarrierCount = 0;
 
-// NOLINTNEXTLINE
 thread_local std::vector<ResourceSync> GlobalResourceSyncTimeline{};
 
 thread_local std::vector<std::pair<BarrierSynced, ResourceState>>
-    GlobalResourceStateUpdates{}; // NOLINT
+    GlobalResourceStateUpdates{};
+
+// NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
 inline auto IsHazard(const ResourceState &oldState,
                      const ResourceState &newState) -> bool {
@@ -101,6 +103,7 @@ inline auto TimelineLookback(uint64_t currentTimelineIndex,
                              const ResourceState &resourceLastUsage, // NOLINT
                              const ResourceState &desiredSynchronization)
     -> bool {
+  ZoneScoped;
 
   if (!IsHazard(resourceLastUsage, desiredSynchronization)) {
     return false; // No hazard, no barrier needed
@@ -197,6 +200,7 @@ auto UpdateUsage(const GraphicsContext &context, BarrierSynced &resource,
       TimelineLookback(resource.lastUsedTimelineIndex, // NOLINT
                        {.stages = previousStages, .access = previousAccess},
                        usage)) {
+    ZoneScopedN("Inserting barrier");
     // Insert barrier
     VkMemoryBarrier2 barrier = {};
     barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2;
@@ -210,10 +214,9 @@ auto UpdateUsage(const GraphicsContext &context, BarrierSynced &resource,
     depInfo.memoryBarrierCount = 1;
     depInfo.pMemoryBarriers = &barrier;
 
-    if (GetIsCurrentlyRendering()) {
-      // End rendering before doing a barrier
-      vkCmdEndRendering(Graphics::GetCommandBuffer());
-      GetIsCurrentlyRendering() = false;
+    if (GetIsCurrentlyRendering() && resource.IsTexture() &&
+        Graphics::DynamicRendering::UsedInPass(*resource.AsTexture())) {
+      DynamicRendering::EndRendering(context);
     }
 
     vkCmdPipelineBarrier2(Graphics::GetCommandBuffer(), &depInfo);
@@ -222,10 +225,9 @@ auto UpdateUsage(const GraphicsContext &context, BarrierSynced &resource,
     previousAccess = usage.access;
     previousStages = usage.stages;
     resource.lastUsedTimelineIndex = GlobalTimelineIndex;
-    GlobalResourceSyncTimeline.push_back({.srcStages = barrier.srcStageMask,
-                                          .srcAccess = barrier.srcAccessMask,
-                                          .dstStages = barrier.dstStageMask,
-                                          .dstAccess = barrier.dstAccessMask});
+    GlobalResourceSyncTimeline.emplace_back(
+        barrier.srcStageMask, barrier.srcAccessMask, barrier.dstStageMask,
+        barrier.dstAccessMask);
     GlobalTimelineIndex++;
     FrameBarrierCount++;
   } else {
@@ -243,6 +245,7 @@ auto UpdateUsage(const GraphicsContext &context, BarrierSynced &resource,
 // The same as Update Usage but doesn't insert any barriers
 auto UpdateUsageVirtual(BarrierSynced &resource, const ResourceState &usage)
     -> std::optional<ResourceSync> {
+  ZoneScoped;
   auto &previousAccess = resource.lastUsedAccess;
   auto &previousStages = resource.lastUsedStages;
 

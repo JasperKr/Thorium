@@ -1,6 +1,7 @@
 #include "uniform.hpp"
 #include "Graphics/graphics.hpp"
 #include <cassert>
+#include <public/tracy/Tracy.hpp>
 #include <vector>
 
 #define VK_NO_PROTOTYPES
@@ -61,7 +62,7 @@ auto FrameUniformBufferObject::Create(GraphicsContext &context)
   return obj;
 }
 
-void FrameUniformBufferObject::SetData(Graphics::GraphicsContext &context,
+void FrameUniformBufferObject::SetData(const Graphics::GraphicsContext &context,
                                        const std::span<const uint8_t> &data,
                                        uint32_t atOffset) {
   if (atOffset + data.size() > localData.size()) {
@@ -72,8 +73,10 @@ void FrameUniformBufferObject::SetData(Graphics::GraphicsContext &context,
   memcpy(localData.data() + atOffset, data.data(), data.size());
 }
 
-auto FrameUniformBufferObject::Flush(Graphics::GraphicsContext &context)
+auto FrameUniformBufferObject::Flush(const Graphics::GraphicsContext &context)
     -> Result<bool> {
+  ZoneScoped;
+
   if (localData.size() > MaximumUniformBufferSize) {
     return Error::Unexpected(
         "Tried to set uniform buffer data larger than maximum. (holy shit)");

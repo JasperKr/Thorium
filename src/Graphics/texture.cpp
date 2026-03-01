@@ -18,6 +18,7 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <public/tracy/Tracy.hpp>
 #include <span>
 #include <string>
 
@@ -53,7 +54,7 @@ auto GetAspectFlagsForFormat(VkFormat format) -> VkImageAspectFlagBits {
 inline auto SetDebugName(const std::string &debugName, Texture *texture,
                          const GraphicsContext &context) -> Error {
 
-  auto debugname = debugName;
+  const auto &debugname = debugName;
 
   VkDebugUtilsObjectNameInfoEXT nameInfo = {};
   nameInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
@@ -890,7 +891,7 @@ auto Texture::GetDepthCompare() const -> std::tuple<bool, VkCompareOp> {
   return {samplerDescription.compareEnable, samplerDescription.compareOp};
 }
 
-auto Texture::GetSampler(GraphicsContext &context) -> VkSampler {
+auto Texture::GetSampler(const GraphicsContext &context) -> VkSampler {
   if (samplerDirty) {
     sampler = GetOrCreateSampler(context, samplerDescription);
     samplerDirty = false;
@@ -901,10 +902,14 @@ auto Texture::GetSampler(GraphicsContext &context) -> VkSampler {
   return sampler;
 }
 
-auto Texture::SetPixels(GraphicsContext &context, Image::ImageData &imageData,
-                        uint32_t mipLevel, uint32_t arrayLayer, // NOLINT
-                        VkRect2D source,                        // NOLINT
+auto Texture::SetPixels(const GraphicsContext &context,
+                        Image::ImageData &imageData,
+                        uint32_t mipLevel, // NOLINT
+                        uint32_t arrayLayer,
+                        VkRect2D source, // NOLINT
                         VkOffset2D target) -> Error {
+  ZoneScoped;
+
   if (source.extent.width > size.width || source.extent.height > size.height) {
     return Error::Create(
         "ImageData dimensions exceed texture dimensions in SetPixels.");
@@ -1019,8 +1024,8 @@ auto Texture::SetPixels(GraphicsContext &context, Image::ImageData &imageData,
   return Error::Success();
 }
 
-auto Texture::SetPixels(GraphicsContext &context, Image::ImageData &imageData,
-                        uint32_t mipLevel,
+auto Texture::SetPixels(const GraphicsContext &context,
+                        Image::ImageData &imageData, uint32_t mipLevel,
                         uint32_t arrayLayer) // NOLINT
     -> Error {
   VkRect2D source = {};
@@ -1030,7 +1035,7 @@ auto Texture::SetPixels(GraphicsContext &context, Image::ImageData &imageData,
   return SetPixels(context, imageData, mipLevel, arrayLayer, source, target);
 }
 
-auto Texture::SetPixels(GraphicsContext &context,
+auto Texture::SetPixels(const GraphicsContext &context,
                         const std::span<const uint8_t> &data, size_t dataWidth,
                         size_t dataHeight, uint32_t mipLevel, // NOLINT
                         uint32_t arrayLayer, VkRect2D source, VkOffset2D target)
@@ -1167,7 +1172,7 @@ std::unordered_map<std::pair<VkFormat, TextureType>, Ref<struct Texture>,
 
 auto UnloadModule() -> void { DefaultTextureCache.clear(); }
 
-auto GetDefaultTexture(GraphicsContext &context, VkFormat format,
+auto GetDefaultTexture(const GraphicsContext &context, VkFormat format,
                        Graphics::Texture::TextureType textureType)
     -> Result<Ref<Graphics::Texture::Texture>> {
 
