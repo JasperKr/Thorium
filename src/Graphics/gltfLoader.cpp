@@ -1,11 +1,10 @@
 #include "gltfLoader.hpp"
 #include "Graphics/graphics.hpp"
 #include "Graphics/texture.hpp"
-#include "Modules/console.hpp"
+#include "Modules/Engine/material.hpp"
+#include "Modules/Engine/model.hpp"
 #include "Modules/error.hpp"
 #include "Modules/filesystem.hpp"
-#include "Modules/material.hpp"
-#include "Modules/model.hpp"
 #include "Modules/object.hpp"
 #include <cstdint>
 #include <span>
@@ -15,7 +14,6 @@
 #include "fastgltf/include/fastgltf/types.hpp"
 #include "vulkan/vulkan_core.h"
 
-#include <utility>
 #include <variant>
 #include <vector>
 
@@ -361,17 +359,17 @@ inline auto LoadNode(Graphics::GraphicsContext &context,
   bool isNode = !isMesh && !isSkin && !isCamera && !isLight;
 
   if (isNode) {
-    Engine::Node node;
+    Ref<Engine::Node> node;
     // Create a new engine node.
-    node.Name = gltfNode.name;
+    node->Name = gltfNode.name;
 
     if (std::holds_alternative<fastgltf::TRS>(gltfNode.transform)) {
       const auto &trs = std::get<fastgltf::TRS>(gltfNode.transform);
-      node.Transform.Position = Math::Vec3(
+      node->Transform.Position = Math::Vec3(
           trs.translation[0], trs.translation[1], trs.translation[2]);
-      node.Transform.Rotation = Math::Quaternion(
+      node->Transform.Rotation = Math::Quaternion(
           trs.rotation[0], trs.rotation[1], trs.rotation[2], trs.rotation[3]);
-      node.Transform.Scale =
+      node->Transform.Scale =
           Math::Vec3(trs.scale[0], trs.scale[1], trs.scale[2]);
     } else {
       // Shouldn't be hit. Since we specified DecomposeNodeMatrices, all matrices should
@@ -386,10 +384,10 @@ inline auto LoadNode(Graphics::GraphicsContext &context,
       if (Error::IsError(childNodeResult)) {
         return childNodeResult.error().AsUnexpected();
       }
-      // node.Children.emplace_back(childNodeResult.value());
+      // node->Children.emplace_back(childNodeResult.value());
 
       for (auto &childObject : childNodeResult.value()) {
-        node.Children.emplace_back(std::move(childObject));
+        node->Children.emplace_back(std::move(childObject));
       }
     }
 

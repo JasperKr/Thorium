@@ -1,7 +1,6 @@
 #include "Graphics/barrier.hpp"
 #include "Graphics/dynamicRendering.hpp"
 #include "Graphics/graphics.hpp"
-#include "Graphics/graphicsState.hpp"
 #include "vulkan/vulkan_core.h"
 #include <array>
 #include <cassert>
@@ -214,11 +213,7 @@ auto UpdateUsage(const GraphicsContext &context, BarrierSynced &resource,
     depInfo.memoryBarrierCount = 1;
     depInfo.pMemoryBarriers = &barrier;
 
-    if (GetIsCurrentlyRendering() && resource.IsTexture() &&
-        Graphics::DynamicRendering::UsedInPass(*resource.AsTexture())) {
-      DynamicRendering::EndRendering(context);
-    }
-
+    DynamicRendering::EndRendering(context);
     vkCmdPipelineBarrier2(Graphics::GetCommandBuffer(), &depInfo);
 
     // Update to new usage

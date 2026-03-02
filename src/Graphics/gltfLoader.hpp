@@ -1,7 +1,7 @@
 #pragma once
 
+#include "Modules/Engine/scene.hpp"
 #include "Modules/error.hpp"
-#include "Modules/scene.hpp"
 #include <string>
 namespace glTF {
 

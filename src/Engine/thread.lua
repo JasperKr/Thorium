@@ -63,7 +63,7 @@ local function draw()
 
   Thorium.graphics.setShader(shader)
   shader:send("MainTexture", texture)
-  for i = 1, 1000 do
+  for i = 1, 100 do
     Thorium.graphics.draw(mesh)
   end
   Thorium.graphics.setShader()

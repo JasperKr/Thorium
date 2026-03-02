@@ -275,6 +275,12 @@ add_executable(Thorium
     src/Modules/error.cpp
     src/Modules/window.cpp
 
+# Engine source
+    src/Modules/Engine/material.cpp
+    src/Modules/Engine/model.cpp
+    src/Modules/Engine/project.cpp
+    src/Modules/Engine/scene.cpp
+
 # Math Modules
     src/Modules/Math/vector.cpp
     src/Modules/Math/matrix.cpp

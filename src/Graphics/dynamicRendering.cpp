@@ -1121,7 +1121,6 @@ inline auto BeginRendering(const GraphicsContext &context) -> Error {
     } else {
       colorAttachments.emplace_back(attachmentInfo);
 
-      // TODO: Why is this commented and depth/stencil isn't?
       Barrier::UpdateUsage(
           context, *rendertarget->texture,
           {.stages = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
@@ -1154,10 +1153,10 @@ inline auto BeginRendering(const GraphicsContext &context) -> Error {
   }
 
   vkCmdBeginRendering(Graphics::GetCommandBuffer(), &renderingInfo);
+  GetIsCurrentlyRendering() = true;
+
   TopOfStack->shader->ClearBindingCache(); // :(
   UsedShaderModules.emplace_back(TopOfStack->shader);
-
-  GetIsCurrentlyRendering() = true;
 
   for (auto &rendertarget : TopOfStack->renderTargets) {
     // Make sure subsequent renders load from the existing content if we ever need to re-bind mid-pass
