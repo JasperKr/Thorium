@@ -223,7 +223,7 @@ static auto CreateDevice(GraphicsContext &context) -> Error {
 }
 
 auto GetThreadContext() -> ThreadContext & {
-  static thread_local ThreadContext threadContext;
+  thread_local ThreadContext threadContext;
   return threadContext;
 }
 

@@ -755,17 +755,7 @@ auto ShaderModule::Send(const GraphicsContext &context, const ResourceKey &key,
 }
 
 auto ShaderModule::hash() const -> size_t {
-  Hash::Hasher hasher;
-  hasher.add(std::hash<std::string>()(moduleName));
-  for (const auto &stage : stages) {
-    hasher.add(static_cast<uint32_t>(stage));
-  }
-  for (const auto &externVar : externs) {
-    hasher.add(std::hash<std::string>()(externVar.name));
-    hasher.add(std::hash<std::string>()(externVar.value));
-  }
-
-  return hasher.get();
+  return reinterpret_cast<size_t>(module); // NOLINT
 }
 
 auto ShaderModule::FlushGlobals(const GraphicsContext &context,

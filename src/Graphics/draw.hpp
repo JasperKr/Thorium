@@ -10,8 +10,8 @@ namespace Graphics {
 auto BindMesh(GraphicsContext &context, VkCommandBuffer cmdBuffer,
               const Mesh &mesh) -> Error;
 
-auto Draw(GraphicsContext &context, const Mesh &mesh,
-          uint32_t instanceCount = 1) -> Error;
+auto Draw(GraphicsContext &context, Mesh &mesh, uint32_t instanceCount = 1)
+    -> Error;
 
 auto Dispatch(GraphicsContext &context, const Math::Uvec3 &threadgroups)
     -> Error;
@@ -20,7 +20,7 @@ auto DispatchIndirect(GraphicsContext &context,
                       const Ref<Buffer> &indirectBuffer, VkDeviceSize offset)
     -> Error;
 
-auto DrawIndirect(GraphicsContext &context, const Mesh &mesh,
+auto DrawIndirect(GraphicsContext &context, Mesh &mesh,
                   const Ref<Buffer> &indirectBuffer,
                   VkDeviceSize offset = 0, // NOLINT
                   uint32_t count = 1) -> Error;

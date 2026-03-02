@@ -159,9 +159,7 @@ auto Mesh::Create(GraphicsContext &context, VertexFormat vertexFormat,
   return mesh;
 }
 
-[[nodiscard]] auto Mesh::GetVertexFormat() const -> VertexFormat {
-  return Format;
-}
+[[nodiscard]] auto Mesh::GetVertexFormat() -> VertexFormat & { return Format; }
 [[nodiscard]] auto Mesh::GetVertexCount() const -> uint32_t {
   return VertexCount;
 }

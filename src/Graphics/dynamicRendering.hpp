@@ -123,31 +123,39 @@ struct RenderTarget : Object {
   Ref<Texture::Texture> texture;
   int location = -1; // Default to index in the render target array
   int layer = 0;
+  mutable bool dirty = true;
 
   VkAttachmentLoadOp loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
 
+  mutable uint64_t hash;
+  auto GetHash() const -> uint64_t;
+
+  // auto operator==(const RenderTarget &other) const -> bool {
+  //   return blendMode.blendEnable == other.blendMode.blendEnable &&
+  //          blendMode.srcColorBlendFactor ==
+  //              other.blendMode.srcColorBlendFactor &&
+  //          blendMode.dstColorBlendFactor ==
+  //              other.blendMode.dstColorBlendFactor &&
+  //          blendMode.colorBlendOp == other.blendMode.colorBlendOp &&
+  //          blendMode.srcAlphaBlendFactor ==
+  //              other.blendMode.srcAlphaBlendFactor &&
+  //          blendMode.dstAlphaBlendFactor ==
+  //              other.blendMode.dstAlphaBlendFactor &&
+  //          blendMode.alphaBlendOp == other.blendMode.alphaBlendOp &&
+  //          blendMode.colorWriteMask == other.blendMode.colorWriteMask &&
+  //          texture->format == other.texture->format &&
+  //          texture->size.width == other.texture->size.width &&
+  //          texture->size.height == other.texture->size.height &&
+  //          texture->size.depth == other.texture->size.depth &&
+  //          texture->mipmapcount == other.texture->mipmapcount &&
+  //          texture->arrayLayers == other.texture->arrayLayers &&
+  //          texture->usage == other.texture->usage &&
+  //          texture->textureType == other.texture->textureType &&
+  //          location == other.location;
+  // }
+
   auto operator==(const RenderTarget &other) const -> bool {
-    return blendMode.blendEnable == other.blendMode.blendEnable &&
-           blendMode.srcColorBlendFactor ==
-               other.blendMode.srcColorBlendFactor &&
-           blendMode.dstColorBlendFactor ==
-               other.blendMode.dstColorBlendFactor &&
-           blendMode.colorBlendOp == other.blendMode.colorBlendOp &&
-           blendMode.srcAlphaBlendFactor ==
-               other.blendMode.srcAlphaBlendFactor &&
-           blendMode.dstAlphaBlendFactor ==
-               other.blendMode.dstAlphaBlendFactor &&
-           blendMode.alphaBlendOp == other.blendMode.alphaBlendOp &&
-           blendMode.colorWriteMask == other.blendMode.colorWriteMask &&
-           texture->format == other.texture->format &&
-           texture->size.width == other.texture->size.width &&
-           texture->size.height == other.texture->size.height &&
-           texture->size.depth == other.texture->size.depth &&
-           texture->mipmapcount == other.texture->mipmapcount &&
-           texture->arrayLayers == other.texture->arrayLayers &&
-           texture->usage == other.texture->usage &&
-           texture->textureType == other.texture->textureType &&
-           location == other.location;
+    return GetHash() == other.GetHash();
   }
 
   static auto GetType() -> Type const * { return &type; }
@@ -177,6 +185,7 @@ struct State {
 
   bool hasViewport = false;
   bool hasScissor = false;
+  mutable bool dirty = true;
 
   Ref<Shader::ShaderModule> shader;
 
@@ -186,65 +195,75 @@ struct State {
   VkPipelineBindPoint bindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
   std::vector<Ref<RenderTarget>> renderTargets;
 
+  mutable uint64_t hash;
+  auto GetHash() const -> uint64_t;
+
+  // auto operator==(const State &other) const -> bool {
+  //   if (bindPoint != other.bindPoint) {
+  //     return false;
+  //   }
+
+  //   if (bindPoint == VK_PIPELINE_BIND_POINT_COMPUTE) {
+  //     // For compute pipelines, only compare shader
+  //     return shader.get() == other.shader.get();
+  //   }
+
+  //   if (bindPoint != VK_PIPELINE_BIND_POINT_GRAPHICS) {
+  //     return false;
+  //   }
+
+  //   if (renderTargets.size() != other.renderTargets.size()) {
+  //     return false;
+  //   }
+
+  //   if (cullMode != other.cullMode || frontFace != other.frontFace ||
+  //       depthTestEnable != other.depthTestEnable ||
+  //       depthWriteEnable != other.depthWriteEnable ||
+  //       depthCompareOp != other.depthCompareOp ||
+  //       stencilTestEnable != other.stencilTestEnable ||
+  //       polygonMode != other.polygonMode || lineWidth != other.lineWidth ||
+  //       shader->module != other.shader->module ||
+  //       !(vertexFormat == other.vertexFormat) ||
+  //       primitiveTopology != other.primitiveTopology) {
+  //     return false;
+  //   }
+
+  //   for (size_t i = 0; i < renderTargets.size(); ++i) {
+  //     if (renderTargets[i].get() == nullptr ||
+  //         other.renderTargets[i].get() == nullptr) {
+  //       PrintWarning(
+  //           "Comparing render targets with null textures in state equality");
+  //       return false;
+  //     }
+
+  //     if (*renderTargets[i] != *other.renderTargets[i]) {
+  //       return false;
+  //     }
+  //   }
+
+  //   return true;
+  // }
+
   auto operator==(const State &other) const -> bool {
-    if (bindPoint != other.bindPoint) {
-      return false;
-    }
-
-    if (bindPoint == VK_PIPELINE_BIND_POINT_COMPUTE) {
-      // For compute pipelines, only compare shader
-      return shader.get() == other.shader.get();
-    }
-
-    if (bindPoint != VK_PIPELINE_BIND_POINT_GRAPHICS) {
-      PrintError("Comparing unsupported pipeline bind point in state equality");
-      return false;
-    }
-
-    if (renderTargets.size() != other.renderTargets.size()) {
-      return false;
-    }
-
-    for (size_t i = 0; i < renderTargets.size(); ++i) {
-      if (renderTargets[i].get() == nullptr ||
-          other.renderTargets[i].get() == nullptr) {
-        PrintWarning(
-            "Comparing render targets with null textures in state equality");
-        return false;
-      }
-
-      if (*renderTargets[i] != *other.renderTargets[i]) {
-        return false;
-      }
-    }
-
-    return cullMode == other.cullMode && frontFace == other.frontFace &&
-           depthTestEnable == other.depthTestEnable &&
-           depthWriteEnable == other.depthWriteEnable &&
-           depthCompareOp == other.depthCompareOp &&
-           stencilTestEnable == other.stencilTestEnable &&
-           polygonMode == other.polygonMode && lineWidth == other.lineWidth &&
-           *shader == *other.shader && vertexFormat == other.vertexFormat &&
-           primitiveTopology == other.primitiveTopology;
+    return GetHash() == other.GetHash();
   }
 };
 
-// NOLINTNEXTLINE, render target state stack
+// NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
 extern thread_local std::vector<State> StateStack;
 
-// NOLINTNEXTLINE, to keep track of last applied state
 extern thread_local State LastState;
 
-// NOLINTNEXTLINE
 extern thread_local State *TopOfStack;
 
-inline auto AddToHash(size_t hash, size_t value) -> size_t {
+// NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
+
+inline auto AddToHash(size_t &hash, size_t value) -> void {
   constexpr uint32_t prime = 0x9e3779b9;
   constexpr uint32_t shift = 6;
   constexpr uint32_t shift2 = 2;
 
   hash ^= value + prime + (hash << shift) + (hash >> shift2);
-  return hash;
 }
 
 inline auto HashBlendmode(VkPipelineColorBlendAttachmentState const &blendMode)
@@ -288,7 +307,7 @@ inline auto HashRenderTarget(const RenderTarget *renderTarget) -> size_t {
 }
 
 struct StateHash {
-  auto operator()(const State &state) const -> size_t {
+  static auto Hash(const State &state) -> size_t {
     size_t hash = 0;
 
     constexpr uint32_t prime = 0x9e3779b9;
@@ -330,6 +349,10 @@ struct StateHash {
     }
 
     return hash;
+  }
+
+  auto operator()(const State &state) const -> size_t {
+    return state.GetHash();
   }
 };
 

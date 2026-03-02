@@ -116,7 +116,7 @@ struct BarrierSynced {
 };
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
-static thread_local std::vector<BarrierSynced> GraphicsResources;
+extern thread_local std::vector<BarrierSynced> GraphicsResources;
 
 auto UpdateUsage(const GraphicsContext &context, BarrierSynced &resource,
                  const ResourceState &usage) -> void;

@@ -27,6 +27,8 @@ thread_local std::vector<ResourceSync> GlobalResourceSyncTimeline{};
 thread_local std::vector<std::pair<BarrierSynced, ResourceState>>
     GlobalResourceStateUpdates{};
 
+thread_local std::vector<BarrierSynced> GraphicsResources;
+
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
 inline auto IsHazard(const ResourceState &oldState,

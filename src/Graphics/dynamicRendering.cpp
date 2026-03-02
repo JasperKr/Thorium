@@ -48,6 +48,14 @@ std::vector<VkPipeline> Pipelines;
 std::mutex PipelineLayoutsMutex;
 std::vector<VkPipelineLayout> PipelineLayouts;
 
+thread_local std::vector<State> StateStack{};
+
+thread_local State LastState;
+
+thread_local State *TopOfStack = nullptr;
+
+thread_local bool StateUpdated = false;
+
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
 inline auto GetRenderExtent(const GraphicsContext &context, const State &state)
@@ -770,15 +778,6 @@ inline auto GetPipeline(const GraphicsContext &context, State &state)
   return result.value();
 }
 
-// NOLINTNEXTLINE, render target state stack
-thread_local std::vector<State> StateStack{};
-
-// NOLINTNEXTLINE, to keep track of last applied state
-thread_local State LastState{};
-
-// NOLINTNEXTLINE
-thread_local State *TopOfStack = nullptr;
-
 // All commands queued to swapchain must happen while the swapchain is bound
 // Thus if this is true and a command is used at frame count != queued frame count
 // we have an error
@@ -998,7 +997,8 @@ auto FlushGraphics(const GraphicsContext &context) -> Result<bool> {
 auto Flush(const GraphicsContext &context) -> Result<bool> {
   ZoneScoped;
 
-  if (*TopOfStack == LastState && !Graphics::GetIsStateDirty()) {
+  if (!Graphics::GetIsStateDirty() &&
+      TopOfStack->GetHash() == LastState.GetHash()) {
     return false;
   }
 
@@ -1344,17 +1344,22 @@ auto SetDepthMode(bool enable, bool writeEnable, VkCompareOp compareOp)
   TopOfStack->depthTestEnable = enable;
   TopOfStack->depthWriteEnable = writeEnable;
   TopOfStack->depthCompareOp = compareOp;
+
+  TopOfStack->dirty = true;
 }
 
 auto SetCullMode(VkCullModeFlags cullMode) -> void {
   TopOfStack->cullMode = cullMode;
+  TopOfStack->dirty = true;
 }
 
 auto SetPolygonMode(VkPolygonMode polygonMode) -> void {
   TopOfStack->polygonMode = polygonMode;
+  TopOfStack->dirty = true;
 }
 
 auto SetViewport(const VkViewport *viewport) -> void {
+  TopOfStack->dirty = true;
   if (viewport == nullptr) {
     TopOfStack->hasViewport = false;
     return;
@@ -1365,6 +1370,7 @@ auto SetViewport(const VkViewport *viewport) -> void {
 }
 
 auto SetScissor(const VkRect2D *scissor) -> void {
+  TopOfStack->dirty = true;
   if (scissor == nullptr) {
     TopOfStack->hasScissor = false;
     return;
@@ -1375,6 +1381,7 @@ auto SetScissor(const VkRect2D *scissor) -> void {
 }
 
 auto ClipScissor(const VkRect2D &scissor) -> void {
+  TopOfStack->dirty = true;
   auto &currentScissor = TopOfStack->scissor;
 
   int32_t rectMinX = std::max(currentScissor.offset.x, scissor.offset.x);
@@ -1403,6 +1410,7 @@ auto ClipScissor(const VkRect2D &scissor) -> void {
 }
 
 auto SetShader(const Ref<Shader::ShaderModule> &shader) -> void {
+  TopOfStack->dirty = true;
   if (shader.get() == nullptr) {
     TopOfStack->shader = Shader::DefaultShaderModule;
   } else {
@@ -1412,6 +1420,7 @@ auto SetShader(const Ref<Shader::ShaderModule> &shader) -> void {
 
 auto SetRenderTargets(const std::vector<Ref<RenderTarget>> &renderTargets)
     -> Error {
+  TopOfStack->dirty = true;
 
   if (renderTargets.empty()) {
     return Error::Create("No render targets provided.");
@@ -1425,18 +1434,22 @@ auto SetRenderTargets(const std::vector<Ref<RenderTarget>> &renderTargets)
 
 auto SetLineWidth(float lineWidth) -> void {
   TopOfStack->lineWidth = lineWidth;
+  TopOfStack->dirty = true;
 }
 
 auto SetWindingOrder(VkFrontFace frontFace) -> void {
   TopOfStack->frontFace = frontFace;
+  TopOfStack->dirty = true;
 }
 
 auto SetVertexFormat(const VertexFormat &vertexFormat) -> void {
   TopOfStack->vertexFormat = vertexFormat;
+  TopOfStack->dirty = true;
 }
 
 auto SetTopology(VkPrimitiveTopology topology) -> void {
   TopOfStack->primitiveTopology = topology;
+  TopOfStack->dirty = true;
 }
 
 // Getters //
@@ -1640,6 +1653,24 @@ auto Clear(const GraphicsContext &context, const ClearInfo &clearInfo)
       clearRects.data());
 
   return Error::Success();
+}
+
+auto State::GetHash() const -> uint64_t {
+  if (dirty) {
+    hash = StateHash::Hash(*this);
+    dirty = false;
+  }
+
+  return hash;
+}
+
+auto RenderTarget::GetHash() const -> uint64_t {
+  if (dirty) {
+    hash = HashRenderTarget(this);
+    dirty = false;
+  }
+
+  return hash;
 }
 
 } // namespace Graphics::DynamicRendering

@@ -4,7 +4,6 @@
 #include "Graphics/dynamicRendering.hpp"
 #include "Graphics/graphics.hpp"
 #include "Graphics/mesh.hpp"
-#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include <cassert>
 #include <cstdint>
@@ -17,9 +16,11 @@ namespace Graphics {
 
 auto BindMesh(GraphicsContext &context, VkCommandBuffer cmdBuffer,
               const Mesh &mesh) -> Error {
+  ZoneScoped;
   auto count =
       mesh.GetIndexCount() > 0 ? mesh.GetIndexCount() : mesh.GetVertexCount();
 
+#ifndef NDEBUG
   switch (mesh.GetTopology()) {
   case VK_PRIMITIVE_TOPOLOGY_LINE_LIST:
     if (count % 2 != 0) {
@@ -48,6 +49,7 @@ auto BindMesh(GraphicsContext &context, VkCommandBuffer cmdBuffer,
   default:
     break;
   }
+#endif
 
   {
     auto vertexBuffer = mesh.GetVertexBuffer();
@@ -81,22 +83,18 @@ auto BindMesh(GraphicsContext &context, VkCommandBuffer cmdBuffer,
   return Error::Success();
 }
 
-auto Draw(GraphicsContext &context, const Mesh &mesh, uint32_t instanceCount)
+auto Draw(GraphicsContext &context, Mesh &mesh, uint32_t instanceCount)
     -> Error {
   ZoneScoped;
 
   auto *commandBuffer = GetCommandBuffer();
+  VertexFormat &format = mesh.GetVertexFormat();
+  uint32_t stride = format.GetStride(0);
 
   if (commandBuffer == nullptr) {
     return Error::Create("Failed to get command buffer for draw call.");
   }
 
-  MeshDrawRange range = mesh.GetDrawRange();
-
-  auto format = mesh.GetVertexFormat();
-  auto stride = format.GetStride(0); // TODO: Multiple buffers
-
-  PrintDebug("Binding mesh");
   auto bindResult = BindMesh(context, commandBuffer, mesh);
   if (Error::IsError(bindResult)) {
     return bindResult;
@@ -106,15 +104,15 @@ auto Draw(GraphicsContext &context, const Mesh &mesh, uint32_t instanceCount)
   DynamicRendering::SetVertexFormat(format);
   DynamicRendering::SetTopology(mesh.GetTopology());
 
-  PrintDebug("Preparing rendering");
   auto error = DynamicRendering::PrepareRendering(context);
   if (Error::IsError(error)) {
     return error;
   }
 
-  PrintDebug("Issuing draw call");
   {
     ZoneScopedN("Vk Draw");
+    MeshDrawRange range = mesh.GetDrawRange();
+
     if (mesh.GetIndexCount() > 0) {
       vkCmdDrawIndexed(commandBuffer, range.Count, instanceCount, range.Offset,
                        0, 0);
@@ -179,7 +177,7 @@ auto DispatchIndirect(GraphicsContext &context,
   return Error::Success();
 }
 
-auto DrawIndirect(GraphicsContext &context, const Mesh &mesh,
+auto DrawIndirect(GraphicsContext &context, Mesh &mesh,
                   const Ref<Buffer> &indirectBuffer,
                   VkDeviceSize offset, // NOLINT
                   uint32_t count) -> Error {

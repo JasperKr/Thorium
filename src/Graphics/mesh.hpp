@@ -49,7 +49,7 @@ struct Mesh : Object {
                      const std::string &debugName = "Mesh")
       -> Result<Ref<Mesh>>;
 
-  [[nodiscard]] auto GetVertexFormat() const -> VertexFormat;
+  [[nodiscard]] auto GetVertexFormat() -> VertexFormat &;
 
   [[nodiscard]] auto GetVertexCount() const -> uint32_t;
   [[nodiscard]] auto GetVertexData() const -> auto *;
