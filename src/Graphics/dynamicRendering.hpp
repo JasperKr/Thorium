@@ -229,6 +229,15 @@ struct State {
   }
 };
 
+// NOLINTNEXTLINE, render target state stack
+extern thread_local std::vector<State> StateStack;
+
+// NOLINTNEXTLINE, to keep track of last applied state
+extern thread_local State LastState;
+
+// NOLINTNEXTLINE
+extern thread_local State *TopOfStack;
+
 inline auto AddToHash(size_t hash, size_t value) -> size_t {
   constexpr uint32_t prime = 0x9e3779b9;
   constexpr uint32_t shift = 6;

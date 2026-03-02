@@ -771,10 +771,13 @@ inline auto GetPipeline(const GraphicsContext &context, State &state)
 }
 
 // NOLINTNEXTLINE, render target state stack
-thread_local static std::vector<State> StateStack{};
+thread_local std::vector<State> StateStack{};
 
 // NOLINTNEXTLINE, to keep track of last applied state
-thread_local static State LastState{};
+thread_local State LastState{};
+
+// NOLINTNEXTLINE
+thread_local State *TopOfStack = nullptr;
 
 // All commands queued to swapchain must happen while the swapchain is bound
 // Thus if this is true and a command is used at frame count != queued frame count
@@ -819,6 +822,7 @@ auto Load(const GraphicsContext &context) -> Error {
   }
 
   StateStack.emplace_back(defaultStateResult.value());
+  TopOfStack = &StateStack.back();
 
   return Error::Success();
 }
@@ -832,8 +836,9 @@ auto Push(const GraphicsContext &context) -> Error {
 
     StateStack.emplace_back(defaultStateResult.value());
   } else {
-    StateStack.emplace_back(StateStack.back());
+    StateStack.emplace_back(*TopOfStack);
   }
+  TopOfStack = &StateStack.back();
 
   return Error::Success();
 }
@@ -844,6 +849,7 @@ auto Pop(const GraphicsContext &context) -> Error {
   }
 
   StateStack.pop_back();
+  TopOfStack = &StateStack.back();
 
   return Error::Success();
 }
@@ -857,6 +863,7 @@ auto Reset(const GraphicsContext &context) -> Error {
   }
 
   StateStack.emplace_back(defaultStateResult.value());
+  TopOfStack = &StateStack.back();
 
   LastState = State();
 
@@ -867,24 +874,24 @@ auto Shutdown(const GraphicsContext &context) -> Error {
   StateStack.clear();
   UsedShaderModules.clear();
   LastState = State();
+  TopOfStack = nullptr;
 
   return Error::Success();
 }
 
 auto FlushCompute(const GraphicsContext &context) -> Result<bool> {
   ZoneScoped;
-  auto &currentState = StateStack.back();
 
-  if (currentState.bindPoint != VK_PIPELINE_BIND_POINT_COMPUTE) {
+  if (TopOfStack->bindPoint != VK_PIPELINE_BIND_POINT_COMPUTE) {
     return Error::Unexpected("Current state is not a compute pipeline.");
   }
 
-  auto result = CreateDescriptorSets(context, currentState.shader.get());
+  auto result = CreateDescriptorSets(context, TopOfStack->shader.get());
   if (Error::IsError(result)) {
     return result.AsUnexpected();
   }
 
-  auto pipelineResult = GetPipeline(context, currentState);
+  auto pipelineResult = GetPipeline(context, *TopOfStack);
   if (Error::IsError(pipelineResult)) {
     return pipelineResult.error().AsUnexpected();
   }
@@ -896,15 +903,15 @@ auto FlushCompute(const GraphicsContext &context) -> Result<bool> {
   }
 
   auto error =
-      currentState.shader->FlushBuffers(context, pipelineResult.value().second,
-                                        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
+      TopOfStack->shader->FlushBuffers(context, pipelineResult.value().second,
+                                       VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
   if (Error::IsError(error)) {
     return error.AsUnexpected();
   }
 
   PrintDebug("Binding pipeline");
 
-  vkCmdBindPipeline(commandBuffer, currentState.bindPoint,
+  vkCmdBindPipeline(commandBuffer, TopOfStack->bindPoint,
                     pipelineResult.value().first);
 
   return true;
@@ -923,25 +930,24 @@ auto IsSwapchainTexture(const GraphicsContext &context,
 
 auto FlushGraphics(const GraphicsContext &context) -> Result<bool> {
   ZoneScoped;
-  auto &currentState = StateStack.back();
 
-  if (currentState.bindPoint != VK_PIPELINE_BIND_POINT_GRAPHICS) {
+  if (TopOfStack->bindPoint != VK_PIPELINE_BIND_POINT_GRAPHICS) {
     return Error::Unexpected("Current state is not a graphics pipeline.");
   }
 
-  for (const auto &rendertarget : currentState.renderTargets) {
+  for (const auto &rendertarget : TopOfStack->renderTargets) {
     if (IsSwapchainTexture(context, *rendertarget->texture)) {
       DrawnToSwapchain = true;
       break;
     }
   }
 
-  auto result = CreateDescriptorSets(context, currentState.shader.get());
+  auto result = CreateDescriptorSets(context, TopOfStack->shader.get());
   if (Error::IsError(result)) {
     return result.AsUnexpected();
   }
 
-  auto pipelineResult = GetPipeline(context, currentState);
+  auto pipelineResult = GetPipeline(context, *TopOfStack);
   if (Error::IsError(pipelineResult)) {
     return pipelineResult.error().AsUnexpected();
   }
@@ -962,14 +968,14 @@ auto FlushGraphics(const GraphicsContext &context) -> Result<bool> {
 
   auto viewProjectionMatrix = projectionMatrix * translationMatrix;
 
-  auto sendErr = currentState.shader->Send(context, {"DefaultProjectionMatrix"},
-                                           viewProjectionMatrix.AsByteSpan());
+  auto sendErr = TopOfStack->shader->Send(context, {"DefaultProjectionMatrix"},
+                                          viewProjectionMatrix.AsByteSpan());
   if (Error::IsError(sendErr)) {
     PrintError("Failed to send projection matrix to shader: {}",
                sendErr.message);
   }
 
-  auto error = currentState.shader->FlushBuffers(
+  auto error = TopOfStack->shader->FlushBuffers(
       context, pipelineResult.value().second,
       VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT |
           VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT);
@@ -981,10 +987,10 @@ auto FlushGraphics(const GraphicsContext &context) -> Result<bool> {
 
   {
     ZoneScopedN("vkCmdBindPipeline");
-    vkCmdBindPipeline(commandBuffer, currentState.bindPoint,
+    vkCmdBindPipeline(commandBuffer, TopOfStack->bindPoint,
                       pipelineResult.value().first);
   }
-  currentState.shader->ClearBindingCache();
+  TopOfStack->shader->ClearBindingCache();
 
   return true;
 }
@@ -992,17 +998,17 @@ auto FlushGraphics(const GraphicsContext &context) -> Result<bool> {
 auto Flush(const GraphicsContext &context) -> Result<bool> {
   ZoneScoped;
 
-  if (StateStack.back() == LastState && !Graphics::GetIsStateDirty()) {
+  if (*TopOfStack == LastState && !Graphics::GetIsStateDirty()) {
     return false;
   }
 
-  LastState = StateStack.back();
+  LastState = *TopOfStack;
 
-  if (StateStack.back().bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS) {
+  if (TopOfStack->bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS) {
     auto result = FlushGraphics(context);
     return result;
   }
-  if (StateStack.back().bindPoint == VK_PIPELINE_BIND_POINT_COMPUTE) {
+  if (TopOfStack->bindPoint == VK_PIPELINE_BIND_POINT_COMPUTE) {
     auto result = FlushCompute(context);
     return result;
   }
@@ -1037,7 +1043,6 @@ auto Destroy(const GraphicsContext &context) -> void {
 
 inline auto BeginRendering(const GraphicsContext &context) -> Error {
   ZoneScoped;
-  auto &currentState = StateStack.back();
 
   VkRenderingInfo renderingInfo = {};
   renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
@@ -1046,12 +1051,12 @@ inline auto BeginRendering(const GraphicsContext &context) -> Error {
   auto scissor = GetScissor();
 
   renderingInfo.renderArea.offset = {.x = 0, .y = 0};
-  renderingInfo.renderArea.extent = GetRenderExtent(context, currentState);
+  renderingInfo.renderArea.extent = GetRenderExtent(context, *TopOfStack);
   renderingInfo.layerCount = 1;
   renderingInfo.viewMask = 0;
   renderingInfo.flags = 0;
 
-  if (currentState.renderTargets.size() >
+  if (TopOfStack->renderTargets.size() >
       context.deviceProperties.limits.maxColorAttachments) {
     return Error::Create(
         "Number of bound render targets exceeds device limits.");
@@ -1069,7 +1074,7 @@ inline auto BeginRendering(const GraphicsContext &context) -> Error {
   bool hasDepth = false;
   bool hasStencil = false;
 
-  for (const auto &rendertarget : currentState.renderTargets) {
+  for (const auto &rendertarget : TopOfStack->renderTargets) {
     auto useResult = rendertarget->texture->UseAsAttachment(context);
     if (Error::IsError(useResult)) {
       return useResult;
@@ -1149,12 +1154,12 @@ inline auto BeginRendering(const GraphicsContext &context) -> Error {
   }
 
   vkCmdBeginRendering(Graphics::GetCommandBuffer(), &renderingInfo);
-  currentState.shader->ClearBindingCache(); // :(
-  UsedShaderModules.emplace_back(currentState.shader);
+  TopOfStack->shader->ClearBindingCache(); // :(
+  UsedShaderModules.emplace_back(TopOfStack->shader);
 
   GetIsCurrentlyRendering() = true;
 
-  for (auto &rendertarget : currentState.renderTargets) {
+  for (auto &rendertarget : TopOfStack->renderTargets) {
     // Make sure subsequent renders load from the existing content if we ever need to re-bind mid-pass
     rendertarget->loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
   }
@@ -1177,8 +1182,7 @@ auto EndRendering(const GraphicsContext &context) -> void {
 auto InsertResourceBarriers(const GraphicsContext &context) -> Error {
   ZoneScoped;
 
-  auto &currentState = StateStack.back();
-  auto &shader = currentState.shader;
+  auto &shader = TopOfStack->shader;
 
   for (auto &bufferPair : shader->GetState().boundBuffers) {
     auto &buffer = bufferPair.second;
@@ -1252,7 +1256,6 @@ auto PrepareRendering(const GraphicsContext &context) -> Error {
   }
 
   auto updatedState = flushResult.value();
-  auto &currentState = StateStack.back();
 
   auto insertionResult = InsertResourceBarriers(context);
 
@@ -1261,7 +1264,7 @@ auto PrepareRendering(const GraphicsContext &context) -> Error {
   }
 
   if (updatedState || !GetIsCurrentlyRendering()) {
-    if (currentState.bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS &&
+    if (TopOfStack->bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS &&
         !GetIsCurrentlyRendering()) {
       auto beginResult = BeginRendering(context);
 
@@ -1271,7 +1274,7 @@ auto PrepareRendering(const GraphicsContext &context) -> Error {
     }
   }
 
-  if (currentState.bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS) {
+  if (TopOfStack->bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS) {
     ZoneScopedN("Set Viewport And Scissor");
 
     auto viewport = GetClippedViewport();
@@ -1295,8 +1298,8 @@ auto FinalizeFrame(const GraphicsContext &context) -> Error {
   if (StateStack.size() != 1) {
     return Error::Create("More pushes than pops.");
   }
-  if (StateStack.back().renderTargets.size() != 0) {
-    for (const auto &rendertarget : StateStack.back().renderTargets) {
+  if (TopOfStack->renderTargets.size() != 0) {
+    for (const auto &rendertarget : TopOfStack->renderTargets) {
       if (!IsSwapchainTexture(context, *rendertarget->texture)) {
         return Error::Create(
             "Non-swapchain render targets remain bound at end of frame.");
@@ -1308,9 +1311,7 @@ auto FinalizeFrame(const GraphicsContext &context) -> Error {
 }
 
 auto UsedInPass(const Texture::Texture &texture) -> bool {
-  auto &state = StateStack.back();
-
-  return std::ranges::any_of(state.renderTargets,
+  return std::ranges::any_of(TopOfStack->renderTargets,
                              [&](const auto &target) -> auto {
                                return target->texture->image == texture.image;
                              });
@@ -1327,6 +1328,7 @@ auto BeginFrame(const GraphicsContext &context) -> Error {
   }
 
   StateStack.emplace_back(defaultStateResult.value());
+  TopOfStack = &StateStack.back();
   DrawnToSwapchain = false;
 
   for (const auto &shader : UsedShaderModules) {
@@ -1340,41 +1342,41 @@ auto BeginFrame(const GraphicsContext &context) -> Error {
 // Setters //
 auto SetDepthMode(bool enable, bool writeEnable, VkCompareOp compareOp)
     -> void {
-  StateStack.back().depthTestEnable = enable;
-  StateStack.back().depthWriteEnable = writeEnable;
-  StateStack.back().depthCompareOp = compareOp;
+  TopOfStack->depthTestEnable = enable;
+  TopOfStack->depthWriteEnable = writeEnable;
+  TopOfStack->depthCompareOp = compareOp;
 }
 
 auto SetCullMode(VkCullModeFlags cullMode) -> void {
-  StateStack.back().cullMode = cullMode;
+  TopOfStack->cullMode = cullMode;
 }
 
 auto SetPolygonMode(VkPolygonMode polygonMode) -> void {
-  StateStack.back().polygonMode = polygonMode;
+  TopOfStack->polygonMode = polygonMode;
 }
 
 auto SetViewport(const VkViewport *viewport) -> void {
   if (viewport == nullptr) {
-    StateStack.back().hasViewport = false;
+    TopOfStack->hasViewport = false;
     return;
   }
 
-  StateStack.back().hasViewport = true;
-  StateStack.back().viewport = *viewport;
+  TopOfStack->hasViewport = true;
+  TopOfStack->viewport = *viewport;
 }
 
 auto SetScissor(const VkRect2D *scissor) -> void {
   if (scissor == nullptr) {
-    StateStack.back().hasScissor = false;
+    TopOfStack->hasScissor = false;
     return;
   }
 
-  StateStack.back().hasScissor = true;
-  StateStack.back().scissor = *scissor;
+  TopOfStack->hasScissor = true;
+  TopOfStack->scissor = *scissor;
 }
 
 auto ClipScissor(const VkRect2D &scissor) -> void {
-  auto &currentScissor = StateStack.back().scissor;
+  auto &currentScissor = TopOfStack->scissor;
 
   int32_t rectMinX = std::max(currentScissor.offset.x, scissor.offset.x);
   int32_t rectMinY = std::max(currentScissor.offset.y, scissor.offset.y);
@@ -1403,9 +1405,9 @@ auto ClipScissor(const VkRect2D &scissor) -> void {
 
 auto SetShader(const Ref<Shader::ShaderModule> &shader) -> void {
   if (shader.get() == nullptr) {
-    StateStack.back().shader = Shader::DefaultShaderModule;
+    TopOfStack->shader = Shader::DefaultShaderModule;
   } else {
-    StateStack.back().shader = shader;
+    TopOfStack->shader = shader;
   }
 }
 
@@ -1416,51 +1418,43 @@ auto SetRenderTargets(const std::vector<Ref<RenderTarget>> &renderTargets)
     return Error::Create("No render targets provided.");
   }
 
-  StateStack.back().renderTargets = renderTargets;
+  TopOfStack->renderTargets = renderTargets;
   SetViewport(nullptr);
 
   return Error::Success();
 }
 
 auto SetLineWidth(float lineWidth) -> void {
-  StateStack.back().lineWidth = lineWidth;
+  TopOfStack->lineWidth = lineWidth;
 }
 
 auto SetWindingOrder(VkFrontFace frontFace) -> void {
-  StateStack.back().frontFace = frontFace;
+  TopOfStack->frontFace = frontFace;
 }
 
 auto SetVertexFormat(const VertexFormat &vertexFormat) -> void {
-  StateStack.back().vertexFormat = vertexFormat;
+  TopOfStack->vertexFormat = vertexFormat;
 }
 
 auto SetTopology(VkPrimitiveTopology topology) -> void {
-  StateStack.back().primitiveTopology = topology;
+  TopOfStack->primitiveTopology = topology;
 }
 
 // Getters //
 
 auto GetDepthMode() -> std::tuple<bool, bool, VkCompareOp> {
-  auto &currentState = StateStack.back();
-  return {currentState.depthTestEnable, currentState.depthWriteEnable,
-          currentState.depthCompareOp};
+  return {TopOfStack->depthTestEnable, TopOfStack->depthWriteEnable,
+          TopOfStack->depthCompareOp};
 }
 
-auto GetCullMode() -> VkCullModeFlags {
-  auto &currentState = StateStack.back();
-  return currentState.cullMode;
-}
+auto GetCullMode() -> VkCullModeFlags { return TopOfStack->cullMode; }
 
-auto GetPolygonMode() -> VkPolygonMode {
-  auto &currentState = StateStack.back();
-  return currentState.polygonMode;
-}
+auto GetPolygonMode() -> VkPolygonMode { return TopOfStack->polygonMode; }
 
 auto GetMaximumAllowedViewport() -> VkViewport {
-  auto &currentState = StateStack.back();
-  auto viewport = currentState.viewport;
+  auto viewport = TopOfStack->viewport;
 
-  auto size = currentState.renderTargets[0]->texture->size;
+  auto size = TopOfStack->renderTargets[0]->texture->size;
 
   viewport.width = static_cast<float>(size.width);
   viewport.height = static_cast<float>(size.height);
@@ -1472,16 +1466,15 @@ auto GetMaximumAllowedViewport() -> VkViewport {
 }
 
 auto GetClippedViewport() -> VkViewport {
-  auto &currentState = StateStack.back();
 
-  if (!currentState.hasViewport) {
+  if (!TopOfStack->hasViewport) {
     return GetMaximumAllowedViewport();
   }
 
-  auto viewport = currentState.viewport;
+  auto viewport = TopOfStack->viewport;
 
   // Default to size of current attachments
-  auto size = currentState.renderTargets[0]->texture->size;
+  auto size = TopOfStack->renderTargets[0]->texture->size;
 
   viewport.width = std::min(viewport.width, static_cast<float>(size.width));
   viewport.height = std::min(viewport.height, static_cast<float>(size.height));
@@ -1490,27 +1483,25 @@ auto GetClippedViewport() -> VkViewport {
 }
 
 auto GetViewport() -> VkViewport {
-  auto &currentState = StateStack.back();
 
-  if (!currentState.hasViewport) {
+  if (!TopOfStack->hasViewport) {
     return GetMaximumAllowedViewport();
   }
 
-  // return currentState.viewport;
+  // return TopOfStack->viewport;
   return {
-      .x = currentState.viewport.x,
-      .y = currentState.viewport.y,
-      .width = (std::max)(currentState.viewport.width, 1.0F),
-      .height = (std::max)(currentState.viewport.height, 1.0F),
-      .minDepth = currentState.viewport.minDepth,
-      .maxDepth = currentState.viewport.maxDepth,
+      .x = TopOfStack->viewport.x,
+      .y = TopOfStack->viewport.y,
+      .width = (std::max)(TopOfStack->viewport.width, 1.0F),
+      .height = (std::max)(TopOfStack->viewport.height, 1.0F),
+      .minDepth = TopOfStack->viewport.minDepth,
+      .maxDepth = TopOfStack->viewport.maxDepth,
   };
 }
 
 auto GetScissor() -> VkRect2D {
-  auto &currentState = StateStack.back();
 
-  if (!currentState.hasScissor) {
+  if (!TopOfStack->hasScissor) {
     VkRect2D scissor = {};
     auto viewport = GetMaximumAllowedViewport();
     scissor.offset = {.x = 0, .y = 0};
@@ -1525,67 +1516,51 @@ auto GetScissor() -> VkRect2D {
     return scissor;
   }
 
-  // return currentState.scissor;
+  // return TopOfStack->scissor;
 
   return {
       .offset =
           {
-              .x = currentState.scissor.offset.x,
-              .y = currentState.scissor.offset.y,
+              .x = TopOfStack->scissor.offset.x,
+              .y = TopOfStack->scissor.offset.y,
           },
       .extent =
           {
-              .width = (std::max)(currentState.scissor.extent.width, 1U),
-              .height = (std::max)(currentState.scissor.extent.height, 1U),
+              .width = (std::max)(TopOfStack->scissor.extent.width, 1U),
+              .height = (std::max)(TopOfStack->scissor.extent.height, 1U),
           },
   };
 }
 
 auto GetShader() -> Ref<Shader::ShaderModule> {
-  auto &currentState = StateStack.back();
-  if (currentState.shader.get() == Shader::DefaultShaderModule.get()) {
+  if (TopOfStack->shader.get() == Shader::DefaultShaderModule.get()) {
     return Ref<Shader::ShaderModule>(nullptr);
   }
-  return currentState.shader;
+  return TopOfStack->shader;
 }
 
 auto GetRenderTargets() -> std::vector<Ref<RenderTarget>> {
-  auto &currentState = StateStack.back();
-  return currentState.renderTargets;
+  return TopOfStack->renderTargets;
 }
 
-auto GetLineWidth() -> float {
-  auto &currentState = StateStack.back();
-  return currentState.lineWidth;
-}
+auto GetLineWidth() -> float { return TopOfStack->lineWidth; }
 
-auto GetWindingOrder() -> VkFrontFace {
-  auto &currentState = StateStack.back();
-  return currentState.frontFace;
-}
+auto GetWindingOrder() -> VkFrontFace { return TopOfStack->frontFace; }
 
-auto GetVertexFormat() -> VertexFormat {
-  auto &currentState = StateStack.back();
-  return currentState.vertexFormat;
-}
+auto GetVertexFormat() -> VertexFormat { return TopOfStack->vertexFormat; }
 
 auto GetTopology() -> VkPrimitiveTopology {
-  auto &currentState = StateStack.back();
-  return currentState.primitiveTopology;
+  return TopOfStack->primitiveTopology;
 }
 
 auto SetBindPoint(VkPipelineBindPoint bindPoint) -> void {
-  StateStack.back().bindPoint = bindPoint;
+  TopOfStack->bindPoint = bindPoint;
 }
-auto GetBindPoint() -> VkPipelineBindPoint {
-  auto &currentState = StateStack.back();
-  return currentState.bindPoint;
-}
+auto GetBindPoint() -> VkPipelineBindPoint { return TopOfStack->bindPoint; }
 
 auto Clear(const GraphicsContext &context, const ClearInfo &clearInfo)
     -> Error {
   ZoneScoped;
-  auto &currentState = StateStack.back();
 
   auto *commandBuffer = Graphics::GetCommandBuffer();
 
@@ -1593,7 +1568,7 @@ auto Clear(const GraphicsContext &context, const ClearInfo &clearInfo)
     return Error::Create("Command buffer is null in Clear.");
   }
 
-  auto count = currentState.renderTargets.size();
+  auto count = TopOfStack->renderTargets.size();
 
   if (count == 0) {
     return Error::Create("No render targets to clear.");
@@ -1618,7 +1593,7 @@ auto Clear(const GraphicsContext &context, const ClearInfo &clearInfo)
 
   for (uint32_t i = 0; i < count; ++i) {
     VkClearAttachment clearAttachment = {};
-    auto &rendertarget = currentState.renderTargets[i];
+    auto &rendertarget = TopOfStack->renderTargets[i];
 
     if (Image::IsDepthTexture(rendertarget->texture->format) ||
         Image::IsStencilTexture(rendertarget->texture->format)) {

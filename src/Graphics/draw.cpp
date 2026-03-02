@@ -113,21 +113,26 @@ auto Draw(GraphicsContext &context, const Mesh &mesh, uint32_t instanceCount)
   }
 
   PrintDebug("Issuing draw call");
-  if (mesh.GetIndexCount() > 0) {
-    vkCmdDrawIndexed(commandBuffer, range.Count, instanceCount, range.Offset, 0,
-                     0);
-  } else {
-    vkCmdDraw(commandBuffer, range.Count, instanceCount, range.Offset, 0);
+  {
+    ZoneScopedN("Vk Draw");
+    if (mesh.GetIndexCount() > 0) {
+      vkCmdDrawIndexed(commandBuffer, range.Count, instanceCount, range.Offset,
+                       0, 0);
+    } else {
+      vkCmdDraw(commandBuffer, range.Count, instanceCount, range.Offset, 0);
+    }
   }
 
   {
-    std::lock_guard<std::mutex> lock(mesh.GetVertexBuffer()->mutex);
-    mesh.GetVertexBuffer()->MarkUse();
-  }
+    ZoneScopedN("Resource management") {
+      std::lock_guard<std::mutex> lock(mesh.GetVertexBuffer()->mutex);
+      mesh.GetVertexBuffer()->MarkUse();
+    }
 
-  if (mesh.GetIndexCount() > 0) {
-    std::lock_guard<std::mutex> lock(mesh.GetIndexBuffer()->mutex);
-    mesh.GetIndexBuffer()->MarkUse();
+    if (mesh.GetIndexCount() > 0) {
+      std::lock_guard<std::mutex> lock(mesh.GetIndexBuffer()->mutex);
+      mesh.GetIndexBuffer()->MarkUse();
+    }
   }
 
   return Error::Success();
