@@ -151,6 +151,8 @@ auto Dispatch(GraphicsContext &context, const Math::Uvec3 &threadgroups)
     return error;
   }
 
+  DynamicRendering::EndRendering(context);
+
   vkCmdDispatch(commandBuffer, threadgroups.x, threadgroups.y, threadgroups.z);
 
   return Error::Success();

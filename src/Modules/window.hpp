@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <vector>
 namespace Window {
 
 // Hide the window, keeping the application running in the background.

@@ -38,6 +38,8 @@ local vertices = {
 local mesh
 
 local shader = Thorium.graphics.newShader("Graphics/Shaders/test.slang")
+local computeshader = Thorium.graphics.newShader("Graphics/Shaders/test2.slang")
+local value = 0.25
 
 local texture
 print("Generated noise texture in " .. tostring(Thorium.timer.getTime() - t) .. " seconds")
@@ -60,6 +62,13 @@ local function draw()
   Thorium.gui.draw()
   Thorium.graphics.setScissor();
   lastImDrawTime = lastImDrawTime + Thorium.timer.getTime() - imStartTime
+
+  Thorium.graphics.setShader(computeshader)
+  computeshader:send("PushConstants", "valueToAdd", value)
+  computeshader:send("PushConstants", "textureSize", { 16, 16 })
+  computeshader:send("outTexture", texture)
+  Thorium.graphics.dispatch(1, 1, 1)
+  value = -value
 
   Thorium.graphics.setShader(shader)
   shader:send("MainTexture", texture)
@@ -88,7 +97,8 @@ while true do
 
   Thorium.graphics.aquireGraphics("gui")
   if not texture then
-    texture = Thorium.graphics.newTexture(testImgdata)
+    print("New texture")
+    texture = Thorium.graphics.newTexture(testImgdata, { storage = true, sampler = true })
 
     local format = {
       {

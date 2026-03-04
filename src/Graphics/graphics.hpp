@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Graphics/deviceSettings.hpp"
 #include "Graphics/threadContext.hpp"
 #include "Modules/object.hpp"
 #include "Modules/window.hpp"
@@ -94,8 +95,8 @@ struct GraphicsContext {
   uint32_t swapchainImageIndex;
 };
 
-auto Initialize(GraphicsContext &context, Window::WindowContext &wcontext)
-    -> Error;
+auto Initialize(GraphicsContext &context, Window::WindowContext &wcontext,
+                const DeviceSettings &deviceSettings) -> Error;
 auto GetThreadContext() -> ThreadContext &;
 auto GetCommandBuffer() -> VkCommandBuffer;
 void Deinitialize(GraphicsContext &context);

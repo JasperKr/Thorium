@@ -1,6 +1,7 @@
 #include "texture.hpp"
 #include "Graphics/barrier.hpp"
 #include "Graphics/buffer.hpp"
+#include "Graphics/dynamicRendering.hpp"
 #include "Graphics/format.hpp"
 #include "Graphics/graphics.hpp"
 #include "Graphics/resource.hpp"
@@ -776,6 +777,8 @@ auto Texture::TransitionLayout(const GraphicsContext &context,
 
   if (currentLayout == layout && sourceStage == destinationStage &&
       srcAccessMask == dstAccessMask) {
+    PrintInfo("Texture already in desired layout {}, skipping transition.",
+              ImageLayoutToString(layout));
     return Error::Success();
   }
 
@@ -808,6 +811,7 @@ auto Texture::TransitionLayout(const GraphicsContext &context,
                        .imageMemoryBarrierCount = 1,
                        .pImageMemoryBarriers = &barrier};
 
+  DynamicRendering::EndRendering(context);
   vkCmdPipelineBarrier2(commandBuffer, &dep);
 
   currentLayout = layout;
@@ -1188,7 +1192,8 @@ auto GetDefaultTexture(const GraphicsContext &context, VkFormat format,
   texInfo.depth = 1;
   texInfo.format = format;
   texInfo.usage = static_cast<uint32_t>(VK_IMAGE_USAGE_SAMPLED_BIT) |
-                  static_cast<uint32_t>(VK_IMAGE_USAGE_TRANSFER_DST_BIT);
+                  static_cast<uint32_t>(VK_IMAGE_USAGE_TRANSFER_DST_BIT) |
+                  static_cast<uint32_t>(VK_IMAGE_USAGE_STORAGE_BIT);
   texInfo.debugName =
       "Default_Texture_" + Format::ImageFormatToString(format) + "_";
   switch (textureType) {

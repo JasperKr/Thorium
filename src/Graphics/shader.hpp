@@ -113,7 +113,7 @@ struct BoundState {
 
   std::unordered_map<uint32_t, VkDescriptorSet> descriptorSets;
   std::vector<DescriptorWriteInfo> pendingDescriptorWrites;
-  std::vector<ImageTransitionInfo> pendingImageTransitions;
+  // std::vector<ImageTransitionInfo> pendingImageTransitions;
 };
 
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)

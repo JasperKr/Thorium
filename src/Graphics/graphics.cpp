@@ -1,4 +1,5 @@
 #include "graphics.hpp"
+#include "Graphics/deviceSettings.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/window.hpp"
@@ -131,7 +132,48 @@ static auto FindQueueFamilies(GraphicsContext &context) -> Error {
   return Error::Success();
 }
 
-static auto CreateDevice(GraphicsContext &context) -> Error {
+auto GetAvailableDeviceExtensions(const GraphicsContext &context)
+    -> Result<std::vector<VkExtensionProperties>> {
+  uint32_t extensionCount = 0;
+  auto error = Error::Create(vkEnumerateDeviceExtensionProperties(
+      context.physicalDevice, nullptr, &extensionCount, nullptr));
+
+  if (Error::IsError(error)) {
+    return error.AsUnexpected();
+  }
+
+  std::vector<VkExtensionProperties> extensions(extensionCount);
+  error = Error::Create(vkEnumerateDeviceExtensionProperties(
+      context.physicalDevice, nullptr, &extensionCount, extensions.data()));
+
+  if (Error::IsError(error)) {
+    return error.AsUnexpected();
+  }
+
+  return extensions;
+}
+
+auto ExtensionListSupported(
+    const std::vector<const char *> &requiredExtensions,
+    const std::vector<VkExtensionProperties> &availableExtensions)
+    -> std::vector<bool> {
+  std::vector<bool> supported(requiredExtensions.size(), false);
+
+  for (size_t i = 0; i < requiredExtensions.size(); i++) {
+    for (const auto &available : availableExtensions) {
+      // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-array-to-pointer-decay, hicpp-no-array-decay)
+      if (strcmp(requiredExtensions.at(i), available.extensionName) == 0) {
+        supported.at(i) = true;
+        break;
+      }
+    }
+  }
+
+  return supported;
+}
+
+static auto CreateDevice(GraphicsContext &context,
+                         const DeviceSettings &settings) -> Error {
   float queuePriority = 1.0F;
   VkDeviceQueueCreateInfo queueCreateInfo{};
   queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
@@ -197,9 +239,78 @@ static auto CreateDevice(GraphicsContext &context) -> Error {
   createInfo.pNext = &features2;
   createInfo.pEnabledFeatures = nullptr;
 
-  const std::vector<const char *> deviceExtensions = {
+  std::vector<const char *> deviceExtensions = {
       VK_KHR_SWAPCHAIN_EXTENSION_NAME,
   };
+
+  constexpr auto extDisabled = ExtensionRequirement::Disabled;
+  constexpr auto extOptional = ExtensionRequirement::Optional;
+  constexpr auto extRequired = ExtensionRequirement::Required;
+
+  if (settings.hardwareRaytracing != extDisabled) {
+    const auto &result = GetAvailableDeviceExtensions(context);
+    if (Error::IsError(result)) {
+      return result.error();
+    }
+    const auto &availableExtensions = result.value();
+
+    const std::vector<const char *> requiredExtensions = {
+        VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
+        VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
+        VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
+        VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME,
+        VK_KHR_SPIRV_1_4_EXTENSION_NAME,
+        VK_KHR_SHADER_FLOAT_CONTROLS_EXTENSION_NAME};
+
+    const auto &supported =
+        ExtensionListSupported(requiredExtensions, availableExtensions);
+    bool allRequiredSupported = true;
+    std::string errmsg;
+    auto index = 0;
+
+    for (const auto &extensionSupported : supported) {
+      if (!extensionSupported) {
+        allRequiredSupported = false;
+        errmsg += std::string(requiredExtensions.at(index)) + "\n";
+      } else {
+        deviceExtensions.emplace_back(requiredExtensions.at(index));
+      }
+      index++;
+    }
+
+    if (!allRequiredSupported) {
+      if (settings.hardwareRaytracing == extRequired) {
+        return Error::Create(
+            "Some Hardware raytracing extensions are not supported:\n" +
+            errmsg);
+      }
+      PrintInfo(
+          "Some Hardware raytracing extensions are not supported, skipping "
+          "hardware raytracing:\n{}",
+          errmsg);
+    } else {
+      PrintInfo("Enabled hardware raytracing support.");
+
+      if (settings.inlineRaytracing != extDisabled) {
+        bool supported =
+            ExtensionListSupported({VK_KHR_RAY_QUERY_EXTENSION_NAME},
+                                   availableExtensions)
+                .at(0);
+        if (!supported) {
+          if (settings.inlineRaytracing == extRequired) {
+            return Error::Create(
+                "Inline raytracing requires " VK_KHR_RAY_QUERY_EXTENSION_NAME
+                " which is not supported on this system.");
+          }
+          PrintInfo("Inline raytracing not supported by hardware, skipping.");
+        } else {
+          PrintInfo("Enabling " VK_KHR_RAY_QUERY_EXTENSION_NAME
+                    " for inline raytracing.");
+          deviceExtensions.emplace_back(VK_KHR_RAY_QUERY_EXTENSION_NAME);
+        }
+      }
+    }
+  }
 
   createInfo.enabledExtensionCount =
       static_cast<uint32_t>(deviceExtensions.size());
@@ -316,8 +427,9 @@ inline auto CreateCommandPool(ThreadContext &tcontext) -> Error {
   return Error::Success();
 }
 
-auto Initialize(GraphicsContext &context, Window::WindowContext &wcontext)
-    -> Error {
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
+auto Initialize(GraphicsContext &context, Window::WindowContext &wcontext,
+                const DeviceSettings &deviceSettings) -> Error {
   PrintDebug("Initializing Volk...");
   Error error = Error::Create(volkInitialize());
 
@@ -359,7 +471,10 @@ auto Initialize(GraphicsContext &context, Window::WindowContext &wcontext)
     extensionList.emplace_back(extensions[i]); // NOLINT
   }
 
+  // Resource debug names
+#ifndef NDEBUG // If debug
   extensionList.emplace_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+#endif
 
   VkApplicationInfo appInfo = {};
   appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -404,7 +519,7 @@ auto Initialize(GraphicsContext &context, Window::WindowContext &wcontext)
     return Error::Create("No current window context found.");
   }
 
-  error = CreateDevice(context);
+  error = CreateDevice(context, deviceSettings);
   if (Error::IsError(error)) {
     return error;
   }

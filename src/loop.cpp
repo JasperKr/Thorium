@@ -254,7 +254,7 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
 
   PrintDebug("Initializing graphics...");
 
-  auto result = Graphics::Initialize(context, wcontext);
+  auto result = Graphics::Initialize(context, wcontext, config.deviceSettings);
   if (Error::IsError(result)) {
     return result;
   }

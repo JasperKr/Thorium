@@ -206,7 +206,9 @@ auto FillDescriptorSets(const GraphicsContext &context,
 
       auto layoutBinding = VkDescriptorSetLayoutBinding{
           .binding = imageInfo.binding,
-          .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+          .descriptorType = imageInfo.access == SLANG_RESOURCE_ACCESS_READ
+                                ? VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
+                                : VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
           .descriptorCount = 1,
           .stageFlags = VK_SHADER_STAGE_ALL,
           .pImmutableSamplers = nullptr,
@@ -901,6 +903,8 @@ auto FlushCompute(const GraphicsContext &context) -> Result<bool> {
     return Error::Unexpected("Command buffer is null in FlushCompute.");
   }
 
+  PrintAlways("Flushing compute pipeline");
+  assert(TopOfStack->shader->stages.at(0) == VK_SHADER_STAGE_COMPUTE_BIT);
   auto error =
       TopOfStack->shader->FlushBuffers(context, pipelineResult.value().second,
                                        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);

@@ -173,6 +173,16 @@ struct Texture : Object, Barrier::BarrierSynced {
                  VkRect2D source, VkOffset2D target) -> Error;
   [[nodiscard]] auto GetMipmapCount() const -> size_t { return mipmapcount; }
   [[nodiscard]] auto GetFormat() const -> VkFormat { return format; }
+  [[nodiscard]] auto SupportsStorage() const -> bool {
+    return (usage & VK_IMAGE_USAGE_STORAGE_BIT) != 0;
+  }
+  [[nodiscard]] auto SupportsSampling() const -> bool {
+    return (usage & VK_IMAGE_USAGE_SAMPLED_BIT) != 0;
+  }
+  [[nodiscard]] auto SupportsAttachment() const -> bool {
+    return (usage & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT) != 0 ||
+           (usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) != 0;
+  }
 
   static auto GetType() -> Type const * { return &type; }
   auto TransitionLayout(

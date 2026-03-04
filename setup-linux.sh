@@ -22,6 +22,19 @@ curl -L https://raw.githubusercontent.com/nothings/stb/master/stb_image.h -o inc
 # Fetch stb_perlin
 curl -L https://raw.githubusercontent.com/nothings/stb/master/stb_perlin.h -o include/stb/stb_perlin.h
 
+# Fetch embree pre-built binearies for Linux x86_64
+URL="https://github.com/embree/embree/releases/download/v4.4.0/embree-4.4.0.x86_64.linux.tar.gz"
+if [ ! -d "temp_embree" ]; then
+    mkdir -p temp_embree
+    curl -L "$URL" -o "temp_embree/embree.tar.gz"
+    tar -xzf "temp_embree/embree.tar.gz" -C temp_embree
+    mkdir -p include/embree
+    cp -r temp_embree/include/embree4/* include/embree/
+    mkdir -p lib/embree
+    cp -r temp_embree/lib/* lib/embree/
+    rm -rf temp_embree
+fi
+
 # Shaderc: clone repository and copy necessary include
 
 # check if the folder is empty, otherwise skip

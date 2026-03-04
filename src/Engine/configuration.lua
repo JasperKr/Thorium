@@ -12,8 +12,11 @@ function Thorium.config(config)
   ---@type Thorium.VsyncMode
   config.window.vsync = "enabled"
 
+  config.graphics.hardwareRaytracing = "optional"
+  config.graphics.inlineRaytracing = "optional"
+
   config.filesystem.identity = "ConfiguredIdentity"
 
   -- "debug" > "info" > "warning" > "error" > "fatal"
-  config.loglevel = "warning"
+  config.loglevel = "info"
 end

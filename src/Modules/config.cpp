@@ -1,4 +1,5 @@
 #include "config.hpp"
+#include "Graphics/deviceSettings.hpp"
 #include "Modules/console.hpp"
 #include "Wrap/Modules/wrap_window.hpp"
 #include "Wrap/wrap.hpp"
@@ -12,7 +13,7 @@ extern "C" {
 namespace Config {
 
 // NOLINTNEXTLINE
-static ApplicationConfig globalConfig;
+ApplicationConfig globalConfig;
 
 inline auto SetIdentity(lua_State *state) -> int {
   if (lua_isstring(state, 1) == 0) {
@@ -20,6 +21,85 @@ inline auto SetIdentity(lua_State *state) -> int {
   }
   globalConfig.Identity = lua_tostring(state, 1);
   PrintInfo("Identity set to ", globalConfig.Identity);
+  return 0;
+}
+
+inline auto StringToExtensionRequirement(const char *str)
+    -> Result<Graphics::ExtensionRequirement> {
+  if (std::string(str) == "disabled") {
+    return Graphics::ExtensionRequirement::Disabled;
+  }
+  if (std::string(str) == "optional") {
+    return Graphics::ExtensionRequirement::Optional;
+  }
+  if (std::string(str) == "required") {
+    return Graphics::ExtensionRequirement::Required;
+  }
+
+  return Error::Unexpectedf("Invalid extension requirement '{}'", str);
+}
+
+inline auto SetGraphicsSettings(lua_State *state) -> int {
+  lua_getfield(state, 1, "hardwareRaytracing");
+  if (!lua_isnoneornil(state, -1)) {
+    auto extRequirementResult =
+        StringToExtensionRequirement(luaL_checkstring(state, -1));
+    if (Error::IsError(extRequirementResult)) {
+      return luaL_error(state, "%s",
+                        extRequirementResult.error().message.c_str());
+    }
+    globalConfig.deviceSettings.hardwareRaytracing =
+        extRequirementResult.value();
+  }
+  lua_pop(state, 1);
+
+  lua_getfield(state, 1, "inlineRaytracing");
+  if (!lua_isnoneornil(state, -1)) {
+    auto extRequirementResult =
+        StringToExtensionRequirement(luaL_checkstring(state, -1));
+    if (Error::IsError(extRequirementResult)) {
+      return luaL_error(state, "%s",
+                        extRequirementResult.error().message.c_str());
+    }
+    globalConfig.deviceSettings.inlineRaytracing = extRequirementResult.value();
+  }
+  lua_pop(state, 1);
+
+  lua_getfield(state, 1, "requiredExtensions");
+  if (!lua_isnoneornil(state, -1)) {
+    if (!lua_istable(state, -1)) {
+      return luaL_error(state, "requiredExtensions must be a table");
+    }
+
+    lua_pushnil(state);
+    while (lua_next(state, -2) != 0) {
+      if (lua_type(state, -2) != LUA_TSTRING ||
+          lua_type(state, -1) != LUA_TSTRING) {
+        return luaL_error(state, "requiredExtensions must be a table "
+                                 "with string keys and values");
+      }
+      const char *extName = lua_tostring(state, -2);
+      const char *extReq = lua_tostring(state, -1);
+      Graphics::ExtensionRequirement extRequirement{};
+
+      auto extRequirementResult = StringToExtensionRequirement(extReq);
+      if (Error::IsError(extRequirementResult)) {
+        return luaL_error(state, "%s",
+                          extRequirementResult.error().message.c_str());
+      }
+
+      extRequirement = extRequirementResult.value();
+      globalConfig.deviceSettings.requiredExtensions.emplace_back(
+          Graphics::Extension{
+              .name = extName,
+              // Instance-level extensions are not supported by lua configuration.
+              .type = Graphics::ExtensionType::Device,
+              .requirement = extRequirement,
+          });
+    }
+  }
+  lua_pop(state, 1);
+
   return 0;
 }
 
@@ -60,6 +140,9 @@ inline auto SetFunctions(lua_State *state) -> void {
 
   lua_pushcfunction(state, Wrap::Window::wrap_SetInitialSettings);
   lua_setfield(state, -2, "_setSettings");
+
+  lua_pushcfunction(state, SetGraphicsSettings);
+  lua_setfield(state, -2, "_setGraphicsSettings");
 }
 
 inline auto RemoveFunctions(lua_State *state) -> void {
@@ -105,6 +188,10 @@ auto Configure(lua_State *state) -> Result<ApplicationConfig> {
         identity = "MyGame",
       },
       window = {},
+      graphics = {
+        hardwareRaytracing = "disabled",
+        inlineRaytracing = "disabled",
+      },
       loglevel = ""
     }
 
@@ -121,6 +208,7 @@ auto Configure(lua_State *state) -> Result<ApplicationConfig> {
 
     Thorium._setIdentity(config.filesystem.identity)
     Thorium._setSettings(config.window)
+    Thorium._setGraphicsSettings(config.graphics or {})
     if config.loglevel ~= "" then Thorium._setLogLevel(config.loglevel) end
   )lua";
 

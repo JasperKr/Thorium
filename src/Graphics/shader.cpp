@@ -3,6 +3,7 @@
 #include "Graphics/Buffers/push.hpp"
 #include "Graphics/graphicsState.hpp"
 #include "Graphics/reflect.hpp"
+#include "Graphics/texture.hpp"
 #include "Modules/Math/vector.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
@@ -720,6 +721,14 @@ auto ShaderModule::Send(const GraphicsContext &context, const ResourceKey &key,
     if (resource.name == *key.begin()) { // TODO: Fix this search
       auto key = SetBindingToSlot(samplerInfo.set, samplerInfo.binding);
 
+      if ((samplerInfo.access == SLANG_RESOURCE_ACCESS_WRITE ||
+           samplerInfo.access == SLANG_RESOURCE_ACCESS_READ_WRITE) &&
+          !texture->SupportsStorage()) {
+        return Error::Create(
+            "Texture does not support storage access required by shader.");
+      }
+
+      // TODO Change to "ToBeBoundTextures" or something, as this is not necessarily bound yet, just pending to be bound.
       if (state.boundTextures[key] == texture) {
         return Error::Success();
       }
@@ -735,17 +744,16 @@ auto ShaderModule::Send(const GraphicsContext &context, const ResourceKey &key,
       descriptorWrite.dstBinding = samplerInfo.binding;
       descriptorWrite.dstArrayElement = 0;
       descriptorWrite.descriptorType =
-          VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+          samplerInfo.access == SLANG_RESOURCE_ACCESS_READ
+              ? VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
+              : VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
       descriptorWrite.descriptorCount = 1;
       descriptorWrite.pImageInfo = imageInfo;
       descriptorWrite.imagePtr = texture;
 
+      // state.boundTextures[key] = texture; // Fix this!
+
       state.pendingDescriptorWrites.emplace_back(descriptorWrite);
-      state.pendingImageTransitions.emplace_back(ImageTransitionInfo{
-          .texture = texture,
-          .newUsage = Texture::TextureUsage::Sampler,
-          .newStage = ShaderStageFlagsToPipelineStageFlags(resource.stages),
-      });
 
       return Error::Success();
     }
@@ -875,41 +883,71 @@ auto ShaderModule::FlushBuffers(const GraphicsContext &context,
             "Descriptor set not found in shader descriptor sets.");
       }
     }
+  }
 
-    for (auto &transition : GetState().pendingImageTransitions) {
-      Error result;
+  for (auto &resource : reflection.resources) {
+    if (!resource.IsSampler()) {
+      PrintAlways("Resource '{}' is not a sampler, skipping.", resource.name);
+      continue;
+    }
+    PrintAlways("Processing sampler resource '{}'...", resource.name);
 
-      switch (transition.newUsage) {
-      case Texture::TextureUsage::Sampler:
-        result = transition.texture->UseAsSampler(context, transition.newStage);
-        break;
-      case Texture::TextureUsage::Storage:
-        result = transition.texture->UseAsStorage(context, transition.newStage);
-        break;
-      case Texture::TextureUsage::Attachment:
-        result = transition.texture->UseAsAttachment(context);
-        break;
-      case Texture::TextureUsage::TransferSrc:
-        result = transition.texture->UseAsTransferSrc(context);
-        break;
-      case Texture::TextureUsage::TransferDst:
-        result = transition.texture->UseAsTransferDst(context);
-        break;
-      case Texture::TextureUsage::PresentSrc:
-        result = transition.texture->UseAsPresentSrc(context);
-        break;
-      case Texture::TextureUsage::Unknown:
-        result = Error::Create(
-            "Cannot transition image with unknown usage in shader flush.");
-        break;
-      }
+    const auto &samplerInfo = std::get<SamplerInfo>(resource.info);
+    auto usage = samplerInfo.access == SLANG_RESOURCE_ACCESS_READ
+                     ? Texture::TextureUsage::Sampler
+                     : Texture::TextureUsage::Storage;
+    auto stage = ShaderStageFlagsToPipelineStageFlags(resource.stages);
 
-      if (Error::IsError(result)) {
-        return result;
-      }
+    auto key = SetBindingToSlot(samplerInfo.set, samplerInfo.binding);
+    auto boundTextureIter = state.boundTextures.find(key);
+    if (boundTextureIter == state.boundTextures.end()) {
+      PrintWarning("No texture bound for sampler '{}', set {}, binding {}.",
+                   resource.name, samplerInfo.set, samplerInfo.binding);
+      continue;
+    }
+    auto *texture = boundTextureIter->second;
+
+    if (texture == nullptr) {
+      PrintWarning("Texture bound to sampler '{}' is null, set {}, binding {}.",
+                   resource.name, samplerInfo.set, samplerInfo.binding);
+      continue;
+    }
+
+    PrintAlways(
+        "Flushing sampler resource '{}' with usage {}...", resource.name,
+        usage == Texture::TextureUsage::Sampler ? "sampler" : "storage");
+
+    Error result;
+
+    switch (usage) {
+    case Texture::TextureUsage::Sampler:
+      result = texture->UseAsSampler(context, stage);
+      break;
+    case Texture::TextureUsage::Storage:
+      result = texture->UseAsStorage(context, stage);
+      break;
+    case Texture::TextureUsage::Attachment:
+      result = texture->UseAsAttachment(context);
+      break;
+    case Texture::TextureUsage::TransferSrc:
+      result = texture->UseAsTransferSrc(context);
+      break;
+    case Texture::TextureUsage::TransferDst:
+      result = texture->UseAsTransferDst(context);
+      break;
+    case Texture::TextureUsage::PresentSrc:
+      result = texture->UseAsPresentSrc(context);
+      break;
+    case Texture::TextureUsage::Unknown:
+      result = Error::Create(
+          "Cannot transition image with unknown usage in shader flush.");
+      break;
+    }
+
+    if (Error::IsError(result)) {
+      return result;
     }
   }
-  state.pendingImageTransitions.clear();
 
   {
     ZoneScopedN("Update descriptor sets");

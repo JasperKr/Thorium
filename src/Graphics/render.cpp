@@ -411,8 +411,7 @@ GetOrderedCommands(GraphicsContext &context,
         Utils::UnorderedErase(
             Threading::Results,
             [&](const Ref<Threading::RenderThreadInfo> &info) -> bool {
-              return info->threadData.id ==
-                     data.id; // Crashes here: Invalid memory reference
+              return info->threadData.id == data.id;
             });
       }
     } else {
