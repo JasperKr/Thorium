@@ -1,5 +1,6 @@
 #include "reflect.hpp"
 #include "Graphics/graphics.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "slang/slang.h"
 #define VK_NO_PROTOTYPES
@@ -253,6 +254,7 @@ auto SetupResource(slang::VariableLayoutReflection *variableLayout,
     resourceInfo.name = variableLayout->getName();
     resourceInfo.stages = SlangStageToVkStage(variableLayout->getStage());
     resourceInfo.info = samplerInfo;
+    PrintAlways("Resource: {}", resourceInfo.name);
 
     reflection.resources.emplace_back(resourceInfo);
     reflection

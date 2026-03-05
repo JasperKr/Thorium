@@ -16,6 +16,7 @@
 #include <span>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 #define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
@@ -109,7 +110,12 @@ ShaderStageFlagsToPipelineStageFlags(VkShaderStageFlags shaderStages)
 
 struct BoundState {
   std::unordered_map<uint64_t, Buffer *> boundBuffers;
+  std::unordered_map<uint64_t, std::pair<Buffer *, BufferInfo>>
+      userBoundBuffers;
+
   std::unordered_map<uint64_t, Texture::Texture *> boundTextures;
+  std::unordered_map<uint64_t, std::pair<Texture::Texture *, SamplerInfo>>
+      userBoundTextures;
 
   std::unordered_map<uint32_t, VkDescriptorSet> descriptorSets;
   std::vector<DescriptorWriteInfo> pendingDescriptorWrites;
@@ -194,8 +200,8 @@ struct ShaderModule : Object {
       -> Result<const ResourceInfo>;
   auto GetSlotDescription(uint64_t slot) -> Result<const ResourceInfo>;
 
-  auto FlushBuffers(const GraphicsContext &context, VkPipelineLayout layout,
-                    VkPipelineStageFlags2 dstStage) -> Error;
+  auto FlushDescriptors(const GraphicsContext &context, VkPipelineLayout layout,
+                        VkPipelineStageFlags2 dstStage) -> Error;
 
   auto GetThreadgroupSize() const -> Result<Math::Uvec3>;
   auto GetWaveSize() const -> uint32_t;

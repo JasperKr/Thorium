@@ -728,32 +728,7 @@ auto ShaderModule::Send(const GraphicsContext &context, const ResourceKey &key,
             "Texture does not support storage access required by shader.");
       }
 
-      // TODO Change to "ToBeBoundTextures" or something, as this is not necessarily bound yet, just pending to be bound.
-      if (state.boundTextures[key] == texture) {
-        return Error::Success();
-      }
-
-      // Create descriptor set for this texture
-      VkDescriptorImageInfo imageInfo{};
-      imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-      imageInfo.imageView = texture->view;
-      imageInfo.sampler = texture->GetSampler(context);
-
-      DescriptorWriteInfo descriptorWrite{};
-      descriptorWrite.dstSet = samplerInfo.set;
-      descriptorWrite.dstBinding = samplerInfo.binding;
-      descriptorWrite.dstArrayElement = 0;
-      descriptorWrite.descriptorType =
-          samplerInfo.access == SLANG_RESOURCE_ACCESS_READ
-              ? VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
-              : VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-      descriptorWrite.descriptorCount = 1;
-      descriptorWrite.pImageInfo = imageInfo;
-      descriptorWrite.imagePtr = texture;
-
-      // state.boundTextures[key] = texture; // Fix this!
-
-      state.pendingDescriptorWrites.emplace_back(descriptorWrite);
+      state.userBoundTextures[key] = {texture, samplerInfo};
 
       return Error::Success();
     }
@@ -821,9 +796,9 @@ auto ShaderModule::FlushGlobals(const GraphicsContext &context,
 }
 
 // NOLINTNEXTLINE
-auto ShaderModule::FlushBuffers(const GraphicsContext &context,
-                                VkPipelineLayout layout,
-                                VkPipelineStageFlags2 dstStage) -> Error {
+auto ShaderModule::FlushDescriptors(const GraphicsContext &context,
+                                    VkPipelineLayout layout,
+                                    VkPipelineStageFlags2 dstStage) -> Error {
   ZoneScoped;
 
   auto validateResult = ValidateBuffers(this);
@@ -842,55 +817,17 @@ auto ShaderModule::FlushBuffers(const GraphicsContext &context,
 
   thread_local std::vector<VkWriteDescriptorSet> writes;
   thread_local std::unordered_set<uint64_t> updatedSets;
+  thread_local std::vector<VkDescriptorImageInfo> imageInfos;
   writes.clear();
   updatedSets.clear();
-
-  auto writeCount = static_cast<int32_t>(state.pendingDescriptorWrites.size());
-  writes.resize(writeCount);
-
-  auto index = 0;
-  { // Loop over writes in reverse to prioritize later writes
-    ZoneScopedN("Fill descriptor writes");
-    for (int32_t i = writeCount - 1; i >= 0; i--) {
-      auto &write = state.pendingDescriptorWrites.at(i);
-
-      if (write.bufferPtr == nullptr && write.imagePtr == nullptr) {
-        return Error::Create(
-            "Descriptor write has no buffer or image info set.");
-      }
-
-      uint64_t key = write.dstSet;
-      key |= (static_cast<uint64_t>(write.dstBinding) << 32U); // NOLINT
-      if (updatedSets.contains(key)) {
-        continue;
-      }
-      updatedSets.insert(key);
-
-      auto &dstWrite = writes[index];
-      dstWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-      dstWrite.pNext = nullptr;
-      dstWrite.dstSet = state.descriptorSets.at(write.dstSet);
-      dstWrite.dstBinding = write.dstBinding;
-      dstWrite.dstArrayElement = write.dstArrayElement;
-      dstWrite.descriptorCount = write.descriptorCount;
-      dstWrite.descriptorType = write.descriptorType;
-      dstWrite.pImageInfo = &write.pImageInfo;
-      dstWrite.pBufferInfo = &write.pBufferInfo;
-      dstWrite.pTexelBufferView = &write.pTexelBufferView;
-
-      if (writes[index++].dstSet == VK_NULL_HANDLE) {
-        return Error::Create(
-            "Descriptor set not found in shader descriptor sets.");
-      }
-    }
-  }
+  imageInfos.clear();
 
   for (auto &resource : reflection.resources) {
     if (!resource.IsSampler()) {
-      PrintAlways("Resource '{}' is not a sampler, skipping.", resource.name);
+      // PrintAlways("Resource '{}' is not a sampler, skipping.", resource.name);
       continue;
     }
-    PrintAlways("Processing sampler resource '{}'...", resource.name);
+    // PrintAlways("Processing sampler resource '{}'...", resource.name);
 
     const auto &samplerInfo = std::get<SamplerInfo>(resource.info);
     auto usage = samplerInfo.access == SLANG_RESOURCE_ACCESS_READ
@@ -899,13 +836,13 @@ auto ShaderModule::FlushBuffers(const GraphicsContext &context,
     auto stage = ShaderStageFlagsToPipelineStageFlags(resource.stages);
 
     auto key = SetBindingToSlot(samplerInfo.set, samplerInfo.binding);
-    auto boundTextureIter = state.boundTextures.find(key);
-    if (boundTextureIter == state.boundTextures.end()) {
+    auto boundTextureIter = state.userBoundTextures.find(key);
+    if (boundTextureIter == state.userBoundTextures.end()) {
       PrintWarning("No texture bound for sampler '{}', set {}, binding {}.",
                    resource.name, samplerInfo.set, samplerInfo.binding);
       continue;
     }
-    auto *texture = boundTextureIter->second;
+    auto *texture = boundTextureIter->second.first;
 
     if (texture == nullptr) {
       PrintWarning("Texture bound to sampler '{}' is null, set {}, binding {}.",
@@ -913,9 +850,14 @@ auto ShaderModule::FlushBuffers(const GraphicsContext &context,
       continue;
     }
 
-    PrintAlways(
-        "Flushing sampler resource '{}' with usage {}...", resource.name,
-        usage == Texture::TextureUsage::Sampler ? "sampler" : "storage");
+    auto currentlyBound = state.boundTextures.contains(key);
+    if (currentlyBound && state.boundTextures.at(key) == texture) {
+      continue;
+    }
+
+    // PrintAlways(
+    //     "Flushing sampler resource '{}' with usage {}...", resource.name,
+    //     usage == Texture::TextureUsage::Sampler ? "sampler" : "storage");
 
     Error result;
 
@@ -947,13 +889,37 @@ auto ShaderModule::FlushBuffers(const GraphicsContext &context,
     if (Error::IsError(result)) {
       return result;
     }
+
+    imageInfos.emplace_back();
+    auto &imageInfo = imageInfos.back();
+
+    imageInfo.imageView = texture->view;
+    imageInfo.imageLayout = texture->currentLayout;
+    imageInfo.sampler = texture->GetSampler(context);
+
+    VkWriteDescriptorSet descSetWrite{};
+    descSetWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    descSetWrite.pNext = nullptr;
+    descSetWrite.dstSet = state.descriptorSets.at(samplerInfo.set);
+    descSetWrite.dstBinding = samplerInfo.binding;
+    descSetWrite.dstArrayElement = 0;
+    descSetWrite.descriptorCount = 1;
+    descSetWrite.descriptorType =
+        (usage == Texture::TextureUsage::Storage
+             ? VK_DESCRIPTOR_TYPE_STORAGE_IMAGE
+             : VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+    descSetWrite.pImageInfo = &imageInfo;
+    descSetWrite.pBufferInfo = nullptr;
+    descSetWrite.pTexelBufferView = nullptr;
+
+    writes.emplace_back(descSetWrite);
   }
 
   {
     ZoneScopedN("Update descriptor sets");
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    vkUpdateDescriptorSets(context.device, static_cast<uint32_t>(index),
-                           writes.data(), 0, nullptr);
+    vkUpdateDescriptorSets(context.device, writes.size(), writes.data(), 0,
+                           nullptr);
   }
   state.pendingDescriptorWrites.clear();
 

@@ -905,9 +905,9 @@ auto FlushCompute(const GraphicsContext &context) -> Result<bool> {
 
   PrintAlways("Flushing compute pipeline");
   assert(TopOfStack->shader->stages.at(0) == VK_SHADER_STAGE_COMPUTE_BIT);
-  auto error =
-      TopOfStack->shader->FlushBuffers(context, pipelineResult.value().second,
-                                       VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
+  auto error = TopOfStack->shader->FlushDescriptors(
+      context, pipelineResult.value().second,
+      VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
   if (Error::IsError(error)) {
     return error.AsUnexpected();
   }
@@ -978,7 +978,7 @@ auto FlushGraphics(const GraphicsContext &context) -> Result<bool> {
                sendErr.message);
   }
 
-  auto error = TopOfStack->shader->FlushBuffers(
+  auto error = TopOfStack->shader->FlushDescriptors(
       context, pipelineResult.value().second,
       VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT |
           VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT);

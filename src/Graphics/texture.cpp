@@ -777,8 +777,6 @@ auto Texture::TransitionLayout(const GraphicsContext &context,
 
   if (currentLayout == layout && sourceStage == destinationStage &&
       srcAccessMask == dstAccessMask) {
-    PrintInfo("Texture already in desired layout {}, skipping transition.",
-              ImageLayoutToString(layout));
     return Error::Success();
   }
 
