@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Graphics/graphicsContext.hpp"
 #include "Modules/Engine/scene.hpp"
 #include "Modules/error.hpp"
 #include <string>

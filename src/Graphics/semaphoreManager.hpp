@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Graphics/graphics.hpp"
+#include "Graphics/graphicsContext.hpp"
 #include "Modules/error.hpp"
 #include <atomic>
 #include <cstdint>
@@ -8,7 +8,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
-#define VK_NO_PROTOTYPES
+
 #include "vulkan/vulkan_core.h"
 
 namespace Graphics {

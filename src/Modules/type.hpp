@@ -14,6 +14,10 @@ public:
   [[nodiscard]] auto GetParent() const -> const Type * { return Parent; }
   [[nodiscard]] auto GetID() const -> uint32_t { return ID; }
 
+  auto operator==(const Type &other) const -> bool {
+    return Name == other.Name;
+  }
+
 private:
   std::string Name;
   const Type *Parent{nullptr};

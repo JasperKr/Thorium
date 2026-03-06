@@ -3,7 +3,6 @@
 #include "Graphics/graphicsState.hpp"
 #include "Modules/Math/vector.hpp"
 #include "Modules/color.hpp"
-#include "Modules/console.hpp"
 #include "Modules/imagedata.hpp"
 #include "Wrap/wrap.hpp"
 extern "C" {
@@ -12,7 +11,6 @@ extern "C" {
 #include <lualib.h>
 }
 
-#define VK_NO_PROTOTYPES
 #include <vulkan/vulkan_core.h>
 
 namespace Wrap::Image {

@@ -18,7 +18,7 @@ extern "C" {
 }
 #include <unordered_map>
 #include <vector>
-#define VK_NO_PROTOTYPES
+
 #include <cmath>
 #include <vulkan/vulkan_core.h>
 

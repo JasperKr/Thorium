@@ -1,10 +1,17 @@
 #pragma once
 
-#include "Graphics/graphics.hpp"
+#include "Graphics/graphicsContext.hpp"
+#include <optional>
+
 #include "vulkan/vulkan_core.h"
 #include <cstdint>
 #include <utility>
 #include <vector>
+
+namespace Graphics::Texture {
+struct Texture;
+}
+
 namespace Graphics::Barrier {
 
 struct ResourceState {

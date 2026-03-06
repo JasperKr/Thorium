@@ -1,10 +1,13 @@
 #include "graphics.hpp"
 #include "Graphics/deviceSettings.hpp"
+#include "Graphics/graphicsContext.hpp"
+#include "Graphics/graphicsState.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/window.hpp"
 #include "SDL3/SDL_init.h"
 #include "SDL3/SDL_vulkan.h"
+
 #include "vulkan/vulkan_core.h"
 #include <cassert>
 #include <cstdint>

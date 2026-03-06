@@ -9,9 +9,11 @@
 #include <format>
 #include <iterator>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <variant>
 #include <vector>
+
 #include <vulkan/vulkan_core.h>
 
 namespace Graphics {

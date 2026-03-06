@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Graphics/buffer.hpp"
-#include "Graphics/graphics.hpp"
+#include "Graphics/graphicsContext.hpp"
 #include "Graphics/mesh.hpp"
 #include "Modules/Math/vector.hpp"
 #include <cstdint>

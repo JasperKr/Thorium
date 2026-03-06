@@ -7,7 +7,7 @@ cbuffer PushConstants
 };
 
 // RW texture
-RWTexture2D<float4> outTexture;
+RWTexture2D<unorm float4> outTexture;
 
 [shader("compute")]
 [numthreads(16,16,1)]

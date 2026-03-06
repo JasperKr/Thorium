@@ -11,7 +11,7 @@
 #include "Modules/console.hpp"
 #endif
 #include <string>
-#define VK_NO_PROTOTYPES
+
 #include "tl/expected.hpp"
 #include <vulkan/vulkan.h>
 

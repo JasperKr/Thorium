@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Graphics/barrier.hpp"
-#include "Graphics/graphics.hpp"
+#include "Graphics/graphicsContext.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Modules/type.hpp"
@@ -11,7 +11,7 @@
 #include <sys/types.h>
 #include <utility>
 #include <vector>
-#define VK_NO_PROTOTYPES
+
 #include <vulkan/vulkan_core.h>
 
 namespace Graphics::Threading {

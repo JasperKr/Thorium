@@ -1,12 +1,11 @@
 #pragma once
 
-#include "Graphics/graphics.hpp"
+#include "Graphics/graphicsContext.hpp"
 #include "Graphics/texture.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Modules/window.hpp"
 
-#define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
 #include <cstdint>
 #include <vector>

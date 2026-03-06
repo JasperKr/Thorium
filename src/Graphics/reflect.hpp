@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Graphics/graphics.hpp"
+#include "Graphics/graphicsContext.hpp"
 #include "Modules/error.hpp"
 #include "slang/slang.h"
 #include <cstdint>
@@ -10,7 +10,7 @@
 #include <unordered_map>
 #include <variant>
 #include <vector>
-#define VK_NO_PROTOTYPES
+
 #include "vulkan/vulkan_core.h"
 
 enum class ScalarType : uint8_t {
@@ -123,6 +123,7 @@ struct SamplerInfo {
 
   SlangResourceShape shape;
   SlangResourceAccess access;
+  VkFormat format;
 };
 
 struct ScalarInfo {

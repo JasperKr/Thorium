@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <public/tracy/Tracy.hpp>
 #include <variant>
+
 #include <vulkan/vulkan_core.h>
 extern "C" {
 #include <lauxlib.h>

@@ -1,7 +1,6 @@
 #include "shader.hpp"
 #include "Buffers/uniform.hpp"
 #include "Graphics/Buffers/push.hpp"
-#include "Graphics/graphicsState.hpp"
 #include "Graphics/reflect.hpp"
 #include "Graphics/texture.hpp"
 #include "Modules/Math/vector.hpp"
@@ -22,7 +21,7 @@
 #include <span>
 #include <unordered_set>
 #include <utility>
-#define VK_NO_PROTOTYPES
+
 #include "vulkan/vulkan_core.h"
 #include <cassert>
 #include <cstddef>

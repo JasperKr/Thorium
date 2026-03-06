@@ -1,5 +1,6 @@
 #include "sampler.hpp"
 #include "Modules/console.hpp"
+#include "Modules/error.hpp"
 #include <unordered_map>
 
 namespace Graphics::Texture {

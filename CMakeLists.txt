@@ -364,6 +364,9 @@ target_link_options(Thorium PRIVATE
 )
 
 target_compile_options(Thorium PRIVATE -fno-exceptions -fno-rtti)
+target_compile_definitions(Thorium
+    PRIVATE VK_NO_PROTOTYPES
+)
 
 if (WIN32)
     target_link_libraries(Thorium PRIVATE dbghelp)

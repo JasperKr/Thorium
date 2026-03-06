@@ -1,8 +1,8 @@
 #pragma once
 
+#include "Graphics/graphicsState.hpp"
 #include "Graphics/swapchainManager.hpp"
 #include "Modules/error.hpp"
-#include "graphics.hpp"
 #include <string>
 #include <vector>
 namespace Graphics {

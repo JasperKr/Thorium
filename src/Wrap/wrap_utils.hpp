@@ -6,7 +6,6 @@
 #include <cstdint>
 #include <cstring>
 
-#define VK_NO_PROTOTYPES
 #include <vulkan/vulkan_core.h>
 
 namespace Wrap::Utils {

@@ -19,3 +19,4 @@ assets/
 external/
 *.log
 *.tmp
+imgui.ini

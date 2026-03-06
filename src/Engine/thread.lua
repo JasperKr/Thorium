@@ -9,7 +9,7 @@ local count = 0
 local doneChannel, canStartChannel = ...
 
 local t = Thorium.timer.getTime()
-local testImgdata = Thorium.data.newImagedata(16, 16)
+local testImgdata = Thorium.data.newImagedata(16, 16, "rgba8")
 for y = 0, 15 do
   for x = 0, 15 do
     -- local value = Thorium.math.noiseWrapped(x / 16, y / 16, 4, 4);

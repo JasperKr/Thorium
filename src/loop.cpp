@@ -24,7 +24,6 @@
 // Enable if encountering C++ exceptions
 // #define DEBUG_CPP_EXCEPTION
 
-#define VK_NO_PROTOTYPES
 #include <vulkan/vulkan.h>
 
 extern "C" {

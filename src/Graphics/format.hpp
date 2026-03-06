@@ -1,6 +1,6 @@
 #pragma once
 #include <cstddef>
-#define VK_NO_PROTOTYPES
+
 #include <string>
 #include <vulkan/vulkan_core.h>
 namespace Graphics::Format {

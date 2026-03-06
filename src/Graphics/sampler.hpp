@@ -1,8 +1,8 @@
 #pragma once
 
-#include "Graphics/graphics.hpp"
-#define VK_NO_PROTOTYPES
+#include "Graphics/graphicsContext.hpp"
 #include "vulkan/vulkan_core.h"
+#include <unordered_map>
 
 namespace Graphics::Texture {
 

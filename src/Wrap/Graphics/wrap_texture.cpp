@@ -9,7 +9,6 @@
 #include <string>
 #include <unordered_set>
 
-#define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
 extern "C" {
 #include <lauxlib.h>
@@ -492,14 +491,6 @@ struct LuaOptions {
     }
     lua_pop(state, 1);
 
-    // format
-    lua_getfield(state, index, "format");
-    if (lua_isstring(state, -1) != 0) {
-      const char *formatStr = luaL_checkstring(state, -1);
-      options.format = Format::StringToImageFormat(std::string(formatStr));
-    }
-    lua_pop(state, 1);
-
     // mipmaps
     lua_getfield(state, index, "mipmaps");
     if (lua_isboolean(state, -1) != 0) {
@@ -578,6 +569,27 @@ struct LuaOptions {
     }
     lua_pop(state, 1);
 
+    // format
+    lua_getfield(state, index, "format");
+    if (lua_isstring(state, -1) != 0) {
+      const char *formatStr = luaL_checkstring(state, -1);
+      options.format = Format::StringToImageFormat(std::string(formatStr));
+    } else {
+      options.format = Graphics::DefaultPixelFormat;
+
+      PrintAlways("Creating texture from options with no format specified");
+
+      if ((static_cast<uint8_t>(options.usage) &
+           static_cast<uint8_t>(LuaTextureUsage::Storage)) != 0) {
+        // If storage usage is specified but no format is given, default to a format that supports storage usage
+        PrintAlways(
+            "Storage usage specified but no format given, defaulting to "
+            "VK_FORMAT_R8G8B8A8_UNORM");
+        options.format = VK_FORMAT_R8G8B8A8_UNORM;
+      }
+    }
+    lua_pop(state, 1);
+
     return options;
   }
 };
@@ -621,7 +633,12 @@ static inline auto TextureFromImagedataAndOptions(lua_State *state)
 
   auto usage = TextureUsageToVkImageUsage(options.format, options.usage);
 
+  PrintAlways("Creating texture from imagedata with format: {} and usage: {}",
+              Format::ImageFormatToString(imageData->GetFormat()),
+              static_cast<uint32_t>(options.usage));
+
   auto result = Graphics::Texture::LoadFromMemory(*ctx, *imageData, usage);
+  PrintAlways("Done");
   if (Error::IsError(result)) {
     return result.error().AsUnexpected();
   }
@@ -712,6 +729,7 @@ static inline auto TextureFromWidthHeightAndOptions(lua_State *state)
   LuaOptions options = optionsResult.value();
 
   auto usage = TextureUsageToVkImageUsage(options.format, options.usage);
+  PrintAlways("Creating texture with format: {}", (uint32_t)options.format);
 
   auto result = Graphics::Texture::Create2D(
       *ctx, Graphics::Texture::TextureCreationInfo{

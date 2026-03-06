@@ -24,9 +24,9 @@
 #include <string>
 
 #define VMA_VULKAN_VERSION 1004000
-#define VK_NO_PROTOTYPES
+
 #include "vulkan/vulkan_core.h"
-#include <vma/vk_mem_alloc.h>
+// #include <vma/vk_mem_alloc.h>
 
 namespace Graphics::Texture {
 
@@ -82,6 +82,14 @@ inline auto SetDebugName(const std::string &debugName, Texture *texture,
 
 auto Create2D(const GraphicsContext &context, const TextureCreationInfo &info)
     -> Result<Ref<Texture>> {
+
+  if (((info.usage & VK_IMAGE_USAGE_STORAGE_BIT) != 0U) &&
+      (info.format == VK_FORMAT_R8G8B8A8_SRGB ||
+       info.format == VK_FORMAT_B8G8R8A8_SRGB)) {
+    assert(false);
+    return Error::Unexpected("SRGB formats are not supported for storage "
+                             "usage.");
+  }
 
   Ref<Texture> texture = Ref<Texture>::Make();
 

@@ -1,9 +1,8 @@
 #include "reflect.hpp"
-#include "Graphics/graphics.hpp"
-#include "Modules/console.hpp"
+#include "Graphics/graphicsContext.hpp"
 #include "Modules/error.hpp"
 #include "slang/slang.h"
-#define VK_NO_PROTOTYPES
+
 #include "vulkan/vulkan_core.h"
 
 // Resolve path for struct fields is exclusive to the struct resource info
@@ -195,6 +194,99 @@ auto SetupStruct(slang::TypeLayoutReflection *bufferLayout, // NOLINT
   return Error::Success();
 }
 
+inline auto SlangImageFormatToVkFormat(SlangImageFormat format) {
+  switch (format) {
+  case SLANG_IMAGE_FORMAT_unknown:
+    return VK_FORMAT_UNDEFINED;
+  case SLANG_IMAGE_FORMAT_rgba32f:
+    return VK_FORMAT_R32G32B32A32_SFLOAT;
+  case SLANG_IMAGE_FORMAT_rgba16f:
+    return VK_FORMAT_R16G16B16A16_SFLOAT;
+  case SLANG_IMAGE_FORMAT_rg32f:
+    return VK_FORMAT_R32G32_SFLOAT;
+  case SLANG_IMAGE_FORMAT_rg16f:
+    return VK_FORMAT_R16G16_SFLOAT;
+  case SLANG_IMAGE_FORMAT_r11f_g11f_b10f:
+    return VK_FORMAT_B10G11R11_UFLOAT_PACK32;
+  case SLANG_IMAGE_FORMAT_r32f:
+    return VK_FORMAT_R32_SFLOAT;
+  case SLANG_IMAGE_FORMAT_r16f:
+    return VK_FORMAT_R16_SFLOAT;
+  case SLANG_IMAGE_FORMAT_rgba16:
+    return VK_FORMAT_R16G16B16A16_UNORM;
+  case SLANG_IMAGE_FORMAT_rgb10_a2:
+    return VK_FORMAT_A2R10G10B10_UNORM_PACK32;
+  case SLANG_IMAGE_FORMAT_rgba8:
+    return VK_FORMAT_R8G8B8A8_UNORM;
+  case SLANG_IMAGE_FORMAT_rg16:
+    return VK_FORMAT_R16G16_UNORM;
+  case SLANG_IMAGE_FORMAT_rg8:
+    return VK_FORMAT_R8G8_UNORM;
+  case SLANG_IMAGE_FORMAT_r16:
+    return VK_FORMAT_R16_UNORM;
+  case SLANG_IMAGE_FORMAT_r8:
+    return VK_FORMAT_R8_UNORM;
+  case SLANG_IMAGE_FORMAT_rgba16_snorm:
+    return VK_FORMAT_R16G16B16A16_SNORM;
+  case SLANG_IMAGE_FORMAT_rgba8_snorm:
+    return VK_FORMAT_R8G8B8A8_SNORM;
+  case SLANG_IMAGE_FORMAT_rg16_snorm:
+    return VK_FORMAT_R16G16_SNORM;
+  case SLANG_IMAGE_FORMAT_rg8_snorm:
+    return VK_FORMAT_R8G8_SNORM;
+  case SLANG_IMAGE_FORMAT_r16_snorm:
+    return VK_FORMAT_R16_SNORM;
+  case SLANG_IMAGE_FORMAT_r8_snorm:
+    return VK_FORMAT_R8_SNORM;
+  case SLANG_IMAGE_FORMAT_rgba32i:
+    return VK_FORMAT_R32G32B32A32_SINT;
+  case SLANG_IMAGE_FORMAT_rgba16i:
+    return VK_FORMAT_R16G16B16A16_SINT;
+  case SLANG_IMAGE_FORMAT_rgba8i:
+    return VK_FORMAT_R8G8B8A8_SINT;
+  case SLANG_IMAGE_FORMAT_rg32i:
+    return VK_FORMAT_R32G32_SINT;
+  case SLANG_IMAGE_FORMAT_rg16i:
+    return VK_FORMAT_R16G16_SINT;
+  case SLANG_IMAGE_FORMAT_rg8i:
+    return VK_FORMAT_R8G8_SINT;
+  case SLANG_IMAGE_FORMAT_r32i:
+    return VK_FORMAT_R32_SINT;
+  case SLANG_IMAGE_FORMAT_r16i:
+    return VK_FORMAT_R16_SINT;
+  case SLANG_IMAGE_FORMAT_r8i:
+    return VK_FORMAT_R8_SINT;
+  case SLANG_IMAGE_FORMAT_rgba32ui:
+    return VK_FORMAT_R32G32B32A32_UINT;
+  case SLANG_IMAGE_FORMAT_rgba16ui:
+    return VK_FORMAT_R16G16B16A16_UINT;
+  case SLANG_IMAGE_FORMAT_rgb10_a2ui:
+    return VK_FORMAT_A2R10G10B10_UINT_PACK32;
+  case SLANG_IMAGE_FORMAT_rgba8ui:
+    return VK_FORMAT_R8G8B8A8_UINT;
+  case SLANG_IMAGE_FORMAT_rg32ui:
+    return VK_FORMAT_R32G32_UINT;
+  case SLANG_IMAGE_FORMAT_rg16ui:
+    return VK_FORMAT_R16G16_UINT;
+  case SLANG_IMAGE_FORMAT_rg8ui:
+    return VK_FORMAT_R8G8_UINT;
+  case SLANG_IMAGE_FORMAT_r32ui:
+    return VK_FORMAT_R32_UINT;
+  case SLANG_IMAGE_FORMAT_r16ui:
+    return VK_FORMAT_R16_UINT;
+  case SLANG_IMAGE_FORMAT_r8ui:
+    return VK_FORMAT_R8_UINT;
+  case SLANG_IMAGE_FORMAT_r64ui:
+    return VK_FORMAT_R64_UINT;
+  case SLANG_IMAGE_FORMAT_r64i:
+    return VK_FORMAT_R64_SINT;
+  case SLANG_IMAGE_FORMAT_bgra8:
+    return VK_FORMAT_B8G8R8A8_UNORM;
+  default:
+    return VK_FORMAT_UNDEFINED;
+  }
+}
+
 inline auto SlangStageToVkStage(SlangStage stage) -> VkShaderStageFlags {
   switch (stage) {
   case SLANG_STAGE_VERTEX:
@@ -248,13 +340,14 @@ auto SetupResource(slang::VariableLayoutReflection *variableLayout,
     samplerInfo.binding = variableLayout->getBindingIndex();
     samplerInfo.shape = shape;
     samplerInfo.access = access;
+    samplerInfo.format =
+        SlangImageFormatToVkFormat(variableLayout->getImageFormat());
 
     auto resourceInfo = ResourceInfo{};
 
     resourceInfo.name = variableLayout->getName();
     resourceInfo.stages = SlangStageToVkStage(variableLayout->getStage());
     resourceInfo.info = samplerInfo;
-    PrintAlways("Resource: {}", resourceInfo.name);
 
     reflection.resources.emplace_back(resourceInfo);
     reflection

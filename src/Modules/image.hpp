@@ -3,7 +3,7 @@
 #include "Modules/error.hpp"
 #include <span>
 #include <variant>
-#define VK_NO_PROTOTYPES
+
 #include "stb/stb_image.h"
 #include "vulkan/vulkan_core.h"
 #include <algorithm>

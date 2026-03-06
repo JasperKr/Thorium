@@ -6,7 +6,7 @@
 #include "texture.hpp"
 #include "tl/expected.hpp"
 #include <unordered_map>
-#define VK_NO_PROTOTYPES
+
 #include "vulkan/vulkan_core.h"
 #include <algorithm>
 #include <cassert>

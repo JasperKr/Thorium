@@ -6,15 +6,15 @@
 #include <sys/types.h>
 
 #include "Graphics/barrier.hpp"
+#include "Graphics/graphicsContext.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "buffer.hpp"
-#include "graphics.hpp"
 #include "tl/expected.hpp"
 #include <cstdint>
 #include <span>
 #include <vector>
-#define VK_NO_PROTOTYPES
+
 #include "vulkan/vulkan_core.h"
 
 #include "vertexformat.hpp"

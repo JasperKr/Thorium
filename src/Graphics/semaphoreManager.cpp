@@ -1,5 +1,6 @@
 #include "Graphics/semaphoreManager.hpp"
 #include "Modules/console.hpp"
+
 #include "vulkan/vulkan_core.h"
 #include <algorithm>
 #include <atomic>

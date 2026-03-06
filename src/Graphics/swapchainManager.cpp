@@ -1,6 +1,6 @@
 #include "swapchainManager.hpp"
 
-#include "Graphics/graphics.hpp"
+#include "Graphics/graphicsState.hpp"
 #include "Graphics/texture.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
@@ -9,7 +9,6 @@
 #include "Modules/window.hpp"
 #include <public/tracy/Tracy.hpp>
 
-#define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
 #include <cstdint>
 #include <vector>

@@ -10,7 +10,6 @@
 #include <mutex>
 #include <span>
 
-#define VK_NO_PROTOTYPES
 #include "vulkan/vulkan_core.h"
 #include <algorithm>
 #include <cstdint>

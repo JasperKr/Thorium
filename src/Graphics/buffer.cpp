@@ -1,6 +1,7 @@
 #include "buffer.hpp"
 #include "Graphics/barrier.hpp"
 #include "Graphics/graphics.hpp"
+#include "Graphics/graphicsState.hpp"
 #include "Graphics/resource.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
@@ -12,7 +13,7 @@
 #include <cstdint>
 #include <mutex>
 #include <vector>
-#define VK_NO_PROTOTYPES
+
 #include "array"
 #include "vulkan/vulkan_core.h"
 

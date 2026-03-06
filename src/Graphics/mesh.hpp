@@ -7,7 +7,7 @@
 #include <cstdint>
 #include <span>
 #include <string>
-#define VK_NO_PROTOTYPES
+
 #include "vulkan/vulkan_core.h"
 
 #include "vertexformat.hpp"

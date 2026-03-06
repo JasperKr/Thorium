@@ -18,10 +18,8 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
-#define VK_NO_PROTOTYPES
-#include "vulkan/vulkan_core.h"
 
-#include "vertexformat.hpp"
+#include "vulkan/vulkan_core.h"
 
 namespace Graphics::Shader {
 

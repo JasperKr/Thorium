@@ -16,7 +16,7 @@
 #include <mutex>
 #include <unordered_set>
 #include <vector>
-#define VK_NO_PROTOTYPES
+
 #include "vulkan/vulkan_core.h"
 #include <algorithm>
 #include <array>
@@ -247,7 +247,7 @@ auto BindDefaultTextures(const GraphicsContext &context,
         continue;
       }
 
-      VkFormat format = Graphics::DefaultPixelFormat;
+      VkFormat format = VK_FORMAT_R8G8B8A8_UNORM;
       Texture::TextureType type = Texture::TextureType::DEFAULT;
 
       if (samplerInfo.shape == SLANG_TEXTURE_3D) {
@@ -903,7 +903,6 @@ auto FlushCompute(const GraphicsContext &context) -> Result<bool> {
     return Error::Unexpected("Command buffer is null in FlushCompute.");
   }
 
-  PrintAlways("Flushing compute pipeline");
   assert(TopOfStack->shader->stages.at(0) == VK_SHADER_STAGE_COMPUTE_BIT);
   auto error = TopOfStack->shader->FlushDescriptors(
       context, pipelineResult.value().second,

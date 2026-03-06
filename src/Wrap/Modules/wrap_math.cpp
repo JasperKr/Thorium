@@ -1,5 +1,3 @@
-#pragma once
-
 #include "wrap_math.hpp"
 #include "Modules/Math/eulerAngle.hpp"
 #include "Modules/Math/math.hpp"

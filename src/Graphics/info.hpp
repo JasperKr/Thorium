@@ -1,7 +1,6 @@
 #include "Graphics/graphics.hpp"
 #include <string>
 
-#define VK_NO_PROTOTYPES
 #include <vulkan/vulkan.h>
 
 namespace Graphics::Info {

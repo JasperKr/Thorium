@@ -2,13 +2,14 @@
 
 #include "Graphics/dynamicRendering.hpp"
 #include "Graphics/graphics.hpp"
+#include "Graphics/graphicsState.hpp"
 #include "Graphics/texture.hpp"
 #include "Modules/error.hpp"
 #include "Wrap/Graphics/wrap_color.hpp"
 #include "Wrap/wrap.hpp"
 #include "tl/expected.hpp"
 #include <string>
-#define VK_NO_PROTOTYPES
+
 #include "vulkan/vulkan_core.h"
 #include <cstring>
 extern "C" {
