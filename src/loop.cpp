@@ -26,11 +26,7 @@
 
 #include <vulkan/vulkan.h>
 
-extern "C" {
-#include <lauxlib.h>
-#include <lua.h>
-#include <lualib.h>
-}
+#include "lua.hpp"
 
 #include "Modules/event.hpp"
 #include "Wrap/reference.hpp"

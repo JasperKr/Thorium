@@ -2,11 +2,7 @@
 
 #include "Modules/error.hpp"
 #include "Wrap/wrap.hpp"
-extern "C" {
-#include <lauxlib.h>
-#include <lua.h>
-#include <lualib.h>
-}
+#include "lua.hpp"
 
 namespace Wrap::Imgui {
 auto NewFrame(lua_State *state) -> int;

@@ -2,11 +2,7 @@
 
 #include "Modules/channel.hpp"
 #include "Wrap/wrap.hpp"
-extern "C" {
-#include <lauxlib.h>
-#include <lua.h>
-#include <lualib.h>
-}
+#include "lua.hpp"
 namespace Wrap::Threading {
 
 auto wrap_NewChannel(lua_State *state) -> int;

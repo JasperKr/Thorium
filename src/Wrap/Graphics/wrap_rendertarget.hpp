@@ -1,10 +1,6 @@
 #pragma once
 
-extern "C" {
-#include <lauxlib.h>
-#include <lua.h>
-#include <lualib.h>
-}
+#include "lua.hpp"
 namespace Graphics::DynamicRendering {
 auto wrap_SetRenderTargets(lua_State *state) -> int;
 }

@@ -9,12 +9,8 @@
 #include <string>
 #include <unordered_set>
 
+#include "lua.hpp"
 #include "vulkan/vulkan_core.h"
-extern "C" {
-#include <lauxlib.h>
-#include <lua.h>
-#include <lualib.h>
-}
 namespace Graphics::Texture {
 auto inline StringToVkFilter(const char *filterStr) -> VkFilter {
   if (strcmp(filterStr, "nearest") == 0) {

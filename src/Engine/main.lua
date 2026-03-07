@@ -12,10 +12,12 @@ require("Graphics.helpers")
 local thread = snap.thread.newThread("src/Engine/thread.lua", "Render thread 1")
 local threadDoneChannel = snap.thread.newChannel()
 local startThreadChannel = snap.thread.newChannel()
-thread:start(threadDoneChannel, startThreadChannel)
+local scene = snap.scene.newScene();
+thread:start(threadDoneChannel, startThreadChannel, scene)
 
 local camera = snap.graphics.newCamera("main camera", vec3(0, 0, 0), vec3(0, 0, 0),
   vec2(snap.graphics.getDimensions()))
+print(scene:getName())
 
 function snap.update(dt)
   i = i + 1

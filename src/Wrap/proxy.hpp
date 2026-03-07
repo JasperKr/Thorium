@@ -2,11 +2,7 @@
 
 #include "Modules/console.hpp"
 #include "Modules/object.hpp"
-extern "C" {
-#include <lauxlib.h>
-#include <lua.h>
-#include <lualib.h>
-}
+#include "lua.hpp"
 
 namespace LuaWrap {
 

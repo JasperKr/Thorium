@@ -1,11 +1,7 @@
 #pragma once
 
 #include "Graphics/reflect.hpp"
-extern "C" {
-#include <lauxlib.h>
-#include <lua.h>
-#include <lualib.h>
-}
+#include "lua.hpp"
 
 // linked list of strings as key and a count of valid entries
 inline auto ResourceKeyFromLua(lua_State *state, int index)

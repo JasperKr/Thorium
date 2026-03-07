@@ -1,58 +1,124 @@
 #pragma once
 
 #include "Graphics/mesh.hpp"
+#include "Modules/Engine/drawable.hpp"
+#include "Modules/Engine/identifier.hpp"
 #include "Modules/Engine/material.hpp"
 #include "Modules/Math/quaternion.hpp"
 #include "Modules/Math/vector.hpp"
 #include "Modules/object.hpp"
 #include "Modules/type.hpp"
-#include <cstdint>
 #include <string>
 #include <variant>
 #include <vector>
 namespace Engine {
+const Type nodeType = Type("Node");
+const Type shapeType = Type("Shape");
+const Type modelType = Type("Model");
+
 struct Transform {
   Math::Vec3 Position{};
   Math::Quaternion Rotation;
   Math::Vec3 Scale{1.0F, 1.0F, 1.0F};
+
+  auto PushPosition(lua_State *state) const -> void;
+  auto ReadPosition(lua_State *state) -> void;
+
+  auto PushRotation(lua_State *state) const -> void;
+  auto ReadRotation(lua_State *state) -> void;
+
+  auto PushScale(lua_State *state) const -> void;
+  auto ReadScale(lua_State *state) -> void;
 };
 
 using SceneObject =
     std::variant<Ref<struct Node>, Ref<struct Shape>, Ref<struct Model>>;
 
 struct Selectable {
-  std::string Name;
-  uint32_t ID;
-  void *Userdata;
+  std::string name;
+  Identifier id;
+  void *userdata;
 };
 
-const Type nodeType = Type("Node");
-const Type shapeType = Type("Shape");
-const Type modelType = Type("Model");
-
-struct Node : Selectable, Object {
-  Transform Transform;
-  std::vector<SceneObject> Children;
+struct Node : Selectable, Object, UiElement {
+  Transform transform;
+  std::vector<SceneObject> children;
+  Identifier id = GenerateIdentifier();
 
   static auto GetType() -> Type const * { return &nodeType; }
   auto GetInstanceType() const -> const Type * override { return &nodeType; }
+  auto DrawUiElement() -> Error override;
+
+  static auto wrap_SetPosition(lua_State *state) -> int;
+  static auto wrap_GetPosition(lua_State *state) -> int;
+
+  static auto wrap_SetRotation(lua_State *state) -> int;
+  static auto wrap_GetRotation(lua_State *state) -> int;
+
+  static auto wrap_SetScale(lua_State *state) -> int;
+  static auto wrap_GetScale(lua_State *state) -> int;
+
+  static auto wrap_AddChild(lua_State *state) -> int;
+  static auto wrap_GetChild(lua_State *state) -> int;
+  static auto wrap_RemoveChild(lua_State *state) -> int;
+  static auto wrap_GetChildren(lua_State *state) -> int;
+
+  static auto wrap_SetName(lua_State *state) -> int;
+  static auto wrap_GetName(lua_State *state) -> int;
+
+  static auto wrap_SetUserdata(lua_State *state) -> int;
+  static auto wrap_GetUserdata(lua_State *state) -> int;
+
+  static auto LoadBinding(lua_State *state) -> int;
 };
 
-struct Shape : Selectable, Object {
-  Transform Transform;
-  Ref<Graphics::Mesh> Mesh;
-  Renderer::Material Material;
+struct Shape : Selectable, Object, UiElement {
+  Transform transform;
+  Ref<Graphics::Mesh> mesh;
+  Ref<Renderer::Material> material;
+  Identifier id = GenerateIdentifier();
 
   static auto GetType() -> Type const * { return &shapeType; }
   auto GetInstanceType() const -> const Type * override { return &shapeType; }
+  auto DrawUiElement() -> Error override;
+
+  static auto wrap_SetPosition(lua_State *state) -> int;
+  static auto wrap_GetPosition(lua_State *state) -> int;
+
+  static auto wrap_SetRotation(lua_State *state) -> int;
+  static auto wrap_GetRotation(lua_State *state) -> int;
+
+  static auto wrap_SetScale(lua_State *state) -> int;
+  static auto wrap_GetScale(lua_State *state) -> int;
+
+  static auto wrap_SetMesh(lua_State *state) -> int;
+  static auto wrap_GetMesh(lua_State *state) -> int;
+
+  static auto wrap_SetMaterial(lua_State *state) -> int;
+  static auto wrap_GetMaterial(lua_State *state) -> int;
+
+  static auto LoadBinding(lua_State *state) -> int;
 };
 
-struct Model : Selectable, Object {
-  Transform Transform;
-  std::vector<Shape> Shapes;
+struct Model : Selectable, Object, UiElement {
+  Transform transform;
+  std::vector<Shape> shapes;
+  Identifier id = GenerateIdentifier();
 
   static auto GetType() -> Type const * { return &modelType; }
   auto GetInstanceType() const -> const Type * override { return &modelType; }
+  auto DrawUiElement() -> Error override;
+
+  static auto wrap_SetPosition(lua_State *state) -> int;
+  static auto wrap_GetPosition(lua_State *state) -> int;
+
+  static auto wrap_SetRotation(lua_State *state) -> int;
+  static auto wrap_GetRotation(lua_State *state) -> int;
+
+  static auto wrap_SetScale(lua_State *state) -> int;
+  static auto wrap_GetScale(lua_State *state) -> int;
+
+  static auto LoadBinding(lua_State *state) -> int;
 };
 
 } // namespace Engine

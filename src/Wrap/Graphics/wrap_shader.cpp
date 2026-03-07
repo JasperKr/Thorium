@@ -7,13 +7,9 @@
 #include "Wrap/Graphics/wrap_reflection.hpp"
 #include "Wrap/wrap.hpp"
 #include "Wrap/wrap_utils.hpp"
+#include "lua.hpp"
 #include <bit>
 #include <cstdint>
-extern "C" {
-#include <lauxlib.h>
-#include <lua.h>
-#include <lualib.h>
-}
 namespace Graphics::Shader {
 
 // TODO: Add externs input support

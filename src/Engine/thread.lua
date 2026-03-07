@@ -6,7 +6,7 @@ local lastShownTime = 0
 local lastShownImDrawTime = 0
 local count = 0
 
-local doneChannel, canStartChannel = ...
+local doneChannel, canStartChannel, scene = ...
 
 local t = snap.timer.getTime()
 local testImgdata = snap.data.newImagedata(16, 16, "rgba8")
@@ -53,6 +53,9 @@ local function draw()
   Imgui.Text("DT: " .. tostring(snap.timer.getDelta()))
   Imgui.Text("Last Draw Time (ms): " .. tostring(lastShownTime * 1000))
   Imgui.Text("Last ImGui Draw Time (ms): " .. tostring(lastShownImDrawTime * 1000))
+
+  Imgui.Separator()
+  scene:drawUiElement()
 
   Imgui.End()
   Imgui.ShowDemoWindow()

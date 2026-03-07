@@ -18,15 +18,11 @@
 #include "tl/expected.hpp"
 #include <cassert>
 
+#include "lua.hpp"
 #include "vulkan/vulkan_core.h"
 #include <cstdint>
 #include <cstring>
 #include <vector>
-extern "C" {
-#include <lauxlib.h>
-#include <lua.h>
-#include <lualib.h>
-}
 
 namespace Graphics {
 auto wrap_Present(lua_State *state) -> int {

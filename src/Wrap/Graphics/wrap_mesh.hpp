@@ -3,11 +3,7 @@
 #include "Graphics/mesh.hpp"
 #include "Modules/console.hpp"
 #include "Wrap/wrap.hpp"
-extern "C" {
-#include <lauxlib.h>
-#include <lua.h>
-#include <lualib.h>
-}
+#include "lua.hpp"
 namespace Graphics {
 
 auto wrap_SetVertices(lua_State *state) -> int;

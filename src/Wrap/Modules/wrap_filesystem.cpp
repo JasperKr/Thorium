@@ -1,13 +1,9 @@
 #include "wrap_filesystem.hpp"
 #include "Modules/bytedata.hpp"
 #include "Wrap/wrap.hpp"
+#include "lua.hpp"
 #include <cstdint>
 #include <cstring>
-extern "C" {
-#include <lauxlib.h>
-#include <lua.h>
-#include <lualib.h>
-}
 #include <string>
 
 #include "Modules/filesystem.hpp"

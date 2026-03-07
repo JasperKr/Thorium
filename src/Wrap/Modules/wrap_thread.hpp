@@ -4,12 +4,8 @@
 #include "Modules/thread.hpp"
 #include "Wrap/Modules/wrap_channel.hpp"
 #include "Wrap/wrap.hpp"
+#include "lua.hpp"
 #include <vector>
-extern "C" {
-#include <lauxlib.h>
-#include <lua.h>
-#include <lualib.h>
-}
 namespace Wrap::Threading {
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)

@@ -3,11 +3,7 @@
 #include "Modules/bytedata.hpp"
 #include "Modules/console.hpp"
 #include "Wrap/wrap.hpp"
-extern "C" {
-#include <lauxlib.h>
-#include <lua.h>
-#include <lualib.h>
-}
+#include "lua.hpp"
 namespace Wrap::Data {
 
 auto wrap_SetUInt32(lua_State *state) -> int;

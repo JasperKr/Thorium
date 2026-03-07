@@ -2,11 +2,7 @@
 #include "Modules/Math/eulerAngle.hpp"
 #include "Modules/Math/math.hpp"
 #include "Modules/Math/matrix.hpp"
-extern "C" {
-#include <lauxlib.h>
-#include <lua.h>
-#include <lualib.h>
-}
+#include "lua.hpp"
 
 namespace Wrap::Math {
 using namespace ::Math::Conversions;

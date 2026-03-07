@@ -1,9 +1,5 @@
 #include "Modules/timer.hpp"
-extern "C" {
-#include <lauxlib.h>
-#include <lua.h>
-#include <lualib.h>
-}
+#include "lua.hpp"
 
 namespace Wrap::Timer {
 auto wrap_GetTime(lua_State *state) -> int {

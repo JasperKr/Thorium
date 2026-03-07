@@ -3,11 +3,7 @@
 #include "Modules/console.hpp"
 #include "Modules/event.hpp"
 
-extern "C" {
-#include <lauxlib.h>
-#include <lua.h>
-#include <lualib.h>
-}
+#include "lua.hpp"
 #include <string>
 
 namespace Wrap::Event {

@@ -2,12 +2,8 @@
 
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
+#include "lua.hpp"
 #include <variant>
-extern "C" {
-#include <lauxlib.h>
-#include <lua.h>
-#include <lualib.h>
-}
 
 namespace LuaWrap {
 

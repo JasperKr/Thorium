@@ -6,11 +6,7 @@
 #include "Wrap/Graphics/wrap_shader.hpp"
 #include "Wrap/Graphics/wrap_texture.hpp"
 #include "Wrap/wrap.hpp"
-extern "C" {
-#include <lauxlib.h>
-#include <lua.h>
-#include <lualib.h>
-}
+#include "lua.hpp"
 namespace Graphics {
 
 // NOLINTNEXTLINE; Cache quad mesh to avoid recreating it every frame

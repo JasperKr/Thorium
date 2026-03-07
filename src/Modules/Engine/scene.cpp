@@ -1,29 +1,31 @@
 #include "scene.hpp"
 #include "Modules/Engine/model.hpp"
+#include "Modules/bindings.hpp"
+#include "Modules/error.hpp"
 #include "Wrap/Helpers/lua_vector.hpp"
 #include "Wrap/wrap.hpp"
 
 #include "Wrap/Helpers/lua_variant.hpp"
+#include <imgui.h>
+#include <utility>
+#include <vector>
 
-extern "C" {
-#include <lauxlib.h>
-#include <lua.h>
-#include <lualib.h>
-}
+#include "lua.hpp"
 
 namespace Engine {
 
 auto Scene::LoadBinding(lua_State *state) -> int {
-  // NOLINTNEXTLINE
-  constexpr luaL_Reg methods[] = {
+  const std::vector<std::pair<std::string, lua_CFunction>> methods = {
       {"getHierarchyObjects", GetHierarchyObjects},
       {"addHierarchyObject", AddHierarchyObject},
       {"getHierarchyObject", GetHierarchyObject},
       {"removeHierarchyObject", RemoveHierarchyObject},
-      {nullptr, nullptr} // terminate with nullptr
+      {"drawUiElement", GetDrawUiElementLuaBinding<Scene>()},
   };
 
-  LuaWrap::RegisterLuaType(state, GetType(), methods); // NOLINT
+  auto binding = Bindings::LuaBoundStruct<Scene>("Scene");
+  binding.RegisterMember<&Scene::name>("Name");
+  binding.Register(state, methods);
 
   return 1;
 }
@@ -112,4 +114,12 @@ auto Scene::RemoveHierarchyObject(lua_State *state) -> int {
 
   return 0;
 }
+
+auto Scene::DrawUiElement() -> Error {
+  ImGui::Text("Scene: %s", name.c_str());
+  ImGui::Text("Objects: %zu", hierarchy.size());
+
+  return Error::Success();
+}
+
 } // namespace Engine

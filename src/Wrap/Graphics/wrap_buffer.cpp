@@ -9,13 +9,9 @@
 #include <public/tracy/Tracy.hpp>
 #include <variant>
 
-#include <vulkan/vulkan_core.h>
-extern "C" {
-#include <lauxlib.h>
-#include <lua.h>
-#include <lualib.h>
-}
+#include "lua.hpp"
 #include <vector>
+#include <vulkan/vulkan_core.h>
 
 #include "Graphics/Buffers/structured.hpp"
 #include "Graphics/bufferformat.hpp"

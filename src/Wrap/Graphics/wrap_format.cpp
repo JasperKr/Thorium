@@ -6,11 +6,7 @@
 #include <string>
 #include <vector>
 
-extern "C" {
-#include <lauxlib.h>
-#include <lua.h>
-#include <lualib.h>
-}
+#include "lua.hpp"
 
 namespace Wrap::Graphics {
 auto ComponentFromLua(lua_State *state, int index)

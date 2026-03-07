@@ -3,11 +3,7 @@
 #include "Wrap/Modules/wrap_bytedata.hpp"
 #include "Wrap/Modules/wrap_imagedata.hpp"
 #include "Wrap/wrap.hpp"
-extern "C" {
-#include <lauxlib.h>
-#include <lua.h>
-#include <lualib.h>
-}
+#include "lua.hpp"
 
 namespace Wrap::Data {
 

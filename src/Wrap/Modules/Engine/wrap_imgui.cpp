@@ -25,11 +25,7 @@
 #include <unordered_map>
 #include <vector>
 
-extern "C" {
-#include <lauxlib.h>
-#include <lua.h>
-#include <lualib.h>
-}
+#include "lua.hpp"
 
 namespace Wrap::Imgui {
 

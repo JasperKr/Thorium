@@ -1,9 +1,5 @@
+#include "lua.hpp"
 #include <utility>
-extern "C" {
-#include <lauxlib.h>
-#include <lua.h>
-#include <lualib.h>
-}
 
 namespace LuaWrap {
 

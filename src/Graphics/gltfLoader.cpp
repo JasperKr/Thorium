@@ -255,16 +255,16 @@ inline auto LoadTexture(Graphics::GraphicsContext &context,
 inline auto LoadMaterial(Graphics::GraphicsContext &context,
                          const fastgltf::Asset &asset,
                          const fastgltf::Material &gltfMaterial,
-                         Renderer::Material &material) -> Error {
-  material.Name = gltfMaterial.name;
+                         Engine::Renderer::Material &material) -> Error {
+  material.name = gltfMaterial.name;
 
-  material.CullMode =
+  material.cullMode =
       gltfMaterial.doubleSided ? VK_CULL_MODE_NONE : VK_CULL_MODE_BACK_BIT;
 
-  material.AlphaCutoff = gltfMaterial.alphaCutoff;
-  material.RoughnessFactor = gltfMaterial.pbrData.roughnessFactor;
-  material.MetallicFactor = gltfMaterial.pbrData.metallicFactor;
-  material.AlbedoFactor = Math::Vec4(gltfMaterial.pbrData.baseColorFactor[0],
+  material.alphaCutoff = gltfMaterial.alphaCutoff;
+  material.roughnessFactor = gltfMaterial.pbrData.roughnessFactor;
+  material.metallicFactor = gltfMaterial.pbrData.metallicFactor;
+  material.albedoFactor = Math::Vec4(gltfMaterial.pbrData.baseColorFactor[0],
                                      gltfMaterial.pbrData.baseColorFactor[1],
                                      gltfMaterial.pbrData.baseColorFactor[2],
                                      gltfMaterial.pbrData.baseColorFactor[3]);
@@ -274,17 +274,17 @@ inline auto LoadMaterial(Graphics::GraphicsContext &context,
 
   switch (gltfMaterial.alphaMode) {
   case fastgltf::AlphaMode::Opaque:
-    material.AlphaModeSetting = Renderer::AlphaMode::Opaque;
+    material.alphaMode = Engine::Renderer::AlphaMode::Opaque;
     break;
   case fastgltf::AlphaMode::Mask:
-    material.AlphaModeSetting = Renderer::AlphaMode::Mask;
+    material.alphaMode = Engine::Renderer::AlphaMode::Mask;
     break;
   case fastgltf::AlphaMode::Blend:
-    material.AlphaModeSetting = Renderer::AlphaMode::Blend;
+    material.alphaMode = Engine::Renderer::AlphaMode::Blend;
     break;
   }
 
-  material.EmissiveFactor =
+  material.emissiveFactor =
       Math::Vec3(gltfMaterial.emissiveFactor[0], gltfMaterial.emissiveFactor[1],
                  gltfMaterial.emissiveFactor[2]);
 
@@ -296,7 +296,7 @@ inline auto LoadMaterial(Graphics::GraphicsContext &context,
       return albedoTextureLoadResult.error();
     }
 
-    material.AlbedoTexture = albedoTextureLoadResult.value();
+    material.albedoTexture = albedoTextureLoadResult.value();
   }
 
   if (gltfMaterial.pbrData.metallicRoughnessTexture.has_value()) {
@@ -307,7 +307,7 @@ inline auto LoadMaterial(Graphics::GraphicsContext &context,
       return metallicRoughnessLoadResult.error();
     }
 
-    material.MetallicRoughnessTexture = metallicRoughnessLoadResult.value();
+    material.metallicRoughnessTexture = metallicRoughnessLoadResult.value();
   }
 
   if (gltfMaterial.occlusionTexture.has_value()) {
@@ -318,7 +318,7 @@ inline auto LoadMaterial(Graphics::GraphicsContext &context,
       return aoTextureLoadResult.error();
     }
 
-    material.AmbientOcclusionTexture = aoTextureLoadResult.value();
+    material.ambientOcclusionTexture = aoTextureLoadResult.value();
   }
 
   if (gltfMaterial.normalTexture.has_value()) {
@@ -329,7 +329,7 @@ inline auto LoadMaterial(Graphics::GraphicsContext &context,
       return normalTextureLoadResult.error();
     }
 
-    material.NormalTexture = normalTextureLoadResult.value();
+    material.normalTexture = normalTextureLoadResult.value();
   }
 
   if (gltfMaterial.emissiveTexture.has_value()) {
@@ -340,7 +340,7 @@ inline auto LoadMaterial(Graphics::GraphicsContext &context,
       return emissiveTextureLoadResult.error();
     }
 
-    material.EmissiveTexture = emissiveTextureLoadResult.value();
+    material.emissiveTexture = emissiveTextureLoadResult.value();
   }
 
   return Error::Success();
@@ -362,15 +362,15 @@ inline auto LoadNode(Graphics::GraphicsContext &context,
   if (isNode) {
     Ref<Engine::Node> node;
     // Create a new engine node.
-    node->Name = gltfNode.name;
+    node->name = gltfNode.name;
 
     if (std::holds_alternative<fastgltf::TRS>(gltfNode.transform)) {
       const auto &trs = std::get<fastgltf::TRS>(gltfNode.transform);
-      node->Transform.Position = Math::Vec3(
+      node->transform.Position = Math::Vec3(
           trs.translation[0], trs.translation[1], trs.translation[2]);
-      node->Transform.Rotation = Math::Quaternion(
+      node->transform.Rotation = Math::Quaternion(
           trs.rotation[0], trs.rotation[1], trs.rotation[2], trs.rotation[3]);
-      node->Transform.Scale =
+      node->transform.Scale =
           Math::Vec3(trs.scale[0], trs.scale[1], trs.scale[2]);
     } else {
       // Shouldn't be hit. Since we specified DecomposeNodeMatrices, all matrices should
@@ -388,7 +388,7 @@ inline auto LoadNode(Graphics::GraphicsContext &context,
       // node->Children.emplace_back(childNodeResult.value());
 
       for (auto &childObject : childNodeResult.value()) {
-        node->Children.emplace_back(std::move(childObject));
+        node->children.emplace_back(std::move(childObject));
       }
     }
 
@@ -404,14 +404,14 @@ inline auto LoadNode(Graphics::GraphicsContext &context,
     for (const auto &primitive : gltfMesh.primitives) {
       // Load each primitive into a shape.
       Engine::Shape shape;
-      shape.Name = gltfNode.name;
+      shape.name = gltfNode.name;
 
       // Load material if present.
       if (primitive.materialIndex.has_value()) {
         const auto &material = asset.materials[primitive.materialIndex.value()];
 
         auto materialResult =
-            LoadMaterial(context, asset, material, shape.Material);
+            LoadMaterial(context, asset, material, *shape.material);
         if (Error::IsError(materialResult)) {
           return materialResult.AsUnexpected();
         }

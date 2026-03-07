@@ -171,6 +171,11 @@ auto GetPipelineLayout(const GraphicsContext &context,
     return error.AsUnexpected();
   }
 
+  {
+    std::lock_guard<std::mutex> lock(PipelineLayoutsMutex);
+    PipelineLayouts.emplace_back(pipelineLayout);
+  }
+
   return pipelineLayout;
 }
 
@@ -688,10 +693,6 @@ inline auto CreateGraphicsPipeline(const GraphicsContext &context, State &state)
     std::lock_guard<std::mutex> lock(PipelinesMutex);
     Pipelines.emplace_back(pipeline);
   }
-  {
-    std::lock_guard<std::mutex> lock(PipelineLayoutsMutex);
-    PipelineLayouts.emplace_back(layoutResult.value());
-  }
 
   return std::pair<VkPipeline, VkPipelineLayout>(pipeline,
                                                  layoutResult.value());
@@ -700,9 +701,6 @@ inline auto CreateGraphicsPipeline(const GraphicsContext &context, State &state)
 inline auto CreateComputePipeline(const GraphicsContext &context, State &state)
     -> Result<std::pair<VkPipeline, VkPipelineLayout>> {
   ZoneScoped;
-
-  // Currently not implemented
-  // return Error::Unexpected("Compute pipeline creation not implemented.");
 
   VkComputePipelineCreateInfo pipelineInfo = {};
   pipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
@@ -736,6 +734,13 @@ inline auto CreateComputePipeline(const GraphicsContext &context, State &state)
     if (Error::IsError(error)) {
       return error.AsUnexpected();
     }
+  }
+
+  PipelineCache[state] = {pipeline, layoutResult.value()};
+
+  {
+    std::lock_guard<std::mutex> lock(PipelinesMutex);
+    Pipelines.emplace_back(pipeline);
   }
 
   return std::pair<VkPipeline, VkPipelineLayout>(pipeline,

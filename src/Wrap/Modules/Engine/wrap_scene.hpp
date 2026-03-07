@@ -2,18 +2,15 @@
 
 #include "Modules/Engine/scene.hpp"
 #include "Wrap/wrap.hpp"
-extern "C" {
-#include <lauxlib.h>
-#include <lua.h>
-#include <lualib.h>
-}
+#include "lua.hpp"
 
 namespace Wrap::Engine {
 
 auto wrap_NewScene(lua_State *state) -> int;
 
 // NOLINTNEXTLINE
-static const luaL_Reg SnapLib[] = {
+static const luaL_Reg SceneLib[] = {
+    {"newScene", wrap_NewScene},
     {nullptr, nullptr},
 };
 
@@ -23,10 +20,10 @@ const static lua_CFunction childrenInitFunctions[] = {
     nullptr,
 };
 
-extern "C" inline auto luaopen_snap(lua_State *state) -> int {
+extern "C" inline auto luaopen_scene(lua_State *state) -> int {
   auto module = LuaWrap::LuaModule{
-      .Name = "snap",
-      .Functions = SnapLib,                           // NOLINT
+      .Name = "scene",
+      .Functions = SceneLib,                          // NOLINT
       .ChildrenInitFunctions = childrenInitFunctions, // NOLINT
       .ModuleType = nullptr,
   };

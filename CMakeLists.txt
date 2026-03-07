@@ -306,13 +306,16 @@ add_executable(snap
     src/Wrap/Modules/wrap_filesystem.cpp
     src/Wrap/Modules/wrap_keyboard.cpp
     src/Wrap/Modules/wrap_mouse.cpp
-    src/Wrap/Modules/Engine/wrap_imgui.cpp
     src/Wrap/Modules/wrap_thread.cpp
     src/Wrap/Modules/wrap_channel.cpp
     src/Wrap/Modules/wrap_window.cpp
     src/Wrap/Modules/wrap_math.cpp
     src/Wrap/wrap.cpp
     src/Wrap/lua_data.cpp
+
+# Engine wrappers
+    src/Wrap/Modules/Engine/wrap_imgui.cpp
+    src/Wrap/Modules/Engine/wrap_scene.cpp
 
 # Libraries
     src/Libraries/vma.cpp

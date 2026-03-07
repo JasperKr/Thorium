@@ -3,11 +3,7 @@
 #include "Graphics/texture.hpp"
 #include "Modules/console.hpp"
 #include "Wrap/wrap.hpp"
-extern "C" {
-#include <lauxlib.h>
-#include <lua.h>
-#include <lualib.h>
-}
+#include "lua.hpp"
 namespace Graphics::Texture {
 auto wrap_SetFilter(lua_State *state) -> int;
 auto wrap_GetFilter(lua_State *state) -> int;

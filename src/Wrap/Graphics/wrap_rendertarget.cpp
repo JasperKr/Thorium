@@ -10,13 +10,9 @@
 #include "tl/expected.hpp"
 #include <string>
 
+#include "lua.hpp"
 #include "vulkan/vulkan_core.h"
 #include <cstring>
-extern "C" {
-#include <lauxlib.h>
-#include <lua.h>
-#include <lualib.h>
-}
 #include <vector>
 namespace Graphics::DynamicRendering {
 auto inline ConvertStringToBlendOp(const char *string) -> VkBlendOp {

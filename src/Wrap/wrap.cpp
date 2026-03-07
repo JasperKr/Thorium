@@ -1,6 +1,8 @@
 #include "wrap.hpp"
+#include "Modules/Engine/scene.hpp"
 #include "Modules/console.hpp"
 #include "Wrap/Modules/Engine/wrap_imgui.hpp"
+#include "Wrap/Modules/Engine/wrap_scene.hpp"
 #include "Wrap/Modules/wrap_data.hpp"
 #include "Wrap/Modules/wrap_math.hpp"
 #include "Wrap/Modules/wrap_mouse.hpp"
@@ -8,15 +10,11 @@
 #include "Wrap/Modules/wrap_window.hpp"
 #include "Wrap/proxy.hpp"
 
+#include "lua.hpp"
 #include <cstdint>
 #include <iostream>
 #include <string>
 #include <unordered_set>
-extern "C" {
-#include <lauxlib.h>
-#include <lua.h>
-#include <lualib.h>
-}
 
 #include "Modules/object.hpp"
 #include "Wrap/Graphics/wrap_graphics.hpp"
@@ -501,7 +499,7 @@ static const luaL_Reg ThoriumModules[] = {
     {"gui", Wrap::Imgui::luaopen_gui},
     {"window", Wrap::Window::luaopen_window},
     {"math", Wrap::Math::luaopen_engine_math},
-    // {"snap", Wrap::},
+    {"scene", Wrap::Engine::luaopen_scene},
     {nullptr, nullptr},
 };
 

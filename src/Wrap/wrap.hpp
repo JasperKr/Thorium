@@ -4,14 +4,10 @@
 #include "Modules/error.hpp"
 #include "Modules/type.hpp"
 #include "Wrap/lua_data.hpp"
+#include "lua.hpp"
 #include <Modules/object.hpp>
 #include <variant>
 #include <vector>
-extern "C" {
-#include <lauxlib.h>
-#include <lua.h>
-#include <lualib.h>
-}
 
 namespace LuaWrap {
 

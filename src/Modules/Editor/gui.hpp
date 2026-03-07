@@ -9,11 +9,7 @@
 #include "imgui.h"
 #include <string>
 
-extern "C" {
-#include <lauxlib.h>
-#include <lua.h>
-#include <lualib.h>
-}
+#include "lua.hpp"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wc23-extensions"

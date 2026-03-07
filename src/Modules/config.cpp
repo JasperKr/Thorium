@@ -4,11 +4,7 @@
 #include "Wrap/Modules/wrap_window.hpp"
 #include "Wrap/wrap.hpp"
 
-extern "C" {
-#include <lauxlib.h>
-#include <lua.h>
-#include <lualib.h>
-}
+#include "lua.hpp"
 
 namespace Config {
 

@@ -24,6 +24,18 @@ struct ShaderModule;
 
 namespace DynamicRendering {
 
+// NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
+
+// Only used for cleanup
+extern std::mutex PipelinesMutex;
+extern std::vector<VkPipeline> Pipelines;
+
+// Only used for cleanup
+extern std::mutex PipelineLayoutsMutex;
+extern std::vector<VkPipelineLayout> PipelineLayouts;
+
+// NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
+
 struct DescriptorSetLayoutKey {
   VkDescriptorSetLayoutCreateFlags flags;
   std::vector<VkDescriptorSetLayoutBinding> bindings;
