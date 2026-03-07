@@ -306,7 +306,7 @@ add_executable(Thorium
     src/Wrap/Modules/wrap_filesystem.cpp
     src/Wrap/Modules/wrap_keyboard.cpp
     src/Wrap/Modules/wrap_mouse.cpp
-    src/Wrap/Modules/Editor/wrap_imgui.cpp
+    src/Wrap/Modules/Engine/wrap_imgui.cpp
     src/Wrap/Modules/wrap_thread.cpp
     src/Wrap/Modules/wrap_channel.cpp
     src/Wrap/Modules/wrap_window.cpp

@@ -15,7 +15,7 @@
 #include "Modules/thread.hpp"
 #include "Modules/window.hpp"
 #include "Wrap/Graphics/wrap_graphics.hpp"
-#include "Wrap/Modules/Editor/wrap_imgui.hpp"
+#include "Wrap/Modules/Engine/wrap_imgui.hpp"
 #include <filesystem>
 #include <public/tracy/Tracy.hpp>
 #include <string>

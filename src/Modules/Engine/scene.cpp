@@ -1,9 +1,9 @@
 #include "scene.hpp"
 #include "Modules/Engine/model.hpp"
-#include "Modules/object.hpp"
-#include "Wrap/proxy.hpp"
+#include "Wrap/Helpers/lua_vector.hpp"
 #include "Wrap/wrap.hpp"
-#include <variant>
+
+#include "Wrap/Helpers/lua_variant.hpp"
 
 extern "C" {
 #include <lauxlib.h>
@@ -14,8 +14,16 @@ extern "C" {
 namespace Engine {
 
 auto Scene::LoadBinding(lua_State *state) -> int {
-  // auto binding = Bindings::LuaBoundStruct<Scene>("Scene");
-  // binding.Register(state);
+  // NOLINTNEXTLINE
+  constexpr luaL_Reg methods[] = {
+      {"getHierarchyObjects", GetHierarchyObjects},
+      {"addHierarchyObject", AddHierarchyObject},
+      {"getHierarchyObject", GetHierarchyObject},
+      {"removeHierarchyObject", RemoveHierarchyObject},
+      {nullptr, nullptr} // terminate with nullptr
+  };
+
+  LuaWrap::RegisterLuaType(state, GetType(), methods); // NOLINT
 
   return 1;
 }
@@ -32,17 +40,14 @@ auto Scene::GetHierarchyObjects(lua_State *state) -> int {
     luaL_checktype(state, 2, LUA_TTABLE);
   }
 
-  auto index = 1;
-
-  for (const auto &hierarchyObject : scene->hierarchy) {
-    auto error = LuaWrap::PushVariant(state, hierarchyObject);
-    if (Error::IsError(error)) {
-      return luaL_error(state, "Failed to push scene object: %s",
-                        error.message.c_str());
-    }
-
-    lua_rawseti(state, -2, index);
-  }
+  LuaWrap::PushVector(state, scene->hierarchy,
+                      [](lua_State *state, const SceneObject &obj) -> void {
+                        auto error = LuaWrap::PushVariant(state, obj);
+                        if (Error::IsError(error)) {
+                          luaL_error(state, "Failed to push scene object: %s",
+                                     error.message.c_str());
+                        }
+                      });
 
   return 1;
 }
@@ -102,7 +107,8 @@ auto Scene::RemoveHierarchyObject(lua_State *state) -> int {
     return luaL_error(state, "Index out of bounds");
   }
 
-  scene->hierarchy.erase(scene->hierarchy.begin() + (index - 1));
+  scene->hierarchy.erase(scene->hierarchy.begin() +
+                         static_cast<int>(index - 1));
 
   return 0;
 }

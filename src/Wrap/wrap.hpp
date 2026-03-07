@@ -93,35 +93,6 @@ inline auto ObjectFromLua(lua_State *state, int index) -> T * {
   return obj;
 }
 
-template <typename Variant, std::size_t... I>
-inline auto VariantFromLua(lua_State *state, int index) -> Result<Variant> {
-  using V = Variant;
-  auto *proxy = static_cast<Proxy *>(lua_touserdata(state, index));
-  if (proxy == nullptr) {
-    return Error::Unexpected("Proxy is null at index " + std::to_string(index));
-  }
-
-  Variant result;
-  bool matched = false;
-
-  (... || ([&] -> auto {
-     using T = std::variant_alternative_t<I, V>;
-     if (!matched && *proxy->type == *Ref<T>::GetType()) {
-       result = V{*static_cast<Ref<T> *>(proxy->object)};
-       matched = true;
-       return true;
-     }
-     return false;
-   }()));
-
-  if (!matched) {
-    return Error::Unexpected("No matching type found for proxy at index " +
-                             std::to_string(index));
-  }
-
-  return result;
-}
-
 template <typename T>
   requires LuaObject<T>
 inline auto ResultFromLua(lua_State *state, int index) -> Result<T *> {
@@ -155,18 +126,6 @@ inline auto ResultFromLua(lua_State *state, int index) -> Result<T *> {
 
   auto *obj = static_cast<T *>(proxy->object);
   return obj;
-}
-
-template <typename Variant>
-auto PushVariant(lua_State *state, const Variant &value) -> Error {
-  std::visit(
-      [&](const auto &value) -> auto {
-        using T = std::decay_t<decltype(value)>;
-        PushObject(state, T::GetType(), value.get());
-      },
-      value);
-
-  return Error::Success();
 }
 
 inline auto PushPointer(lua_State *state, void *pointer) -> void {
