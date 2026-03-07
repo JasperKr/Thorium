@@ -21,7 +21,7 @@ auto Wrap_NewCursor(lua_State *state) -> int;
 auto Wrap_SetCursor(lua_State *state) -> int;
 
 // NOLINTNEXTLINE
-static const luaL_Reg MouseLib[] = {
+static const std::vector<luaL_Reg> MouseLib = {
     {"isDown", Wrap_IsDown},
     {"getX", Wrap_GetX},
     {"getY", Wrap_GetY},
@@ -36,18 +36,18 @@ static const luaL_Reg MouseLib[] = {
     {"getHardwareCursor", Wrap_GetHardwareCursor},
     {"newCursor", Wrap_NewCursor},
     {"setCursor", Wrap_SetCursor},
-    {nullptr, nullptr},
+
 };
 
 // nullptr-terminated
-const static lua_CFunction *const childrenInitFunctions = {nullptr};
+const static std::vector<lua_CFunction> childrenInitFunctions{};
 
 extern "C" inline auto luaopen_mouse(lua_State *state) -> int {
   auto module = LuaWrap::LuaModule{
       .Name = "mouse",
       .Functions = MouseLib, // NOLINT
       .ChildrenInitFunctions = childrenInitFunctions,
-      .ModuleType = nullptr,
+
   };
 
   RegisterLuaModule(state, module);

@@ -11,23 +11,22 @@ auto Wrap_SetEnableTextInput(lua_State *state) -> int;
 auto Wrap_IsTextInputEnabled(lua_State *state) -> int;
 
 // NOLINTNEXTLINE
-static const luaL_Reg KeyboardLib[] = {
+static const std::vector<luaL_Reg> KeyboardLib = {
     {"isDown", Wrap_IsDown},
     {"isScancodeDown", Wrap_IsScancodeDown},
     {"setEnableTextInput", Wrap_SetEnableTextInput},
     {"isTextInputEnabled", Wrap_IsTextInputEnabled},
-    {nullptr, nullptr},
+
 };
 
-// nullptr-terminated
-const static lua_CFunction *const childrenInitFunctions = {nullptr};
+const static std::vector<lua_CFunction> childrenInitFunctions{};
 
 extern "C" inline auto luaopen_keyboard(lua_State *state) -> int {
   auto module = LuaWrap::LuaModule{
       .Name = "keyboard",
       .Functions = KeyboardLib, // NOLINT
       .ChildrenInitFunctions = childrenInitFunctions,
-      .ModuleType = nullptr,
+
   };
 
   RegisterLuaModule(state, module);

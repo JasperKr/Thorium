@@ -422,9 +422,8 @@ struct LuaBoundStruct {
     for (const auto &[methodName, methodFunc] : additionalMethods) {
       luaMethods.push_back({methodName.c_str(), methodFunc});
     }
-    luaMethods.push_back({nullptr, nullptr}); // null terminator
 
-    LuaWrap::RegisterLuaType(state, T::GetType(), luaMethods.data());
+    LuaWrap::RegisterLuaType(state, T::GetType(), luaMethods);
   };
 };
 

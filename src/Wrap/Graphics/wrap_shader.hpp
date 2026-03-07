@@ -17,13 +17,13 @@ auto wrap_NewShader(lua_State *state) -> int;
 auto wrap_Release(lua_State *state) -> int;
 
 // NOLINTNEXTLINE
-static const luaL_Reg ShaderLib[] = {
+static const std::vector<luaL_Reg> ShaderLib = {
     {"send", wrap_Send},
     {"hasUniform", wrap_HasUniform},
     {"getUniforms", wrap_GetUniforms},
     {"getThreadgroupSize", wrap_GetThreadgroupSize},
     {"getWaveSize", wrap_GetWaveSize},
-    {nullptr, nullptr} // terminate with nullptr
+
 };
 
 extern "C" inline auto luaopen_shader(lua_State *state) -> int {

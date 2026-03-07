@@ -17,7 +17,7 @@ auto wrap_GetDimensions(lua_State *state) -> int;
 auto wrap_GetFormat(lua_State *state) -> int;
 
 // NOLINTNEXTLINE
-static const luaL_Reg ImagedataLib[] = {
+static const std::vector<luaL_Reg> ImagedataLib = {
     {"setUInt32", Data::wrap_SetUInt32},
     {"getUInt32", Data::wrap_GetUInt32},
     {"setInt32", Data::wrap_SetInt32},
@@ -43,7 +43,7 @@ static const luaL_Reg ImagedataLib[] = {
 
     {"getSize", Data::wrap_GetSize},
     {"getPointer", Data::wrap_GetPointer},
-    {nullptr, nullptr} // terminate with nullptr
+
 };
 
 extern "C" inline auto luaopen_imagedata(lua_State *state) -> int {

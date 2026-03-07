@@ -22,7 +22,7 @@ auto TextInput(lua_State *state) -> int;
 auto Shutdown() -> Error;
 
 // NOLINTNEXTLINE
-static const luaL_Reg ImGuiLib[] = {
+static const std::vector<luaL_Reg> ImGuiLib = {
     {"newFrame", NewFrame},
     {"endFrame", EndFrame},
     {"draw", Draw},
@@ -33,20 +33,17 @@ static const luaL_Reg ImGuiLib[] = {
     {"keyPressed", KeyPressed},
     {"keyReleased", KeyReleased},
     {"textInput", TextInput},
-    {nullptr, nullptr},
+
 };
 
-// nullptr-terminated NOLINTNEXTLINE
-const static lua_CFunction childrenInitFunctions[] = {
-    nullptr,
-};
+const static std::vector<lua_CFunction> childrenInitFunctions = {};
 
 extern "C" inline auto luaopen_gui(lua_State *state) -> int {
   auto module = LuaWrap::LuaModule{
       .Name = "gui",
       .Functions = ImGuiLib,                          // NOLINT
       .ChildrenInitFunctions = childrenInitFunctions, // NOLINT
-      .ModuleType = nullptr,
+
   };
 
   RegisterLuaModule(state, module);

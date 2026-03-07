@@ -28,7 +28,7 @@ auto wrap_NewTexture(lua_State *state) -> int;
 auto wrap_Release(lua_State *state) -> int;
 
 // NOLINTNEXTLINE
-static const luaL_Reg TextureLib[] = {
+static const std::vector<luaL_Reg> TextureLib = {
     {"setFilter", wrap_SetFilter},
     {"getFilter", wrap_GetFilter},
     {"setAnisotropy", wrap_SetAnisotropy},
@@ -48,7 +48,7 @@ static const luaL_Reg TextureLib[] = {
     {"getMipmapCount", wrap_GetMipmapCount},
     {"getFormat", wrap_GetFormat},
     {"getID", wrap_GetID},
-    {nullptr, nullptr} // terminate with nullptr
+
 };
 
 extern "C" inline auto luaopen_texture(lua_State *state) -> int {

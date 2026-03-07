@@ -39,8 +39,7 @@ auto wrap_RequestAttention(lua_State *state) -> int;
 auto wrap_SetColorSpace(lua_State *state) -> int;
 auto wrap_GetColorSpace(lua_State *state) -> int;
 
-// NOLINTNEXTLINE
-static const luaL_Reg WindowLib[] = {
+static const std::vector<luaL_Reg> WindowLib = {
     {"hide", wrap_Hide},
     {"getDisplayCount", wrap_GetDisplayCount},
     {"getDisplayName", wrap_GetDisplayName},
@@ -74,17 +73,17 @@ static const luaL_Reg WindowLib[] = {
     {"requestAttention", wrap_RequestAttention},
     {"setColorSpace", wrap_SetColorSpace},
     {"getColorSpace", wrap_GetColorSpace},
-    {nullptr, nullptr},
+
 };
 
-static const lua_CFunction *const childrenInitFunctions = {nullptr};
+static const std::vector<lua_CFunction> childrenInitFunctions{};
 
 extern "C" inline auto luaopen_window(lua_State *state) -> int {
   auto module = LuaWrap::LuaModule{
       .Name = "window",
       .Functions = WindowLib, // NOLINT
       .ChildrenInitFunctions = childrenInitFunctions,
-      .ModuleType = nullptr,
+
   };
 
   RegisterLuaModule(state, module);

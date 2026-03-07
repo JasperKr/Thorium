@@ -1,5 +1,4 @@
 #include "wrap.hpp"
-#include "Modules/Engine/scene.hpp"
 #include "Modules/console.hpp"
 #include "Wrap/Modules/Engine/wrap_imgui.hpp"
 #include "Wrap/Modules/Engine/wrap_scene.hpp"
@@ -15,6 +14,7 @@
 #include <iostream>
 #include <string>
 #include <unordered_set>
+#include <vector>
 
 #include "Modules/object.hpp"
 #include "Wrap/Graphics/wrap_graphics.hpp"
@@ -206,7 +206,7 @@ auto LuaTrampoline(lua_State *state) -> int {
 static const Type moduleType("MODULE");
 
 auto RegisterLuaModule(lua_State *state, const LuaModule &module) -> void {
-  if (module.Functions == nullptr) {
+  if (module.Functions.empty()) {
     std::cerr << "Module " << module.Name << " has no functions to register."
               << "\n";
     return;
@@ -236,73 +236,38 @@ auto RegisterLuaModule(lua_State *state, const LuaModule &module) -> void {
   lua_newtable(state); // [snap, module]
 
   // register Functions to snap.modulename.functionname
-  if (module.Functions != nullptr) {
-    const luaL_Reg *func = module.Functions;
-    while (func->name != nullptr) {
-      // lua_pushcfunction(state, func->func); // [snap, module, func]
-
+  if (!module.Functions.empty()) {
+    for (const auto &func : module.Functions) {
 #if !defined(NDEBUG) && DEBUG_CPP_EXCEPTION // If debug build
       // Wrap function in trampoline to catch exceptions
       lua_pushlightuserdata(
           state, // NOLINTNEXTLINE(cppcoreguidelines-pro-type-cstyle-cast)
-          (void *)func->func); // [mt, lightuserdata with function pointer]
+          (void *)func.func); // [mt, lightuserdata with function pointer]
       lua_pushcclosure(state, LuaTrampoline,
                        1); // [mt, cclosure that calls function pointer]
 #else
-      lua_pushcfunction(state, func->func); // [mt, func]
+      lua_pushcfunction(state, func.func); // [mt, func]
 #endif
 
-      lua_setfield(state, -2, func->name); // [snap, module]
-      func++; // NOLINT, functions are nullptr-terminated
+      lua_setfield(state, -2, func.name); // [snap, module]
     }
   }
 
   lua_setfield(state, -2, name); // [snap]
 
   // register init functions
-  if (module.ChildrenInitFunctions != nullptr) {
-    const lua_CFunction *func = module.ChildrenInitFunctions;
-    while (*func != nullptr) {
-      (*func)(state);
-      func++; // NOLINT, functions are nullptr-terminated
+  if (!module.ChildrenInitFunctions.empty()) {
+    for (const auto &func : module.ChildrenInitFunctions) {
+      func(state);
     }
   }
 
   // done, remove module table from stack
   lua_pop(state, 1); // []
-
-  // Sanity check snap[modulename][first function] exists
-  lua_getglobal(state, "snap"); // [snap]
-  if (lua_isnil(state, -1)) {
-    std::cerr << "Error registering module " << module.Name
-              << ": snap table not found." << "\n";
-    lua_pop(state, 1); // []
-    return;
-  }
-  lua_getfield(state, -1, module.Name.c_str()); // [snap, module]
-  if (lua_isnil(state, -1)) {
-    std::cerr << "Error registering module " << module.Name
-              << ": module table not found." << "\n";
-    lua_pop(state, 2); // []
-    return;
-  }
-  if (module.Functions->name == nullptr) {
-    PrintWarning("Module {} has no functions to verify during registration.",
-                 module.Name);
-    lua_pop(state, 2); // []
-    return;
-  }
-  lua_getfield(state, -1, module.Functions->name); // [snap, module, func]
-  if (lua_isnil(state, -1)) {
-    std::cerr << "Error registering module " << module.Name << ": function "
-              << module.Functions->name << " not found." << "\n";
-    lua_pop(state, 3); // []
-    return;
-  }
 }
 
 auto RegisterLuaType(lua_State *state, const Type *type,
-                     const luaL_Reg *functions) -> void {
+                     const std::vector<luaL_Reg> &functions) -> void {
 
   if (type == nullptr) {
     PrintError("Cannot register Lua type: type is null");
@@ -337,30 +302,25 @@ auto RegisterLuaType(lua_State *state, const Type *type,
   };
 
   // Register functions
-  if (functions != nullptr) {
-    const luaL_Reg *func = functions;
-    while (func->name != nullptr) {
-      // Check for reserved names
-      if (ReservedNames.contains(func->name)) {
-        PrintError("Cannot register Lua type {}: function name '{}' is "
-                   "reserved.",
-                   type->GetName(), func->name);
-        func++; // NOLINT, functions are nullptr-terminated
-        continue;
-      }
-#if !defined(NDEBUG) && DEBUG_CPP_EXCEPTION // If debug build
-      // Wrap function in trampoline to catch exceptions
-      lua_pushlightuserdata(
-          state, // NOLINTNEXTLINE(cppcoreguidelines-pro-type-cstyle-cast)
-          (void *)func->func); // [mt, lightuserdata with function pointer]
-      lua_pushcclosure(state, LuaTrampoline,
-                       1); // [mt, cclosure that calls function pointer]
-#else
-      lua_pushcfunction(state, func->func); // [mt, func]
-#endif
-      lua_setfield(state, -2, func->name); // [mt]
-      func++; // NOLINT, functions are nullptr-terminated
+  for (const auto &func : functions) {
+    // Check for reserved names
+    if (ReservedNames.contains(func.name)) {
+      PrintError("Cannot register Lua type {}: function name '{}' is "
+                 "reserved.",
+                 type->GetName(), func.name);
+      continue;
     }
+#if !defined(NDEBUG) && DEBUG_CPP_EXCEPTION // If debug build
+    // Wrap function in trampoline to catch exceptions
+    lua_pushlightuserdata(
+        state, // NOLINTNEXTLINE(cppcoreguidelines-pro-type-cstyle-cast)
+        (void *)func.func); // [mt, lightuserdata with function pointer]
+    lua_pushcclosure(state, LuaTrampoline,
+                     1); // [mt, cclosure that calls function pointer]
+#else
+    lua_pushcfunction(state, func.func); // [mt, func]
+#endif
+    lua_setfield(state, -2, func.name); // [mt]
   }
 
   lua_pop(state, 1); // []
@@ -487,7 +447,7 @@ auto PushObject(lua_State *state, Object *object) -> void {
 }
 
 // NOLINTNEXTLINE
-static const luaL_Reg ThoriumModules[] = {
+static const std::vector<luaL_Reg> ThoriumModules = {
     {"graphics", Graphics::luaopen_graphics},
     {"event", Wrap::Event::luaopen_event},
     {"timer", Wrap::Timer::luaopen_timer},
@@ -500,7 +460,7 @@ static const luaL_Reg ThoriumModules[] = {
     {"window", Wrap::Window::luaopen_window},
     {"math", Wrap::Math::luaopen_engine_math},
     {"scene", Wrap::Engine::luaopen_scene},
-    {nullptr, nullptr},
+
 };
 
 auto RegisterModules(lua_State *state) -> void {
@@ -508,10 +468,8 @@ auto RegisterModules(lua_State *state) -> void {
   lua_setglobal(state, "snap"); // [snap]
   lua_pop(state, 1);            // empty stack
 
-  const luaL_Reg *module = ThoriumModules; // NOLINT
-  while (module->name != nullptr) {
-    module->func(state);
-    module++; // NOLINT, modules are nullptr-terminated
+  for (const auto &module : ThoriumModules) {
+    module.func(state);
   }
 }
 

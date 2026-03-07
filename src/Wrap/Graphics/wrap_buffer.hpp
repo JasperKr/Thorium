@@ -19,7 +19,7 @@ auto wrap_GetDebugName(lua_State *state) -> int;
 auto wrap_NewBuffer(lua_State *state) -> int;
 
 // NOLINTNEXTLINE
-static const luaL_Reg BufferLib[] = {
+static const std::vector<luaL_Reg> BufferLib = {
     {"getSize", wrap_GetSize},
     {"getElementCount", wrap_GetElementCount},
     {"getElementStride", wrap_GetElementStride},
@@ -29,7 +29,7 @@ static const luaL_Reg BufferLib[] = {
     {"copyTo", wrap_CopyTo},
     {"getComponentOffset", wrap_GetComponentOffset},
     {"getDebugName", wrap_GetDebugName},
-    {nullptr, nullptr} // terminate with nullptr
+
 };
 
 extern "C" inline auto luaopen_buffer(lua_State *state) -> int {

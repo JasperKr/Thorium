@@ -21,7 +21,7 @@ auto Wrap_GetSourceDirectory(lua_State *state) -> int;
 auto Wrap_GetSourceBaseDirectory(lua_State *state) -> int;
 
 // NOLINTNEXTLINE
-static const luaL_Reg FilesystemLib[] = {
+static const std::vector<luaL_Reg> FilesystemLib = {
     {"read", Wrap_Read},
     {"append", Wrap_Append},
     {"write", Wrap_Write},
@@ -35,18 +35,17 @@ static const luaL_Reg FilesystemLib[] = {
     {"getSaveDirectory", Wrap_GetSaveDirectory},
     {"getSourceDirectory", Wrap_GetSourceDirectory},
     {"getSourceBaseDirectory", Wrap_GetSourceBaseDirectory},
-    {nullptr, nullptr},
+
 };
 
-// nullptr-terminated
-const static lua_CFunction *const childrenInitFunctions = {nullptr};
+const static std::vector<lua_CFunction> childrenInitFunctions{};
 
 extern "C" inline auto luaopen_filesystem(lua_State *state) -> int {
   auto module = LuaWrap::LuaModule{
       .Name = "filesystem",
       .Functions = FilesystemLib, // NOLINT
       .ChildrenInitFunctions = childrenInitFunctions,
-      .ModuleType = nullptr,
+
   };
 
   RegisterLuaModule(state, module);

@@ -9,22 +9,21 @@ auto wrap_Pull(lua_State *state) -> int;
 auto wrap_Pop(lua_State *state) -> int;
 
 // NOLINTNEXTLINE
-static const luaL_Reg EventLib[] = {
+static const std::vector<luaL_Reg> EventLib = {
     {"pull", wrap_Pull},
     {"pop", wrap_Pop},
     {"quit", wrap_Quit},
-    {nullptr, nullptr},
+
 };
 
-// nullptr-terminated
-const static lua_CFunction *const childrenInitFunctions = {nullptr};
+const static std::vector<lua_CFunction> childrenInitFunctions{};
 
 extern "C" inline auto luaopen_event(lua_State *state) -> int {
   auto module = LuaWrap::LuaModule{
       .Name = "event",
       .Functions = EventLib, // NOLINT
       .ChildrenInitFunctions = childrenInitFunctions,
-      .ModuleType = nullptr,
+
   };
 
   RegisterLuaModule(state, module);

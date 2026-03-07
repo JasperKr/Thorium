@@ -15,14 +15,8 @@ struct LuaModule {
   // Name of the module
   std::string Name;
 
-  // Must be nullptr-terminated
-  const luaL_Reg *Functions{nullptr};
-
-  // Must be nullptr-terminated, always a leaf. No modules in modules.
-  const lua_CFunction *ChildrenInitFunctions{nullptr};
-
-  // Associated Type instance
-  Type *ModuleType{nullptr};
+  std::vector<luaL_Reg> Functions;
+  std::vector<lua_CFunction> ChildrenInitFunctions;
 };
 
 auto RegisterLuaModule(lua_State *state, const LuaModule &module) -> void;
@@ -43,7 +37,7 @@ inline auto SetStackToRegistry(lua_State *state, const char *key) -> void {
 auto SetStackToTable(lua_State *state, const char *key) -> void;
 auto PushObject(lua_State *state, const Type *type, Object *object) -> void;
 auto RegisterLuaType(lua_State *state, const Type *type,
-                     const luaL_Reg *functions) -> void;
+                     const std::vector<luaL_Reg> &functions) -> void;
 auto SetupLuaType(lua_State *state, const Type *type, Object *object) -> void;
 auto LoadStorageTable(lua_State *state, const char *key) -> void;
 auto LoadOrCreateStorageTable(lua_State *state, const char *key) -> void;

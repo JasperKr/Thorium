@@ -14,10 +14,10 @@ auto wrap_Demand(lua_State *state) -> int;
 auto wrap_Clear(lua_State *state) -> int;
 
 // NOLINTNEXTLINE
-static const luaL_Reg ChannelLib[] = {
+static const std::vector<luaL_Reg> ChannelLib = {
     {"push", wrap_Push},         {"pop", wrap_Pop},       {"peek", wrap_Peek},
     {"getCount", wrap_GetCount}, {"demand", wrap_Demand}, {"clear", wrap_Clear},
-    {nullptr, nullptr},
+
 };
 
 extern "C" inline auto luaopen_channel(lua_State *state) -> int {

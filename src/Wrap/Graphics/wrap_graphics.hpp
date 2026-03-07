@@ -57,7 +57,7 @@ auto wrap_GetGeneratedCommands(lua_State *state) -> int;
 auto ShutdownWrapGraphics() -> void;
 
 // NOLINTNEXTLINE
-static const luaL_Reg GraphicsLib[] = {
+static const std::vector<luaL_Reg> GraphicsLib = {
     {"present", wrap_Present},
     {"push", wrap_Push},
     {"pop", wrap_Pop},
@@ -96,16 +96,14 @@ static const luaL_Reg GraphicsLib[] = {
     {"submitGraphics", wrap_SubmitCommandBuffer},
     {"useCommands", wrap_UseCommands},
     {"getGeneratedCommands", wrap_GetGeneratedCommands},
-    {nullptr, nullptr},
+
 };
 
-// nullptr-terminated NOLINTNEXTLINE
-const static lua_CFunction childrenInitFunctions[] = {
+const static std::vector<lua_CFunction> childrenInitFunctions = {
     Texture::luaopen_texture,
     Graphics::luaopen_mesh,
     Graphics::Shader::luaopen_shader,
     Graphics::luaopen_buffer,
-    nullptr,
 };
 
 extern "C" inline auto luaopen_graphics(lua_State *state) -> int {
@@ -113,7 +111,7 @@ extern "C" inline auto luaopen_graphics(lua_State *state) -> int {
       .Name = "graphics",
       .Functions = GraphicsLib,                       // NOLINT
       .ChildrenInitFunctions = childrenInitFunctions, // NOLINT
-      .ModuleType = nullptr,
+
   };
 
   RegisterLuaModule(state, module);
