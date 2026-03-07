@@ -4,7 +4,7 @@ else
     CONFIG="$1"
 fi
 
-rm -f ./build/Thorium
+rm -f ./build/snap
 
 FLAGS=""
 
@@ -39,10 +39,10 @@ cmake --build build
 # You can verify the setting by running `cat /proc/cmdline` and checking for amdgpu.ppfeaturemask=0xffffffff
 
 if [ "$2" == "profile" ]; then
-  SDL_VIDEODRIVER=x11 RADV_PERFTEST=rt MESA_VK_TRACE=rgp MESA_VK_TRACE_TRIGGER=/tmp/trigger ./build/Thorium ../src/Engine/main.lua
+  SDL_VIDEODRIVER=x11 RADV_PERFTEST=rt MESA_VK_TRACE=rgp MESA_VK_TRACE_TRIGGER=/tmp/trigger ./build/snap ../src/Engine/main.lua
 fi
 
 # if second argument is "run", run the built executable
 if [ "$2" == "run" ]; then
-  ./build/Thorium ../src/Engine/main.lua
+  ./build/snap ../src/Engine/main.lua
 fi

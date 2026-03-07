@@ -4,13 +4,13 @@ error("Do not require this file")
 
 --- Creates a new frame
 --- @param dt number Delta time
-function Thorium.gui.newFrame(dt) end
+function snap.gui.newFrame(dt) end
 
 --- Ends the current frame
-function Thorium.gui.endFrame() end
+function snap.gui.endFrame() end
 
 --- Renders the current frame
-function Thorium.gui.draw() end
+function snap.gui.draw() end
 
 --[[
     {"mousePressed", MousePressed}, -- x, y, button
@@ -26,32 +26,32 @@ function Thorium.gui.draw() end
 --- @param x number X position
 --- @param y number Y position
 --- @param button number Button index
-function Thorium.gui.mousePressed(x, y, button) end
+function snap.gui.mousePressed(x, y, button) end
 
 --- Handles a mouse released event
 --- @param x number X position
 --- @param y number Y position
 --- @param button number Button index
-function Thorium.gui.mouseReleased(x, y, button) end
+function snap.gui.mouseReleased(x, y, button) end
 
 --- Handles a mouse moved event
 --- @param x number X position
 --- @param y number Y position
-function Thorium.gui.mouseMoved(x, y) end
+function snap.gui.mouseMoved(x, y) end
 
 --- Handles a mouse wheel moved event
 --- @param x number X position
 --- @param y number Y position
-function Thorium.gui.mouseWheelMoved(x, y) end
+function snap.gui.mouseWheelMoved(x, y) end
 
 --- Handles a key pressed event
 --- @param key number Key code
-function Thorium.gui.keyPressed(key) end
+function snap.gui.keyPressed(key) end
 
 --- Handles a key released event
 --- @param key number Key code
-function Thorium.gui.keyReleased(key) end
+function snap.gui.keyReleased(key) end
 
 --- Handles a text input event
 --- @param text string Input text
-function Thorium.gui.textInput(text) end
+function snap.gui.textInput(text) end

@@ -1,4 +1,4 @@
-function Thorium.config(config)
+function snap.config(config)
   config.window.width = 1200
   config.window.height = 1000
 
@@ -9,7 +9,7 @@ function Thorium.config(config)
   config.window.colorspace = "gammacorrect"
 
   -- "adaptive" | "immediate" | "replace" | "enabled"
-  ---@type Thorium.VsyncMode
+  ---@type snap.VsyncMode
   config.window.vsync = "enabled"
 
   config.graphics.hardwareRaytracing = "optional"

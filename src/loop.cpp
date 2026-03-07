@@ -37,45 +37,45 @@ extern "C" {
 #include "Wrap/wrap.hpp"
 
 constexpr auto defaultRunFunction = R"lua(
-function Thorium.run()
+function snap.run()
 
-  if Thorium.load then
-    Thorium.load()
+  if snap.load then
+    snap.load()
   end
 
   return function()
-    Thorium.event.pull()
+    snap.event.pull()
 
-    local name, a,b,c,d,e,f = Thorium.event.pop()
+    local name, a,b,c,d,e,f = snap.event.pop()
     while name do
       if name == "quit" then
-        if Thorium.quit then
-          return Thorium.quit() or 0
+        if snap.quit then
+          return snap.quit() or 0
         end
         return 0
       end
 
-      if Thorium[name] then
-        Thorium[name](a,b,c,d,e,f)
+      if snap[name] then
+        snap[name](a,b,c,d,e,f)
       end
 
-      name, a,b,c,d,e,f = Thorium.event.pop()
+      name, a,b,c,d,e,f = snap.event.pop()
     end
 
-    Thorium.timer.step()
+    snap.timer.step()
 
-    local dt = Thorium.timer.getDelta()
+    local dt = snap.timer.getDelta()
 
-    if Thorium.update then
-      Thorium.update(dt)
+    if snap.update then
+      snap.update(dt)
     end
 
-    if Thorium.graphics then
-      if Thorium.draw then
-        Thorium.draw()
+    if snap.graphics then
+      if snap.draw then
+        snap.draw()
       end
 
-      Thorium.graphics.present()
+      snap.graphics.present()
     end
   end
 end
@@ -145,39 +145,39 @@ auto LoadLua(lua_State *state, const std::vector<std::string> &launchArgs)
     return Error::Create(luaErrorMessage);
   }
 
-  // Get Thorium.run function
-  lua_getglobal(state, "Thorium");
+  // Get snap.run function
+  lua_getglobal(state, "snap");
   lua_getfield(state, -1, "run");
 
   if (!lua_isfunction(state, -1)) {
-    // If Thorium.run is not defined, load default
-    PrintDebug("Thorium.run not found, loading default run function...");
-    lua_pop(state, 2); // Remove non-function and Thorium table from stack
+    // If snap.run is not defined, load default
+    PrintDebug("snap.run not found, loading default run function...");
+    lua_pop(state, 2); // Remove non-function and snap table from stack
     if (luaL_dostring(state, defaultRunFunction) != LUA_OK) {
       std::string luaErrorMessage = lua_tostring(state, -1);
       lua_pop(state, 1); // Remove error message from stack
       return Error::Create("Failed to load default run function: " +
                            luaErrorMessage);
     }
-    lua_getglobal(state, "Thorium");
+    lua_getglobal(state, "snap");
     lua_getfield(state, -1, "run");
   }
 
   if (!lua_isfunction(state, -1)) {
     lua_pop(state, 1); // Remove non-function from stack
-    return Error::Create("Thorium.run is not a function.");
+    return Error::Create("snap.run is not a function.");
   }
 
-  // Call Thorium.run to get the main loop function
+  // Call snap.run to get the main loop function
   if (lua_pcall(state, 0, 1, 0) != LUA_OK) {
     std::string luaErrorMessage = lua_tostring(state, -1);
     lua_pop(state, 1); // Remove error message from stack
-    return Error::Create("Failed to call Thorium.run: " + luaErrorMessage);
+    return Error::Create("Failed to call snap.run: " + luaErrorMessage);
   }
 
   if (!lua_isfunction(state, -1)) {
     lua_pop(state, 1); // Remove non-function from stack
-    return Error::Create("Thorium.run did not return a function.");
+    return Error::Create("snap.run did not return a function.");
   }
 
   PrintDebug("Main Lua script loaded successfully.");

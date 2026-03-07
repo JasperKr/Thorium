@@ -1,4 +1,4 @@
-Thorium.internal.buffers = {}
+snap.internal.buffers = {}
 
 local ffi = require("ffi")
 
@@ -24,10 +24,10 @@ x, y, ... are the the components
 
 local bufferMetatable = {}
 
----@class  Thorium.buffer
----@field buffer Thorium.Buffer the buffer object
+---@class  snap.buffer
+---@field buffer snap.Buffer the buffer object
 ---@field componentCount integer the amount of components in an element
----@field data Thorium.Bytedata the data of the buffer
+---@field data snap.Bytedata the data of the buffer
 ---@field format table the format of the buffer
 ---@field formatIndexTable { string:integer } a table of component names to their index in the buffer
 ---@field engineData table a table for engine data
@@ -97,24 +97,24 @@ local ffiTypes = {
   uint32vec4  = "uint32_t"
 }
 
-Thorium.internal.attributeComponentCounts = attributeComponentCount
-Thorium.internal.attributeTypeToFFIType = ffiTypes
+snap.internal.attributeComponentCounts = attributeComponentCount
+snap.internal.attributeTypeToFFIType = ffiTypes
 
---- Wrapper for Thorium.graphics.newBuffer
+--- Wrapper for snap.graphics.newBuffer
 ---@param format table|string
 ---@param elementCount number
 ---@param settings { usage: "static"|"dynamic"|"stream", shaderstorage:boolean, index:boolean, vertex:boolean, indirectarguments:boolean, texel:boolean}
----@return Thorium.buffer
-function Thorium.graphics.newWrappedBuffer(format, elementCount, settings)
-  Thorium.internal.assert(elementCount > 0, "Buffer item count must be greater than 0")
+---@return snap.buffer
+function snap.graphics.newWrappedBuffer(format, elementCount, settings)
+  snap.internal.assert(elementCount > 0, "Buffer item count must be greater than 0")
 
   if type(format) == "string" then
     format = { { format = format } }
   end
 
-  local buffer = Thorium.graphics.newBuffer(format, elementCount, settings)
+  local buffer = snap.graphics.newBuffer(format, elementCount, settings)
 
-  local byteData = Thorium.data.newByteData(buffer:getSize())
+  local byteData = snap.data.newByteData(buffer:getSize())
   local byteDataPtr = byteData:getPointer()
 
   local floatArray = ffi.cast("float*", byteDataPtr)
@@ -128,7 +128,7 @@ function Thorium.graphics.newWrappedBuffer(format, elementCount, settings)
   for i, component in ipairs(format) do
     local componentType = ffiTypes[component.format]
 
-    Thorium.internal.assert(componentType, "Invalid buffer component format: " .. component.format)
+    snap.internal.assert(componentType, "Invalid buffer component format: " .. component.format)
 
     for j = 1, attributeComponentCount[component.format] do
       table.insert(componentTypes, componentType)
@@ -208,7 +208,7 @@ end
 --- resizes the buffer
 --- @param count integer
 --- @param useGPUData boolean? whether to use the GPU data or use the CPU data
---- @return Thorium.GraphicsBuffer
+--- @return snap.GraphicsBuffer
 function bufferFunctions:resize(count, useGPUData)
   if self.elementCount == count then
     return self.buffer -- no need to resize
@@ -216,9 +216,9 @@ function bufferFunctions:resize(count, useGPUData)
 
   self.elementCount = count
 
-  local buffer = Thorium.graphics.newBuffer(self.format, count, self.bufferCreationSettings)
+  local buffer = snap.graphics.newBuffer(self.format, count, self.bufferCreationSettings)
 
-  local byteData = Thorium.data.newByteData(buffer:getSize())
+  local byteData = snap.data.newByteData(buffer:getSize())
   local byteDataPtr = byteData:getPointer()
 
   local floatArray = ffi.cast("float*", byteDataPtr)
@@ -262,13 +262,13 @@ function bufferFunctions:release()
 end
 
 --- gets the löve buffer object of the buffer
---- @return Thorium.GraphicsBuffer
+--- @return snap.GraphicsBuffer
 function bufferFunctions:getBuffer()
   return self.buffer
 end
 
 --- gets the data of the buffer
---- @return Thorium.ByteData
+--- @return snap.ByteData
 function bufferFunctions:getData()
   return self.data
 end
@@ -325,9 +325,9 @@ end
 --- @return integer # the new index, incremented by the amount of components written
 function bufferFunctions:setAt(index, value)
   local t = type(value)
-  local RType = Thorium.type(value)
+  local RType = snap.type(value)
 
-  Thorium.internal.assert(index >= 0)
+  snap.internal.assert(index >= 0)
 
   if t == "number" then
     local array = self.dataReferences[self:getComponentType(index)]
@@ -427,7 +427,7 @@ end
 --- writes many values to the buffer iteratively,
 --- can be used in a for-loop to write all the data
 --- @param ... number|vec2|vec3|vec4|quaternion|matrix3x3|matrix4x4|table
---- @return Thorium.buffer
+--- @return snap.buffer
 function bufferFunctions:writeMany(...)
   for i = 1, select("#", ...) do
     self.writeIndex = self:setAt(self.writeIndex, select(i, ...))
@@ -452,7 +452,7 @@ end
 --- writes many values to the buffer iteratively,
 --- can be used in a for-loop to write all the data
 --- @param ... number|ffi.cdata*
---- @return Thorium.buffer
+--- @return snap.buffer
 function bufferFunctions:writeFloatMany(...)
   for i = 1, select("#", ...) do
     self:writeFloat(select(i, ...))
@@ -513,7 +513,7 @@ end
 --- @param index integer
 function bufferFunctions:setComponentWriteIndex(index)
   self.writeIndex = index
-  Thorium.internal.assert(self.writeIndex >= 0, "Buffer write index out of bounds")
+  snap.internal.assert(self.writeIndex >= 0, "Buffer write index out of bounds")
 
   return self
 end
@@ -592,7 +592,7 @@ function bufferFunctions:getElementStride()
 end
 
 --- Clear the buffer data
---- @return Thorium.buffer
+--- @return snap.buffer
 function bufferFunctions:clear()
   self.buffer:clear()
   ffi.fill(self.byteDataPtr, self.data:getSize(), 0)
@@ -601,7 +601,7 @@ function bufferFunctions:clear()
 end
 
 --- Copy data from another buffer to this buffer
---- @param other Thorium.buffer|Thorium.byteData
+--- @param other snap.buffer|snap.byteData
 --- @param count? integer byte count to copy, defaults to the size of the other buffer
 --- @param from? integer the offset in bytes from which to start copying in the other buffer, defaults to 0
 --- @param to? integer the byte offset to start copying to, defaults to 0
@@ -654,7 +654,7 @@ local formatNum = function(itemType, num)
 end
 
 --- draws a matrix in the buffer
----@param self Thorium.buffer
+---@param self snap.buffer
 ---@param sx integer
 ---@param sy integer
 ---@param index integer
@@ -670,7 +670,7 @@ local function drawMatrix(self, sx, sy, index)
 
       index = index + 1
     end
-    Thorium.internal.imgui.Text(text)
+    snap.internal.imgui.Text(text)
   end
 
   return index
@@ -678,10 +678,10 @@ end
 
 -- draws a gui overlay with imGui
 function bufferFunctions:draw()
-  local imgui = Thorium.internal.imgui
+  local imgui = snap.internal.imgui
 
   if imgui.IsWindowAppearing() then
-    imgui.SetNextItemWidth(Thorium.graphics.getWidth() * 0.75)
+    imgui.SetNextItemWidth(snap.graphics.getWidth() * 0.75)
   end
 
   if imgui.Begin("Buffer '" .. self.buffer:getDebugName() .. "' Data") then
@@ -758,10 +758,10 @@ end
 --- @param value number|vec2|vec3|vec4|quaternion|matrix3x3|matrix4x4|number[]|integer[]
 --- @param offset? integer
 function bufferFunctions:set(name, value, offset)
-  Thorium.internal.assert(self.formatIndexTable, "One or more buffer components do not have names")
+  snap.internal.assert(self.formatIndexTable, "One or more buffer components do not have names")
   local index = self.formatIndexTable[name]
 
-  Thorium.internal.assert(index, "Invalid buffer component name: " .. name)
+  snap.internal.assert(index, "Invalid buffer component name: " .. name)
 
   index = index + (offset or 0) * self.componentCount
 
@@ -774,10 +774,10 @@ end
 --- @param offset? integer
 --- @param count? integer
 function bufferFunctions:get(name, offset, count)
-  Thorium.internal.assert(self.formatIndexTable, "One or more buffer components do not have names")
+  snap.internal.assert(self.formatIndexTable, "One or more buffer components do not have names")
   local index = self.formatIndexTable[name]
 
-  Thorium.internal.assert(index, "Invalid buffer component name: " .. name)
+  snap.internal.assert(index, "Invalid buffer component name: " .. name)
 
   index = index + (offset or 0) * self.componentCount
 
@@ -792,7 +792,7 @@ end
 --- only applies when using "writeElement"
 --- @param func (fun(...):...)? the encoding function, nil if you want to disable encoding
 function bufferFunctions:encodeElementsWith(func)
-  Thorium.assertType(func, "function", true)
+  snap.assertType(func, "function", true)
   self.encodeFunction = func
 end
 

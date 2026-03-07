@@ -2,7 +2,7 @@ Imgui = require("cimgui.init")
 
 local doneChannel, stopChannel = ...
 
-local meshes = {} ---@type Thorium.Mesh[]
+local meshes = {} ---@type snap.Mesh[]
 local colors = {
   { 1, 0, 0, 1 },
   { 0, 1, 0, 1 },
@@ -14,7 +14,7 @@ local drawCount = 4
 
 print("Creating meshes...")
 
-Thorium.graphics.aquireGraphics("load")
+snap.graphics.aquireGraphics("load")
 
 for i = 1, drawCount do
   -- x, y, u, v, r, g, b, a
@@ -36,12 +36,12 @@ for i = 1, drawCount do
     3, 4, 1,
   }
 
-  local indicesData = Thorium.data.newBytedata(#indices * 4)
+  local indicesData = snap.data.newBytedata(#indices * 4)
   for j = 1, #indices do
     indicesData:setUInt32((j - 1) * 4, indices[j] - 1)
   end
 
-  meshes[i] = Thorium.graphics.newMesh(
+  meshes[i] = snap.graphics.newMesh(
     {
       { name = "position", format = "floatvec2",  location = 0 },
       { name = "texcoord", format = "floatvec2",  location = 1 },
@@ -58,13 +58,13 @@ for i = 1, drawCount do
 end
 
 print("Meshes created.")
-Thorium.graphics.submitGraphics()
+snap.graphics.submitGraphics()
 doneChannel:push(true)
 
-Thorium.timer.sleep(0.1)
+snap.timer.sleep(0.1)
 
 local function draw(i)
-  Thorium.graphics.draw(meshes[i])
+  snap.graphics.draw(meshes[i])
 end
 
 while true do
@@ -74,12 +74,12 @@ while true do
 
   for i = 1, drawCount do
     print("THREAD #2 drawing " .. tostring(i))
-    Thorium.graphics.aquireGraphics("square-" .. tostring(i))
+    snap.graphics.aquireGraphics("square-" .. tostring(i))
 
-    Thorium.timer.sleep(0.1)
+    snap.timer.sleep(0.1)
 
     draw(i)
-    Thorium.graphics.submitGraphics()
+    snap.graphics.submitGraphics()
     doneChannel:push(i)
   end
 end

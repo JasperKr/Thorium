@@ -365,7 +365,7 @@ auto SetSourceDirectory(const std::string &path) -> Error {
 
 auto GetSaveDirectory() -> std::string {
   static const auto *identity =
-      PHYSFS_getPrefDir("Thorium", GetConfig().identity.c_str());
+      PHYSFS_getPrefDir("snap", GetConfig().identity.c_str());
 
   return identity != nullptr ? std::string(identity) : std::string();
 }

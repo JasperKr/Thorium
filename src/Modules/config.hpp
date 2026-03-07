@@ -12,7 +12,7 @@ extern "C" {
 namespace Config {
 
 struct ApplicationConfig {
-  std::string Identity = "Thorium"; // Filesystem identity
+  std::string Identity = "snap"; // Filesystem identity
 
   Graphics::DeviceSettings deviceSettings;
 };

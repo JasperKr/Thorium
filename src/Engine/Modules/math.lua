@@ -1,8 +1,8 @@
 table.new = require("table.new")
 table.clear = require("table.clear")
 
-local mathModule = Thorium.math or {}
-Thorium.math = mathModule
+local mathModule = snap.math or {}
+snap.math = mathModule
 
 mathModule.PI2 = math.pi * 2
 mathModule.PI05 = math.pi * 0.5
@@ -153,7 +153,7 @@ do
     table.clear(tempIDTable)
 
     for i = 1, 32 do
-      table.insert(tempIDTable, IdxToHexChar[Thorium.math.random(0, 15)])
+      table.insert(tempIDTable, IdxToHexChar[snap.math.random(0, 15)])
     end
 
     return table.concat(tempIDTable)
@@ -749,7 +749,7 @@ function mathModule.frustumSphere(fru, x, y, z, r)
   return true
 end
 
----@class Thorium.ray
+---@class snap.ray
 ---@field position vec3
 ---@field direction vec3
 ---@field length number
@@ -759,11 +759,11 @@ end
 ---@param position vec3
 ---@param direction vec3
 ---@param length number
----@return Thorium.ray
+---@return snap.ray
 function mathModule.newRay(position, direction, length)
-  Thorium.assertType(position, "vec3")
-  Thorium.assertType(direction, "vec3")
-  Thorium.assertType(length, "number")
+  snap.assertType(position, "vec3")
+  snap.assertType(direction, "vec3")
+  snap.assertType(length, "number")
 
   return {
     position = position,
@@ -775,8 +775,8 @@ end
 ---returns a ray that goes from the camera position to the x,y position
 ---@param x number [0 - 1]
 ---@param y number [0 - 1]
----@param camera Thorium.camera
----@return Thorium.ray ray length undefined
+---@param camera snap.camera
+---@return snap.ray ray length undefined
 function mathModule.screenPositionToRay(x, y, camera, outRay)
   local vx, vy, vz, vw = camera.inverseProjectionMatrix:vMulSepW1(
     (x - 0.5) * 2.0,
@@ -1842,7 +1842,7 @@ do
     local frequency = curFrequency
 
     for i = 1, curOctaves do
-      value = value + Thorium.math.simplexNoise(x * frequency) * amplitude
+      value = value + snap.math.simplexNoise(x * frequency) * amplitude
 
       frequency = frequency * curLacunarity
       amplitude = amplitude * curGain
@@ -1857,7 +1857,7 @@ do
     local frequency = curFrequency
 
     for i = 1, curOctaves do
-      value = value + Thorium.math.simplexNoise(x * frequency, y * frequency) * amplitude
+      value = value + snap.math.simplexNoise(x * frequency, y * frequency) * amplitude
 
       frequency = frequency * curLacunarity
       amplitude = amplitude * curGain
@@ -1872,7 +1872,7 @@ do
     local frequency = curFrequency
 
     for i = 1, curOctaves do
-      value = value + Thorium.math.simplexNoise(x * frequency, y * frequency, z * frequency) * amplitude
+      value = value + snap.math.simplexNoise(x * frequency, y * frequency, z * frequency) * amplitude
 
       frequency = frequency * curLacunarity
       amplitude = amplitude * curGain
@@ -1888,7 +1888,7 @@ do
 
     for i = 1, curOctaves do
       value = value +
-          Thorium.math.simplexNoise(x * frequency, y * frequency, z * frequency, w * frequency) * amplitude
+          snap.math.simplexNoise(x * frequency, y * frequency, z * frequency, w * frequency) * amplitude
 
       frequency = frequency * curLacunarity
       amplitude = amplitude * curGain
@@ -2015,9 +2015,9 @@ local colorCache = {}
 function mathModule.stringToColor(str)
   if colorCache[str] then return unpack(colorCache[str], 1, 3) end
 
-  local h = Thorium.math.random()
-  local s = Thorium.math.random()
-  local v = Thorium.math.random()
+  local h = snap.math.random()
+  local s = snap.math.random()
+  local v = snap.math.random()
 
   -- make sure there is always some saturation and value but never too much
   v = v * 0.5 + 0.2
@@ -2045,7 +2045,7 @@ function mathModule.stringToColor(str)
     r, g, b = C, m, X
   end
 
-  r, g, b = Thorium.math.linearToGamma(r, g, b)
+  r, g, b = snap.math.linearToGamma(r, g, b)
 
   colorCache[str] = { r, g, b }
 

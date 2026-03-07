@@ -233,15 +233,15 @@ auto RegisterLuaModule(lua_State *state, const LuaModule &module) -> void {
   lua_setfield(state, -2, name); // [_modules] _modules[name] = module
   lua_pop(state, 1);             // []
 
-  SetStackToTable(state, "Thorium"); // [Thorium]
+  SetStackToTable(state, "snap"); // [snap]
 
-  lua_newtable(state); // [Thorium, module]
+  lua_newtable(state); // [snap, module]
 
-  // register Functions to Thorium.modulename.functionname
+  // register Functions to snap.modulename.functionname
   if (module.Functions != nullptr) {
     const luaL_Reg *func = module.Functions;
     while (func->name != nullptr) {
-      // lua_pushcfunction(state, func->func); // [Thorium, module, func]
+      // lua_pushcfunction(state, func->func); // [snap, module, func]
 
 #if !defined(NDEBUG) && DEBUG_CPP_EXCEPTION // If debug build
       // Wrap function in trampoline to catch exceptions
@@ -254,12 +254,12 @@ auto RegisterLuaModule(lua_State *state, const LuaModule &module) -> void {
       lua_pushcfunction(state, func->func); // [mt, func]
 #endif
 
-      lua_setfield(state, -2, func->name); // [Thorium, module]
+      lua_setfield(state, -2, func->name); // [snap, module]
       func++; // NOLINT, functions are nullptr-terminated
     }
   }
 
-  lua_setfield(state, -2, name); // [Thorium]
+  lua_setfield(state, -2, name); // [snap]
 
   // register init functions
   if (module.ChildrenInitFunctions != nullptr) {
@@ -273,15 +273,15 @@ auto RegisterLuaModule(lua_State *state, const LuaModule &module) -> void {
   // done, remove module table from stack
   lua_pop(state, 1); // []
 
-  // Sanity check Thorium[modulename][first function] exists
-  lua_getglobal(state, "Thorium"); // [Thorium]
+  // Sanity check snap[modulename][first function] exists
+  lua_getglobal(state, "snap"); // [snap]
   if (lua_isnil(state, -1)) {
     std::cerr << "Error registering module " << module.Name
-              << ": Thorium table not found." << "\n";
+              << ": snap table not found." << "\n";
     lua_pop(state, 1); // []
     return;
   }
-  lua_getfield(state, -1, module.Name.c_str()); // [Thorium, module]
+  lua_getfield(state, -1, module.Name.c_str()); // [snap, module]
   if (lua_isnil(state, -1)) {
     std::cerr << "Error registering module " << module.Name
               << ": module table not found." << "\n";
@@ -294,7 +294,7 @@ auto RegisterLuaModule(lua_State *state, const LuaModule &module) -> void {
     lua_pop(state, 2); // []
     return;
   }
-  lua_getfield(state, -1, module.Functions->name); // [Thorium, module, func]
+  lua_getfield(state, -1, module.Functions->name); // [snap, module, func]
   if (lua_isnil(state, -1)) {
     std::cerr << "Error registering module " << module.Name << ": function "
               << module.Functions->name << " not found." << "\n";
@@ -506,9 +506,9 @@ static const luaL_Reg ThoriumModules[] = {
 };
 
 auto RegisterModules(lua_State *state) -> void {
-  lua_newtable(state);             // [table]
-  lua_setglobal(state, "Thorium"); // [Thorium]
-  lua_pop(state, 1);               // empty stack
+  lua_newtable(state);          // [table]
+  lua_setglobal(state, "snap"); // [snap]
+  lua_pop(state, 1);            // empty stack
 
   const luaL_Reg *module = ThoriumModules; // NOLINT
   while (module->name != nullptr) {

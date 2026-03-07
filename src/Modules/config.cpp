@@ -146,12 +146,12 @@ inline auto SetFunctions(lua_State *state) -> void {
 }
 
 inline auto RemoveFunctions(lua_State *state) -> void {
-  LuaWrap::SetStackToTable(state, "Thorium"); // [Thorium]
+  LuaWrap::SetStackToTable(state, "snap"); // [snap]
 
   std::vector<std::string> keysToRemove;
 
   lua_pushnil(state);                // first key for lua_next
-  while (lua_next(state, -2) != 0) { // [Thorium, key, value]
+  while (lua_next(state, -2) != 0) { // [snap, key, value]
     if (lua_type(state, -2) == LUA_TSTRING) {
       const char *key = lua_tostring(state, -2);
       // NOLINTNEXTLINE
@@ -164,20 +164,20 @@ inline auto RemoveFunctions(lua_State *state) -> void {
 
   // Remove collected keys
   for (auto &key : keysToRemove) {
-    lua_pushstring(state, key.c_str()); // [Thorium, key]
-    lua_pushnil(state);                 // [Thorium, key, nil]
-    lua_rawset(state, -3);              // Thorium[key] = nil
+    lua_pushstring(state, key.c_str()); // [snap, key]
+    lua_pushnil(state);                 // [snap, key, nil]
+    lua_rawset(state, -3);              // snap[key] = nil
   }
 
-  lua_pop(state, 1); // pop Thorium table
+  lua_pop(state, 1); // pop snap table
 }
 
 auto Configure(lua_State *state) -> Result<ApplicationConfig> {
 
-  LuaWrap::SetStackToTable(state, "Thorium"); // [Thorium]
+  LuaWrap::SetStackToTable(state, "snap"); // [snap]
 
-  SetFunctions(state); // [Thorium with set functions]
-  lua_pop(state, 1);   // Pop Thorium table
+  SetFunctions(state); // [snap with set functions]
+  lua_pop(state, 1);   // Pop snap table
 
   auto constexpr luaScript = R"lua(
     -- User configuration script
@@ -201,15 +201,15 @@ auto Configure(lua_State *state) -> Result<ApplicationConfig> {
       print("No configuration.lua found or error in file: " .. err)
     end
 
-    if (type(Thorium.config) == "function") then
+    if (type(snap.config) == "function") then
       -- Call user-defined configuration function, not a pcall, this needs to run without errors
-      Thorium.config(config)
+      snap.config(config)
     end
 
-    Thorium._setIdentity(config.filesystem.identity)
-    Thorium._setSettings(config.window)
-    Thorium._setGraphicsSettings(config.graphics or {})
-    if config.loglevel ~= "" then Thorium._setLogLevel(config.loglevel) end
+    snap._setIdentity(config.filesystem.identity)
+    snap._setSettings(config.window)
+    snap._setGraphicsSettings(config.graphics or {})
+    if config.loglevel ~= "" then snap._setLogLevel(config.loglevel) end
   )lua";
 
   if (luaL_dostring(state, luaScript) != LUA_OK) {

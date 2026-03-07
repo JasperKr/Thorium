@@ -2,12 +2,12 @@
 
 error("Do not require this file")
 
----@class Thorium.Channel
+---@class snap.Channel
 local Channel = {}
 
 --- Creates a new channel
---- @return Thorium.Channel channel
-function Thorium.thread.newChannel() end
+--- @return snap.Channel channel
+function snap.thread.newChannel() end
 
 --- Pushes a value into the channel
 ---@param value any

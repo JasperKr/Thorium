@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
-project(Thorium LANGUAGES C CXX)
+project(snap LANGUAGES C CXX)
 
 set(CMAKE_C_STANDARD 23)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -150,7 +150,7 @@ elseif(UNIX)
 endif()
 
 
-# Ensure Thorium depends on LuaJIT build
+# Ensure snap depends on LuaJIT build
 add_dependencies(LuaJIT::LuaJIT luajit)
 
 # -------------------------------
@@ -229,7 +229,7 @@ endif()
 # -------------------------------
 # Engine executable
 # -------------------------------
-add_executable(Thorium
+add_executable(snap
 # Main source files
     src/main.cpp
     src/loop.cpp
@@ -321,21 +321,21 @@ add_executable(Thorium
 )
 
 # ImGui definitions
-target_compile_definitions(Thorium PRIVATE
+target_compile_definitions(snap PRIVATE
     IMGUI_IMPL_VULKAN_NO_PROTOTYPES
     IMGUI_IMPL_VULKAN_USE_LOADER
 )
 
 # Copy LuaJIT DLL after build
 if (WIN32)
-    add_custom_command(TARGET Thorium POST_BUILD
+    add_custom_command(TARGET snap POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "${LUAJIT_SRC}/src/lua51.dll"
-            $<TARGET_FILE_DIR:Thorium>)
+            $<TARGET_FILE_DIR:snap>)
 endif()
 
 # Include paths
-target_include_directories(Thorium
+target_include_directories(snap
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src
     SYSTEM PRIVATE
@@ -345,7 +345,7 @@ target_include_directories(Thorium
 )
 
 # Link libraries
-target_link_libraries(Thorium
+target_link_libraries(snap
     PRIVATE
         imgui
         SDL3::SDL3
@@ -359,27 +359,27 @@ target_link_libraries(Thorium
         tracy
 )
 
-target_link_options(Thorium PRIVATE
+target_link_options(snap PRIVATE
     $<$<CONFIG:Debug>:-rdynamic>
 )
 
-target_compile_options(Thorium PRIVATE -fno-exceptions -fno-rtti)
-target_compile_definitions(Thorium
+target_compile_options(snap PRIVATE -fno-exceptions -fno-rtti)
+target_compile_definitions(snap
     PRIVATE VK_NO_PROTOTYPES
 )
 
 if (WIN32)
-    target_link_libraries(Thorium PRIVATE dbghelp)
+    target_link_libraries(snap PRIVATE dbghelp)
 endif()
 
 # -------------------------------
 # Windows: copy SDL3.dll after build
 # -------------------------------
 if (WIN32)
-    add_custom_command(TARGET Thorium POST_BUILD
+    add_custom_command(TARGET snap POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
         $<TARGET_FILE:SDL3::SDL3>
-        $<TARGET_FILE_DIR:Thorium>
+        $<TARGET_FILE_DIR:snap>
     )
 endif()
 

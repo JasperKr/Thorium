@@ -1,4 +1,4 @@
----@class Thorium.camera
+---@class snap.camera
 ---@field position vec3
 ---@field rotation vec3
 ---@field nextPosition vec3 Next frame's position
@@ -27,10 +27,10 @@
 ---@field bloom table
 ---@field linear boolean
 ---@field specular boolean
----@field buffer Thorium.WrappedBuffer
+---@field buffer snap.WrappedBuffer
 ---@field textures {static:table, current:table, previous:table, internal:table}
 ---@field interactable boolean
----@field lighting {tileBuffer: Thorium.Texture, indexBuffer: Thorium.Buffer, indexCounterBuffer: Thorium.Buffer, indicesPerVoxel: number, tileWidth: number, tileHeight: number}
+---@field lighting {tileBuffer: snap.Texture, indexBuffer: snap.Buffer, indexCounterBuffer: snap.Buffer, indicesPerVoxel: number, tileWidth: number, tileHeight: number}
 ---@field onResizeFunctions function[]
 ---@field invalidatedHistory boolean
 local Camera = {}
@@ -44,8 +44,8 @@ Camera.__index = Camera
 ---@param fov number?
 ---@param near number?
 ---@param far number?
----@return Thorium.camera
-function Thorium.graphics.newCamera(name, position, rotation, resolution, fov, near, far)
+---@return snap.camera
+function snap.graphics.newCamera(name, position, rotation, resolution, fov, near, far)
   local self = setmetatable({}, Camera)
 
   -- Enforce that the resolution is a multiple of 32, for tiled lighting
@@ -72,12 +72,12 @@ function Thorium.graphics.newCamera(name, position, rotation, resolution, fov, n
   local rotationProjectionMatrix = mat4()
   local inverseRotationProjectionMatrix = mat4()
 
-  local projectionMatrix = Thorium.graphics.newPerspectiveProjectionMatrixSimple(aspectRatio, self.fov, self.near,
+  local projectionMatrix = snap.graphics.newPerspectiveProjectionMatrixSimple(aspectRatio, self.fov, self.near,
     self.far)
 
   projectionMatrix:invertTranspose(inverseProjectionMatrix)
-  local translationMatrix = Thorium.math.newTranslationMatrix(-position)
-  local rotationMatrix = Thorium.math.eulerToMatrix(rotation:get())
+  local translationMatrix = snap.math.newTranslationMatrix(-position)
+  local rotationMatrix = snap.math.eulerToMatrix(rotation:get())
   rotationMatrix:mul(projectionMatrix, rotationProjectionMatrix)
   rotationMatrix:invertTranspose(inverseRotationProjectionMatrix)
 
@@ -118,7 +118,7 @@ function Thorium.graphics.newCamera(name, position, rotation, resolution, fov, n
   self.bloom = {}
   self.name = name
 
-  self.buffer = Thorium.graphics.newBuffer({
+  self.buffer = snap.graphics.newBuffer({
     { name = "ViewProjectionMatrix",            format = "floatmat4x4" },
     { name = "InverseViewProjectionMatrix",     format = "floatmat4x4" },
     { name = "ViewMatrix",                      format = "floatmat4x4" },
@@ -146,13 +146,13 @@ local tempVec3 = vec3()
 function Camera:UpdateMatrices()
   local aspectRatio = self.resolution.x / self.resolution.y
 
-  Thorium.graphics.newPerspectiveProjectionMatrixSimple(aspectRatio, self.fov, self.near,
+  snap.graphics.newPerspectiveProjectionMatrixSimple(aspectRatio, self.fov, self.near,
     self.far, self.projectionMatrix)
 
   self.projectionMatrix:invertTranspose(self.inverseProjectionMatrix)
-  Thorium.math.newTranslationMatrix(mathv.unm3(self.position, tempVec3),
+  snap.math.newTranslationMatrix(mathv.unm3(self.position, tempVec3),
     self.translationMatrix)
-  Thorium.math.eulerToMatrix(self.rotation.x, self.rotation.y, self.rotation.z, self.rotationMatrix)
+  snap.math.eulerToMatrix(self.rotation.x, self.rotation.y, self.rotation.z, self.rotationMatrix)
   self.rotationMatrix:mul(self.projectionMatrix, self.rotationProjectionMatrix)
   self.rotationMatrix:invertTranspose(self.inverseRotationProjectionMatrix)
 

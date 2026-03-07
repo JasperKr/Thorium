@@ -2,19 +2,19 @@
 
 error("Do not require this file")
 
----@class Thorium.Shader : Thorium.Data
+---@class snap.Shader : snap.Data
 local Shader = {}
 
----@alias Thorium.ShaderResource
+---@alias snap.ShaderResource
 ---| number
 ---| integer
----| Thorium.Texture
----| Thorium.Bytedata
+---| snap.Texture
+---| snap.Bytedata
 ---| table
----| Thorium.Buffer
+---| snap.Buffer
 
 --- Sends a uniform value to the shader.
----@param ... string|Thorium.ShaderResource The name keys of the uniform followed by the values to send.
+---@param ... string|snap.ShaderResource The name keys of the uniform followed by the values to send.
 function Shader:send(...) end
 
 --- Checks if a shader has a uniform.
@@ -23,5 +23,5 @@ function Shader:send(...) end
 function Shader:hasUniform(...) end
 
 --- Gets all of the uniforms in the shader.
----@return table<string[], Thorium.ShaderResource> uniforms A table of uniform names to their values.
+---@return table<string[], snap.ShaderResource> uniforms A table of uniform names to their values.
 function Shader:getUniforms() end

@@ -2,14 +2,14 @@
 
 error("Do not require this file")
 
----@class Thorium.Thread
+---@class snap.Thread
 local Thread = {}
 
 --- Creates a new thread
 ---@param source string Filepath or Source string
 ---@param debugName string? Optional debug name for tracy
----@return Thorium.Thread thread
-function Thorium.thread.newThread(source, debugName) end
+---@return snap.Thread thread
+function snap.thread.newThread(source, debugName) end
 
 --- Starts the thread
 ---@param ... any Arguments to pass to the thread

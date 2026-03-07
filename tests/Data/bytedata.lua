@@ -1,4 +1,4 @@
-local bytedata = Thorium.data.newBytedata(16)
+local bytedata = snap.data.newBytedata(16)
 
 for i = 0, 15 do
   bytedata:setUInt8(i, i * 2)

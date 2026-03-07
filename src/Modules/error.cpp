@@ -51,8 +51,8 @@ inline auto CleanupTracebackLine(const std::string &line) -> std::string {
     }
   }
 
-  // Split before and after "Thorium!"
-  const std::string splitKeyword = "Thorium!";
+  // Split before and after "snap!"
+  const std::string splitKeyword = "snap!";
   size_t thoriumPos = sanitizedLine.find(splitKeyword);
   std::string inFunction = "Unknown";
 

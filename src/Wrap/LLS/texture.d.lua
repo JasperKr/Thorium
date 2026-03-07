@@ -2,16 +2,16 @@
 
 error("Do not require this file")
 
----@alias Thorium.Filter
+---@alias snap.Filter
 ---| "nearest" # Nearest-neighbor filtering
 ---| "linear" # Linear filtering
 
----@alias Thorium.Wrapmode
+---@alias snap.Wrapmode
 ---| "clamp" # Clamps texture coordinates to the edge
 ---| "repeat" # Repeats the texture
 ---| "mirror" # Mirrors the texture when the coordinates are outside the range [0, 1]
 
----@alias Thorium.TextureFormat
+---@alias snap.TextureFormat
 ---| "rgba8" Default format
 ---| "rgba16"
 ---| "rgba16f" Medium-precision floating point
@@ -42,17 +42,17 @@ error("Do not require this file")
 ---| "bc6hs"
 ---| "bc7" Useful for High quality compressed textures
 
----@class Thorium.Texture : Thorium.Data
+---@class snap.Texture : snap.Data
 local Texture = {}
 
 --- Sets the filter mode for the texture.
----@param filtermin Thorium.Filter The minification filter.
----@param filtermag Thorium.Filter The magnification filter.
+---@param filtermin snap.Filter The minification filter.
+---@param filtermag snap.Filter The magnification filter.
 function Texture:setFilter(filtermin, filtermag) end
 
 --- Gets the filter mode for the texture.
----@return Thorium.Filter filtermin The minification filter.
----@return Thorium.Filter filtermag The magnification filter.
+---@return snap.Filter filtermin The minification filter.
+---@return snap.Filter filtermag The magnification filter.
 function Texture:getFilter() end
 
 --- Sets the anisotropic level for the texture.
@@ -64,13 +64,13 @@ function Texture:setAnisotropy(level) end
 function Texture:getAnisotropy() end
 
 --- Sets the wrap mode for the texture.
----@param wraps Thorium.Wrapmode The wrap mode for the S (U) coordinate.
----@param wrapt Thorium.Wrapmode The wrap mode for the T (V) coordinate.
+---@param wraps snap.Wrapmode The wrap mode for the S (U) coordinate.
+---@param wrapt snap.Wrapmode The wrap mode for the T (V) coordinate.
 function Texture:setWrap(wraps, wrapt) end
 
 --- Gets the wrap mode for the texture.
----@return Thorium.Wrapmode wraps The wrap mode for the S (U) coordinate.
----@return Thorium.Wrapmode wrapt The wrap mode for the T (V) coordinate.
+---@return snap.Wrapmode wraps The wrap mode for the S (U) coordinate.
+---@return snap.Wrapmode wrapt The wrap mode for the T (V) coordinate.
 function Texture:getWrap() end
 
 --- Sets the LOD bias for the texture.
@@ -91,7 +91,7 @@ function Texture:setLODRange(min, max) end
 ---@return number max The maximum LOD.
 function Texture:getLODRange() end
 
----@alias Thorium.TextureDepthCompareOp
+---@alias snap.TextureDepthCompareOp
 ---| "never" # Never pass
 ---| "less" # Pass if the incoming depth value is less than the stored depth value
 ---| "equal" # Pass if the incoming depth value is equal to the stored depth value
@@ -103,11 +103,11 @@ function Texture:getLODRange() end
 --- the stored depth value
 
 --- Sets the depth compare mode for the texture.
----@param compareOp Thorium.TextureDepthCompareOp The depth compare operation.
+---@param compareOp snap.TextureDepthCompareOp The depth compare operation.
 function Texture:setDepthCompare(compareOp) end
 
 --- Gets the depth compare mode for the texture.
----@return Thorium.TextureDepthCompareOp compareOp The depth compare operation.
+---@return snap.TextureDepthCompareOp compareOp The depth compare operation.
 function Texture:getDepthCompare() end
 
 --- Gets the width of the texture.
@@ -132,5 +132,5 @@ function Texture:getDepth() end
 function Texture:getMipmapCount() end
 
 --- Gets the format of the texture.
----@return Thorium.TextureFormat format The format of the texture.
+---@return snap.TextureFormat format The format of the texture.
 function Texture:getFormat() end

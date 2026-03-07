@@ -49,7 +49,7 @@ enum class VsyncMode : uint8_t {
 enum class ColorSpace : uint8_t { GammaCorrect, Linear, HDR };
 
 struct Settings {
-  std::string title{"Thorium Application"};
+  std::string title{"snap Application"};
   bool resizable{true};
   bool borderless{false};
   bool fullscreen{false};

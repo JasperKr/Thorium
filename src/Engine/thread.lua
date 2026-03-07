@@ -8,13 +8,13 @@ local count = 0
 
 local doneChannel, canStartChannel = ...
 
-local t = Thorium.timer.getTime()
-local testImgdata = Thorium.data.newImagedata(16, 16, "rgba8")
+local t = snap.timer.getTime()
+local testImgdata = snap.data.newImagedata(16, 16, "rgba8")
 for y = 0, 15 do
   for x = 0, 15 do
-    -- local value = Thorium.math.noiseWrapped(x / 16, y / 16, 4, 4);
+    -- local value = snap.math.noiseWrapped(x / 16, y / 16, 4, 4);
     -- value = (value + 1) / 2
-    local value = Thorium.math.random()
+    local value = snap.math.random()
     local r = value
     local g = value
     local b = value
@@ -37,47 +37,47 @@ local vertices = {
 }
 local mesh
 
-local shader = Thorium.graphics.newShader("Graphics/Shaders/test.slang")
-local computeshader = Thorium.graphics.newShader("Graphics/Shaders/test2.slang")
+local shader = snap.graphics.newShader("Graphics/Shaders/test.slang")
+local computeshader = snap.graphics.newShader("Graphics/Shaders/test2.slang")
 local value = 0.25
 
 local texture
-print("Generated noise texture in " .. tostring(Thorium.timer.getTime() - t) .. " seconds")
+print("Generated noise texture in " .. tostring(snap.timer.getTime() - t) .. " seconds")
 
 local function draw()
-  local startTime = Thorium.timer.getTime()
+  local startTime = snap.timer.getTime()
   Imgui.Begin("Test window")
 
   Imgui.Separator()
-  Imgui.Text("FPS: " .. tostring(Thorium.timer.getFPS()))
-  Imgui.Text("DT: " .. tostring(Thorium.timer.getDelta()))
+  Imgui.Text("FPS: " .. tostring(snap.timer.getFPS()))
+  Imgui.Text("DT: " .. tostring(snap.timer.getDelta()))
   Imgui.Text("Last Draw Time (ms): " .. tostring(lastShownTime * 1000))
   Imgui.Text("Last ImGui Draw Time (ms): " .. tostring(lastShownImDrawTime * 1000))
 
   Imgui.End()
   Imgui.ShowDemoWindow()
 
-  Thorium.gui.endFrame()
-  local imStartTime = Thorium.timer.getTime()
-  Thorium.gui.draw()
-  Thorium.graphics.setScissor();
-  lastImDrawTime = lastImDrawTime + Thorium.timer.getTime() - imStartTime
+  snap.gui.endFrame()
+  local imStartTime = snap.timer.getTime()
+  snap.gui.draw()
+  snap.graphics.setScissor();
+  lastImDrawTime = lastImDrawTime + snap.timer.getTime() - imStartTime
 
-  Thorium.graphics.setShader(computeshader)
+  snap.graphics.setShader(computeshader)
   computeshader:send("PushConstants", "valueToAdd", value)
   computeshader:send("PushConstants", "textureSize", { 16, 16 })
   computeshader:send("outTexture", texture)
-  Thorium.graphics.dispatch(1, 1, 1)
+  snap.graphics.dispatch(1, 1, 1)
   value = -value
 
-  Thorium.graphics.setShader(shader)
+  snap.graphics.setShader(shader)
   shader:send("MainTexture", texture)
   for i = 1, 100 do
-    Thorium.graphics.draw(mesh)
+    snap.graphics.draw(mesh)
   end
-  Thorium.graphics.setShader()
+  snap.graphics.setShader()
 
-  lastDrawTime = lastDrawTime + Thorium.timer.getTime() - startTime
+  lastDrawTime = lastDrawTime + snap.timer.getTime() - startTime
   count = count + 1
   if (count >= 50) then
     lastShownTime = lastDrawTime / count
@@ -88,17 +88,17 @@ local function draw()
   end
 end
 
-local t = Thorium.timer.getTime()
+local t = snap.timer.getTime()
 
 while true do
   if not (canStartChannel:demand(1)) then
     break
   end
 
-  Thorium.graphics.aquireGraphics("gui")
+  snap.graphics.aquireGraphics("gui")
   if not texture then
     print("New texture")
-    texture = Thorium.graphics.newTexture(testImgdata, { storage = true, sampler = true })
+    texture = snap.graphics.newTexture(testImgdata, { storage = true, sampler = true })
 
     local format = {
       {
@@ -112,16 +112,16 @@ while true do
       { name = "test2", format = "uint32" }
     }
 
-    mesh = Thorium.graphics.newMesh(vertexformat, vertices, "triangles")
+    mesh = snap.graphics.newMesh(vertexformat, vertices, "triangles")
 
-    local indicesData = Thorium.data.newBytedata(#indices * 4)
+    local indicesData = snap.data.newBytedata(#indices * 4)
     for j = 1, #indices do
       indicesData:setUInt32((j - 1) * 4, indices[j] - 1)
     end
     mesh:setIndices(indicesData)
   end
 
-  ---@type Thorium.DetailedBlendMode
+  ---@type snap.DetailedBlendMode
   local blendmode = {
     srccolor = "one",
     dstcolor = "oneminussrcalpha",
@@ -131,16 +131,16 @@ while true do
     alphaop = "add",
   }
 
-  Thorium.graphics.setRenderTarget({ loadas = "clear", blendmode = blendmode })
+  snap.graphics.setRenderTarget({ loadas = "clear", blendmode = blendmode })
 
-  local dt = Thorium.timer.getTime() - t
-  t = Thorium.timer.getTime()
+  local dt = snap.timer.getTime() - t
+  t = snap.timer.getTime()
 
-  Thorium.gui.newFrame(dt)
+  snap.gui.newFrame(dt)
 
   draw()
 
-  Thorium.graphics.submitGraphics()
+  snap.graphics.submitGraphics()
 
   doneChannel:push(true)
 end

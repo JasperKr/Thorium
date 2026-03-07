@@ -1,5 +1,5 @@
----@meta Thorium
+---@meta snap
 
 error("Do not require this file")
 
-Thorium = {}
+snap = {}

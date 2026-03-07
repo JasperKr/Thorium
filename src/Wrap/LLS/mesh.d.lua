@@ -2,27 +2,27 @@
 
 error("Do not require this file")
 
----@class Thorium.Mesh : Thorium.Data
+---@class snap.Mesh : snap.Data
 local Mesh = {}
 
 --- Sets the vertices of the mesh.
----@param vertices Thorium.Bytedata The vertex data.
+---@param vertices snap.Bytedata The vertex data.
 ---@param offset number|nil The offset in the vertex data to start from.
 ---@param range number|nil The number of vertices to set.
 function Mesh:setVertices(vertices, offset, range) end
 
 --- Sets the indices of the mesh.
----@param indices Thorium.Bytedata The index data.
+---@param indices snap.Bytedata The index data.
 ---@param offset number|nil The offset in the index data to start from.
 ---@param range number|nil The number of indices to set.
 function Mesh:setIndices(indices, offset, range) end
 
 --- Sets the vertex buffer used by the mesh.
----@param buffer Thorium.Buffer The vertex buffer.
+---@param buffer snap.Buffer The vertex buffer.
 function Mesh:setVertexBuffer(buffer) end
 
 --- Sets the index buffer used by the mesh.
----@param buffer Thorium.Buffer The index buffer.
+---@param buffer snap.Buffer The index buffer.
 function Mesh:setIndexBuffer(buffer) end
 
 --- Sets the draw range of the mesh.

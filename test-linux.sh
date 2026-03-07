@@ -4,7 +4,7 @@ else
     CONFIG="$1"
 fi
 
-rm -f ./build/Thorium
+rm -f ./build/snap
 
 cmake -G Ninja -DCMAKE_CXX_COMPILER=clang++ -B build \
   -DCMAKE_BUILD_TYPE=$CONFIG \
@@ -15,5 +15,5 @@ cmake --build build
 
 # if second argument is "run", run the built executable
 if [ "$2" == "run" ]; then
-  ./build/Thorium ../tests/main.lua
+  ./build/snap ../tests/main.lua
 fi

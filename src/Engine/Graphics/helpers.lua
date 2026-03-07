@@ -6,7 +6,7 @@
 ---@param far number
 ---@param out matrix4x4?
 ---@return matrix4x4
-function Thorium.graphics.newOrthographicProjectionMatrix(left, right, top, bottom, near, far, out)
+function snap.graphics.newOrthographicProjectionMatrix(left, right, top, bottom, near, far, out)
   out = out or mat4()
 
   out:setFromNumbers(
@@ -19,7 +19,7 @@ function Thorium.graphics.newOrthographicProjectionMatrix(left, right, top, bott
   return out
 end
 
-function Thorium.graphics.newPerspectiveProjectionMatrix(left, right, top, bottom, near, far)
+function snap.graphics.newPerspectiveProjectionMatrix(left, right, top, bottom, near, far)
   return mat4(
     (near * 2) / (right - left), 0, (right + left) / (right - left), 0,
     0, -(near * 2) / (top - bottom), (top + bottom) / (top - bottom), 0,
@@ -28,7 +28,7 @@ function Thorium.graphics.newPerspectiveProjectionMatrix(left, right, top, botto
   )
 end
 
-function Thorium.graphics.newPerspectiveProjectionMatrixSimple(aspectRatio, fov, near, far, out)
+function snap.graphics.newPerspectiveProjectionMatrixSimple(aspectRatio, fov, near, far, out)
   local tanHalfFov = math.tan(math.rad(fov / 2))
 
   out = out or mat4()

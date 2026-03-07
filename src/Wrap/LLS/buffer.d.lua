@@ -2,7 +2,7 @@
 
 error("Do not require this file")
 
----@class Thorium.Buffer
+---@class snap.Buffer
 local Buffer = {}
 
 --- Gets the size of the buffer in bytes
@@ -24,7 +24,7 @@ function Buffer:getElementStride() end
 function Buffer:clear(value, offset, size) end
 
 ---TODO: Fix this fucking name
----@alias Thorium.BufferFormatComponentFormat
+---@alias snap.BufferFormatComponentFormat
 ---|"uint8"    # 1 byte unsigned integer
 ---|"uint8vec2" # 2 byte unsigned integer vector
 ---|"uint8vec3" # 3 byte unsigned integer vector
@@ -115,19 +115,19 @@ function Buffer:clear(value, offset, size) end
 ---|"halfmat4x3" # 24 byte 4x3 half
 ---|"halfmat4x4" # 32 byte 4x4 half-precision float matrix
 
----@alias Thorium.BufferFormatElement { name: string, format: Thorium.BufferFormatComponentFormat }
----@alias Thorium.BufferFormat Thorium.BufferFormatElement[]
+---@alias snap.BufferFormatElement { name: string, format: snap.BufferFormatComponentFormat }
+---@alias snap.BufferFormat snap.BufferFormatElement[]
 
----@alias Thorium.EvaluatedBufferFormatElement { name: string, offset: integer, format: Thorium.BufferFormatComponentFormat }
----@alias Thorium.EvaluatedBufferFormat Thorium.EvaluatedBufferFormatElement[]
+---@alias snap.EvaluatedBufferFormatElement { name: string, offset: integer, format: snap.BufferFormatComponentFormat }
+---@alias snap.EvaluatedBufferFormat snap.EvaluatedBufferFormatElement[]
 
 --- Gets the format of the buffer
---- @return Thorium.EvaluatedBufferFormat format
+--- @return snap.EvaluatedBufferFormat format
 function Buffer:getFormat() end
 
 --- Sets the data of the buffer
 --- @overload fun(data: number[], offset?: integer, size?: integer)
---- @param data Thorium.Bytedata The data to set
+--- @param data snap.Bytedata The data to set
 --- @param srcOffset integer? The offset in bytes or index to start reading from
 --- @param dstOffset integer? The offset in bytes to start writing from
 --- @param size integer? The number of bytes to set
@@ -140,7 +140,7 @@ function Buffer:setData(data, srcOffset, dstOffset, size) end
 function Buffer:clear(value, offset, size) end
 
 --- Copies data from this buffer to another buffer
---- @param dstBuffer Thorium.Buffer The destination buffer to copy to, can be the same as this buffer
+--- @param dstBuffer snap.Buffer The destination buffer to copy to, can be the same as this buffer
 --- @param srcIndex integer The index of the element in this buffer to start copying from
 --- @param dstIndex integer The index of the element in the destination buffer to start copying to
 --- @param size integer The number of elements to copy
@@ -157,8 +157,8 @@ function Buffer:getComponentOffset(name) end
 function Buffer:getDebugName() end
 
 --- Creates a new buffer
---- @param format Thorium.BufferFormat|Thorium.BufferFormatComponentFormat The format of the buffer
+--- @param format snap.BufferFormat|snap.BufferFormatComponentFormat The format of the buffer
 --- @param elementCount integer The number of elements in the buffer
 --- @param usage { shaderstorage: boolean, uniform: boolean, vertex: boolean, index: boolean, cpupersistent: boolean }? The usage flags for the buffer
---- @return Thorium.Buffer buffer
-function Thorium.graphics.newBuffer(format, elementCount, usage) end
+--- @return snap.Buffer buffer
+function snap.graphics.newBuffer(format, elementCount, usage) end

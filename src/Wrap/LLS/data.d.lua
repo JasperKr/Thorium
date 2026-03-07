@@ -3,14 +3,14 @@
 error("Do not require this file")
 
 --- Global Data class
----@class Thorium.Data
+---@class snap.Data
 Data = {}
 
 --- Releases the data from memory.
 function Data:release() end
 
 --- ByteData class
----@class Thorium.Bytedata : Thorium.Data
+---@class snap.Bytedata : snap.Data
 local Bytedata = {}
 
 --- Gets the size of the Bytedata in bytes.
@@ -119,5 +119,5 @@ function Bytedata:getInt8(offset, count) end
 
 --- Creates a new Bytedata object.
 ---@param size number The size in bytes.
----@return Thorium.Bytedata bytedata The new Bytedata object.
-function Thorium.data.newBytedata(size) end
+---@return snap.Bytedata bytedata The new Bytedata object.
+function snap.data.newBytedata(size) end
