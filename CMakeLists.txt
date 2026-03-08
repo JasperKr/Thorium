@@ -227,13 +227,9 @@ elseif(UNIX)
 endif()
 
 # -------------------------------
-# Engine executable
+# Engine core (shared object library)
 # -------------------------------
-add_executable(snap
-# Main source files
-    src/main.cpp
-    src/loop.cpp
-
+add_library(snap_core OBJECT
 # Graphics module
     src/Graphics/graphics.cpp
     src/Graphics/texture.cpp
@@ -316,6 +312,7 @@ add_executable(snap
 # Engine wrappers
     src/Wrap/Modules/Engine/wrap_imgui.cpp
     src/Wrap/Modules/Engine/wrap_scene.cpp
+    src/Wrap/Modules/Engine/wrap_renderer.cpp
 
 # Libraries
     src/Libraries/vma.cpp
@@ -323,33 +320,26 @@ add_executable(snap
     src/Libraries/load_volk.cpp
 )
 
-# ImGui definitions
-target_compile_definitions(snap PRIVATE
-    IMGUI_IMPL_VULKAN_NO_PROTOTYPES
-    IMGUI_IMPL_VULKAN_USE_LOADER
-)
-
-# Copy LuaJIT DLL after build
-if (WIN32)
-    add_custom_command(TARGET snap POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${LUAJIT_SRC}/src/lua51.dll"
-            $<TARGET_FILE_DIR:snap>)
-endif()
-
-# Include paths
-target_include_directories(snap
-    PRIVATE
+target_include_directories(snap_core
+    PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/src
-    SYSTEM PRIVATE
+)
+target_include_directories(snap_core SYSTEM PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
         ${CMAKE_CURRENT_SOURCE_DIR}/external/physfs/src
-        ${Vulkan_INCLUDE_DIRS}   # now valid
+        ${Vulkan_INCLUDE_DIRS}
 )
 
-# Link libraries
-target_link_libraries(snap
+target_compile_options(snap_core PRIVATE -fno-exceptions -fno-rtti)
+target_compile_definitions(snap_core
+    PUBLIC VK_NO_PROTOTYPES
     PRIVATE
+        IMGUI_IMPL_VULKAN_NO_PROTOTYPES
+        IMGUI_IMPL_VULKAN_USE_LOADER
+)
+
+target_link_libraries(snap_core
+    PUBLIC
         imgui
         SDL3::SDL3
         Vulkan::Vulkan
@@ -362,13 +352,31 @@ target_link_libraries(snap
         tracy
 )
 
-target_link_options(snap PRIVATE
-    $<$<CONFIG:Debug>:-rdynamic>
+# -------------------------------
+# Engine executable
+# -------------------------------
+add_executable(snap
+    src/main.cpp
+    src/loop.cpp
+    $<TARGET_OBJECTS:snap_core>
 )
 
-target_compile_options(snap PRIVATE -fno-exceptions -fno-rtti)
-target_compile_definitions(snap
-    PRIVATE VK_NO_PROTOTYPES
+# Copy LuaJIT DLL after build
+if (WIN32)
+    add_custom_command(TARGET snap POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${LUAJIT_SRC}/src/lua51.dll"
+            $<TARGET_FILE_DIR:snap>)
+endif()
+
+# Link libraries
+target_link_libraries(snap
+    PRIVATE
+        snap_core
+)
+
+target_link_options(snap PRIVATE
+    $<$<CONFIG:Debug>:-rdynamic>
 )
 
 if (WIN32)
@@ -406,8 +414,20 @@ elseif (MSVC)
     )
 endif()
 
-# Debug/Release flags
-add_compile_options(
-    $<$<CONFIG:Debug>:-O0 -g3>
-    $<$<CONFIG:Release>:-O3 -DNDEBUG>
+add_executable(lua_stub_gen
+    src/generateBindings.cpp
+    $<TARGET_OBJECTS:snap_core>
 )
+
+target_link_libraries(lua_stub_gen
+    PRIVATE
+        snap_core
+)
+
+
+add_custom_target(generate_bindings
+    COMMAND lua_stub_gen
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    COMMENT "Generating Lua bindings..."
+)
+

@@ -163,7 +163,7 @@ inline auto SerializeVarargs(lua_State *state, int startIndex)
   int numArgs = lua_gettop(state) - startIndex + 1;
 
   std::vector<Data::LuaType> launchArguments;
-  launchArguments.reserve(numArgs);
+  launchArguments.reserve(static_cast<size_t>(numArgs));
 
   for (int i = 0; i < numArgs; ++i) {
     if (lua_isnoneornil(state, startIndex + i)) {
@@ -186,7 +186,7 @@ inline auto PushVarargs(lua_State *state,
                         int count) -> Error {
 
   for (int i = 0; i < count; ++i) {
-    const auto &arg = launchArguments[i];
+    const auto &arg = launchArguments[static_cast<size_t>(i)];
 
     auto pushResult = Data::ToStack(state, arg);
     if (Error::IsError(pushResult)) {

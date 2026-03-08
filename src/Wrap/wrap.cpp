@@ -1,6 +1,7 @@
 #include "wrap.hpp"
 #include "Modules/console.hpp"
 #include "Wrap/Modules/Engine/wrap_imgui.hpp"
+#include "Wrap/Modules/Engine/wrap_renderer.hpp"
 #include "Wrap/Modules/Engine/wrap_scene.hpp"
 #include "Wrap/Modules/wrap_data.hpp"
 #include "Wrap/Modules/wrap_math.hpp"
@@ -460,7 +461,7 @@ static const std::vector<luaL_Reg> ThoriumModules = {
     {"window", Wrap::Window::luaopen_window},
     {"math", Wrap::Math::luaopen_engine_math},
     {"scene", Wrap::Engine::luaopen_scene},
-
+    {"renderer", Engine::Renderer::luaopen_renderer},
 };
 
 auto RegisterModules(lua_State *state) -> void {

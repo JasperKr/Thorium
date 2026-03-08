@@ -90,14 +90,14 @@ public:
   }
 
   // Set a new color
-  auto operator+(ConsoleColor color) -> ColoredPrinter & {
-    this->color = color;
+  auto operator+(ConsoleColor newColor) -> ColoredPrinter & {
+    this->color = newColor;
     return *this;
   }
 
   // Set a new color
-  auto operator+=(ConsoleColor color) -> ColoredPrinter & {
-    this->color = color;
+  auto operator+=(ConsoleColor newColor) -> ColoredPrinter & {
+    this->color = newColor;
     return *this;
   }
 

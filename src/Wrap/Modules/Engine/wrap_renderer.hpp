@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Modules/Engine/material.hpp"
 #include "Wrap/wrap.hpp"
 #include "lua.hpp"
 #include <vector>
@@ -12,7 +13,9 @@ static const std::vector<luaL_Reg> RendererLib = {
     {"newMaterial", wrap_NewMaterial},
 };
 
-static const std::vector<lua_CFunction> childrenInitFunctions{};
+static const std::vector<lua_CFunction> childrenInitFunctions{
+    Material::LoadBinding,
+};
 
 extern "C" inline auto luaopen_renderer(lua_State *state) -> int {
   auto module = LuaWrap::LuaModule{

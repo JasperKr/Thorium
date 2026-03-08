@@ -7,18 +7,20 @@
 
 namespace Engine::Renderer {
 
-const static LuaWrap::LuaEnum<AlphaMode> LuaAlphaModeEnum({
-    {"opaque", AlphaMode::Opaque},
-    {"mask", AlphaMode::Mask},
-    {"blend", AlphaMode::Blend},
-});
+const static LuaWrap::LuaEnum<AlphaMode>
+    LuaAlphaModeEnum("AlphaMode", {
+                                      {"opaque", AlphaMode::Opaque},
+                                      {"mask", AlphaMode::Mask},
+                                      {"blend", AlphaMode::Blend},
+                                  });
 
-const static LuaWrap::LuaEnum<VkCullModeFlags> LuaCullModeEnum({
-    {"none", VK_CULL_MODE_NONE},
-    {"front", VK_CULL_MODE_FRONT_BIT},
-    {"back", VK_CULL_MODE_BACK_BIT},
-    {"all", VK_CULL_MODE_FRONT_AND_BACK},
-});
+const static LuaWrap::LuaEnum<VkCullModeFlags>
+    LuaCullModeEnum("CullMode", {
+                                    {"none", VK_CULL_MODE_NONE},
+                                    {"front", VK_CULL_MODE_FRONT_BIT},
+                                    {"back", VK_CULL_MODE_BACK_BIT},
+                                    {"all", VK_CULL_MODE_FRONT_AND_BACK},
+                                });
 
 auto Material::LoadBinding(lua_State *state) -> int {
   const std::vector<std::pair<std::string, lua_CFunction>> methods = {
@@ -28,27 +30,46 @@ auto Material::LoadBinding(lua_State *state) -> int {
 
   auto binding = Bindings::LuaBoundStruct<Material>("Material");
   binding.RegisterMember<&Material::name>("Name");
-  binding.RegisterMember<&Material::alphaCutoff>("AlphaCutoff");
-  binding.RegisterMember<&Material::shader>("Shader");
+  binding.RegisterMember<&Material::alphaCutoff>(
+      "AlphaCutoff", "Alpha cutoff value used when AlphaMode is Mask.\n"
+                     "Pixels with alpha below this value will be discarded.");
+  binding.RegisterMember<&Material::shader>(
+      "Shader", "Shader module used for rendering this material.");
 
-  binding.RegisterMember<&Material::preview>("Preview");
-  binding.RegisterMember<&Material::albedoTexture>("AlbedoTexture");
-  binding.RegisterMember<&Material::normalTexture>("NormalTexture");
+  binding.RegisterMember<&Material::preview>(
+      "Preview", "Preview texture for this material, used in the editor.");
+  binding.RegisterMember<&Material::albedoTexture>(
+      "AlbedoTexture", "srgb RGBA texture for base color.");
+  binding.RegisterMember<&Material::normalTexture>(
+      "NormalTexture", "Linear RGB texture for normals.");
   binding.RegisterMember<&Material::metallicRoughnessTexture>(
-      "MetallicRoughnessTexture");
+      "MetallicRoughnessTexture",
+      "Linear RG texture where R is metallic and G is roughness.");
   binding.RegisterMember<&Material::ambientOcclusionTexture>(
-      "AmbientOcclusionTexture");
-  binding.RegisterMember<&Material::reflectanceTexture>("ReflectanceTexture");
-  binding.RegisterMember<&Material::emissiveTexture>("EmissiveTexture");
+      "AmbientOcclusionTexture", "Linear R texture for ambient occlusion.");
+  binding.RegisterMember<&Material::reflectanceTexture>(
+      "ReflectanceTexture", "Linear R texture for reflectance.");
+  binding.RegisterMember<&Material::emissiveTexture>(
+      "EmissiveTexture", "Linear RGB texture for emissive color.");
 
-  binding.RegisterMember<&Material::albedoFactor>("AlbedoFactor");
-  binding.RegisterMember<&Material::roughnessFactor>("RoughnessFactor");
-  binding.RegisterMember<&Material::metallicFactor>("MetallicFactor");
+  binding.RegisterMember<&Material::albedoFactor>(
+      "AlbedoFactor",
+      "Albedo color factor multiplied with the albedo texture.");
+  binding.RegisterMember<&Material::roughnessFactor>(
+      "RoughnessFactor",
+      "Roughness factor multiplied with the roughness texture.");
+  binding.RegisterMember<&Material::metallicFactor>(
+      "MetallicFactor",
+      "Metallic factor multiplied with the metallic texture.");
   binding.RegisterMember<&Material::reflectanceFactor>("ReflectanceFactor");
-  binding.RegisterMember<&Material::emissiveFactor>("EmissiveFactor");
+  binding.RegisterMember<&Material::emissiveFactor>(
+      "EmissiveFactor",
+      "Emissive color factor multiplied with the emissive texture.");
 
-  binding.RegisterEnum<&Material::alphaMode, LuaAlphaModeEnum>("AlphaMode");
-  binding.RegisterEnum<&Material::cullMode, LuaCullModeEnum>("CullMode");
+  binding.RegisterEnum<&Material::alphaMode, LuaAlphaModeEnum>(
+      "AlphaMode", "Alpha mode used for rendering this material.");
+  binding.RegisterEnum<&Material::cullMode, LuaCullModeEnum>(
+      "CullMode", "Culling mode used for rendering this material.");
 
   binding.Register(state, methods);
 

@@ -42,6 +42,8 @@ if [ "$2" == "profile" ]; then
   SDL_VIDEODRIVER=x11 RADV_PERFTEST=rt MESA_VK_TRACE=rgp MESA_VK_TRACE_TRIGGER=/tmp/trigger ./build/snap ../src/Engine/main.lua
 fi
 
+./build/lua_stub_gen
+
 # if second argument is "run", run the built executable
 if [ "$2" == "run" ]; then
   ./build/snap ../src/Engine/main.lua

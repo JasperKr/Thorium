@@ -1,10 +1,8 @@
 #include "Modules/console.hpp"
 #include "Modules/errorhandler.hpp"
 #include "loop.hpp"
-#include <chrono>
 #include <public/client/TracyProfiler.hpp>
 #include <string>
-#include <thread>
 #include <vector>
 
 #include "Modules/event.hpp"

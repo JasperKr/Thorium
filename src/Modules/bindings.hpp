@@ -11,6 +11,7 @@
 #include "Wrap/Helpers/lua_vector.hpp"
 #include "Wrap/wrap.hpp"
 #include "lua.hpp"
+#include "reflectBindings.hpp"
 #include <cassert>
 #include <string>
 #include <type_traits>
@@ -78,7 +79,7 @@ template <typename T> struct LuaType {
   };
 
   template <typename M>
-  static auto PushValue(lua_State *state, const M &value) -> void {
+  static auto PushValue(lua_State *state, const M &value) -> int {
     if constexpr (std::is_floating_point_v<M>) {
       lua_pushnumber(state, static_cast<lua_Number>(value));
     } else if constexpr (std::is_same_v<M, bool>) {
@@ -92,17 +93,19 @@ template <typename T> struct LuaType {
                          std::is_same_v<M, Math::Vec4> ||
                          std::is_same_v<M, Math::Quaternion> ||
                          std::is_same_v<M, Math::Matrix4x4>) {
-      PushMathValue(state, value);
+      return PushMathValue(state, value);
     } else if constexpr (LuaWrap::LuaObject<M>) {
       LuaWrap::PushObject(state, M::GetType(), const_cast<M *>(&value));
     } else if (RefOfObject<M>) {
       using O = typename M::element_type;
       LuaWrap::PushObject(state, O::GetType(), value.get());
-    } else {
     }
+
+    return 1;
   };
 
   template <typename M>
+  // NOLINTNEXTLINE(readability-function-cognitive-complexity)
   static auto GetMathValue(lua_State *state, int stackIndex) -> Result<M> {
     if constexpr (std::is_same_v<M, Math::Vec2>) {
       if (lua_gettop(state) - stackIndex + 1 < 2) {
@@ -110,6 +113,13 @@ template <typename T> struct LuaType {
       }
       return M{static_cast<float>(luaL_checknumber(state, stackIndex)),
                static_cast<float>(luaL_checknumber(state, stackIndex + 1))};
+    } else if constexpr (std::is_same_v<M, Math::Uvec2> ||
+                         std::is_same_v<M, Math::Ivec2>) {
+      if (lua_gettop(state) - stackIndex + 1 < 2) {
+        return Error::Unexpected("Expected at least 2 values for Vec2");
+      }
+      return M{static_cast<uint32_t>(luaL_checkinteger(state, stackIndex)),
+               static_cast<uint32_t>(luaL_checkinteger(state, stackIndex + 1))};
     } else if constexpr (std::is_same_v<M, Math::Vec3>) {
       if (lua_gettop(state) - stackIndex + 1 < 3) {
         return Error::Unexpected("Expected at least 3 values for Vec3");
@@ -117,16 +127,35 @@ template <typename T> struct LuaType {
       return M{static_cast<float>(luaL_checknumber(state, stackIndex)),
                static_cast<float>(luaL_checknumber(state, stackIndex + 1)),
                static_cast<float>(luaL_checknumber(state, stackIndex + 2))};
+    } else if constexpr (std::is_same_v<M, Math::Uvec3> ||
+                         std::is_same_v<M, Math::Ivec3>) {
+      if (lua_gettop(state) - stackIndex + 1 < 3) {
+        return Error::Unexpected("Expected at least 3 values for Vec3");
+      }
+      return M{static_cast<uint32_t>(luaL_checkinteger(state, stackIndex)),
+               static_cast<uint32_t>(luaL_checkinteger(state, stackIndex + 1)),
+               static_cast<uint32_t>(luaL_checkinteger(state, stackIndex + 2))};
     } else if constexpr (std::is_same_v<M, Math::Vec4> ||
                          std::is_same_v<M, Math::Quaternion>) {
       if (lua_gettop(state) - stackIndex + 1 < 4) {
-        return Error::Unexpected(
-            "Expected at least 4 values for Vec4/Quaternion");
+        std::string typeName =
+            std::is_same_v<M, Math::Vec4> ? "Vec4" : "Quaternion";
+        return Error::Unexpectedf("Expected at least 4 values for {}",
+                                  typeName);
       }
       return M{static_cast<float>(luaL_checknumber(state, stackIndex)),
                static_cast<float>(luaL_checknumber(state, stackIndex + 1)),
                static_cast<float>(luaL_checknumber(state, stackIndex + 2)),
                static_cast<float>(luaL_checknumber(state, stackIndex + 3))};
+    } else if constexpr (std::is_same_v<M, Math::Uvec4> ||
+                         std::is_same_v<M, Math::Ivec4>) {
+      if (lua_gettop(state) - stackIndex + 1 < 4) {
+        return Error::Unexpected("Expected at least 4 values for Vec4");
+      }
+      return M{static_cast<uint32_t>(luaL_checkinteger(state, stackIndex)),
+               static_cast<uint32_t>(luaL_checkinteger(state, stackIndex + 1)),
+               static_cast<uint32_t>(luaL_checkinteger(state, stackIndex + 2)),
+               static_cast<uint32_t>(luaL_checkinteger(state, stackIndex + 3))};
     } else if constexpr (std::is_same_v<M, Math::Matrix4x4>) {
       if (lua_gettop(state) - stackIndex + 1 < Math::Matrix4x4::Size) {
         return Error::Unexpected("Expected at least 16 values for Mat4");
@@ -143,26 +172,49 @@ template <typename T> struct LuaType {
   };
 
   template <typename M>
-  static auto PushMathValue(lua_State *state, const M &value) -> void {
+  static auto PushMathValue(lua_State *state, const M &value) -> int {
     if constexpr (std::is_same_v<M, Math::Vec2>) {
       lua_pushnumber(state, value.x);
       lua_pushnumber(state, value.y);
+      return 2;
+    } else if constexpr (std::is_same_v<M, Math::Uvec2> ||
+                         std::is_same_v<M, Math::Ivec2>) {
+      lua_pushinteger(state, value.x);
+      lua_pushinteger(state, value.y);
+      return 2;
     } else if constexpr (std::is_same_v<M, Math::Vec3>) {
       lua_pushnumber(state, value.x);
       lua_pushnumber(state, value.y);
       lua_pushnumber(state, value.z);
+      return 3;
+    } else if constexpr (std::is_same_v<M, Math::Uvec3> ||
+                         std::is_same_v<M, Math::Ivec3>) {
+      lua_pushinteger(state, value.x);
+      lua_pushinteger(state, value.y);
+      lua_pushinteger(state, value.z);
+      return 3;
     } else if constexpr (std::is_same_v<M, Math::Vec4> ||
                          std::is_same_v<M, Math::Quaternion>) {
       lua_pushnumber(state, value.x);
       lua_pushnumber(state, value.y);
       lua_pushnumber(state, value.z);
       lua_pushnumber(state, value.w);
+      return 4;
+    } else if constexpr (std::is_same_v<M, Math::Uvec4> ||
+                         std::is_same_v<M, Math::Ivec4>) {
+      lua_pushinteger(state, value.x);
+      lua_pushinteger(state, value.y);
+      lua_pushinteger(state, value.z);
+      lua_pushinteger(state, value.w);
+      return 4;
     } else if constexpr (std::is_same_v<M, Math::Matrix4x4>) {
       for (size_t i = 0; i < Math::Matrix4x4::Size; ++i) {
         lua_pushnumber(state, value.data[i]);
       }
+      return static_cast<int>(Math::Matrix4x4::Size);
     } else {
       PushValue(state, value);
+      return 1;
     }
   };
 
@@ -179,8 +231,8 @@ template <typename T> struct LuaType {
       // remove object from stack, so we don't return it to Lua if PushValue fails
       lua_pop(state, 1);
 
-      PushValue(state, static_cast<typename Traits::Object *>(*obj)->*Member);
-      return 1;
+      return PushValue(state,
+                       static_cast<typename Traits::Object *>(*obj)->*Member);
     };
   }
 
@@ -248,15 +300,30 @@ struct LuaBoundStruct {
   std::string name;
   std::vector<lua_CFunction> methods;
   std::vector<std::string> names;
+  std::vector<MemberInfo> members;
   LuaType<T> type{};
 
   void AddMethod(const lua_CFunction &method) { methods.emplace_back(method); }
 
   // Usage: binding.RegisterMember<&MyStruct::myField>("MyField");
-  template <auto Member> void RegisterMember(const std::string &name) {
+  template <auto Member>
+  void RegisterMember(const std::string &name, // NOLINT
+                      const std::string &description = "") {
     using Traits =
         MemberTraits<decltype(Member)>; // e.g., MemberTraits<int Test::*>
     using M = typename Traits::Type;    // e.g., int
+
+    members.emplace_back(MemberInfo{
+        .name = name,
+        .description = description,
+        .type = nullptr,
+        .luaType = GetBindingLuaType<M>(),
+        .isEnum = false,
+    });
+
+    if constexpr (GetBindingLuaType<M>() == BindingLuaType::Userdata) {
+      members.back().type = M::GetType();
+    }
 
     names.emplace_back(std::string("get") + name);
     AddMethod(type.template GenBindings_Get<Member>());
@@ -266,7 +333,8 @@ struct LuaBoundStruct {
   };
 
   template <auto Member>
-  void RegisterStandardVectorMember(const std::string &name) {
+  void RegisterStandardVectorMember(const std::string &name, // NOLINT
+                                    const std::string &description = "") {
     // Similar to RegisterMember but for std::vector members, generates get, add, at, remove methods.
 
     using Traits = MemberTraits<
@@ -275,6 +343,20 @@ struct LuaBoundStruct {
     static_assert(std::is_same_v<V, std::vector<typename V::value_type>>,
                   "Member must be a std::vector");
     using ElementType = typename V::value_type;
+
+    members.emplace_back(MemberInfo{
+        .name = name,
+        .description = description,
+        .type = nullptr,
+        .luaType = GetBindingLuaType<ElementType>(),
+        .isEnum = false,
+        .isVector = true,
+    });
+
+    if constexpr (GetBindingLuaType<ElementType>() ==
+                  BindingLuaType::Userdata) {
+      members.back().type = ElementType::GetType();
+    }
 
     // get entire vector method
     names.emplace_back(std::string("get") + name);
@@ -371,9 +453,19 @@ struct LuaBoundStruct {
 
   template <auto Member, const LuaWrap::LuaEnum<typename MemberTraits<
                              decltype(Member)>::Type> &EnumHelper>
-  auto RegisterEnum(const std::string &name) -> void {
+  auto RegisterEnum(const std::string &name, // NOLINT
+                    const std::string &description = "") -> void {
     using Traits = MemberTraits<decltype(Member)>;
     using M = typename Traits::Type;
+
+    members.emplace_back(MemberInfo{
+        .name = name,
+        .description = description,
+        .type = nullptr,
+        .luaType = BindingLuaType::String,
+        .isEnum = true,
+        .enumHelper = &EnumHelper,
+    });
 
     names.emplace_back(std::string("set") + name);
     AddMethod([](lua_State *state) -> int {
@@ -422,6 +514,8 @@ struct LuaBoundStruct {
     for (const auto &[methodName, methodFunc] : additionalMethods) {
       luaMethods.push_back({methodName.c_str(), methodFunc});
     }
+
+    LuaModules.emplace_back(name, members);
 
     LuaWrap::RegisterLuaType(state, T::GetType(), luaMethods);
   };

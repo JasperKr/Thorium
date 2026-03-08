@@ -49,17 +49,31 @@ inline auto EnumToLua(lua_State *state, T value,
   return Error::Success();
 }
 
-template <typename T> struct LuaEnum {
+struct LuaEnumBase {
+  std::string name;
+  std::vector<std::string> options;
+};
+
+// NOLINTNEXTLINE, registered enums for generating lua definitions
+inline std::vector<LuaEnumBase> RegisteredEnums;
+
+template <typename T> struct LuaEnum : public LuaEnumBase {
 private:
   std::unordered_map<std::string, T> EnumMap;
   std::unordered_map<T, std::string> ReverseEnumMap;
 
 public:
-  explicit LuaEnum(const std::vector<std::pair<std::string, T>> &entries) {
+  explicit LuaEnum(const std::string &enumName,
+                   const std::vector<std::pair<std::string, T>> &entries)
+      : LuaEnumBase{enumName, {}} {
+
     for (const auto &[key, value] : entries) {
       EnumMap[key] = value;
       ReverseEnumMap[value] = key;
+      options.push_back(key);
     }
+
+    RegisteredEnums.push_back(*this);
   }
 
   auto FromLua(lua_State *state, int index) const -> Result<T> {

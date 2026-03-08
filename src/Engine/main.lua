@@ -12,7 +12,32 @@ require("Graphics.helpers")
 local thread = snap.thread.newThread("src/Engine/thread.lua", "Render thread 1")
 local threadDoneChannel = snap.thread.newChannel()
 local startThreadChannel = snap.thread.newChannel()
-local scene = snap.scene.newScene();
+local scene = snap.scene.newScene()
+
+local material = snap.renderer.newMaterial()
+print("Name", material:getName())
+print("AlphaCutoff", material:getAlphaCutoff())
+print("Shader", material:getShader())
+
+print("Preview", material:getPreview())
+print("AlbedoTexture", material:getAlbedoTexture())
+print("NormalTexture", material:getNormalTexture())
+print("MetallicRoughnessTexture",
+  material:getMetallicRoughnessTexture())
+print("AmbientOcclusionTexture",
+  material:getAmbientOcclusionTexture())
+print("ReflectanceTexture", material:getReflectanceTexture())
+print("EmissiveTexture", material:getEmissiveTexture())
+
+print("AlbedoFactor", material:getAlbedoFactor())
+print("RoughnessFactor", material:getRoughnessFactor())
+print("MetallicFactor", material:getMetallicFactor())
+print("ReflectanceFactor", material:getReflectanceFactor())
+print("EmissiveFactor", material:getEmissiveFactor())
+
+print("AlphaMode", material:getAlphaMode())
+print("CullMode", material:getCullMode())
+
 thread:start(threadDoneChannel, startThreadChannel, scene)
 
 local camera = snap.graphics.newCamera("main camera", vec3(0, 0, 0), vec3(0, 0, 0),

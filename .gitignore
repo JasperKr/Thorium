@@ -20,3 +20,4 @@ assets/
 *.log
 *.tmp
 imgui.ini
+generated/
