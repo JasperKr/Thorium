@@ -39,6 +39,7 @@ thread_local std::unordered_map<State, std::pair<VkPipeline, VkPipelineLayout>,
                                 StateHash>
     PipelineCache{};
 thread_local std::vector<Ref<Shader::ShaderModule>> UsedShaderModules{};
+thread_local VkPipelineLayout CurrentPipelineLayout; // NOLINT
 
 // Only used for cleanup
 std::mutex PipelinesMutex;
@@ -909,6 +910,12 @@ auto FlushCompute(const GraphicsContext &context) -> Result<bool> {
   }
 
   assert(TopOfStack->shader->stages.at(0) == VK_SHADER_STAGE_COMPUTE_BIT);
+
+  // TODO: Only clear on incompatible layout
+  TopOfStack->shader->ClearBindingCache();
+  UsedShaderModules.emplace_back(TopOfStack->shader);
+
+  CurrentPipelineLayout = pipelineResult.value().second;
   auto error = TopOfStack->shader->FlushDescriptors(
       context, pipelineResult.value().second,
       VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
@@ -982,6 +989,11 @@ auto FlushGraphics(const GraphicsContext &context) -> Result<bool> {
                sendErr.message);
   }
 
+  CurrentPipelineLayout = pipelineResult.value().second;
+  // TODO: Optimise this so we can avoid clearing the entire cache
+  // We should check if the layout is compatible, and only clear if not
+  TopOfStack->shader->ClearBindingCache();
+
   auto error = TopOfStack->shader->FlushDescriptors(
       context, pipelineResult.value().second,
       VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT |
@@ -991,13 +1003,11 @@ auto FlushGraphics(const GraphicsContext &context) -> Result<bool> {
   }
 
   PrintDebug("Binding pipeline");
-
   {
     ZoneScopedN("vkCmdBindPipeline");
     vkCmdBindPipeline(commandBuffer, TopOfStack->bindPoint,
                       pipelineResult.value().first);
   }
-  TopOfStack->shader->ClearBindingCache();
 
   return true;
 }
@@ -1250,6 +1260,65 @@ auto InsertResourceBarriers(const GraphicsContext &context) -> Error {
                          });
   }
 
+  for (auto &texturePair : shader->GetState().boundTextures) {
+    auto &texture = texturePair.second;
+    auto key = texturePair.first;
+
+    auto infoResult = shader->GetSlotDescription(key);
+    if (Error::IsError(infoResult)) {
+      return infoResult.error();
+    }
+
+    auto info = infoResult.value().GetInfo<SamplerInfo>();
+
+    VkAccessFlags2 access = 0;
+
+    switch (info.access) {
+    case SLANG_RESOURCE_ACCESS_READ:
+      access = VK_ACCESS_2_SHADER_READ_BIT;
+      break;
+    case SLANG_RESOURCE_ACCESS_READ_WRITE:
+      access = VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT;
+      break;
+    case SLANG_RESOURCE_ACCESS_WRITE:
+      access = VK_ACCESS_2_SHADER_WRITE_BIT;
+      break;
+    default:
+      break;
+    }
+
+    if (access == 0) {
+      PrintWarning("Texture access type is Unknown for slang access: {}, "
+                   "skipping barrier.",
+                   static_cast<uint32_t>(info.access));
+      continue;
+    }
+
+    auto stages = VK_PIPELINE_STAGE_2_NONE;
+
+    for (const auto &stage : shader->stages) {
+      switch (stage) {
+      case VK_SHADER_STAGE_VERTEX_BIT:
+        stages |= VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT;
+        break;
+      case VK_SHADER_STAGE_FRAGMENT_BIT:
+        stages |= VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+        break;
+      case VK_SHADER_STAGE_COMPUTE_BIT:
+        stages |= VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+        break;
+      default:
+        break;
+      }
+    }
+
+    Barrier::UpdateUsage(context, *texture,
+                         {
+                             .stages = stages,
+                             .access = access,
+                         });
+  }
+
   return Error::Success();
 }
 
@@ -1263,6 +1332,19 @@ auto PrepareRendering(const GraphicsContext &context) -> Error {
   }
 
   auto updatedState = flushResult.value();
+
+  {
+    assert(CurrentPipelineLayout != nullptr);
+    ZoneScopedN("Flush push buffer data");
+    for (auto &pushBuffer : TopOfStack->shader->pushBuffers) {
+      FlushInfo info{
+          .commandBuffer = GetCommandBuffer(),
+          .pipelineLayout = CurrentPipelineLayout,
+      };
+
+      pushBuffer.FlushData(info);
+    }
+  }
 
   auto insertionResult = InsertResourceBarriers(context);
 

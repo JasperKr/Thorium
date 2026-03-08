@@ -175,6 +175,7 @@ auto ExtensionListSupported(
   return supported;
 }
 
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 static auto CreateDevice(GraphicsContext &context,
                          const DeviceSettings &settings) -> Error {
   float queuePriority = 1.0F;

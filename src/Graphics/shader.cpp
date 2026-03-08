@@ -572,22 +572,16 @@ void append(ResourceKey &dest, const ResourceKey &src) {
 auto ShaderModule::GetUniform(const ResourceKey &key) const
     -> Result<const ResourceInfo> {
   for (const auto &pushBuffer : pushBuffers) {
-    PrintDebug("Checking push buffer {} for key: {}...",
-               pushBuffer.GetLayout().name, ResourceKeyToString(key));
-    if (pushBuffer.ContainsUniform(key.begin(), key.end())) {
-      const auto *const info = pushBuffer.GetUniform(key.begin(), key.end());
-      if (info == nullptr) {
-        return Error::Unexpected("Uniform not found in push buffer.");
-      }
-      return *info;
+    const auto *const info = pushBuffer.GetUniform(key.begin(), key.end());
+    if (info == nullptr) {
+      continue;
     }
+    return *info;
   }
 
   // check global ubo
   ResourceKey globalsKey = {"Globals"};
   append(globalsKey, key);
-  PrintDebug("Checking global UBO for key: {}...",
-             ResourceKeyToString(globalsKey));
 
   const auto *info =
       reflection.globals.ResolvePath(globalsKey.begin(), globalsKey.end());
@@ -613,8 +607,6 @@ auto ShaderModule::Send(const GraphicsContext &context, const ResourceKey &key,
   // check global ubo
   ResourceKey globalsKey = {"Globals"};
   append(globalsKey, key);
-  PrintDebug("Checking global UBO for key: {}...",
-             ResourceKeyToString(globalsKey));
 
   const auto *info =
       reflection.globals.ResolvePath(globalsKey.begin(), globalsKey.end());
@@ -823,10 +815,8 @@ auto ShaderModule::FlushDescriptors(const GraphicsContext &context,
 
   for (auto &resource : reflection.resources) {
     if (!resource.IsSampler()) {
-      // PrintAlways("Resource '{}' is not a sampler, skipping.", resource.name);
       continue;
     }
-    // PrintAlways("Processing sampler resource '{}'...", resource.name);
 
     const auto &samplerInfo = std::get<SamplerInfo>(resource.info);
     auto usage = samplerInfo.access == SLANG_RESOURCE_ACCESS_READ
@@ -912,6 +902,7 @@ auto ShaderModule::FlushDescriptors(const GraphicsContext &context,
     descSetWrite.pTexelBufferView = nullptr;
 
     writes.emplace_back(descSetWrite);
+    state.boundTextures[key] = texture;
   }
 
   {
@@ -958,18 +949,6 @@ auto ShaderModule::FlushDescriptors(const GraphicsContext &context,
         vkCmdBindDescriptorSets(commandBuffer, bindpoint, layout, 0,
                                 static_cast<uint32_t>(descriptorSetList.size()),
                                 descriptorSetList.data(), 0, nullptr);
-  }
-
-  {
-    ZoneScopedN("Flush push buffer data");
-    for (auto &pushBuffer : pushBuffers) {
-      FlushInfo info{
-          .commandBuffer = commandBuffer,
-          .pipelineLayout = layout,
-      };
-
-      pushBuffer.FlushData(info);
-    }
   }
 
   return Error::Success();

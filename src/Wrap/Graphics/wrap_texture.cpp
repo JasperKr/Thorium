@@ -634,7 +634,6 @@ static inline auto TextureFromImagedataAndOptions(lua_State *state)
               static_cast<uint32_t>(options.usage));
 
   auto result = Graphics::Texture::LoadFromMemory(*ctx, *imageData, usage);
-  PrintAlways("Done");
   if (Error::IsError(result)) {
     return result.error().AsUnexpected();
   }

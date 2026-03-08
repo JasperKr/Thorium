@@ -12,8 +12,6 @@ local t = snap.timer.getTime()
 local testImgdata = snap.data.newImagedata(16, 16, "rgba8")
 for y = 0, 15 do
   for x = 0, 15 do
-    -- local value = snap.math.noiseWrapped(x / 16, y / 16, 4, 4);
-    -- value = (value + 1) / 2
     local value = snap.math.random()
     local r = value
     local g = value
@@ -39,7 +37,7 @@ local mesh
 
 local shader = snap.graphics.newShader("Graphics/Shaders/test.slang")
 local computeshader = snap.graphics.newShader("Graphics/Shaders/test2.slang")
-local value = 0.25
+local value = 0.15
 
 local texture
 print("Generated noise texture in " .. tostring(snap.timer.getTime() - t) .. " seconds")
@@ -75,7 +73,7 @@ local function draw()
 
   snap.graphics.setShader(shader)
   shader:send("MainTexture", texture)
-  for i = 1, 100 do
+  for i = 1, 1 do
     snap.graphics.draw(mesh)
   end
   snap.graphics.setShader()

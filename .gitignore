@@ -16,7 +16,7 @@ vgcore.*
 *.gltf
 assets/
 *.so.*
-external/
+# external/
 *.log
 *.tmp
 imgui.ini

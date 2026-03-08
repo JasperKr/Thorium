@@ -137,11 +137,48 @@ auto wrap_Send(lua_State *state) -> int {
     uint64_t tableLength = lua_objlen(state, valueOffset);
     data.reserve(sizeof(uint32_t) * static_cast<size_t>(tableLength));
 
+    auto info = shader->GetUniform(key);
+    if (Error::IsError(info)) {
+      return luaL_error(state, "%s", info.error().message.c_str());
+    }
+
     for (uint64_t i = 0; i < tableLength; ++i) {
       lua_rawgeti(state, valueOffset, static_cast<int>(i + 1));
-      auto value = static_cast<float>(lua_tonumber(state, -1));
+      auto scalarType = ScalarType::Unknown;
+      if (info->IsVector()) {
+        const auto &vectorInfo = info->GetInfo<VectorInfo>();
+        scalarType = vectorInfo.scalarType;
+      } else if (info->IsMatrix()) {
+        scalarType = ScalarType::Float;
+      } else if (info->IsScalar()) {
+        scalarType = info->GetInfo<ScalarInfo>().type;
+      } else {
+        return luaL_error(state,
+                          "Unable to send uniform `%s`: expected vector, "
+                          "matrix, or scalar, got %s",
+                          ResourceKeyToString(key).c_str(),
+                          luaL_typename(state, -1));
+      }
 
-      data.emplace_back(std::bit_cast<uint32_t>(value));
+      switch (scalarType) {
+      case ScalarType::Unknown:
+        return luaL_error(state,
+                          "Unable to send uniform `%s`: unknown scalar type",
+                          ResourceKeyToString(key).c_str());
+      case ScalarType::Float:
+        data.push_back(std::bit_cast<uint32_t>(
+            static_cast<float>(lua_tonumber(state, -1)))); // NOLINT
+        break;
+      case ScalarType::Int:
+      case ScalarType::UInt:
+        data.push_back(
+            static_cast<uint32_t>(lua_tointeger(state, -1))); // NOLINT
+        break;
+      case ScalarType::Bool:
+        data.push_back(lua_toboolean(state, -1));
+        break;
+      }
+
       lua_pop(state, 1);
     }
 

@@ -374,7 +374,8 @@ extern thread_local std::unordered_map<
     StateHash> // NOLINTNEXTLINE Pipeline cacheBegunRendering
     PipelineCache;
 extern thread_local std::vector<Ref<Shader::ShaderModule>>
-    UsedShaderModules; // NOLINT
+    UsedShaderModules;                                      // NOLINT
+extern thread_local VkPipelineLayout CurrentPipelineLayout; // NOLINT
 
 auto FinalizeFrame(const GraphicsContext &context) -> Error;
 auto BeginFrame(const GraphicsContext &context) -> Error;
