@@ -13,6 +13,7 @@
 #include "lua.hpp"
 #include "reflectBindings.hpp"
 #include <cassert>
+#include <concepts>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -382,12 +383,13 @@ struct LuaBoundStruct {
         return luaL_error(state, "%s", obj.error().message.c_str());
       }
 
-      auto elementValue = LuaType<ElementType>::GetValue(state, 2);
+      auto elementValue =
+          LuaType<ElementType>::template GetValue<ElementType>(state, 2);
       if (Error::IsError(elementValue)) {
         return luaL_error(state, "%s", elementValue.error().message.c_str());
       }
 
-      (*obj)->*Member.emplace_back(elementValue.value());
+      ((*obj)->*Member).emplace_back(elementValue.value());
       return 0;
     });
 
@@ -427,6 +429,10 @@ struct LuaBoundStruct {
       return 0;
     });
 
+    // Assert that ElementType is equality comparable for the remove by value method
+    static_assert(std::equality_comparable<ElementType>,
+                  "ElementType must be equality comparable for remove method");
+
     // remove element method (by value, removes first occurrence)
     names.emplace_back(std::string("remove") + name);
     AddMethod([](lua_State *state) -> int {
@@ -435,7 +441,8 @@ struct LuaBoundStruct {
         return luaL_error(state, "%s", obj.error().message.c_str());
       }
 
-      auto elementValue = LuaType<ElementType>::GetValue(state, 2);
+      auto elementValue =
+          LuaType<ElementType>::template GetValue<ElementType>(state, 2);
       if (Error::IsError(elementValue)) {
         return luaL_error(state, "%s", elementValue.error().message.c_str());
       }

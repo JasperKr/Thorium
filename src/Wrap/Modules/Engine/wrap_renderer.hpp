@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Modules/Engine/material.hpp"
+#include "Modules/Engine/model.hpp"
 #include "Wrap/wrap.hpp"
 #include "lua.hpp"
 #include <vector>
@@ -15,6 +16,9 @@ static const std::vector<luaL_Reg> RendererLib = {
 
 static const std::vector<lua_CFunction> childrenInitFunctions{
     Material::LoadBinding,
+    Node::LoadBinding,
+    Model::LoadBinding,
+    Shape::LoadBinding,
 };
 
 extern "C" inline auto luaopen_renderer(lua_State *state) -> int {

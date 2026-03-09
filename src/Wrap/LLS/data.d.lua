@@ -9,6 +9,9 @@ Data = {}
 --- Releases the data from memory.
 function Data:release() end
 
+---@return string
+function Data:getType() end
+
 --- ByteData class
 ---@class snap.Bytedata : snap.Data
 local Bytedata = {}

@@ -168,7 +168,7 @@ inline void EmitLuaStruct(std::ostream &out, const std::string &classname,
   out << "-- See reflectBindings.hpp or the lua_stub_gen target.\n\n";
   out << "error(\"Do not require this file.\")\n\n";
 
-  out << "---@class snap." << classname << "\n";
+  out << "---@class snap." << classname << " : snap.Data\n";
   out << classname << " = {}\n\n";
 
   for (const auto &member : members) {

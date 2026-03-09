@@ -16,6 +16,13 @@ const Type nodeType = Type("Node");
 const Type shapeType = Type("Shape");
 const Type modelType = Type("Model");
 
+// NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
+
+extern thread_local uint64_t NextNodeUserdataIndex;
+extern thread_local uint64_t NextModelUserdataIndex;
+
+// NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
+
 struct Transform {
   Math::Vec3 Position{};
   Math::Quaternion Rotation;
@@ -36,14 +43,16 @@ using SceneObject =
 
 struct Selectable {
   std::string name;
-  Identifier id;
-  void *userdata;
+  Identifier id = GenerateIdentifier();
+  uint64_t userdataIndex = 0;
+
+  static auto SetUserdata(lua_State *state, uint64_t &userdataIndex) -> int;
+  static auto GetUserdata(lua_State *state, uint64_t &userdataIndex) -> int;
 };
 
 struct Node : Selectable, Object, UiElement {
   Transform transform;
   std::vector<SceneObject> children;
-  Identifier id = GenerateIdentifier();
 
   static auto GetType() -> Type const * { return &nodeType; }
   auto GetInstanceType() const -> const Type * override { return &nodeType; }
@@ -76,7 +85,6 @@ struct Shape : Selectable, Object, UiElement {
   Transform transform;
   Ref<Graphics::Mesh> mesh;
   Ref<Renderer::Material> material;
-  Identifier id = GenerateIdentifier();
 
   static auto GetType() -> Type const * { return &shapeType; }
   auto GetInstanceType() const -> const Type * override { return &shapeType; }
@@ -97,17 +105,22 @@ struct Shape : Selectable, Object, UiElement {
   static auto wrap_SetMaterial(lua_State *state) -> int;
   static auto wrap_GetMaterial(lua_State *state) -> int;
 
+  static auto wrap_SetUserdata(lua_State *state) -> int;
+  static auto wrap_GetUserdata(lua_State *state) -> int;
+
   static auto LoadBinding(lua_State *state) -> int;
 };
 
 struct Model : Selectable, Object, UiElement {
   Transform transform;
-  std::vector<Shape> shapes;
-  Identifier id = GenerateIdentifier();
+  std::vector<Ref<Shape>> shapes;
 
   static auto GetType() -> Type const * { return &modelType; }
   auto GetInstanceType() const -> const Type * override { return &modelType; }
   auto DrawUiElement() -> Error override;
+
+  static auto wrap_SetName(lua_State *state) -> int;
+  static auto wrap_GetName(lua_State *state) -> int;
 
   static auto wrap_SetPosition(lua_State *state) -> int;
   static auto wrap_GetPosition(lua_State *state) -> int;
@@ -117,6 +130,9 @@ struct Model : Selectable, Object, UiElement {
 
   static auto wrap_SetScale(lua_State *state) -> int;
   static auto wrap_GetScale(lua_State *state) -> int;
+
+  static auto wrap_SetUserdata(lua_State *state) -> int;
+  static auto wrap_GetUserdata(lua_State *state) -> int;
 
   static auto LoadBinding(lua_State *state) -> int;
 };

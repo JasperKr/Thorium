@@ -2,7 +2,7 @@
 
 error("Do not require this file")
 
----@class snap.Buffer
+---@class snap.Buffer : snap.Data
 local Buffer = {}
 
 --- Gets the size of the buffer in bytes

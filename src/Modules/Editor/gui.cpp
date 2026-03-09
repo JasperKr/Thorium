@@ -1,8 +1,10 @@
 #include "gui.hpp"
+#include "Modules/console.hpp"
 #include "Modules/filesystem.hpp"
 #include "Modules/object.hpp"
 #include "SDL3/SDL_mouse.h"
 #include "imgui.h"
+#include "imstb_truetype.h"
 #include <array>
 #include <unordered_map>
 
@@ -49,34 +51,20 @@ auto LoadGUIState(lua_State *state) -> Result<GuiState> {
   flags |= static_cast<uint32_t>(ImGuiBackendFlags_RendererHasTextures);
   inout.BackendFlags = static_cast<ImGuiBackendFlags>(flags);
 
-  auto fontDataResult =
-      Filesystem::ReadFile("src/Graphics/Assets/user_interface_font.ttf");
-  if (Error::IsError(fontDataResult)) {
-    return Error::Unexpected("Failed to read GUI font file: " +
-                             fontDataResult.error().message);
-  }
+  ImGuiStyle &style = ImGui::GetStyle();
+  style.FontSizeBase = 16.0F;
 
-  auto fontData = fontDataResult.value();
+  ImGuiIO &io = ImGui::GetIO();
+  style.FontScaleMain = 1.0F;
 
   const float fontSize = 18.0F;
-  const std::string debugname = "Source Code Pro - Mono";
 
-  auto baseConfig = ImFontConfig();
-  baseConfig.FontDataOwnedByAtlas = false;
-  // baseConfig.Name = "Source Code Pro - Mono";
-  // NOLINTNEXTLINE
-  std::strncpy(baseConfig.Name, debugname.c_str(), sizeof(baseConfig.Name) - 1);
-  baseConfig.MergeMode = false;
-  baseConfig.PixelSnapH = false;
-  baseConfig.OversampleH = 0; // NOLINT
-  baseConfig.OversampleV = 0; // NOLINT
+  ImFontConfig config;
+  config.OversampleH = 0;
+  config.OversampleV = 0;
 
-  ImFont *font = inout.Fonts->AddFontFromMemoryTTF(
-      fontData.data(), static_cast<int>(fontData.size()), fontSize,
-      &baseConfig);
-  if (font == nullptr) {
-    return Error::Unexpected("Failed to load GUI font from memory.");
-  }
+  ImFont *font = inout.Fonts->AddFontFromFileTTF(
+      "src/Graphics/Assets/user_interface_font.ttf", 16.0F, &config);
 
   // Optionally set this font as default
   inout.FontDefault = font;

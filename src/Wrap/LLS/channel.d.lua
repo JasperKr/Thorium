@@ -2,7 +2,7 @@
 
 error("Do not require this file")
 
----@class snap.Channel
+---@class snap.Channel : snap.Data
 local Channel = {}
 
 --- Creates a new channel

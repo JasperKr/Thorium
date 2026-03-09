@@ -84,7 +84,9 @@ auto Material::DrawUiElement() -> Error {
   auto texWidth = preview.isValid() ? preview.get()->GetWidth() : 0;
 
   if (preview.isValid()) {
-    ImGui::Image(preview.get(), ImVec2());
+    ImTextureRef ref;
+    ref._TexID = reinterpret_cast<uintptr_t>(preview.get());
+    ImGui::Image(ref, ImVec2());
   }
 
   return Error::Success();

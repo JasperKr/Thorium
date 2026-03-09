@@ -2,7 +2,7 @@
 
 error("Do not require this file")
 
----@class snap.Thread
+---@class snap.Thread : snap.Data
 local Thread = {}
 
 --- Creates a new thread

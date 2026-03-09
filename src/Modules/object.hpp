@@ -104,6 +104,13 @@ public:
     return T::GetType();
   }
 
+  auto operator==(Ref<T> const &other) const -> bool {
+    return ptr == other.ptr;
+  }
+  auto operator!=(Ref<T> const &other) const -> bool {
+    return ptr != other.ptr;
+  }
+
 private:
   T *ptr = nullptr;
 };
