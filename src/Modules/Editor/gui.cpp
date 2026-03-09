@@ -2,10 +2,12 @@
 #include "Modules/console.hpp"
 #include "Modules/filesystem.hpp"
 #include "Modules/object.hpp"
+#include "SDL3/SDL_clipboard.h"
 #include "SDL3/SDL_mouse.h"
 #include "imgui.h"
 #include "imstb_truetype.h"
 #include <array>
+#include <cassert>
 #include <unordered_map>
 
 namespace Gui {
@@ -35,9 +37,8 @@ auto LoadGUIState(lua_State *state) -> Result<GuiState> {
         std::string(errorMessage != nullptr ? errorMessage : "Unknown error"));
   }
 
-  auto *guiContext = ImGui::CreateContext();
-
-  GetGuiState() = guiState;
+  IMGUI_CHECKVERSION();
+  ImGui::CreateContext();
 
   ImGui::StyleColorsDark();
 
@@ -47,27 +48,43 @@ auto LoadGUIState(lua_State *state) -> Result<GuiState> {
       ImGuiConfigFlags_NavEnableKeyboard); // Enable Keyboard Controls
   inout.ConfigFlags = static_cast<ImGuiConfigFlags>(flags);
 
-  flags = static_cast<uint32_t>(inout.BackendFlags);
-  flags |= static_cast<uint32_t>(ImGuiBackendFlags_RendererHasTextures);
-  inout.BackendFlags = static_cast<ImGuiBackendFlags>(flags);
+  auto &platformIO = ImGui::GetPlatformIO();
+  platformIO.Platform_GetClipboardTextFn =
+      [](ImGuiContext *context) -> const char * {
+    return SDL_GetClipboardText();
+  };
+  platformIO.Platform_SetClipboardTextFn = [](ImGuiContext *context,
+                                              const char *text) -> void {
+    SDL_SetClipboardText(text);
+  };
+
+  float scale = SDL_GetDisplayContentScale(SDL_GetPrimaryDisplay());
+  assert(scale > 0.0F && "Display content scale must be greater than 0");
 
   ImGuiStyle &style = ImGui::GetStyle();
-  style.FontSizeBase = 16.0F;
-
-  ImGuiIO &io = ImGui::GetIO();
-  style.FontScaleMain = 1.0F;
-
-  const float fontSize = 18.0F;
+  style.FontScaleDpi = scale;
+  style.ScaleAllSizes(scale);
 
   ImFontConfig config;
-  config.OversampleH = 0;
-  config.OversampleV = 0;
+  config.OversampleH = 5;
+  config.OversampleV = 5;
+  config.PixelSnapH = true;
+
+  ImGui::GetIO().Fonts->AddFontDefault(&config);
 
   ImFont *font = inout.Fonts->AddFontFromFileTTF(
-      "src/Graphics/Assets/user_interface_font.ttf", 16.0F, &config);
+      "src/Graphics/Assets/user_interface_font.ttf", scale, &config);
 
-  // Optionally set this font as default
-  inout.FontDefault = font;
+  // Set the font as the default font
+  // inout.FontDefault = font;
+
+  ImGuiIO &io = ImGui::GetIO();
+
+  flags = static_cast<uint32_t>(inout.BackendFlags);
+  flags |= static_cast<uint32_t>(ImGuiBackendFlags_RendererHasTextures);
+  flags |= static_cast<uint32_t>(ImGuiBackendFlags_HasSetMousePos);
+  flags |= static_cast<uint32_t>(ImGuiBackendFlags_HasMouseCursors);
+  inout.BackendFlags = static_cast<ImGuiBackendFlags>(flags);
 
   auto ctx = *Graphics::GetCurrentGraphicsContext();
 

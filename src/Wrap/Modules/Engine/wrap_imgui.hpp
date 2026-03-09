@@ -3,6 +3,7 @@
 #include "Modules/error.hpp"
 #include "Wrap/wrap.hpp"
 #include "lua.hpp"
+#include <lua.h>
 
 namespace Wrap::Imgui {
 auto NewFrame(lua_State *state) -> int;
@@ -19,6 +20,9 @@ auto KeyPressed(lua_State *state) -> int;
 auto KeyReleased(lua_State *state) -> int;
 auto TextInput(lua_State *state) -> int;
 
+auto GetImguiContextPtr(lua_State *state) -> int;
+auto GetImguiFontAtlasPtr(lua_State *state) -> int;
+
 auto Shutdown() -> Error;
 
 // NOLINTNEXTLINE
@@ -33,6 +37,8 @@ static const std::vector<luaL_Reg> ImGuiLib = {
     {"keyPressed", KeyPressed},
     {"keyReleased", KeyReleased},
     {"textInput", TextInput},
+    {"getContextPtr", GetImguiContextPtr},
+    {"getFontAtlasPtr", GetImguiFontAtlasPtr},
 
 };
 

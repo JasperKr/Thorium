@@ -334,6 +334,7 @@ target_compile_options(snap_core PRIVATE -fno-exceptions -fno-rtti)
 target_compile_definitions(snap_core
     PUBLIC VK_NO_PROTOTYPES
     IMGUI_DISABLE_OBSOLETE_FUNCTIONS
+    IMGUI_ENABLE_FREETYPE
     PRIVATE
         IMGUI_IMPL_VULKAN_NO_PROTOTYPES
         IMGUI_IMPL_VULKAN_USE_LOADER

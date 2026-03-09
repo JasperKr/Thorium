@@ -555,4 +555,19 @@ auto Shutdown() -> Error {
   return Error::Success();
 }
 
+auto GetImguiContextPtr(lua_State *state) -> int {
+  // bitcast the ImGui context pointer to a double (since Lua doesn't have a native pointer type) and return it
+  auto *context = ImGui::GetCurrentContext();
+  auto contextValue = reinterpret_cast<uintptr_t>(context); // NOLINT
+  lua_pushnumber(state, static_cast<lua_Number>(contextValue));
+  return 1;
+}
+auto GetImguiFontAtlasPtr(lua_State *state) -> int {
+  // bitcast the ImGui font atlas pointer to a double (since Lua doesn't have a native pointer type) and return it
+  auto *fontAtlas = ImGui::GetIO().Fonts;
+  auto fontAtlasValue = reinterpret_cast<uintptr_t>(fontAtlas); // NOLINT
+  lua_pushnumber(state, static_cast<lua_Number>(fontAtlasValue));
+  return 1;
+}
+
 } // namespace Wrap::Imgui
