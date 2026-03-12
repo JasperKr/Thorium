@@ -292,16 +292,27 @@ template <typename T> struct LuaType {
   };
 };
 
+// Base class of LuaBoundStruct used for documentation purposes.
+// You may use this if you have an entire class defined manually, and want to auto-generate documentation
+struct LuaDocumentingStruct {
+  std::string name;
+  std::vector<MethodInfo> methodInfos;
+
+  void DocumentCustomMethod(const MethodInfo &info) {
+    methodInfos.emplace_back(info);
+  }
+
+  void Register() { Bindings::LuaModules.emplace_back(name, methodInfos); }
+};
+
 template <typename T>
   requires LuaWrap::LuaObject<T>
-struct LuaBoundStruct {
+struct LuaBoundStruct : LuaDocumentingStruct {
   explicit LuaBoundStruct<T>(std::string structName)
-      : name(std::move(structName)) {}
+      : LuaDocumentingStruct(std::move(structName)) {}
 
-  std::string name;
   std::vector<lua_CFunction> methods;
   std::vector<std::string> names;
-  std::vector<MemberInfo> members;
   LuaType<T> type{};
 
   void AddMethod(const lua_CFunction &method) { methods.emplace_back(method); }
@@ -311,26 +322,50 @@ struct LuaBoundStruct {
   void RegisterMember(const std::string &name, // NOLINT
                       const std::string &description = "") {
     using Traits =
-        MemberTraits<decltype(Member)>; // e.g., MemberTraits<int Test::*>
-    using M = typename Traits::Type;    // e.g., int
-
-    members.emplace_back(MemberInfo{
-        .name = name,
-        .description = description,
-        .type = nullptr,
-        .luaType = GetBindingLuaType<M>(),
-        .isEnum = false,
-    });
-
-    if constexpr (GetBindingLuaType<M>() == BindingLuaType::Userdata) {
-      members.back().type = M::GetType();
-    }
+        MemberTraits<decltype(Member)>;     // e.g., MemberTraits<int Test::*>
+    using M = typename Traits::Type;        // e.g., int
+    using Struct = typename Traits::Object; // e.g., Test
 
     names.emplace_back(std::string("get") + name);
     AddMethod(type.template GenBindings_Get<Member>());
+    methodInfos.emplace_back(MethodInfo{
+        .name = std::string("get") + name,
+        .description = description,
+        .parameters = {},
+        .returnType =
+            TypeInfo{
+                .name = name,
+                .type = nullptr,
+                .luaType = GetBindingLuaType<M>(),
+                .isEnum = false,
+                .isVector = false,
+            },
+    });
+    if constexpr (GetBindingLuaType<M>() == BindingLuaType::Userdata) {
+      methodInfos.back().returnType->type = M::GetType();
+    }
 
     names.emplace_back(std::string("set") + name);
     AddMethod(type.template GenBindings_Set<Member>());
+
+    methodInfos.emplace_back(MethodInfo{
+        .name = std::string("set") + name,
+        .description = description,
+        .parameters =
+            {
+                TypeInfo{
+                    .name = name,
+                    .type = nullptr,
+                    .luaType = GetBindingLuaType<M>(),
+                    .isEnum = false,
+                    .isVector = false,
+                },
+            },
+    });
+
+    if constexpr (GetBindingLuaType<M>() == BindingLuaType::Userdata) {
+      methodInfos.back().parameters[0].type = M::GetType();
+    }
   };
 
   template <auto Member>
@@ -344,20 +379,6 @@ struct LuaBoundStruct {
     static_assert(std::is_same_v<V, std::vector<typename V::value_type>>,
                   "Member must be a std::vector");
     using ElementType = typename V::value_type;
-
-    members.emplace_back(MemberInfo{
-        .name = name,
-        .description = description,
-        .type = nullptr,
-        .luaType = GetBindingLuaType<ElementType>(),
-        .isEnum = false,
-        .isVector = true,
-    });
-
-    if constexpr (GetBindingLuaType<ElementType>() ==
-                  BindingLuaType::Userdata) {
-      members.back().type = ElementType::GetType();
-    }
 
     // get entire vector method
     names.emplace_back(std::string("get") + name);
@@ -374,6 +395,32 @@ struct LuaBoundStruct {
           });
       return 1;
     });
+
+    methodInfos.emplace_back(MethodInfo{
+        .name = std::string("get") + name,
+        .description = description,
+        .parameters =
+            {
+                TypeInfo{
+                    .name = name,
+                    .type = Traits::Object::GetType(),
+                    .luaType = GetBindingLuaType<typename Traits::Object>(),
+                    .isEnum = false,
+                    .isVector = false,
+                },
+            },
+        .returnType =
+            TypeInfo{
+                .name = name,
+                .type = nullptr,
+                .luaType = GetBindingLuaType<ElementType>(),
+                .isEnum = false,
+                .isVector = false,
+            },
+    });
+    if (methodInfos.back().returnType->luaType == BindingLuaType::Userdata) {
+      methodInfos.back().returnType->type = Traits::Type::value_type::GetType();
+    }
 
     // add element method
     names.emplace_back(std::string("add") + name);
@@ -392,6 +439,25 @@ struct LuaBoundStruct {
       ((*obj)->*Member).emplace_back(elementValue.value());
       return 0;
     });
+    methodInfos.emplace_back(MethodInfo{
+        .name = std::string("add") + name,
+        .description = description,
+        .parameters =
+            {
+                TypeInfo{
+                    .name = name,
+                    .type = nullptr,
+                    .luaType = GetBindingLuaType<ElementType>(),
+                    .isEnum = false,
+                    .isVector = false,
+                },
+            },
+    });
+
+    if (methodInfos.back().parameters[0].luaType == BindingLuaType::Userdata) {
+      methodInfos.back().parameters[0].type =
+          Traits::Type::value_type::element_type::GetType();
+    }
 
     // at index method
     names.emplace_back(std::string("get") + name + "At");
@@ -411,6 +477,33 @@ struct LuaBoundStruct {
       return 1;
     });
 
+    methodInfos.emplace_back(MethodInfo{
+        .name = std::string("get") + name + "At",
+        .description = description,
+        .parameters =
+            {
+                TypeInfo{
+                    .name = "Index",
+                    .type = nullptr,
+                    .luaType = BindingLuaType::Integer,
+                    .isEnum = false,
+                    .isVector = false,
+                },
+            },
+        .returnType =
+            TypeInfo{
+                .name = name,
+                .type = nullptr,
+                .luaType = GetBindingLuaType<ElementType>(),
+                .isEnum = false,
+                .isVector = false,
+            },
+    });
+    if (methodInfos.back().returnType->luaType == BindingLuaType::Userdata) {
+      methodInfos.back().returnType->type =
+          Traits::Type::value_type::element_type::GetType();
+    }
+
     // remove at index method
     names.emplace_back(std::string("remove") + name + "At");
     AddMethod([](lua_State *state) -> int {
@@ -427,6 +520,21 @@ struct LuaBoundStruct {
 
       vec.erase(vec.begin() + index);
       return 0;
+    });
+
+    methodInfos.emplace_back(MethodInfo{
+        .name = std::string("remove") + name + "At",
+        .description = description,
+        .parameters =
+            {
+                TypeInfo{
+                    .name = "Index",
+                    .type = nullptr,
+                    .luaType = BindingLuaType::Integer,
+                    .isEnum = false,
+                    .isVector = false,
+                },
+            },
     });
 
     // Assert that ElementType is equality comparable for the remove by value method
@@ -456,6 +564,26 @@ struct LuaBoundStruct {
       vec.erase(iter);
       return 0;
     });
+
+    methodInfos.emplace_back(MethodInfo{
+        .name = std::string("remove") + name,
+        .description = description,
+        .parameters =
+            {
+                TypeInfo{
+                    .name = name,
+                    .type = nullptr,
+                    .luaType = GetBindingLuaType<ElementType>(),
+                    .isEnum = false,
+                    .isVector = false,
+                },
+            },
+    });
+
+    if (methodInfos.back().parameters[0].luaType == BindingLuaType::Userdata) {
+      methodInfos.back().parameters[0].type =
+          Traits::Type::value_type::element_type::GetType();
+    }
   };
 
   template <auto Member, const LuaWrap::LuaEnum<typename MemberTraits<
@@ -464,15 +592,6 @@ struct LuaBoundStruct {
                     const std::string &description = "") -> void {
     using Traits = MemberTraits<decltype(Member)>;
     using M = typename Traits::Type;
-
-    members.emplace_back(MemberInfo{
-        .name = name,
-        .description = description,
-        .type = nullptr,
-        .luaType = BindingLuaType::String,
-        .isEnum = true,
-        .enumHelper = &EnumHelper,
-    });
 
     names.emplace_back(std::string("set") + name);
     AddMethod([](lua_State *state) -> int {
@@ -489,6 +608,21 @@ struct LuaBoundStruct {
       (*obj)->*Member = static_cast<M>(result.value());
       return 0;
     });
+    methodInfos.emplace_back(MethodInfo{
+        .name = std::string("set") + name,
+        .description = description,
+        .parameters =
+            {
+                TypeInfo{
+                    .name = EnumHelper.name,
+                    .type = nullptr,
+                    .luaType = BindingLuaType::String,
+                    .isEnum = true,
+                    .isVector = false,
+                    .enumHelper = &EnumHelper,
+                },
+            },
+    });
 
     names.emplace_back(std::string("get") + name);
     AddMethod([](lua_State *state) -> int {
@@ -504,6 +638,21 @@ struct LuaBoundStruct {
       }
 
       return 1;
+    });
+
+    methodInfos.emplace_back(MethodInfo{
+        .name = std::string("get") + name,
+        .description = description,
+        .parameters = {},
+        .returnType =
+            TypeInfo{
+                .name = EnumHelper.name,
+                .type = nullptr,
+                .luaType = BindingLuaType::String,
+                .isEnum = true,
+                .isVector = false,
+                .enumHelper = &EnumHelper,
+            },
     });
   };
 
@@ -522,7 +671,7 @@ struct LuaBoundStruct {
       luaMethods.push_back({methodName.c_str(), methodFunc});
     }
 
-    LuaModules.emplace_back(name, members);
+    LuaDocumentingStruct::Register();
 
     LuaWrap::RegisterLuaType(state, T::GetType(), luaMethods);
   };

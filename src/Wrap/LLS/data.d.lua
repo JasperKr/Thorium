@@ -49,10 +49,10 @@ function Bytedata:setFloat(offset, value) end
 function Bytedata:getFloat(offset, count) end
 
 --- Sets an unsigned 32-bit integer at the specified offset.
----@overload fun(offset: number, values: number[]): nil
----@param offset number The offset in bytes.
----@param value number The unsigned 32-bit integer value.
-function Bytedata:setUInt32(offset, value) end
+-- ---@overload fun(offset: number, values: number[]): nil
+-- ---@param offset number The offset in bytes.
+-- ---@param value number The unsigned 32-bit integer value.
+-- function Bytedata:setUInt32(offset, value) end
 
 --- Gets unsigned 32-bit integers at the specified offset.
 ---@param offset number The offset in bytes.

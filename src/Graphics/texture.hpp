@@ -251,7 +251,7 @@ auto GetDefaultTexture(const GraphicsContext &context, VkFormat format,
                        Graphics::Texture::TextureType textureType)
     -> Result<Ref<Graphics::Texture::Texture>>;
 
-auto GetAccessFlagsForUsage(TextureUsage usage, VkImageLayout currentLayout)
+auto GetAccessFlagsForUsage(TextureUsage usage, VkFormat format)
     -> VkAccessFlags2;
 
 } // namespace Graphics::Texture

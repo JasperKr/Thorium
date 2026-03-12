@@ -9,6 +9,7 @@
 #include <ostream>
 #include <string>
 #include <type_traits>
+#include <utility>
 #include <vector>
 namespace Bindings {
 
@@ -61,9 +62,9 @@ template <typename T> constexpr auto GetBindingLuaType() {
   }
 }
 
-struct MemberInfo {
+struct TypeInfo {
   std::string name;
-  std::string description;
+
   Type const *type; // For Ref<T>
   BindingLuaType luaType;
   bool isEnum = false;
@@ -71,8 +72,16 @@ struct MemberInfo {
   const LuaWrap::LuaEnumBase *enumHelper;
 };
 
+struct MethodInfo {
+  std::string name;
+  std::string description;
+
+  std::vector<TypeInfo> parameters;
+  std::optional<TypeInfo> returnType;
+};
+
 // NOLINTNEXTLINE
-inline std::vector<std::pair<std::string, std::vector<MemberInfo>>> LuaModules;
+inline std::vector<std::pair<std::string, std::vector<MethodInfo>>> LuaModules;
 
 constexpr auto LuaTypeName(BindingLuaType bindingType) -> const char * {
   switch (bindingType) {
@@ -87,7 +96,7 @@ constexpr auto LuaTypeName(BindingLuaType bindingType) -> const char * {
   case BindingLuaType::Table:
     return "table";
   case BindingLuaType::Userdata:
-    return nullptr; // handled separately
+    return "USERDATA"; // handled separately
   case BindingLuaType::Vec2:
     return "Vec2";
   case BindingLuaType::Vec3:
@@ -102,42 +111,6 @@ constexpr auto LuaTypeName(BindingLuaType bindingType) -> const char * {
   return "any";
 }
 
-inline auto GetLuaFieldType(const MemberInfo &member)
-    -> std::vector<std::string> {
-  if (member.isEnum) {
-    return {std::string("snap.") + member.enumHelper->name};
-  }
-
-  if (member.luaType == BindingLuaType::Userdata && (member.type != nullptr)) {
-    return {std::string("snap.") + member.type->GetName()};
-  }
-
-  const char *base = LuaTypeName(member.luaType);
-  if (base == nullptr) {
-    return {"any"};
-  }
-
-  if (member.isVector) {
-    return {std::string(base) + "[]"};
-  }
-
-  if (member.luaType == BindingLuaType::Vec2) {
-    return {"number", "number"};
-  }
-  if (member.luaType == BindingLuaType::Vec3) {
-    return {"number", "number", "number"};
-  }
-  if (member.luaType == BindingLuaType::Vec4 ||
-      member.luaType == BindingLuaType::Quaternion) {
-    return {"number", "number", "number", "number"};
-  }
-  if (member.luaType == BindingLuaType::Matrix4x4) {
-    return {"number[16]"};
-  }
-
-  return {base};
-}
-
 inline auto LowercaseFirstChar(const std::string &str) -> std::string {
   if (str.empty()) {
     return str;
@@ -145,6 +118,54 @@ inline auto LowercaseFirstChar(const std::string &str) -> std::string {
   std::string result = str;
   result[0] = static_cast<char>(std::tolower(result[0]));
   return result;
+}
+
+inline auto GetLuaTypes(const std::vector<TypeInfo> &methods)
+    -> std::vector<std::pair<std::string, std::string>> {
+  std::vector<std::pair<std::string, std::string>> types;
+
+  for (const auto &typeinfo : methods) {
+    const auto &camelCaseName = LowercaseFirstChar(typeinfo.name);
+
+    if (typeinfo.isEnum) {
+      types.emplace_back(std::string("snap.") + typeinfo.enumHelper->name,
+                         camelCaseName);
+      continue;
+    }
+
+    if (typeinfo.luaType == BindingLuaType::Userdata &&
+        (typeinfo.type != nullptr)) {
+      types.emplace_back(std::string("snap.") + typeinfo.type->GetName(),
+                         camelCaseName);
+      continue;
+    }
+
+    const char *base = LuaTypeName(typeinfo.luaType);
+    if (base == nullptr) {
+      types.emplace_back("any", camelCaseName);
+    } else if (typeinfo.isVector) {
+      types.emplace_back(std::string(base) + "[]", camelCaseName);
+    } else if (typeinfo.luaType == BindingLuaType::Vec2) {
+      types.emplace_back("number", camelCaseName + "_x");
+      types.emplace_back("number", camelCaseName + "_y");
+    } else if (typeinfo.luaType == BindingLuaType::Vec3) {
+      types.emplace_back("number", camelCaseName + "_x");
+      types.emplace_back("number", camelCaseName + "_y");
+      types.emplace_back("number", camelCaseName + "_z");
+    } else if (typeinfo.luaType == BindingLuaType::Vec4 ||
+               typeinfo.luaType == BindingLuaType::Quaternion) {
+      types.emplace_back("number", camelCaseName + "_x");
+      types.emplace_back("number", camelCaseName + "_y");
+      types.emplace_back("number", camelCaseName + "_z");
+      types.emplace_back("number", camelCaseName + "_w");
+    } else if (typeinfo.luaType == BindingLuaType::Matrix4x4) {
+      types.emplace_back("number[16]", camelCaseName);
+    } else {
+      types.emplace_back(base, camelCaseName);
+    }
+  }
+
+  return types;
 }
 
 inline auto Replace(const std::string &src, char from,
@@ -161,7 +182,7 @@ inline auto Replace(const std::string &src, char from,
 }
 
 inline void EmitLuaStruct(std::ostream &out, const std::string &classname,
-                          const std::vector<MemberInfo> &members) {
+                          const std::vector<MethodInfo> &members) {
 
   out << "---@meta\n";
   out << "-- This file is auto-generated. Do not edit directly.\n";
@@ -172,63 +193,57 @@ inline void EmitLuaStruct(std::ostream &out, const std::string &classname,
   out << classname << " = {}\n\n";
 
   for (const auto &member : members) {
-    out << "--- Sets the " << member.name << " field.\n";
-
     if (!member.description.empty()) {
       const auto &replaced = Replace(member.description, '\n', "\n--- ");
       out << "--- " << replaced << "\n";
     }
 
-    const auto &fields = GetLuaFieldType(member);
-    auto fieldCount = fields.size();
-    std::string camelCaseName = LowercaseFirstChar(member.name);
+    const auto &parameters = GetLuaTypes(member.parameters);
+    auto fieldCount = parameters.size();
 
-    size_t count = 0;
-    for (const auto &type : fields) {
+    for (const auto &type : parameters) {
       out << "---@param ";
 
-      if (fieldCount > 1) {
-        out << camelCaseName << "_" << (++count);
-      } else {
-        out << camelCaseName;
-      }
+      const auto &typeName = type.first;
+      const auto &paramName = type.second;
 
-      out << " " << type << "\n";
+      out << (paramName.empty() ? "param" : paramName) << " "
+          << (typeName.empty() ? "any" : typeName) << "\n";
     }
 
-    out << "function " << classname << ":set" << member.name << "(";
+    out << "---@return ";
+    if (member.returnType.has_value()) {
+      const auto &returnTypes = GetLuaTypes({member.returnType.value()});
+      for (size_t index = 0; index < returnTypes.size(); ++index) {
+        if (index > 0) {
+          out << "---@return ";
+        }
+
+        const auto &typeName = returnTypes[index].first;
+        const auto &paramName = returnTypes[index].second;
+
+        out << (typeName.empty() ? "any" : typeName) << " "
+            << (paramName.empty() ? "Unknown" : paramName) << "\n";
+      }
+
+      if (returnTypes.empty()) {
+        out << "any\n";
+      }
+    } else {
+      out << "nil\n";
+    }
+
+    out << "function " << classname << ":" << member.name << "(";
 
     for (size_t index = 0; index < fieldCount; ++index) {
       if (index > 0) {
         out << ", ";
       }
 
-      if (fieldCount > 1) {
-        out << camelCaseName << "_" << (index + 1);
-      } else {
-        out << camelCaseName;
-      }
+      out << parameters[index].second;
     }
 
     out << ") end\n\n";
-    out << "--- Gets the " << member.name << " field.\n";
-
-    if (!member.description.empty()) {
-      const auto &replaced = Replace(member.description, '\n', "\n--- ");
-      out << "--- " << replaced << "\n";
-    }
-
-    out << "---@return ";
-    auto index = 0;
-    for (const auto &type : fields) {
-      if (index > 0) {
-        out << ", ";
-      }
-      out << type;
-      index++;
-    }
-
-    out << "\nfunction " << classname << ":get" << member.name << "() end\n\n";
   }
 }
 

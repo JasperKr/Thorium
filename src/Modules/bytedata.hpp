@@ -9,7 +9,7 @@
 #include <span>
 namespace Data {
 
-static const Type type = Type("ByteData");
+static const Type type = Type("Bytedata");
 
 struct ByteData : Object {
 public:

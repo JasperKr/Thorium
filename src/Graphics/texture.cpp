@@ -1273,7 +1273,7 @@ auto GetDefaultTexture(const GraphicsContext &context, VkFormat format,
   return texture;
 }
 
-auto GetAccessFlagsForUsage(TextureUsage usage, VkImageLayout currentLayout)
+auto GetAccessFlagsForUsage(TextureUsage usage, VkFormat format)
     -> VkAccessFlags2 {
   switch (usage) {
   case TextureUsage::Sampler:
@@ -1281,11 +1281,10 @@ auto GetAccessFlagsForUsage(TextureUsage usage, VkImageLayout currentLayout)
   case TextureUsage::Storage:
     return VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT;
   case TextureUsage::Attachment:
-    if (currentLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL) {
-      return VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
-    } else if (currentLayout ==
-               VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL) {
+    if (Image::IsDepthTexture(format) || Image::IsStencilTexture(format)) {
       return VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+    } else {
+      return VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
     }
   case TextureUsage::TransferSrc:
     return VK_ACCESS_2_TRANSFER_READ_BIT;
@@ -1386,9 +1385,8 @@ auto Texture::UseAs(const GraphicsContext &context, TextureUsage newUsage,
 
   auto layout = GetRequiredTextureLayout(newUsage, format);
 
-  VkAccessFlags2 currentAccess =
-      GetAccessFlagsForUsage(lastUsage, currentLayout);
-  VkAccessFlags2 newAccess = GetAccessFlagsForUsage(newUsage, layout);
+  VkAccessFlags2 currentAccess = GetAccessFlagsForUsage(lastUsage, format);
+  VkAccessFlags2 newAccess = GetAccessFlagsForUsage(newUsage, format);
 
   if (lastUsage == TextureUsage::Unknown) {
     // First time usage, so we can skip the transition from UNDEFINED
