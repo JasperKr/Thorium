@@ -5,6 +5,7 @@
 #include "Modules/Math/vector.hpp"
 #include "Modules/type.hpp"
 #include "Wrap/Helpers/lua_enum.hpp"
+#include <bit>
 #include <cstdint>
 #include <ostream>
 #include <string>
@@ -13,21 +14,25 @@
 #include <vector>
 namespace Bindings {
 
-enum class BindingLuaType : uint8_t {
+// NOLINTNEXTLINE, uint16_t would become int16_t?? Idk.. which will warn on Bit-op
+enum class BindingLuaType : uint32_t {
   // Default types
-  Integer,
-  Number,
-  Boolean,
-  String,
-  Table,
-  Userdata,
+  Integer = 1U << 0U,
+  Number = 1U << 1U,
+  Boolean = 1U << 2U,
+  String = 1U << 3U,
+  Table = 1U << 4U,
+  Userdata = 1U << 5U,
 
   // Special types with custom handling
-  Vec2,
-  Vec3,
-  Vec4,
-  Quaternion,
-  Matrix4x4,
+  Vec2 = 1U << 6U,
+  Vec3 = 1U << 7U,
+  Vec4 = 1U << 8U,
+  Quaternion = 1U << 9U,
+  Matrix4x4 = 1U << 10U,
+
+  // Types that can be safely used across threads
+  ThreadSafe = Integer | Number | Boolean | String | Userdata,
 };
 
 template <typename T> constexpr auto GetBindingLuaType() {
@@ -83,32 +88,71 @@ struct MethodInfo {
 // NOLINTNEXTLINE
 inline std::vector<std::pair<std::string, std::vector<MethodInfo>>> LuaModules;
 
-constexpr auto LuaTypeName(BindingLuaType bindingType) -> const char * {
-  switch (bindingType) {
-  case BindingLuaType::Integer:
-    return "integer";
-  case BindingLuaType::Number:
-    return "number";
-  case BindingLuaType::Boolean:
-    return "boolean";
-  case BindingLuaType::String:
-    return "string";
-  case BindingLuaType::Table:
-    return "table";
-  case BindingLuaType::Userdata:
-    return "USERDATA"; // handled separately
-  case BindingLuaType::Vec2:
-    return "Vec2";
-  case BindingLuaType::Vec3:
-    return "Vec3";
-  case BindingLuaType::Vec4:
-    return "Vec4";
-  case BindingLuaType::Quaternion:
-    return "Quaternion";
-  case BindingLuaType::Matrix4x4:
-    return "Matrix4x4";
+inline auto LuaTypeName(BindingLuaType bindingType) -> std::string {
+  static std::vector<std::string> types;
+  types.clear();
+  auto bindings = static_cast<uint32_t>(bindingType);
+  auto mask = bindings;
+
+  while (mask != 0U) {
+    auto bit = mask & -mask;
+    mask &= ~bit;
+
+    switch (static_cast<BindingLuaType>(bit)) {
+    case BindingLuaType::Integer:
+      types.emplace_back("integer");
+      break;
+    case BindingLuaType::Number:
+      types.emplace_back("number");
+      break;
+    case BindingLuaType::Boolean:
+      types.emplace_back("boolean");
+      break;
+    case BindingLuaType::String:
+      types.emplace_back("string");
+      break;
+    case BindingLuaType::Table:
+      types.emplace_back("table");
+      break;
+    case BindingLuaType::Userdata:
+      types.emplace_back("snap.Data"); // handled separately
+      break;
+    case BindingLuaType::Vec2:
+      types.emplace_back("Vec2");
+      break;
+    case BindingLuaType::Vec3:
+      types.emplace_back("Vec3");
+      break;
+    case BindingLuaType::Vec4:
+      types.emplace_back("Vec4");
+      break;
+    case BindingLuaType::Quaternion:
+      types.emplace_back("Quaternion");
+      break;
+    case BindingLuaType::Matrix4x4:
+      types.emplace_back("Matrix4x4");
+      break;
+    default:
+      types.emplace_back("any");
+      break;
+    }
   }
-  return "any";
+
+  if (types.empty()) {
+    return "any";
+  }
+  if (types.size() == 1) {
+    return types.at(0);
+  } // Multiple types, return as union
+  static std::string result;
+  result.clear();
+  for (size_t i = 0; i < types.size(); ++i) {
+    if (i > 0) {
+      result += " | ";
+    }
+    result += types[i];
+  }
+  return result;
 }
 
 inline auto LowercaseFirstChar(const std::string &str) -> std::string {
@@ -140,10 +184,8 @@ inline auto GetLuaTypes(const std::vector<TypeInfo> &methods)
       continue;
     }
 
-    const char *base = LuaTypeName(typeinfo.luaType);
-    if (base == nullptr) {
-      types.emplace_back("any", camelCaseName);
-    } else if (typeinfo.isVector) {
+    const auto &base = LuaTypeName(typeinfo.luaType);
+    if (typeinfo.isVector) {
       types.emplace_back(std::string(base) + "[]", camelCaseName);
     } else if (typeinfo.luaType == BindingLuaType::Vec2) {
       types.emplace_back("number", camelCaseName + "_x");

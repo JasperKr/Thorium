@@ -4,6 +4,7 @@
 #include "Graphics/graphics.hpp"
 #include "Graphics/graphicsState.hpp"
 #include "Graphics/texture.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Wrap/Graphics/wrap_color.hpp"
 #include "Wrap/wrap.hpp"
@@ -105,7 +106,7 @@ auto inline FromLuaState(lua_State *state)
       blendMode.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
       blendMode.colorBlendOp = VK_BLEND_OP_ADD;
       blendMode.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-      blendMode.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+      blendMode.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
       blendMode.alphaBlendOp = VK_BLEND_OP_ADD;
     } else if (strcmp(modeStr, "add") == 0) {
       blendMode.blendEnable = VK_TRUE;
@@ -137,7 +138,6 @@ auto inline FromLuaState(lua_State *state)
 
     const char *alphaModeStr = luaL_checkstring(state, -1);
     if (strcmp(alphaModeStr, "alphamultiply") == 0) {
-      // No change needed
     } else if (strcmp(alphaModeStr, "premultiplied") == 0) {
       blendMode.srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
     } else {
@@ -437,7 +437,7 @@ auto wrap_SetRenderTargets(lua_State *state) -> int {
     rendertarget->loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
 
     auto setResult =
-        Graphics::DynamicRendering::SetRenderTargets({rendertarget});
+        Graphics::DynamicRendering::SetRenderTargets(*ctx, {rendertarget});
 
     if (Error::IsError(setResult)) {
       return luaL_error(state, setResult.message.c_str());
@@ -518,7 +518,8 @@ auto wrap_SetRenderTargets(lua_State *state) -> int {
                       "Invalid arguments to RenderTarget.setRenderTargets");
   }
 
-  auto setResult = Graphics::DynamicRendering::SetRenderTargets(renderTargets);
+  auto setResult =
+      Graphics::DynamicRendering::SetRenderTargets(*ctx, renderTargets);
   if (Error::IsError(setResult)) {
     return luaL_error(state, setResult.message.c_str());
   }

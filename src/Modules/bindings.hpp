@@ -302,7 +302,34 @@ struct LuaDocumentingStruct {
     methodInfos.emplace_back(info);
   }
 
+  void DocumentCustomMethod(const std::string &name, // NOLINT
+                            const std::string &description,
+                            const std::vector<TypeInfo> &parameters = {},
+                            const std::optional<TypeInfo> &returnType = {}) {
+    methodInfos.emplace_back(name, description, parameters, returnType);
+  }
+
   void Register() { Bindings::LuaModules.emplace_back(name, methodInfos); }
+  static auto CreateType(const std::string &name, BindingLuaType luaType)
+      -> TypeInfo {
+    return TypeInfo{
+        .name = name,
+        .type = nullptr,
+        .luaType = luaType,
+        .isEnum = false,
+        .isVector = false,
+    };
+  }
+  static auto CreateVectorType(const std::string &name, BindingLuaType luaType)
+      -> TypeInfo {
+    return TypeInfo{
+        .name = name,
+        .type = nullptr,
+        .luaType = luaType,
+        .isEnum = false,
+        .isVector = true,
+    };
+  }
 };
 
 template <typename T>

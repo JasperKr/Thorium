@@ -126,10 +126,7 @@ inline auto TimelineLookback(uint64_t currentTimelineIndex,
     uint32_t bitIndex = std::countr_zero(bit);
     mask &= ~bit; // clear the lowest set bit
 
-    // NOLINTNEXTLINE
-    if ((desiredSynchronization.stages & bit) != 0U && bitIndex != 64U) {
-      maskBits.at(bitIndex) = desiredSynchronization.access;
-    }
+    maskBits.at(bitIndex) = desiredSynchronization.access;
   }
 
   uint64_t LocalTimelineIndex = GlobalTimelineIndex - GlobalTimelineOffset;

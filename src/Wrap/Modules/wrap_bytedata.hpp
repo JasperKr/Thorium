@@ -55,288 +55,96 @@ extern "C" inline auto luaopen_bytedata(lua_State *state) -> int {
                            BytedataLib); // NOLINT
 
   auto documenter = Bindings::LuaDocumentingStruct("Bytedata");
+  constexpr auto &createType = Bindings::LuaDocumentingStruct::CreateType;
+  constexpr auto &createVType =
+      Bindings::LuaDocumentingStruct::CreateVectorType;
+
+  const auto &offsetType =
+      createType("Offset", Bindings::BindingLuaType::Integer);
+  const auto &valueType =
+      createType("Value", Bindings::BindingLuaType::Integer);
+  const auto &numberValueType =
+      createType("Value", Bindings::BindingLuaType::Number);
 
   // setUInt32
-  documenter.DocumentCustomMethod({
-      .name = "setUInt32",
-      .description = "Set a 32-bit unsigned integer at the given byte-offset",
-      .parameters =
-          {
-              Bindings::TypeInfo{
-                  .name = "Offset",
-                  .luaType = Bindings::BindingLuaType::Integer,
-              },
-              Bindings::TypeInfo{
-                  .name = "Value",
-                  .luaType = Bindings::BindingLuaType::Integer,
-              },
-          },
-  });
+  documenter.DocumentCustomMethod(
+      "setUInt32", "Set a 32-bit unsigned integer at the given byte-offset",
+      {offsetType, valueType});
 
   // getUInt32
-  documenter.DocumentCustomMethod({
-      .name = "getUInt32",
-      .description = "Get a 32-bit unsigned integer at the given byte-offset",
-      .parameters =
-          {
-              Bindings::TypeInfo{
-                  .name = "Offset",
-                  .luaType = Bindings::BindingLuaType::Integer,
-              },
-          },
-      .returnType =
-          Bindings::TypeInfo{
-              .name = "Value",
-              .luaType = Bindings::BindingLuaType::Integer,
-          },
-  });
+  documenter.DocumentCustomMethod(
+      "getUInt32", "Get a 32-bit unsigned integer at the given byte-offset",
+      {offsetType}, valueType);
 
   // setInt32
-  documenter.DocumentCustomMethod({
-      .name = "setInt32",
-      .description = "Set a 32-bit signed integer at the given byte-offset",
-      .parameters =
-          {
-              Bindings::TypeInfo{
-                  .name = "Offset",
-                  .luaType = Bindings::BindingLuaType::Integer,
-              },
-              Bindings::TypeInfo{
-                  .name = "Value",
-                  .luaType = Bindings::BindingLuaType::Integer,
-              },
-          },
-  });
+  documenter.DocumentCustomMethod(
+      "setInt32", "Set a 32-bit signed integer at the given byte-offset",
+      {offsetType, valueType});
 
   // getInt32
-  documenter.DocumentCustomMethod({
-      .name = "getInt32",
-      .description = "Get a 32-bit signed integer at the given byte-offset",
-      .parameters =
-          {
-              Bindings::TypeInfo{
-                  .name = "Offset",
-                  .luaType = Bindings::BindingLuaType::Integer,
-              },
-          },
-      .returnType =
-          Bindings::TypeInfo{
-              .name = "Value",
-              .luaType = Bindings::BindingLuaType::Integer,
-          },
-  });
+  documenter.DocumentCustomMethod(
+      "getInt32", "Get a 32-bit signed integer at the given byte-offset",
+      {offsetType}, valueType);
 
   // setUInt16
-  documenter.DocumentCustomMethod({
-      .name = "setUInt16",
-      .description = "Set a 16-bit unsigned integer at the given byte-offset",
-      .parameters =
-          {
-              Bindings::TypeInfo{
-                  .name = "Offset",
-                  .luaType = Bindings::BindingLuaType::Integer,
-              },
-              Bindings::TypeInfo{
-                  .name = "Value",
-                  .luaType = Bindings::BindingLuaType::Integer,
-              },
-          },
-  });
+  documenter.DocumentCustomMethod(
+      "setUInt16", "Set a 16-bit unsigned integer at the given byte-offset",
+      {offsetType, valueType});
 
   // getUInt16
-  documenter.DocumentCustomMethod({
-      .name = "getUInt16",
-      .description = "Get a 16-bit unsigned integer at the given byte-offset",
-      .parameters =
-          {
-              Bindings::TypeInfo{
-                  .name = "Offset",
-                  .luaType = Bindings::BindingLuaType::Integer,
-              },
-          },
-      .returnType =
-          Bindings::TypeInfo{
-              .name = "Value",
-              .luaType = Bindings::BindingLuaType::Integer,
-          },
-  });
+  documenter.DocumentCustomMethod(
+      "getUInt16", "Get a 16-bit unsigned integer at the given byte-offset",
+      {offsetType}, valueType);
 
   // setInt16
-  documenter.DocumentCustomMethod({
-      .name = "setInt16",
-      .description = "Set a 16-bit signed integer at the given byte-offset",
-      .parameters =
-          {
-              Bindings::TypeInfo{
-                  .name = "Offset",
-                  .luaType = Bindings::BindingLuaType::Integer,
-              },
-              Bindings::TypeInfo{
-                  .name = "Value",
-                  .luaType = Bindings::BindingLuaType::Integer,
-              },
-          },
-  });
+  documenter.DocumentCustomMethod(
+      "setInt16", "Set a 16-bit signed integer at the given byte-offset",
+      {offsetType, valueType});
 
   // getInt16
-  documenter.DocumentCustomMethod({
-      .name = "getInt16",
-      .description = "Get a 16-bit signed integer at the given byte-offset",
-      .parameters =
-          {
-              Bindings::TypeInfo{
-                  .name = "Offset",
-                  .luaType = Bindings::BindingLuaType::Integer,
-              },
-          },
-      .returnType =
-          Bindings::TypeInfo{
-              .name = "Value",
-              .luaType = Bindings::BindingLuaType::Integer,
-          },
-  });
+  documenter.DocumentCustomMethod(
+      "getInt16", "Get a 16-bit signed integer at the given byte-offset",
+      {offsetType}, valueType);
 
   // setUInt8
-  documenter.DocumentCustomMethod({
-      .name = "setUInt8",
-      .description = "Set an 8-bit unsigned integer at the given byte-offset",
-      .parameters =
-          {
-              Bindings::TypeInfo{
-                  .name = "Offset",
-                  .luaType = Bindings::BindingLuaType::Integer,
-              },
-              Bindings::TypeInfo{
-                  .name = "Value",
-                  .luaType = Bindings::BindingLuaType::Integer,
-              },
-          },
-  });
+  documenter.DocumentCustomMethod(
+      "setUInt8", "Set an 8-bit unsigned integer at the given byte-offset",
+      {offsetType, valueType});
 
   // getUInt8
-  documenter.DocumentCustomMethod({
-      .name = "getUInt8",
-      .description = "Get an 8-bit unsigned integer at the given byte-offset",
-      .parameters =
-          {
-              Bindings::TypeInfo{
-                  .name = "Offset",
-                  .luaType = Bindings::BindingLuaType::Integer,
-              },
-          },
-      .returnType =
-          Bindings::TypeInfo{
-              .name = "Value",
-              .luaType = Bindings::BindingLuaType::Integer,
-          },
-  });
+  documenter.DocumentCustomMethod(
+      "getUInt8", "Get an 8-bit unsigned integer at the given byte-offset",
+      {offsetType}, valueType);
 
   // setInt8
-  documenter.DocumentCustomMethod({
-      .name = "setInt8",
-      .description = "Set an 8-bit signed integer at the given byte-offset",
-      .parameters =
-          {
-              Bindings::TypeInfo{
-                  .name = "Offset",
-                  .luaType = Bindings::BindingLuaType::Integer,
-              },
-              Bindings::TypeInfo{
-                  .name = "Value",
-                  .luaType = Bindings::BindingLuaType::Integer,
-              },
-          },
-  });
+  documenter.DocumentCustomMethod(
+      "setInt8", "Set an 8-bit signed integer at the given byte-offset",
+      {offsetType, valueType});
 
   // getInt8
-  documenter.DocumentCustomMethod({
-      .name = "getInt8",
-      .description = "Get an 8-bit signed integer at the given byte-offset",
-      .parameters =
-          {
-              Bindings::TypeInfo{
-                  .name = "Offset",
-                  .luaType = Bindings::BindingLuaType::Integer,
-              },
-          },
-      .returnType =
-          Bindings::TypeInfo{
-              .name = "Value",
-              .luaType = Bindings::BindingLuaType::Integer,
-          },
-  });
+  documenter.DocumentCustomMethod(
+      "getInt8", "Get an 8-bit signed integer at the given byte-offset",
+      {offsetType}, valueType);
 
   // setFloat
-  documenter.DocumentCustomMethod({
-      .name = "setFloat",
-      .description = "Set a 32-bit float at the given byte-offset",
-      .parameters =
-          {
-              Bindings::TypeInfo{
-                  .name = "Offset",
-                  .luaType = Bindings::BindingLuaType::Integer,
-              },
-              Bindings::TypeInfo{
-                  .name = "Value",
-                  .luaType = Bindings::BindingLuaType::Number,
-              },
-          },
-  });
+  documenter.DocumentCustomMethod("setFloat",
+                                  "Set a 32-bit float at the given byte-offset",
+                                  {offsetType, numberValueType});
 
   // getFloat
-  documenter.DocumentCustomMethod({
-      .name = "getFloat",
-      .description = "Get a 32-bit float at the given byte-offset",
-      .parameters =
-          {
-              Bindings::TypeInfo{
-                  .name = "Offset",
-                  .luaType = Bindings::BindingLuaType::Integer,
-              },
-          },
-      .returnType =
-          Bindings::TypeInfo{
-              .name = "Value",
-              .luaType = Bindings::BindingLuaType::Number,
-          },
-  });
+  documenter.DocumentCustomMethod("getFloat",
+                                  "Get a 32-bit float at the given byte-offset",
+                                  {offsetType}, numberValueType);
 
   // setHalf
-  documenter.DocumentCustomMethod({
-      .name = "setHalf",
-      .description =
-          "Set a 16-bit half-precision float at the given byte-offset",
-      .parameters =
-          {
-              Bindings::TypeInfo{
-                  .name = "Offset",
-                  .luaType = Bindings::BindingLuaType::Integer,
-              },
-              Bindings::TypeInfo{
-                  .name = "Value",
-                  .luaType = Bindings::BindingLuaType::Number,
-              },
-          },
-  });
+  documenter.DocumentCustomMethod(
+      "setHalf", "Set a 16-bit half-precision float at the given byte-offset",
+      {offsetType, numberValueType});
 
   // getHalf
-  documenter.DocumentCustomMethod({
-      .name = "getHalf",
-      .description =
-          "Get a 16-bit half-precision float at the given byte-offset",
-      .parameters =
-          {
-              Bindings::TypeInfo{
-                  .name = "Offset",
-                  .luaType = Bindings::BindingLuaType::Integer,
-              },
-          },
-      .returnType =
-          Bindings::TypeInfo{
-              .name = "Value",
-              .luaType = Bindings::BindingLuaType::Number,
-          },
-  });
+  documenter.DocumentCustomMethod(
+      "getHalf", "Get a 16-bit half-precision float at the given byte-offset",
+      {offsetType}, numberValueType);
 
   // getSize
   documenter.DocumentCustomMethod({
@@ -366,155 +174,50 @@ extern "C" inline auto luaopen_bytedata(lua_State *state) -> int {
   // Vector overloads for setters
 
   // setUInt32 (vector)
-  documenter.DocumentCustomMethod({
-      .name = "setUInt32",
-      .description =
-          "Set multiple 32-bit unsigned integers at the given byte-offset",
-      .parameters =
-          {
-              Bindings::TypeInfo{
-                  .name = "Offset",
-                  .luaType = Bindings::BindingLuaType::Integer,
-              },
-              Bindings::TypeInfo{
-                  .name = "Values",
-                  .luaType = Bindings::BindingLuaType::Integer,
-                  .isVector = true,
-              },
-          },
-  });
+  documenter.DocumentCustomMethod(
+      "setUInt32",
+      "Set multiple 32-bit unsigned integers at the given byte-offset",
+      {offsetType, createVType("Values", Bindings::BindingLuaType::Integer)});
 
   // setInt32 (vector)
-  documenter.DocumentCustomMethod({
-      .name = "setInt32",
-      .description =
-          "Set multiple 32-bit signed integers at the given byte-offset",
-      .parameters =
-          {
-              Bindings::TypeInfo{
-                  .name = "Offset",
-                  .luaType = Bindings::BindingLuaType::Integer,
-              },
-              Bindings::TypeInfo{
-                  .name = "Values",
-                  .luaType = Bindings::BindingLuaType::Integer,
-                  .isVector = true,
-              },
-          },
-  });
+  documenter.DocumentCustomMethod(
+      "setInt32",
+      "Set multiple 32-bit signed integers at the given byte-offset",
+      {offsetType, createVType("Values", Bindings::BindingLuaType::Integer)});
 
   // setUInt16 (vector)
-  documenter.DocumentCustomMethod({
-      .name = "setUInt16",
-      .description =
-          "Set multiple 16-bit unsigned integers at the given byte-offset",
-      .parameters =
-          {
-              Bindings::TypeInfo{
-                  .name = "Offset",
-                  .luaType = Bindings::BindingLuaType::Integer,
-              },
-              Bindings::TypeInfo{
-                  .name = "Values",
-                  .luaType = Bindings::BindingLuaType::Integer,
-                  .isVector = true,
-              },
-          },
-  });
+  documenter.DocumentCustomMethod(
+      "setUInt16",
+      "Set multiple 16-bit unsigned integers at the given byte-offset",
+      {offsetType, createVType("Values", Bindings::BindingLuaType::Integer)});
 
   // setInt16 (vector)
-  documenter.DocumentCustomMethod({
-      .name = "setInt16",
-      .description =
-          "Set multiple 16-bit signed integers at the given byte-offset",
-      .parameters =
-          {
-              Bindings::TypeInfo{
-                  .name = "Offset",
-                  .luaType = Bindings::BindingLuaType::Integer,
-              },
-              Bindings::TypeInfo{
-                  .name = "Values",
-                  .luaType = Bindings::BindingLuaType::Integer,
-                  .isVector = true,
-              },
-          },
-  });
+  documenter.DocumentCustomMethod(
+      "setInt16",
+      "Set multiple 16-bit signed integers at the given byte-offset",
+      {offsetType, createVType("Values", Bindings::BindingLuaType::Integer)});
 
   // setUInt8 (vector)
-  documenter.DocumentCustomMethod({
-      .name = "setUInt8",
-      .description =
-          "Set multiple 8-bit unsigned integers at the given byte-offset",
-      .parameters =
-          {
-              Bindings::TypeInfo{
-                  .name = "Offset",
-                  .luaType = Bindings::BindingLuaType::Integer,
-              },
-              Bindings::TypeInfo{
-                  .name = "Values",
-                  .luaType = Bindings::BindingLuaType::Integer,
-                  .isVector = true,
-              },
-          },
-  });
+  documenter.DocumentCustomMethod(
+      "setUInt8",
+      "Set multiple 8-bit unsigned integers at the given byte-offset",
+      {offsetType, createVType("Values", Bindings::BindingLuaType::Integer)});
 
   // setInt8 (vector)
-  documenter.DocumentCustomMethod({
-      .name = "setInt8",
-      .description =
-          "Set multiple 8-bit signed integers at the given byte-offset",
-      .parameters =
-          {
-              Bindings::TypeInfo{
-                  .name = "Offset",
-                  .luaType = Bindings::BindingLuaType::Integer,
-              },
-              Bindings::TypeInfo{
-                  .name = "Values",
-                  .luaType = Bindings::BindingLuaType::Integer,
-                  .isVector = true,
-              },
-          },
-  });
+  documenter.DocumentCustomMethod(
+      "setInt8", "Set multiple 8-bit signed integers at the given byte-offset",
+      {offsetType, createVType("Values", Bindings::BindingLuaType::Integer)});
 
   // setFloat (vector)
-  documenter.DocumentCustomMethod({
-      .name = "setFloat",
-      .description = "Set multiple 32-bit floats at the given byte-offset",
-      .parameters =
-          {
-              Bindings::TypeInfo{
-                  .name = "Offset",
-                  .luaType = Bindings::BindingLuaType::Integer,
-              },
-              Bindings::TypeInfo{
-                  .name = "Values",
-                  .luaType = Bindings::BindingLuaType::Number,
-                  .isVector = true,
-              },
-          },
-  });
+  documenter.DocumentCustomMethod(
+      "setFloat", "Set multiple 32-bit floats at the given byte-offset",
+      {offsetType, createVType("Values", Bindings::BindingLuaType::Number)});
 
   // setHalf (vector)
-  documenter.DocumentCustomMethod({
-      .name = "setHalf",
-      .description =
-          "Set multiple 16-bit half-precision floats at the given byte-offset",
-      .parameters =
-          {
-              Bindings::TypeInfo{
-                  .name = "Offset",
-                  .luaType = Bindings::BindingLuaType::Integer,
-              },
-              Bindings::TypeInfo{
-                  .name = "Values",
-                  .luaType = Bindings::BindingLuaType::Number,
-                  .isVector = true,
-              },
-          },
-  });
+  documenter.DocumentCustomMethod(
+      "setHalf",
+      "Set multiple 16-bit half-precision floats at the given byte-offset",
+      {offsetType, createVType("Values", Bindings::BindingLuaType::Number)});
 
   documenter.Register();
 

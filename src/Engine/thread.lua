@@ -1,4 +1,5 @@
 Imgui = require("Editor.cimgui.init")
+local ffi = require("ffi")
 
 local lastDrawTime = 0
 local lastImDrawTime = 0
@@ -13,10 +14,7 @@ local testImgdata = snap.data.newImagedata(16, 16, "rgba8")
 for y = 0, 15 do
   for x = 0, 15 do
     local value = snap.math.random()
-    local r = value
-    local g = value
-    local b = value
-    testImgdata:setPixel(x, y, r, g, b, 1.0)
+    testImgdata:setPixel(x, y, 1, 1, 1, value)
   end
 end
 
@@ -40,6 +38,7 @@ local computeshader = snap.graphics.newShader("Graphics/Shaders/test2.slang")
 local value = 0.15
 
 local texture
+local testnumber = ffi.new("float[1]")
 print("Generated noise texture in " .. tostring(snap.timer.getTime() - t) .. " seconds")
 
 local function draw()
@@ -51,6 +50,9 @@ local function draw()
   Imgui.Text("DT: " .. tostring(snap.timer.getDelta()))
   Imgui.Text("Last Draw Time (ms): " .. tostring(lastShownTime * 1000))
   Imgui.Text("Last ImGui Draw Time (ms): " .. tostring(lastShownImDrawTime * 1000))
+
+  Imgui.Separator()
+  Imgui.InputFloat("Value", testnumber, 0.01)
 
   Imgui.Separator()
   scene:drawUiElement()
@@ -71,11 +73,13 @@ local function draw()
   snap.graphics.dispatch(1, 1, 1)
   value = -value
 
-  snap.graphics.setShader(shader)
-  shader:send("MainTexture", texture)
-  for i = 1, 1 do
-    snap.graphics.draw(mesh)
-  end
+  -- snap.graphics.setShader(shader)
+  -- shader:send("MainTexture", texture)
+
+  -- for i = 1, 2 do
+  --   snap.graphics.setRenderTarget({ loadas = "clear", blendmode = { blendmode = "alpha", alphamode = i == 2 and "premultiplied" or "alphamultiply" } })
+  --   snap.graphics.draw(mesh)
+  -- end
   snap.graphics.setShader()
 
   lastDrawTime = lastDrawTime + snap.timer.getTime() - startTime
@@ -132,7 +136,7 @@ while true do
     alphaop = "add",
   }
 
-  snap.graphics.setRenderTarget({ loadas = "clear", blendmode = blendmode })
+  snap.graphics.setRenderTarget({ loadas = "clear", blendmode = { blendmode = "alpha", alphamode = "premultiplied" } })
 
   local dt = snap.timer.getTime() - t
   t = snap.timer.getTime()

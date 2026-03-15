@@ -3,6 +3,7 @@
 #include "Graphics/barrier.hpp"
 #include "Graphics/sampler.hpp"
 #include "Graphics/semaphoreManager.hpp"
+#include "Modules/image.hpp"
 #include "Modules/imagedata.hpp"
 #include "Modules/object.hpp"
 #include "Modules/type.hpp"
@@ -181,6 +182,14 @@ struct Texture : Object, Barrier::BarrierSynced {
   [[nodiscard]] auto SupportsAttachment() const -> bool {
     return (usage & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT) != 0 ||
            (usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) != 0;
+  }
+
+  [[nodiscard]] auto IsDepthTexture() const -> bool {
+    return Image::IsDepthTexture(format);
+  }
+
+  [[nodiscard]] auto IsStencilTexture() const -> bool {
+    return Image::IsStencilTexture(format);
   }
 
   static auto GetType() -> Type const * { return &type; }

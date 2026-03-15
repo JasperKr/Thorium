@@ -404,7 +404,8 @@ auto SetViewport(const VkViewport *viewport) -> void;
 auto SetScissor(const VkRect2D *scissor) -> void;
 auto ClipScissor(const VkRect2D &scissor) -> void;
 auto SetShader(const Ref<Shader::ShaderModule> &shader) -> void;
-auto SetRenderTargets(const std::vector<Ref<RenderTarget>> &renderTargets)
+auto SetRenderTargets(const GraphicsContext &context,
+                      const std::vector<Ref<RenderTarget>> &renderTargets)
     -> Error;
 auto SetLineWidth(float lineWidth) -> void;
 auto SetWindingOrder(VkFrontFace frontFace) -> void;

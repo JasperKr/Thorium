@@ -41,13 +41,6 @@ inline auto FromSDLEvent(const SDL_Event &sdlEvent) -> Event {
   }
   case SDL_EVENT_FINGER_DOWN:
   case SDL_EVENT_MOUSE_BUTTON_DOWN: {
-    // lua_pushstring(state, "mousepressed");
-    // lua_pushnumber(state, event.button.x);
-    // lua_pushnumber(state, event.button.y);
-    // lua_pushinteger(state, event.button.button);
-    // lua_pushboolean(state, event.type == SDL_EVENT_FINGER_DOWN ? 1 : 0);
-    // lua_pushinteger(state, event.button.clicks);
-    // returnValCount = 6; // NOLINT
     event.Name = "mousepressed";
     event.Values.emplace_back(sdlEvent.button.x);
     event.Values.emplace_back(sdlEvent.button.y);
@@ -58,12 +51,6 @@ inline auto FromSDLEvent(const SDL_Event &sdlEvent) -> Event {
   }
   case SDL_EVENT_FINGER_UP:
   case SDL_EVENT_MOUSE_BUTTON_UP: {
-    // lua_pushstring(state, "mousereleased");
-    // lua_pushnumber(state, event.button.x);
-    // lua_pushnumber(state, event.button.y);
-    // lua_pushinteger(state, event.button.button);
-    // lua_pushboolean(state, event.type == SDL_EVENT_FINGER_UP ? 1 : 0);
-    // returnValCount = 5; // NOLINT
     event.Name = "mousereleased";
     event.Values.emplace_back(sdlEvent.button.x);
     event.Values.emplace_back(sdlEvent.button.y);
@@ -72,12 +59,6 @@ inline auto FromSDLEvent(const SDL_Event &sdlEvent) -> Event {
     break;
   }
   case SDL_EVENT_MOUSE_MOTION: {
-    // lua_pushstring(state, "mousemoved");
-    // lua_pushnumber(state, event.motion.x);
-    // lua_pushnumber(state, event.motion.y);
-    // lua_pushnumber(state, event.motion.xrel);
-    // lua_pushnumber(state, event.motion.yrel);
-    // returnValCount = 5; // NOLINT
     event.Name = "mousemoved";
     event.Values.emplace_back(sdlEvent.motion.x);
     event.Values.emplace_back(sdlEvent.motion.y);
@@ -86,31 +67,18 @@ inline auto FromSDLEvent(const SDL_Event &sdlEvent) -> Event {
     break;
   }
   case SDL_EVENT_MOUSE_WHEEL: {
-    // lua_pushstring(state, "wheelmoved");
-    // lua_pushnumber(state, event.wheel.x);
-    // lua_pushnumber(state, event.wheel.y);
-    // returnValCount = 3;
     event.Name = "wheelmoved";
     event.Values.emplace_back(sdlEvent.wheel.x);
     event.Values.emplace_back(sdlEvent.wheel.y);
     break;
   }
-  case SDL_EVENT_TEXT_EDITING: {
-    // TODO: Is this needed?
-    // lua_pushstring(state, "textedited");
-  } break;
   case SDL_EVENT_TEXT_INPUT: {
-    // lua_pushstring(state, "textinput");
-    // lua_pushstring(state, event.text.text);
-    // returnValCount = 2;
     event.Name = "textinput";
     event.Values.emplace_back(std::string(sdlEvent.text.text));
     break;
   }
   case SDL_EVENT_TERMINATING:
   case SDL_EVENT_QUIT: {
-    // lua_pushstring(state, "quit");
-    // returnValCount = 1;
     event.Name = "quit";
     break;
   }
@@ -120,6 +88,18 @@ inline auto FromSDLEvent(const SDL_Event &sdlEvent) -> Event {
     event.Values.emplace_back(sdlEvent.window.data1);
     event.Values.emplace_back(sdlEvent.window.data2);
     Window::GetWindowContext()->swapchainOutOfDate = true;
+    break;
+  }
+  case SDL_EVENT_LOW_MEMORY: {
+    event.Name = "lowmemory";
+    break;
+  }
+  case SDL_EVENT_LOCALE_CHANGED: {
+    event.Name = "localechanged";
+    break;
+  }
+  case SDL_EVENT_SYSTEM_THEME_CHANGED: {
+    event.Name = "themechanged";
     break;
   }
   default:
@@ -132,7 +112,7 @@ inline auto FromSDLEvent(const SDL_Event &sdlEvent) -> Event {
 
 auto Push(const Event &event) -> void {
   std::lock_guard<std::mutex> lock(eventsMutex);
-  events.push(event);
+  events.emplace(event);
 }
 
 auto Pull() -> void {
@@ -140,7 +120,7 @@ auto Pull() -> void {
   SDL_Event event;
 
   while (SDL_PollEvent(&event)) {
-    events.push(FromSDLEvent(event));
+    events.emplace(FromSDLEvent(event));
   }
 }
 

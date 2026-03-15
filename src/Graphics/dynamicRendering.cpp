@@ -1036,7 +1036,6 @@ auto Flush(const GraphicsContext &context) -> Result<bool> {
 }
 
 auto Destroy(const GraphicsContext &context) -> void {
-
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
     std::lock_guard<std::mutex> lock2(PipelinesMutex);
@@ -1508,12 +1507,39 @@ auto SetShader(const Ref<Shader::ShaderModule> &shader) -> void {
   }
 }
 
-auto SetRenderTargets(const std::vector<Ref<RenderTarget>> &renderTargets)
+auto SetRenderTargets(const GraphicsContext &context,
+                      const std::vector<Ref<RenderTarget>> &renderTargets)
     -> Error {
   TopOfStack->dirty = true;
 
   if (renderTargets.empty()) {
     return Error::Create("No render targets provided.");
+  }
+
+  if (GetIsCurrentlyRendering()) {
+    ClearInfo clearInfo{};
+    for (const auto &target : renderTargets) {
+      if (target->loadOp == VK_ATTACHMENT_LOAD_OP_CLEAR) {
+        if (target->texture->IsDepthTexture()) {
+          clearInfo.clearDepth = true;
+          clearInfo.depthClearValue = target->clearValue.depthStencil.depth;
+        } else if (target->texture->IsStencilTexture()) {
+          clearInfo.clearStencil = true;
+          clearInfo.stencilClearValue =
+              static_cast<int>(target->clearValue.depthStencil.stencil);
+        } else {
+          clearInfo.colors.emplace_back(target->clearValue.color.float32[0],
+                                        target->clearValue.color.float32[1],
+                                        target->clearValue.color.float32[2],
+                                        target->clearValue.color.float32[3]);
+        }
+      }
+    }
+
+    auto clearResult = Clear(context, clearInfo);
+    if (Error::IsError(clearResult)) {
+      return clearResult;
+    }
   }
 
   TopOfStack->renderTargets = renderTargets;

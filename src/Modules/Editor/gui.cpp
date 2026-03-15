@@ -65,18 +65,21 @@ auto LoadGUIState(lua_State *state) -> Result<GuiState> {
   style.FontScaleDpi = scale;
   style.ScaleAllSizes(scale);
 
+  const float baseFontSize = 18.0F;
+
   ImFontConfig config;
   config.OversampleH = 5;
   config.OversampleV = 5;
   config.PixelSnapH = true;
+  config.SizePixels = baseFontSize * scale;
 
   ImGui::GetIO().Fonts->AddFontDefault(&config);
 
   ImFont *font = inout.Fonts->AddFontFromFileTTF(
-      "src/Graphics/Assets/user_interface_font.ttf", scale, &config);
+      "src/Graphics/Assets/user_interface_font.ttf", baseFontSize, &config);
 
   // Set the font as the default font
-  // inout.FontDefault = font;
+  inout.FontDefault = font;
 
   ImGuiIO &io = ImGui::GetIO();
 

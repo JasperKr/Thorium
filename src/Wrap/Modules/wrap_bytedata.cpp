@@ -14,7 +14,6 @@ auto GetBytedataFromLua(lua_State *state, int index) -> ::Data::ByteData * {
   return nullptr;
 }
 
-// TODO: Change to byte offset, not element offset, otherwise unaligned writes are impossible
 template <typename T>
 constexpr auto SetIntFromLuaData(lua_State *state) -> int {
   auto *bytedata = GetBytedataFromLua(state, 1);
