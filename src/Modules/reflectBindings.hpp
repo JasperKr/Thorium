@@ -85,8 +85,17 @@ struct MethodInfo {
   std::optional<TypeInfo> returnType;
 };
 
+struct Alias {
+  std::string name;
+  std::vector<TypeInfo> types;
+  Type newLuaType;
+};
+
 // NOLINTNEXTLINE
 inline std::vector<std::pair<std::string, std::vector<MethodInfo>>> LuaModules;
+
+// NOLINTNEXTLINE
+inline std::vector<Alias> LuaTypeAliases;
 
 inline auto LuaTypeName(BindingLuaType bindingType) -> std::string {
   static std::vector<std::string> types;
@@ -305,6 +314,35 @@ inline void EmitLuaEnums(std::ostream &out,
       }
 
       out << "\"" << option << "\"";
+      first = false;
+    }
+    out << "\n\n";
+  }
+}
+
+inline auto EmitLuaAliases(std::ostream &out, const std::vector<Alias> &aliases)
+    -> void {
+  out << "---@meta\n";
+  out << "-- This file is auto-generated. Do not edit directly.\n";
+  out << "-- See reflectBindings.hpp or the lua_stub_gen target.\n\n";
+  out << "error(\"Do not require this file.\")\n\n";
+
+  for (const auto &alias : aliases) {
+    out << "---@alias snap." << alias.name << " ";
+    bool first = true;
+    for (const auto &type : alias.types) {
+      if (!first) {
+        out << " | ";
+      }
+
+      if (type.isEnum) {
+        out << "snap." << type.enumHelper->name;
+      } else if (type.luaType == BindingLuaType::Userdata &&
+                 (type.type != nullptr)) {
+        out << "snap." << type.type->GetName();
+      } else {
+        out << LuaTypeName(type.luaType);
+      }
       first = false;
     }
     out << "\n\n";

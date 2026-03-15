@@ -2,14 +2,14 @@ local i = 0
 snap.threaderror = error
 
 print("Starting thread 1")
-require("Modules.vec")
-require("Modules.quaternions")
-require("Modules.matrices")
-require("Modules.math")
-require("Graphics.camera")
-require("Graphics.helpers")
+require("Scripting.Modules.vec")
+require("Scripting.Modules.quaternions")
+require("Scripting.Modules.matrices")
+require("Scripting.Modules.math")
+require("Scripting.Graphics.camera")
+require("Scripting.Graphics.helpers")
 
-local thread = snap.thread.newThread("src/Engine/thread.lua", "Render thread 1")
+local thread = snap.thread.newThread("src/Engine/Scripting/thread.lua", "Render thread 1")
 local threadDoneChannel = snap.thread.newChannel()
 local startThreadChannel = snap.thread.newChannel()
 local scene = snap.scene.newScene()

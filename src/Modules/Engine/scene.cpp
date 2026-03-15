@@ -2,6 +2,7 @@
 #include "Modules/Engine/model.hpp"
 #include "Modules/bindings.hpp"
 #include "Modules/error.hpp"
+#include "Modules/reflectBindings.hpp"
 #include "Wrap/Helpers/lua_vector.hpp"
 #include "Wrap/wrap.hpp"
 
@@ -23,8 +24,66 @@ auto Scene::LoadBinding(lua_State *state) -> int {
       {"drawUiElement", GetDrawUiElementLuaBinding<Scene>()},
   };
 
+  const auto &type = Bindings::DefineLuaTypeAlias(
+      "SceneObject", {Bindings::TypeInfo{
+                          .name = "Model",
+                          .type = Model::GetType(),
+                          .luaType = Bindings::BindingLuaType::Userdata,
+                          .isEnum = false,
+                          .isVector = false,
+                      },
+                      Bindings::TypeInfo{
+                          .name = "Node",
+                          .type = Node::GetType(),
+                          .luaType = Bindings::BindingLuaType::Userdata,
+                          .isEnum = false,
+                          .isVector = false,
+                      },
+                      Bindings::TypeInfo{
+                          .name = "Shape",
+                          .type = Shape::GetType(),
+                          .luaType = Bindings::BindingLuaType::Userdata,
+                          .isEnum = false,
+                          .isVector = false,
+                      }});
+
   auto binding = Bindings::LuaBoundStruct<Scene>("Scene");
   binding.RegisterMember<&Scene::name>("Name");
+
+  binding.DocumentCustomMethod(
+      "getHierarchyObjects", "Get the objects in the scene's hierarchy", {},
+      Bindings::TypeInfo{
+          .name = "HierarchyObjects",
+          .type = &type,
+          .luaType = Bindings::BindingLuaType::Userdata,
+          .isVector = true,
+      });
+
+  binding.DocumentCustomMethod(
+      "addHierarchyObject", "Add an object to the scene's hierarchy",
+      {Bindings::TypeInfo{
+          .name = "Object",
+          .type = &type,
+          .luaType = Bindings::BindingLuaType::Userdata,
+      }},
+      std::nullopt);
+
+  binding.DocumentCustomMethod(
+      "getHierarchyObject", "Get an object from the scene's hierarchy by index",
+      {Bindings::LuaDocumentingStruct::CreateType(
+          "Index", Bindings::BindingLuaType::Integer)},
+      Bindings::TypeInfo{
+          .name = "HierarchyObject",
+          .type = &type,
+          .luaType = Bindings::BindingLuaType::Userdata,
+      });
+
+  binding.DocumentCustomMethod(
+      "removeHierarchyObject",
+      "Remove an object from the scene's hierarchy by index",
+      {Bindings::LuaDocumentingStruct::CreateType(
+          "Index", Bindings::BindingLuaType::Integer)});
+
   binding.Register(state, methods);
 
   return 1;

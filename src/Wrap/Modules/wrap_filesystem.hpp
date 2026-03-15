@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Modules/bindings.hpp"
 #include "Wrap/wrap.hpp"
 #include "lua.hpp"
 

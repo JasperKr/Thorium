@@ -7,6 +7,13 @@
 
 namespace Wrap::Threading {
 
+const auto threadStatusEnum = LuaWrap::LuaEnum<::Threading::ThreadStatus>(
+    "ThreadStatus", {
+                        {"running", ::Threading::ThreadStatus::Running},
+                        {"finished", ::Threading::ThreadStatus::Stopped},
+                        {"error", ::Threading::ThreadStatus::Error},
+                    });
+
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 std::vector<Ref<::Threading::Thread>> Threads;
 

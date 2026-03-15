@@ -7,6 +7,7 @@
 #include "Modules/Math/vector.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
+#include "Modules/type.hpp"
 #include "Wrap/Helpers/lua_enum.hpp"
 #include "Wrap/Helpers/lua_vector.hpp"
 #include "Wrap/wrap.hpp"
@@ -291,6 +292,14 @@ template <typename T> struct LuaType {
     };
   };
 };
+
+[[nodiscard]] inline auto DefineLuaTypeAlias(const std::string &aliasName,
+                                             const std::vector<TypeInfo> &types)
+    -> Type & {
+  LuaTypeAliases.emplace_back(
+      Alias{.name = aliasName, .types = types, .newLuaType = Type(aliasName)});
+  return LuaTypeAliases.back().newLuaType;
+}
 
 // Base class of LuaBoundStruct used for documentation purposes.
 // You may use this if you have an entire class defined manually, and want to auto-generate documentation

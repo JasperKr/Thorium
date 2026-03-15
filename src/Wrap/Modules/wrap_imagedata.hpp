@@ -52,6 +52,112 @@ extern "C" inline auto luaopen_imagedata(lua_State *state) -> int {
   LuaWrap::RegisterLuaType(state, ::Image::ImageData::GetType(),
                            ImagedataLib); // NOLINT
 
+  auto documenter = Bindings::LuaDocumentingStruct("Imagedata");
+
+  constexpr auto &createType = Bindings::LuaDocumentingStruct::CreateType;
+  constexpr auto &createVType =
+      Bindings::LuaDocumentingStruct::CreateVectorType;
+
+  auto offsetType = createType("Offset", Bindings::BindingLuaType::Integer);
+  auto valueType = createType("Value", Bindings::BindingLuaType::Integer);
+  auto valueNumberType = createType("Value", Bindings::BindingLuaType::Number);
+
+  documenter.DocumentCustomMethod(
+      "setPixel", "Set the pixel at the given coordinates to the given color",
+      {createType("X", Bindings::BindingLuaType::Integer),
+       createType("Y", Bindings::BindingLuaType::Integer),
+       createType("Color", Bindings::BindingLuaType::Vec4)});
+
+  documenter.DocumentCustomMethod(
+      "getPixel", "Get the color of the pixel at the given coordinates",
+      {createType("X", Bindings::BindingLuaType::Integer),
+       createType("Y", Bindings::BindingLuaType::Integer)},
+      createType("Color", Bindings::BindingLuaType::Vec4));
+
+  documenter.DocumentCustomMethod(
+      "getWidth", "Get the width of the image data", {},
+      createType("Width", Bindings::BindingLuaType::Integer));
+
+  documenter.DocumentCustomMethod(
+      "getHeight", "Get the height of the image data", {},
+      createType("Height", Bindings::BindingLuaType::Integer));
+
+  documenter.DocumentCustomMethod(
+      "getDimensions", "Get the dimensions of the image data", {},
+      createType("Dimensions", Bindings::BindingLuaType::Vec2));
+
+  documenter.DocumentCustomMethod(
+      "getFormat", "Get the format of the image data", {},
+      createType("Format", Bindings::BindingLuaType::String));
+
+  // raw data access methods
+
+  documenter.DocumentCustomMethod(
+      "setUInt32", "Set a 32-bit unsigned integer at the given byte-offset",
+      {offsetType, valueType});
+
+  documenter.DocumentCustomMethod(
+      "getUInt32", "Get a 32-bit unsigned integer at the given byte-offset",
+      {offsetType}, valueType);
+
+  documenter.DocumentCustomMethod(
+      "setInt32", "Set a 32-bit signed integer at the given byte-offset",
+      {offsetType, valueType});
+
+  documenter.DocumentCustomMethod(
+      "getInt32", "Get a 32-bit signed integer at the given byte-offset",
+      {offsetType}, valueType);
+
+  documenter.DocumentCustomMethod(
+      "setUInt16", "Set a 16-bit unsigned integer at the given byte-offset",
+      {offsetType, valueType});
+
+  documenter.DocumentCustomMethod(
+      "getUInt16", "Get a 16-bit unsigned integer at the given byte-offset",
+      {offsetType}, valueType);
+
+  documenter.DocumentCustomMethod(
+      "setInt16", "Set a 16-bit signed integer at the given byte-offset",
+      {offsetType, valueType});
+
+  documenter.DocumentCustomMethod(
+      "getInt16", "Get a 16-bit signed integer at the given byte-offset",
+      {offsetType}, valueType);
+
+  documenter.DocumentCustomMethod(
+      "setUInt8", "Set an 8-bit unsigned integer at the given byte-offset",
+      {offsetType, valueType});
+
+  documenter.DocumentCustomMethod(
+      "getUInt8", "Get an 8-bit unsigned integer at the given byte-offset",
+      {offsetType}, valueType);
+
+  documenter.DocumentCustomMethod(
+      "setInt8", "Set an 8-bit signed integer at the given byte-offset",
+      {offsetType, valueType});
+
+  documenter.DocumentCustomMethod(
+      "getInt8", "Get an 8-bit signed integer at the given byte-offset",
+      {offsetType}, valueType);
+
+  documenter.DocumentCustomMethod("setFloat",
+                                  "Set a 32-bit float at the given byte-offset",
+                                  {offsetType, valueNumberType});
+
+  documenter.DocumentCustomMethod("getFloat",
+                                  "Get a 32-bit float at the given byte-offset",
+                                  {offsetType}, valueNumberType);
+
+  documenter.DocumentCustomMethod("setHalf",
+                                  "Set a 16-bit float at the given byte-offset",
+                                  {offsetType, valueNumberType});
+
+  documenter.DocumentCustomMethod("getHalf",
+                                  "Get a 16-bit float at the given byte-offset",
+                                  {offsetType}, valueNumberType);
+
+  documenter.Register();
+
   return 1;
 }
 

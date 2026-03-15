@@ -40,6 +40,17 @@ auto main() -> int {
   Bindings::EmitLuaEnums(enumOutFile, LuaWrap::RegisteredEnums);
   enumOutFile.close();
 
+  std::cout
+      << "Emitting Lua type aliases to 'generated/lua_aliases.d.lua'...\n";
+  std::ofstream aliasOutFile("generated/lua_aliases.d.lua");
+  if (!aliasOutFile) {
+    std::cerr << "Failed to open file for Lua type aliases\n";
+    return 1;
+  }
+
+  Bindings::EmitLuaAliases(aliasOutFile, Bindings::LuaTypeAliases);
+  aliasOutFile.close();
+
   lua_close(state);
   std::cout << "Lua bindings generation completed.\n";
 }

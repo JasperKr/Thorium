@@ -1,7 +1,10 @@
 #pragma once
 
+#include "Modules/bindings.hpp"
 #include "Modules/object.hpp"
+#include "Modules/reflectBindings.hpp"
 #include "Modules/thread.hpp"
+#include "Wrap/Helpers/lua_enum.hpp"
 #include "Wrap/Modules/wrap_channel.hpp"
 #include "Wrap/wrap.hpp"
 #include "lua.hpp"
@@ -47,6 +50,8 @@ const static std::vector<lua_CFunction> childrenInitFunctions = {
     Wrap::Threading::luaopen_channel,
 };
 
+const extern LuaWrap::LuaEnum<::Threading::ThreadStatus> threadStatusEnum;
+
 extern "C" inline auto luaopen_threading(lua_State *state) -> int {
   auto module = LuaWrap::LuaModule{
       .Name = "thread",
@@ -56,6 +61,61 @@ extern "C" inline auto luaopen_threading(lua_State *state) -> int {
   };
 
   RegisterLuaModule(state, module);
+
+  auto documenter = Bindings::LuaDocumentingStruct("Thread");
+
+  auto threadStatusType = Bindings::TypeInfo{
+      .name = "ThreadStatus",
+      .type = nullptr,
+      .luaType = Bindings::BindingLuaType::String,
+      .isEnum = true,
+      .isVector = false,
+      .enumHelper = &threadStatusEnum,
+  };
+
+  auto thisType = Bindings::TypeInfo{
+      .name = "Thread",
+      .type = ::Threading::Thread::GetType(),
+      .luaType = Bindings::BindingLuaType::Userdata,
+      .isEnum = false,
+      .isVector = false,
+      .enumHelper = nullptr,
+  };
+
+  documenter.DocumentCustomMethod(
+      "newThread", "Create a new thread from the given filepath",
+      {Bindings::LuaDocumentingStruct::CreateType(
+           "Path", Bindings::BindingLuaType::String),
+       Bindings::LuaDocumentingStruct::CreateType(
+           "Debugname", Bindings::BindingLuaType::String)},
+      thisType);
+
+  documenter.DocumentCustomMethod(
+      "newThread", "Create a new thread from the given lua code string",
+      {Bindings::LuaDocumentingStruct::CreateType(
+           "Code", Bindings::BindingLuaType::String),
+       Bindings::LuaDocumentingStruct::CreateType(
+           "Debugname", Bindings::BindingLuaType::String)},
+      thisType);
+
+  documenter.DocumentCustomMethod(
+      "start", "Start the thread",
+      {Bindings::LuaDocumentingStruct::CreateType(
+          "...", Bindings::BindingLuaType::ThreadSafe)},
+      {});
+
+  documenter.DocumentCustomMethod("wait", "Wait for the thread to finish");
+  documenter.DocumentCustomMethod("getStatus",
+                                  "Get the current status of the thread", {},
+                                  threadStatusType);
+
+  documenter.DocumentCustomMethod(
+      "getError", "Get the error message if the thread has errored", {},
+      Bindings::LuaDocumentingStruct::CreateType(
+          "ErrorMessage", Bindings::BindingLuaType::String));
+
+  documenter.Register();
+
   return 1;
 }
 

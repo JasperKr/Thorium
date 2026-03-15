@@ -1,4 +1,4 @@
-Imgui = require("Editor.cimgui.init")
+Imgui = require("Scripting.Editor.cimgui.init")
 local ffi = require("ffi")
 
 local lastDrawTime = 0
@@ -33,8 +33,8 @@ local vertices = {
 }
 local mesh
 
-local shader = snap.graphics.newShader("Graphics/Shaders/test.slang")
-local computeshader = snap.graphics.newShader("Graphics/Shaders/test2.slang")
+local shader = snap.graphics.newShader("Scripting/Graphics/Shaders/test.slang")
+local computeshader = snap.graphics.newShader("Scripting/Graphics/Shaders/test2.slang")
 local value = 0.15
 
 local texture
