@@ -19,6 +19,7 @@
 #include <array>
 #include <public/tracy/Tracy.hpp>
 #include <span>
+#include <string_view>
 #include <unordered_set>
 #include <utility>
 
@@ -272,13 +273,14 @@ static inline auto LoadSlang(GraphicsContext &context,
   auto sourceDir = Filesystem::GetSourceDirectory();
   auto saveDir = Filesystem::GetSaveDirectory();
 
-  auto shaderDirectory = Path::Join({"src", "Graphics", "Shaders"});
+  auto shaderDirectory = Path::Join({"src", "Snap", "Graphics", "Shaders"});
+  const auto &sourceBack = Path::Join(sourceDir, std::string(".."));
 
-  std::vector<const char *> searchPaths = {sourceDir.c_str(), saveDir.c_str(),
-                                           sourceBaseDir.c_str(),
-                                           shaderDirectory.c_str()};
+  std::vector<const char *> searchPaths = {
+      sourceDir.c_str(), sourceBack.c_str(), saveDir.c_str(),
+      sourceBaseDir.c_str(), shaderDirectory.c_str()};
 
-  std::string directories = "Shader directories:\n";
+  std::string directories = "To be searched:\n";
   for (const auto &path : searchPaths) {
     directories += " - " + std::string(path) + "\n";
   }

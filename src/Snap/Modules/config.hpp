@@ -20,6 +20,7 @@ struct ApplicationConfig {
 // NOLINTNEXTLINE
 extern ApplicationConfig globalConfig;
 
-auto Configure(lua_State *state) -> Result<ApplicationConfig>;
+auto Configure(lua_State *state, const std::string &sourceDirectory)
+    -> Result<ApplicationConfig>;
 
 } // namespace Config

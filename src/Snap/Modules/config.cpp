@@ -5,6 +5,7 @@
 #include "Wrap/wrap.hpp"
 
 #include "lua.hpp"
+#include <string>
 
 namespace Config {
 
@@ -168,16 +169,18 @@ inline auto RemoveFunctions(lua_State *state) -> void {
   lua_pop(state, 1); // pop snap table
 }
 
-auto Configure(lua_State *state) -> Result<ApplicationConfig> {
+auto Configure(lua_State *state, const std::string &sourceDirectory)
+    -> Result<ApplicationConfig> {
 
   LuaWrap::SetStackToTable(state, "snap"); // [snap]
 
   SetFunctions(state); // [snap with set functions]
   lua_pop(state, 1);   // Pop snap table
 
-  auto constexpr luaScript = R"lua(
+  const auto luaScript = R"lua(
     -- User configuration script
-    package.path = package.path .. ";./src/Engine/?.lua"
+    package.path = package.path .. ";)lua" +
+                         sourceDirectory + R"lua(/?.lua"
 
     local config = {
       filesystem = {
@@ -200,6 +203,9 @@ auto Configure(lua_State *state) -> Result<ApplicationConfig> {
     if (type(snap.config) == "function") then
       -- Call user-defined configuration function, not a pcall, this needs to run without errors
       snap.config(config)
+      print("Configuration loaded successfully.")
+    else
+      print("snap.config function not found, using default configuration")
     end
 
     snap._setIdentity(config.filesystem.identity)
@@ -208,7 +214,7 @@ auto Configure(lua_State *state) -> Result<ApplicationConfig> {
     if config.loglevel ~= "" then snap._setLogLevel(config.loglevel) end
   )lua";
 
-  if (luaL_dostring(state, luaScript) != LUA_OK) {
+  if (luaL_dostring(state, luaScript.c_str()) != LUA_OK) {
     const char *errorMsg = lua_tostring(state, -1);
     lua_pop(state, 1); // Pop error message
     return Error::Unexpected(

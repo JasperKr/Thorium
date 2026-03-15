@@ -76,7 +76,8 @@ auto LoadGUIState(lua_State *state) -> Result<GuiState> {
   ImGui::GetIO().Fonts->AddFontDefault(&config);
 
   ImFont *font = inout.Fonts->AddFontFromFileTTF(
-      "src/Graphics/Assets/user_interface_font.ttf", baseFontSize, &config);
+      "src/Snap/Graphics/Assets/user_interface_font.ttf", baseFontSize,
+      &config);
 
   // Set the font as the default font
   inout.FontDefault = font;

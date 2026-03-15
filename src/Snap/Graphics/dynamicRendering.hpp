@@ -1,6 +1,5 @@
 #pragma once
 
-#include "Graphics/graphicsContext.hpp"
 #include "Graphics/hash.hpp"
 #include "Graphics/texture.hpp"
 #include "Graphics/vertexformat.hpp"
@@ -8,6 +7,7 @@
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Modules/type.hpp"
+#include "graphicsContext.hpp"
 #include "shader.hpp"
 #include <cstddef>
 #include <cstdint>

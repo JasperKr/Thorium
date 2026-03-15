@@ -201,31 +201,25 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
 
   PrintDebug("Lua modules registered.");
 
-  auto configResult = Config::Configure(state);
+  if (arguments.size() == 0) {
+    return Error::Create("No Lua script specified to run.");
+  }
+
+  const auto &currentPath = std::filesystem::current_path();
+  PrintAlways("Current working directory: " + currentPath.string());
+
+  auto sourceDirectory =
+      Path::Sanitize(currentPath.string() + "/" + arguments[0]);
+  sourceDirectory = Path::Directory(sourceDirectory);
+  PrintAlways("Source directory: " + sourceDirectory);
+
+  auto configResult = Config::Configure(state, sourceDirectory);
 
   if (Error::IsError(configResult)) {
     return configResult.error();
   }
 
   auto config = configResult.value();
-
-#if defined(__linux__)
-  std::filesystem::path exeDir =
-      std::filesystem::read_symlink("/proc/self/exe").parent_path();
-#elif defined(_WIN32)
-  char buffer[MAX_PATH];
-  GetModuleFileNameA(NULL, buffer, MAX_PATH);
-  std::filesystem::path exeDir = std::filesystem::path(buffer).parent_path();
-#else
-  std::filesystem::path exeDir = std::filesystem::current_path();
-#endif
-
-  if (arguments.size() == 0) {
-    return Error::Create("No Lua script specified to run.");
-  }
-
-  auto sourceDirectory = Path::Sanitize(exeDir.string() + "/" + arguments[0]);
-  sourceDirectory = Path::Directory(sourceDirectory);
 
   Filesystem::GetConfig().identity = config.Identity;
   Error fsInitErr = Filesystem::Init(".");

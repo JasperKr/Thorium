@@ -500,23 +500,20 @@ auto Sanitize(const std::string &path) -> std::string {
   return sanitized;
 }
 
-// Base case: single string
 inline auto Join(std::string_view str) -> std::string {
   return Sanitize(std::string(str));
 }
 
-// Recursive variadic template
 template <typename... Strings>
 auto Join(std::string_view first, const Strings &...rest) -> std::string {
   if constexpr (sizeof...(rest) == 0) {
     return Sanitize(std::string(first));
   } else {
-    auto combined = Join(rest...);             // join the rest first
-    return Join(std::string(first), combined); // call your original 2-arg logic
+    auto combined = Join(rest...);
+    return Join(std::string(first), combined);
   }
 }
 
-// Overload for two args using your original logic
 auto Join(const std::string &base, const std::string &append) -> std::string {
   if (base.empty()) {
     return append;
@@ -525,21 +522,18 @@ auto Join(const std::string &base, const std::string &append) -> std::string {
     return base;
   }
 
-  auto sanitizedBase = Sanitize(base);
-  auto sanitizedAppend = Sanitize(append);
-
-  if (sanitizedBase.back() == '/') {
-    if (sanitizedAppend.front() == '/') {
-      return sanitizedBase + sanitizedAppend.substr(1);
+  if (base.back() == '/') {
+    if (append.front() == '/') {
+      return Sanitize(base + append.substr(1));
     }
-    return sanitizedBase + sanitizedAppend;
+    return Sanitize(base + append);
   }
 
-  if (sanitizedAppend.front() == '/') {
-    return sanitizedBase + sanitizedAppend;
+  if (append.front() == '/') {
+    return Sanitize(base + append);
   }
 
-  return sanitizedBase + '/' + sanitizedAppend;
+  return Sanitize(base + '/' + append);
 }
 
 auto Join(const std::vector<std::string> &paths) -> std::string {

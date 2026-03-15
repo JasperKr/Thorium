@@ -1,4 +1,4 @@
-Imgui = require("Scripting.Editor.cimgui.init")
+Imgui = require("Editor.cimgui.init")
 local ffi = require("ffi")
 
 local lastDrawTime = 0

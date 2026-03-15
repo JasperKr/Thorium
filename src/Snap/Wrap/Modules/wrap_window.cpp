@@ -339,6 +339,15 @@ inline auto SettingsFromStack(lua_State *state) -> Result<::Window::Settings> {
   }
   lua_pop(state, 1);
 
+  lua_getfield(state, 1, "title");
+  if (!lua_isnoneornil(state, -1)) {
+    if (lua_isstring(state, -1) == 0) {
+      return Error::Unexpected("Title must be a string");
+    }
+    settings.title = lua_tostring(state, -1);
+  }
+  lua_pop(state, 1);
+
   return settings;
 }
 

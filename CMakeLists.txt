@@ -231,98 +231,98 @@ endif()
 # -------------------------------
 add_library(snap_core OBJECT
 # Graphics module
-    src/Graphics/graphics.cpp
-    src/Graphics/texture.cpp
-    src/Graphics/buffer.cpp
-    src/Graphics/render.cpp
-    src/Graphics/shader.cpp
-    src/Graphics/rendergraph.cpp
-    src/Graphics/sampler.cpp
-    src/Graphics/dynamicRendering.cpp
-    src/Graphics/reflect.cpp
-    src/Graphics/resource.cpp
-    src/Graphics/mesh.cpp
-    src/Graphics/draw.cpp
-    src/Graphics/barrier.cpp
-    src/Graphics/gltfLoader.cpp
-    src/Graphics/renderThread.cpp
-    src/Graphics/semaphoreManager.cpp
-    src/Graphics/bufferformat.cpp
-    src/Graphics/swapchainManager.cpp
+    src/Snap/Graphics/graphics.cpp
+    src/Snap/Graphics/texture.cpp
+    src/Snap/Graphics/buffer.cpp
+    src/Snap/Graphics/render.cpp
+    src/Snap/Graphics/shader.cpp
+    src/Snap/Graphics/rendergraph.cpp
+    src/Snap/Graphics/sampler.cpp
+    src/Snap/Graphics/dynamicRendering.cpp
+    src/Snap/Graphics/reflect.cpp
+    src/Snap/Graphics/resource.cpp
+    src/Snap/Graphics/mesh.cpp
+    src/Snap/Graphics/draw.cpp
+    src/Snap/Graphics/barrier.cpp
+    src/Snap/Graphics/gltfLoader.cpp
+    src/Snap/Graphics/renderThread.cpp
+    src/Snap/Graphics/semaphoreManager.cpp
+    src/Snap/Graphics/bufferformat.cpp
+    src/Snap/Graphics/swapchainManager.cpp
 
 # Graphics Buffers
-    src/Graphics/Buffers/push.cpp
-    src/Graphics/Buffers/uniform.cpp
-    src/Graphics/Buffers/structured.cpp
+    src/Snap/Graphics/Buffers/push.cpp
+    src/Snap/Graphics/Buffers/uniform.cpp
+    src/Snap/Graphics/Buffers/structured.cpp
 
 # Engine Modules
-    src/Modules/filesystem.cpp
-    src/Modules/timer.cpp
-    src/Modules/errorhandler.cpp
-    src/Modules/config.cpp
-    src/Modules/event.cpp
-    src/Modules/object.cpp
-    src/Modules/imagedata.cpp
-    src/Modules/Peripherals/mouse.cpp
-    src/Modules/Peripherals/keyboard.cpp
-    src/Modules/thread.cpp
-    src/Modules/channel.cpp
-    src/Modules/utils.cpp
-    src/Modules/error.cpp
-    src/Modules/window.cpp
+    src/Snap/Modules/filesystem.cpp
+    src/Snap/Modules/timer.cpp
+    src/Snap/Modules/errorhandler.cpp
+    src/Snap/Modules/config.cpp
+    src/Snap/Modules/event.cpp
+    src/Snap/Modules/object.cpp
+    src/Snap/Modules/imagedata.cpp
+    src/Snap/Modules/Peripherals/mouse.cpp
+    src/Snap/Modules/Peripherals/keyboard.cpp
+    src/Snap/Modules/thread.cpp
+    src/Snap/Modules/channel.cpp
+    src/Snap/Modules/utils.cpp
+    src/Snap/Modules/error.cpp
+    src/Snap/Modules/window.cpp
 
 # Engine source
-    src/Modules/Engine/material.cpp
-    src/Modules/Engine/model.cpp
-    src/Modules/Engine/project.cpp
-    src/Modules/Engine/scene.cpp
+    src/Snap/Modules/Engine/material.cpp
+    src/Snap/Modules/Engine/model.cpp
+    src/Snap/Modules/Engine/project.cpp
+    src/Snap/Modules/Engine/scene.cpp
 
 # Math Modules
-    src/Modules/Math/vector.cpp
-    src/Modules/Math/matrix.cpp
-    src/Modules/Math/quaternion.cpp
-    src/Modules/Math/math.cpp
+    src/Snap/Modules/Math/vector.cpp
+    src/Snap/Modules/Math/matrix.cpp
+    src/Snap/Modules/Math/quaternion.cpp
+    src/Snap/Modules/Math/math.cpp
 
 # Editor
-    src/Modules/Editor/gui.cpp
+    src/Snap/Modules/Editor/gui.cpp
 
 # Wrappers
-    src/Wrap/Graphics/wrap_graphics.cpp
-    src/Wrap/Graphics/wrap_texture.cpp
-    src/Wrap/Graphics/wrap_rendertarget.cpp
-    src/Wrap/Graphics/wrap_mesh.cpp
-    src/Wrap/Graphics/wrap_shader.cpp
-    src/Wrap/Graphics/wrap_buffer.cpp
-    src/Wrap/Graphics/wrap_format.cpp
-    src/Wrap/Modules/wrap_event.cpp
-    src/Wrap/Modules/wrap_timer.cpp
-    src/Wrap/Modules/wrap_data.cpp
-    src/Wrap/Modules/wrap_bytedata.cpp
-    src/Wrap/Modules/wrap_imagedata.cpp
-    src/Wrap/Modules/wrap_filesystem.cpp
-    src/Wrap/Modules/wrap_keyboard.cpp
-    src/Wrap/Modules/wrap_mouse.cpp
-    src/Wrap/Modules/wrap_thread.cpp
-    src/Wrap/Modules/wrap_channel.cpp
-    src/Wrap/Modules/wrap_window.cpp
-    src/Wrap/Modules/wrap_math.cpp
-    src/Wrap/wrap.cpp
-    src/Wrap/lua_data.cpp
+    src/Snap/Wrap/Graphics/wrap_graphics.cpp
+    src/Snap/Wrap/Graphics/wrap_texture.cpp
+    src/Snap/Wrap/Graphics/wrap_rendertarget.cpp
+    src/Snap/Wrap/Graphics/wrap_mesh.cpp
+    src/Snap/Wrap/Graphics/wrap_shader.cpp
+    src/Snap/Wrap/Graphics/wrap_buffer.cpp
+    src/Snap/Wrap/Graphics/wrap_format.cpp
+    src/Snap/Wrap/Modules/wrap_event.cpp
+    src/Snap/Wrap/Modules/wrap_timer.cpp
+    src/Snap/Wrap/Modules/wrap_data.cpp
+    src/Snap/Wrap/Modules/wrap_bytedata.cpp
+    src/Snap/Wrap/Modules/wrap_imagedata.cpp
+    src/Snap/Wrap/Modules/wrap_filesystem.cpp
+    src/Snap/Wrap/Modules/wrap_keyboard.cpp
+    src/Snap/Wrap/Modules/wrap_mouse.cpp
+    src/Snap/Wrap/Modules/wrap_thread.cpp
+    src/Snap/Wrap/Modules/wrap_channel.cpp
+    src/Snap/Wrap/Modules/wrap_window.cpp
+    src/Snap/Wrap/Modules/wrap_math.cpp
+    src/Snap/Wrap/wrap.cpp
+    src/Snap/Wrap/lua_data.cpp
 
 # Engine wrappers
-    src/Wrap/Modules/Engine/wrap_imgui.cpp
-    src/Wrap/Modules/Engine/wrap_scene.cpp
-    src/Wrap/Modules/Engine/wrap_renderer.cpp
+    src/Snap/Wrap/Modules/Engine/wrap_imgui.cpp
+    src/Snap/Wrap/Modules/Engine/wrap_scene.cpp
+    src/Snap/Wrap/Modules/Engine/wrap_renderer.cpp
 
 # Libraries
-    src/Libraries/vma.cpp
-    src/Libraries/load_stb.cpp
-    src/Libraries/load_volk.cpp
+    src/Snap/Libraries/vma.cpp
+    src/Snap/Libraries/load_stb.cpp
+    src/Snap/Libraries/load_volk.cpp
 )
 
 target_include_directories(snap_core
     PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/Snap
 )
 target_include_directories(snap_core SYSTEM PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -358,8 +358,8 @@ target_link_libraries(snap_core
 # Engine executable
 # -------------------------------
 add_executable(snap
-    src/main.cpp
-    src/loop.cpp
+    src/Snap/main.cpp
+    src/Snap/loop.cpp
     $<TARGET_OBJECTS:snap_core>
 )
 
@@ -417,7 +417,7 @@ elseif (MSVC)
 endif()
 
 add_executable(lua_stub_gen
-    src/generateBindings.cpp
+    src/Snap/generateBindings.cpp
     $<TARGET_OBJECTS:snap_core>
 )
 

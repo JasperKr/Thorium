@@ -46,5 +46,5 @@ fi
 
 # if second argument is "run", run the built executable
 if [ "$2" == "run" ]; then
-  ./build/snap ../src/Engine/main.lua
+  ./build/snap src/Scripting/main.lua
 fi
