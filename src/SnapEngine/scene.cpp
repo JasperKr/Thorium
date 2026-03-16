@@ -1,10 +1,10 @@
 #include "scene.hpp"
-#include "Modules/Engine/model.hpp"
 #include "Modules/bindings.hpp"
 #include "Modules/error.hpp"
 #include "Modules/reflectBindings.hpp"
 #include "Wrap/Helpers/lua_vector.hpp"
 #include "Wrap/wrap.hpp"
+#include "model.hpp"
 
 #include "Wrap/Helpers/lua_variant.hpp"
 #include <imgui.h>

@@ -4,6 +4,12 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+
+// Cursed, TODO: Fix this
+#include "loop.hpp"
+
+auto RegisterAllLuaModules(lua_State * /*unused*/) -> void {}
+
 auto main() -> int {
   auto *state = luaL_newstate();
   std::cout << "Generating Lua bindings...\n";

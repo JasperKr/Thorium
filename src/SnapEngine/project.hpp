@@ -1,9 +1,9 @@
 #pragma once
 
-#include "Modules/Engine/drawable.hpp"
-#include "Modules/Engine/identifier.hpp"
-#include "Modules/Engine/scene.hpp"
 #include "Modules/object.hpp"
+#include "drawable.hpp"
+#include "identifier.hpp"
+#include "scene.hpp"
 #include <string>
 #include <vector>
 

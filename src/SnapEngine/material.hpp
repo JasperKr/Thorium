@@ -2,8 +2,8 @@
 
 #include "Graphics/shader.hpp"
 #include "Graphics/texture.hpp"
-#include "Modules/Engine/drawable.hpp"
 #include "Modules/object.hpp"
+#include "drawable.hpp"
 #include <array>
 #include <string>
 

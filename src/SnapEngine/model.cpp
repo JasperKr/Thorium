@@ -1,10 +1,10 @@
 #include "model.hpp"
 #include "Graphics/mesh.hpp"
-#include "Modules/Engine/material.hpp"
 #include "Modules/bindings.hpp"
 #include "Modules/object.hpp"
 #include "Wrap/Helpers/lua_variant.hpp"
 #include "Wrap/wrap.hpp"
+#include "material.hpp"
 #include <imgui.h>
 #include <lua.h>
 #include <utility>

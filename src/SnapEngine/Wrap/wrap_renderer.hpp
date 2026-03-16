@@ -1,9 +1,9 @@
 #pragma once
 
-#include "Modules/Engine/material.hpp"
-#include "Modules/Engine/model.hpp"
 #include "Wrap/wrap.hpp"
 #include "lua.hpp"
+#include "material.hpp"
+#include "model.hpp"
 #include <vector>
 
 namespace Engine::Renderer {

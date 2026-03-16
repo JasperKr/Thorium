@@ -1,4 +1,4 @@
-#include "Modules/Engine/project.hpp"
+#include "project.hpp"
 #include "Modules/bindings.hpp"
 #include "Modules/error.hpp"
 #include "Wrap/wrap.hpp"

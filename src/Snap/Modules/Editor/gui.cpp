@@ -75,9 +75,17 @@ auto LoadGUIState(lua_State *state) -> Result<GuiState> {
 
   ImGui::GetIO().Fonts->AddFontDefault(&config);
 
-  ImFont *font = inout.Fonts->AddFontFromFileTTF(
-      "src/Snap/Graphics/Assets/user_interface_font.ttf", baseFontSize,
-      &config);
+  const auto &sourceDirectory = Filesystem::GetSourceDirectory();
+  const std::string &fontPath = "Graphics/Assets/user_interface_font.ttf";
+  const auto fontDataResult = Filesystem::ReadFile(fontPath);
+  if (Error::IsError(fontDataResult)) {
+    return Error::Unexpected("Failed to load font file:'" +
+                             fontDataResult.error().message);
+  }
+  const auto &fontData = fontDataResult.value();
+
+  ImFont *font = inout.Fonts->AddFontFromMemoryTTF(
+      (void *)fontData.data(), (int)fontData.size(), baseFontSize, &config);
 
   // Set the font as the default font
   inout.FontDefault = font;
