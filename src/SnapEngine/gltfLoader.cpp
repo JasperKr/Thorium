@@ -1,11 +1,11 @@
 #include "gltfLoader.hpp"
 #include "Graphics/graphicsContext.hpp"
 #include "Graphics/texture.hpp"
-#include "Modules/Engine/material.hpp"
-#include "Modules/Engine/model.hpp"
 #include "Modules/error.hpp"
 #include "Modules/filesystem.hpp"
 #include "Modules/object.hpp"
+#include "material.hpp"
+#include "model.hpp"
 #include <cstdint>
 #include <span>
 #include <string>

@@ -1,13 +1,13 @@
 #pragma once
 
 #include "Graphics/mesh.hpp"
-#include "Modules/Engine/drawable.hpp"
-#include "Modules/Engine/identifier.hpp"
-#include "Modules/Engine/material.hpp"
 #include "Modules/Math/quaternion.hpp"
 #include "Modules/Math/vector.hpp"
 #include "Modules/object.hpp"
 #include "Modules/type.hpp"
+#include "drawable.hpp"
+#include "identifier.hpp"
+#include "material.hpp"
 #include <string>
 #include <variant>
 #include <vector>

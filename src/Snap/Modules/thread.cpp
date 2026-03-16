@@ -13,6 +13,7 @@
 #include <thread>
 #include <vector>
 
+#include "loop.hpp"
 #include "lua.hpp"
 
 #include "channel.hpp"
@@ -87,7 +88,7 @@ auto Thread::Run(Thread *thread,
   lua_setfield(state, -2, "path");
   lua_pop(state, 1); // remove package table
 
-  LuaWrap::RegisterModules(state);
+  RegisterAllLuaModules(state);
 
   Graphics::ContextDebugname = thread->debugname;
   PrintInfo("Initializing graphics with debug name: {}",

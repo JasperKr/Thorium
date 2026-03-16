@@ -4,10 +4,18 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+
+#include "../SnapEngine/Wrap/wrap_engine.hpp"
+
+auto RegisterAllLuaModules(lua_State *state) -> void {
+  LuaWrap::RegisterModules(state);
+  Engine::LuaWrap::RegisterModules(state);
+}
+
 auto main() -> int {
   auto *state = luaL_newstate();
   std::cout << "Generating Lua bindings...\n";
-  LuaWrap::RegisterModules(state);
+  RegisterAllLuaModules(state);
 
   // Log real path
   std::cout << "Current working directory: "

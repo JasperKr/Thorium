@@ -192,7 +192,7 @@ private:
 #include <mutex>
 // NOLINTBEGIN
 static std::mutex loggingMutex;
-static std::ofstream logFile("thorium.log", std::ios::out | std::ios::app);
+static std::ofstream logFile("Snap.log", std::ios::out | std::ios::app);
 // NOLINTEND
 #define OBTAIN_LOG_LOCK std::lock_guard<std::mutex> lock(loggingMutex);
 #define OUT logFile

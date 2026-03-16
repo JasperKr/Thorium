@@ -53,16 +53,16 @@ inline auto CleanupTracebackLine(const std::string &line) -> std::string {
 
   // Split before and after "snap!"
   const std::string splitKeyword = "snap!";
-  size_t thoriumPos = sanitizedLine.find(splitKeyword);
+  size_t SnapPos = sanitizedLine.find(splitKeyword);
   std::string inFunction = "Unknown";
 
-  if (thoriumPos != std::string::npos) {
-    auto inFunctionPos = thoriumPos + splitKeyword.length();
+  if (SnapPos != std::string::npos) {
+    auto inFunctionPos = SnapPos + splitKeyword.length();
     auto inFunctionCount =
         sanitizedLine.length() - inFunctionPos - 1; // -1 for newline
-    inFunction = sanitizedLine.substr(thoriumPos + splitKeyword.length(),
-                                      inFunctionCount);
-    sanitizedLine = sanitizedLine.substr(0, thoriumPos)
+    inFunction =
+        sanitizedLine.substr(SnapPos + splitKeyword.length(), inFunctionCount);
+    sanitizedLine = sanitizedLine.substr(0, SnapPos)
                         .append("in function \'")
                         .append(inFunction)
                         .append("\'\n");

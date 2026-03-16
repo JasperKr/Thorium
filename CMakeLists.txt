@@ -244,7 +244,6 @@ add_library(snap_core OBJECT
     src/Snap/Graphics/mesh.cpp
     src/Snap/Graphics/draw.cpp
     src/Snap/Graphics/barrier.cpp
-    src/Snap/Graphics/gltfLoader.cpp
     src/Snap/Graphics/renderThread.cpp
     src/Snap/Graphics/semaphoreManager.cpp
     src/Snap/Graphics/bufferformat.cpp
@@ -270,21 +269,13 @@ add_library(snap_core OBJECT
     src/Snap/Modules/utils.cpp
     src/Snap/Modules/error.cpp
     src/Snap/Modules/window.cpp
-
-# Engine source
-    src/Snap/Modules/Engine/material.cpp
-    src/Snap/Modules/Engine/model.cpp
-    src/Snap/Modules/Engine/project.cpp
-    src/Snap/Modules/Engine/scene.cpp
+    src/Snap/Modules/reflectBindings.cpp
 
 # Math Modules
     src/Snap/Modules/Math/vector.cpp
     src/Snap/Modules/Math/matrix.cpp
     src/Snap/Modules/Math/quaternion.cpp
     src/Snap/Modules/Math/math.cpp
-
-# Editor
-    src/Snap/Modules/Editor/gui.cpp
 
 # Wrappers
     src/Snap/Wrap/Graphics/wrap_graphics.cpp
@@ -308,11 +299,6 @@ add_library(snap_core OBJECT
     src/Snap/Wrap/Modules/wrap_math.cpp
     src/Snap/Wrap/wrap.cpp
     src/Snap/Wrap/lua_data.cpp
-
-# Engine wrappers
-    src/Snap/Wrap/Modules/Engine/wrap_imgui.cpp
-    src/Snap/Wrap/Modules/Engine/wrap_scene.cpp
-    src/Snap/Wrap/Modules/Engine/wrap_renderer.cpp
 
 # Libraries
     src/Snap/Libraries/vma.cpp
@@ -363,6 +349,11 @@ add_executable(snap
     $<TARGET_OBJECTS:snap_core>
 )
 
+target_include_directories(snap
+    PUBLIC
+        ${PROJECT_SOURCE_DIR}/src/SnapEngine
+)
+
 # Copy LuaJIT DLL after build
 if (WIN32)
     add_custom_command(TARGET snap POST_BUILD
@@ -371,10 +362,13 @@ if (WIN32)
             $<TARGET_FILE_DIR:snap>)
 endif()
 
+add_subdirectory(src/SnapEngine)
+
 # Link libraries
 target_link_libraries(snap
     PRIVATE
         snap_core
+        SnapEngine
 )
 
 target_link_options(snap PRIVATE
@@ -419,13 +413,19 @@ endif()
 add_executable(lua_stub_gen
     src/Snap/generateBindings.cpp
     $<TARGET_OBJECTS:snap_core>
+    $<TARGET_OBJECTS:SnapEngine>
+)
+
+target_compile_definitions(lua_stub_gen
+  PRIVATE
+    LUA_STUB_GEN
 )
 
 target_link_libraries(lua_stub_gen
     PRIVATE
         snap_core
+        SnapEngine
 )
-
 
 add_custom_target(generate_bindings
     COMMAND lua_stub_gen

@@ -15,6 +15,7 @@ namespace Gui {
 // NOLINTBEGIN
 Ref<Graphics::Shader::ShaderModule> ImGuiShaderRGBA8;
 Ref<Graphics::Shader::ShaderModule> ImGuiShaderA8;
+std::vector<std::vector<unsigned char>> ImGuiFonts{};
 // NOLINTEND
 
 auto MainWindow() -> void {}
@@ -72,12 +73,23 @@ auto LoadGUIState(lua_State *state) -> Result<GuiState> {
   config.OversampleV = 5;
   config.PixelSnapH = true;
   config.SizePixels = baseFontSize * scale;
+  config.FontDataOwnedByAtlas = false;
 
   ImGui::GetIO().Fonts->AddFontDefault(&config);
 
-  ImFont *font = inout.Fonts->AddFontFromFileTTF(
-      "src/Snap/Graphics/Assets/user_interface_font.ttf", baseFontSize,
-      &config);
+  const auto &sourceDirectory = Filesystem::GetSourceDirectory();
+  const std::string &fontPath = "Graphics/Assets/user_interface_font.ttf";
+  const auto fontDataResult = Filesystem::ReadFile(fontPath);
+  if (Error::IsError(fontDataResult)) {
+    return Error::Unexpected("Failed to load font file:'" +
+                             fontDataResult.error().message);
+  }
+  const auto &fontData = fontDataResult.value();
+  ImGuiFonts.emplace_back(fontData);
+
+  ImFont *font = inout.Fonts->AddFontFromMemoryTTF(
+      (void *)ImGuiFonts.back().data(), (int)ImGuiFonts.back().size(),
+      baseFontSize, &config);
 
   // Set the font as the default font
   inout.FontDefault = font;

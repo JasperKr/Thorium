@@ -8,6 +8,7 @@
 #include "guiState.h"
 #include "imgui.h"
 #include <string>
+#include <vector>
 
 #include "lua.hpp"
 
@@ -54,6 +55,7 @@ namespace Gui {
 // NOLINTBEGIN
 extern Ref<Graphics::Shader::ShaderModule> ImGuiShaderRGBA8;
 extern Ref<Graphics::Shader::ShaderModule> ImGuiShaderA8;
+extern std::vector<std::vector<unsigned char>> ImGuiFonts;
 // NOLINTEND
 
 auto LoadGUIState(lua_State *state) -> Result<GuiState>;

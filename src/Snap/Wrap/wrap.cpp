@@ -1,8 +1,5 @@
 #include "wrap.hpp"
 #include "Modules/console.hpp"
-#include "Wrap/Modules/Engine/wrap_imgui.hpp"
-#include "Wrap/Modules/Engine/wrap_renderer.hpp"
-#include "Wrap/Modules/Engine/wrap_scene.hpp"
 #include "Wrap/Modules/wrap_data.hpp"
 #include "Wrap/Modules/wrap_math.hpp"
 #include "Wrap/Modules/wrap_mouse.hpp"
@@ -119,7 +116,7 @@ static auto wrap_release(lua_State *state) -> int {
     proxy->object = nullptr;
 
     // load object storage table
-    LoadStorageTable(state, "ThoriumObjectStorage"); // [storage]
+    LoadStorageTable(state, "SnapObjectStorage"); // [storage]
 
     // NOLINTNEXTLINE
     auto key = (uintptr_t)(object);
@@ -276,7 +273,7 @@ auto RegisterLuaType(lua_State *state, const Type *type,
   }
 
   // Make sure permanent object storage table exists with weak values
-  LoadOrCreateStorageTable(state, "ThoriumObjectStorage"); // [storage]
+  LoadOrCreateStorageTable(state, "SnapObjectStorage"); // [storage]
 
   lua_pop(state, 1); // Remove storage table from stack []
 
@@ -370,7 +367,7 @@ auto PushObject(lua_State *state, const Type *type, Object *object) -> void {
   }
 
   // fetch permanent object storage table
-  LoadOrCreateStorageTable(state, "ThoriumObjectStorage"); // [storage]
+  LoadOrCreateStorageTable(state, "SnapObjectStorage"); // [storage]
 
   if (lua_isnoneornil(state, -1)) {
     // No storage table
@@ -413,7 +410,7 @@ auto PushObject(lua_State *state, Object *object) -> void {
   }
 
   // fetch permanent object storage table
-  LoadStorageTable(state, "ThoriumObjectStorage"); // [storage]
+  LoadStorageTable(state, "SnapObjectStorage"); // [storage]
 
   if (lua_isnoneornil(state, -1)) {
     // No storage table
@@ -448,7 +445,7 @@ auto PushObject(lua_State *state, Object *object) -> void {
 }
 
 // NOLINTNEXTLINE
-static const std::vector<luaL_Reg> ThoriumModules = {
+static const std::vector<luaL_Reg> SnapModules = {
     {"graphics", Graphics::luaopen_graphics},
     {"event", Wrap::Event::luaopen_event},
     {"timer", Wrap::Timer::luaopen_timer},
@@ -457,19 +454,20 @@ static const std::vector<luaL_Reg> ThoriumModules = {
     {"filesystem", Wrap::Filesystem::luaopen_filesystem},
     {"keyboard", Wrap::Keyboard::luaopen_keyboard},
     {"mouse", Wrap::Mouse::luaopen_mouse},
-    {"gui", Wrap::Imgui::luaopen_gui},
     {"window", Wrap::Window::luaopen_window},
     {"math", Wrap::Math::luaopen_engine_math},
-    {"scene", Wrap::Engine::luaopen_scene},
-    {"renderer", Engine::Renderer::luaopen_renderer},
 };
 
 auto RegisterModules(lua_State *state) -> void {
-  lua_newtable(state);          // [table]
-  lua_setglobal(state, "snap"); // [snap]
-  lua_pop(state, 1);            // empty stack
+  lua_getglobal(state, "snap"); // [snap or nil]
+  if (!lua_istable(state, -1)) {
+    lua_newtable(state);          // [nil, table]
+    lua_setglobal(state, "snap"); // set global 'snap'
+  }
+  // At this point, 'snap' table is on top of stack
+  lua_pop(state, 1); // empty stack
 
-  for (const auto &module : ThoriumModules) {
+  for (const auto &module : SnapModules) {
     module.func(state);
   }
 }

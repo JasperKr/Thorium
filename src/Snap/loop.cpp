@@ -1,3 +1,5 @@
+#include "loop.hpp"
+#include "Editor/gui.hpp"
 #include "Graphics/Buffers/uniform.hpp"
 #include "Graphics/buffer.hpp"
 #include "Graphics/dynamicRendering.hpp"
@@ -7,7 +9,6 @@
 #include "Graphics/resource.hpp"
 #include "Graphics/shader.hpp"
 #include "Graphics/texture.hpp"
-#include "Modules/Editor/gui.hpp"
 #include "Modules/config.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
@@ -15,7 +16,8 @@
 #include "Modules/thread.hpp"
 #include "Modules/window.hpp"
 #include "Wrap/Graphics/wrap_graphics.hpp"
-#include "Wrap/Modules/Engine/wrap_imgui.hpp"
+#include "Wrap/wrap_engine.hpp"
+#include "Wrap/wrap_imgui.hpp"
 #include <filesystem>
 #include <public/tracy/Tracy.hpp>
 #include <string>
@@ -183,6 +185,11 @@ auto LoadLua(lua_State *state, const std::vector<std::string> &launchArgs)
   return Error::Success();
 }
 
+auto RegisterAllLuaModules(lua_State *state) -> void {
+  LuaWrap::RegisterModules(state);
+  Engine::LuaWrap::RegisterModules(state);
+}
+
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 auto MainLoop(const std::vector<std::string> &arguments) -> Error {
   Error::SetupTraceback();
@@ -197,7 +204,7 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
 
   PrintDebug("Registering Lua modules...");
 
-  LuaWrap::RegisterModules(state);
+  RegisterAllLuaModules(state);
 
   PrintDebug("Lua modules registered.");
 
@@ -223,6 +230,8 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
 
   Filesystem::GetConfig().identity = config.Identity;
   Error fsInitErr = Filesystem::Init(".");
+  PrintAlways("Source base directory: {}",
+              Filesystem::GetSourceBaseDirectory());
 
   if (Error::IsError(fsInitErr)) {
     return fsInitErr;
@@ -235,6 +244,11 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
   }
 
   Error fsMntErr = Filesystem::Mount(".", "/", true);
+  if (Error::IsError(fsMntErr)) {
+    return fsMntErr;
+  }
+
+  fsMntErr = Filesystem::Mount(sourceDirectory, "/", true);
   if (Error::IsError(fsMntErr)) {
     return fsMntErr;
   }

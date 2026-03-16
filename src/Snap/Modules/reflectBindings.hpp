@@ -5,7 +5,6 @@
 #include "Modules/Math/vector.hpp"
 #include "Modules/type.hpp"
 #include "Wrap/Helpers/lua_enum.hpp"
-#include <bit>
 #include <cstdint>
 #include <ostream>
 #include <string>
@@ -92,7 +91,7 @@ struct Alias {
 };
 
 // NOLINTNEXTLINE
-inline std::vector<std::pair<std::string, std::vector<MethodInfo>>> LuaModules;
+extern std::vector<std::pair<std::string, std::vector<MethodInfo>>> LuaModules;
 
 // NOLINTNEXTLINE
 inline std::vector<Alias> LuaTypeAliases;
