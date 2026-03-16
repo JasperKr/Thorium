@@ -620,6 +620,33 @@ struct LuaBoundStruct : LuaDocumentingStruct {
       methodInfos.back().parameters[0].type =
           Traits::Type::value_type::element_type::GetType();
     }
+
+    // getItemCount method
+    names.emplace_back(std::string("get") + name + "Count");
+    AddMethod([](lua_State *state) -> int {
+      auto obj = LuaWrap::ResultFromLua<typename Traits::Object>(state, 1);
+      if (Error::IsError(obj)) {
+        return luaL_error(state, "%s", obj.error().message.c_str());
+      }
+
+      auto &vec = (*obj)->*Member;
+      lua_pushinteger(state, static_cast<lua_Integer>(vec.size()));
+      return 1;
+    });
+
+    methodInfos.emplace_back(MethodInfo{
+        .name = std::string("get") + name + "Count",
+        .description = description,
+        .parameters = {},
+        .returnType =
+            TypeInfo{
+                .name = "Count",
+                .type = nullptr,
+                .luaType = BindingLuaType::Integer,
+                .isEnum = false,
+                .isVector = false,
+            },
+    });
   };
 
   template <auto Member, const LuaWrap::LuaEnum<typename MemberTraits<

@@ -15,6 +15,7 @@ namespace Gui {
 // NOLINTBEGIN
 Ref<Graphics::Shader::ShaderModule> ImGuiShaderRGBA8;
 Ref<Graphics::Shader::ShaderModule> ImGuiShaderA8;
+std::vector<std::vector<unsigned char>> ImGuiFonts{};
 // NOLINTEND
 
 auto MainWindow() -> void {}
@@ -72,6 +73,7 @@ auto LoadGUIState(lua_State *state) -> Result<GuiState> {
   config.OversampleV = 5;
   config.PixelSnapH = true;
   config.SizePixels = baseFontSize * scale;
+  config.FontDataOwnedByAtlas = false;
 
   ImGui::GetIO().Fonts->AddFontDefault(&config);
 
@@ -83,9 +85,11 @@ auto LoadGUIState(lua_State *state) -> Result<GuiState> {
                              fontDataResult.error().message);
   }
   const auto &fontData = fontDataResult.value();
+  ImGuiFonts.emplace_back(fontData);
 
   ImFont *font = inout.Fonts->AddFontFromMemoryTTF(
-      (void *)fontData.data(), (int)fontData.size(), baseFontSize, &config);
+      (void *)ImGuiFonts.back().data(), (int)ImGuiFonts.back().size(),
+      baseFontSize, &config);
 
   // Set the font as the default font
   inout.FontDefault = font;

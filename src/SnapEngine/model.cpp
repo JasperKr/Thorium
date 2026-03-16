@@ -530,7 +530,7 @@ auto Model::LoadBinding(lua_State *state) -> int {
   auto binding = Bindings::LuaBoundStruct<Model>("Model");
 
   binding.RegisterMember<&Model::name>("Name");
-  binding.RegisterStandardVectorMember<&Model::shapes>("Shapes");
+  binding.RegisterStandardVectorMember<&Model::shapes>("Shape");
 
   binding.Register(state, methods);
 

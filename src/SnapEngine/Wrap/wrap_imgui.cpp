@@ -1,4 +1,5 @@
 #include "wrap_imgui.hpp"
+#include "Editor/gui.hpp"
 #include "Graphics/draw.hpp"
 #include "Graphics/dynamicRendering.hpp"
 #include "Graphics/graphics.hpp"
@@ -7,7 +8,6 @@
 #include "Graphics/shader.hpp"
 #include "Graphics/texture.hpp"
 #include "Graphics/vertexformat.hpp"
-#include "Modules/Editor/gui.hpp"
 #include "Modules/Peripherals/keyboard.hpp"
 #include "Modules/Peripherals/mouse.hpp"
 #include "Modules/console.hpp"

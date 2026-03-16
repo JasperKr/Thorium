@@ -1,12 +1,13 @@
 add_library(SnapEngine
   material.cpp
   model.cpp
-  project.cpp
+  "project.cpp"
   scene.cpp
   gltfLoader.cpp
 
-  # Wrappers
+  Editor/gui.cpp
 
+  # Wrappers
   Wrap/wrap_scene.cpp
   Wrap/wrap_renderer.cpp
   Wrap/wrap_imgui.cpp

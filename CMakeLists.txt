@@ -269,15 +269,13 @@ add_library(snap_core OBJECT
     src/Snap/Modules/utils.cpp
     src/Snap/Modules/error.cpp
     src/Snap/Modules/window.cpp
+    src/Snap/Modules/reflectBindings.cpp
 
 # Math Modules
     src/Snap/Modules/Math/vector.cpp
     src/Snap/Modules/Math/matrix.cpp
     src/Snap/Modules/Math/quaternion.cpp
     src/Snap/Modules/Math/math.cpp
-
-# Editor
-    src/Snap/Modules/Editor/gui.cpp
 
 # Wrappers
     src/Snap/Wrap/Graphics/wrap_graphics.cpp
@@ -415,6 +413,7 @@ endif()
 add_executable(lua_stub_gen
     src/Snap/generateBindings.cpp
     $<TARGET_OBJECTS:snap_core>
+    $<TARGET_OBJECTS:SnapEngine>
 )
 
 target_compile_definitions(lua_stub_gen
@@ -425,6 +424,7 @@ target_compile_definitions(lua_stub_gen
 target_link_libraries(lua_stub_gen
     PRIVATE
         snap_core
+        SnapEngine
 )
 
 add_custom_target(generate_bindings

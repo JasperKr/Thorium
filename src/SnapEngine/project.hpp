@@ -29,9 +29,6 @@ struct Project : Object, UiElement {
   static auto GetType() -> Type const * { return &projectType; }
   auto GetInstanceType() const -> const Type * override { return &projectType; }
 
-  static auto GetScene(lua_State *state) -> int;
-  static auto AddScene(lua_State *state) -> int;
-  static auto RemoveScene(lua_State *state) -> int;
   static auto LoadBinding(lua_State *state) -> int;
   auto DrawUiElement() -> Error override;
 };

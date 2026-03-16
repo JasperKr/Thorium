@@ -1,4 +1,5 @@
 #include "loop.hpp"
+#include "Editor/gui.hpp"
 #include "Graphics/Buffers/uniform.hpp"
 #include "Graphics/buffer.hpp"
 #include "Graphics/dynamicRendering.hpp"
@@ -8,7 +9,6 @@
 #include "Graphics/resource.hpp"
 #include "Graphics/shader.hpp"
 #include "Graphics/texture.hpp"
-#include "Modules/Editor/gui.hpp"
 #include "Modules/config.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
