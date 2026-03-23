@@ -1,26 +1,62 @@
 #!/usr/bin/env bash
 set -e
 
+read -p "This script will fetch all dependencies for the project. Do you want to proceed? (y/n) " -n 1 -r
+echo    # move to a new line
+if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    echo "Aborting."
+    exit 1
+fi
+
 git submodule update --init --recursive
 
 # Create include folders
 mkdir -p include/tl include/vma include/stb include/volk include/shaderc
 
 # Fetch TL expected.hpp
-curl -L https://raw.githubusercontent.com/TartanLlama/expected/master/include/tl/expected.hpp -o include/tl/expected.hpp
+if [ ! -f "include/tl/expected.hpp" ]; then
+    echo "Fetching tl::expected..."
+    curl -L https://raw.githubusercontent.com/TartanLlama/expected/master/include/tl/expected.hpp -o include/tl/expected.hpp
+else
+    echo "tl::expected already exists, skipping fetch."
+fi
 
 # Fetch VMA
-curl -L https://raw.githubusercontent.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator/master/include/vk_mem_alloc.h -o include/vma/vk_mem_alloc.h
+if [ ! -f "include/vma/vk_mem_alloc.h" ]; then
+    echo "Fetching Vulkan Memory Allocator..."
+    mkdir -p include/vma
+    curl -L https://raw.githubusercontent.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator/master/include/vk_mem_alloc.h -o include/vma/vk_mem_alloc.h
+else
+    echo "Vulkan Memory Allocator already exists, skipping fetch."
+fi
 
 # Fetch Volk
-curl -L https://raw.githubusercontent.com/zeux/volk/master/volk.h -o include/volk/volk.h
-curl -L https://raw.githubusercontent.com/zeux/volk/master/volk.c -o include/volk/volk.c
+if [ ! -f "include/volk/volk.h" ] || [ ! -f "include/volk/volk.c" ]; then
+    echo "Fetching Volk..."
+    mkdir -p include/volk
+    curl -L https://raw.githubusercontent.com/zeux/volk/master/volk.h -o include/volk/volk.h
+    curl -L https://raw.githubusercontent.com/zeux/volk/master/volk.c -o include/volk/volk.c
+else
+    echo "Volk already exists, skipping fetch."
+fi
 
 # Fetch stb_image
-curl -L https://raw.githubusercontent.com/nothings/stb/master/stb_image.h -o include/stb/stb_image.h
+if [ ! -f "include/stb/stb_image.h" ]; then
+    echo "Fetching stb_image..."
+    mkdir -p include/stb
+    curl -L https://raw.githubusercontent.com/nothings/stb/master/stb_image.h -o include/stb/stb_image.h
+else
+    echo "stb_image already exists, skipping fetch."
+fi
 
 # Fetch stb_perlin
-curl -L https://raw.githubusercontent.com/nothings/stb/master/stb_perlin.h -o include/stb/stb_perlin.h
+if [ ! -f "include/stb/stb_perlin.h" ]; then
+    echo "Fetching stb_perlin..."
+    mkdir -p include/stb
+    curl -L https://raw.githubusercontent.com/nothings/stb/master/stb_perlin.h -o include/stb/stb_perlin.h
+else
+    echo "stb_perlin already exists, skipping fetch."
+fi
 
 # Fetch embree pre-built binearies for Linux x86_64
 URL="https://github.com/embree/embree/releases/download/v4.4.0/embree-4.4.0.x86_64.linux.tar.gz"
@@ -79,14 +115,16 @@ if [ ! -d "./include/slang/" ] || [ -z "$(ls -A ./include/slang/)" ]; then
     rm -rf "$TEMP_DIR"
 fi
 
-echo "Fetching float-16"
-URL="https://github.com/fengwang/float16_t.git"
-if [ ! -d "float16_t_temp" ]; then
-    git clone --depth 1 "$URL" float16_t_temp
+if [ ! -f "include/float16_t/float16_t.hpp" ]; then
+    echo "Fetching float-16"
+    URL="https://github.com/fengwang/float16_t.git"
+    if [ ! -d "float16_t_temp" ]; then
+        git clone --depth 1 "$URL" float16_t_temp
+    fi
+    mkdir -p include/float16_t
+    cp float16_t_temp/float16_t.hpp include/float16_t/float16_t.hpp
+    rm -rf float16_t_temp
 fi
-mkdir -p include/float16_t
-cp float16_t_temp/float16_t.hpp include/float16_t/float16_t.hpp
-rm -rf float16_t_temp
 
 # Download https://github.com/spnda/fastgltf.git to temp/fastgltf and copy temp/fastgltf/include/fastgltf/* to include/fastgltf/
 URL="https://github.com/spnda/fastgltf.git"
@@ -99,6 +137,16 @@ if [ ! -d "include/simdjson" ]; then
     curl -L "$URL" -o "include/simdjson/singleheader.zip"
     unzip -q "include/simdjson/singleheader.zip" -d "include/simdjson/"
     rm "include/simdjson/singleheader.zip"
+fi
+URL="https://github.com/SanderMertens/flecs/archive/refs/tags/v4.1.5.tar.gz"
+if [ ! -d "include/flecs" ]; then
+    mkdir -p include/flecs
+    curl -L "$URL" -o "include/flecs/flecs.tar.gz"
+    mkdir -p temp_flecs
+    tar -xzf "include/flecs/flecs.tar.gz" -C "temp_flecs/" --strip-components=1
+    cp -r temp_flecs/include/* include/flecs/
+    rm -rf temp_flecs
+    rm "include/flecs/flecs.tar.gz"
 fi
 
 echo "All dependencies fetched into include/"

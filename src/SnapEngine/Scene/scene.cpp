@@ -5,6 +5,8 @@
 #include "Wrap/Helpers/lua_vector.hpp"
 #include "Wrap/wrap.hpp"
 #include "model.hpp"
+#include "node.hpp"
+#include "shape.hpp"
 
 #include "Wrap/Helpers/lua_variant.hpp"
 #include <imgui.h>
@@ -21,6 +23,7 @@ auto Scene::LoadBinding(lua_State *state) -> int {
       {"addHierarchyObject", AddHierarchyObject},
       {"getHierarchyObject", GetHierarchyObject},
       {"removeHierarchyObject", RemoveHierarchyObject},
+      {"getHierarchyObjectCount", GetHierarchyObjectCount},
       {"drawUiElement", GetDrawUiElementLuaBinding<Scene>()},
   };
 
@@ -83,6 +86,11 @@ auto Scene::LoadBinding(lua_State *state) -> int {
       "Remove an object from the scene's hierarchy by index",
       {Bindings::LuaDocumentingStruct::CreateType(
           "Index", Bindings::BindingLuaType::Integer)});
+  binding.DocumentCustomMethod(
+      "getHierarchyObjectCount",
+      "Get the number of objects in the scene's hierarchy", {},
+      Bindings::LuaDocumentingStruct::CreateType(
+          "Count", Bindings::BindingLuaType::Integer));
 
   binding.Register(state, methods);
 
@@ -172,6 +180,15 @@ auto Scene::RemoveHierarchyObject(lua_State *state) -> int {
                          static_cast<int>(index - 1));
 
   return 0;
+}
+auto Scene::GetHierarchyObjectCount(lua_State *state) -> int {
+  auto *scene = LuaWrap::ObjectFromLua<Scene>(state, 1);
+  if (scene == nullptr) {
+    return luaL_error(state, "Invalid scene object");
+  }
+
+  lua_pushinteger(state, static_cast<lua_Integer>(scene->hierarchy.size()));
+  return 1;
 }
 
 auto Scene::DrawUiElement() -> Error {

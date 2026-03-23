@@ -1,11 +1,13 @@
 #include "gltfLoader.hpp"
 #include "Graphics/graphicsContext.hpp"
 #include "Graphics/texture.hpp"
+#include "Modules/Math/quaternion.hpp"
+#include "Modules/Math/vector.hpp"
 #include "Modules/error.hpp"
 #include "Modules/filesystem.hpp"
 #include "Modules/object.hpp"
+#include "Scene/shape.hpp"
 #include "material.hpp"
-#include "model.hpp"
 #include <cstdint>
 #include <span>
 #include <string>
@@ -13,6 +15,7 @@
 #include "fastgltf/include/fastgltf/core.hpp"
 #include "fastgltf/include/fastgltf/types.hpp"
 
+#include "Scene/node.hpp"
 #include "vulkan/vulkan_core.h"
 
 #include <variant>

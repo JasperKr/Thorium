@@ -2,7 +2,7 @@
 
 #include "Graphics/graphicsContext.hpp"
 #include "Modules/error.hpp"
-#include "scene.hpp"
+#include "Scene/scene.hpp"
 #include <string>
 namespace glTF {
 

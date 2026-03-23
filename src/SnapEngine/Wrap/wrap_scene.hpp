@@ -1,8 +1,8 @@
 #pragma once
 
+#include "Scene/scene.hpp"
 #include "Wrap/wrap.hpp"
 #include "lua.hpp"
-#include "scene.hpp"
 
 namespace Wrap::Engine {
 

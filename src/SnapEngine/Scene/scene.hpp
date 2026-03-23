@@ -2,11 +2,11 @@
 
 #include "Modules/object.hpp"
 #include "Modules/type.hpp"
+#include "Scene/node.hpp"
 #include "drawable.hpp"
 #include "identifier.hpp"
-#include "model.hpp"
+#include "sceneObject.hpp"
 #include <string>
-#include <vector>
 
 #include "lua.hpp"
 
@@ -34,6 +34,7 @@ struct Scene : Object, UiElement {
   static auto AddHierarchyObject(lua_State *state) -> int;
   static auto GetHierarchyObject(lua_State *state) -> int;
   static auto RemoveHierarchyObject(lua_State *state) -> int;
+  static auto GetHierarchyObjectCount(lua_State *state) -> int;
 
   static auto GetType() -> Type const * { return &sceneType; }
   auto GetInstanceType() const -> const Type * override { return &sceneType; }

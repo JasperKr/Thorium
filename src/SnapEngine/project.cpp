@@ -1,9 +1,10 @@
 #include "project.hpp"
 #include "Modules/bindings.hpp"
 #include "Modules/error.hpp"
-#include "Wrap/wrap.hpp"
+#include "Scene/model.hpp"
+#include "Scene/node.hpp"
+#include "Scene/shape.hpp"
 
-#include <algorithm>
 #include <imgui.h>
 #include <utility>
 #include <vector>

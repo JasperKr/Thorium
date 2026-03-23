@@ -1,7 +1,9 @@
 #include "wrap_scene.hpp"
 #include "Modules/object.hpp"
+#include "Scene/node.hpp"
+#include "Scene/scene.hpp"
+#include "Scene/shape.hpp"
 #include "Wrap/wrap.hpp"
-#include "scene.hpp"
 
 namespace Wrap::Engine {
 

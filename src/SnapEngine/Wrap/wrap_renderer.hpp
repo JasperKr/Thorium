@@ -1,9 +1,11 @@
 #pragma once
 
+#include "Scene/model.hpp"
+#include "Scene/node.hpp"
+#include "Scene/shape.hpp"
 #include "Wrap/wrap.hpp"
 #include "lua.hpp"
 #include "material.hpp"
-#include "model.hpp"
 #include <vector>
 
 namespace Engine::Renderer {
