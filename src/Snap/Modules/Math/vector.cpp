@@ -1,5 +1,5 @@
 #include "vector.hpp"
-#include "Modules/Math/math.hpp"
+#include <algorithm>
 #include <cassert>
 #include <cmath>
 #include <cstdint>
@@ -1153,5 +1153,77 @@ Ivec4::Ivec4(const Uvec3 &vec3, int32_t w_val)
 Ivec4::Ivec4(const Uvec4 &vec4)
     : x(static_cast<int32_t>(vec4.x)), y(static_cast<int32_t>(vec4.y)),
       z(static_cast<int32_t>(vec4.z)), w(static_cast<int32_t>(vec4.w)) {}
+
+auto Min(const Vec2 &vec_a, const Vec2 &vec_b) -> Vec2 {
+  return {std::fmin(vec_a.x, vec_b.x), std::fmin(vec_a.y, vec_b.y)};
+}
+auto Min(const Vec3 &vec_a, const Vec3 &vec_b) -> Vec3 {
+  return {std::fmin(vec_a.x, vec_b.x), std::fmin(vec_a.y, vec_b.y),
+          std::fmin(vec_a.z, vec_b.z)};
+}
+auto Min(const Vec4 &vec_a, const Vec4 &vec_b) -> Vec4 {
+  return {std::fmin(vec_a.x, vec_b.x), std::fmin(vec_a.y, vec_b.y),
+          std::fmin(vec_a.z, vec_b.z), std::fmin(vec_a.w, vec_b.w)};
+}
+
+auto Max(const Vec2 &vec_a, const Vec2 &vec_b) -> Vec2 {
+  return {std::fmax(vec_a.x, vec_b.x), std::fmax(vec_a.y, vec_b.y)};
+}
+auto Max(const Vec3 &vec_a, const Vec3 &vec_b) -> Vec3 {
+  return {std::fmax(vec_a.x, vec_b.x), std::fmax(vec_a.y, vec_b.y),
+          std::fmax(vec_a.z, vec_b.z)};
+}
+auto Max(const Vec4 &vec_a, const Vec4 &vec_b) -> Vec4 {
+  return {std::fmax(vec_a.x, vec_b.x), std::fmax(vec_a.y, vec_b.y),
+          std::fmax(vec_a.z, vec_b.z), std::fmax(vec_a.w, vec_b.w)};
+}
+
+auto Min(const Uvec2 &vec_a, const Uvec2 &vec_b) -> Uvec2 {
+  return {std::min(vec_a.x, vec_b.x), std::min(vec_a.y, vec_b.y)};
+}
+auto Min(const Uvec3 &vec_a, const Uvec3 &vec_b) -> Uvec3 {
+  return {std::min(vec_a.x, vec_b.x), std::min(vec_a.y, vec_b.y),
+          std::min(vec_a.z, vec_b.z)};
+}
+auto Min(const Uvec4 &vec_a, const Uvec4 &vec_b) -> Uvec4 {
+  return {std::min(vec_a.x, vec_b.x), std::min(vec_a.y, vec_b.y),
+          std::min(vec_a.z, vec_b.z), std::min(vec_a.w, vec_b.w)};
+}
+
+auto Max(const Uvec2 &vec_a, const Uvec2 &vec_b) -> Uvec2 {
+  return {std::max(vec_a.x, vec_b.x), std::max(vec_a.y, vec_b.y)};
+}
+auto Max(const Uvec3 &vec_a, const Uvec3 &vec_b) -> Uvec3 {
+  return {std::max(vec_a.x, vec_b.x), std::max(vec_a.y, vec_b.y),
+          std::max(vec_a.z, vec_b.z)};
+}
+auto Max(const Uvec4 &vec_a, const Uvec4 &vec_b) -> Uvec4 {
+  return {std::max(vec_a.x, vec_b.x), std::max(vec_a.y, vec_b.y),
+          std::max(vec_a.z, vec_b.z), std::max(vec_a.w, vec_b.w)};
+}
+
+auto Min(const Ivec2 &vec_a, const Ivec2 &vec_b) -> Ivec2 {
+  return {std::min(vec_a.x, vec_b.x), std::min(vec_a.y, vec_b.y)};
+}
+auto Min(const Ivec3 &vec_a, const Ivec3 &vec_b) -> Ivec3 {
+  return {std::min(vec_a.x, vec_b.x), std::min(vec_a.y, vec_b.y),
+          std::min(vec_a.z, vec_b.z)};
+}
+auto Min(const Ivec4 &vec_a, const Ivec4 &vec_b) -> Ivec4 {
+  return {std::min(vec_a.x, vec_b.x), std::min(vec_a.y, vec_b.y),
+          std::min(vec_a.z, vec_b.z), std::min(vec_a.w, vec_b.w)};
+}
+
+auto Max(const Ivec2 &vec_a, const Ivec2 &vec_b) -> Ivec2 {
+  return {std::max(vec_a.x, vec_b.x), std::max(vec_a.y, vec_b.y)};
+}
+auto Max(const Ivec3 &vec_a, const Ivec3 &vec_b) -> Ivec3 {
+  return {std::max(vec_a.x, vec_b.x), std::max(vec_a.y, vec_b.y),
+          std::max(vec_a.z, vec_b.z)};
+}
+auto Max(const Ivec4 &vec_a, const Ivec4 &vec_b) -> Ivec4 {
+  return {std::max(vec_a.x, vec_b.x), std::max(vec_a.y, vec_b.y),
+          std::max(vec_a.z, vec_b.z), std::max(vec_a.w, vec_b.w)};
+}
 
 } // namespace Math

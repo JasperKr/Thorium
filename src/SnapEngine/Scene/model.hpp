@@ -1,28 +1,28 @@
 #pragma once
 
-#include "Modules/object.hpp"
-#include "Modules/type.hpp"
+#include "Scene/selectable.hpp"
 #include "Scene/transform.hpp"
-#include "Scene/world.hpp"
-#include "drawable.hpp"
-#include "flecs/flecs.h"
-#include "shape.hpp"
-#include <flecs/flecs/addons/cpp/world.hpp>
+#include <flecs.h>
 #include <string>
+#include <vector>
 namespace Engine {
-const Type modelType = Type("Model");
-
-// NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
-
-extern thread_local uint64_t NextNodeUserdataIndex;
-extern thread_local uint64_t NextModelUserdataIndex;
-
-// NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
 struct Model {
-  static auto Create() -> auto {
-    auto entity = Ecs.entity();
-    entity.add<Transform>();
+  static auto CreateModel(flecs::world &world, const std::string &name,
+                          const std::vector<flecs::entity> &shapes,
+                          const flecs::entity &material) -> flecs::entity {
+    auto modelEntity = flecs::entity(world, name.c_str());
+    modelEntity.add<Model>();
+
+    modelEntity.add<Selectable>(Selectable{.name = name});
+    modelEntity.add<Transform>();
+
+    for (const auto &shape : shapes) {
+      shape.child_of(modelEntity);
+    }
+
+    material.child_of(modelEntity);
+    return modelEntity;
   }
 };
 

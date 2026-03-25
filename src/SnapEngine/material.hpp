@@ -3,7 +3,6 @@
 #include "Graphics/shader.hpp"
 #include "Graphics/texture.hpp"
 #include "Modules/object.hpp"
-#include "drawable.hpp"
 #include <array>
 #include <string>
 
@@ -22,7 +21,7 @@ using TexRef = Ref<Graphics::Texture::Texture>;
 
 const Type materialType = Type("Material");
 
-struct Material : Object, Engine::UiElement {
+struct Material {
   std::string name;
 
   VkCullModeFlags cullMode = VK_CULL_MODE_BACK_BIT;
@@ -55,14 +54,6 @@ struct Material : Object, Engine::UiElement {
   // 6: emissive
   // NOLINTNEXTLINE (magic numbers)
   std::array<uint8_t, 7> textureUVIndices = {0};
-
-  static auto GetType() -> Type const * { return &materialType; }
-  auto GetInstanceType() const -> const Type * override {
-    return &materialType;
-  }
-
-  auto DrawUiElement() -> Error override;
-  static auto LoadBinding(lua_State *state) -> int;
 
   static auto wrap_setCullMode(lua_State *state) -> int;
   static auto wrap_getCullMode(lua_State *state) -> int;

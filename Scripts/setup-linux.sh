@@ -60,7 +60,7 @@ fi
 
 # Fetch embree pre-built binearies for Linux x86_64
 URL="https://github.com/embree/embree/releases/download/v4.4.0/embree-4.4.0.x86_64.linux.tar.gz"
-if [ ! -d "temp_embree" ]; then
+if [ ! -d "include/embree" ] || [ -z "$(ls -A include/embree)" ]; then
     mkdir -p temp_embree
     curl -L "$URL" -o "temp_embree/embree.tar.gz"
     tar -xzf "temp_embree/embree.tar.gz" -C temp_embree
@@ -137,16 +137,6 @@ if [ ! -d "include/simdjson" ]; then
     curl -L "$URL" -o "include/simdjson/singleheader.zip"
     unzip -q "include/simdjson/singleheader.zip" -d "include/simdjson/"
     rm "include/simdjson/singleheader.zip"
-fi
-URL="https://github.com/SanderMertens/flecs/archive/refs/tags/v4.1.5.tar.gz"
-if [ ! -d "include/flecs" ]; then
-    mkdir -p include/flecs
-    curl -L "$URL" -o "include/flecs/flecs.tar.gz"
-    mkdir -p temp_flecs
-    tar -xzf "include/flecs/flecs.tar.gz" -C "temp_flecs/" --strip-components=1
-    cp -r temp_flecs/include/* include/flecs/
-    rm -rf temp_flecs
-    rm "include/flecs/flecs.tar.gz"
 fi
 
 echo "All dependencies fetched into include/"

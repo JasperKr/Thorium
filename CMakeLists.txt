@@ -227,6 +227,21 @@ elseif(UNIX)
 endif()
 
 # -------------------------------
+# Flecs
+# -------------------------------
+
+cmake_policy(PUSH)
+cmake_policy(SET CMP0077 NEW)
+
+set(FLECS_STATIC ON)
+set(FLECS_SHARED OFF)
+set(FLECS_PIC ON)
+set(FLECS_TESTS OFF)
+add_subdirectory(external/flecs)
+
+cmake_policy(POP)
+
+# -------------------------------
 # Engine core (shared object library)
 # -------------------------------
 add_library(snap_core OBJECT
@@ -338,6 +353,7 @@ target_link_libraries(snap_core
         ${SLANG_LIBS}
         fastgltf
         tracy
+        flecs::flecs_static
 )
 
 # -------------------------------

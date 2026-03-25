@@ -10,14 +10,14 @@ struct Transform {
   Math::Quaternion Rotation;
   Math::Vec3 Scale{1.0F, 1.0F, 1.0F};
 
-  auto PushPosition(lua_State *state) const -> void;
-  auto ReadPosition(lua_State *state) -> void;
-
-  auto PushRotation(lua_State *state) const -> void;
-  auto ReadRotation(lua_State *state) -> void;
-
-  auto PushScale(lua_State *state) const -> void;
-  auto ReadScale(lua_State *state) -> void;
+  static auto SetPosition(lua_State *state) -> int;
+  static auto GetPosition(lua_State *state) -> int;
+  static auto SetRotation(lua_State *state) -> int;
+  static auto GetRotation(lua_State *state) -> int;
+  static auto SetScale(lua_State *state) -> int;
+  static auto GetScale(lua_State *state) -> int;
+  static auto SetTransform(lua_State *state) -> int;
+  static auto GetTransform(lua_State *state) -> int;
 };
 
 } // namespace Engine

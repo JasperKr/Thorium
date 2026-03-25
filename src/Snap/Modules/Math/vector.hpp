@@ -428,4 +428,28 @@ struct Ivec4 {
   explicit Ivec4(const Uvec4 &vec4);
 };
 
+auto Min(const Vec2 &vec_a, const Vec2 &vec_b) -> Vec2;
+auto Min(const Vec3 &vec_a, const Vec3 &vec_b) -> Vec3;
+auto Min(const Vec4 &vec_a, const Vec4 &vec_b) -> Vec4;
+
+auto Max(const Vec2 &vec_a, const Vec2 &vec_b) -> Vec2;
+auto Max(const Vec3 &vec_a, const Vec3 &vec_b) -> Vec3;
+auto Max(const Vec4 &vec_a, const Vec4 &vec_b) -> Vec4;
+
+auto Min(const Uvec2 &vec_a, const Uvec2 &vec_b) -> Uvec2;
+auto Min(const Uvec3 &vec_a, const Uvec3 &vec_b) -> Uvec3;
+auto Min(const Uvec4 &vec_a, const Uvec4 &vec_b) -> Uvec4;
+
+auto Max(const Uvec2 &vec_a, const Uvec2 &vec_b) -> Uvec2;
+auto Max(const Uvec3 &vec_a, const Uvec3 &vec_b) -> Uvec3;
+auto Max(const Uvec4 &vec_a, const Uvec4 &vec_b) -> Uvec4;
+
+auto Min(const Ivec2 &vec_a, const Ivec2 &vec_b) -> Ivec2;
+auto Min(const Ivec3 &vec_a, const Ivec3 &vec_b) -> Ivec3;
+auto Min(const Ivec4 &vec_a, const Ivec4 &vec_b) -> Ivec4;
+
+auto Max(const Ivec2 &vec_a, const Ivec2 &vec_b) -> Ivec2;
+auto Max(const Ivec3 &vec_a, const Ivec3 &vec_b) -> Ivec3;
+auto Max(const Ivec4 &vec_a, const Ivec4 &vec_b) -> Ivec4;
+
 } // namespace Math

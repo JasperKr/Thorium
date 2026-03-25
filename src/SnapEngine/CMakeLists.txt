@@ -8,6 +8,10 @@ add_library(SnapEngine
   Scene/model.cpp
   Scene/scene.cpp
   Scene/shape.cpp
+  Scene/transform.cpp
+  Scene/levelOfDetail.cpp
+  Scene/boundingBox.cpp
+  Scene/selectable.cpp
 
   # Wrappers
   Wrap/wrap_scene.cpp
