@@ -60,6 +60,6 @@ struct LuaModel : Object {
   static auto GetShapes(lua_State *state) -> int;
 };
 
-extern const LuaWrap::LuaModule ModelModule;
+extern const LuaWrap::LuaClass ModelClass;
 
 } // namespace Engine

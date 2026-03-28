@@ -25,6 +25,6 @@ struct Scene : Object {
   static auto DrawUiElement(lua_State *state) -> int;
 };
 
-extern "C" auto luaopen_Scene(lua_State *state) -> int;
+extern const LuaWrap::LuaClass SceneLuaClass;
 
 } // namespace Engine

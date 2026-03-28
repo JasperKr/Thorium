@@ -249,9 +249,10 @@ auto LuaModel::GetShapes(lua_State *state) -> int {
   return 1;
 }
 
-const LuaWrap::LuaModule ModelModule = {
+const LuaWrap::LuaClass ModelClass = {
     .Name = "Model",
-    .Functions =
+    .Type = LuaModel::GetType(),
+    .Methods =
         {
             {"Create", LuaModel::Create},
             {"GetName", LuaModel::GetName},
@@ -264,8 +265,6 @@ const LuaWrap::LuaModule ModelModule = {
             {"SetScale", LuaModel::SetScale},
             {"GetShapes", LuaModel::GetShapes},
         },
-    .ChildrenInitFunctions = {},
-    .Children = {},
 };
 
 // NOLINTEND(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)

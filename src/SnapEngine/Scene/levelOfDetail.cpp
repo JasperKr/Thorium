@@ -101,9 +101,10 @@ auto LuaLevelOfDetail::GetMeshes(lua_State *state) -> int {
   return 1;
 }
 
-const LuaWrap::LuaModule LevelOfDetailModule = {
+const LuaWrap::LuaClass LevelOfDetailClass = {
     .Name = "LevelOfDetail",
-    .Functions =
+    .Type = LuaLevelOfDetail::GetType(),
+    .Methods =
         {
             {"GetTransitionThreshold",
              LuaLevelOfDetail::GetTransitionThreshold},

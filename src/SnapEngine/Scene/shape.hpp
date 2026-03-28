@@ -2,6 +2,7 @@
 
 #include "Modules/object.hpp"
 #include "Scene/levelOfDetail.hpp"
+#include "Wrap/wrap.hpp"
 #include <flecs.h>
 #include <lua.hpp>
 #include <vector>
@@ -41,6 +42,6 @@ struct LuaShape : Object {
   static auto GetLODs(lua_State *state) -> int;
 };
 
-extern const LuaWrap::LuaModule ShapeModule;
+extern const LuaWrap::LuaClass ShapeClass;
 
 }; // namespace Engine

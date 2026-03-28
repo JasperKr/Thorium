@@ -17,7 +17,14 @@ struct LuaModule {
 
   std::vector<luaL_Reg> Functions;
   std::vector<lua_CFunction> ChildrenInitFunctions;
-  std::vector<LuaModule> Children;
+};
+
+struct LuaClass {
+  std::string Name;
+  Type const *Type;
+
+  std::vector<luaL_Reg> Methods;
+  std::vector<LuaClass> Children;
 };
 
 auto RegisterLuaModule(lua_State *state, const LuaModule &module) -> void;
@@ -39,6 +46,7 @@ auto SetStackToTable(lua_State *state, const char *key) -> void;
 auto PushObject(lua_State *state, const Type *type, Object *object) -> void;
 auto RegisterLuaType(lua_State *state, const Type *type,
                      const std::vector<luaL_Reg> &functions) -> void;
+auto RegisterLuaType(lua_State *state, const LuaClass &luaClass) -> void;
 auto SetupLuaType(lua_State *state, const Type *type, Object *object) -> void;
 auto LoadStorageTable(lua_State *state, const char *key) -> void;
 auto LoadOrCreateStorageTable(lua_State *state, const char *key) -> void;

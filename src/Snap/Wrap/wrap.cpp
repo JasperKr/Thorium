@@ -254,26 +254,34 @@ auto RegisterLuaModule(lua_State *state, const LuaModule &module) -> void {
 
   // done, remove module table from stack
   lua_pop(state, 1); // []
-
-  for (const auto &child : module.Children) {
-    RegisterLuaModule(state, child);
-  }
 }
 
 auto RegisterLuaType(lua_State *state, const Type *type,
                      const std::vector<luaL_Reg> &functions) -> void {
+  RegisterLuaType(state, LuaClass{.Name = type->GetName(),
+                                  .Type = type,
+                                  .Methods = functions,
+                                  .Children = {}});
+}
 
-  if (type == nullptr) {
-    PrintError("Cannot register Lua type: type is null");
-    return;
-  }
+auto RegisterLuaType(lua_State *state, const LuaClass &luaClass) -> void {
 
   // Make sure permanent object storage table exists with weak values
   LoadOrCreateStorageTable(state, "SnapObjectStorage"); // [storage]
 
   lua_pop(state, 1); // Remove storage table from stack []
 
-  const auto *name = type->GetName().c_str();
+  if (luaClass.Methods.empty()) {
+    PrintError("Lua type {} has no methods to register.", luaClass.Name);
+    return;
+  }
+
+  if (luaClass.Type == nullptr) {
+    PrintError("Lua type {} has null Type pointer.", luaClass.Name);
+    return;
+  }
+
+  const auto *name = luaClass.Type->GetName().c_str();
 
   luaL_newmetatable(state, name);     // Create metatable [mt]
   lua_pushvalue(state, -1);           // Duplicate metatable [mt, mt]
@@ -295,13 +303,12 @@ auto RegisterLuaType(lua_State *state, const Type *type,
       "__gc", "__index", "__tostring", "type", "typeof", "__eq", "release",
   };
 
-  // Register functions
-  for (const auto &func : functions) {
+  for (const auto &func : luaClass.Methods) {
     // Check for reserved names
     if (ReservedNames.contains(func.name)) {
       PrintError("Cannot register Lua type {}: function name '{}' is "
                  "reserved.",
-                 type->GetName(), func.name);
+                 luaClass.Type->GetName(), func.name);
       continue;
     }
 #if !defined(NDEBUG) && DEBUG_CPP_EXCEPTION // If debug build
@@ -318,6 +325,12 @@ auto RegisterLuaType(lua_State *state, const Type *type,
   }
 
   lua_pop(state, 1); // []
+
+  PrintAlways("Registered Lua type: {}", luaClass.Name);
+
+  for (const auto &child : luaClass.Children) {
+    RegisterLuaType(state, child);
+  }
 }
 
 auto SetupLuaType(lua_State *state, const Type *type, Object *object) -> void {

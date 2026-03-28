@@ -289,22 +289,20 @@ auto LuaBoundingBox::IntersectInPlace(lua_State *state) -> int {
   return 0;
 }
 
-const LuaWrap::LuaModule BoundingBoxModule = {
+const LuaWrap::LuaClass BoundingBoxClass = {
     .Name = "BoundingBox",
-    .Functions =
-        {
-            {"GetMin", LuaBoundingBox::GetMin},
-            {"SetMin", LuaBoundingBox::SetMin},
-            {"GetMax", LuaBoundingBox::GetMax},
-            {"SetMax", LuaBoundingBox::SetMax},
-            {"GetCenter", LuaBoundingBox::GetCenter},
-            {"GetSize", LuaBoundingBox::GetSize},
-            {"Union", LuaBoundingBox::Union},
-            {"Intersect", LuaBoundingBox::Intersect},
-            {"UnionInPlace", LuaBoundingBox::UnionInPlace},
-            {"IntersectInPlace", LuaBoundingBox::IntersectInPlace},
-        },
-    .ChildrenInitFunctions = {},
-    .Children = {}};
+    .Type = LuaBoundingBox::GetType(),
+    .Methods = {
+        {"GetMin", LuaBoundingBox::GetMin},
+        {"SetMin", LuaBoundingBox::SetMin},
+        {"GetMax", LuaBoundingBox::GetMax},
+        {"SetMax", LuaBoundingBox::SetMax},
+        {"GetCenter", LuaBoundingBox::GetCenter},
+        {"GetSize", LuaBoundingBox::GetSize},
+        {"Union", LuaBoundingBox::Union},
+        {"Intersect", LuaBoundingBox::Intersect},
+        {"UnionInPlace", LuaBoundingBox::UnionInPlace},
+        {"IntersectInPlace", LuaBoundingBox::IntersectInPlace},
+    }};
 
 } // namespace Engine

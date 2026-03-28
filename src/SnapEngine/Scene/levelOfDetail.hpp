@@ -58,6 +58,6 @@ struct LuaLevelOfDetail : Object {
   static auto GetMeshes(lua_State *state) -> int;
 };
 
-extern const LuaWrap::LuaModule LevelOfDetailModule;
+extern const LuaWrap::LuaClass LevelOfDetailClass;
 
 } // namespace Engine

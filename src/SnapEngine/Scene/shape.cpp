@@ -47,9 +47,10 @@ auto LuaShape::GetLODs(lua_State *state) -> int {
   return 1;
 }
 
-const LuaWrap::LuaModule ShapeModule = {
+const LuaWrap::LuaClass ShapeClass = {
     .Name = "Shape",
-    .Functions =
+    .Type = LuaShape::GetType(),
+    .Methods =
         {
             {"GetName", LuaShape::GetName},
             {"SetName", LuaShape::SetName},

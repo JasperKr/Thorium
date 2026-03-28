@@ -74,13 +74,23 @@ auto Scene::DrawUiElement(lua_State *state) -> int {
   return 0;
 }
 
-const std::vector<luaL_Reg> SceneLib = {
-    {"drawUIElement", Scene::DrawUiElement},
-};
+// const std::vector<luaL_Reg> SceneLib = {
+//     {"drawUIElement", Scene::DrawUiElement},
+// };
 
-extern "C" auto luaopen_Scene(lua_State *state) -> int {
-  LuaWrap::RegisterLuaType(state, Scene::GetType(), SceneLib); // NOLINT
-  return 1;
-}
+// extern "C" auto luaopen_Scene(lua_State *state) -> int {
+//   LuaWrap::RegisterLuaType(state, Scene::GetType(), SceneLib); // NOLINT
+//   return 1;
+// }
+
+const LuaWrap::LuaClass SceneLuaClass{
+    .Name = "Scene",
+    .Type = Scene::GetType(),
+    .Methods =
+        {
+            {"drawUIElement", Scene::DrawUiElement},
+        },
+    .Children = {},
+};
 
 } // namespace Engine

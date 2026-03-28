@@ -52,6 +52,6 @@ struct LuaBoundingBox : Object {
   static auto IntersectInPlace(lua_State *state) -> int;
 };
 
-extern const LuaWrap::LuaModule BoundingBoxModule;
+extern const LuaWrap::LuaClass BoundingBoxClass;
 
 } // namespace Engine
