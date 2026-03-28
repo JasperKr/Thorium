@@ -21,7 +21,25 @@ using TexRef = Ref<Graphics::Texture::Texture>;
 
 const Type materialType = Type("Material");
 
-struct Material {
+struct Material : Object {
+  Material(const Material &) = delete;
+  Material(Material &&) = delete;
+  auto operator=(const Material &) -> Material & = delete;
+  auto operator=(Material &&) -> Material & = delete;
+  Material(std::string name, Ref<Graphics::Shader::ShaderModule> shader,
+           TexRef preview, TexRef albedoTexture, TexRef normalTexture,
+           TexRef metallicRoughnessTexture, TexRef ambientOcclusionTexture,
+           TexRef reflectanceTexture, TexRef emissiveTexture)
+      : name(std::move(name)), shader(std::move(shader)),
+        preview(std::move(preview)), albedoTexture(std::move(albedoTexture)),
+        normalTexture(std::move(normalTexture)),
+        metallicRoughnessTexture(std::move(metallicRoughnessTexture)),
+        ambientOcclusionTexture(std::move(ambientOcclusionTexture)),
+        reflectanceTexture(std::move(reflectanceTexture)),
+        emissiveTexture(std::move(emissiveTexture)) {}
+
+  ~Material() override = default;
+
   std::string name;
 
   VkCullModeFlags cullMode = VK_CULL_MODE_BACK_BIT;
@@ -63,5 +81,10 @@ struct Material {
 
   static auto wrap_setTextureUVIndex(lua_State *state) -> int;
   static auto wrap_getTextureUVIndex(lua_State *state) -> int;
+
+  static auto GetType() -> const Type * { return &materialType; }
+  auto GetInstanceType() const -> const Type * override {
+    return &materialType;
+  }
 };
 } // namespace Engine::Renderer

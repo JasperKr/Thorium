@@ -55,7 +55,7 @@ local function draw()
   Imgui.InputFloat("Value", testnumber, 0.01)
 
   Imgui.Separator()
-  scene:drawUiElement()
+  scene:drawUIElement()
 
   Imgui.End()
   Imgui.ShowDemoWindow()

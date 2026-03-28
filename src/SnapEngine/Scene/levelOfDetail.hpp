@@ -8,10 +8,6 @@
 namespace Engine {
 
 struct LevelOfDetail {
-  // std::vector<Ref<Graphics::Mesh>> Meshes;
-  // std::vector<BoundingBox> BoundingBoxes;
-  // BoundingBox CombinedBoundingBox;
-
   // Threshold is calculated based on the area of the bounding box of the mesh on the screen.
   // Starting at 1.0 and decreasing as the mesh gets smaller on the screen.
   // This threshold determines when to switch to the next level of detail.
@@ -19,11 +15,10 @@ struct LevelOfDetail {
 
   static auto CreateLevelOfDetail(flecs::world &world, const std::string &name,
                                   const std::vector<flecs::entity> &meshes,
-                                  const std::vector<BoundingBox> &boundingBoxes,
                                   Math::Scalar transitionThreshold)
       -> flecs::entity {
-    auto lod = flecs::entity(world, name.c_str());
-    lod.add<LevelOfDetail>(
+    auto lod = world.entity(name.c_str());
+    lod.set<LevelOfDetail>(
         LevelOfDetail{.TransitionThreshold = transitionThreshold});
 
     for (const auto &mesh : meshes) {
@@ -32,18 +27,37 @@ struct LevelOfDetail {
 
     BoundingBox combinedBoundingBox{};
 
-    for (const auto &boundingBox : boundingBoxes) {
-      combinedBoundingBox.UnionInPlace(boundingBox);
-      auto bboxEntity = flecs::entity(world).add<BoundingBox>(boundingBox);
-      bboxEntity.child_of(lod);
-    }
-
     auto combinedBBoxEntity =
-        flecs::entity(world).add<BoundingBox>(combinedBoundingBox);
+        flecs::entity(world).set<BoundingBox>(combinedBoundingBox);
     combinedBBoxEntity.child_of(lod);
 
     return lod;
   };
 };
+
+static const Type levelOfDetailType = Type("LevelOfDetail");
+
+struct LuaLevelOfDetail : Object {
+  flecs::entity entity;
+
+  explicit LuaLevelOfDetail(const flecs::entity &entity) : entity(entity) {}
+
+  static auto GetType() -> const Type * { return &levelOfDetailType; }
+  auto GetInstanceType() const -> const Type * override {
+    return &levelOfDetailType;
+  }
+
+  static auto FromEntity(const flecs::entity &entity) -> Ref<LuaLevelOfDetail> {
+    return Ref<LuaLevelOfDetail>::Make(entity);
+  }
+
+  static auto GetTransitionThreshold(lua_State *state) -> int;
+  static auto SetTransitionThreshold(lua_State *state) -> int;
+
+  static auto GetBoundingBoxes(lua_State *state) -> int;
+  static auto GetMeshes(lua_State *state) -> int;
+};
+
+extern const LuaWrap::LuaModule LevelOfDetailModule;
 
 } // namespace Engine

@@ -17,6 +17,7 @@ struct LuaModule {
 
   std::vector<luaL_Reg> Functions;
   std::vector<lua_CFunction> ChildrenInitFunctions;
+  std::vector<LuaModule> Children;
 };
 
 auto RegisterLuaModule(lua_State *state, const LuaModule &module) -> void;

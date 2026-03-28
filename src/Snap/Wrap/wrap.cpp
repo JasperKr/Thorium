@@ -204,6 +204,8 @@ auto LuaTrampoline(lua_State *state) -> int {
 static const Type moduleType("MODULE");
 
 auto RegisterLuaModule(lua_State *state, const LuaModule &module) -> void {
+  PrintAlways("Registering Lua module: {}", module.Name);
+
   if (module.Functions.empty()) {
     std::cerr << "Module " << module.Name << " has no functions to register."
               << "\n";
@@ -236,18 +238,8 @@ auto RegisterLuaModule(lua_State *state, const LuaModule &module) -> void {
   // register Functions to snap.modulename.functionname
   if (!module.Functions.empty()) {
     for (const auto &func : module.Functions) {
-#if !defined(NDEBUG) && DEBUG_CPP_EXCEPTION // If debug build
-      // Wrap function in trampoline to catch exceptions
-      lua_pushlightuserdata(
-          state, // NOLINTNEXTLINE(cppcoreguidelines-pro-type-cstyle-cast)
-          (void *)func.func); // [mt, lightuserdata with function pointer]
-      lua_pushcclosure(state, LuaTrampoline,
-                       1); // [mt, cclosure that calls function pointer]
-#else
       lua_pushcfunction(state, func.func); // [mt, func]
-#endif
-
-      lua_setfield(state, -2, func.name); // [snap, module]
+      lua_setfield(state, -2, func.name);  // [snap, module]
     }
   }
 
@@ -262,6 +254,10 @@ auto RegisterLuaModule(lua_State *state, const LuaModule &module) -> void {
 
   // done, remove module table from stack
   lua_pop(state, 1); // []
+
+  for (const auto &child : module.Children) {
+    RegisterLuaModule(state, child);
+  }
 }
 
 auto RegisterLuaType(lua_State *state, const Type *type,

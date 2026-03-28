@@ -1,12 +1,18 @@
 #include "gltfLoader.hpp"
 #include "Graphics/graphicsContext.hpp"
+#include "Graphics/mesh.hpp"
 #include "Graphics/texture.hpp"
+#include "Graphics/vertexformat.hpp"
 #include "Modules/Math/quaternion.hpp"
 #include "Modules/Math/vector.hpp"
 #include "Modules/error.hpp"
 #include "Modules/filesystem.hpp"
 #include "Modules/object.hpp"
+#include "Scene/node.hpp"
 #include "Scene/shape.hpp"
+#include "Scene/transform.hpp"
+#include "Scene/userdata.hpp"
+#include "flecs/addons/cpp/entity.hpp"
 #include "material.hpp"
 #include <cstdint>
 #include <span>
@@ -15,7 +21,6 @@
 #include "fastgltf/include/fastgltf/core.hpp"
 #include "fastgltf/include/fastgltf/types.hpp"
 
-#include "Scene/node.hpp"
 #include "vulkan/vulkan_core.h"
 
 #include <variant>
@@ -349,11 +354,143 @@ inline auto LoadMaterial(Graphics::GraphicsContext &context,
   return Error::Success();
 }
 
+auto GetVkFormat(fastgltf::ComponentType type, int componentCount)
+    -> Result<VkFormat> {
+
+  switch (type) {
+  case fastgltf::ComponentType::Byte:
+    switch (componentCount) {
+    case 1:
+      return VK_FORMAT_R8_SINT;
+    case 2:
+      return VK_FORMAT_R8G8_SINT;
+    case 3:
+      return VK_FORMAT_R8G8B8_SINT;
+    case 4:
+      return VK_FORMAT_R8G8B8A8_SINT;
+    default:
+      return Error::Unexpected("Unsupported component count for Byte.");
+    }
+  case fastgltf::ComponentType::UnsignedByte:
+    switch (componentCount) {
+    case 1:
+      return VK_FORMAT_R8_UINT;
+    case 2:
+      return VK_FORMAT_R8G8_UINT;
+    case 3:
+      return VK_FORMAT_R8G8B8_UINT;
+    case 4:
+      return VK_FORMAT_R8G8B8A8_UINT;
+    default:
+      return Error::Unexpected("Unsupported component count for UnsignedByte.");
+    }
+  case fastgltf::ComponentType::Short:
+    switch (componentCount) {
+    case 1:
+      return VK_FORMAT_R16_SINT;
+    case 2:
+      return VK_FORMAT_R16G16_SINT;
+    case 3:
+      return VK_FORMAT_R16G16B16_SINT;
+    case 4:
+      return VK_FORMAT_R16G16B16A16_SINT;
+    default:
+      return Error::Unexpected("Unsupported component count for Short.");
+    }
+  case fastgltf::ComponentType::UnsignedShort:
+    switch (componentCount) {
+    case 1:
+      return VK_FORMAT_R16_UINT;
+    case 2:
+      return VK_FORMAT_R16G16_UINT;
+    case 3:
+      return VK_FORMAT_R16G16B16_UINT;
+    case 4:
+      return VK_FORMAT_R16G16B16A16_UINT;
+    default:
+      return Error::Unexpected(
+          "Unsupported component count for UnsignedShort.");
+    }
+  case fastgltf::ComponentType::Int:
+    switch (componentCount) {
+    case 1:
+      return VK_FORMAT_R32_SINT;
+    case 2:
+      return VK_FORMAT_R32G32_SINT;
+    case 3:
+      return VK_FORMAT_R32G32B32_SINT;
+    case 4:
+      return VK_FORMAT_R32G32B32A32_SINT;
+    default:
+      return Error::Unexpected("Unsupported component count for Int.");
+    }
+  case fastgltf::ComponentType::UnsignedInt:
+    switch (componentCount) {
+    case 1:
+      return VK_FORMAT_R32_UINT;
+    case 2:
+      return VK_FORMAT_R32G32_UINT;
+    case 3:
+      return VK_FORMAT_R32G32B32_UINT;
+    case 4:
+      return VK_FORMAT_R32G32B32A32_UINT;
+    default:
+      return Error::Unexpected("Unsupported component count for UnsignedInt.");
+    }
+  case fastgltf::ComponentType::Float:
+    switch (componentCount) {
+    case 1:
+      return VK_FORMAT_R32_SFLOAT;
+    case 2:
+      return VK_FORMAT_R32G32_SFLOAT;
+    case 3:
+      return VK_FORMAT_R32G32B32_SFLOAT;
+    case 4:
+      return VK_FORMAT_R32G32B32A32_SFLOAT;
+    default:
+      return Error::Unexpected("Unsupported component count for Float.");
+    }
+  case fastgltf::ComponentType::Double:
+    switch (componentCount) {
+    case 1:
+      return VK_FORMAT_R64_SFLOAT;
+    case 2:
+      return VK_FORMAT_R64G64_SFLOAT;
+    case 3:
+      return VK_FORMAT_R64G64B64_SFLOAT;
+    case 4:
+      return VK_FORMAT_R64G64B64A64_SFLOAT;
+    default:
+      return Error::Unexpected("Unsupported component count for Double.");
+    }
+  case fastgltf::ComponentType::Invalid:
+  default:
+    return Error::Unexpected("Unsupported or invalid component type.");
+  }
+}
+
+auto ExtractVertexFormat(const fastgltf::Asset &asset,
+                         const fastgltf::Primitive &primitive)
+    -> Result<Graphics::VertexFormat> {
+  if (primitive.attributes.empty()) {
+    return Error::Unexpected("Primitive is missing attributes.");
+  }
+
+  std::vector<Graphics::VertexComponent> attributes;
+
+  for (const auto &[semantic, accessorIndex] : primitive.attributes) {
+    const fastgltf::Accessor &accessor = asset.accessors.at(accessorIndex);
+
+    auto size = fastgltf::getComponentByteSize(accessor.componentType);
+    auto count = fastgltf::getNumComponents(accessor.type);
+  }
+}
+
 // NOLINTNEXTLINE
-inline auto LoadNode(Graphics::GraphicsContext &context,
+inline auto LoadNode(flecs::world world, Graphics::GraphicsContext &context,
                      const fastgltf::Asset &asset,
                      const fastgltf::Node &gltfNode)
-    -> Result<std::vector<Engine::SceneObject>> {
+    -> Result<std::vector<flecs::entity>> {
   bool isMesh = gltfNode.meshIndex.has_value();
   bool isSkin = gltfNode.skinIndex.has_value();
   bool isCamera = gltfNode.cameraIndex.has_value();
@@ -363,18 +500,22 @@ inline auto LoadNode(Graphics::GraphicsContext &context,
   bool isNode = !isMesh && !isSkin && !isCamera && !isLight;
 
   if (isNode) {
-    Ref<Engine::Node> node;
-    // Create a new engine node.
-    node->name = gltfNode.name;
+    auto node = flecs::entity(world, gltfNode.name.c_str());
+    node.add<Engine::Node>();
+    node.add<Engine::Selectable>(
+        Engine::Selectable{.name = std::string(gltfNode.name)});
+    node.add<Engine::Transform>();
 
     if (std::holds_alternative<fastgltf::TRS>(gltfNode.transform)) {
       const auto &trs = std::get<fastgltf::TRS>(gltfNode.transform);
-      node->transform.Position = Math::Vec3(
-          trs.translation[0], trs.translation[1], trs.translation[2]);
-      node->transform.Rotation = Math::Quaternion(
-          trs.rotation[0], trs.rotation[1], trs.rotation[2], trs.rotation[3]);
-      node->transform.Scale =
-          Math::Vec3(trs.scale[0], trs.scale[1], trs.scale[2]);
+
+      auto &transform = node.get_mut<Engine::Transform>();
+
+      transform.Position = Math::Vec3(trs.translation[0], trs.translation[1],
+                                      trs.translation[2]);
+      transform.Rotation = Math::Quaternion(trs.rotation[0], trs.rotation[1],
+                                            trs.rotation[2], trs.rotation[3]);
+      transform.Scale = Math::Vec3(trs.scale[0], trs.scale[1], trs.scale[2]);
     } else {
       // Shouldn't be hit. Since we specified DecomposeNodeMatrices, all matrices should
       // have been decomposed.
@@ -384,34 +525,37 @@ inline auto LoadNode(Graphics::GraphicsContext &context,
 
     for (const auto &childIndex : gltfNode.children) {
       const auto &childGltfNode = asset.nodes[childIndex];
-      auto childNodeResult = LoadNode(context, asset, childGltfNode);
+      auto childNodeResult = LoadNode(world, context, asset, childGltfNode);
       if (Error::IsError(childNodeResult)) {
         return childNodeResult.error().AsUnexpected();
       }
-      // node->Children.emplace_back(childNodeResult.value());
 
       for (auto &childObject : childNodeResult.value()) {
-        node->children.emplace_back(std::move(childObject));
+        childObject.child_of(node);
       }
     }
 
-    return std::vector<Engine::SceneObject>{node};
+    return std::vector<flecs::entity>{node};
   }
 
   if (isMesh) {
     auto meshIndex = *gltfNode.meshIndex;
     const auto &gltfMesh = asset.meshes[meshIndex];
 
-    std::vector<Engine::SceneObject> shapes;
+    std::vector<flecs::entity> meshes;
 
     for (const auto &primitive : gltfMesh.primitives) {
       // Load each primitive into a shape.
-      Engine::Shape shape;
-      shape.name = gltfNode.name;
+      // Engine::Shape shape;
+      // shape.name = gltfNode.name;
+
+      auto mesh =
+          Graphics::Mesh::Create(context, format, vertexCount, debugName);
 
       // Load material if present.
       if (primitive.materialIndex.has_value()) {
         const auto &material = asset.materials[primitive.materialIndex.value()];
+        auto &shape = shapeEntity.get_mut<Engine::Shape>();
 
         auto materialResult =
             LoadMaterial(context, asset, material, *shape.material);
