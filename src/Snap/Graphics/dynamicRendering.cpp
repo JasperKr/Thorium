@@ -273,22 +273,9 @@ auto BindDefaultTextures(const GraphicsContext &context,
 
       auto defaultTexture = defaultTextureResult.value();
 
-      VkDescriptorImageInfo imageInfo{};
-      imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-      imageInfo.imageView = defaultTexture->view;
-      imageInfo.sampler = defaultTexture->GetSampler(context);
-
-      Shader::DescriptorWriteInfo descriptorWrite{};
-      descriptorWrite.dstSet = samplerInfo.set;
-      descriptorWrite.dstBinding = samplerInfo.binding;
-      descriptorWrite.dstArrayElement = 0;
-      descriptorWrite.descriptorType =
-          VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-      descriptorWrite.descriptorCount = 1;
-      descriptorWrite.pImageInfo = imageInfo;
-      descriptorWrite.imagePtr = defaultTexture.get();
-
-      state.pendingDescriptorWrites.emplace_back(descriptorWrite);
+      if (!state.userBoundTextures.contains(key)) {
+        state.userBoundTextures[key] = {defaultTexture.get(), samplerInfo};
+      }
     }
   }
 

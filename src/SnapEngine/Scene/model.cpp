@@ -1,13 +1,15 @@
 #include "model.hpp"
 #include "Modules/Math/quaternion.hpp"
 #include "Modules/Math/vector.hpp"
+#include "Modules/console.hpp"
 #include "Modules/object.hpp"
 #include "Scene/scene.hpp"
 #include "Scene/shape.hpp"
+#include "Scene/transform.hpp"
+#include "Scene/userdata.hpp"
 #include "Wrap/wrap.hpp"
 #include "material.hpp"
 #include <lua.h>
-#include <vector>
 
 namespace Engine {
 // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
@@ -22,6 +24,9 @@ auto LuaModel::Create(lua_State *state) -> int {
 
   const char *name = luaL_checkstring(state, 2);
   auto entity = scene->world->entity(name);
+
+  entity.add<Model>();
+  entity.add<Userdata>();
 
   Math::Vec3 position{0.0F, 0.0F, 0.0F};
   // Position table
@@ -61,33 +66,35 @@ auto LuaModel::Create(lua_State *state) -> int {
     scale.y = static_cast<Math::Scalar>(luaL_checknumber(state, -1));
     lua_rawgeti(state, 5, 3);
     scale.z = static_cast<Math::Scalar>(luaL_checknumber(state, -1));
-    lua_pop(state, 5);
+    lua_pop(state, 3);
   }
 
-  std::vector<Ref<LuaShape>> shapes;
+  entity.set<Transform>(Transform{
+      .Position = position,
+      .Rotation = rotation,
+      .Scale = scale,
+  });
+
   if (lua_gettop(state) >= 6) {
     luaL_checktype(state, 6, LUA_TTABLE);
     lua_pushnil(state);
     while (lua_next(state, 6) != 0) {
       auto *luaShape = LuaWrap::ObjectFromLua<LuaShape>(state, -1);
       if (luaShape != nullptr) {
-        shapes.emplace_back(luaShape);
+        luaShape->entity.child_of(entity);
+      } else {
+        return luaL_error(state, "Expected a Shape object in the shapes table");
       }
       lua_pop(state, 1);
     }
   }
 
-  Ref<Renderer::Material> material;
   if (lua_gettop(state) >= 7) {
-    auto *luaMaterial = LuaWrap::ObjectFromLua<Renderer::Material>(state, 7);
-    if (luaMaterial != nullptr) {
-      material = Ref<Renderer::Material>(luaMaterial);
+    auto *luaMaterial = LuaWrap::ObjectFromLua<Renderer::LuaMaterial>(state, 7);
+    if (luaMaterial != nullptr && luaMaterial->material != nullptr) {
+      entity.set<Renderer::Material>(*luaMaterial->material);
     }
   }
-
-  entity.add<Model>();
-  entity.add<Userdata>();
-  entity.add<Transform>();
 
   auto model = Ref<LuaModel>::Make(entity);
   LuaWrap::PushObject(state, LuaModel::GetType(), model.get());
@@ -254,16 +261,15 @@ const LuaWrap::LuaClass ModelClass = {
     .Type = LuaModel::GetType(),
     .Methods =
         {
-            {"Create", LuaModel::Create},
-            {"GetName", LuaModel::GetName},
-            {"SetName", LuaModel::SetName},
-            {"GetPosition", LuaModel::GetPosition},
-            {"SetPosition", LuaModel::SetPosition},
-            {"GetRotation", LuaModel::GetRotation},
-            {"SetRotation", LuaModel::SetRotation},
-            {"GetScale", LuaModel::GetScale},
-            {"SetScale", LuaModel::SetScale},
-            {"GetShapes", LuaModel::GetShapes},
+            {"getName", LuaModel::GetName},
+            {"setName", LuaModel::SetName},
+            {"getPosition", LuaModel::GetPosition},
+            {"setPosition", LuaModel::SetPosition},
+            {"getRotation", LuaModel::GetRotation},
+            {"setRotation", LuaModel::SetRotation},
+            {"getScale", LuaModel::GetScale},
+            {"setScale", LuaModel::SetScale},
+            {"getShapes", LuaModel::GetShapes},
         },
 };
 

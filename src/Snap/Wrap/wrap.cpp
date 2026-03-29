@@ -204,8 +204,6 @@ auto LuaTrampoline(lua_State *state) -> int {
 static const Type moduleType("MODULE");
 
 auto RegisterLuaModule(lua_State *state, const LuaModule &module) -> void {
-  PrintAlways("Registering Lua module: {}", module.Name);
-
   if (module.Functions.empty()) {
     std::cerr << "Module " << module.Name << " has no functions to register."
               << "\n";
@@ -304,6 +302,12 @@ auto RegisterLuaType(lua_State *state, const LuaClass &luaClass) -> void {
   };
 
   for (const auto &func : luaClass.Methods) {
+    if (func.name == nullptr) {
+      PrintError("Cannot register Lua type {}: function with null name.",
+                 luaClass.Type->GetName());
+      continue;
+    }
+
     // Check for reserved names
     if (ReservedNames.contains(func.name)) {
       PrintError("Cannot register Lua type {}: function name '{}' is "
@@ -322,11 +326,18 @@ auto RegisterLuaType(lua_State *state, const LuaClass &luaClass) -> void {
     lua_pushcfunction(state, func.func); // [mt, func]
 #endif
     lua_setfield(state, -2, func.name); // [mt]
+
+#ifndef NDEBUG
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+    auto firstChar = func.name[0];
+    if (firstChar != '\0' && (std::isupper(firstChar) != 0)) {
+      PrintWarning("Expected camelCase. Got: '{}' in class: '{}'.", func.name,
+                   luaClass.Type->GetName());
+    }
+#endif
   }
 
   lua_pop(state, 1); // []
-
-  PrintAlways("Registered Lua type: {}", luaClass.Name);
 
   for (const auto &child : luaClass.Children) {
     RegisterLuaType(state, child);

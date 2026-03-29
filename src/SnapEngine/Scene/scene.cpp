@@ -1,11 +1,20 @@
 #include "scene.hpp"
+#include "Graphics/draw.hpp"
+#include "Graphics/mesh.hpp"
 #include "Modules/bindings.hpp"
+#include "Modules/error.hpp"
+#include "Modules/object.hpp"
 #include "Modules/reflectBindings.hpp"
+#include "Scene/geometry.hpp"
+#include "Scene/levelOfDetail.hpp"
+#include "Scene/model.hpp"
+#include "Scene/shape.hpp"
 #include "Wrap/wrap.hpp"
 #include "flecs/addons/cpp/c_types.hpp"
 #include "flecs/addons/cpp/mixins/id/decl.hpp"
 #include <imgui.h>
-#include <vector>
+#include <lauxlib.h>
+#include <string>
 
 namespace Engine {
 
@@ -43,7 +52,7 @@ auto DrawEntityHierarchy(const flecs::entity &entity) -> void {
             std::string_view(componentName).empty()) {
           componentName = "Unnamed Component";
         }
-        ImGui::Text("Component: %s", componentName);
+        ImGui::TextDisabled(" - %s", componentName);
       }
     }
   });
@@ -74,14 +83,30 @@ auto Scene::DrawUiElement(lua_State *state) -> int {
   return 0;
 }
 
-// const std::vector<luaL_Reg> SceneLib = {
-//     {"drawUIElement", Scene::DrawUiElement},
-// };
+auto Scene::DrawModels(lua_State *state) -> int {
+  auto *scene = LuaWrap::ObjectFromLua<Scene>(state, 1);
 
-// extern "C" auto luaopen_Scene(lua_State *state) -> int {
-//   LuaWrap::RegisterLuaType(state, Scene::GetType(), SceneLib); // NOLINT
-//   return 1;
-// }
+  if (scene == nullptr) {
+    return luaL_error(state, "Expected a Scene object");
+  }
+
+  auto *ctx = Graphics::GetCurrentGraphicsContext();
+  Error drawResult = Error::Success();
+
+  scene->world->each<Geometry>(
+      [&](flecs::entity entity, const Geometry &geometry) -> void {
+        auto result = Graphics::Draw(*ctx, *geometry.mesh);
+        if (Error::IsError(result)) {
+          drawResult = result;
+        }
+      });
+
+  if (Error::IsError(drawResult)) {
+    return luaL_error(state, "%s", drawResult.ToString().c_str());
+  }
+
+  return 0;
+}
 
 const LuaWrap::LuaClass SceneLuaClass{
     .Name = "Scene",
@@ -89,6 +114,11 @@ const LuaWrap::LuaClass SceneLuaClass{
     .Methods =
         {
             {"drawUIElement", Scene::DrawUiElement},
+            {"drawModels", Scene::DrawModels},
+            {"createModel", LuaModel::Create},
+            {"createShape", LuaShape::Create},
+            {"createLOD", LuaLevelOfDetail::Create},
+            {"createGeometry", LuaGeometry::Create},
         },
     .Children = {},
 };

@@ -66,21 +66,8 @@ local function draw()
   snap.graphics.setScissor();
   lastImDrawTime = lastImDrawTime + snap.timer.getTime() - imStartTime
 
-  snap.graphics.setShader(computeshader)
-  computeshader:send("PushConstants", "valueToAdd", value)
-  computeshader:send("PushConstants", "textureSize", { 16, 16 })
-  computeshader:send("outTexture", texture)
-  snap.graphics.dispatch(1, 1, 1)
-  value = -value
-
-  -- snap.graphics.setShader(shader)
-  -- shader:send("MainTexture", texture)
-
-  -- for i = 1, 2 do
-  --   snap.graphics.setRenderTarget({ loadas = "clear", blendmode = { blendmode = "alpha", alphamode = i == 2 and "premultiplied" or "alphamultiply" } })
-  --   snap.graphics.draw(mesh)
-  -- end
   snap.graphics.setShader()
+  scene:drawModels()
 
   lastDrawTime = lastDrawTime + snap.timer.getTime() - startTime
   count = count + 1

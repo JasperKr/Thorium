@@ -15,29 +15,53 @@ local startThreadChannel = snap.thread.newChannel()
 local scene = snap.scene.newScene("Main")
 print(scene:getName())
 
--- local material = snap.renderer.newMaterial()
--- print("Name", material:getName())
--- print("AlphaCutoff", material:getAlphaCutoff())
--- print("Shader", material:getShader())
+snap.graphics.aquireGraphics("load")
 
--- print("Preview", material:getPreview())
--- print("AlbedoTexture", material:getAlbedoTexture())
--- print("NormalTexture", material:getNormalTexture())
--- print("MetallicRoughnessTexture",
---   material:getMetallicRoughnessTexture())
--- print("AmbientOcclusionTexture",
---   material:getAmbientOcclusionTexture())
--- print("ReflectanceTexture", material:getReflectanceTexture())
--- print("EmissiveTexture", material:getEmissiveTexture())
+local vertexformat = {
+  { name = "position", format = "floatvec2",  location = 0 },
+  { name = "uv",       format = "floatvec2",  location = 1 },
+  { name = "color",    format = "unorm8vec4", location = 2 },
+}
 
--- print("AlbedoFactor", material:getAlbedoFactor())
--- print("RoughnessFactor", material:getRoughnessFactor())
--- print("MetallicFactor", material:getMetallicFactor())
--- print("ReflectanceFactor", material:getReflectanceFactor())
--- print("EmissiveFactor", material:getEmissiveFactor())
+local indices = { 1, 2, 3, 1, 3, 4 }
+local vertices = {
+  { 0,   0,   0, 0, 1, 1, 1, 1 },
+  { 100, 0,   1, 0, 1, 1, 1, 1 },
+  { 100, 100, 1, 1, 1, 1, 1, 1 },
+  { 0,   100, 0, 1, 1, 1, 1, 1 },
+}
 
--- print("AlphaMode", material:getAlphaMode())
--- print("CullMode", material:getCullMode())
+local mesh = snap.graphics.newMesh(vertexformat, vertices, "triangles")
+local indicesData = snap.data.newBytedata(#indices * 4)
+for j = 1, #indices do
+  indicesData:setUInt32((j - 1) * 4, indices[j] - 1)
+end
+mesh:setIndices(indicesData)
+
+snap.graphics.submitGraphics()
+snap.graphics.useCommands("load")
+
+local geometries = {}
+
+for i = 1, 4 do
+  local geometry = scene:createGeometry("Test geometry " .. i, mesh)
+  table.insert(geometries, geometry)
+end
+
+local lod = scene:createLOD("Test LOD")
+local lod2 = scene:createLOD("Test LOD 2")
+local lod3 = scene:createLOD("Test LOD 3", 0.25)
+local lod4 = scene:createLOD("Test LOD 4", 0.125)
+
+lod:addGeometry(geometries[1])
+lod2:addGeometry(geometries[2])
+lod3:addGeometry(geometries[3])
+lod4:addGeometry(geometries[4])
+
+local shape = scene:createShape("Test shape", { lod, lod2, lod3 })
+local shape2 = scene:createShape("Test shape 2", { lod4 })
+
+local model = scene:createModel("Test model", { 100, 10, 0 }, { 0, 0, 0, 1 }, { 1, 1, 1 }, { shape, shape2 })
 
 thread:start(threadDoneChannel, startThreadChannel, scene)
 

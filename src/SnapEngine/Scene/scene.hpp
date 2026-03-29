@@ -23,6 +23,7 @@ struct Scene : Object {
 
   static auto LoadBinding(lua_State *state) -> int;
   static auto DrawUiElement(lua_State *state) -> int;
+  static auto DrawModels(lua_State *state) -> int;
 };
 
 extern const LuaWrap::LuaClass SceneLuaClass;

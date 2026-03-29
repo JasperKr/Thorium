@@ -846,10 +846,6 @@ auto ShaderModule::FlushDescriptors(const GraphicsContext &context,
       continue;
     }
 
-    // PrintAlways(
-    //     "Flushing sampler resource '{}' with usage {}...", resource.name,
-    //     usage == Texture::TextureUsage::Sampler ? "sampler" : "storage");
-
     Error result;
 
     switch (usage) {

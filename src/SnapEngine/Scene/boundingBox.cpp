@@ -293,16 +293,16 @@ const LuaWrap::LuaClass BoundingBoxClass = {
     .Name = "BoundingBox",
     .Type = LuaBoundingBox::GetType(),
     .Methods = {
-        {"GetMin", LuaBoundingBox::GetMin},
-        {"SetMin", LuaBoundingBox::SetMin},
-        {"GetMax", LuaBoundingBox::GetMax},
-        {"SetMax", LuaBoundingBox::SetMax},
-        {"GetCenter", LuaBoundingBox::GetCenter},
-        {"GetSize", LuaBoundingBox::GetSize},
-        {"Union", LuaBoundingBox::Union},
-        {"Intersect", LuaBoundingBox::Intersect},
-        {"UnionInPlace", LuaBoundingBox::UnionInPlace},
-        {"IntersectInPlace", LuaBoundingBox::IntersectInPlace},
+        {"getMin", LuaBoundingBox::GetMin},
+        {"setMin", LuaBoundingBox::SetMin},
+        {"getMax", LuaBoundingBox::GetMax},
+        {"setMax", LuaBoundingBox::SetMax},
+        {"getCenter", LuaBoundingBox::GetCenter},
+        {"getSize", LuaBoundingBox::GetSize},
+        {"union", LuaBoundingBox::Union},
+        {"intersect", LuaBoundingBox::Intersect},
+        {"unionInPlace", LuaBoundingBox::UnionInPlace},
+        {"intersectInPlace", LuaBoundingBox::IntersectInPlace},
     }};
 
 } // namespace Engine

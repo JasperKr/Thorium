@@ -4,7 +4,6 @@
 #include "Scene/boundingBox.hpp"
 #include <flecs.h>
 #include <string>
-#include <vector>
 namespace Engine {
 
 struct LevelOfDetail {
@@ -14,22 +13,13 @@ struct LevelOfDetail {
   Math::Scalar TransitionThreshold = 0.0F;
 
   static auto CreateLevelOfDetail(flecs::world &world, const std::string &name,
-                                  const std::vector<flecs::entity> &meshes,
                                   Math::Scalar transitionThreshold)
       -> flecs::entity {
     auto lod = world.entity(name.c_str());
     lod.set<LevelOfDetail>(
         LevelOfDetail{.TransitionThreshold = transitionThreshold});
 
-    for (const auto &mesh : meshes) {
-      mesh.child_of(lod);
-    }
-
-    BoundingBox combinedBoundingBox{};
-
-    auto combinedBBoxEntity =
-        flecs::entity(world).set<BoundingBox>(combinedBoundingBox);
-    combinedBBoxEntity.child_of(lod);
+    lod.add<BoundingBox>();
 
     return lod;
   };
@@ -51,11 +41,16 @@ struct LuaLevelOfDetail : Object {
     return Ref<LuaLevelOfDetail>::Make(entity);
   }
 
+  static auto Create(lua_State *state) -> int;
+
   static auto GetTransitionThreshold(lua_State *state) -> int;
   static auto SetTransitionThreshold(lua_State *state) -> int;
 
-  static auto GetBoundingBoxes(lua_State *state) -> int;
+  static auto AddGeometry(lua_State *state) -> int;
+  static auto RemoveGeometry(lua_State *state) -> int;
+
   static auto GetMeshes(lua_State *state) -> int;
+  static auto GetBoundingBox(lua_State *state) -> int;
 };
 
 extern const LuaWrap::LuaClass LevelOfDetailClass;

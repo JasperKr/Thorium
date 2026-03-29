@@ -11,6 +11,7 @@ add_library(SnapEngine
   Scene/levelOfDetail.cpp
   Scene/boundingBox.cpp
   Scene/userdata.cpp
+  Scene/geometry.cpp
 
   # Wrappers
   Wrap/wrap_scene.cpp

@@ -6,6 +6,7 @@
 #include <array>
 #include <string>
 
+#include "flecs.h"
 #include "lua.hpp"
 
 #include <vulkan/vulkan_core.h>
@@ -21,11 +22,7 @@ using TexRef = Ref<Graphics::Texture::Texture>;
 
 const Type materialType = Type("Material");
 
-struct Material : Object {
-  Material(const Material &) = delete;
-  Material(Material &&) = delete;
-  auto operator=(const Material &) -> Material & = delete;
-  auto operator=(Material &&) -> Material & = delete;
+struct Material {
   Material(std::string name, Ref<Graphics::Shader::ShaderModule> shader,
            TexRef preview, TexRef albedoTexture, TexRef normalTexture,
            TexRef metallicRoughnessTexture, TexRef ambientOcclusionTexture,
@@ -37,8 +34,6 @@ struct Material : Object {
         ambientOcclusionTexture(std::move(ambientOcclusionTexture)),
         reflectanceTexture(std::move(reflectanceTexture)),
         emissiveTexture(std::move(emissiveTexture)) {}
-
-  ~Material() override = default;
 
   std::string name;
 
@@ -81,10 +76,20 @@ struct Material : Object {
 
   static auto wrap_setTextureUVIndex(lua_State *state) -> int;
   static auto wrap_getTextureUVIndex(lua_State *state) -> int;
+};
+
+struct LuaMaterial : Object {
+  explicit LuaMaterial(Material *material) : material(material) {}
+
+  Material *material;
+  flecs::entity entity;
 
   static auto GetType() -> const Type * { return &materialType; }
   auto GetInstanceType() const -> const Type * override {
     return &materialType;
   }
+
+  static auto Create(lua_State *state) -> int;
 };
+
 } // namespace Engine::Renderer

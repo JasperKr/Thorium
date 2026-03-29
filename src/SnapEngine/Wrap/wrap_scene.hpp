@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Scene/boundingBox.hpp"
+#include "Scene/geometry.hpp"
 #include "Scene/levelOfDetail.hpp"
 #include "Scene/model.hpp"
 #include "Scene/scene.hpp"
@@ -35,6 +36,7 @@ extern "C" inline auto luaopen_scene(lua_State *state) -> int {
   LuaWrap::RegisterLuaType(state, ::Engine::ShapeClass);
   LuaWrap::RegisterLuaType(state, ::Engine::LevelOfDetailClass);
   LuaWrap::RegisterLuaType(state, ::Engine::BoundingBoxClass);
+  LuaWrap::RegisterLuaType(state, ::Engine::GeometryClass);
 
   return 1;
 }
