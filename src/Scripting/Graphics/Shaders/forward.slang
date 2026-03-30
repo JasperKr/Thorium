@@ -6,34 +6,35 @@ import utils;
 struct VertexStageOutput
 {
     float4 sv_position : SV_Position;
-    float4x2 TexCoords : Texture_Coordinates;
-    half4 normal : Normal;
-    half4 tangent : Tangent;
-    float4 color       : Color;
+    float3 normal : NORMAL;
+    float4 tangent : TANGENT;
+    float4x2 tex_coord : TEXCOORDS;
+    float4 color : COLOR;
 };
 
 struct VertexInput
 {
-    float3 Position : POSITION;
-    uint4 TexCoord : Texture_Coordinates;
-    uint2 NormalTangent : Normal_Tangent;
-    uint Color    : Packed_Color;
+    float4 Position : POSITION;
+    uint2 TexCoords : TEXCOORD;
+    uint Normal : NORMAL;
+    uint Tangent : TANGENT;
+    float4 Color  : COLOR;
 };
 
 [shader("vertex")]
 VertexStageOutput vertexMain(VertexInput input)
 {
     VertexStageOutput out;
-    out.sv_position = mul(camera.ViewProjectionMatrix, float4(input.Position, 1.0));
+    out.sv_position = mul(camera.ViewProjectionMatrix, float4(input.Position.xyz, 1.0));
 
-    float2 uv0 = unpackHalf2x16ToFloat(input.TexCoord.x);
-    float2 uv1 = unpackHalf2x16ToFloat(input.TexCoord.y);
-    float2 uv2 = unpackHalf2x16ToFloat(input.TexCoord.z);
-    float2 uv3 = unpackHalf2x16ToFloat(input.TexCoord.w);
+    float2 uv0 = unpackHalf2x16ToFloat(input.TexCoords.x);
+    float2 uv1 = unpackHalf2x16ToFloat(input.TexCoords.x >> 16);
+    float2 uv2 = unpackHalf2x16ToFloat(input.TexCoords.y);
+    float2 uv3 = unpackHalf2x16ToFloat(input.TexCoords.y >> 16);
 
-    out.TexCoords = float4x2(uv0, uv1, uv2, uv3);
-    out.normal = UnpackNormal(input.NormalTangent.x);
-    out.tangent = UnpackTangent(input.NormalTangent.y);
+    out.tex_coord = float4x2(uv0, uv1, uv2, uv3);
+    out.normal = UnpackNormal(input.Normal).xyz;
+    out.tangent = UnpackTangent(input.Tangent);
 
     out.color = input.Color;
     return out;
@@ -41,7 +42,9 @@ VertexStageOutput vertexMain(VertexInput input)
 
 struct FragmentInput
 {
-    float2 tex_coord : Texture_Coordinates;
+    float3 normal : NORMAL;
+    float4 tangent : TANGENT;
+    float4x2 tex_coord : TEXCOORDS;
     float4 color : COLOR;
 };
 
@@ -50,5 +53,5 @@ Sampler2D MainTexture;
 [shader("fragment")]
 float4 fragmentMain(FragmentInput input)
 {
-  return float4(float3(1.0), MainTexture.Sample(input.tex_coord).r) * input.color;
+  return float4(float3(1.0), MainTexture .Sample(float2(input.tex_coord._m00, input.tex_coord._m10)) .r) * input.color;
 }

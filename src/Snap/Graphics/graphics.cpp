@@ -206,6 +206,7 @@ static auto CreateDevice(GraphicsContext &context,
   VkPhysicalDeviceVulkan12Features features12{
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
       .pNext = &features13,
+      .shaderFloat16 = VK_TRUE,
       .descriptorIndexing = VK_TRUE,
       .shaderSampledImageArrayNonUniformIndexing = VK_TRUE,
       .shaderStorageBufferArrayNonUniformIndexing = VK_TRUE,

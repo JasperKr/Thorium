@@ -1,470 +1,283 @@
 #pragma once
+#include "Modules/console.hpp"
 #include <cstddef>
 
 #include <string>
+#include <unordered_map>
 #include <vulkan/vulkan_core.h>
 namespace Graphics::Format {
+
+static auto ToString(VkFormat format, size_t arraySize = 1) -> std::string;
+
 static inline auto GetChannelCount(VkFormat format) -> uint32_t {
-  switch (format) {
-  case VK_FORMAT_R8_UNORM:
-  case VK_FORMAT_R8_SNORM:
-  case VK_FORMAT_R8_UINT:
-  case VK_FORMAT_R8_SINT:
-  case VK_FORMAT_R8_SRGB:
-  case VK_FORMAT_R16_UNORM:
-  case VK_FORMAT_R16_SNORM:
-  case VK_FORMAT_R16_UINT:
-  case VK_FORMAT_R16_SINT:
-  case VK_FORMAT_R16_SFLOAT:
-  case VK_FORMAT_R32_UINT:
-  case VK_FORMAT_R32_SINT:
-  case VK_FORMAT_R32_SFLOAT:
-    return 1;
+  static const std::unordered_map<VkFormat, uint8_t> FormatChannelCounts = {
+      {VK_FORMAT_R8_UNORM, 1},
+      {VK_FORMAT_R8_SNORM, 1},
+      {VK_FORMAT_R8_UINT, 1},
+      {VK_FORMAT_R8_SINT, 1},
+      {VK_FORMAT_R8_SRGB, 1},
+      {VK_FORMAT_R16_UNORM, 1},
+      {VK_FORMAT_R16_SNORM, 1},
+      {VK_FORMAT_R16_UINT, 1},
+      {VK_FORMAT_R16_SINT, 1},
+      {VK_FORMAT_R16_SFLOAT, 1},
+      {VK_FORMAT_R32_UINT, 1},
+      {VK_FORMAT_R32_SINT, 1},
+      {VK_FORMAT_R32_SFLOAT, 1},
 
-  case VK_FORMAT_R8G8_UNORM:
-  case VK_FORMAT_R8G8_SNORM:
-  case VK_FORMAT_R8G8_UINT:
-  case VK_FORMAT_R8G8_SINT:
-  case VK_FORMAT_R8G8_SRGB:
-  case VK_FORMAT_R16G16_UNORM:
-  case VK_FORMAT_R16G16_SNORM:
-  case VK_FORMAT_R16G16_UINT:
-  case VK_FORMAT_R16G16_SINT:
-  case VK_FORMAT_R16G16_SFLOAT:
-  case VK_FORMAT_R32G32_UINT:
-  case VK_FORMAT_R32G32_SINT:
-  case VK_FORMAT_R32G32_SFLOAT:
-    return 2;
+      {VK_FORMAT_R8G8_UNORM, 2},
+      {VK_FORMAT_R8G8_SNORM, 2},
+      {VK_FORMAT_R8G8_UINT, 2},
+      {VK_FORMAT_R8G8_SINT, 2},
+      {VK_FORMAT_R8G8_SRGB, 2},
+      {VK_FORMAT_R16G16_UNORM, 2},
+      {VK_FORMAT_R16G16_SNORM, 2},
+      {VK_FORMAT_R16G16_UINT, 2},
+      {VK_FORMAT_R16G16_SINT, 2},
+      {VK_FORMAT_R16G16_SFLOAT, 2},
+      {VK_FORMAT_R32G32_UINT, 2},
+      {VK_FORMAT_R32G32_SINT, 2},
+      {VK_FORMAT_R32G32_SFLOAT, 2},
 
-  case VK_FORMAT_R8G8B8_UNORM:
-  case VK_FORMAT_R8G8B8_SRGB:
-  case VK_FORMAT_B8G8R8_UNORM:
-  case VK_FORMAT_B8G8R8_SRGB:
-  case VK_FORMAT_R16G16B16_UNORM:
-  case VK_FORMAT_R16G16B16_SNORM:
-  case VK_FORMAT_R16G16B16_UINT:
-  case VK_FORMAT_R16G16B16_SINT:
-  case VK_FORMAT_R16G16B16_SFLOAT:
-  case VK_FORMAT_R32G32B32_UINT:
-  case VK_FORMAT_R32G32B32_SINT:
-  case VK_FORMAT_R32G32B32_SFLOAT:
-    return 3;
+      {VK_FORMAT_R8G8B8_UNORM, 3},
+      {VK_FORMAT_R8G8B8_SNORM, 3},
+      {VK_FORMAT_R8G8B8_SRGB, 3},
+      {VK_FORMAT_B8G8R8_UNORM, 3},
+      {VK_FORMAT_B8G8R8_SRGB, 3},
+      {VK_FORMAT_B8G8R8_SRGB, 3},
+      {VK_FORMAT_R16G16B16_UNORM, 3},
+      {VK_FORMAT_R16G16B16_SNORM, 3},
+      {VK_FORMAT_R16G16B16_UINT, 3},
+      {VK_FORMAT_R16G16B16_SINT, 3},
+      {VK_FORMAT_R16G16B16_SFLOAT, 3},
+      {VK_FORMAT_R32G32B32_UINT, 3},
+      {VK_FORMAT_R32G32B32_SINT, 3},
+      {VK_FORMAT_R32G32B32_SFLOAT, 3},
 
-  case VK_FORMAT_R8G8B8A8_UNORM:
-  case VK_FORMAT_R8G8B8A8_SRGB:
-  case VK_FORMAT_B8G8R8A8_UNORM:
-  case VK_FORMAT_B8G8R8A8_SRGB:
-  case VK_FORMAT_R16G16B16A16_UNORM:
-  case VK_FORMAT_R16G16B16A16_SNORM:
-  case VK_FORMAT_R16G16B16A16_UINT:
-  case VK_FORMAT_R16G16B16A16_SINT:
-  case VK_FORMAT_R16G16B16A16_SFLOAT:
-  case VK_FORMAT_R32G32B32A32_UINT:
-  case VK_FORMAT_R32G32B32A32_SINT:
-  case VK_FORMAT_R32G32B32A32_SFLOAT:
-    return 4;
-  default:
-    return 0;
+      {VK_FORMAT_R8G8B8A8_UNORM, 4},
+      {VK_FORMAT_R8G8B8A8_SRGB, 4},
+      {VK_FORMAT_B8G8R8A8_UNORM, 4},
+      {VK_FORMAT_B8G8R8A8_SRGB, 4},
+      {VK_FORMAT_R16G16B16A16_UNORM, 4},
+      {VK_FORMAT_R16G16B16A16_SNORM, 4},
+      {VK_FORMAT_R16G16B16A16_UINT, 4},
+      {VK_FORMAT_R16G16B16A16_SINT, 4},
+      {VK_FORMAT_R16G16B16A16_SFLOAT, 4},
+      {VK_FORMAT_R32G32B32A32_UINT, 4},
+      {VK_FORMAT_R32G32B32A32_SINT, 4},
+      {VK_FORMAT_R32G32B32A32_SFLOAT, 4},
+  };
+
+  auto iter = FormatChannelCounts.find(format);
+  if (iter != FormatChannelCounts.end()) {
+    return iter->second;
   }
+
+  auto formatStr = ToString(format);
+  PrintWarning("Unknown format {} for channel count retrieval.", formatStr);
+
+  return 0;
 }
 
 static inline auto GetSize(VkFormat format) -> uint32_t {
-  constexpr uint32_t byteSize = 1;
-  constexpr uint32_t shortSize = 2;
-  constexpr uint32_t halfSize = 2; // FP16
-  constexpr uint32_t floatSize = 4;
-  constexpr uint32_t intSize = 4;
+  static const std::unordered_map<VkFormat, uint32_t> FormatSizes = {
+      // 1 channel
+      {VK_FORMAT_R8_UNORM, 1},
+      {VK_FORMAT_R8_SNORM, 1},
+      {VK_FORMAT_R8_UINT, 1},
+      {VK_FORMAT_R8_SINT, 1},
+      {VK_FORMAT_R8_SRGB, 1},
+      {VK_FORMAT_R16_UNORM, 2},
+      {VK_FORMAT_R16_SNORM, 2},
+      {VK_FORMAT_R16_UINT, 2},
+      {VK_FORMAT_R16_SINT, 2},
+      {VK_FORMAT_R16_SFLOAT, 2},
+      {VK_FORMAT_R32_UINT, 4},
+      {VK_FORMAT_R32_SINT, 4},
+      {VK_FORMAT_R32_SFLOAT, 4},
+      // 2 channel
+      {VK_FORMAT_R8G8_UNORM, 2},
+      {VK_FORMAT_R8G8_SNORM, 2},
+      {VK_FORMAT_R8G8_UINT, 2},
+      {VK_FORMAT_R8G8_SINT, 2},
+      {VK_FORMAT_R8G8_SRGB, 2},
+      {VK_FORMAT_R16G16_UNORM, 4},
+      {VK_FORMAT_R16G16_SNORM, 4},
+      {VK_FORMAT_R16G16_UINT, 4},
+      {VK_FORMAT_R16G16_SINT, 4},
+      {VK_FORMAT_R16G16_SFLOAT, 4},
+      {VK_FORMAT_R32G32_UINT, 8},
+      {VK_FORMAT_R32G32_SINT, 8},
+      {VK_FORMAT_R32G32_SFLOAT, 8},
+      // 3 channel
+      {VK_FORMAT_R8G8B8_UNORM, 3},
+      {VK_FORMAT_R8G8B8_SRGB, 3},
+      {VK_FORMAT_B8G8R8_UNORM, 3},
+      {VK_FORMAT_B8G8R8_SRGB, 3},
+      {VK_FORMAT_R16G16B16_UNORM, 6},
+      {VK_FORMAT_R16G16B16_SNORM, 6},
+      {VK_FORMAT_R16G16B16_UINT, 6},
+      {VK_FORMAT_R16G16B16_SINT, 6},
+      {VK_FORMAT_R16G16B16_SFLOAT, 6},
+      {VK_FORMAT_R32G32B32_UINT, 12},
+      {VK_FORMAT_R32G32B32_SINT, 12},
+      {VK_FORMAT_R32G32B32_SFLOAT, 12},
+      // 4 channel
+      {VK_FORMAT_R8G8B8A8_UNORM, 4},
+      {VK_FORMAT_R8G8B8A8_SRGB, 4},
+      {VK_FORMAT_R8G8B8A8_SNORM, 4},
+      {VK_FORMAT_B8G8R8A8_UNORM, 4},
+      {VK_FORMAT_B8G8R8A8_SRGB, 4},
+      {VK_FORMAT_R8G8B8A8_UINT, 4},
+      {VK_FORMAT_R8G8B8A8_SINT, 4},
+      {VK_FORMAT_R16G16B16A16_UNORM, 8},
+      {VK_FORMAT_R16G16B16A16_SNORM, 8},
+      {VK_FORMAT_R16G16B16A16_UINT, 8},
+      {VK_FORMAT_R16G16B16A16_SINT, 8},
+      {VK_FORMAT_R16G16B16A16_SFLOAT, 8},
+      {VK_FORMAT_R32G32B32A32_UINT, 16},
+      {VK_FORMAT_R32G32B32A32_SINT, 16},
+      {VK_FORMAT_R32G32B32A32_SFLOAT, 16},
+      // Depth / Stencil
+      {VK_FORMAT_D16_UNORM, 2},
+      {VK_FORMAT_D24_UNORM_S8_UINT, 4},
+      {VK_FORMAT_X8_D24_UNORM_PACK32, 4},
+      {VK_FORMAT_D32_SFLOAT, 4},
+      {VK_FORMAT_D32_SFLOAT_S8_UINT, 5},
+      // BC Compressed (block size)
+      {VK_FORMAT_BC1_RGB_UNORM_BLOCK, 8},
+      {VK_FORMAT_BC1_RGB_SRGB_BLOCK, 8},
+      {VK_FORMAT_BC1_RGBA_UNORM_BLOCK, 8},
+      {VK_FORMAT_BC1_RGBA_SRGB_BLOCK, 8},
+      {VK_FORMAT_BC2_UNORM_BLOCK, 16},
+      {VK_FORMAT_BC2_SRGB_BLOCK, 16},
+      {VK_FORMAT_BC3_UNORM_BLOCK, 16},
+      {VK_FORMAT_BC3_SRGB_BLOCK, 16},
+      {VK_FORMAT_BC4_UNORM_BLOCK, 8},
+      {VK_FORMAT_BC4_SNORM_BLOCK, 8},
+      {VK_FORMAT_BC5_UNORM_BLOCK, 16},
+      {VK_FORMAT_BC5_SNORM_BLOCK, 16},
+      {VK_FORMAT_BC6H_UFLOAT_BLOCK, 16},
+      {VK_FORMAT_BC6H_SFLOAT_BLOCK, 16},
+      {VK_FORMAT_BC7_UNORM_BLOCK, 16},
+      {VK_FORMAT_BC7_SRGB_BLOCK, 16},
+  };
 
-  constexpr uint32_t BC1BlockSize = 8;
-  constexpr uint32_t BC2BlockSize = 16;
-  constexpr uint32_t BC3BlockSize = 16;
-  constexpr uint32_t BC4BlockSize = 8;
-  constexpr uint32_t BC5BlockSize = 16;
-  constexpr uint32_t BC6HBlockSize = 16;
-  constexpr uint32_t BC7BlockSize = 16;
-
-  switch (format) {
-  //
-  // --- 1 CHANNEL ---
-  //
-  case VK_FORMAT_R8_UNORM:
-  case VK_FORMAT_R8_SNORM:
-  case VK_FORMAT_R8_UINT:
-  case VK_FORMAT_R8_SINT:
-  case VK_FORMAT_R8_SRGB:
-    return byteSize * 1;
-
-  case VK_FORMAT_R16_UNORM:
-  case VK_FORMAT_R16_SNORM:
-  case VK_FORMAT_R16_UINT:
-  case VK_FORMAT_R16_SINT:
-    return shortSize * 1;
-
-  case VK_FORMAT_R16_SFLOAT:
-    return halfSize * 1;
-
-  case VK_FORMAT_R32_UINT:
-  case VK_FORMAT_R32_SINT:
-  case VK_FORMAT_R32_SFLOAT:
-    return floatSize * 1;
-
-  //
-  // --- 2 CHANNEL ---
-  //
-  case VK_FORMAT_R8G8_UNORM:
-  case VK_FORMAT_R8G8_SNORM:
-  case VK_FORMAT_R8G8_UINT:
-  case VK_FORMAT_R8G8_SINT:
-  case VK_FORMAT_R8G8_SRGB:
-    return byteSize * 2;
-
-  case VK_FORMAT_R16G16_UNORM:
-  case VK_FORMAT_R16G16_SNORM:
-  case VK_FORMAT_R16G16_UINT:
-  case VK_FORMAT_R16G16_SINT:
-    return shortSize * 2;
-
-  case VK_FORMAT_R16G16_SFLOAT:
-    return halfSize * 2;
-
-  case VK_FORMAT_R32G32_UINT:
-  case VK_FORMAT_R32G32_SINT:
-  case VK_FORMAT_R32G32_SFLOAT:
-    return floatSize * 2;
-
-  //
-  // --- 3 CHANNEL ---
-  //
-  case VK_FORMAT_R8G8B8_UNORM:
-  case VK_FORMAT_R8G8B8_SRGB:
-  case VK_FORMAT_B8G8R8_UNORM:
-  case VK_FORMAT_B8G8R8_SRGB:
-    return byteSize * 3;
-
-  case VK_FORMAT_R16G16B16_UNORM:
-  case VK_FORMAT_R16G16B16_SNORM:
-  case VK_FORMAT_R16G16B16_UINT:
-  case VK_FORMAT_R16G16B16_SINT:
-  case VK_FORMAT_R16G16B16_SFLOAT:
-    return shortSize * 3;
-
-  case VK_FORMAT_R32G32B32_UINT:
-  case VK_FORMAT_R32G32B32_SINT:
-  case VK_FORMAT_R32G32B32_SFLOAT:
-    return floatSize * 3;
-
-  //
-  // --- 4 CHANNEL ---
-  //
-  case VK_FORMAT_R8G8B8A8_UNORM:
-  case VK_FORMAT_R8G8B8A8_SRGB:
-  case VK_FORMAT_R8G8B8A8_SNORM:
-  case VK_FORMAT_B8G8R8A8_UNORM:
-  case VK_FORMAT_B8G8R8A8_SRGB:
-  case VK_FORMAT_R8G8B8A8_UINT:
-  case VK_FORMAT_R8G8B8A8_SINT:
-    return byteSize * 4;
-
-  case VK_FORMAT_R16G16B16A16_UNORM:
-  case VK_FORMAT_R16G16B16A16_SNORM:
-  case VK_FORMAT_R16G16B16A16_UINT:
-  case VK_FORMAT_R16G16B16A16_SINT:
-    return shortSize * 4;
-
-  case VK_FORMAT_R16G16B16A16_SFLOAT:
-    return halfSize * 4;
-
-  case VK_FORMAT_R32G32B32A32_UINT:
-  case VK_FORMAT_R32G32B32A32_SINT:
-  case VK_FORMAT_R32G32B32A32_SFLOAT:
-    return floatSize * 4;
-
-  //
-  // --- Depth / Stencil ---
-  //
-  case VK_FORMAT_D16_UNORM:
-    return shortSize;
-  case VK_FORMAT_D24_UNORM_S8_UINT:
-    return (3 * byteSize) + byteSize;
-  case VK_FORMAT_X8_D24_UNORM_PACK32:
-    return intSize;
-  case VK_FORMAT_D32_SFLOAT:
-    return floatSize;
-  case VK_FORMAT_D32_SFLOAT_S8_UINT:
-    return floatSize + byteSize;
-
-  //
-  // --- BC Compressed (block size) ---
-  //
-  case VK_FORMAT_BC1_RGB_UNORM_BLOCK:
-  case VK_FORMAT_BC1_RGB_SRGB_BLOCK:
-  case VK_FORMAT_BC1_RGBA_UNORM_BLOCK:
-  case VK_FORMAT_BC1_RGBA_SRGB_BLOCK:
-    return BC1BlockSize;
-
-  case VK_FORMAT_BC2_UNORM_BLOCK:
-  case VK_FORMAT_BC2_SRGB_BLOCK:
-    return BC2BlockSize;
-  case VK_FORMAT_BC3_UNORM_BLOCK:
-  case VK_FORMAT_BC3_SRGB_BLOCK:
-    return BC3BlockSize;
-
-  case VK_FORMAT_BC4_UNORM_BLOCK:
-  case VK_FORMAT_BC4_SNORM_BLOCK:
-    return BC4BlockSize;
-
-  case VK_FORMAT_BC5_UNORM_BLOCK:
-  case VK_FORMAT_BC5_SNORM_BLOCK:
-    return BC5BlockSize;
-
-  case VK_FORMAT_BC6H_UFLOAT_BLOCK:
-  case VK_FORMAT_BC6H_SFLOAT_BLOCK:
-    return BC6HBlockSize;
-  case VK_FORMAT_BC7_UNORM_BLOCK:
-  case VK_FORMAT_BC7_SRGB_BLOCK:
-    return BC7BlockSize;
-
-  default:
-    return 0;
+  auto iter = FormatSizes.find(format);
+  if (iter != FormatSizes.end()) {
+    return iter->second;
   }
+
+  auto formatStr = ToString(format);
+  PrintWarning("Unknown format {} for size retrieval.", formatStr);
+  return 0;
 }
 
 // NOLINTNEXTLINE
 static inline auto StringToImageFormat(const std::string &format) -> VkFormat {
-  // 8-bit unorm
-  if (format == "rgba8") {
-    return VK_FORMAT_R8G8B8A8_UNORM;
+  static const std::unordered_map<std::string, VkFormat> StringToFormat = {
+      {"rgba8", VK_FORMAT_R8G8B8A8_UNORM},
+      {"rg8", VK_FORMAT_R8G8_UNORM},
+      {"r8", VK_FORMAT_R8_UNORM},
+      {"rgba16", VK_FORMAT_R16G16B16A16_UNORM},
+      {"rg16", VK_FORMAT_R16G16_UNORM},
+      {"r16", VK_FORMAT_R16_UNORM},
+      {"rgba16f", VK_FORMAT_R16G16B16A16_SFLOAT},
+      {"rg16f", VK_FORMAT_R16G16_SFLOAT},
+      {"r16f", VK_FORMAT_R16_SFLOAT},
+      {"rgba32f", VK_FORMAT_R32G32B32A32_SFLOAT},
+      {"rg32f", VK_FORMAT_R32G32_SFLOAT},
+      {"r32f", VK_FORMAT_R32_SFLOAT},
+      {"rgba8ui", VK_FORMAT_R8G8B8A8_UINT},
+      {"rg8ui", VK_FORMAT_R8G8_UINT},
+      {"r8ui", VK_FORMAT_R8_UINT},
+      {"rgba16ui", VK_FORMAT_R16G16B16A16_UINT},
+      {"rg16ui", VK_FORMAT_R16G16_UINT},
+      {"r16ui", VK_FORMAT_R16_UINT},
+      {"rgba32ui", VK_FORMAT_R32G32B32A32_UINT},
+      {"rg32ui", VK_FORMAT_R32G32_UINT},
+      {"r32ui", VK_FORMAT_R32_UINT},
+      {"rgba8si", VK_FORMAT_R8G8B8A8_SINT},
+      {"rg8si", VK_FORMAT_R8G8_SINT},
+      {"r8si", VK_FORMAT_R8_SINT},
+      {"rgba16si", VK_FORMAT_R16G16B16A16_SINT},
+      {"rg16si", VK_FORMAT_R16G16_SINT},
+      {"r16si", VK_FORMAT_R16_SINT},
+      {"rgba32si", VK_FORMAT_R32G32B32A32_SINT},
+      {"rg32si", VK_FORMAT_R32G32_SINT},
+      {"r32si", VK_FORMAT_R32_SINT},
+      {"depth16", VK_FORMAT_D16_UNORM},
+      {"depth24", VK_FORMAT_X8_D24_UNORM_PACK32},
+      {"depth32", VK_FORMAT_D32_SFLOAT},
+      {"depth24stencil8", VK_FORMAT_D24_UNORM_S8_UINT},
+      {"depth32stencil8", VK_FORMAT_D32_SFLOAT_S8_UINT},
+      {"rg11b10f", VK_FORMAT_B10G11R11_UFLOAT_PACK32},
+      {"rgb9e5", VK_FORMAT_E5B9G9R9_UFLOAT_PACK32},
+      {"rgb10a2", VK_FORMAT_A2B10G10R10_UNORM_PACK32},
+      {"rgb10a2ui", VK_FORMAT_A2B10G10R10_UINT_PACK32},
+      {"bgr5a1", VK_FORMAT_A1R5G5B5_UNORM_PACK16},
+      {"bgr565", VK_FORMAT_R5G6B5_UNORM_PACK16},
+      {"rgba4", VK_FORMAT_R4G4B4A4_UNORM_PACK16},
+      {"bc1", VK_FORMAT_BC1_RGBA_UNORM_BLOCK},
+      {"bc3", VK_FORMAT_BC3_UNORM_BLOCK},
+      {"bc4", VK_FORMAT_BC4_UNORM_BLOCK},
+      {"bc5", VK_FORMAT_BC5_UNORM_BLOCK},
+      {"bc6h", VK_FORMAT_BC6H_UFLOAT_BLOCK},
+      {"bc6hs", VK_FORMAT_BC6H_SFLOAT_BLOCK},
+      {"bc7", VK_FORMAT_BC7_UNORM_BLOCK},
+  };
+  auto iter = StringToFormat.find(format);
+  if (iter != StringToFormat.end()) {
+    return iter->second;
   }
-  if (format == "rg8") {
-    return VK_FORMAT_R8G8_UNORM;
-  }
-  if (format == "r8") {
-    return VK_FORMAT_R8_UNORM;
-  }
-  // 16-bit unorm
-  if (format == "rgba16") {
-    return VK_FORMAT_R16G16B16A16_UNORM;
-  }
-  if (format == "rg16") {
-    return VK_FORMAT_R16G16_UNORM;
-  }
-  if (format == "r16") {
-    return VK_FORMAT_R16_UNORM;
-  }
-  // 16-bit float
-  if (format == "rgba16f") {
-    return VK_FORMAT_R16G16B16A16_SFLOAT;
-  }
-  if (format == "rg16f") {
-    return VK_FORMAT_R16G16_SFLOAT;
-  }
-  if (format == "r16f") {
-    return VK_FORMAT_R16_SFLOAT;
-  }
-  // 32-bit float
-  if (format == "rgba32f") {
-    return VK_FORMAT_R32G32B32A32_SFLOAT;
-  }
-  if (format == "rg32f") {
-    return VK_FORMAT_R32G32_SFLOAT;
-  }
-  if (format == "r32f") {
-    return VK_FORMAT_R32_SFLOAT;
-  }
-  // 8-bit uint
-  if (format == "rgba8ui") {
-    return VK_FORMAT_R8G8B8A8_UINT;
-  }
-  if (format == "rg8ui") {
-    return VK_FORMAT_R8G8_UINT;
-  }
-  if (format == "r8ui") {
-    return VK_FORMAT_R8_UINT;
-  }
-  // 16-bit uint
-  if (format == "rgba16ui") {
-    return VK_FORMAT_R16G16B16A16_UINT;
-  }
-  if (format == "rg16ui") {
-    return VK_FORMAT_R16G16_UINT;
-  }
-  if (format == "r16ui") {
-    return VK_FORMAT_R16_UINT;
-  }
-  // 32-bit uint
-  if (format == "rgba32ui") {
-    return VK_FORMAT_R32G32B32A32_UINT;
-  }
-  if (format == "rg32ui") {
-    return VK_FORMAT_R32G32_UINT;
-  }
-  if (format == "r32ui") {
-    return VK_FORMAT_R32_UINT;
-  }
-  // 8-bit sint
-  if (format == "rgba8si") {
-    return VK_FORMAT_R8G8B8A8_SINT;
-  }
-  if (format == "rg8si") {
-    return VK_FORMAT_R8G8_SINT;
-  }
-  if (format == "r8si") {
-    return VK_FORMAT_R8_SINT;
-  }
-  // 16-bit sint
-  if (format == "rgba16si") {
-    return VK_FORMAT_R16G16B16A16_SINT;
-  }
-  if (format == "rg16si") {
-    return VK_FORMAT_R16G16_SINT;
-  }
-  if (format == "r16si") {
-    return VK_FORMAT_R16_SINT;
-  }
-  // 32-bit sint
-  if (format == "rgba32si") {
-    return VK_FORMAT_R32G32B32A32_SINT;
-  }
-  if (format == "rg32si") {
-    return VK_FORMAT_R32G32_SINT;
-  }
-  if (format == "r32si") {
-    return VK_FORMAT_R32_SINT;
-  }
-  // Depth formats
-  if (format == "depth16") {
-    return VK_FORMAT_D16_UNORM;
-  }
-  if (format == "depth24") {
-    return VK_FORMAT_X8_D24_UNORM_PACK32;
-  }
-  if (format == "depth32") {
-    return VK_FORMAT_D32_SFLOAT;
-  }
-  // Depth-stencil formats
-  if (format == "depth24stencil8") {
-    return VK_FORMAT_D24_UNORM_S8_UINT;
-  }
-  if (format == "depth32stencil8") {
-    return VK_FORMAT_D32_SFLOAT_S8_UINT;
-  }
-  // packed formats
-  if (format == "rg11b10f") {
-    return VK_FORMAT_B10G11R11_UFLOAT_PACK32;
-  }
-  if (format == "rgb9e5") {
-    return VK_FORMAT_E5B9G9R9_UFLOAT_PACK32;
-  }
-  if (format == "rgb10a2") {
-    return VK_FORMAT_A2B10G10R10_UNORM_PACK32;
-  }
-  if (format == "rgb10a2ui") {
-    return VK_FORMAT_A2B10G10R10_UINT_PACK32;
-  }
-  if (format == "bgr5a1") {
-    return VK_FORMAT_A1R5G5B5_UNORM_PACK16;
-  }
-  if (format == "bgr565") {
-    return VK_FORMAT_R5G6B5_UNORM_PACK16;
-  }
-  if (format == "rgba4") {
-    return VK_FORMAT_R4G4B4A4_UNORM_PACK16;
-  }
-  // compressed formats
-  if (format == "bc1") {
-    return VK_FORMAT_BC1_RGBA_UNORM_BLOCK;
-  }
-  if (format == "bc3") {
-    return VK_FORMAT_BC3_UNORM_BLOCK;
-  }
-  if (format == "bc4") {
-    return VK_FORMAT_BC4_UNORM_BLOCK;
-  }
-  if (format == "bc5") {
-    return VK_FORMAT_BC5_UNORM_BLOCK;
-  }
-  if (format == "bc6h") {
-    return VK_FORMAT_BC6H_UFLOAT_BLOCK;
-  }
-  if (format == "bc6hs") {
-    return VK_FORMAT_BC6H_SFLOAT_BLOCK;
-  }
-  if (format == "bc7") {
-    return VK_FORMAT_BC7_UNORM_BLOCK;
-  }
+
+  PrintWarning("Unknown image format string '{}'.", format);
 
   return VK_FORMAT_UNDEFINED;
 }
 
 // NOLINTNEXTLINE
 static inline auto ImageFormatToString(VkFormat format) -> std::string {
-  switch (format) {
-  case VK_FORMAT_R8G8B8A8_UNORM:
-    return "rgba8";
-  case VK_FORMAT_R8G8B8A8_SRGB:
-    return "srgba8";
-  case VK_FORMAT_R16G16B16A16_UNORM:
-    return "rgba16";
-  case VK_FORMAT_R16G16B16A16_SFLOAT:
-    return "rgba16f";
-  case VK_FORMAT_R32G32B32A32_SFLOAT:
-    return "rgba32f";
-  case VK_FORMAT_R8G8B8A8_UINT:
-    return "rgba8ui";
-  case VK_FORMAT_R16G16B16A16_UINT:
-    return "rgba16ui";
-  case VK_FORMAT_R32G32B32A32_UINT:
-    return "rgba32ui";
-  case VK_FORMAT_R8G8B8A8_SINT:
-    return "rgba8si";
-  case VK_FORMAT_R16G16B16A16_SINT:
-    return "rgba16si";
-  case VK_FORMAT_R32G32B32A32_SINT:
-    return "rgba32si";
-  case VK_FORMAT_D16_UNORM:
-    return "depth16";
-  case VK_FORMAT_X8_D24_UNORM_PACK32:
-    return "depth24";
-  case VK_FORMAT_D32_SFLOAT:
-    return "depth32";
-  case VK_FORMAT_D24_UNORM_S8_UINT:
-    return "depth24stencil8";
-  case VK_FORMAT_D32_SFLOAT_S8_UINT:
-    return "depth32stencil8";
-  case VK_FORMAT_B10G11R11_UFLOAT_PACK32:
-    return "rg11b10f";
-  case VK_FORMAT_E5B9G9R9_UFLOAT_PACK32:
-    return "rgb9e5";
-  case VK_FORMAT_A2B10G10R10_UNORM_PACK32:
-    return "rgb10a2";
-  case VK_FORMAT_A2B10G10R10_UINT_PACK32:
-    return "rgb10a2ui";
-  case VK_FORMAT_A1R5G5B5_UNORM_PACK16:
-    return "bgr5a1";
-  case VK_FORMAT_R5G6B5_UNORM_PACK16:
-    return "bgr565";
-  case VK_FORMAT_R4G4B4A4_UNORM_PACK16:
-    return "rgba4";
-  case VK_FORMAT_BC1_RGBA_UNORM_BLOCK:
-    return "bc1";
-  case VK_FORMAT_BC3_UNORM_BLOCK:
-    return "bc3";
-  case VK_FORMAT_BC4_UNORM_BLOCK:
-    return "bc4";
-  case VK_FORMAT_BC5_UNORM_BLOCK:
-    return "bc5";
-  case VK_FORMAT_BC6H_UFLOAT_BLOCK:
-    return "bc6h";
-  case VK_FORMAT_BC6H_SFLOAT_BLOCK:
-    return "bc6hs";
-  case VK_FORMAT_BC7_UNORM_BLOCK:
-    return "bc7";
-  default:
-    return "undefined";
+  static const std::unordered_map<VkFormat, std::string> FormatToString = {
+      {VK_FORMAT_R8G8B8A8_UNORM, "rgba8"},
+      {VK_FORMAT_R8G8B8A8_SRGB, "srgba8"},
+      {VK_FORMAT_R16G16B16A16_UNORM, "rgba16"},
+      {VK_FORMAT_R16G16B16A16_SFLOAT, "rgba16f"},
+      {VK_FORMAT_R32G32B32A32_SFLOAT, "rgba32f"},
+      {VK_FORMAT_R8G8B8A8_UINT, "rgba8ui"},
+      {VK_FORMAT_R16G16B16A16_UINT, "rgba16ui"},
+      {VK_FORMAT_R32G32B32A32_UINT, "rgba32ui"},
+      {VK_FORMAT_R8G8B8A8_SINT, "rgba8si"},
+      {VK_FORMAT_R16G16B16A16_SINT, "rgba16si"},
+      {VK_FORMAT_R32G32B32A32_SINT, "rgba32si"},
+      {VK_FORMAT_D16_UNORM, "depth16"},
+      {VK_FORMAT_X8_D24_UNORM_PACK32, "depth24"},
+      {VK_FORMAT_D32_SFLOAT, "depth32"},
+      {VK_FORMAT_D24_UNORM_S8_UINT, "depth24stencil8"},
+      {VK_FORMAT_D32_SFLOAT_S8_UINT, "depth32stencil8"},
+      {VK_FORMAT_B10G11R11_UFLOAT_PACK32, "rg11b10f"},
+      {VK_FORMAT_E5B9G9R9_UFLOAT_PACK32, "rgb9e5"},
+      {VK_FORMAT_A2B10G10R10_UNORM_PACK32, "rgb10a2"},
+      {VK_FORMAT_A2B10G10R10_UINT_PACK32, "rgb10a2ui"},
+      {VK_FORMAT_A1R5G5B5_UNORM_PACK16, "bgr5a1"},
+      {VK_FORMAT_R5G6B5_UNORM_PACK16, "bgr565"},
+      {VK_FORMAT_R4G4B4A4_UNORM_PACK16, "rgba4"},
+      {VK_FORMAT_BC1_RGBA_UNORM_BLOCK, "bc1"},
+      {VK_FORMAT_BC3_UNORM_BLOCK, "bc3"},
+      {VK_FORMAT_BC4_UNORM_BLOCK, "bc4"},
+      {VK_FORMAT_BC5_UNORM_BLOCK, "bc5"},
+      {VK_FORMAT_BC6H_UFLOAT_BLOCK, "bc6h"},
+      {VK_FORMAT_BC6H_SFLOAT_BLOCK, "bc6hs"},
+      {VK_FORMAT_BC7_UNORM_BLOCK, "bc7"},
+  };
+  auto iter = FormatToString.find(format);
+  if (iter != FormatToString.end()) {
+    return iter->second;
   }
+  return "undefined";
 }
 
-static auto ToString(VkFormat format, size_t arraySize = 1) -> std::string {
+static auto ToString(VkFormat format, size_t arraySize) -> std::string {
   switch (format) {
   case VK_FORMAT_R32_SFLOAT:
     return "float";
@@ -594,256 +407,103 @@ static auto ToString(VkFormat format, size_t arraySize = 1) -> std::string {
 
 // NOLINTNEXTLINE, cognitive complexity
 static auto FromString(const std::string &format) -> VkFormat {
-  if (format == "unknown") {
-    return VK_FORMAT_UNDEFINED;
-  }
-  if (format == "float") {
-    return VK_FORMAT_R32_SFLOAT;
-  }
-  if (format == "floatvec2") {
-    return VK_FORMAT_R32G32_SFLOAT;
-  }
-  if (format == "floatvec3") {
-    return VK_FORMAT_R32G32B32_SFLOAT;
-  }
-  if (format == "floatvec4") {
-    return VK_FORMAT_R32G32B32A32_SFLOAT;
-  }
-  if (format == "half") {
-    return VK_FORMAT_R16_SFLOAT;
-  }
-  if (format == "halfvec2") {
-    return VK_FORMAT_R16G16_SFLOAT;
-  }
-  if (format == "halfvec3") {
-    return VK_FORMAT_R16G16B16_SFLOAT;
-  }
-  if (format == "halfvec4") {
-    return VK_FORMAT_R16G16B16A16_SFLOAT;
-  }
-  if (format == "uint8") {
-    return VK_FORMAT_R8_UINT;
-  }
-  if (format == "uint8vec2") {
-    return VK_FORMAT_R8G8_UINT;
-  }
-  if (format == "uint8vec3") {
-    return VK_FORMAT_R8G8B8_UINT;
-  }
-  if (format == "uint8vec4") {
-    return VK_FORMAT_R8G8B8A8_UINT;
-  }
-  if (format == "uint16") {
-    return VK_FORMAT_R16_UINT;
-  }
-  if (format == "uint16vec2") {
-    return VK_FORMAT_R16G16_UINT;
-  }
-  if (format == "uint16vec3") {
-    return VK_FORMAT_R16G16B16_UINT;
-  }
-  if (format == "uint16vec4") {
-    return VK_FORMAT_R16G16B16A16_UINT;
-  }
-  if (format == "uint32") {
-    return VK_FORMAT_R32_UINT;
-  }
-  if (format == "uint32vec2") {
-    return VK_FORMAT_R32G32_UINT;
-  }
-  if (format == "uint32vec3") {
-    return VK_FORMAT_R32G32B32_UINT;
-  }
-  if (format == "uint32vec4") {
-    return VK_FORMAT_R32G32B32A32_UINT;
-  }
-  if (format == "int8") {
-    return VK_FORMAT_R8_SINT;
-  }
-  if (format == "int8vec2") {
-    return VK_FORMAT_R8G8_SINT;
-  }
-  if (format == "int8vec3") {
-    return VK_FORMAT_R8G8B8_SINT;
-  }
-  if (format == "int8vec4") {
-    return VK_FORMAT_R8G8B8A8_SINT;
-  }
-  if (format == "int16") {
-    return VK_FORMAT_R16_SINT;
-  }
-  if (format == "int16vec2") {
-    return VK_FORMAT_R16G16_SINT;
-  }
-  if (format == "int16vec3") {
-    return VK_FORMAT_R16G16B16_SINT;
-  }
-  if (format == "int16vec4") {
-    return VK_FORMAT_R16G16B16A16_SINT;
-  }
-  if (format == "int32") {
-    return VK_FORMAT_R32_SINT;
-  }
-  if (format == "int32vec2") {
-    return VK_FORMAT_R32G32_SINT;
-  }
-  if (format == "int32vec3") {
-    return VK_FORMAT_R32G32B32_SINT;
-  }
-  if (format == "int32vec4") {
-    return VK_FORMAT_R32G32B32A32_SINT;
-  }
-  if (format == "unorm8") {
-    return VK_FORMAT_R8_UNORM;
-  }
-  if (format == "unorm8vec2") {
-    return VK_FORMAT_R8G8_UNORM;
-  }
-  if (format == "unorm8vec3") {
-    return VK_FORMAT_R8G8B8_UNORM;
-  }
-  if (format == "unorm8vec4") {
-    return VK_FORMAT_R8G8B8A8_UNORM;
-  }
-  if (format == "unorm16") {
-    return VK_FORMAT_R16_UNORM;
-  }
-  if (format == "unorm16vec2") {
-    return VK_FORMAT_R16G16_UNORM;
-  }
-  if (format == "unorm16vec3") {
-    return VK_FORMAT_R16G16B16_UNORM;
-  }
-  if (format == "unorm16vec4") {
-    return VK_FORMAT_R16G16B16A16_UNORM;
-  }
-  if (format == "snorm8") {
-    return VK_FORMAT_R8_SNORM;
-  }
-  if (format == "snorm8vec2") {
-    return VK_FORMAT_R8G8_SNORM;
-  }
-  if (format == "snorm8vec3") {
-    return VK_FORMAT_R8G8B8_SNORM;
-  }
-  if (format == "snorm8vec4") {
-    return VK_FORMAT_R8G8B8A8_SNORM;
-  }
-  if (format == "snorm16") {
-    return VK_FORMAT_R16_SNORM;
-  }
-  if (format == "snorm16vec2") {
-    return VK_FORMAT_R16G16_SNORM;
-  }
-  if (format == "snorm16vec3") {
-    return VK_FORMAT_R16G16B16_SNORM;
-  }
-  if (format == "snorm16vec4") {
-    return VK_FORMAT_R16G16B16A16_SNORM;
-  }
-  if (format == "floatmat2" || format == "floatmat2x2") {
-    return VK_FORMAT_R32G32_SFLOAT;
-  }
-  if (format == "floatmat3" || format == "floatmat3x3") {
-    return VK_FORMAT_R32G32B32_SFLOAT;
-  }
-  if (format == "floatmat4" || format == "floatmat4x4") {
-    return VK_FORMAT_R32G32B32A32_SFLOAT;
-  }
-  if (format == "halfmat2" || format == "halfmat2x2") {
-    return VK_FORMAT_R16G16_SFLOAT;
-  }
-  if (format == "halfmat3" || format == "halfmat3x3") {
-    return VK_FORMAT_R16G16B16_SFLOAT;
-  }
-  if (format == "halfmat4" || format == "halfmat4x4") {
-    return VK_FORMAT_R16G16B16A16_SFLOAT;
-  }
-  if (format == "floatmat2x3") {
-    return VK_FORMAT_R32G32B32_SFLOAT;
-  }
-  if (format == "floatmat3x2") {
-    return VK_FORMAT_R32G32_SFLOAT;
-  }
-  if (format == "floatmat2x4") {
-    return VK_FORMAT_R32G32B32A32_SFLOAT;
-  }
-  if (format == "floatmat4x2") {
-    return VK_FORMAT_R32G32_SFLOAT;
-  }
-  if (format == "floatmat3x4") {
-    return VK_FORMAT_R32G32B32A32_SFLOAT;
-  }
-  if (format == "floatmat4x3") {
-    return VK_FORMAT_R32G32B32_SFLOAT;
-  }
-  if (format == "halfmat2x3") {
-    return VK_FORMAT_R16G16B16_SFLOAT;
-  }
-  if (format == "halfmat3x2") {
-    return VK_FORMAT_R16G16_SFLOAT;
-  }
-  if (format == "halfmat2x4") {
-    return VK_FORMAT_R16G16B16A16_SFLOAT;
-  }
-  if (format == "halfmat4x2") {
-    return VK_FORMAT_R16G16_SFLOAT;
-  }
-  if (format == "halfmat3x4") {
-    return VK_FORMAT_R16G16B16A16_SFLOAT;
-  }
-  if (format == "halfmat4x3") {
-    return VK_FORMAT_R16G16B16_SFLOAT;
-  }
-
+  static const std::unordered_map<std::string, VkFormat> StringToFormat = {
+      {"unknown", VK_FORMAT_UNDEFINED},
+      {"float", VK_FORMAT_R32_SFLOAT},
+      {"floatvec2", VK_FORMAT_R32G32_SFLOAT},
+      {"floatvec3", VK_FORMAT_R32G32B32_SFLOAT},
+      {"floatvec4", VK_FORMAT_R32G32B32A32_SFLOAT},
+      {"half", VK_FORMAT_R16_SFLOAT},
+      {"halfvec2", VK_FORMAT_R16G16_SFLOAT},
+      {"halfvec3", VK_FORMAT_R16G16B16_SFLOAT},
+      {"halfvec4", VK_FORMAT_R16G16B16A16_SFLOAT},
+      {"uint8", VK_FORMAT_R8_UINT},
+      {"uint8vec2", VK_FORMAT_R8G8_UINT},
+      {"uint8vec3", VK_FORMAT_R8G8B8_UINT},
+      {"uint8vec4", VK_FORMAT_R8G8B8A8_UINT},
+      {"uint16", VK_FORMAT_R16_UINT},
+      {"uint16vec2", VK_FORMAT_R16G16_UINT},
+      {"uint16vec3", VK_FORMAT_R16G16B16_UINT},
+      {"uint16vec4", VK_FORMAT_R16G16B16A16_UINT},
+      {"uint32", VK_FORMAT_R32_UINT},
+      {"uint32vec2", VK_FORMAT_R32G32_UINT},
+      {"uint32vec3", VK_FORMAT_R32G32B32_UINT},
+      {"uint32vec4", VK_FORMAT_R32G32B32A32_UINT},
+      {"int8", VK_FORMAT_R8_SINT},
+      {"int8vec2", VK_FORMAT_R8G8_SINT},
+      {"int8vec3", VK_FORMAT_R8G8B8_SINT},
+      {"int8vec4", VK_FORMAT_R8G8B8A8_SINT},
+      {"int16", VK_FORMAT_R16_SINT},
+      {"int16vec2", VK_FORMAT_R16G16_SINT},
+      {"int16vec3", VK_FORMAT_R16G16B16_SINT},
+      {"int16vec4", VK_FORMAT_R16G16B16A16_SINT},
+      {"int32", VK_FORMAT_R32_SINT},
+      {"int32vec2", VK_FORMAT_R32G32_SINT},
+      {"int32vec3", VK_FORMAT_R32G32B32_SINT},
+      {"int32vec4", VK_FORMAT_R32G32B32A32_SINT},
+      {"unorm8", VK_FORMAT_R8_UNORM},
+      {"unorm8vec2", VK_FORMAT_R8G8_UNORM},
+      {"unorm8vec3", VK_FORMAT_R8G8B8_UNORM},
+      {"unorm8vec4", VK_FORMAT_R8G8B8A8_UNORM},
+      {"unorm16", VK_FORMAT_R16_UNORM},
+      {"unorm16vec2", VK_FORMAT_R16G16_UNORM},
+      {"unorm16vec3", VK_FORMAT_R16G16B16_UNORM},
+      {"unorm16vec4", VK_FORMAT_R16G16B16A16_UNORM},
+      {"snorm8", VK_FORMAT_R8_SNORM},
+      {"snorm8vec2", VK_FORMAT_R8G8_SNORM},
+      {"snorm8vec3", VK_FORMAT_R8G8B8_SNORM},
+      {"snorm8vec4", VK_FORMAT_R8G8B8A8_SNORM},
+      {"snorm16", VK_FORMAT_R16_SNORM},
+      {"snorm16vec2", VK_FORMAT_R16G16_SNORM},
+      {"snorm16vec3", VK_FORMAT_R16G16B16_SNORM},
+      {"snorm16vec4", VK_FORMAT_R16G16B16A16_SNORM},
+      {"floatmat2", VK_FORMAT_R32G32_SFLOAT},
+      {"floatmat2x2", VK_FORMAT_R32G32_SFLOAT},
+      {"floatmat3", VK_FORMAT_R32G32B32_SFLOAT},
+      {"floatmat3x3", VK_FORMAT_R32G32B32_SFLOAT},
+      {"floatmat4", VK_FORMAT_R32G32B32A32_SFLOAT},
+      {"floatmat4x4", VK_FORMAT_R32G32B32A32_SFLOAT},
+      {"halfmat2", VK_FORMAT_R16G16_SFLOAT},
+      {"halfmat2x2", VK_FORMAT_R16G16_SFLOAT},
+      {"halfmat3", VK_FORMAT_R16G16B16_SFLOAT},
+      {"halfmat3x3", VK_FORMAT_R16G16B16_SFLOAT},
+      {"halfmat4", VK_FORMAT_R16G16B16A16_SFLOAT},
+      {"halfmat4x4", VK_FORMAT_R16G16B16A16_SFLOAT},
+      {"floatmat2x3", VK_FORMAT_R32G32B32_SFLOAT},
+      {"floatmat3x2", VK_FORMAT_R32G32_SFLOAT},
+      {"floatmat2x4", VK_FORMAT_R32G32B32A32_SFLOAT},
+      {"floatmat4x2", VK_FORMAT_R32G32_SFLOAT},
+      {"floatmat3x4", VK_FORMAT_R32G32B32A32_SFLOAT},
+      {"floatmat4x3", VK_FORMAT_R32G32B32_SFLOAT},
+      {"halfmat2x3", VK_FORMAT_R16G16B16_SFLOAT},
+      {"halfmat3x2", VK_FORMAT_R16G16_SFLOAT},
+      {"halfmat2x4", VK_FORMAT_R16G16B16A16_SFLOAT},
+      {"halfmat4x2", VK_FORMAT_R16G16_SFLOAT},
+      {"halfmat3x4", VK_FORMAT_R16G16B16A16_SFLOAT},
+      {"halfmat4x3", VK_FORMAT_R16G16B16_SFLOAT},
+  };
+  auto iter = StringToFormat.find(format);
+  if (iter != StringToFormat.end()) {
+    return iter->second;
+  }
+  PrintWarning("Unknown format string: " + format);
   return VK_FORMAT_UNDEFINED;
 }
 
 static auto StringToArraySize(const std::string &format) -> size_t {
-  if (format == "floatmat2x2" || format == "floatmat2") {
-    return 2;
-  }
-  if (format == "floatmat3x3" || format == "floatmat3") {
-    return 3;
-  }
-  if (format == "floatmat4x4" || format == "floatmat4") {
-    return 4;
-  }
-  if (format == "floatmat2x3") {
-    return 3;
-  }
-  if (format == "floatmat3x2") {
-    return 2;
-  }
-  if (format == "floatmat2x4") {
-    return 4;
-  }
-  if (format == "floatmat4x2") {
-    return 2;
-  }
-  if (format == "floatmat3x4") {
-    return 4;
-  }
-  if (format == "floatmat4x3") {
-    return 3;
-  }
-  if (format == "halfmat2x3") {
-    return 3;
-  }
-  if (format == "halfmat3x2") {
-    return 2;
-  }
-  if (format == "halfmat2x4") {
-    return 4;
-  }
-  if (format == "halfmat4x2") {
-    return 2;
-  }
-  if (format == "halfmat3x4") {
-    return 4;
-  }
-  if (format == "halfmat4x3") {
-    return 3;
+  static const std::unordered_map<std::string, size_t> FormatToArraySize = {
+      {"floatmat2", 2},   {"floatmat2x2", 2}, {"floatmat3", 3},
+      {"floatmat3x3", 3}, {"floatmat4", 4},   {"floatmat4x4", 4},
+      {"halfmat2", 2},    {"halfmat2x2", 2},  {"halfmat3", 3},
+      {"halfmat3x3", 3},  {"halfmat4", 4},    {"halfmat4x4", 4},
+      {"floatmat2x3", 3}, {"floatmat3x2", 2}, {"floatmat2x4", 4},
+      {"floatmat4x2", 2}, {"floatmat3x4", 4}, {"floatmat4x3", 3},
+      {"halfmat2x3", 3},  {"halfmat3x2", 2},  {"halfmat2x4", 4},
+      {"halfmat4x2", 2},  {"halfmat3x4", 4},  {"halfmat4x3", 3},
+  };
+  auto iter = FormatToArraySize.find(format);
+  if (iter != FormatToArraySize.end()) {
+    return iter->second;
   }
 
   return 1; // default array size is 1 for non-matrix types

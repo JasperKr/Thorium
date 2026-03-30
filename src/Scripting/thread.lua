@@ -33,7 +33,7 @@ local vertices = {
 }
 local mesh
 
-local shader = snap.graphics.newShader("Scripting/Graphics/Shaders/test.slang")
+local shader = snap.graphics.newShader("Scripting/Graphics/Shaders/forward.slang")
 local computeshader = snap.graphics.newShader("Scripting/Graphics/Shaders/test2.slang")
 local value = 0.15
 
@@ -66,8 +66,9 @@ local function draw()
   snap.graphics.setScissor();
   lastImDrawTime = lastImDrawTime + snap.timer.getTime() - imStartTime
 
-  snap.graphics.setShader()
+  snap.graphics.setShader(shader)
   scene:drawModels()
+  snap.graphics.setShader()
 
   lastDrawTime = lastDrawTime + snap.timer.getTime() - startTime
   count = count + 1

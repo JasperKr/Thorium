@@ -617,8 +617,9 @@ auto SetupFromType(slang::VariableLayoutReflection *variableLayout,
     break;
   }
   default: {
-    return Error::Create(
-        "Unsupported type layout kind for global UBO reflection.");
+    auto kindInt = static_cast<int>(typeLayout->getKind());
+    return Error::Createf(
+        "Unsupported type layout kind for global UBO reflection: {}", kindInt);
   }
   }
 

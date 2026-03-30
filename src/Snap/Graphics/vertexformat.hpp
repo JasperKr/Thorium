@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include "Modules/console.hpp"
 #include "vulkan/vulkan_core.h"
 
 namespace Graphics {
@@ -130,8 +131,13 @@ private:
     for (auto &component : Attributes) {
       auto formatSize = Format::GetSize(component.format);
 
+      if (formatSize == 0) {
+        PrintFatal(
+            "Vertex attribute '{}' has unsupported or unknown format: {}",
+            component.name, Format::ToString(component.format));
+      }
       assert(formatSize > 0 &&
-             "Vertex attribute has unsupported or unknown format");
+             "Vertex attribute has unsupported or unknown format: ");
 
       component.offset = Bindings[component.binding].stride;
       Bindings[component.binding].stride += formatSize;

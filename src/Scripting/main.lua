@@ -17,18 +17,29 @@ print(scene:getName())
 
 snap.graphics.aquireGraphics("load")
 
+--[[
+    float4 sv_position : SV_Position;
+    float4x2 TexCoords : Texture_Coordinates;
+    half4 normal : Normal;
+    half4 tangent : Tangent;
+    float4 color       : Color;
+]]
+
 local vertexformat = {
-  { name = "position", format = "floatvec2",  location = 0 },
-  { name = "uv",       format = "floatvec2",  location = 1 },
-  { name = "color",    format = "unorm8vec4", location = 2 },
+  { name = "position",      format = "floatvec4",  location = 0 },
+  { name = "textureCoords", format = "uint32vec2", location = 1 },
+  { name = "normal",        format = "uint32",     location = 2 },
+  { name = "tangent",       format = "uint32",     location = 3 },
+  { name = "color",         format = "unorm8vec4", location = 4 },
 }
 
 local indices = { 1, 2, 3, 1, 3, 4 }
 local vertices = {
-  { 0,   0,   0, 0, 1, 1, 1, 1 },
-  { 100, 0,   1, 0, 1, 1, 1, 1 },
-  { 100, 100, 1, 1, 1, 1, 1, 1 },
-  { 0,   100, 0, 1, 1, 1, 1, 1 },
+  --x,   y,   z, w, t0,t1,n, t, r, g, b, a
+  { 0,   0,   0, 0, 0, 0, 0, 0, 1, 1, 1, 1 },
+  { 100, 0,   0, 0, 0, 0, 0, 0, 1, 1, 1, 1 },
+  { 100, 100, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1 },
+  { 0,   100, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1 },
 }
 
 local mesh = snap.graphics.newMesh(vertexformat, vertices, "triangles")
