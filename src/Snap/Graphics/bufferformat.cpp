@@ -310,11 +310,11 @@ auto BufferFormat::FlattenComponentTree() -> void {
 }
 
 [[nodiscard]] auto BufferFormat::FormatAt(size_t componentOffset) -> VkFormat {
-  componentOffset %= FlatComponents.size();
-
   if (FlatComponents.empty()) {
     FlattenComponentTree();
   }
+
+  componentOffset %= FlatComponents.size();
 
   return FlatComponents[componentOffset];
 }

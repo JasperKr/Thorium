@@ -107,12 +107,12 @@ ShaderStageFlagsToPipelineStageFlags(VkShaderStageFlags shaderStages)
 }
 
 struct BoundState {
-  std::unordered_map<uint64_t, Buffer *> boundBuffers;
-  std::unordered_map<uint64_t, std::pair<Buffer *, BufferInfo>>
+  std::unordered_map<uint64_t, Ref<Buffer>> boundBuffers;
+  std::unordered_map<uint64_t, std::pair<Ref<Buffer>, BufferInfo>>
       userBoundBuffers;
 
-  std::unordered_map<uint64_t, Texture::Texture *> boundTextures;
-  std::unordered_map<uint64_t, std::pair<Texture::Texture *, SamplerInfo>>
+  std::unordered_map<uint64_t, Ref<Texture::Texture>> boundTextures;
+  std::unordered_map<uint64_t, std::pair<Ref<Texture::Texture>, SamplerInfo>>
       userBoundTextures;
 
   std::unordered_map<uint32_t, VkDescriptorSet> descriptorSets;
@@ -191,7 +191,7 @@ struct ShaderModule : Object {
             StructuredBuffer *buffer) -> Error;
 
   auto Send(const GraphicsContext &context, const ResourceKey &key,
-            Graphics::Texture::Texture *texture) -> Error;
+            const Ref<Graphics::Texture::Texture> &texture) -> Error;
 
   auto GetUniform(const ResourceKey &key) const -> Result<const ResourceInfo>;
   auto GetSlotDescription(uint32_t set, uint32_t binding)

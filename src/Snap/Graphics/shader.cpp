@@ -554,7 +554,7 @@ inline auto ValidateBuffers(const ShaderModule *shader) -> Error {
 
     auto locationKey = SetBindingToSlot(bufferInfo.set, bufferInfo.binding);
 
-    if (!shader->GetState().boundBuffers.contains(locationKey)) {
+    if (!shader->GetState().userBoundBuffers.contains(locationKey)) {
       return Error::Create("Storage buffer '" + resource.name +
                            "' not set up in shader.");
     }
@@ -645,44 +645,8 @@ auto ShaderModule::Send(const GraphicsContext &context, const ResourceKey &key,
     if (bufferInfo.name == *key.begin()) {
       auto locationKey = SetBindingToSlot(bufferInfo.set, bufferInfo.binding);
 
-      auto *bufferHandle = buffer->GetBuffer().get();
-
-      GetState().boundBuffers[locationKey] = bufferHandle;
-
-      VkDescriptorBufferInfo vkBufferInfo{};
-      vkBufferInfo.buffer = bufferHandle->handle;
-      vkBufferInfo.offset = 0;
-      vkBufferInfo.range = bufferHandle->size;
-
-      DescriptorWriteInfo descriptorWrite{};
-      descriptorWrite.dstSet = bufferInfo.set;
-      descriptorWrite.dstBinding = bufferInfo.binding;
-      descriptorWrite.dstArrayElement = 0;
-      descriptorWrite.descriptorType =
-          (bufferInfo.bufferType == BufferType::Uniform
-               ? VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
-               : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
-      descriptorWrite.descriptorCount = 1;
-      descriptorWrite.pBufferInfo = vkBufferInfo;
-      descriptorWrite.bufferPtr = bufferHandle;
-
-      switch (bufferInfo.access) {
-      case SLANG_RESOURCE_ACCESS_READ:
-        descriptorWrite.bufferAccessBits = VK_ACCESS_2_SHADER_READ_BIT;
-        break;
-      case SLANG_RESOURCE_ACCESS_WRITE:
-        descriptorWrite.bufferAccessBits = VK_ACCESS_2_SHADER_WRITE_BIT;
-        break;
-      case SLANG_RESOURCE_ACCESS_READ_WRITE:
-        descriptorWrite.bufferAccessBits = static_cast<VkAccessFlagBits2>(
-            VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT);
-        break;
-      default:
-        descriptorWrite.bufferAccessBits = VK_ACCESS_2_SHADER_READ_BIT;
-        break;
-      };
-
-      GetState().pendingDescriptorWrites.emplace_back(descriptorWrite);
+      GetState().userBoundBuffers[locationKey] = {buffer->GetBuffer(),
+                                                  bufferInfo};
 
       return Error::Success();
     }
@@ -692,10 +656,11 @@ auto ShaderModule::Send(const GraphicsContext &context, const ResourceKey &key,
 }
 
 auto ShaderModule::Send(const GraphicsContext &context, const ResourceKey &key,
-                        Graphics::Texture::Texture *texture) -> Error {
+                        const Ref<Graphics::Texture::Texture> &texture)
+    -> Error {
   ZoneScopedN("ShaderModule::Send texture");
 
-  if (texture == nullptr) {
+  if (!texture.isValid()) {
     return Error::Create("Texture is null.");
   }
 
@@ -788,31 +753,14 @@ auto ShaderModule::FlushGlobals(const GraphicsContext &context,
   return Error::Success();
 }
 
-// NOLINTNEXTLINE
-auto ShaderModule::FlushDescriptors(const GraphicsContext &context,
-                                    VkPipelineLayout layout,
-                                    VkPipelineStageFlags2 dstStage) -> Error {
+inline auto BindTextures(const GraphicsContext &context,
+                         std::vector<VkWriteDescriptorSet> &writes,
+                         std::unordered_set<uint64_t> &updatedSets,
+                         ShaderReflection &reflection, BoundState &state)
+    -> Error {
   ZoneScoped;
 
-  auto validateResult = ValidateBuffers(this);
-  if (Error::IsError(validateResult)) {
-    return validateResult;
-  }
-
-  static Graphics::Buffer *currentUBOBuffer;
-
-  auto updateResult = FlushGlobals(context, layout, dstStage);
-  if (Error::IsError(updateResult)) {
-    return updateResult;
-  }
-
-  auto &state = GetState();
-
-  thread_local std::vector<VkWriteDescriptorSet> writes;
-  thread_local std::unordered_set<uint64_t> updatedSets;
   thread_local std::vector<VkDescriptorImageInfo> imageInfos;
-  writes.clear();
-  updatedSets.clear();
   imageInfos.clear();
 
   for (auto &resource : reflection.resources) {
@@ -833,9 +781,9 @@ auto ShaderModule::FlushDescriptors(const GraphicsContext &context,
                    resource.name, samplerInfo.set, samplerInfo.binding);
       continue;
     }
-    auto *texture = boundTextureIter->second.first;
+    auto texture = boundTextureIter->second.first;
 
-    if (texture == nullptr) {
+    if (!texture.isValid()) {
       PrintWarning("Texture bound to sampler '{}' is null, set {}, binding {}.",
                    resource.name, samplerInfo.set, samplerInfo.binding);
       continue;
@@ -901,6 +849,115 @@ auto ShaderModule::FlushDescriptors(const GraphicsContext &context,
 
     writes.emplace_back(descSetWrite);
     state.boundTextures[key] = texture;
+  }
+
+  return Error::Success();
+}
+
+inline auto BindBuffers(const GraphicsContext &context,
+                        std::vector<VkWriteDescriptorSet> &writes,
+                        std::unordered_set<uint64_t> &updatedSets,
+                        ShaderReflection &reflection, BoundState &state)
+    -> Error {
+  ZoneScoped;
+
+  thread_local std::vector<VkDescriptorBufferInfo> bufferInfos;
+  bufferInfos.clear();
+
+  for (auto &resource : reflection.resources) {
+    if (!resource.IsBuffer()) {
+      continue;
+    }
+
+    const auto &bufferInfo = std::get<BufferInfo>(resource.info);
+
+    if (bufferInfo.bufferType == BufferType::PushConstant) {
+      continue;
+    }
+
+    auto key = SetBindingToSlot(bufferInfo.set, bufferInfo.binding);
+    auto boundBufferIter = state.userBoundBuffers.find(key);
+    if (boundBufferIter == state.userBoundBuffers.end()) {
+      PrintWarning("No buffer bound for resource '{}', set {}, binding {}.",
+                   resource.name, bufferInfo.set, bufferInfo.binding);
+      continue;
+    }
+    auto &buffer = boundBufferIter->second.first;
+
+    if (!buffer.isValid()) {
+      PrintWarning("Buffer bound to resource '{}' is null, set {}, binding {}.",
+                   resource.name, bufferInfo.set, bufferInfo.binding);
+      continue;
+    }
+
+    auto currentlyBound = state.boundBuffers.contains(key);
+    if (currentlyBound && state.boundBuffers.at(key) == buffer) {
+      continue;
+    }
+
+    // VkDescriptorBufferInfo vkBufferInfo{};
+    bufferInfos.emplace_back();
+    auto &vkBufferInfo = bufferInfos.back();
+    vkBufferInfo.buffer = buffer->handle;
+    vkBufferInfo.offset = 0; // TODO: support dynamic offsets
+    vkBufferInfo.range = VK_WHOLE_SIZE;
+
+    VkWriteDescriptorSet descSetWrite{};
+    descSetWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    descSetWrite.pNext = nullptr;
+    descSetWrite.dstSet = state.descriptorSets.at(bufferInfo.set);
+    descSetWrite.dstBinding = bufferInfo.binding;
+    descSetWrite.dstArrayElement = 0;
+    descSetWrite.descriptorCount = 1;
+    descSetWrite.descriptorType = (bufferInfo.bufferType == BufferType::Uniform
+                                       ? VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
+                                       : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER);
+    descSetWrite.pImageInfo = nullptr;
+    descSetWrite.pBufferInfo = &vkBufferInfo;
+    descSetWrite.pTexelBufferView = nullptr;
+
+    writes.emplace_back(descSetWrite);
+    state.boundBuffers[key] = buffer;
+  }
+
+  return Error::Success();
+}
+
+// NOLINTNEXTLINE
+auto ShaderModule::FlushDescriptors(const GraphicsContext &context,
+                                    VkPipelineLayout layout,
+                                    VkPipelineStageFlags2 dstStage) -> Error {
+  ZoneScoped;
+
+  auto validateResult = ValidateBuffers(this);
+  if (Error::IsError(validateResult)) {
+    return validateResult;
+  }
+
+  static Graphics::Buffer *currentUBOBuffer;
+
+  auto updateResult = FlushGlobals(context, layout, dstStage);
+  if (Error::IsError(updateResult)) {
+    return updateResult;
+  }
+
+  auto &state = GetState();
+
+  thread_local std::vector<VkWriteDescriptorSet> writes;
+  thread_local std::unordered_set<uint64_t> updatedSets;
+  writes.clear();
+  updatedSets.clear();
+
+  auto textureResult =
+      BindTextures(context, writes, updatedSets, reflection, state);
+  if (Error::IsError(textureResult)) {
+    return textureResult;
+  }
+
+  auto bufferResult =
+      BindBuffers(context, writes, updatedSets, reflection, state);
+  if (Error::IsError(bufferResult)) {
+    return bufferResult;
   }
 
   {

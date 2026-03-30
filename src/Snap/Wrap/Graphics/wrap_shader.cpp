@@ -65,8 +65,9 @@ auto wrap_Send(lua_State *state) -> int {
   if (LuaWrap::IsType<Graphics::Texture::Texture>(state, valueOffset)) {
     auto *texture =
         LuaWrap::ObjectFromLua<Graphics::Texture::Texture>(state, valueOffset);
+    auto texRef = Ref<Graphics::Texture::Texture>(texture);
     auto result =
-        shader->Send(*Graphics::GetCurrentGraphicsContext(), key, texture);
+        shader->Send(*Graphics::GetCurrentGraphicsContext(), key, texRef);
     if (Error::IsError(result)) {
       return luaL_error(state, "%s", result.message.c_str());
     }

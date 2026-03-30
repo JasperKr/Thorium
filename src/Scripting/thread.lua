@@ -1,4 +1,8 @@
 Imgui = require("Editor.cimgui.init")
+require("Modules.vec")
+require("Modules.quaternions")
+require("Modules.matrices")
+require("Modules.math")
 local ffi = require("ffi")
 
 local lastDrawTime = 0
@@ -7,7 +11,7 @@ local lastShownTime = 0
 local lastShownImDrawTime = 0
 local count = 0
 
-local doneChannel, canStartChannel, scene = ...
+local commandBufferChannel, canStartChannel, scene = ...
 
 local t = snap.timer.getTime()
 local testImgdata = snap.data.newImagedata(16, 16, "rgba8")
@@ -36,6 +40,7 @@ local mesh
 local shader = snap.graphics.newShader("Scripting/Graphics/Shaders/forward.slang")
 local computeshader = snap.graphics.newShader("Scripting/Graphics/Shaders/test2.slang")
 local value = 0.15
+local cameraBuffer
 
 local texture
 local testnumber = ffi.new("float[1]")
@@ -67,6 +72,7 @@ local function draw()
   lastImDrawTime = lastImDrawTime + snap.timer.getTime() - imStartTime
 
   snap.graphics.setShader(shader)
+  shader:send("CameraData", cameraBuffer)
   scene:drawModels()
   snap.graphics.setShader()
 
@@ -88,7 +94,7 @@ while true do
     break
   end
 
-  snap.graphics.aquireGraphics("gui")
+  snap.graphics.aquireGraphics()
   if not texture then
     print("New texture")
     texture = snap.graphics.newTexture(testImgdata, { storage = true, sampler = true })
@@ -112,6 +118,66 @@ while true do
       indicesData:setUInt32((j - 1) * 4, indices[j] - 1)
     end
     mesh:setIndices(indicesData)
+
+    --[[
+    public cbuffer CameraData {
+  public float4 CameraPosition;
+  public float4x4 ViewMatrix;
+  public float4x4 InverseViewMatrix;
+  public float4x4 RotationMatrix;
+  public float4x4 InverseRotationMatrix;
+  public float4x4 ProjectionMatrix;
+  public float4x4 InverseProjectionMatrix;
+  public float4x4 ViewProjectionMatrix;
+  public float4x4 InverseViewProjectionMatrix;
+  public float4x4 RotationProjectionMatrix;
+  public float4x4 InverseRotationProjectionMatrix;
+    };
+    ]]
+
+    local format = {
+      { name = "CameraPosition",                  format = "floatvec4" },
+      { name = "ViewMatrix",                      format = "floatmat4" },
+      { name = "InverseViewMatrix",               format = "floatmat4" },
+      { name = "RotationMatrix",                  format = "floatmat4" },
+      { name = "InverseRotationMatrix",           format = "floatmat4" },
+      { name = "ProjectionMatrix",                format = "floatmat4" },
+      { name = "InverseProjectionMatrix",         format = "floatmat4" },
+      { name = "ViewProjectionMatrix",            format = "floatmat4" },
+      { name = "InverseViewProjectionMatrix",     format = "floatmat4" },
+      { name = "RotationProjectionMatrix",        format = "floatmat4" },
+      { name = "InverseRotationProjectionMatrix", format = "floatmat4" },
+    }
+
+    local viewMatrix = mat4()
+    local inverseViewMatrix = mat4()
+    local rotationMatrix = mat4()
+    local inverseRotationMatrix = mat4()
+    local projectionMatrix = mat4()
+    local inverseProjectionMatrix = mat4()
+    local viewProjectionMatrix = mat4()
+    local inverseViewProjectionMatrix = mat4()
+    local rotationProjectionMatrix = mat4()
+    local inverseRotationProjectionMatrix = mat4()
+
+    local matrices = {
+      viewMatrix, inverseViewMatrix, rotationMatrix, inverseRotationMatrix,
+      projectionMatrix, inverseProjectionMatrix, viewProjectionMatrix, inverseViewProjectionMatrix,
+      rotationProjectionMatrix, inverseRotationProjectionMatrix
+    }
+
+
+    local dataArray = { 0, 0, 0, 0 }
+
+    for i, matrix in ipairs(matrices) do
+      local data = matrix:table()
+      for j = 1, #data do
+        table.insert(dataArray, #dataArray)
+      end
+    end
+
+    cameraBuffer = snap.graphics.newBuffer(format, 1, { uniform = true })
+    cameraBuffer:setData(dataArray)
   end
 
   ---@type snap.DetailedBlendMode
@@ -133,9 +199,7 @@ while true do
 
   draw()
 
-  snap.graphics.submitGraphics()
-
-  doneChannel:push(true)
+  commandBufferChannel:push(snap.graphics.submitGraphics())
 end
 
 print("THREAD #1 EXITING")

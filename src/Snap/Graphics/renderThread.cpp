@@ -229,45 +229,41 @@ auto AquireCommandBuffer(Graphics::GraphicsContext &context,
   return threadInfo;
 }
 
-auto SubmitCommands(Graphics::GraphicsContext &context) -> Error {
+auto SubmitCommands(Graphics::GraphicsContext &context)
+    -> Result<Ref<RenderThreadInfo>> {
   auto validateResult = DynamicRendering::FinalizeFrame(context);
   if (Error::IsError(validateResult)) {
-    return validateResult;
+    return validateResult.AsUnexpected();
   }
 
   auto flushResult = FlushBufferUploads(context);
   if (Error::IsError(flushResult)) {
-    return flushResult;
+    return flushResult.AsUnexpected();
   }
 
-  auto &threadInfo = *CurrentRenderThreadInfo;
+  auto threadInfo = Ref<RenderThreadInfo>(CurrentRenderThreadInfo.get());
 
   auto endResult =
-      Error::Create(vkEndCommandBuffer(threadInfo.threadData.commandBuffer));
+      Error::Create(vkEndCommandBuffer(threadInfo->threadData.commandBuffer));
   if (Error::IsError(endResult)) {
-    return endResult;
+    return endResult.AsUnexpected();
   }
 
-  threadInfo.threadData.resourceSyncs = Barrier::GlobalResourceSyncTimeline;
-  threadInfo.threadData.usageUpdates = Barrier::GlobalResourceStateUpdates;
-  threadInfo.threadData.drawsToSwapchain =
+  threadInfo->threadData.resourceSyncs = Barrier::GlobalResourceSyncTimeline;
+  threadInfo->threadData.usageUpdates = Barrier::GlobalResourceStateUpdates;
+  threadInfo->threadData.drawsToSwapchain =
       Graphics::DynamicRendering::DrawnToSwapchain;
 
   auto timelineValue = GetSemaphoreValue();
 
   ThreadCommandBuffers.emplace_back(timelineValue,
-                                    threadInfo.threadData.commandBuffer);
+                                    threadInfo->threadData.commandBuffer);
 
   GetThreadContext().commandBuffer = VK_NULL_HANDLE;
 
-  {
-    std::lock_guard<std::mutex> lock(ResultsMutex);
-    Results.emplace_back(&threadInfo);
-  }
-
   CurrentRenderThreadInfo.reset();
 
-  return Error::Success();
+  return threadInfo;
 }
 
 inline auto CreateCommandPool(ThreadContext &tcontext) -> Error {
@@ -352,17 +348,6 @@ auto Deinitialize(Graphics::GraphicsContext &context) -> Error {
   }
 
   return Error::Success();
-}
-
-auto GetGeneratedCommands() -> std::vector<std::string> {
-  std::lock_guard<std::mutex> lock(ResultsMutex);
-  std::vector<std::string> commandNames;
-  commandNames.reserve(Results.size());
-
-  for (const auto &info : Results) {
-    commandNames.emplace_back(info->threadData.name);
-  }
-  return commandNames;
 }
 
 } // namespace Graphics::Threading

@@ -94,9 +94,6 @@ static const std::vector<luaL_Reg> GraphicsLib = {
     {"getDimensions", wrap_GetDimensions},
     {"aquireGraphics", wrap_AquireCommandBuffer},
     {"submitGraphics", wrap_SubmitCommandBuffer},
-    {"useCommands", wrap_UseCommands},
-    {"getGeneratedCommands", wrap_GetGeneratedCommands},
-
 };
 
 const static std::vector<lua_CFunction> childrenInitFunctions = {

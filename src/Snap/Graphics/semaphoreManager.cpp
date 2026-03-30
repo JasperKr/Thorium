@@ -77,8 +77,6 @@ auto UpdateSemaphoreValues(const GraphicsContext &context) -> Result<uint64_t> {
   std::lock_guard lock(timelineSetsMutex);
 
   if (sortedPendingTimelineValues.empty()) {
-    PrintWarning("No sorting pending timeline values to update");
-
     for (const auto &pair : pendingTimelineValues) {
       sortedUncompletedTimelineValues.emplace_back(pair.second);
     }

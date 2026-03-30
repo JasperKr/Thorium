@@ -274,7 +274,7 @@ auto BindDefaultTextures(const GraphicsContext &context,
       auto defaultTexture = defaultTextureResult.value();
 
       if (!state.userBoundTextures.contains(key)) {
-        state.userBoundTextures[key] = {defaultTexture.get(), samplerInfo};
+        state.userBoundTextures[key] = {defaultTexture, samplerInfo};
       }
     }
   }
@@ -1214,7 +1214,7 @@ auto InsertResourceBarriers(const GraphicsContext &context) -> Error {
       break;
     }
 
-    if (access == 0) {
+    if (access == 0 && info.access != SLANG_RESOURCE_ACCESS_NONE) {
       PrintWarning("Buffer access type is Unknown for slang access: {}, "
                    "skipping barrier.",
                    static_cast<uint32_t>(info.access));

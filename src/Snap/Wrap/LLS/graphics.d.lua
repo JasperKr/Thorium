@@ -189,7 +189,7 @@ function snap.graphics.getRenderTargets() end
 function snap.graphics.setRenderTarget(...) end
 
 --- Aquires a local graphics context for the current thread.
---- @param identifier string | integer The identifier of the graphics context to aquire.
+--- @param identifier string | integer | nil The identifier of the graphics context to aquire.
 --- @param priority number? The priority, Tie-breaker for commands with matching identifiers. Higher priority contexts are executed first.
 function snap.graphics.aquireGraphics(identifier, priority) end
 

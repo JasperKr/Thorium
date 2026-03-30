@@ -327,8 +327,9 @@ inline auto DrawTemporaryCommandLists(Graphics::GraphicsContext &ctx,
           return Error::Create("ImGui texture is null");
         }
 
+        auto texRef = Ref<Graphics::Texture::Texture>(texture);
         auto sendResult =
-            ::Gui::ImGuiShaderRGBA8->Send(ctx, {"MainTexture"}, texture);
+            ::Gui::ImGuiShaderRGBA8->Send(ctx, {"MainTexture"}, texRef);
         if (Error::IsError(sendResult)) {
           return sendResult;
         }

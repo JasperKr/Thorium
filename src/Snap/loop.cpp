@@ -69,11 +69,15 @@ function snap.run()
     end
 
     if snap.graphics then
+      local commandBuffers
+
       if snap.draw then
-        snap.draw()
+        commandBuffers = snap.draw()
       end
 
-      snap.graphics.present()
+      if commandBuffers then
+        snap.graphics.present(commandBuffers)
+      end
     end
   end
 end
@@ -350,6 +354,7 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
       Event::ExitCode = 1;
 
       mainLoopResult = Error::Create(luaErrorMessage);
+      PrintError("Error in main loop: {}", luaErrorMessage);
     }
     FrameMarkEnd("Frame");
 

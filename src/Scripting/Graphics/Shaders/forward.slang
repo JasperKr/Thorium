@@ -21,11 +21,13 @@ struct VertexInput
     float4 Color  : COLOR;
 };
 
+uniform float4x4 DefaultProjectionMatrix;
+
 [shader("vertex")]
 VertexStageOutput vertexMain(VertexInput input)
 {
     VertexStageOutput out;
-    out.sv_position = mul(camera.ViewProjectionMatrix, float4(input.Position.xyz, 1.0));
+    out.sv_position = mul(ViewProjectionMatrix, float4(input.Position.xyz, 1.0));
 
     float2 uv0 = unpackHalf2x16ToFloat(input.TexCoords.x);
     float2 uv1 = unpackHalf2x16ToFloat(input.TexCoords.x >> 16);

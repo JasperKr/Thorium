@@ -21,12 +21,31 @@
 #include "vulkan/vulkan_core.h"
 #include <cstdint>
 #include <cstring>
+#include <lauxlib.h>
+#include <lua.h>
 #include <vector>
 
 namespace Graphics {
 auto wrap_Present(lua_State *state) -> int {
   auto &ctx = *GetCurrentGraphicsContext();
-  auto result = Present(ctx);
+
+  std::vector<Ref<Threading::RenderThreadInfo>> commands;
+
+  luaL_checktype(state, 1, LUA_TTABLE);
+
+  for (int index = 1; index <= lua_objlen(state, 1); index++) {
+    lua_rawgeti(state, 1, index);
+    auto *renderInfo =
+        LuaWrap::ObjectFromLua<Threading::RenderThreadInfo>(state, -1);
+    if (renderInfo == nullptr) {
+      return luaL_error(state, "Invalid RenderThreadInfo at argument %d",
+                        index);
+    }
+
+    commands.emplace_back(renderInfo);
+  }
+
+  auto result = Present(ctx, commands);
 
   if (Error::IsError(result)) {
     return luaL_error(state, "%s", result.ToString().c_str());
@@ -527,7 +546,8 @@ auto wrap_Draw(lua_State *state) -> int {
         shader = Shader::DefaultShaderModule;
       }
 
-      auto sendResult = shader->Send(*ctx, {"MainTexture"}, texture);
+      auto texRef = Ref<Texture::Texture>(texture);
+      auto sendResult = shader->Send(*ctx, {"MainTexture"}, texRef);
       if (Error::IsError(sendResult)) {
         return luaL_error(state, "%s", sendResult.ToString().c_str());
       }
@@ -730,7 +750,7 @@ auto wrap_AquireCommandBuffer(lua_State *state) -> int {
   }
 
   Threading::AquireInfo info{};
-  info.name = luaL_checkstring(state, 1);
+  info.name = luaL_optstring(state, 1, "Unnamed Command Buffer");
   info.priority = static_cast<int>(luaL_optinteger(state, 2, 0));
 
   auto result = Threading::AquireCommandBuffer(*ctx, info);
@@ -750,42 +770,11 @@ auto wrap_SubmitCommandBuffer(lua_State *state) -> int {
 
   auto submitResult = Threading::SubmitCommands(*ctx);
   if (Error::IsError(submitResult)) {
-    return luaL_error(state, "%s", submitResult.ToString().c_str());
+    return luaL_error(state, "%s", submitResult.error().ToString().c_str());
   }
 
-  return 0;
-}
-
-auto wrap_UseCommands(lua_State *state) -> int {
-
-  if (lua_type(state, 1) == LUA_TNUMBER) {
-    Graphics::UseCommands(static_cast<uint64_t>(luaL_checkinteger(state, 1)));
-  } else if (lua_type(state, 1) == LUA_TSTRING) {
-    Graphics::UseCommands(luaL_checkstring(state, 1));
-  } else {
-    return luaL_error(state, "Invalid argument to useCommands.");
-  }
-
-  return 0;
-}
-
-// Get a list of command buffer names
-// Optionally a table to fill
-auto wrap_GetGeneratedCommands(lua_State *state) -> int {
-  if (lua_gettop(state) == 1 && lua_istable(state, 1) == 0) {
-    return luaL_error(state, "Expected table as argument.");
-  }
-
-  if (lua_gettop(state) == 0) {
-    lua_newtable(state); // Create new table
-  }
-
-  auto commands = Graphics::Threading::GetGeneratedCommands();
-
-  for (size_t i = 0; i < commands.size(); ++i) {
-    lua_pushstring(state, commands[i].c_str());
-    lua_rawseti(state, -2, static_cast<int>(i + 1));
-  }
+  LuaWrap::PushObject(state, Threading::RenderThreadInfo::GetType(),
+                      submitResult.value().get());
 
   return 1;
 }

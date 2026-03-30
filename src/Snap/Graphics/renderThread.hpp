@@ -35,27 +35,19 @@ struct RenderThreadData {
   uint64_t id;
 };
 
-const Type renderInfoType = Type("Internal RenderThreadInfo");
+const Type renderInfoType = Type("Commands");
 
 struct RenderThreadInfo : Object {
   RenderThreadData threadData;
 
-  auto GetInstanceType() const -> Type const * override {
+  static auto GetType() -> Type const * { return &renderInfoType; }
+  [[nodiscard]] auto GetInstanceType() const -> Type const * override {
     return &renderInfoType;
   }
-
-  static auto GetType() -> Type const * { return &renderInfoType; }
 };
-
-// NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
-
-extern std::mutex ResultsMutex;
-extern std::vector<Ref<RenderThreadInfo>> Results;
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 extern thread_local Ref<RenderThreadInfo> CurrentRenderThreadInfo;
-
-// NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
 struct AquireInfo {
   std::string name;
@@ -68,15 +60,13 @@ auto AquireCommandBuffer(Graphics::GraphicsContext &context,
     -> Result<Ref<RenderThreadInfo>>;
 
 // Submit the commands recorded on the current thread
-auto SubmitCommands(Graphics::GraphicsContext &context) -> Error;
+auto SubmitCommands(Graphics::GraphicsContext &context)
+    -> Result<Ref<RenderThreadInfo>>;
 
 // Initialize the render threading module
 auto Initialize(Graphics::GraphicsContext &context) -> Error;
 
 // Deinitialize the render threading module
 auto Deinitialize(Graphics::GraphicsContext &context) -> Error;
-
-// Get all generated command names
-auto GetGeneratedCommands() -> std::vector<std::string>;
 
 } // namespace Graphics::Threading

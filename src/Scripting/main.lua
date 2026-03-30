@@ -10,10 +10,11 @@ require("Graphics.camera")
 require("Graphics.helpers")
 
 local thread = snap.thread.newThread("src/Scripting/thread.lua", "Render thread 1")
-local threadDoneChannel = snap.thread.newChannel()
+local commandsChannel = snap.thread.newChannel()
 local startThreadChannel = snap.thread.newChannel()
 local scene = snap.scene.newScene("Main")
 print(scene:getName())
+local commandBuffers = {}
 
 snap.graphics.aquireGraphics("load")
 
@@ -42,6 +43,7 @@ local vertices = {
   { 0,   100, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1 },
 }
 
+
 local mesh = snap.graphics.newMesh(vertexformat, vertices, "triangles")
 local indicesData = snap.data.newBytedata(#indices * 4)
 for j = 1, #indices do
@@ -49,8 +51,7 @@ for j = 1, #indices do
 end
 mesh:setIndices(indicesData)
 
-snap.graphics.submitGraphics()
-snap.graphics.useCommands("load")
+table.insert(commandBuffers, snap.graphics.submitGraphics())
 
 local geometries = {}
 
@@ -74,7 +75,7 @@ local shape2 = scene:createShape("Test shape 2", { lod4 })
 
 local model = scene:createModel("Test model", { 100, 10, 0 }, { 0, 0, 0, 1 }, { 1, 1, 1 }, { shape, shape2 })
 
-thread:start(threadDoneChannel, startThreadChannel, scene)
+thread:start(commandsChannel, startThreadChannel, scene)
 
 local camera = snap.graphics.newCamera("main camera", vec3(0, 0, 0), vec3(0, 0, 0),
   vec2(snap.graphics.getDimensions()))
@@ -131,7 +132,12 @@ snap.keyboard.setEnableTextInput(true)
 
 function snap.draw()
   startThreadChannel:push(true)
-  threadDoneChannel:demand(1)
 
-  snap.graphics.useCommands("gui")
+  local buffer = commandsChannel:demand(1)
+  table.insert(commandBuffers, buffer)
+
+  local buffers = commandBuffers
+  commandBuffers = {}
+
+  return buffers
 end
