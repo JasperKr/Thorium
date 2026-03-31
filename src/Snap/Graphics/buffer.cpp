@@ -552,7 +552,7 @@ auto Buffer::MarkUse() -> void {
 // NOLINTNEXTLINE
 auto Buffer::Clear(const GraphicsContext &context, uint32_t value,
                    VkDeviceSize offset, VkDeviceSize size) -> Error {
-  auto *commandBuffer = GetCommandBuffer();
+  auto **commandBuffer = GetCommandBufferPtr();
 
   if (commandBuffer == nullptr) {
     return Error::Create("Failed to get command buffer for buffer clear.");
@@ -563,7 +563,7 @@ auto Buffer::Clear(const GraphicsContext &context, uint32_t value,
                        {.stages = VK_PIPELINE_STAGE_TRANSFER_BIT,
                         .access = VK_ACCESS_TRANSFER_WRITE_BIT});
 
-  vkCmdFillBuffer(commandBuffer, handle, offset, size, value);
+  vkCmdFillBuffer(*commandBuffer, handle, offset, size, value);
 
   return Error::Success();
 }

@@ -19,6 +19,7 @@
 #include "Wrap/wrap_engine.hpp"
 #include "Wrap/wrap_imgui.hpp"
 #include <filesystem>
+#include <lua.h>
 #include <public/tracy/Tracy.hpp>
 #include <string>
 #include <vector>
@@ -94,6 +95,14 @@ auto LoadLua(lua_State *state, const std::vector<std::string> &launchArgs)
     return Error::Create("No launch arguments provided for Lua script.");
   }
 
+  lua_getglobal(state, "debug");
+  lua_getfield(state, -1, "traceback");
+  lua_remove(state, -2); // remove debug table from stack
+  if (!lua_isfunction(state, -1)) {
+    lua_pop(state, 1); // remove non-function from stack
+    return Error::Create("debug.traceback is not a function.");
+  }
+
   lua_getglobal(state, "package");
   lua_getfield(state, -1, "path");
   std::string currentPath = lua_tostring(state, -1);
@@ -131,7 +140,7 @@ auto LoadLua(lua_State *state, const std::vector<std::string> &launchArgs)
   }
 
   // Call the loaded chunk
-  if (lua_pcall(state, static_cast<int>(launchArgs.size()), 0, 0) != LUA_OK) {
+  if (lua_pcall(state, static_cast<int>(launchArgs.size()), 0, 1) != LUA_OK) {
     if (lua_type(state, -1) != LUA_TSTRING) {
       lua_pop(state, 1); // Remove non-string error from stack
       return Error::Create("Failed to run main Lua script: Unknown error");
@@ -144,7 +153,7 @@ auto LoadLua(lua_State *state, const std::vector<std::string> &launchArgs)
 
     std::string luaErrorMessage = lua_tostring(state, -1);
     lua_pop(state, 1); // Remove error message from stack
-    return Error::Create(luaErrorMessage);
+    return Error::Create("Failed to run main Lua script: " + luaErrorMessage);
   }
 
   // Get snap.run function

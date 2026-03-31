@@ -2,6 +2,7 @@
 #include "Graphics/format.hpp"
 #include "Graphics/hash.hpp"
 #include "Graphics/reflect.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include <algorithm>
 #include <cassert>
@@ -21,7 +22,10 @@ BufferFormat::BufferFormat(std::vector<BufferComponent> components,
                            Standard std)
     : Components(std::move(components)) {
 
-  CalculateStride(std);
+  PrintAlways("Creating buffer format with {} components", Components.size());
+
+  size_t offset = 0;
+  CalculateStride(std, offset);
 }
 
 auto BufferFormat::GetComponentOffset(size_t componentIndex) const -> size_t {
@@ -183,12 +187,15 @@ inline auto AlignUp(size_t offset, size_t alignment) -> size_t {
 }
 
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
-auto BufferFormat::CalculateStride(Standard std) -> void {
+// TODO: Refactor this function.
+// We need to calculate the stride of a buffer format
+// And we also need write a final offset relative to the place of that format in the parent format for each component
+auto BufferFormat::CalculateStride(Standard std, size_t &offset) -> void {
   if (Components.empty()) {
+    PrintWarning("Buffer format has no components, stride will be 0");
     return;
   }
 
-  size_t offset = 0;
   size_t maxAlignment = 0;
   for (auto &format : Components) {
     size_t baseAlign = 0;
@@ -208,9 +215,7 @@ auto BufferFormat::CalculateStride(Standard std) -> void {
       baseAlign = alignResult.value();
     } else if (std::holds_alternative<BufferFormat>(format.format)) {
       auto bufferFormat = std::get<BufferFormat>(format.format);
-      if (!bufferFormat.initialized) {
-        bufferFormat.CalculateStride(std);
-      }
+      bufferFormat.CalculateStride(std, offset);
 
       baseAlign = bufferFormat.alignment;
     }
@@ -240,9 +245,9 @@ auto BufferFormat::CalculateStride(Standard std) -> void {
       size = Graphics::Format::GetSize(vulkanFormat);
     } else if (std::holds_alternative<BufferFormat>(format.format)) {
       auto bufferFormat = std::get<BufferFormat>(format.format);
-      if (!bufferFormat.initialized) {
-        bufferFormat.CalculateStride(std);
-      }
+      PrintAlways("Offset before calculating nested format: {}", offset);
+      bufferFormat.CalculateStride(std, offset);
+      PrintAlways("Offset after calculating nested format: {}", offset);
 
       size = bufferFormat.stride;
     }

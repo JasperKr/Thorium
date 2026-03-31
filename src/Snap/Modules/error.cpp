@@ -16,7 +16,7 @@
 #include "tl/expected.hpp"
 #include <vulkan/vulkan.h>
 
-#if __has_include(<stacktrace>) && not defined(__unix__)
+#if __cpp_lib_stacktrace
 #include <vector>
 #define STD_STACKTRACE_SUPPORTED 1
 #include <stacktrace>
@@ -130,10 +130,10 @@ inline auto GetStackTrace(uint32_t level = 0) -> std::string {
   char **symbols = backtrace_symbols(stack.data(), frames);
 
   std::string trace;
-  // for (int i = 0; i < frames; i++) {
-  //   // NOLINTNEXTLINE
-  //   trace += std::string(symbols[i]) + "\n";
-  // }
+  for (int i = 0; i < frames; i++) {
+    // NOLINTNEXTLINE
+    trace += std::string(symbols[i]) + "\n";
+  }
 
   free(symbols); // NOLINT
   return trace;

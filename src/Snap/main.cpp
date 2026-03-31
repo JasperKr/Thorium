@@ -32,8 +32,6 @@ auto main(int argCount, char **argValues) -> int {
         "\nCode: " + ColorText(std::to_string(err.code), ConsoleColor::Green) +
         "\nTraceback:\n" + ColorText(err.backtrace, ConsoleColor::Cyan) + "\n");
 
-    ErrorHandlerMainLoop();
-
     return Event::ExitCode != 0 ? Event::ExitCode : err.code;
   }
 

@@ -36,7 +36,7 @@ struct BufferFormat {
 private:
   auto FlattenComponentTree() -> void;
 
-  auto CalculateStride(Standard std) -> void;
+  auto CalculateStride(Standard std, size_t &offset) -> void;
 
   [[nodiscard]] auto FindComponent(ResourceKey::const_iterator iterator,
                                    ResourceKey::const_iterator end) const

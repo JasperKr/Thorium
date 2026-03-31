@@ -75,10 +75,11 @@ local shape2 = scene:createShape("Test shape 2", { lod4 })
 
 local model = scene:createModel("Test model", { 100, 10, 0 }, { 0, 0, 0, 1 }, { 1, 1, 1 }, { shape, shape2 })
 
-thread:start(commandsChannel, startThreadChannel, scene)
-
+-- snap.graphics.newCamera(name, position, rotation, resolution, fov, near, far)
 local camera = snap.graphics.newCamera("main camera", vec3(0, 0, 0), vec3(0, 0, 0),
-  vec2(snap.graphics.getDimensions()))
+  vec2(snap.graphics.getDimensions()), math.rad(60), 0.1, 1000)
+
+thread:start(commandsChannel, startThreadChannel, scene)
 
 function snap.update(dt)
   i = i + 1

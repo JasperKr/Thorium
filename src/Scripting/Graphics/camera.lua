@@ -27,7 +27,8 @@
 ---@field bloom table
 ---@field linear boolean
 ---@field specular boolean
----@field buffer snap.WrappedBuffer
+---@field buffer snap.Buffer
+---@field bufferData snap.Bytedata
 ---@field textures {static:table, current:table, previous:table, internal:table}
 ---@field interactable boolean
 ---@field lighting {tileBuffer: snap.Texture, indexBuffer: snap.Buffer, indexCounterBuffer: snap.Buffer, indicesPerVoxel: number, tileWidth: number, tileHeight: number}
@@ -118,15 +119,15 @@ function snap.graphics.newCamera(name, position, rotation, resolution, fov, near
   self.bloom = {}
   self.name = name
 
-  self.buffer = snap.graphics.newBuffer({
-    { name = "ViewProjectionMatrix",            format = "floatmat4x4" },
-    { name = "InverseViewProjectionMatrix",     format = "floatmat4x4" },
-    { name = "ViewMatrix",                      format = "floatmat4x4" },
-    { name = "InverseViewMatrix",               format = "floatmat4x4" },
-    { name = "ProjectionMatrix",                format = "floatmat4x4" },
-    { name = "InverseProjectionMatrix",         format = "floatmat4x4" },
-    { name = "RotationProjectionMatrix",        format = "floatmat4x4" },
-    { name = "InverseRotationProjectionMatrix", format = "floatmat4x4" },
+  local cameraElementFormat = {
+    { name = "ViewMatrix",                      format = "floatmat4" },
+    { name = "InverseViewMatrix",               format = "floatmat4" },
+    { name = "ProjectionMatrix",                format = "floatmat4" },
+    { name = "InverseProjectionMatrix",         format = "floatmat4" },
+    { name = "ViewProjectionMatrix",            format = "floatmat4" },
+    { name = "InverseViewProjectionMatrix",     format = "floatmat4" },
+    { name = "RotationProjectionMatrix",        format = "floatmat4" },
+    { name = "InverseRotationProjectionMatrix", format = "floatmat4" },
     { name = "Position",                        format = "floatvec3" },
     { name = "Near",                            format = "float" },
     { name = "Far",                             format = "float" },
@@ -136,7 +137,23 @@ function snap.graphics.newCamera(name, position, rotation, resolution, fov, near
     { name = "Jitter",                          format = "floatvec2" },
     { name = "ProjectionType",                  format = "uint32" },
     { name = "ShadowCascadeCount",              format = "uint32" },
-  }, 2, { shaderstorage = true, debugname = "Camera [" .. name .. "] buffer", usage = "dynamic" })
+  }
+
+  self.buffer = snap.graphics.newBuffer({
+    {
+      name = "camera",
+      format = cameraElementFormat
+    },
+    {
+      name = "previousCamera",
+      format = cameraElementFormat
+    }
+  }, 1, { uniform = true, debugname = "Camera [" .. name .. "] buffer", usage = "dynamic" })
+  self.bufferData = snap.data.newBytedata(self.buffer:getSize())
+
+  print(type(self.buffer))
+
+  snap.helpers.print(self.buffer:getFormat())
 
   return self
 end
@@ -160,6 +177,10 @@ function Camera:UpdateMatrices()
   self.viewMatrix:invertTranspose(self.inverseViewMatrix)
   self.viewMatrix:mul(self.projectionMatrix, self.viewProjectionMatrix)
   self.viewProjectionMatrix:invertTranspose(self.inverseViewProjectionMatrix)
+end
+
+function Camera:UpdateState()
+  self:UpdateMatrices()
 end
 
 function Camera:Update()
@@ -204,5 +225,20 @@ local jitterSequence = {
 local jitter = { 0, 0 }
 
 function Camera:UpdateGpuBuffers()
-
+  self.bufferData:setFloat(0, self.viewMatrix:get())
+  self.bufferData:setFloat(64, self.inverseViewMatrix:get())
+  self.bufferData:setFloat(128, self.projectionMatrix:get())
+  self.bufferData:setFloat(192, self.inverseProjectionMatrix:get())
+  self.bufferData:setFloat(256, self.viewProjectionMatrix:get())
+  self.bufferData:setFloat(320, self.inverseViewProjectionMatrix:get())
+  self.bufferData:setFloat(384, self.rotationProjectionMatrix:get())
+  self.bufferData:setFloat(448, self.inverseRotationProjectionMatrix:get())
+  self.bufferData:setFloat(512, self.position:get())
+  self.bufferData:setFloat(524, self.near)
+  self.bufferData:setFloat(528, self.far)
+  self.bufferData:setFloat(532, self.near * self.far)
+  self.bufferData:setFloat(536, self.far - self.near)
+  self.bufferData:setUint(540, self.invalidatedHistory and 1 or 0)
+  self.bufferData:setFloat(544, jitter[1])
+  self.bufferData:setFloat(548, jitter[2])
 end

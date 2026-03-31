@@ -105,17 +105,23 @@ auto wrap_ClearBuffer(lua_State *state) -> int {
 
 inline auto BuildBufferFormatTree(lua_State *state, const BufferFormat &format)
     -> void {
+
+  // [{}]
   lua_newtable(state);
 
   int tableIndex = 1;
   for (const auto &component : format.GetComponents()) {
+    // [{}, {}]
     lua_newtable(state);
     // name, list of strings
     lua_pushstring(state, "name");
-    lua_newtable(state);
+    // [{}, {}, "name"]
 
     lua_pushstring(state, component.name.c_str());
-    lua_settable(state, -3); // table["name"] = name table
+    // [{}, {}, "name", "componentName"]}]
+
+    // table["name"] = name table
+    lua_settable(state, -3); // table["name"] = name
 
     // offset
     lua_pushstring(state, "offset");

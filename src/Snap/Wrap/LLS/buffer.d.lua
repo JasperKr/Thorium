@@ -115,7 +115,7 @@ function Buffer:clear(value, offset, size) end
 ---|"halfmat4x3" # 24 byte 4x3 half
 ---|"halfmat4x4" # 32 byte 4x4 half-precision float matrix
 
----@alias snap.BufferFormatElement { name: string, format: snap.BufferFormatComponentFormat }
+---@alias snap.BufferFormatElement { name: string, format: snap.BufferFormatComponentFormat|snap.BufferFormatElement[] }
 ---@alias snap.BufferFormat snap.BufferFormatElement[]
 
 ---@alias snap.EvaluatedBufferFormatElement { name: string, offset: integer, format: snap.BufferFormatComponentFormat }

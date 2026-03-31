@@ -72,8 +72,8 @@ auto BufferInfo::ResolvePath(ResourceKey::const_iterator iterator,
 }
 
 auto SetupStruct(slang::TypeLayoutReflection *bufferLayout, // NOLINT
-                 slang::TypeLayoutReflection *typeLayout, BufferInfo &info)
-    -> Error {
+                 slang::TypeLayoutReflection *typeLayout)
+    -> Result<std::variant<StructInfo, ScalarInfo, VectorInfo, MatrixInfo>> {
   switch (bufferLayout->getKind()) {
   case slang::TypeReflection::Kind::Struct: {
     auto structInfo = StructInfo{};
@@ -140,16 +140,44 @@ auto SetupStruct(slang::TypeLayoutReflection *bufferLayout, // NOLINT
 
         break;
       }
+      case slang::TypeReflection::Kind::Struct: {
+        auto result = SetupStruct(fieldType, fieldType);
+        if (Error::IsError(result)) {
+          return result.error().AsUnexpected();
+        }
+
+        auto structFieldInfo = result.value();
+
+        ResourceInfo fieldInfo{
+            .name = fieldVariableType->getName(),
+        };
+
+        if (std::holds_alternative<StructInfo>(structFieldInfo)) {
+          fieldInfo.info = std::get<StructInfo>(structFieldInfo);
+        } else if (std::holds_alternative<ScalarInfo>(structFieldInfo)) {
+          fieldInfo.info = std::get<ScalarInfo>(structFieldInfo);
+        } else if (std::holds_alternative<VectorInfo>(structFieldInfo)) {
+          fieldInfo.info = std::get<VectorInfo>(structFieldInfo);
+        } else if (std::holds_alternative<MatrixInfo>(structFieldInfo)) {
+          fieldInfo.info = std::get<MatrixInfo>(structFieldInfo);
+        } else {
+          return Error::Create("Unsupported struct field type in nested struct "
+                               "reflection.")
+              .AsUnexpected();
+        }
+
+        structInfo.fields.emplace_back(fieldInfo);
+
+        break;
+      }
       default: {
-        return Error::Create(
+        return Error::Unexpectedf(
             "Unsupported struct field type in Buffer struct reflection.");
       }
       }
     }
 
-    info.info = structInfo;
-
-    break;
+    return structInfo;
   }
   case slang::TypeReflection::Kind::Scalar: {
     auto scalarInfo = ScalarInfo{};
@@ -157,9 +185,8 @@ auto SetupStruct(slang::TypeLayoutReflection *bufferLayout, // NOLINT
     scalarInfo.offset =
         static_cast<uint32_t>(typeLayout->getElementVarLayout()->getOffset());
     scalarInfo.type = FromScalarType(bufferLayout->getScalarType());
-    info.info = scalarInfo;
 
-    break;
+    return scalarInfo;
   }
   case slang::TypeReflection::Kind::Vector: {
     auto vectorInfo = VectorInfo{};
@@ -170,8 +197,7 @@ auto SetupStruct(slang::TypeLayoutReflection *bufferLayout, // NOLINT
     vectorInfo.scalarType = FromScalarType(bufferLayout->getScalarType());
     vectorInfo.vectorType = ToVectorType(bufferLayout->getElementCount());
 
-    info.info = vectorInfo;
-    break;
+    return vectorInfo;
   }
   case slang::TypeReflection::Kind::Matrix: {
     auto matrixInfo = MatrixInfo{};
@@ -182,16 +208,18 @@ auto SetupStruct(slang::TypeLayoutReflection *bufferLayout, // NOLINT
     matrixInfo.matrixType = ToMatrixType(bufferLayout->getRowCount(),
                                          bufferLayout->getColumnCount());
 
-    info.info = matrixInfo;
-    break;
+    return matrixInfo;
   }
   default: {
-    return Error::Create(
+    return Error::Unexpectedf(
         "Unsupported buffer element type in Buffer reflection.");
   }
   }
 
-  return Error::Success();
+  int kind = static_cast<int>(bufferLayout->getKind());
+
+  return Error::Unexpectedf(
+      "Unsupported type layout kind for Buffer reflection: {}", kind);
 }
 
 inline auto SlangImageFormatToVkFormat(SlangImageFormat format) {
@@ -543,10 +571,12 @@ auto SetupFromType(slang::VariableLayoutReflection *variableLayout,
     bufferInfo.bufferType =
         isPushConstant ? BufferType::PushConstant : BufferType::Uniform;
 
-    auto err = SetupStruct(bufferLayout, typeLayout, bufferInfo);
-    if (Error::IsError(err)) {
-      return err;
+    auto result = SetupStruct(bufferLayout, typeLayout);
+    if (Error::IsError(result)) {
+      return result.error();
     }
+
+    bufferInfo.info = result.value();
 
     auto resourceInfo = ResourceInfo{};
     resourceInfo.name = variableLayout->getName();

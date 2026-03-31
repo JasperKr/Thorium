@@ -24,7 +24,7 @@ x, y, ... are the the components
 
 local bufferMetatable = {}
 
----@class  snap.buffer
+---@class snap.WrappedBuffer
 ---@field buffer snap.Buffer the buffer object
 ---@field componentCount integer the amount of components in an element
 ---@field data snap.Bytedata the data of the buffer
@@ -104,7 +104,7 @@ snap.internal.attributeTypeToFFIType = ffiTypes
 ---@param format table|string
 ---@param elementCount number
 ---@param settings { usage: "static"|"dynamic"|"stream", shaderstorage:boolean, index:boolean, vertex:boolean, indirectarguments:boolean, texel:boolean}
----@return snap.buffer
+---@return snap.WrappedBuffer
 function snap.graphics.newWrappedBuffer(format, elementCount, settings)
   snap.internal.assert(elementCount > 0, "Buffer item count must be greater than 0")
 

@@ -3,6 +3,7 @@
 #include "Graphics/buffer.hpp"
 #include "Graphics/bufferformat.hpp"
 #include "Graphics/graphics.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "tl/expected.hpp"
@@ -31,6 +32,8 @@ auto StructuredBuffer::Create(GraphicsContext &context, BufferFormat &format,
   if (Error::IsError(result)) {
     return result.error().AsUnexpected();
   }
+
+  PrintAlways("creating structured buffer.");
 
   auto buffer = Ref<StructuredBuffer>::Make();
 

@@ -119,40 +119,39 @@ while true do
     end
     mesh:setIndices(indicesData)
 
-    --[[
-    public cbuffer CameraData {
-  public float4 CameraPosition;
-  public float4x4 ViewMatrix;
-  public float4x4 InverseViewMatrix;
-  public float4x4 RotationMatrix;
-  public float4x4 InverseRotationMatrix;
-  public float4x4 ProjectionMatrix;
-  public float4x4 InverseProjectionMatrix;
-  public float4x4 ViewProjectionMatrix;
-  public float4x4 InverseViewProjectionMatrix;
-  public float4x4 RotationProjectionMatrix;
-  public float4x4 InverseRotationProjectionMatrix;
-    };
-    ]]
-
-    local format = {
-      { name = "CameraPosition",                  format = "floatvec4" },
+    local cameraElementFormat = {
       { name = "ViewMatrix",                      format = "floatmat4" },
       { name = "InverseViewMatrix",               format = "floatmat4" },
-      { name = "RotationMatrix",                  format = "floatmat4" },
-      { name = "InverseRotationMatrix",           format = "floatmat4" },
       { name = "ProjectionMatrix",                format = "floatmat4" },
       { name = "InverseProjectionMatrix",         format = "floatmat4" },
       { name = "ViewProjectionMatrix",            format = "floatmat4" },
       { name = "InverseViewProjectionMatrix",     format = "floatmat4" },
       { name = "RotationProjectionMatrix",        format = "floatmat4" },
       { name = "InverseRotationProjectionMatrix", format = "floatmat4" },
+      { name = "Position",                        format = "floatvec3" },
+      { name = "Near",                            format = "float" },
+      { name = "Far",                             format = "float" },
+      { name = "NearMulFar",                      format = "float" },
+      { name = "FarMinusNear",                    format = "float" },
+      { name = "HistoryInvalidated",              format = "uint32" },
+      { name = "Jitter",                          format = "floatvec2" },
+      { name = "ProjectionType",                  format = "uint32" },
+      { name = "ShadowCascadeCount",              format = "uint32" },
+    }
+
+    local format = {
+      {
+        name = "camera",
+        format = cameraElementFormat
+      },
+      {
+        name = "previousCamera",
+        format = cameraElementFormat
+      }
     }
 
     local viewMatrix = mat4()
     local inverseViewMatrix = mat4()
-    local rotationMatrix = mat4()
-    local inverseRotationMatrix = mat4()
     local projectionMatrix = mat4()
     local inverseProjectionMatrix = mat4()
     local viewProjectionMatrix = mat4()
@@ -161,23 +160,40 @@ while true do
     local inverseRotationProjectionMatrix = mat4()
 
     local matrices = {
-      viewMatrix, inverseViewMatrix, rotationMatrix, inverseRotationMatrix,
+      viewMatrix, inverseViewMatrix,
       projectionMatrix, inverseProjectionMatrix, viewProjectionMatrix, inverseViewProjectionMatrix,
       rotationProjectionMatrix, inverseRotationProjectionMatrix
     }
 
-
-    local dataArray = { 0, 0, 0, 0 }
-
-    for i, matrix in ipairs(matrices) do
+    local dataArray = {}
+    for _, matrix in ipairs(matrices) do
       local data = matrix:table()
       for j = 1, #data do
         table.insert(dataArray, #dataArray)
       end
     end
+    table.insert(dataArray, 0) -- Position
+    table.insert(dataArray, 0)
+    table.insert(dataArray, 0)
+    table.insert(dataArray, 1.5)        -- Jitter x
+    table.insert(dataArray, 2.5)        -- Jitter y
+    table.insert(dataArray, 0.1)        -- Near
+    table.insert(dataArray, 1000)       -- Far
+    table.insert(dataArray, 0.1 * 1000) -- NearMulFar
+    table.insert(dataArray, 1000 - 0.1) -- FarMinusNear
+    table.insert(dataArray, 0)          -- HistoryInvalidated
+    table.insert(dataArray, 0)          -- ProjectionType
+    table.insert(dataArray, 0)          -- ShadowCascadeCount
+
+    local copiedDataArray = {}
+    for j = 1, 2 do
+      for _, value in ipairs(dataArray) do
+        table.insert(copiedDataArray, value)
+      end
+    end
 
     cameraBuffer = snap.graphics.newBuffer(format, 1, { uniform = true })
-    cameraBuffer:setData(dataArray)
+    cameraBuffer:setData(copiedDataArray)
   end
 
   ---@type snap.DetailedBlendMode

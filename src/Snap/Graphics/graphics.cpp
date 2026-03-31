@@ -343,10 +343,17 @@ auto GetThreadContext() -> ThreadContext & {
   return threadContext;
 }
 
+// Will assert if command buffer is null
 auto GetCommandBuffer() -> VkCommandBuffer {
   auto *commandBuffer = GetThreadContext().commandBuffer;
   assert(commandBuffer != nullptr && "Command buffer is null!");
   return commandBuffer;
+}
+
+// May be null
+auto GetCommandBufferPtr() -> VkCommandBuffer * {
+  auto &threadContext = GetThreadContext();
+  return &threadContext.commandBuffer;
 }
 
 static auto CreateSemaphores(GraphicsContext &context) -> Error {

@@ -354,6 +354,8 @@ target_link_libraries(snap_core
         fastgltf
         tracy
         flecs::flecs_static
+        backtrace
+        dl
 )
 
 # -------------------------------

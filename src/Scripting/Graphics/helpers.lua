@@ -1,3 +1,5 @@
+snap.helpers = snap.helpers or {}
+
 ---@param left number
 ---@param right number
 ---@param top number
@@ -39,4 +41,21 @@ function snap.graphics.newPerspectiveProjectionMatrixSimple(aspectRatio, fov, ne
   out[1][4], out[2][4], out[3][4], out[4][4] = 0, 0, -1, 0
 
   return out
+end
+
+local function printAnyInternal(any, tabs)
+  if type(any) == "table" then
+    local result = "{\n"
+    for key, value in pairs(any) do
+      result = result ..
+          string.rep("  ", tabs + 1) .. tostring(key) .. ": " .. printAnyInternal(value, tabs + 1) .. ",\n"
+    end
+    return result .. string.rep("  ", tabs) .. "}"
+  else
+    return tostring(any)
+  end
+end
+
+function snap.helpers.print(any)
+  print(printAnyInternal(any, 0))
 end
