@@ -10,6 +10,7 @@ struct DescriptorPoolInfo {
   uint64_t lastUsedTimestamp;
 };
 
+// Per-thread context for graphics operations, even on the main thread
 struct ThreadContext {
   struct GraphicsContext *graphicsContext; // Global graphics context
   VkCommandPool commandPool;               // Per-thread command pool

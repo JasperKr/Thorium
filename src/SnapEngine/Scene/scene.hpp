@@ -1,4 +1,5 @@
 #pragma once
+#include "Modules/console.hpp"
 #include "Modules/object.hpp"
 #include "Modules/type.hpp"
 #include "Wrap/wrap.hpp"

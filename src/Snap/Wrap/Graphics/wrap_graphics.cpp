@@ -47,6 +47,10 @@ auto wrap_Present(lua_State *state) -> int {
 
   auto result = Present(ctx, commands);
 
+  for (auto &command : commands) {
+    command->ScheduleDestroy();
+  }
+
   if (Error::IsError(result)) {
     return luaL_error(state, "%s", result.ToString().c_str());
   }

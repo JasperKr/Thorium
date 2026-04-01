@@ -564,6 +564,11 @@ void Deinitialize(GraphicsContext &context) {
       Graphics::GraphicsContext::mutexes.vmaAllocator);
   vkDeviceWaitIdle(context.device);
 
+  for (auto &descriptorPoolInfo : GetThreadContext().descriptorPools) {
+    vkDestroyDescriptorPool(context.device, descriptorPoolInfo.descriptorPool,
+                            nullptr);
+  }
+
   vmaDestroyAllocator(context.vmaAllocator);
 
   for (VkSemaphore semaphore : context.imageAvailable) {

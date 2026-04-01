@@ -2,6 +2,8 @@
 
 #include "Graphics/barrier.hpp"
 #include "Graphics/graphicsContext.hpp"
+#include "Graphics/semaphoreManager.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Modules/type.hpp"
@@ -37,6 +39,11 @@ struct RenderThreadData {
 
 const Type renderInfoType = Type("Commands");
 
+// NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
+
+extern std::mutex CommandBufferCacheMutex;
+extern std::vector<std::pair<uint64_t, VkCommandBuffer>> CommandBufferCache;
+
 struct RenderThreadInfo : Object {
   RenderThreadData threadData;
 
@@ -44,10 +51,21 @@ struct RenderThreadInfo : Object {
   [[nodiscard]] auto GetInstanceType() const -> Type const * override {
     return &renderInfoType;
   }
+
+  auto UseDeferredDestruction() const -> bool override { return true; }
+  auto ScheduleDestroy() -> void override {
+    if (threadData.commandBuffer != VK_NULL_HANDLE) {
+      std::lock_guard<std::mutex> lock(CommandBufferCacheMutex);
+      CommandBufferCache.emplace_back(GetSemaphoreValue(),
+                                      threadData.commandBuffer);
+      threadData.commandBuffer = VK_NULL_HANDLE;
+    }
+  }
 };
 
-// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 extern thread_local Ref<RenderThreadInfo> CurrentRenderThreadInfo;
+
+// NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
 struct AquireInfo {
   std::string name;

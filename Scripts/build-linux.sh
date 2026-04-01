@@ -39,7 +39,9 @@ cmake --build build
 # You can verify the setting by running `cat /proc/cmdline` and checking for amdgpu.ppfeaturemask=0xffffffff
 
 if [ "$2" == "profile" ]; then
-  SDL_VIDEODRIVER=x11 RADV_PERFTEST=rt MESA_VK_TRACE=rgp MESA_VK_TRACE_TRIGGER=/tmp/trigger ./build/snap ../src/Engine/main.lua
+  #rmv radeom memory visualizer. Needs /opt/radeon-gpu-profiler/scripts/setup.sh to be run beforehand
+  #rgp for radeon gpu profiler.
+  SDL_VIDEODRIVER=x11 RADV_PERFTEST=rt MESA_VK_TRACE=rmv MESA_VK_TRACE_TRIGGER=/tmp/trigger ./build/snap src/Scripting/main.lua
 fi
 
 ./build/lua_stub_gen

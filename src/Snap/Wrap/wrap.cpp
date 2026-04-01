@@ -34,8 +34,6 @@ static auto wrap_gc(lua_State *state) -> int {
       return 0;
     }
 
-    PrintDebug("Releasing object of type {} in Lua GC",
-               proxy->type != nullptr ? proxy->type->GetName() : "Unknown");
     proxy->object->release();
     proxy->object = nullptr;
 

@@ -500,7 +500,7 @@ inline auto LoadNode(flecs::world world, Graphics::GraphicsContext &context,
   bool isNode = !isMesh && !isSkin && !isCamera && !isLight;
 
   if (isNode) {
-    auto node = flecs::entity(world, gltfNode.name.c_str());
+    auto node = world.entity(gltfNode.name.c_str());
     node.add<Engine::Node>();
     node.add<Engine::Selectable>(
         Engine::Selectable{.name = std::string(gltfNode.name)});

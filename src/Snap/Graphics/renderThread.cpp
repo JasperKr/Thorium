@@ -27,19 +27,35 @@ std::mutex ResultsMutex{};
 std::vector<Ref<RenderThreadInfo>> Results{};
 
 thread_local Ref<RenderThreadInfo> CurrentRenderThreadInfo;
-thread_local inline std::vector<std::pair<uint64_t, VkCommandBuffer>>
-    ThreadCommandBuffers;
+
+std::mutex CommandBufferCacheMutex;
+std::vector<std::pair<uint64_t, VkCommandBuffer>> CommandBufferCache;
+
 inline std::atomic<uint64_t> threadDataIDCounter = 0;
 
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
 auto GetCachedCommandBuffer(const GraphicsContext &context)
     -> std::optional<VkCommandBuffer> {
-  for (auto it = ThreadCommandBuffers.begin(); it != ThreadCommandBuffers.end();
+
+  uint64_t completedValue = UINT64_MAX;
+
+  {
+    std::lock_guard lock(Graphics::GraphicsContext::mutexes.device);
+    auto result = Error::Create(vkGetSemaphoreCounterValue(
+        context.device, globalTimelineSemaphore, &completedValue));
+
+    if (Error::IsError(result)) {
+      return std::nullopt;
+    }
+  }
+
+  std::lock_guard<std::mutex> lock(CommandBufferCacheMutex);
+  for (auto it = CommandBufferCache.begin(); it != CommandBufferCache.end();
        ++it) {
-    if (!IsInUse(it->first)) {
+    if (it->first <= completedValue) {
       auto *commandBuffer = it->second;
-      ThreadCommandBuffers.erase(it);
+      CommandBufferCache.erase(it);
       return commandBuffer;
     }
   }
@@ -109,6 +125,8 @@ inline auto GetDescriptorPool(ThreadContext &tcontext) -> Error {
   }
 
   if (pool == VK_NULL_HANDLE) {
+    // TODO: FUUUCK
+    PrintAlways("Creating new descriptor pool");
     auto createResult = CreateDescriptorPool(tcontext);
 
     if (Error::IsError(createResult)) {
@@ -166,6 +184,7 @@ auto AquireCommandBuffer(Graphics::GraphicsContext &context,
   auto cachedCmdBuffer = GetCachedCommandBuffer(context);
 
   if (!cachedCmdBuffer.has_value()) {
+    PrintAlways("Allocating new command buffer for thread '{}'", info.name);
     VkCommandBufferAllocateInfo allocInfo = {};
     allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
     allocInfo.commandPool = tcontext.commandPool;
@@ -255,9 +274,6 @@ auto SubmitCommands(Graphics::GraphicsContext &context)
       Graphics::DynamicRendering::DrawnToSwapchain;
 
   auto timelineValue = GetSemaphoreValue();
-
-  ThreadCommandBuffers.emplace_back(timelineValue,
-                                    threadInfo->threadData.commandBuffer);
 
   GetThreadContext().commandBuffer = VK_NULL_HANDLE;
 

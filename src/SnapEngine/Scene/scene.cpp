@@ -75,7 +75,7 @@ auto Scene::DrawUiElement(lua_State *state) -> int {
   // This is just a placeholder for now
 
   ImGui::Begin(scene->name.c_str());
-  scene->world->entity(0).children(
+  scene->world->entity().children(
       [&](flecs::entity entity) -> void { DrawEntityHierarchy(entity); });
 
   ImGui::End();

@@ -206,9 +206,6 @@ auto BufferFormat::CalculateStride(Standard std) -> size_t {
     return 0;
   }
 
-  PrintAlways("Calculating stride for buffer format with {} components",
-              Components.size());
-
   size_t offset = 0;
 
   size_t maxAlignment = 0;
@@ -300,9 +297,6 @@ auto BufferFormat::CalculateStride(Standard std) -> size_t {
   }
 
   initialized = true;
-  PrintAlways(
-      "Calculated stride: {}, alignment: {}, max component alignment: {}",
-      stride, alignment, maxAlignment);
 
   return stride;
 }
