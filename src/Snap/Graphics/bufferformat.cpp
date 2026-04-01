@@ -24,8 +24,7 @@ BufferFormat::BufferFormat(std::vector<BufferComponent> components,
 
   PrintAlways("Creating buffer format with {} components", Components.size());
 
-  size_t offset = 0;
-  CalculateStride(std, offset);
+  CalculateStride(std);
 }
 
 auto BufferFormat::GetComponentOffset(size_t componentIndex) const -> size_t {
@@ -186,15 +185,31 @@ inline auto AlignUp(size_t offset, size_t alignment) -> size_t {
   return (offset + alignment - 1) & ~(alignment - 1);
 }
 
+auto BufferFormat::Offset(size_t offset) -> void {
+  for (auto &component : Components) {
+    component.offset += offset;
+
+    if (std::holds_alternative<BufferFormat>(component.format)) {
+      auto &format = std::get<BufferFormat>(component.format);
+      format.Offset(offset);
+    }
+  }
+}
+
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 // TODO: Refactor this function.
 // We need to calculate the stride of a buffer format
 // And we also need write a final offset relative to the place of that format in the parent format for each component
-auto BufferFormat::CalculateStride(Standard std, size_t &offset) -> void {
+auto BufferFormat::CalculateStride(Standard std) -> size_t {
   if (Components.empty()) {
     PrintWarning("Buffer format has no components, stride will be 0");
-    return;
+    return 0;
   }
+
+  PrintAlways("Calculating stride for buffer format with {} components",
+              Components.size());
+
+  size_t offset = 0;
 
   size_t maxAlignment = 0;
   for (auto &format : Components) {
@@ -209,13 +224,13 @@ auto BufferFormat::CalculateStride(Standard std, size_t &offset) -> void {
               : Graphics::Format::GetVec4Variant(vulkanFormat);
       auto alignResult = GetAlignment(alignFormat);
       if (Error::IsError(alignResult)) {
-        return;
+        return 0;
       }
 
       baseAlign = alignResult.value();
     } else if (std::holds_alternative<BufferFormat>(format.format)) {
       auto bufferFormat = std::get<BufferFormat>(format.format);
-      bufferFormat.CalculateStride(std, offset);
+      bufferFormat.CalculateStride(std);
 
       baseAlign = bufferFormat.alignment;
     }
@@ -232,9 +247,6 @@ auto BufferFormat::CalculateStride(Standard std, size_t &offset) -> void {
     case Standard::Std430:
       compAlignment = baseAlign;
       break;
-    default:
-      assert(false && "Something went very wrong");
-      break;
     }
     maxAlignment = std::max(maxAlignment, compAlignment);
     size_t size = 0;
@@ -245,16 +257,17 @@ auto BufferFormat::CalculateStride(Standard std, size_t &offset) -> void {
       size = Graphics::Format::GetSize(vulkanFormat);
     } else if (std::holds_alternative<BufferFormat>(format.format)) {
       auto bufferFormat = std::get<BufferFormat>(format.format);
-      PrintAlways("Offset before calculating nested format: {}", offset);
-      bufferFormat.CalculateStride(std, offset);
-      PrintAlways("Offset after calculating nested format: {}", offset);
-
-      size = bufferFormat.stride;
+      size = bufferFormat.CalculateStride(std);
     }
 
     // Align component
     offset = AlignUp(offset, compAlignment);
     format.offset = offset;
+
+    if (std::holds_alternative<BufferFormat>(format.format)) {
+      auto &bufferFormat = std::get<BufferFormat>(format.format);
+      bufferFormat.Offset(offset);
+    }
 
     // Add padding
     if (format.arraySize == 1) {
@@ -266,9 +279,6 @@ auto BufferFormat::CalculateStride(Standard std, size_t &offset) -> void {
         break;
       case Standard::Std430:
         offset += AlignUp(size, compAlignment) * format.arraySize;
-        break;
-      default:
-        assert(false && "Something went very wrong");
         break;
       }
     }
@@ -290,6 +300,11 @@ auto BufferFormat::CalculateStride(Standard std, size_t &offset) -> void {
   }
 
   initialized = true;
+  PrintAlways(
+      "Calculated stride: {}, alignment: {}, max component alignment: {}",
+      stride, alignment, maxAlignment);
+
+  return stride;
 }
 
 auto BufferFormat::FlattenComponentTree() -> void {

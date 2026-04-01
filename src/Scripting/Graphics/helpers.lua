@@ -56,6 +56,49 @@ local function printAnyInternal(any, tabs)
   end
 end
 
-function snap.helpers.print(any)
-  print(printAnyInternal(any, 0))
+local function printAnyCompactInternal(any, tabs)
+  if type(any) == "table" then
+    local result = "{ "
+    local count = 0
+    for key, value in pairs(any) do
+      count = count + 1
+    end
+
+    if count <= 5 then
+      local result = "{ "
+      local i = 0
+      for key, value in pairs(any) do
+        i = i + 1
+        result = result .. tostring(key) .. ": " .. printAnyCompactInternal(value, tabs + 1)
+        if i < count then
+          result = result .. ", "
+        end
+      end
+
+      return result .. " }"
+    else
+      local result = "{\n"
+      for key, value in pairs(any) do
+        result = result ..
+        string.rep("  ", tabs + 1) .. tostring(key) .. ": " .. printAnyCompactInternal(value, tabs + 1) .. ",\n"
+      end
+      return result .. string.rep("  ", tabs) .. "}"
+    end
+  else
+    return tostring(any)
+  end
+end
+
+function snap.helpers.print(...)
+  for i = 1, select("#", ...) do
+    local any = select(i, ...)
+    print(printAnyInternal(any, 0))
+  end
+end
+
+function snap.helpers.printCompact(...)
+  for i = 1, select("#", ...) do
+    local any = select(i, ...)
+    print(printAnyCompactInternal(any, 0))
+  end
 end

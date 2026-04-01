@@ -153,7 +153,7 @@ function snap.graphics.newCamera(name, position, rotation, resolution, fov, near
 
   print(type(self.buffer))
 
-  snap.helpers.print(self.buffer:getFormat())
+  snap.helpers.printCompact(self.buffer:getFormat())
 
   return self
 end

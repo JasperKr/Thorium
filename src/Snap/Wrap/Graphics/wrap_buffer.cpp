@@ -1,5 +1,6 @@
 #include "Wrap/Graphics/wrap_buffer.hpp"
 #include "Graphics/barrier.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Wrap/Graphics/wrap_format.hpp"
 #include "Wrap/Graphics/wrap_reflection.hpp"
@@ -155,6 +156,7 @@ auto wrap_GetFormat(lua_State *state) -> int {
   }
 
   auto format = buffer->GetFormat();
+  PrintAlways(format.ToString());
 
   BuildBufferFormatTree(state, format);
 
