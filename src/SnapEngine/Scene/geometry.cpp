@@ -34,7 +34,7 @@ auto LuaGeometry::Create(lua_State *state) -> int {
 
   auto meshRef = Ref<Graphics::Mesh>(mesh);
 
-  auto entity = scene->world->entity(name);
+  auto entity = scene->world.entity(name);
   entity.set<Geometry>(Geometry{meshRef});
   entity.add<Transform>();
 

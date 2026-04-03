@@ -23,7 +23,7 @@ auto LuaModel::Create(lua_State *state) -> int {
   }
 
   const char *name = luaL_checkstring(state, 2);
-  auto entity = scene->world->entity(name);
+  auto entity = scene->world.entity(name);
 
   entity.add<Model>();
   entity.add<Userdata>();

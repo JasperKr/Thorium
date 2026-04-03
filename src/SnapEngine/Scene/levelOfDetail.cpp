@@ -105,7 +105,7 @@ auto LuaLevelOfDetail::Create(lua_State *state) -> int {
   auto transitionThreshold =
       static_cast<Math::Scalar>(luaL_optnumber(state, 3, 0.0F));
 
-  auto lodEntity = LevelOfDetail::CreateLevelOfDetail(*scene->world, name,
+  auto lodEntity = LevelOfDetail::CreateLevelOfDetail(scene->world, name,
                                                       transitionThreshold);
   auto luaLevelOfDetail = LuaLevelOfDetail::FromEntity(lodEntity);
   LuaWrap::PushObject(state, LuaLevelOfDetail::GetType(),

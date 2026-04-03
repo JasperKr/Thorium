@@ -62,7 +62,7 @@ auto LuaShape::Create(lua_State *state) -> int {
     return luaL_error(state, "Expected a World object");
   }
 
-  auto shapeEntity = scene->world->entity(name);
+  auto shapeEntity = scene->world.entity(name);
 
   luaL_checktype(state, 3, LUA_TTABLE);
   int lodCount = static_cast<int>(lua_objlen(state, 3));

@@ -75,7 +75,7 @@ auto Scene::DrawUiElement(lua_State *state) -> int {
   // This is just a placeholder for now
 
   ImGui::Begin(scene->name.c_str());
-  scene->world->entity().children(
+  scene->world.entity(0).children(
       [&](flecs::entity entity) -> void { DrawEntityHierarchy(entity); });
 
   ImGui::End();
@@ -93,7 +93,7 @@ auto Scene::DrawModels(lua_State *state) -> int {
   auto *ctx = Graphics::GetCurrentGraphicsContext();
   Error drawResult = Error::Success();
 
-  scene->world->each<Geometry>(
+  scene->world.each<Geometry>(
       [&](flecs::entity entity, const Geometry &geometry) -> void {
         auto result = Graphics::Draw(*ctx, *geometry.mesh);
         if (Error::IsError(result)) {

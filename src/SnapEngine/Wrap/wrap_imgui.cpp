@@ -544,13 +544,6 @@ auto Shutdown() -> Error {
     return shutdownResult;
   }
 
-  // Debug log reference counts of meshes
-
-  for (auto &temporaryCommandList : TemporaryCommandLists) {
-    PrintInfo("Imgui Temporary Mesh Ref Count: {}",
-              temporaryCommandList.Mesh->getReferenceCount());
-  }
-
   TemporaryCommandLists.clear();
 
   return Error::Success();
