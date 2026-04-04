@@ -254,18 +254,17 @@ auto BindDefaultTextures(const GraphicsContext &context,
       }
 
       VkFormat format = VK_FORMAT_R8G8B8A8_UNORM;
-      Texture::TextureType type = Texture::TextureType::DEFAULT;
+      TextureType type = TextureType::DEFAULT;
 
       if (samplerInfo.shape == SLANG_TEXTURE_3D) {
-        type = Texture::TextureType::VOLUME;
+        type = TextureType::VOLUME;
       } else if (samplerInfo.shape == SLANG_TEXTURE_CUBE) {
-        type = Texture::TextureType::CUBEMAP;
+        type = TextureType::CUBEMAP;
       } else if (samplerInfo.shape == SLANG_TEXTURE_2D_ARRAY) {
-        type = Texture::TextureType::ARRAY;
+        type = TextureType::ARRAY;
       }
 
-      auto defaultTextureResult =
-          Texture::GetDefaultTexture(context, format, type);
+      auto defaultTextureResult = GetDefaultTexture(context, format, type);
 
       if (Error::IsError(defaultTextureResult)) {
         return defaultTextureResult.error();
@@ -919,7 +918,7 @@ auto FlushCompute(const GraphicsContext &context) -> Result<bool> {
 }
 
 auto IsSwapchainTexture(const GraphicsContext &context,
-                        const Graphics::Texture::Texture &texture) -> bool {
+                        const Graphics::Texture &texture) -> bool {
   for (const auto &swapchainTexture : context.swapchainInfo.textures) {
     if (swapchainTexture.get() == &texture) {
       return true;
@@ -1385,7 +1384,7 @@ auto FinalizeFrame(const GraphicsContext &context) -> Error {
   return Error::Success();
 }
 
-auto UsedInPass(const Texture::Texture &texture) -> bool {
+auto UsedInPass(const Texture &texture) -> bool {
   return std::ranges::any_of(TopOfStack->renderTargets,
                              [&](const auto &target) -> auto {
                                return target->texture->image == texture.image;

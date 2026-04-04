@@ -396,11 +396,11 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
     PrintError("Error during ImGui shutdown: {}", shutdownResult.message);
   }
 
-  Graphics::ShutdownWrapGraphics();
+  Wrap::Graphics::ShutdownWrapGraphics();
 
   Graphics::DeinitilizeRendering(context);
 
-  Graphics::Texture::UnloadModule();
+  Graphics::UnloadModule();
 
   Graphics::ProcessReleasedResources(context);
 
@@ -444,7 +444,7 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
 
   PrintInfo("Destroying samplers...");
 
-  Graphics::Texture::DestroySamplers(context);
+  Graphics::DestroySamplers(context);
 
   PrintInfo("Destroying graphics context...");
 

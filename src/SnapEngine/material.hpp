@@ -18,7 +18,7 @@ enum class AlphaMode : uint8_t {
   Blend = 2,
 };
 
-using TexRef = Ref<Graphics::Texture::Texture>;
+using TexRef = Ref<Graphics::Texture>;
 
 const Type materialType = Type("Material");
 

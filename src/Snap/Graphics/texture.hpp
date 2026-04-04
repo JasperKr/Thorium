@@ -15,7 +15,9 @@
 #include <algorithm>
 #include <cstdint>
 
-namespace Graphics::Texture {
+namespace Graphics {
+
+struct Buffer;
 
 enum class TextureType : uint8_t {
   DEFAULT, // 2D texture, but we cannot start a variable with a number
@@ -32,7 +34,7 @@ enum class WrapMode : uint8_t {
   CLAMPZERO
 };
 
-const static Type type = Type("Texture");
+const static Type LuaTextureType = Type("Texture");
 
 enum class TextureUsage : uint8_t {
   Sampler,
@@ -49,6 +51,28 @@ extern std::unordered_map<std::pair<VkFormat, TextureType>, Ref<struct Texture>,
     DefaultTextureCache; // NOLINT
 
 auto UnloadModule() -> void;
+
+struct CopyRegion {
+  VkOffset3D srcOffset{};
+  VkOffset3D dstOffset{};
+  VkExtent3D extent{};
+  uint32_t srcBaseArrayLayer = 0;
+  uint32_t dstBaseArrayLayer = 0;
+  uint32_t layerCount = 1;
+  uint32_t srcBaseMipLevel = 0;
+  uint32_t dstBaseMipLevel = 0;
+  uint32_t mipLevelCount = 1;
+};
+
+struct ToBufferCopyRegion {
+  VkOffset3D srcOffset{};
+  VkExtent3D extent{};
+  uint32_t srcBaseArrayLayer = 0;
+  uint32_t layerCount = 1;
+  uint32_t srcBaseMipLevel = 0;
+  uint32_t mipLevelCount = 1;
+  int32_t dstOffset = 0;
+};
 
 struct Texture : Object, Barrier::BarrierSynced {
   std::mutex mutex;
@@ -109,6 +133,12 @@ struct Texture : Object, Barrier::BarrierSynced {
   auto UseDeferredDestruction() const -> bool override {
     return GetDeferredDestructionAllowed() && !isDestroyed;
   }
+
+  auto CopyTo(const GraphicsContext &context, Texture &dstTexture,
+              CopyRegion region) -> Error;
+
+  auto CopyTo(const GraphicsContext &context, Buffer &dstBuffer,
+              ToBufferCopyRegion region) -> Error;
 
   Texture() = default;
   Texture(const Texture &) = delete;
@@ -192,7 +222,7 @@ struct Texture : Object, Barrier::BarrierSynced {
     return Image::IsStencilTexture(format);
   }
 
-  static auto GetType() -> Type const * { return &type; }
+  static auto GetType() -> Type const * { return &LuaTextureType; }
   auto TransitionLayout(
       const GraphicsContext &context, VkImageLayout layout,
       VkPipelineStageFlags2 sourceStage = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT |
@@ -204,7 +234,7 @@ struct Texture : Object, Barrier::BarrierSynced {
       VkAccessFlags2 dstAccessMask = VK_ACCESS_NONE) -> Error;
 
   [[nodiscard]] auto GetInstanceType() const -> Type const * override {
-    return Texture::GetType();
+    return GetType();
   }
 };
 
@@ -257,10 +287,10 @@ auto LoadFromMemory(GraphicsContext &context,
     -> Result<Ref<Texture>>;
 
 auto GetDefaultTexture(const GraphicsContext &context, VkFormat format,
-                       Graphics::Texture::TextureType textureType)
-    -> Result<Ref<Graphics::Texture::Texture>>;
+                       Graphics::TextureType textureType)
+    -> Result<Ref<Graphics::Texture>>;
 
 auto GetAccessFlagsForUsage(TextureUsage usage, VkFormat format)
     -> VkAccessFlags2;
 
-} // namespace Graphics::Texture
+} // namespace Graphics

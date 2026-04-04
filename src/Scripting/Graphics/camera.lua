@@ -151,10 +151,6 @@ function snap.graphics.newCamera(name, position, rotation, resolution, fov, near
   }, 1, { uniform = true, debugname = "Camera [" .. name .. "] buffer", usage = "dynamic" })
   self.bufferData = snap.data.newBytedata(self.buffer:getSize())
 
-  print(type(self.buffer))
-
-  snap.helpers.printCompact(self.buffer:getFormat())
-
   return self
 end
 

@@ -464,7 +464,7 @@ auto PushObject(lua_State *state, Object *object) -> void {
 
 // NOLINTNEXTLINE
 static const std::vector<luaL_Reg> SnapModules = {
-    {"graphics", Graphics::luaopen_graphics},
+    {"graphics", Wrap::Graphics::luaopen_graphics},
     {"event", Wrap::Event::luaopen_event},
     {"timer", Wrap::Timer::luaopen_timer},
     {"data", Wrap::Data::luaopen_data},

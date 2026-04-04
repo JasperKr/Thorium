@@ -246,8 +246,7 @@ auto RenderTargetsFromTexture(lua_State *state, int index)
     -> Ref<Graphics::DynamicRendering::RenderTarget> {
   luaL_checktype(state, index, LUA_TUSERDATA);
 
-  auto *texture =
-      LuaWrap::ObjectFromLua<Graphics::Texture::Texture>(state, index);
+  auto *texture = LuaWrap::ObjectFromLua<Graphics::Texture>(state, index);
 
   if (texture == nullptr) {
     auto *ctx = Graphics::GetCurrentGraphicsContext();
@@ -256,7 +255,7 @@ auto RenderTargetsFromTexture(lua_State *state, int index)
   }
 
   auto rendertarget = Ref<Graphics::DynamicRendering::RenderTarget>::Make();
-  rendertarget->texture = Ref<Graphics::Texture::Texture>(texture);
+  rendertarget->texture = Ref<Graphics::Texture>(texture);
   rendertarget->blendMode = DefaultBlendMode;
   rendertarget->clearValue = {0.0F, 0.0F, 0.0F, 1.0F};
   rendertarget->loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
@@ -276,7 +275,7 @@ auto RenderTargetsFromOptions(lua_State *state, int index)
 
   lua_rawgeti(state, index, 1);
   if (lua_isnoneornil(state, -1) == 0) {
-    if (LuaWrap::IsType<Graphics::Texture::Texture>(state, -1)) {
+    if (LuaWrap::IsType<Graphics::Texture>(state, -1)) {
       return Error::Unexpected("Expected named field 'texture' in options "
                                "table, got texture at index 1.");
     }
@@ -294,12 +293,11 @@ auto RenderTargetsFromOptions(lua_State *state, int index)
     rendertarget->texture =
         context->swapchainInfo.textures[context->swapchainImageIndex];
   } else {
-    auto *texture =
-        LuaWrap::ObjectFromLua<Graphics::Texture::Texture>(state, -1);
+    auto *texture = LuaWrap::ObjectFromLua<Graphics::Texture>(state, -1);
     if (texture == nullptr) {
       return Error::Unexpected("Invalid texture in render target options");
     }
-    rendertarget->texture = Ref<Graphics::Texture::Texture>(texture);
+    rendertarget->texture = Ref<Graphics::Texture>(texture);
   }
   lua_pop(state, 1);
 

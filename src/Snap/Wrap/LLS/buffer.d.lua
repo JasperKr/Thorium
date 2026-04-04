@@ -156,6 +156,12 @@ function Buffer:getComponentOffset(name) end
 --- @return string debugName
 function Buffer:getDebugName() end
 
+--- Gets if the buffer format has padding between components
+--- @return boolean hasPadding
+--- @return string? component The name of the component for which padding was added, or nil if no padding was added
+--- @return integer? paddingSize The size of the padding in bytes, or nil if no padding was added
+function Buffer:hasPadding() end
+
 --- Creates a new buffer
 --- @param format snap.BufferFormat|snap.BufferFormatComponentFormat The format of the buffer
 --- @param elementCount integer The number of elements in the buffer

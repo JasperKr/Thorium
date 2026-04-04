@@ -84,6 +84,16 @@ public:
 
   [[nodiscard]] auto ToString(int indentation = 0) const -> std::string;
 
+  struct PaddingResult {
+    bool needsPadding;
+
+    // The name of the component that was misaligned, if any
+    std::string needsPaddingAt;
+    size_t amountOfPadding;
+  };
+
+  [[nodiscard]] auto NeedsPadding(Standard std) const -> PaddingResult;
+
 private:
   // Definition tree
   std::vector<BufferComponent> Components;

@@ -656,8 +656,7 @@ auto ShaderModule::Send(const GraphicsContext &context, const ResourceKey &key,
 }
 
 auto ShaderModule::Send(const GraphicsContext &context, const ResourceKey &key,
-                        const Ref<Graphics::Texture::Texture> &texture)
-    -> Error {
+                        const Ref<Graphics::Texture> &texture) -> Error {
   ZoneScopedN("ShaderModule::Send texture");
 
   if (!texture.isValid()) {
@@ -770,8 +769,8 @@ inline auto BindTextures(const GraphicsContext &context,
 
     const auto &samplerInfo = std::get<SamplerInfo>(resource.info);
     auto usage = samplerInfo.access == SLANG_RESOURCE_ACCESS_READ
-                     ? Texture::TextureUsage::Sampler
-                     : Texture::TextureUsage::Storage;
+                     ? TextureUsage::Sampler
+                     : TextureUsage::Storage;
     auto stage = ShaderStageFlagsToPipelineStageFlags(resource.stages);
 
     auto key = SetBindingToSlot(samplerInfo.set, samplerInfo.binding);
@@ -797,25 +796,25 @@ inline auto BindTextures(const GraphicsContext &context,
     Error result;
 
     switch (usage) {
-    case Texture::TextureUsage::Sampler:
+    case TextureUsage::Sampler:
       result = texture->UseAsSampler(context, stage);
       break;
-    case Texture::TextureUsage::Storage:
+    case TextureUsage::Storage:
       result = texture->UseAsStorage(context, stage);
       break;
-    case Texture::TextureUsage::Attachment:
+    case TextureUsage::Attachment:
       result = texture->UseAsAttachment(context);
       break;
-    case Texture::TextureUsage::TransferSrc:
+    case TextureUsage::TransferSrc:
       result = texture->UseAsTransferSrc(context);
       break;
-    case Texture::TextureUsage::TransferDst:
+    case TextureUsage::TransferDst:
       result = texture->UseAsTransferDst(context);
       break;
-    case Texture::TextureUsage::PresentSrc:
+    case TextureUsage::PresentSrc:
       result = texture->UseAsPresentSrc(context);
       break;
-    case Texture::TextureUsage::Unknown:
+    case TextureUsage::Unknown:
       result = Error::Create(
           "Cannot transition image with unknown usage in shader flush.");
       break;
@@ -840,7 +839,7 @@ inline auto BindTextures(const GraphicsContext &context,
     descSetWrite.dstArrayElement = 0;
     descSetWrite.descriptorCount = 1;
     descSetWrite.descriptorType =
-        (usage == Texture::TextureUsage::Storage
+        (usage == TextureUsage::Storage
              ? VK_DESCRIPTOR_TYPE_STORAGE_IMAGE
              : VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
     descSetWrite.pImageInfo = &imageInfo;

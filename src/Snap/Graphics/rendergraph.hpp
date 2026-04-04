@@ -38,7 +38,7 @@ struct ResourceUsageLifetime {
 };
 
 struct ImportedTexture {
-  Ref<Graphics::Texture::Texture> texture;
+  Ref<Graphics::Texture> texture;
 };
 
 struct ImportedBuffer {
@@ -86,7 +86,7 @@ struct Resource {
 
   Type type = Type::Unknown;
 
-  std::variant<Ref<Texture::Texture>, Ref<Buffer>> info;
+  std::variant<Ref<Texture>, Ref<Buffer>> info;
 };
 
 struct PassState {
@@ -247,7 +247,7 @@ struct RenderGraph {
 };
 
 struct TextureDescriptor {
-  Texture::TextureType type = Texture::TextureType::DEFAULT;
+  TextureType type = TextureType::DEFAULT;
   VkFormat format = VK_FORMAT_R8G8B8A8_UNORM;
 
   uint32_t width{};
@@ -283,8 +283,7 @@ auto AddTexture(RenderGraph &graph, const TextureDescriptor &descriptor)
 auto AddBuffer(RenderGraph &graph, const BufferDescriptor &descriptor)
     -> ResourceHandle;
 
-auto ImportTexture(RenderGraph &graph,
-                   const Ref<Graphics::Texture::Texture> &texture,
+auto ImportTexture(RenderGraph &graph, const Ref<Graphics::Texture> &texture,
                    LayoutUpdate layoutUpdate) -> ResourceHandle;
 
 auto ImportBuffer(RenderGraph &graph, const Ref<Graphics::Buffer> &buffer)

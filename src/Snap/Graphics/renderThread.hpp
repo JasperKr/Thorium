@@ -3,7 +3,6 @@
 #include "Graphics/barrier.hpp"
 #include "Graphics/graphicsContext.hpp"
 #include "Graphics/semaphoreManager.hpp"
-#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Modules/type.hpp"

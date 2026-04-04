@@ -4,7 +4,7 @@
 #include "Modules/console.hpp"
 #include "Wrap/wrap.hpp"
 #include "lua.hpp"
-namespace Graphics::Texture {
+namespace Graphics {
 auto wrap_SetFilter(lua_State *state) -> int;
 auto wrap_GetFilter(lua_State *state) -> int;
 auto wrap_SetAnisotropy(lua_State *state) -> int;
@@ -60,4 +60,4 @@ extern "C" inline auto luaopen_texture(lua_State *state) -> int {
   return 1;
 }
 
-} // namespace Graphics::Texture
+} // namespace Graphics

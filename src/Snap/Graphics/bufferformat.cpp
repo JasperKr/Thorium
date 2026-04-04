@@ -197,9 +197,6 @@ auto BufferFormat::Offset(size_t offset) -> void {
 }
 
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
-// TODO: Refactor this function.
-// We need to calculate the stride of a buffer format
-// And we also need write a final offset relative to the place of that format in the parent format for each component
 auto BufferFormat::CalculateStride(Standard std) -> size_t {
   if (Components.empty()) {
     PrintWarning("Buffer format has no components, stride will be 0");
@@ -360,6 +357,40 @@ auto BufferFormat::FlattenComponentTree() -> void {
   output << baseTabs << "};\n";
 
   return output.str();
+}
+
+[[nodiscard]] auto BufferFormat::NeedsPadding(Standard std) const
+    -> PaddingResult {
+  size_t offset = 0;
+  for (const auto &component : Components) {
+    if (component.offset != offset) {
+      return {
+          .needsPadding = true,
+          .needsPaddingAt = component.name,
+          .amountOfPadding = component.offset - offset,
+      };
+    }
+
+    size_t size = 0;
+    if (std::holds_alternative<VkFormat>(component.format)) {
+      auto vulkanFormat = std::get<VkFormat>(component.format);
+      size = Graphics::Format::GetSize(vulkanFormat);
+    } else if (std::holds_alternative<BufferFormat>(component.format)) {
+      auto bufferFormat = std::get<BufferFormat>(component.format);
+      size = bufferFormat.GetStride();
+
+      auto paddingResult = bufferFormat.NeedsPadding(std);
+      if (paddingResult.needsPadding) {
+        return paddingResult;
+      }
+    }
+
+    offset += size * component.arraySize;
+  }
+
+  return {
+      .needsPadding = false,
+  };
 }
 
 } // namespace Graphics

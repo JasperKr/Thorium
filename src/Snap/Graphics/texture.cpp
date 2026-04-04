@@ -28,7 +28,7 @@
 #include "vulkan/vulkan_core.h"
 // #include <vma/vk_mem_alloc.h>
 
-namespace Graphics::Texture {
+namespace Graphics {
 
 auto GetAspectFlagsForFormat(VkFormat format) -> VkImageAspectFlagBits {
   switch (format) {
@@ -1183,8 +1183,8 @@ std::unordered_map<std::pair<VkFormat, TextureType>, Ref<struct Texture>,
 auto UnloadModule() -> void { DefaultTextureCache.clear(); }
 
 auto GetDefaultTexture(const GraphicsContext &context, VkFormat format,
-                       Graphics::Texture::TextureType textureType)
-    -> Result<Ref<Graphics::Texture::Texture>> {
+                       Graphics::TextureType textureType)
+    -> Result<Ref<Graphics::Texture>> {
 
   auto key = std::make_pair(format, textureType);
   auto textureIterator = DefaultTextureCache.find(key);
@@ -1227,16 +1227,16 @@ auto GetDefaultTexture(const GraphicsContext &context, VkFormat format,
   Result<Ref<Texture>> result;
   switch (textureType) {
   case TextureType::DEFAULT:
-    result = Graphics::Texture::Create2D(context, texInfo);
+    result = Graphics::Create2D(context, texInfo);
     break;
   case TextureType::CUBEMAP:
-    result = Graphics::Texture::CreateCubeMap(context, texInfo);
+    result = Graphics::CreateCubeMap(context, texInfo);
     break;
   case TextureType::VOLUME:
-    result = Graphics::Texture::CreateVolume(context, texInfo);
+    result = Graphics::CreateVolume(context, texInfo);
     break;
   case TextureType::ARRAY:
-    result = Graphics::Texture::CreateArray(context, texInfo);
+    result = Graphics::CreateArray(context, texInfo);
     break;
   default:
     return Error::Unexpected("Unsupported texture type for default texture");
@@ -1428,4 +1428,142 @@ auto Texture::UseAsPresentSrc(const GraphicsContext &context) -> Error {
                VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT);
 }
 
-} // namespace Graphics::Texture
+auto Texture::CopyTo(const GraphicsContext &context, Texture &dstTexture,
+                     CopyRegion region) -> Error {
+  if (format != dstTexture.format) {
+    return Error::Create(
+        "CopyTo: Source and destination textures must have the "
+        "same format for copying.");
+  }
+  if (region.extent.width == 0 || region.extent.height == 0 ||
+      region.extent.depth == 0) {
+    return Error::Create("CopyTo: Copy extent must be greater than zero.");
+  }
+  if (region.srcBaseMipLevel >= mipmapcount ||
+      region.dstBaseMipLevel >= dstTexture.mipmapcount) {
+    return Error::Create(
+        "CopyTo: Source and destination mip levels must be within bounds.");
+  }
+
+  if (region.srcBaseArrayLayer >= arrayLayers ||
+      region.dstBaseArrayLayer >= dstTexture.arrayLayers) {
+    return Error::Create(
+        "CopyTo: Source and destination array layers must be within bounds.");
+  }
+
+  if (region.srcOffset.x < 0 || region.srcOffset.y < 0 ||
+      region.srcOffset.z < 0 || region.dstOffset.x < 0 ||
+      region.dstOffset.y < 0 || region.dstOffset.z < 0) {
+    return Error::Create(
+        "CopyTo: Source and destination offsets cannot be negative.");
+  }
+
+  if (region.srcOffset.x + region.extent.width > size.width ||
+      region.srcOffset.y + region.extent.height > size.height ||
+      region.srcOffset.z + region.extent.depth > size.depth) {
+    return Error::Create(
+        "CopyTo: Source offset and extent exceed source texture dimensions.");
+  }
+
+  if (region.dstOffset.x + region.extent.width > dstTexture.size.width ||
+      region.dstOffset.y + region.extent.height > dstTexture.size.height ||
+      region.dstOffset.z + region.extent.depth > dstTexture.size.depth) {
+    return Error::Create(
+        "CopyTo: Destination offset and extent exceed destination texture "
+        "dimensions.");
+  }
+
+  auto **commandBuffer = GetCommandBufferPtr();
+  if (commandBuffer == nullptr) {
+    return Error::Create("CopyTo: Failed to get command buffer for copying.");
+  }
+
+  auto error = UseAsTransferSrc(context);
+  if (Error::IsError(error)) {
+    return error;
+  }
+  error = dstTexture.UseAsTransferDst(context);
+  if (Error::IsError(error)) {
+    return error;
+  }
+
+  VkImageCopy copyRegion = {};
+  copyRegion.srcSubresource.aspectMask = GetAspectFlagsForFormat(format);
+  copyRegion.srcSubresource.mipLevel = region.srcBaseMipLevel;
+  copyRegion.srcSubresource.baseArrayLayer = region.srcBaseArrayLayer;
+  copyRegion.srcSubresource.layerCount = region.layerCount;
+  copyRegion.srcOffset = region.srcOffset;
+  copyRegion.dstSubresource.aspectMask =
+      GetAspectFlagsForFormat(dstTexture.format);
+  copyRegion.dstSubresource.mipLevel = region.dstBaseMipLevel;
+  copyRegion.dstSubresource.baseArrayLayer = region.dstBaseArrayLayer;
+  copyRegion.dstSubresource.layerCount = region.layerCount;
+  copyRegion.dstOffset = region.dstOffset;
+  copyRegion.extent = region.extent;
+
+  // TODO: Check if this is needed after UseAsTransferSrc and UseAsTransferDst
+  // Barrier::UpdateUsage(context, *this,
+  //                      Barrier::ResourceState{
+  //                          .stages = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+  //                          .access = VK_ACCESS_2_TRANSFER_READ_BIT,
+  //                      });
+  // Barrier::UpdateUsage(context, dstTexture,
+  //                      Barrier::ResourceState{
+  //                          .stages = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+  //                          .access = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+  //                      });
+
+  vkCmdCopyImage(*commandBuffer, image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                 dstTexture.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1,
+                 &copyRegion);
+
+  MarkUse();
+  dstTexture.MarkUse();
+
+  return Error::Success();
+}
+
+auto Texture::CopyTo(const GraphicsContext &context, Buffer &dstBuffer,
+                     ToBufferCopyRegion region) -> Error {
+  VkBufferImageCopy copyRegion = {};
+  copyRegion.bufferOffset = region.dstOffset;
+  copyRegion.bufferRowLength = region.extent.width;
+  copyRegion.bufferImageHeight = region.extent.height;
+  copyRegion.imageSubresource.aspectMask = GetAspectFlagsForFormat(format);
+  copyRegion.imageSubresource.mipLevel = region.srcBaseMipLevel;
+  copyRegion.imageSubresource.baseArrayLayer = region.srcBaseArrayLayer;
+  copyRegion.imageSubresource.layerCount = region.layerCount;
+  copyRegion.imageOffset = region.srcOffset;
+  copyRegion.imageExtent = region.extent;
+
+  auto **commandBuffer = GetCommandBufferPtr();
+  if (commandBuffer == nullptr) {
+    return Error::Create("CopyTo: Failed to get command buffer for copying.");
+  }
+
+  auto error = UseAsTransferSrc(context);
+  if (Error::IsError(error)) {
+    return error;
+  }
+
+  if ((dstBuffer.usage & VK_BUFFER_USAGE_TRANSFER_DST_BIT) == 0) {
+    return Error::Create(
+        "CopyTo: Destination buffer must have VK_BUFFER_USAGE_TRANSFER_DST_BIT "
+        "usage flag.");
+  }
+
+  // TODO: Check if we need an update usage here after UseAsTransferSrc
+  Barrier::UpdateUsage(context, dstBuffer,
+                       Barrier::ResourceState{
+                           .stages = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                           .access = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+                       });
+  vkCmdCopyImageToBuffer(*commandBuffer, image,
+                         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dstBuffer.handle,
+                         1, &copyRegion);
+  dstBuffer.MarkUse();
+  MarkUse();
+  return Error::Success();
+}
+
+} // namespace Graphics

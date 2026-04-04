@@ -350,7 +350,7 @@ auto Deinitialize(Graphics::GraphicsContext &context) -> Error {
     return err;
   }
 
-  Graphics::ShutdownWrapGraphics();
+  Wrap::Graphics::ShutdownWrapGraphics();
 
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);

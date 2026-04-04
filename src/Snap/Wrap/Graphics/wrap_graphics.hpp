@@ -7,10 +7,10 @@
 #include "Wrap/Graphics/wrap_texture.hpp"
 #include "Wrap/wrap.hpp"
 #include "lua.hpp"
-namespace Graphics {
+namespace Wrap::Graphics {
 
 // NOLINTNEXTLINE; Cache quad mesh to avoid recreating it every frame
-extern thread_local Ref<Mesh> QuadMeshCache;
+extern thread_local Ref<::Graphics::Mesh> QuadMeshCache;
 
 auto wrap_Present(lua_State *state) -> int;
 
@@ -54,6 +54,11 @@ auto wrap_SubmitCommandBuffer(lua_State *state) -> int;
 auto wrap_UseCommands(lua_State *state) -> int;
 auto wrap_GetGeneratedCommands(lua_State *state) -> int;
 
+auto wrap_CopyBuffer(lua_State *state) -> int;
+auto wrap_CopyTexture(lua_State *state) -> int;
+auto wrap_CopyBufferToTexture(lua_State *state) -> int;
+auto wrap_CopyTextureToBuffer(lua_State *state) -> int;
+
 auto ShutdownWrapGraphics() -> void;
 
 // NOLINTNEXTLINE
@@ -69,7 +74,7 @@ static const std::vector<luaL_Reg> GraphicsLib = {
     {"setScissor", wrap_SetScissor},
     {"clipScissor", wrap_ClipScissor},
     {"setShader", wrap_SetShader},
-    {"setRenderTarget", DynamicRendering::wrap_SetRenderTargets},
+    {"setRenderTarget", ::Graphics::DynamicRendering::wrap_SetRenderTargets},
     {"setLineWidth", wrap_SetLineWidth},
     {"setWindingOrder", wrap_SetWindingOrder},
     {"getDepthMode", wrap_GetDepthMode},
@@ -81,10 +86,10 @@ static const std::vector<luaL_Reg> GraphicsLib = {
     {"getRenderTargets", wrap_GetRenderTargets},
     {"getLineWidth", wrap_GetLineWidth},
     {"getWindingOrder", wrap_GetWindingOrder},
-    {"newTexture", Texture::wrap_NewTexture},
-    {"newMesh", Graphics::wrap_NewMesh},
-    {"newShader", Graphics::Shader::wrap_NewShader},
-    {"newBuffer", Graphics::wrap_NewBuffer},
+    {"newTexture", ::Graphics::wrap_NewTexture},
+    {"newMesh", ::Graphics::wrap_NewMesh},
+    {"newShader", ::Graphics::Shader::wrap_NewShader},
+    {"newBuffer", Buffer::wrap_NewBuffer},
     {"draw", wrap_Draw},
     {"dispatch", wrap_Dispatch},
     {"dispatchIndirect", wrap_DispatchIndirect},
@@ -97,10 +102,10 @@ static const std::vector<luaL_Reg> GraphicsLib = {
 };
 
 const static std::vector<lua_CFunction> childrenInitFunctions = {
-    Texture::luaopen_texture,
-    Graphics::luaopen_mesh,
-    Graphics::Shader::luaopen_shader,
-    Graphics::luaopen_buffer,
+    ::Graphics::luaopen_texture,
+    ::Graphics::luaopen_mesh,
+    ::Graphics::Shader::luaopen_shader,
+    Buffer::luaopen_buffer,
 };
 
 extern "C" inline auto luaopen_graphics(lua_State *state) -> int {
@@ -115,4 +120,4 @@ extern "C" inline auto luaopen_graphics(lua_State *state) -> int {
   return 1;
 }
 
-} // namespace Graphics
+} // namespace Wrap::Graphics

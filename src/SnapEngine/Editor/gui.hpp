@@ -342,7 +342,7 @@ inline auto GetImGuiCursorMap()
   return imgui_cursor_to_mouse_cursor;
 }
 
-extern std::unordered_map<ImTextureID, Ref<Graphics::Texture::Texture>>
+extern std::unordered_map<ImTextureID, Ref<Graphics::Texture>>
     ImGuiTextures; // NOLINT
 
 auto LoadImGuiCursorMap() -> Error;

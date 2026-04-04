@@ -213,7 +213,7 @@ inline auto GetSwapchainTextures(GraphicsContext &context) -> Error {
   context.swapchainInfo.textures.resize(context.swapchainInfo.imageCount);
 
   for (uint32_t i = 0; i < context.swapchainInfo.imageCount; i++) {
-    auto textureResult = Graphics::Texture::FromSwapchainTexture(
+    auto textureResult = Graphics::FromSwapchainTexture(
         context, context.swapchainInfo.images[i],
         context.swapchainInfo.imageViews[i], context.swapchainInfo.format,
         context.swapchainInfo.extent.width,
@@ -357,7 +357,7 @@ auto SwapchainManager::GetCurrentSwapchain() -> VkSwapchainKHR {
   return currentSwapchain;
 }
 auto SwapchainManager::GetCurrentSwapchainTexture(
-    const GraphicsContext &context) -> Ref<Texture::Texture> {
+    const GraphicsContext &context) -> Ref<Texture> {
   return currentTextures.at(context.swapchainImageIndex);
 }
 

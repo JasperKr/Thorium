@@ -19,7 +19,7 @@
 #include "Graphics/format.hpp"
 #include "Modules/bytedata.hpp"
 
-namespace Graphics {
+namespace Wrap::Graphics::Buffer {
 
 /*
 auto wrap_GetSize(lua_State *state) -> int;
@@ -33,7 +33,7 @@ auto wrap_NewBuffer(lua_State *state) -> int;
 */
 
 auto wrap_GetSize(lua_State *state) -> int {
-  auto *buffer = LuaWrap::ObjectFromLua<Graphics::StructuredBuffer>(state, 1);
+  auto *buffer = LuaWrap::ObjectFromLua<::Graphics::StructuredBuffer>(state, 1);
 
   if (buffer == nullptr) {
     return luaL_error(state, "Expected Buffer as first argument");
@@ -44,7 +44,7 @@ auto wrap_GetSize(lua_State *state) -> int {
 }
 
 auto wrap_GetElementCount(lua_State *state) -> int {
-  auto *buffer = LuaWrap::ObjectFromLua<Graphics::StructuredBuffer>(state, 1);
+  auto *buffer = LuaWrap::ObjectFromLua<::Graphics::StructuredBuffer>(state, 1);
 
   if (buffer == nullptr) {
     return luaL_error(state, "Expected Buffer as first argument");
@@ -55,7 +55,7 @@ auto wrap_GetElementCount(lua_State *state) -> int {
 }
 
 auto wrap_GetElementStride(lua_State *state) -> int {
-  auto *buffer = LuaWrap::ObjectFromLua<Graphics::StructuredBuffer>(state, 1);
+  auto *buffer = LuaWrap::ObjectFromLua<::Graphics::StructuredBuffer>(state, 1);
 
   if (buffer == nullptr) {
     return luaL_error(state, "Expected Buffer as first argument");
@@ -67,7 +67,7 @@ auto wrap_GetElementStride(lua_State *state) -> int {
 
 // [value = 0], [offset = 0], [size = whole size]
 auto wrap_ClearBuffer(lua_State *state) -> int {
-  auto *buffer = LuaWrap::ObjectFromLua<Graphics::StructuredBuffer>(state, 1);
+  auto *buffer = LuaWrap::ObjectFromLua<::Graphics::StructuredBuffer>(state, 1);
 
   if (buffer == nullptr) {
     return luaL_error(state, "Expected Buffer as first argument");
@@ -88,7 +88,7 @@ auto wrap_ClearBuffer(lua_State *state) -> int {
     size = static_cast<VkDeviceSize>(luaL_checkinteger(state, 4));
   }
 
-  auto *ctx = GetCurrentGraphicsContext();
+  auto *ctx = ::Graphics::GetCurrentGraphicsContext();
 
   if (ctx == nullptr) {
     return luaL_error(state, "No current GraphicsContext set for this thread.");
@@ -104,7 +104,8 @@ auto wrap_ClearBuffer(lua_State *state) -> int {
   return 0;
 }
 
-inline auto BuildBufferFormatTree(lua_State *state, const BufferFormat &format)
+inline auto BuildBufferFormatTree(lua_State *state,
+                                  const ::Graphics::BufferFormat &format)
     -> void {
 
   // [{}]
@@ -133,9 +134,10 @@ inline auto BuildBufferFormatTree(lua_State *state, const BufferFormat &format)
     lua_pushstring(state, "format");
     if (std::holds_alternative<VkFormat>(component.format)) {
       auto vkFormat = std::get<VkFormat>(component.format);
-      lua_pushstring(state, Format::ToString(vkFormat).c_str());
-    } else if (std::holds_alternative<BufferFormat>(component.format)) {
-      auto bufferFormat = std::get<BufferFormat>(component.format);
+      lua_pushstring(state, ::Graphics::Format::ToString(vkFormat).c_str());
+    } else if (std::holds_alternative<::Graphics::BufferFormat>(
+                   component.format)) {
+      auto bufferFormat = std::get<::Graphics::BufferFormat>(component.format);
       BuildBufferFormatTree(state, bufferFormat);
     }
     lua_settable(state, -3); // table["format"] = format
@@ -149,7 +151,7 @@ inline auto BuildBufferFormatTree(lua_State *state, const BufferFormat &format)
 // returns:
 // { { name = ..., offset = ..., format = ... } }
 auto wrap_GetFormat(lua_State *state) -> int {
-  auto *buffer = LuaWrap::ObjectFromLua<Graphics::StructuredBuffer>(state, 1);
+  auto *buffer = LuaWrap::ObjectFromLua<::Graphics::StructuredBuffer>(state, 1);
 
   if (buffer == nullptr) {
     return luaL_error(state, "Expected Buffer as first argument");
@@ -168,13 +170,13 @@ auto wrap_GetFormat(lua_State *state) -> int {
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 auto wrap_SetData(lua_State *state) -> int {
   ZoneScoped;
-  auto *ctx = GetCurrentGraphicsContext();
+  auto *ctx = ::Graphics::GetCurrentGraphicsContext();
 
   if (ctx == nullptr) {
     return luaL_error(state, "No current GraphicsContext set for this thread.");
   }
 
-  auto *buffer = LuaWrap::ObjectFromLua<Graphics::StructuredBuffer>(state, 1);
+  auto *buffer = LuaWrap::ObjectFromLua<::Graphics::StructuredBuffer>(state, 1);
 
   if (buffer == nullptr) {
     return luaL_error(state, "Expected Buffer as first argument");
@@ -182,11 +184,11 @@ auto wrap_SetData(lua_State *state) -> int {
 
   std::vector<uint8_t> data{};
 
-  Graphics::Barrier::UpdateUsage(*ctx, *buffer->GetBuffer(),
-                                 Graphics::Barrier::ResourceState{
-                                     .stages = VK_PIPELINE_STAGE_2_HOST_BIT,
-                                     .access = VK_ACCESS_2_HOST_WRITE_BIT,
-                                 });
+  ::Graphics::Barrier::UpdateUsage(*ctx, *buffer->GetBuffer(),
+                                   ::Graphics::Barrier::ResourceState{
+                                       .stages = VK_PIPELINE_STAGE_2_HOST_BIT,
+                                       .access = VK_ACCESS_2_HOST_WRITE_BIT,
+                                   });
 
   if (lua_istable(state, 2)) {
     // table of numbers
@@ -267,38 +269,8 @@ auto wrap_SetData(lua_State *state) -> int {
   return 0;
 }
 
-auto wrap_CopyTo(lua_State *state) -> int {
-  auto *ctx = GetCurrentGraphicsContext();
-
-  if (ctx == nullptr) {
-    return luaL_error(state, "No current GraphicsContext set for this thread.");
-  }
-
-  auto *srcBuffer =
-      LuaWrap::ObjectFromLua<Graphics::StructuredBuffer>(state, 1);
-  auto *dstBuffer =
-      LuaWrap::ObjectFromLua<Graphics::StructuredBuffer>(state, 2);
-
-  if (srcBuffer == nullptr || dstBuffer == nullptr) {
-    return luaL_error(state, "Expected Buffer as first and second argument");
-  }
-
-  auto srcIndex = static_cast<size_t>(luaL_checkinteger(state, 3));
-  auto dstIndex = static_cast<size_t>(luaL_checkinteger(state, 4));
-  auto size = static_cast<size_t>(luaL_checkinteger(state, 5)); // NOLINT
-
-  auto result = srcBuffer->GetBuffer()->CopyTo(*ctx, *dstBuffer->GetBuffer(),
-                                               srcIndex, dstIndex, size);
-  if (Error::IsError(result)) {
-    return luaL_error(state, "Failed to copy buffer data: %s",
-                      result.message.c_str());
-  }
-
-  return 0;
-}
-
 auto wrap_GetComponentOffset(lua_State *state) -> int {
-  auto *buffer = LuaWrap::ObjectFromLua<Graphics::StructuredBuffer>(state, 1);
+  auto *buffer = LuaWrap::ObjectFromLua<::Graphics::StructuredBuffer>(state, 1);
 
   if (buffer == nullptr) {
     return luaL_error(state, "Expected Buffer as first argument");
@@ -327,7 +299,7 @@ auto wrap_GetComponentOffset(lua_State *state) -> int {
 }
 
 auto wrap_GetDebugName(lua_State *state) -> int {
-  auto *buffer = LuaWrap::ObjectFromLua<Graphics::StructuredBuffer>(state, 1);
+  auto *buffer = LuaWrap::ObjectFromLua<::Graphics::StructuredBuffer>(state, 1);
 
   if (buffer == nullptr) {
     return luaL_error(state, "Expected Buffer as first argument");
@@ -337,10 +309,32 @@ auto wrap_GetDebugName(lua_State *state) -> int {
   return 1;
 }
 
+auto wrap_BufferHasPadding(lua_State *state) -> int {
+  auto *buffer = LuaWrap::ObjectFromLua<::Graphics::StructuredBuffer>(state, 1);
+
+  if (buffer == nullptr) {
+    return luaL_error(state, "Expected Buffer as first argument");
+  }
+
+  // Todo: allow 140
+  auto paddingResult =
+      buffer->GetFormat().NeedsPadding(::Graphics::Standard::Std430);
+
+  lua_pushboolean(state, static_cast<int>(paddingResult.needsPadding));
+  if (paddingResult.needsPadding) {
+    lua_pushstring(state, paddingResult.needsPaddingAt.c_str());
+    lua_pushinteger(state,
+                    static_cast<lua_Integer>(paddingResult.amountOfPadding));
+    return 3;
+  }
+
+  return 1;
+}
+
 // Buffer format: { { name = ..., format = ... }, ... }
 inline auto BufferFormatFromLua(lua_State *state, int index)
-    -> Result<Graphics::BufferFormat> {
-  std::vector<Graphics::BufferComponent> components;
+    -> Result<::Graphics::BufferFormat> {
+  std::vector<::Graphics::BufferComponent> components;
 
   if (lua_type(state, index) == LUA_TSTRING) {
     // Single component format
@@ -368,7 +362,7 @@ inline auto ConditionalFlag(lua_State *state, VkBufferUsageFlags flag) {
 // element count: integer
 // settings: { usages, cpupersistent: boolean }
 auto wrap_NewBuffer(lua_State *state) -> int {
-  auto *ctx = GetCurrentGraphicsContext();
+  auto *ctx = ::Graphics::GetCurrentGraphicsContext();
 
   if (ctx == nullptr) {
     return luaL_error(state, "No current GraphicsContext set for this thread.");
@@ -433,13 +427,13 @@ auto wrap_NewBuffer(lua_State *state) -> int {
         VK_BUFFER_USAGE_TRANSFER_DST_BIT; // allow data upload if not gpu only
   }
 
-  Graphics::StructuredBufferCreationInfo info;
+  ::Graphics::StructuredBufferCreationInfo info;
   info.memoryFlags = memoryFlags;
   info.usageFlags = usageFlags;
   info.debugName = "Structured Buffer";
 
   auto result =
-      Graphics::StructuredBuffer::Create(*ctx, format, elementCount, info);
+      ::Graphics::StructuredBuffer::Create(*ctx, format, elementCount, info);
 
   if (Error::IsError(result)) {
     return luaL_error(state, "Failed to create Buffer: %s",
@@ -448,9 +442,9 @@ auto wrap_NewBuffer(lua_State *state) -> int {
 
   auto buffer = result.value();
 
-  LuaWrap::PushObject(state, Graphics::StructuredBuffer::GetType(),
+  LuaWrap::PushObject(state, ::Graphics::StructuredBuffer::GetType(),
                       buffer.get());
 
   return 1;
 }
-} // namespace Graphics
+} // namespace Wrap::Graphics::Buffer

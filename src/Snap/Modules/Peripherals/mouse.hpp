@@ -16,7 +16,7 @@ const std::map<std::string, uint32_t> MouseButtonMap = {
     {"x2", SDL_BUTTON_X2},
 };
 
-const static Type type = Type("Mouse Cursor");
+const static Type LuaMouseCursorType = Type("MouseCursor");
 
 struct MouseCursor : Object {
   MouseCursor(const MouseCursor &) = delete;
@@ -28,7 +28,9 @@ struct MouseCursor : Object {
 
   ~MouseCursor() override { SDL_DestroyCursor(sdlCursor); }
 
-  [[nodiscard]] static auto GetType() -> Type const * { return &type; }
+  [[nodiscard]] static auto GetType() -> Type const * {
+    return &LuaMouseCursorType;
+  }
 
   [[nodiscard]] auto GetInstanceType() const -> Type const * override {
     return MouseCursor::GetType();

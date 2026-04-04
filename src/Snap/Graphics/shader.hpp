@@ -33,8 +33,8 @@ struct ShaderExtern {
 };
 
 struct ImageTransitionInfo {
-  Texture::Texture *texture{};
-  Texture::TextureUsage newUsage = Texture::TextureUsage::Unknown;
+  Texture *texture{};
+  TextureUsage newUsage = TextureUsage::Unknown;
   // Unused for: Attachments, TransferSrc, TransferDst
   VkPipelineStageFlags2 newStage = VK_PIPELINE_STAGE_2_NONE;
 };
@@ -50,7 +50,7 @@ struct DescriptorWriteInfo {
   VkBufferView pTexelBufferView{};
 
   Buffer *bufferPtr{};
-  Texture::Texture *imagePtr{};
+  Texture *imagePtr{};
   VkAccessFlagBits2 bufferAccessBits{};
 
   ImageTransitionInfo transition;
@@ -73,7 +73,7 @@ struct DescriptorWriteInfo {
   }
 };
 
-static const Type type = Type("Shader");
+static const Type LuaShaderType = Type("Shader");
 
 constexpr auto
 ShaderStageFlagsToPipelineStageFlags(VkShaderStageFlags shaderStages)
@@ -111,8 +111,8 @@ struct BoundState {
   std::unordered_map<uint64_t, std::pair<Ref<Buffer>, BufferInfo>>
       userBoundBuffers;
 
-  std::unordered_map<uint64_t, Ref<Texture::Texture>> boundTextures;
-  std::unordered_map<uint64_t, std::pair<Ref<Texture::Texture>, SamplerInfo>>
+  std::unordered_map<uint64_t, Ref<Texture>> boundTextures;
+  std::unordered_map<uint64_t, std::pair<Ref<Texture>, SamplerInfo>>
       userBoundTextures;
 
   std::unordered_map<uint32_t, VkDescriptorSet> descriptorSets;
@@ -191,7 +191,7 @@ struct ShaderModule : Object {
             StructuredBuffer *buffer) -> Error;
 
   auto Send(const GraphicsContext &context, const ResourceKey &key,
-            const Ref<Graphics::Texture::Texture> &texture) -> Error;
+            const Ref<Graphics::Texture> &texture) -> Error;
 
   auto GetUniform(const ResourceKey &key) const -> Result<const ResourceInfo>;
   auto GetSlotDescription(uint32_t set, uint32_t binding)
@@ -210,7 +210,7 @@ struct ShaderModule : Object {
 
   auto hash() const -> size_t;
 
-  static auto GetType() -> Type const * { return &type; }
+  static auto GetType() -> Type const * { return &LuaShaderType; }
 
   [[nodiscard]] auto GetInstanceType() const -> Type const * override {
     return ShaderModule::GetType();

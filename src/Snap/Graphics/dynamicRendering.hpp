@@ -128,12 +128,12 @@ extern std::unordered_map<DescriptorSetLayoutKey, VkDescriptorSetLayout,
 // NOLINTNEXTLINE
 extern thread_local bool DrawnToSwapchain;
 
-const static Type type = Type("RenderTarget");
+const static Type LuaRendertargetType = Type("RenderTarget");
 
 struct RenderTarget : Object {
   VkPipelineColorBlendAttachmentState blendMode = {};
   VkClearValue clearValue = {};
-  Ref<Texture::Texture> texture;
+  Ref<Texture> texture;
   int location = -1; // Default to index in the render target array
   int layer = 0;
   mutable bool dirty = true;
@@ -171,7 +171,7 @@ struct RenderTarget : Object {
     return GetHash() == other.GetHash();
   }
 
-  static auto GetType() -> Type const * { return &type; }
+  static auto GetType() -> Type const * { return &LuaRendertargetType; }
 
   [[nodiscard]] auto GetInstanceType() const -> Type const * override {
     return RenderTarget::GetType();
@@ -295,7 +295,7 @@ inline auto HashBlendmode(VkPipelineColorBlendAttachmentState const &blendMode)
   return hash;
 }
 
-inline auto HashTexture(const Texture::Texture *texture) -> size_t {
+inline auto HashTexture(const Texture *texture) -> size_t {
   size_t hash = 0;
 
   AddToHash(hash, std::hash<VkFormat>()(texture->format));
@@ -305,7 +305,7 @@ inline auto HashTexture(const Texture::Texture *texture) -> size_t {
   AddToHash(hash, std::hash<uint32_t>()(texture->mipmapcount));
   AddToHash(hash, std::hash<uint32_t>()(texture->arrayLayers));
   AddToHash(hash, std::hash<VkImageUsageFlags>()(texture->usage));
-  AddToHash(hash, std::hash<Texture::TextureType>()(texture->textureType));
+  AddToHash(hash, std::hash<TextureType>()(texture->textureType));
 
   return hash;
 }
@@ -438,7 +438,7 @@ struct ClearInfo {
 
 auto Clear(const GraphicsContext &context, const ClearInfo &clearInfo) -> Error;
 
-auto UsedInPass(const Texture::Texture &texture) -> bool;
+auto UsedInPass(const Texture &texture) -> bool;
 
 } // namespace DynamicRendering
 } // namespace Graphics

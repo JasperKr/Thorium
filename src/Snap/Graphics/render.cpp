@@ -78,8 +78,7 @@ static auto EndRecording(Graphics::GraphicsContext &context,
   return Error::Success();
 }
 
-void TransitionColorToPresent(VkCommandBuffer cmd,
-                              Ref<Texture::Texture> &texture) {
+void TransitionColorToPresent(VkCommandBuffer cmd, Ref<Texture> &texture) {
 
   VkImageMemoryBarrier2 barrier2 = {};
   barrier2.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
@@ -320,7 +319,7 @@ auto InitializeRendering(Graphics::GraphicsContext &context,
     context.swapchainInfo.textures[context.swapchainImageIndex]->currentLayout =
         VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     context.swapchainInfo.textures[context.swapchainImageIndex]->lastUsage =
-        Texture::TextureUsage::Unknown;
+        TextureUsage::Unknown;
     context.swapchainInfo.textures[context.swapchainImageIndex]
         ->lastPipelineStage = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT;
   }
@@ -357,6 +356,18 @@ PrepareCommands(GraphicsContext &context,
 
   auto unorderedSemaphoreValues = Graphics::GetPendingTimelineValues();
   std::vector<uint64_t> orderedSemaphoreValues = {};
+
+  for (const auto &command : commands) {
+    auto iter =
+        unorderedSemaphoreValues.find(command->threadData.commandBuffer);
+    if (iter != unorderedSemaphoreValues.end()) {
+      orderedSemaphoreValues.emplace_back(iter->second);
+    } else {
+      return Error::Createf(
+          "No pending timeline value found for command buffer of thread {}",
+          command->threadData.name);
+    }
+  }
 
   Graphics::SetPendingTimelineValues(orderedSemaphoreValues);
 

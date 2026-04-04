@@ -223,7 +223,7 @@ inline auto LoadDataSource(const fastgltf::Asset &asset,
 inline auto LoadTexture(Graphics::GraphicsContext &context,
                         const fastgltf::Asset &asset,
                         const fastgltf::TextureInfo &gltfTexture)
-    -> Result<Ref<Graphics::Texture::Texture>> {
+    -> Result<Ref<Graphics::Texture>> {
   const auto &texture = asset.textures[gltfTexture.textureIndex];
   const auto &sampler = texture.samplerIndex.has_value()
                             ? asset.samplers[texture.samplerIndex.value()]
@@ -245,9 +245,9 @@ inline auto LoadTexture(Graphics::GraphicsContext &context,
   auto &data = LoadedBuffers[dataIdx];
   auto span = data.GetData();
 
-  // return Ref<Graphics::Texture::Texture>::Make();
+  // return Ref<Graphics::Texture>::Make();
 
-  auto textureResult = Graphics::Texture::LoadFromMemory(
+  auto textureResult = Graphics::LoadFromMemory(
       context, span,
       VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
 

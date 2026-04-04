@@ -168,7 +168,7 @@ auto LoadImGuiCursorMap() -> Error {
   return Error::Success();
 }
 
-std::unordered_map<ImTextureID, Ref<Graphics::Texture::Texture>>
+std::unordered_map<ImTextureID, Ref<Graphics::Texture>>
     ImGuiTextures{}; // NOLINT
 
 auto ShutdownImGui() -> Error {

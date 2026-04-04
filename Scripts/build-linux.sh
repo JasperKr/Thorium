@@ -33,6 +33,8 @@ cmake -G Ninja -DCMAKE_CXX_COMPILER=clang++ -B build \
 
 cmake --build build
 
+./build/lua_stub_gen
+
 # Make sure to append amdgpu.ppfeaturemask=0xffffffff to GRUB_CMDLINE_LINUX_DEFAULT in /etc/default/grub (space-separated).
 # Otherwise profiling may not work correctly.
 # After modifying /etc/default/grub, run `sudo update-grub` or `sudo grub-mkconfig -o /boot/grub/grub.cfg` and reboot.
@@ -43,8 +45,6 @@ if [ "$2" == "profile" ]; then
   #rgp for radeon gpu profiler.
   SDL_VIDEODRIVER=x11 RADV_PERFTEST=rt MESA_VK_TRACE=rmv MESA_VK_TRACE_TRIGGER=/tmp/trigger ./build/snap src/Scripting/main.lua
 fi
-
-./build/lua_stub_gen
 
 # if second argument is "run", run the built executable
 if [ "$2" == "run" ]; then

@@ -62,10 +62,10 @@ auto wrap_Send(lua_State *state) -> int {
   // Base index of 1; + 1 for shader object; + keyCount for key parts
   auto valueOffset = 2 + keyCount;
 
-  if (LuaWrap::IsType<Graphics::Texture::Texture>(state, valueOffset)) {
+  if (LuaWrap::IsType<Graphics::Texture>(state, valueOffset)) {
     auto *texture =
-        LuaWrap::ObjectFromLua<Graphics::Texture::Texture>(state, valueOffset);
-    auto texRef = Ref<Graphics::Texture::Texture>(texture);
+        LuaWrap::ObjectFromLua<Graphics::Texture>(state, valueOffset);
+    auto texRef = Ref<Graphics::Texture>(texture);
     auto result =
         shader->Send(*Graphics::GetCurrentGraphicsContext(), key, texRef);
     if (Error::IsError(result)) {
