@@ -4,7 +4,7 @@
 #include "Modules/console.hpp"
 #include "Wrap/wrap.hpp"
 #include "lua.hpp"
-namespace Graphics {
+namespace Wrap::Graphics::Texture {
 auto wrap_SetFilter(lua_State *state) -> int;
 auto wrap_GetFilter(lua_State *state) -> int;
 auto wrap_SetAnisotropy(lua_State *state) -> int;
@@ -54,10 +54,10 @@ static const std::vector<luaL_Reg> TextureLib = {
 extern "C" inline auto luaopen_texture(lua_State *state) -> int {
   PrintDebug("Registering Texture Lua type.");
 
-  LuaWrap::RegisterLuaType(state, Texture::GetType(),
+  LuaWrap::RegisterLuaType(state, ::Graphics::Texture::GetType(),
                            TextureLib); // NOLINT
 
   return 1;
 }
 
-} // namespace Graphics
+} // namespace Wrap::Graphics::Texture

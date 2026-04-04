@@ -4,7 +4,7 @@
 #include "Modules/console.hpp"
 #include "Wrap/wrap.hpp"
 #include "lua.hpp"
-namespace Graphics {
+namespace Wrap::Graphics::Mesh {
 
 auto wrap_SetVertices(lua_State *state) -> int;
 auto wrap_SetIndices(lua_State *state) -> int;
@@ -37,10 +37,10 @@ static const std::vector<luaL_Reg> MeshLib = {
 extern "C" inline auto luaopen_mesh(lua_State *state) -> int {
   PrintDebug("Registering Mesh Lua type.");
 
-  LuaWrap::RegisterLuaType(state, Mesh::GetType(),
+  LuaWrap::RegisterLuaType(state, ::Graphics::Mesh::GetType(),
                            MeshLib); // NOLINT
 
   return 1;
 }
 
-} // namespace Graphics
+} // namespace Wrap::Graphics::Mesh

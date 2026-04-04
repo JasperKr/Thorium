@@ -18,11 +18,11 @@
 #include <cmath>
 #include <vulkan/vulkan_core.h>
 
-namespace Graphics {
+namespace Wrap::Graphics::Mesh {
 
 // Bytedata, [offset], [range]
 auto wrap_SetVertices(lua_State *state) -> int {
-  auto *mesh = LuaWrap::ObjectFromLua<Mesh>(state, 1);
+  auto *mesh = LuaWrap::ObjectFromLua<::Graphics::Mesh>(state, 1);
 
   if (mesh == nullptr) {
     return luaL_error(state, "Expected Mesh as first argument");
@@ -59,7 +59,7 @@ auto wrap_SetVertices(lua_State *state) -> int {
   std::span<uint8_t> vertexData = // NOLINTNEXTLINE, pointer arithmetic
       std::span<uint8_t>(data->GetData() + offset, static_cast<size_t>(count));
 
-  auto result = mesh->SetVertices(*Graphics::GetCurrentGraphicsContext(),
+  auto result = mesh->SetVertices(*::Graphics::GetCurrentGraphicsContext(),
                                   vertexData, static_cast<uint64_t>(offset));
 
   if (Error::IsError(result)) {
@@ -71,7 +71,7 @@ auto wrap_SetVertices(lua_State *state) -> int {
 
 // data: bytedata, offset: int, precision: [uint32_t] | uint16_t
 auto wrap_SetIndices(lua_State *state) -> int {
-  auto *mesh = LuaWrap::ObjectFromLua<Mesh>(state, 1);
+  auto *mesh = LuaWrap::ObjectFromLua<::Graphics::Mesh>(state, 1);
 
   if (mesh == nullptr) {
     return luaL_error(state, "Expected Mesh as first argument");
@@ -99,7 +99,7 @@ auto wrap_SetIndices(lua_State *state) -> int {
     }
   }
 
-  auto count = data->GetSize() / GetIndexFormatSize(format);
+  auto count = data->GetSize() / ::Graphics::GetIndexFormatSize(format);
   if (lua_gettop(state) >= 3) {
     count = static_cast<int64_t>(luaL_checkinteger(state, 3));
 
@@ -108,16 +108,16 @@ auto wrap_SetIndices(lua_State *state) -> int {
     }
   }
 
-  if (count > data->GetSize() / GetIndexFormatSize(format)) {
+  if (count > data->GetSize() / ::Graphics::GetIndexFormatSize(format)) {
     return luaL_error(state, "Index data range out of bounds.");
   }
 
   std::span<uint8_t> indexData = std::span<
       uint8_t>( // NOLINTNEXTLINE, pointer arithmetic and reinterpret cast
       reinterpret_cast<uint8_t *>(data->GetData()),
-      static_cast<size_t>(count * GetIndexFormatSize(format)));
+      static_cast<size_t>(count * ::Graphics::GetIndexFormatSize(format)));
 
-  auto result = mesh->SetIndices(*Graphics::GetCurrentGraphicsContext(),
+  auto result = mesh->SetIndices(*::Graphics::GetCurrentGraphicsContext(),
                                  indexData, format);
 
   if (Error::IsError(result)) {
@@ -128,26 +128,26 @@ auto wrap_SetIndices(lua_State *state) -> int {
 }
 
 auto wrap_SetVertexBuffer(lua_State *state) -> int {
-  auto *mesh = LuaWrap::ObjectFromLua<Mesh>(state, 1);
+  auto *mesh = LuaWrap::ObjectFromLua<::Graphics::Mesh>(state, 1);
 
   if (mesh == nullptr) {
     return luaL_error(state, "Expected Mesh as first argument");
   }
 
-  auto *buffer = LuaWrap::ObjectFromLua<Buffer>(state, 2);
+  auto *buffer = LuaWrap::ObjectFromLua<::Graphics::Buffer>(state, 2);
 
-  mesh->SetVertexBuffer(Ref<Buffer>(buffer));
+  mesh->SetVertexBuffer(Ref<::Graphics::Buffer>(buffer));
 
   return 0;
 }
 auto wrap_SetIndexBuffer(lua_State *state) -> int {
-  auto *mesh = LuaWrap::ObjectFromLua<Mesh>(state, 1);
+  auto *mesh = LuaWrap::ObjectFromLua<::Graphics::Mesh>(state, 1);
 
   if (mesh == nullptr) {
     return luaL_error(state, "Expected Mesh as first argument");
   }
 
-  auto *buffer = LuaWrap::ObjectFromLua<Buffer>(state, 2);
+  auto *buffer = LuaWrap::ObjectFromLua<::Graphics::Buffer>(state, 2);
 
   auto format = VK_INDEX_TYPE_UINT32;
 
@@ -165,7 +165,7 @@ auto wrap_SetIndexBuffer(lua_State *state) -> int {
     }
   }
 
-  auto result = mesh->SetIndexBuffer(Ref<Buffer>(buffer), format);
+  auto result = mesh->SetIndexBuffer(Ref<::Graphics::Buffer>(buffer), format);
 
   if (Error::IsError(result)) {
     return luaL_error(state, "Error Setting index buffer: %s",
@@ -176,7 +176,7 @@ auto wrap_SetIndexBuffer(lua_State *state) -> int {
 }
 
 auto wrap_SetDrawRange(lua_State *state) -> int {
-  auto *mesh = LuaWrap::ObjectFromLua<Mesh>(state, 1);
+  auto *mesh = LuaWrap::ObjectFromLua<::Graphics::Mesh>(state, 1);
 
   if (mesh == nullptr) {
     return luaL_error(state, "Expected Mesh as first argument");
@@ -185,12 +185,13 @@ auto wrap_SetDrawRange(lua_State *state) -> int {
   auto offset = static_cast<uint32_t>(luaL_checkinteger(state, 2));
   auto count = static_cast<uint32_t>(luaL_checkinteger(state, 3));
 
-  mesh->SetDrawRange(MeshDrawRange{.Offset = offset, .Count = count});
+  mesh->SetDrawRange(
+      ::Graphics::MeshDrawRange{.Offset = offset, .Count = count});
 
   return 0;
 }
 auto wrap_GetDrawRange(lua_State *state) -> int {
-  auto *mesh = LuaWrap::ObjectFromLua<Mesh>(state, 1);
+  auto *mesh = LuaWrap::ObjectFromLua<::Graphics::Mesh>(state, 1);
 
   if (mesh == nullptr) {
     return luaL_error(state, "Expected Mesh as first argument");
@@ -212,10 +213,10 @@ auto wrap_GetDrawRange(lua_State *state) -> int {
 }
 */
 inline auto VertexFormatFromLua(lua_State *state, int index,
-                                VertexFormat &format) -> int {
+                                ::Graphics::VertexFormat &format) -> int {
   luaL_checktype(state, index, LUA_TTABLE);
 
-  std::vector<VertexComponent> attributes;
+  std::vector<::Graphics::VertexComponent> attributes;
 
   // Copy table to top of stack
   lua_pushvalue(state, index);
@@ -240,7 +241,7 @@ inline auto VertexFormatFromLua(lua_State *state, int index,
       return luaL_error(state, "Vertex attribute missing format field.");
     }
     const char *formatStr = luaL_checkstring(state, -1);
-    auto dataFormat = Format::FromString(formatStr);
+    auto dataFormat = ::Graphics::Format::FromString(formatStr);
     lua_pop(state, 1); // pop format
 
     // Location
@@ -251,7 +252,7 @@ inline auto VertexFormatFromLua(lua_State *state, int index,
     int location = static_cast<int>(luaL_checkinteger(state, -1));
     lua_pop(state, 1); // pop location
 
-    attributes.emplace_back(VertexComponent{
+    attributes.emplace_back(::Graphics::VertexComponent{
         .name = std::string(name),
         .location = static_cast<uint32_t>(location),
         .binding = 0,
@@ -263,7 +264,7 @@ inline auto VertexFormatFromLua(lua_State *state, int index,
   }
   lua_pop(state, 1); // pop key and table copy
 
-  format = VertexFormat(attributes);
+  format = ::Graphics::VertexFormat(attributes);
 
   return 0;
 }
@@ -447,7 +448,8 @@ const std::unordered_map<VkFormat, ReadInfo> formatReadInfo = {
     // Could be very useful for color packing or other specialized uses
 };
 
-auto inline ReadVertex(lua_State *state, int index, VertexFormat &format,
+auto inline ReadVertex(lua_State *state, int index,
+                       ::Graphics::VertexFormat &format,
                        std::span<uint8_t> destination, size_t &writeOffset)
     -> int {
 
@@ -510,13 +512,13 @@ inline auto PrimitiveTopologyFromLua(lua_State *state, int index)
 // vertexFormat, table(vertices), [topology]
 // NOLINTNEXTLINE
 auto wrap_NewMesh(lua_State *state) -> int {
-  auto *ctx = Graphics::GetCurrentGraphicsContext();
+  auto *ctx = ::Graphics::GetCurrentGraphicsContext();
 
   if (ctx == nullptr) {
     return luaL_error(state, "No current GraphicsContext.");
   }
 
-  VertexFormat vertexFormat;
+  ::Graphics::VertexFormat vertexFormat;
   auto result = VertexFormatFromLua(state, 1, vertexFormat);
   if (result != 0) {
     return result;
@@ -568,7 +570,7 @@ auto wrap_NewMesh(lua_State *state) -> int {
   PrintDebug("Creating mesh with {} bytes of vertex data.\n",
              vertexData.size());
 
-  auto meshResult = Mesh::Create(*ctx, vertexFormat, vertexData);
+  auto meshResult = ::Graphics::Mesh::Create(*ctx, vertexFormat, vertexData);
 
   if (Error::IsError(meshResult)) {
     return luaL_error(state, "%s", meshResult.error().message.c_str());
@@ -581,13 +583,13 @@ auto wrap_NewMesh(lua_State *state) -> int {
     return luaL_error(state, "%s", setTopologyResult.ToString().c_str());
   }
 
-  LuaWrap::PushObject(state, Graphics::Mesh::GetType(), mesh.get());
+  LuaWrap::PushObject(state, ::Graphics::Mesh::GetType(), mesh.get());
 
   return 1;
 }
 
 auto wrap_GetVertexCount(lua_State *state) -> int {
-  auto *mesh = LuaWrap::ObjectFromLua<Mesh>(state, 1);
+  auto *mesh = LuaWrap::ObjectFromLua<::Graphics::Mesh>(state, 1);
 
   if (mesh == nullptr) {
     return luaL_error(state, "Expected Mesh as first argument");
@@ -598,7 +600,7 @@ auto wrap_GetVertexCount(lua_State *state) -> int {
 }
 
 auto wrap_GetIndexCount(lua_State *state) -> int {
-  auto *mesh = LuaWrap::ObjectFromLua<Mesh>(state, 1);
+  auto *mesh = LuaWrap::ObjectFromLua<::Graphics::Mesh>(state, 1);
 
   if (mesh == nullptr) {
     return luaL_error(state, "Expected Mesh as first argument");
@@ -607,4 +609,4 @@ auto wrap_GetIndexCount(lua_State *state) -> int {
   lua_pushinteger(state, static_cast<lua_Integer>(mesh->GetIndexCount()));
   return 1;
 }
-} // namespace Graphics
+} // namespace Wrap::Graphics::Mesh

@@ -13,10 +13,29 @@ template <typename T>
 inline auto EnumFromLua(lua_State *state, int index,
                         std::unordered_map<std::string, T> enumMap)
     -> Result<T> {
+
+  if (!lua_isstring(state, index)) {
+    return Error::Unexpected("Expected string for enum value.");
+  }
+
   const char *str = luaL_checkstring(state, index);
   auto iter = enumMap.find(str);
   if (iter == enumMap.end()) {
-    return Error::Unexpected("Invalid enum value: " + std::string(str));
+    std::vector<std::string> validKeys;
+    for (const auto &[key, _] : enumMap) {
+      validKeys.push_back(key);
+    }
+
+    std::string validKeysStr;
+    for (size_t i = 0; i < validKeys.size(); ++i) {
+      validKeysStr += validKeys[i];
+      if (i < validKeys.size() - 1) {
+        validKeysStr += ", ";
+      }
+    }
+
+    return Error::Unexpectedf("Invalid enum value: '{}'\nExpected one of: {}",
+                              str, validKeysStr);
   }
   return iter->second;
 }

@@ -86,9 +86,9 @@ static const std::vector<luaL_Reg> GraphicsLib = {
     {"getRenderTargets", wrap_GetRenderTargets},
     {"getLineWidth", wrap_GetLineWidth},
     {"getWindingOrder", wrap_GetWindingOrder},
-    {"newTexture", ::Graphics::wrap_NewTexture},
-    {"newMesh", ::Graphics::wrap_NewMesh},
-    {"newShader", ::Graphics::Shader::wrap_NewShader},
+    {"newTexture", Texture::wrap_NewTexture},
+    {"newMesh", Mesh::wrap_NewMesh},
+    {"newShader", Shader::wrap_NewShader},
     {"newBuffer", Buffer::wrap_NewBuffer},
     {"draw", wrap_Draw},
     {"dispatch", wrap_Dispatch},
@@ -102,9 +102,9 @@ static const std::vector<luaL_Reg> GraphicsLib = {
 };
 
 const static std::vector<lua_CFunction> childrenInitFunctions = {
-    ::Graphics::luaopen_texture,
-    ::Graphics::luaopen_mesh,
-    ::Graphics::Shader::luaopen_shader,
+    Texture::luaopen_texture,
+    Mesh::luaopen_mesh,
+    Shader::luaopen_shader,
     Buffer::luaopen_buffer,
 };
 
