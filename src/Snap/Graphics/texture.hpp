@@ -71,7 +71,7 @@ struct ToBufferCopyRegion {
   uint32_t layerCount = 1;
   uint32_t srcBaseMipLevel = 0;
   uint32_t mipLevelCount = 1;
-  int32_t dstOffset = 0;
+  VkDeviceSize dstOffset = 0;
 };
 
 struct Texture : Object, Barrier::BarrierSynced {

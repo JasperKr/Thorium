@@ -147,8 +147,8 @@ auto wrap_Random(lua_State *state) -> int {
 
   if (lua_gettop(state) == 2) {
 
-    auto min = static_cast<int>(luaL_checkinteger(state, 1));
-    auto max = static_cast<int>(luaL_checkinteger(state, 2));
+    auto min = luaL_checkinteger(state, 1);
+    auto max = luaL_checkinteger(state, 2);
 
     auto result = ::Math::Random(min, max);
     lua_pushinteger(state, result);

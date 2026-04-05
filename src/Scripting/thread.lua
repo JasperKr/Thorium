@@ -3,6 +3,8 @@ require("Modules.vec")
 require("Modules.quaternions")
 require("Modules.matrices")
 require("Modules.math")
+require("Modules.helpers")
+require("Graphics.camera")
 local ffi = require("ffi")
 
 local lastDrawTime = 0
@@ -12,6 +14,9 @@ local lastShownImDrawTime = 0
 local count = 0
 
 local commandBufferChannel, canStartChannel, scene = ...
+
+local camera = snap.graphics.newCamera("main camera", vec3(0, 0, 0), vec3(0, 0, 0),
+  vec2(snap.graphics.getDimensions()), math.rad(60), 0.1, 1000)
 
 local t = snap.timer.getTime()
 local testImgdata = snap.data.newImagedata(16, 16, "rgba8")
@@ -38,9 +43,6 @@ local vertices = {
 local mesh
 
 local shader = snap.graphics.newShader("Scripting/Graphics/Shaders/forward.slang")
-local computeshader = snap.graphics.newShader("Scripting/Graphics/Shaders/test2.slang")
-local value = 0.15
-local cameraBuffer
 
 local texture
 local testnumber = ffi.new("float[1]")
@@ -72,7 +74,9 @@ local function draw()
   lastImDrawTime = lastImDrawTime + snap.timer.getTime() - imStartTime
 
   snap.graphics.setShader(shader)
-  shader:send("CameraData", cameraBuffer)
+  camera:Update()
+  camera:UpdateState()
+  shader:send("CameraData", camera.buffer)
   scene:drawModels()
   snap.graphics.setShader()
 
@@ -96,21 +100,7 @@ while true do
 
   snap.graphics.aquireGraphics()
   if not texture then
-    print("New texture")
     texture = snap.graphics.newTexture(testImgdata, { storage = true, sampler = true })
-
-    local format = {
-      {
-        name = "test",
-        format = {
-          { name = "position", format = "floatvec2" },
-          { name = "uv",       format = "float" },
-          { name = "color",    format = "float",    arraysize = 4 },
-        }
-      },
-      { name = "test2", format = "uint32" }
-    }
-
     mesh = snap.graphics.newMesh(vertexformat, vertices, "triangles")
 
     local indicesData = snap.data.newBytedata(#indices * 4)
@@ -118,93 +108,7 @@ while true do
       indicesData:setUInt32((j - 1) * 4, indices[j] - 1)
     end
     mesh:setIndices(indicesData)
-
-    local cameraElementFormat = {
-      { name = "ViewMatrix",                      format = "floatmat4" },
-      { name = "InverseViewMatrix",               format = "floatmat4" },
-      { name = "ProjectionMatrix",                format = "floatmat4" },
-      { name = "InverseProjectionMatrix",         format = "floatmat4" },
-      { name = "ViewProjectionMatrix",            format = "floatmat4" },
-      { name = "InverseViewProjectionMatrix",     format = "floatmat4" },
-      { name = "RotationProjectionMatrix",        format = "floatmat4" },
-      { name = "InverseRotationProjectionMatrix", format = "floatmat4" },
-      { name = "Position",                        format = "floatvec3" },
-      { name = "Near",                            format = "float" },
-      { name = "Far",                             format = "float" },
-      { name = "NearMulFar",                      format = "float" },
-      { name = "FarMinusNear",                    format = "float" },
-      { name = "HistoryInvalidated",              format = "uint32" },
-      { name = "Jitter",                          format = "floatvec2" },
-      { name = "ProjectionType",                  format = "uint32" },
-      { name = "ShadowCascadeCount",              format = "uint32" },
-    }
-
-    local format = {
-      {
-        name = "camera",
-        format = cameraElementFormat
-      },
-      {
-        name = "previousCamera",
-        format = cameraElementFormat
-      }
-    }
-
-    local viewMatrix = mat4()
-    local inverseViewMatrix = mat4()
-    local projectionMatrix = mat4()
-    local inverseProjectionMatrix = mat4()
-    local viewProjectionMatrix = mat4()
-    local inverseViewProjectionMatrix = mat4()
-    local rotationProjectionMatrix = mat4()
-    local inverseRotationProjectionMatrix = mat4()
-
-    local matrices = {
-      viewMatrix, inverseViewMatrix,
-      projectionMatrix, inverseProjectionMatrix, viewProjectionMatrix, inverseViewProjectionMatrix,
-      rotationProjectionMatrix, inverseRotationProjectionMatrix
-    }
-
-    local dataArray = {}
-    for _, matrix in ipairs(matrices) do
-      local data = matrix:table()
-      for j = 1, #data do
-        table.insert(dataArray, #dataArray)
-      end
-    end
-    table.insert(dataArray, 0) -- Position
-    table.insert(dataArray, 0)
-    table.insert(dataArray, 0)
-    table.insert(dataArray, 1.5)        -- Jitter x
-    table.insert(dataArray, 2.5)        -- Jitter y
-    table.insert(dataArray, 0.1)        -- Near
-    table.insert(dataArray, 1000)       -- Far
-    table.insert(dataArray, 0.1 * 1000) -- NearMulFar
-    table.insert(dataArray, 1000 - 0.1) -- FarMinusNear
-    table.insert(dataArray, 0)          -- HistoryInvalidated
-    table.insert(dataArray, 0)          -- ProjectionType
-    table.insert(dataArray, 0)          -- ShadowCascadeCount
-
-    local copiedDataArray = {}
-    for j = 1, 2 do
-      for _, value in ipairs(dataArray) do
-        table.insert(copiedDataArray, value)
-      end
-    end
-
-    cameraBuffer = snap.graphics.newBuffer(format, 1, { uniform = true })
-    cameraBuffer:setData(copiedDataArray)
   end
-
-  ---@type snap.DetailedBlendMode
-  local blendmode = {
-    srccolor = "one",
-    dstcolor = "oneminussrcalpha",
-    colorop = "add",
-    srcalpha = "one",
-    dstalpha = "zero",
-    alphaop = "add",
-  }
 
   snap.graphics.setRenderTarget({ loadas = "clear", blendmode = { blendmode = "alpha", alphamode = "premultiplied" } })
 

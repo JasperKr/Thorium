@@ -216,6 +216,21 @@ auto Random(int Min, int Max) -> int {
   std::uniform_int_distribution<int> dist(Min, Max);
   return dist(rng);
 }
+
+auto Random(Scalar Min, Scalar Max) -> Scalar {
+  Min = std::min(Min, Max);
+
+  std::uniform_real_distribution<Scalar> dist(Min, Max);
+  return dist(rng);
+}
+
+auto Random(long Min, long Max) -> long {
+  Min = std::min(Min, Max);
+
+  std::uniform_int_distribution<long> dist(Min, Max);
+  return dist(rng);
+}
+
 auto Random(int Max) -> int { return Random(0, Max); }
 auto Random() -> Scalar {
   std::uniform_real_distribution<Scalar> dist(0.0F, 1.0F);

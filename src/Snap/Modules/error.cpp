@@ -252,7 +252,7 @@ auto Error::SetupTraceback() -> void {
 auto Error::Create(const std::string &message, int32_t code, uint32_t level)
     -> Error {
   Error err = Error{
-      .message = message, .code = code, .backtrace = GetStackTrace(level)};
+      .message = message, .backtrace = GetStackTrace(level), .code = code};
 #if defined(LOG_ERRORS)
   if (code < 0) {
     PrintError("{}", err.ToString());
@@ -266,7 +266,7 @@ auto Error::Create(const char *message, int32_t code) -> Error {
 }
 
 auto Error::Success() -> Error {
-  return {.message = "", .code = 0, .backtrace = ""};
+  return {.message = "", .backtrace = "", .code = 0};
 }
 
 auto Error::IsError(const Error &error) -> bool { return error.code < 0; }

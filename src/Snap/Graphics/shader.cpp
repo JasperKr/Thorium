@@ -587,11 +587,18 @@ auto ShaderModule::GetUniform(const ResourceKey &key) const
 
   const auto *info =
       reflection.globals.ResolvePath(globalsKey.begin(), globalsKey.end());
-  if (info == nullptr) {
-    return Error::Unexpected("Uniform not found.");
+  if (info != nullptr) {
+    return *info;
   }
 
-  return *info;
+  for (const auto &resource : reflection.resources) {
+    if (resource.name == *key.begin()) {
+      return resource;
+    }
+  }
+
+  const auto &str = ResourceKeyToString(key);
+  return Error::Unexpectedf("Uniform `{} not found.", str);
 }
 
 auto ShaderModule::Send(const GraphicsContext &context, const ResourceKey &key,

@@ -80,7 +80,7 @@ local function printAnyCompactInternal(any, tabs)
       local result = "{\n"
       for key, value in pairs(any) do
         result = result ..
-        string.rep("  ", tabs + 1) .. tostring(key) .. ": " .. printAnyCompactInternal(value, tabs + 1) .. ",\n"
+            string.rep("  ", tabs + 1) .. tostring(key) .. ": " .. printAnyCompactInternal(value, tabs + 1) .. ",\n"
       end
       return result .. string.rep("  ", tabs) .. "}"
     end
@@ -101,4 +101,18 @@ function snap.helpers.printCompact(...)
     local any = select(i, ...)
     print(printAnyCompactInternal(any, 0))
   end
+end
+
+---@diagnostic disable-next-line: lowercase-global
+function ripairs(t)
+  local function ripairs_it(t2, i)
+    i = i - 1
+    local v = t2[i]
+    if v ~= nil then
+      return i, v
+    else
+      return nil
+    end
+  end
+  return ripairs_it, t, #t + 1
 end

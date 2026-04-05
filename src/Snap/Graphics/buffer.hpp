@@ -2,9 +2,11 @@
 
 #include "Graphics/barrier.hpp"
 #include "Graphics/graphics.hpp"
+#include "Modules/bytedata.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "graphics.hpp"
+#include <condition_variable>
 #include <cstdint>
 #include <mutex>
 #include <span>
@@ -27,6 +29,22 @@ struct BufferCreationInfo {
 
   // Debug name for the buffer
   std::string debugName;
+};
+
+const static Type LuaBufferReadbackType = Type("BufferReadback");
+
+struct BufferReadback : Object {
+  static auto GetType() -> Type const * { return &LuaBufferReadbackType; }
+  auto GetInstanceType() const -> Type const * override {
+    return BufferReadback::GetType();
+  }
+
+  Ref<Data::ByteData> data;
+  bool completed = false;
+  Error error = Error::Success();
+
+  std::mutex mutex;
+  std::condition_variable conditionVar;
 };
 
 auto FlushBufferUploads(const GraphicsContext &context) -> Error;
@@ -120,6 +138,11 @@ struct Buffer : Object, Barrier::BarrierSynced {
   auto UploadRing(const GraphicsContext &context,
                   std::span<const uint8_t> data, // NOLINTNEXTLINE
                   VkDeviceSize offset, VkDeviceSize size) const -> Error;
+
+  auto Readback(const GraphicsContext &context, VkDeviceSize offset = 0,
+                VkDeviceSize size = VK_WHOLE_SIZE,
+                const Ref<Data::ByteData> &output = Ref<Data::ByteData>())
+      -> Result<Ref<BufferReadback>>;
 
   std::string debugName;
 };

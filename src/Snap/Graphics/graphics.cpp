@@ -351,9 +351,9 @@ auto GetCommandBuffer() -> VkCommandBuffer {
 }
 
 // May be null
-auto GetCommandBufferPtr() -> VkCommandBuffer * {
+auto GetCommandBufferPtr() -> VkCommandBuffer {
   auto &threadContext = GetThreadContext();
-  return &threadContext.commandBuffer;
+  return threadContext.commandBuffer;
 }
 
 static auto CreateSemaphores(GraphicsContext &context) -> Error {

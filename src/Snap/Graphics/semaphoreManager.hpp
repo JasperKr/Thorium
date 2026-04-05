@@ -3,7 +3,9 @@
 #include "Graphics/graphicsContext.hpp"
 #include "Modules/error.hpp"
 #include <atomic>
+#include <condition_variable>
 #include <cstdint>
+#include <mutex>
 #include <shared_mutex>
 #include <unordered_map>
 #include <unordered_set>
@@ -17,6 +19,8 @@ namespace Graphics {
 
 extern VkSemaphore globalTimelineSemaphore;
 extern std::atomic<uint64_t> currentCPUTimelineValue;
+extern std::condition_variable timelineCompletionCV;
+extern std::mutex timelineCompletionMutex;
 
 extern std::shared_mutex timelineSetsMutex;
 

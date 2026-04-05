@@ -1,8 +1,11 @@
 #include "buffer.hpp"
 #include "Graphics/barrier.hpp"
+#include "Graphics/dynamicRendering.hpp"
 #include "Graphics/graphics.hpp"
 #include "Graphics/graphicsState.hpp"
 #include "Graphics/resource.hpp"
+#include "Graphics/semaphoreManager.hpp"
+#include "Modules/bytedata.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
@@ -12,6 +15,8 @@
 #include <cassert>
 #include <cstdint>
 #include <mutex>
+#include <span>
+#include <thread>
 #include <vector>
 
 #include "array"
@@ -226,6 +231,8 @@ auto Buffer::UploadLarge(const GraphicsContext &context,
     return Error::Create("Failed to get command buffer for buffer upload.");
   }
 
+  DynamicRendering::EndRendering(context);
+
   VkBufferCopy copyRegion = {};
   copyRegion.srcOffset = 0;
   copyRegion.dstOffset = offset;
@@ -308,6 +315,8 @@ auto Buffer::UploadRing(const GraphicsContext &context,
   copyRegion.srcOffset = uploadOffset;
   copyRegion.dstOffset = offset;
   copyRegion.size = uploadSize;
+
+  DynamicRendering::EndRendering(context);
 
   vkCmdCopyBuffer(commandBuffer, uploadBuffer->handle, handle, 1, &copyRegion);
   uploadOffset += uploadSize;
@@ -525,6 +534,8 @@ auto Buffer::CopyTo(const GraphicsContext &context,
     }
   }
 
+  DynamicRendering::EndRendering(context);
+
   VkBufferCopy copyRegion = {};
   copyRegion.srcOffset = srcIndex;
   copyRegion.dstOffset = dstIndex;
@@ -533,6 +544,38 @@ auto Buffer::CopyTo(const GraphicsContext &context,
 
   MarkUse();
   dstBuffer.MarkUse();
+
+  return Error::Success();
+}
+
+auto Buffer::CopyTo(const GraphicsContext &context, Texture &dstTexture,
+                    VkBufferImageCopy region) -> Error {
+  if (((dstTexture.usage) & VK_IMAGE_USAGE_TRANSFER_DST_BIT) == 0) {
+    return Error::Create("Destination texture was not created with "
+                         "TRANSFER_DST usage flag for copy.");
+  }
+
+  auto *commandBuffer = GetCommandBufferPtr();
+  if (commandBuffer == nullptr) {
+    return Error::Create(
+        "Failed to get command buffer for buffer to image copy.");
+  }
+
+  if ((usage & VK_BUFFER_USAGE_TRANSFER_SRC_BIT) == 0) {
+    return Error::Create(
+        "Source buffer was not created with TRANSFER_SRC usage flag for copy.");
+  }
+
+  auto error = dstTexture.UseAsTransferDst(context);
+  if (Error::IsError(error)) {
+    return error;
+  }
+
+  vkCmdCopyBufferToImage(commandBuffer, handle, dstTexture.image,
+                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+
+  MarkUse();
+  dstTexture.MarkUse();
 
   return Error::Success();
 }
@@ -552,7 +595,7 @@ auto Buffer::MarkUse() -> void {
 // NOLINTNEXTLINE
 auto Buffer::Clear(const GraphicsContext &context, uint32_t value,
                    VkDeviceSize offset, VkDeviceSize size) -> Error {
-  auto **commandBuffer = GetCommandBufferPtr();
+  auto *commandBuffer = GetCommandBufferPtr();
 
   if (commandBuffer == nullptr) {
     return Error::Create("Failed to get command buffer for buffer clear.");
@@ -563,9 +606,135 @@ auto Buffer::Clear(const GraphicsContext &context, uint32_t value,
                        {.stages = VK_PIPELINE_STAGE_TRANSFER_BIT,
                         .access = VK_ACCESS_TRANSFER_WRITE_BIT});
 
-  vkCmdFillBuffer(*commandBuffer, handle, offset, size, value);
+  vkCmdFillBuffer(commandBuffer, handle, offset, size, value);
 
   return Error::Success();
+}
+
+auto Buffer::Readback(const GraphicsContext &context,
+                      VkDeviceSize offset, // NOLINT
+                      VkDeviceSize size, const Ref<Data::ByteData> &output)
+    -> Result<Ref<BufferReadback>> {
+  if (((usage)&VK_BUFFER_USAGE_TRANSFER_SRC_BIT) == 0) {
+    return Error::Unexpected(
+        "Buffer was not created with TRANSFER_SRC usage flag for readback.");
+  }
+
+  const auto uploadSize = size == VK_WHOLE_SIZE ? this->size : size;
+
+  if (uploadSize + offset > this->size) {
+    return Error::Unexpected(
+        "Error reading back data, cannot read more data than is allocated.");
+  }
+
+  if (output.isValid() && uploadSize > output->GetSize()) {
+    return Error::Unexpected("Error reading back data, output buffer is too "
+                             "small for requested readback size.");
+  }
+
+  // Use staging buffer
+  VkBufferCreateInfo stagingBufferInfo = {};
+  stagingBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+  stagingBufferInfo.size = uploadSize;
+  stagingBufferInfo.usage =
+      VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+  stagingBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+  // See: https://gpuopen-librariesandsdks.github.io/VulkanMemoryAllocator/html/usage_patterns.html
+  VmaAllocationCreateInfo stagingAllocInfo = {};
+  stagingAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+  stagingAllocInfo.flags =
+      static_cast<uint32_t>(
+          VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT) |
+      static_cast<uint32_t>(VMA_ALLOCATION_CREATE_MAPPED_BIT);
+  VkBuffer stagingBuffer = nullptr;
+  VmaAllocation stagingMemory = nullptr;
+
+  {
+    std::lock_guard<std::mutex> lock(
+        Graphics::GraphicsContext::mutexes.vmaAllocator);
+
+    VkResult result = vmaCreateBuffer(context.vmaAllocator, &stagingBufferInfo,
+                                      &stagingAllocInfo, &stagingBuffer,
+                                      &stagingMemory, nullptr);
+    if (result != VK_SUCCESS) {
+      return Error::Unexpected(result);
+    }
+  }
+
+  auto *commandBuffer = GetCommandBuffer();
+
+  if (commandBuffer == nullptr) {
+    return Error::Unexpected(
+        "Failed to get command buffer for buffer readback.");
+  }
+
+  DynamicRendering::EndRendering(context);
+
+  VkBufferCopy copyRegion = {};
+  copyRegion.srcOffset = offset;
+  copyRegion.dstOffset = 0;
+  copyRegion.size = uploadSize;
+  vkCmdCopyBuffer(commandBuffer, handle, stagingBuffer, 1, &copyRegion);
+
+  MarkUse();
+  auto timelineValue = GetSemaphoreValue();
+
+  auto bufferReadback = Ref<BufferReadback>::Make();
+  if (output.isValid()) {
+    bufferReadback->data = output;
+  } else {
+    bufferReadback->data = Ref<Data::ByteData>::Make(uploadSize);
+  }
+
+  auto readbackThread = std::thread([context, stagingBuffer, stagingMemory,
+                                     timelineValue, uploadSize,
+                                     bufferReadback]() -> void {
+    void *mapped = nullptr;
+    {
+      std::lock_guard<std::mutex> lock(
+          Graphics::GraphicsContext::mutexes.vmaAllocator);
+
+      VkResult result =
+          vmaMapMemory(context.vmaAllocator, stagingMemory, &mapped);
+      if (result != VK_SUCCESS) {
+        vmaDestroyBuffer(context.vmaAllocator, stagingBuffer, stagingMemory);
+        bufferReadback->error = Error::Create(result);
+
+        {
+          std::lock_guard lock(bufferReadback->mutex);
+          bufferReadback->completed = true;
+          bufferReadback->conditionVar.notify_all();
+        }
+
+        return;
+      }
+    }
+
+    {
+      std::unique_lock<std::mutex> lock(timelineCompletionMutex);
+      timelineCompletionCV.wait(
+          lock, [&]() -> bool { return !IsInUse(timelineValue); });
+    }
+
+    std::memcpy(bufferReadback->data->GetData(), mapped, uploadSize);
+
+    {
+      std::lock_guard<std::mutex> lock(
+          Graphics::GraphicsContext::mutexes.vmaAllocator);
+      vmaUnmapMemory(context.vmaAllocator, stagingMemory);
+      vmaDestroyBuffer(context.vmaAllocator, stagingBuffer, stagingMemory);
+    }
+
+    bufferReadback->completed = true;
+    {
+      std::lock_guard lock(bufferReadback->mutex);
+      bufferReadback->conditionVar.notify_all();
+    }
+  });
+
+  readbackThread.detach();
+
+  return bufferReadback;
 }
 
 Buffer::~Buffer() {

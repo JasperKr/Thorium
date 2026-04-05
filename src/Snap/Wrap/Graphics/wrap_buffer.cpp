@@ -7,6 +7,7 @@
 #include "Wrap/wrap.hpp"
 #include "Wrap/wrap_utils.hpp"
 #include <cstdint>
+#include <mutex>
 #include <public/tracy/Tracy.hpp>
 #include <variant>
 
@@ -331,6 +332,106 @@ auto wrap_BufferHasPadding(lua_State *state) -> int {
   return 1;
 }
 
+auto wrap_Readback_GetData(lua_State *state) -> int {
+  auto *readback = LuaWrap::ObjectFromLua<::Graphics::BufferReadback>(state, 1);
+
+  if (readback == nullptr) {
+    return luaL_error(state, "Expected BufferReadback as first argument");
+  }
+
+  std::lock_guard<std::mutex> lock(readback->mutex);
+
+  if (!readback->completed) {
+    return 0; // Not ready yet, return nil
+  }
+
+  LuaWrap::PushObject(state, Data::ByteData::GetType(), readback->data.get());
+
+  return 1;
+}
+
+auto wrap_Readback_IsReady(lua_State *state) -> int {
+  auto *readback = LuaWrap::ObjectFromLua<::Graphics::BufferReadback>(state, 1);
+
+  if (readback == nullptr) {
+    return luaL_error(state, "Expected BufferReadback as first argument");
+  }
+
+  std::lock_guard<std::mutex> lock(readback->mutex);
+
+  lua_pushboolean(state, static_cast<int>(readback->completed));
+  return 1;
+}
+
+auto wrap_Readback_GetError(lua_State *state) -> int {
+  auto *readback = LuaWrap::ObjectFromLua<::Graphics::BufferReadback>(state, 1);
+
+  if (readback == nullptr) {
+    return luaL_error(state, "Expected BufferReadback as first argument");
+  }
+
+  std::lock_guard<std::mutex> lock(readback->mutex);
+
+  if (Error::IsError(readback->error)) {
+    lua_pushstring(state, readback->error.message.c_str());
+    return 1;
+  }
+
+  return 0; // No error, return nil
+}
+
+auto wrap_Readback_Wait(lua_State *state) -> int {
+  auto *readback = LuaWrap::ObjectFromLua<::Graphics::BufferReadback>(state, 1);
+
+  if (readback == nullptr) {
+    return luaL_error(state, "Expected BufferReadback as first argument");
+  }
+
+  {
+    std::lock_guard<std::mutex> lock(readback->mutex);
+
+    if (readback->completed) {
+      return 0;
+    }
+  }
+
+  {
+    std::unique_lock<std::mutex> lock(readback->mutex);
+    readback->conditionVar.wait(lock,
+                                [&]() -> bool { return readback->completed; });
+  }
+
+  return 0;
+}
+
+auto wrap_Readback(lua_State *state) -> int {
+  auto *buffer = LuaWrap::ObjectFromLua<::Graphics::StructuredBuffer>(state, 1);
+
+  if (buffer == nullptr) {
+    return luaL_error(state, "Expected Buffer as first argument");
+  }
+
+  auto *ctx = ::Graphics::GetCurrentGraphicsContext();
+
+  if (ctx == nullptr) {
+    return luaL_error(state, "No current GraphicsContext set for this thread.");
+  }
+
+  auto readbackResult = buffer->GetBuffer()->Readback(*ctx);
+
+  if (Error::IsError(readbackResult)) {
+    return luaL_error(state, "Failed to read back buffer: %s",
+                      readbackResult.error().message.c_str());
+  }
+
+  auto readbackData = readbackResult.value();
+
+  LuaWrap::PushObject(state, ::Graphics::BufferReadback::GetType(),
+                      readbackData.get());
+
+  return 1;
+}
+
 // Buffer format: { { name = ..., format = ... }, ... }
 inline auto BufferFormatFromLua(lua_State *state, int index)
     -> Result<::Graphics::BufferFormat> {
@@ -425,6 +526,11 @@ auto wrap_NewBuffer(lua_State *state) -> int {
   if ((memoryFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) == 0U) {
     usageFlags |=
         VK_BUFFER_USAGE_TRANSFER_DST_BIT; // allow data upload if not gpu only
+  }
+
+  if ((usageFlags & VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT) == 0U) {
+    // allow readback if not a uniform buffer, since why would you read back a uniform buffer?
+    usageFlags |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
   }
 
   ::Graphics::StructuredBufferCreationInfo info;

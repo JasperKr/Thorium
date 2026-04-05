@@ -175,8 +175,30 @@ function Camera:UpdateMatrices()
   self.viewProjectionMatrix:invertTranspose(self.inverseViewProjectionMatrix)
 end
 
+local jitterSequence = {
+  { 0,     0 },
+  { 0.5,   0.5 },
+  { 0.5,   -0.5 },
+  { -0.5,  0.5 },
+  { -0.5,  -0.5 },
+  { 0.25,  0.25 },
+  { 0.25,  -0.25 },
+  { -0.25, 0.25 },
+  { -0.25, -0.25 }
+}
+
+local jitter = { 0, 0 }
+local drawIndex = 0
+
 function Camera:UpdateState()
+  drawIndex = drawIndex + 1
+
+  local jitterIndex = drawIndex % #jitterSequence + 1
+  jitter[1] = jitterSequence[jitterIndex][1] / self.resolution.x
+  jitter[2] = jitterSequence[jitterIndex][2] / self.resolution.y
+
   self:UpdateMatrices()
+  self:UpdateGpuBuffers()
 end
 
 function Camera:Update()
@@ -206,20 +228,6 @@ function Camera:GetUp()
   return tempVec3
 end
 
-local jitterSequence = {
-  { 0,     0 },
-  { 0.5,   0.5 },
-  { 0.5,   -0.5 },
-  { -0.5,  0.5 },
-  { -0.5,  -0.5 },
-  { 0.25,  0.25 },
-  { 0.25,  -0.25 },
-  { -0.25, 0.25 },
-  { -0.25, -0.25 }
-}
-
-local jitter = { 0, 0 }
-
 function Camera:UpdateGpuBuffers()
   self.bufferData:setFloat(0, self.viewMatrix:get())
   self.bufferData:setFloat(64, self.inverseViewMatrix:get())
@@ -234,7 +242,11 @@ function Camera:UpdateGpuBuffers()
   self.bufferData:setFloat(528, self.far)
   self.bufferData:setFloat(532, self.near * self.far)
   self.bufferData:setFloat(536, self.far - self.near)
-  self.bufferData:setUint(540, self.invalidatedHistory and 1 or 0)
+  self.bufferData:setUInt32(540, self.invalidatedHistory and 1 or 0)
   self.bufferData:setFloat(544, jitter[1])
   self.bufferData:setFloat(548, jitter[2])
+  self.bufferData:setUInt32(552, 0) -- ProjectionType (0 = perspective, 1 = orthographic)
+  self.bufferData:setUInt32(556, 0) -- ShadowCascadeCount
+
+  self.buffer:setData(self.bufferData)
 end

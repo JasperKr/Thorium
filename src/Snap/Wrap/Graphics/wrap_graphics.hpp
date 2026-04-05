@@ -99,6 +99,11 @@ static const std::vector<luaL_Reg> GraphicsLib = {
     {"getDimensions", wrap_GetDimensions},
     {"aquireGraphics", wrap_AquireCommandBuffer},
     {"submitGraphics", wrap_SubmitCommandBuffer},
+    {"readbackBuffer", Buffer::wrap_Readback},
+    {"copyBuffer", wrap_CopyBuffer},
+    {"copyTexture", wrap_CopyTexture},
+    {"copyBufferToTexture", wrap_CopyBufferToTexture},
+    {"copyTextureToBuffer", wrap_CopyTextureToBuffer},
 };
 
 const static std::vector<lua_CFunction> childrenInitFunctions = {

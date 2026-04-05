@@ -22,6 +22,8 @@ auto ToMatrix(Quaternion quat) -> Matrix4x4;
 // NOLINTEND(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
 
 auto Random(int Min, int Max) -> int;
+auto Random(Scalar Min, Scalar Max) -> Scalar;
+auto Random(long Min, long Max) -> long;
 auto Random(int Max) -> int;
 auto Random() -> Scalar;
 

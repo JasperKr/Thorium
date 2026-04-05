@@ -15,8 +15,14 @@ auto wrap_SetData(lua_State *state) -> int;
 auto wrap_GetComponentOffset(lua_State *state) -> int;
 auto wrap_GetDebugName(lua_State *state) -> int;
 auto wrap_BufferHasPadding(lua_State *state) -> int;
+auto wrap_Readback(lua_State *state) -> int;
 
 auto wrap_NewBuffer(lua_State *state) -> int;
+
+auto wrap_Readback_GetData(lua_State *state) -> int;
+auto wrap_Readback_IsReady(lua_State *state) -> int;
+auto wrap_Readback_GetError(lua_State *state) -> int;
+auto wrap_Readback_Wait(lua_State *state) -> int;
 
 // NOLINTNEXTLINE
 static const std::vector<luaL_Reg> BufferLib = {
@@ -32,11 +38,31 @@ static const std::vector<luaL_Reg> BufferLib = {
 
 };
 
+static const std::vector<luaL_Reg> BufferReadbackLib = {
+    {"getData", wrap_Readback_GetData},
+    {"isReady", wrap_Readback_IsReady},
+    {"getError", wrap_Readback_GetError},
+    {"wait", wrap_Readback_Wait},
+};
+
+static const LuaWrap::LuaClass BufferReadbackClass{
+    .Name = "BufferReadback",
+    .Type = ::Graphics::BufferReadback::GetType(),
+    .Methods = BufferReadbackLib,
+    .Children = {},
+};
+
+static const LuaWrap::LuaClass BufferClass{
+    .Name = "Buffer",
+    .Type = ::Graphics::StructuredBuffer::GetType(),
+    .Methods = BufferLib,
+    .Children = {BufferReadbackClass},
+};
+
 extern "C" inline auto luaopen_buffer(lua_State *state) -> int {
   PrintDebug("Registering Buffer Lua type.");
 
-  LuaWrap::RegisterLuaType(state, ::Graphics::StructuredBuffer::GetType(),
-                           BufferLib); // NOLINT
+  LuaWrap::RegisterLuaType(state, BufferClass);
 
   return 1;
 }

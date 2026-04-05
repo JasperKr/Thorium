@@ -1473,7 +1473,7 @@ auto Texture::CopyTo(const GraphicsContext &context, Texture &dstTexture,
         "dimensions.");
   }
 
-  auto **commandBuffer = GetCommandBufferPtr();
+  auto *commandBuffer = GetCommandBufferPtr();
   if (commandBuffer == nullptr) {
     return Error::Create("CopyTo: Failed to get command buffer for copying.");
   }
@@ -1513,7 +1513,7 @@ auto Texture::CopyTo(const GraphicsContext &context, Texture &dstTexture,
   //                          .access = VK_ACCESS_2_TRANSFER_WRITE_BIT,
   //                      });
 
-  vkCmdCopyImage(*commandBuffer, image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+  vkCmdCopyImage(commandBuffer, image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                  dstTexture.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1,
                  &copyRegion);
 
@@ -1536,7 +1536,7 @@ auto Texture::CopyTo(const GraphicsContext &context, Buffer &dstBuffer,
   copyRegion.imageOffset = region.srcOffset;
   copyRegion.imageExtent = region.extent;
 
-  auto **commandBuffer = GetCommandBufferPtr();
+  auto *commandBuffer = GetCommandBufferPtr();
   if (commandBuffer == nullptr) {
     return Error::Create("CopyTo: Failed to get command buffer for copying.");
   }
@@ -1558,7 +1558,7 @@ auto Texture::CopyTo(const GraphicsContext &context, Buffer &dstBuffer,
                            .stages = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
                            .access = VK_ACCESS_2_TRANSFER_WRITE_BIT,
                        });
-  vkCmdCopyImageToBuffer(*commandBuffer, image,
+  vkCmdCopyImageToBuffer(commandBuffer, image,
                          VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dstBuffer.handle,
                          1, &copyRegion);
   dstBuffer.MarkUse();

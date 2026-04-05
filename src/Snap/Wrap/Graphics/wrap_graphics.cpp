@@ -826,6 +826,7 @@ auto wrap_CopyBuffer(lua_State *state) -> int {
   return 0;
 }
 
+// copyTexture(srcTexture, dstTexture, offsetX=0, offsetY=0, offsetZ=0, extentWidth=src-width, extentHeight=src-height, extentDepth=src-depth, srcBaseMipLevel=0, srcBaseArrayLayer=0, dstBaseMipLevel=0, dstBaseArrayLayer=0, layerCount=1)
 auto wrap_CopyTexture(lua_State *state) -> int {
   auto *ctx = ::Graphics::GetCurrentGraphicsContext();
 
@@ -852,9 +853,12 @@ auto wrap_CopyTexture(lua_State *state) -> int {
   region.dstOffset.y = static_cast<int32_t>(luaL_optinteger(state, i++, 0));
   region.dstOffset.z = static_cast<int32_t>(luaL_optinteger(state, i++, 0));
 
-  region.extent.width = static_cast<uint32_t>(luaL_optinteger(state, i++, 0));
-  region.extent.height = static_cast<uint32_t>(luaL_optinteger(state, i++, 0));
-  region.extent.depth = static_cast<uint32_t>(luaL_optinteger(state, i++, 0));
+  region.extent.width = static_cast<uint32_t>(
+      luaL_optinteger(state, i++, srcTexture->GetWidth()));
+  region.extent.height = static_cast<uint32_t>(
+      luaL_optinteger(state, i++, srcTexture->GetHeight()));
+  region.extent.depth = static_cast<uint32_t>(
+      luaL_optinteger(state, i++, srcTexture->GetDepth()));
 
   region.srcBaseArrayLayer =
       static_cast<uint32_t>(luaL_optinteger(state, i++, 0));
@@ -871,6 +875,113 @@ auto wrap_CopyTexture(lua_State *state) -> int {
   auto result = srcTexture->CopyTo(*ctx, *dstTexture, region);
   if (Error::IsError(result)) {
     return luaL_error(state, "Failed to copy texture data: %s",
+                      result.message.c_str());
+  }
+
+  return 0;
+}
+
+// copyBufferToTexture(srcBuffer, dstTexture, bufferOffset=0, bufferRowLength=0, bufferImageHeight=0, imageOffsetX=0, imageOffsetY=0, imageOffsetZ=0, imageExtentWidth=dst-width, imageExtentHeight=dst-height, imageExtentDepth=dst-depth, mipLevel=0, baseArrayLayer=0, layerCount=1)
+auto wrap_CopyBufferToTexture(lua_State *state) -> int {
+  auto *ctx = ::Graphics::GetCurrentGraphicsContext();
+
+  if (ctx == nullptr) {
+    return luaL_error(state, "No current GraphicsContext set for this thread.");
+  }
+
+  auto *srcBuffer =
+      LuaWrap::ObjectFromLua<::Graphics::StructuredBuffer>(state, 1);
+  auto *dstTexture = LuaWrap::ObjectFromLua<::Graphics::Texture>(state, 2);
+
+  if (srcBuffer == nullptr || dstTexture == nullptr) {
+    return luaL_error(
+        state,
+        "Expected Buffer as first argument and Texture as second argument");
+  }
+
+  VkBufferImageCopy region{};
+
+  int i = 3; // NOLINT
+
+  region.bufferOffset =
+      static_cast<VkDeviceSize>(luaL_optinteger(state, i++, 0));
+  region.bufferRowLength =
+      static_cast<uint32_t>(luaL_optinteger(state, i++, 0));
+  region.bufferImageHeight =
+      static_cast<uint32_t>(luaL_optinteger(state, i++, 0));
+
+  region.imageOffset.x = static_cast<int32_t>(luaL_optinteger(state, i++, 0));
+  region.imageOffset.y = static_cast<int32_t>(luaL_optinteger(state, i++, 0));
+  region.imageOffset.z = static_cast<int32_t>(luaL_optinteger(state, i++, 0));
+  region.imageExtent.width = static_cast<uint32_t>(
+      luaL_optinteger(state, i++, dstTexture->GetWidth()));
+  region.imageExtent.height = static_cast<uint32_t>(
+      luaL_optinteger(state, i++, dstTexture->GetHeight()));
+  region.imageExtent.depth = static_cast<uint32_t>(
+      luaL_optinteger(state, i++, dstTexture->GetDepth()));
+
+  region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  region.imageSubresource.mipLevel =
+      static_cast<uint32_t>(luaL_optinteger(state, i++, 0));
+  region.imageSubresource.baseArrayLayer =
+      static_cast<uint32_t>(luaL_optinteger(state, i++, 0));
+  region.imageSubresource.layerCount =
+      static_cast<uint32_t>(luaL_optinteger(state, i++, 1));
+
+  auto result = srcBuffer->GetBuffer()->CopyTo(*ctx, *dstTexture, region);
+  if (Error::IsError(result)) {
+    return luaL_error(state, "Failed to copy buffer to texture: %s",
+                      result.message.c_str());
+  }
+
+  return 0;
+}
+
+// copyTextureToBuffer(srcTexture, dstBuffer, offsetX=0, offsetY=0, offsetZ=0, extentWidth=src-width, extentHeight=src-height, extentDepth=src-depth, srcBaseMipLevel=0, srcBaseArrayLayer=0, dstOffset=0)
+auto wrap_CopyTextureToBuffer(lua_State *state) -> int {
+  auto *ctx = ::Graphics::GetCurrentGraphicsContext();
+
+  if (ctx == nullptr) {
+    return luaL_error(state, "No current GraphicsContext set for this thread.");
+  }
+
+  auto *srcTexture = LuaWrap::ObjectFromLua<::Graphics::Texture>(state, 1);
+  auto *dstBuffer =
+      LuaWrap::ObjectFromLua<::Graphics::StructuredBuffer>(state, 2);
+
+  if (srcTexture == nullptr || dstBuffer == nullptr) {
+    return luaL_error(
+        state,
+        "Expected Texture as first argument and Buffer as second argument");
+  }
+
+  ::Graphics::ToBufferCopyRegion region{};
+
+  int i = 3; // NOLINT
+
+  region.srcOffset.x = static_cast<int32_t>(luaL_optinteger(state, i++, 0));
+  region.srcOffset.y = static_cast<int32_t>(luaL_optinteger(state, i++, 0));
+  region.srcOffset.z = static_cast<int32_t>(luaL_optinteger(state, i++, 0));
+
+  region.extent.width = static_cast<uint32_t>(
+      luaL_optinteger(state, i++, srcTexture->GetWidth()));
+  region.extent.height = static_cast<uint32_t>(
+      luaL_optinteger(state, i++, srcTexture->GetHeight()));
+  region.extent.depth = static_cast<uint32_t>(
+      luaL_optinteger(state, i++, srcTexture->GetDepth()));
+
+  region.srcBaseArrayLayer =
+      static_cast<uint32_t>(luaL_optinteger(state, i++, 0));
+  region.layerCount = static_cast<uint32_t>(luaL_optinteger(state, i++, 1));
+
+  region.srcBaseMipLevel =
+      static_cast<uint32_t>(luaL_optinteger(state, i++, 0));
+
+  region.dstOffset = static_cast<VkDeviceSize>(luaL_optinteger(state, i++, 0));
+
+  auto result = srcTexture->CopyTo(*ctx, *dstBuffer->GetBuffer(), region);
+  if (Error::IsError(result)) {
+    return luaL_error(state, "Failed to copy texture to buffer: %s",
                       result.message.c_str());
   }
 
