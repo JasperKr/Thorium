@@ -103,16 +103,15 @@ function snap.helpers.printCompact(...)
   end
 end
 
----@diagnostic disable-next-line: lowercase-global
-function ripairs(t)
-  local function ripairs_it(t2, i)
-    i = i - 1
-    local v = t2[i]
-    if v ~= nil then
-      return i, v
-    else
-      return nil
-    end
+local function reverse_iterator(tbl, i)
+  i = i - 1
+  local v = tbl[i]
+  if nil ~= v then
+    return i, v
   end
-  return ripairs_it, t, #t + 1
+end
+
+---@diagnostic disable-next-line: lowercase-global
+function reverse_ipairs(t)
+  return reverse_iterator, t, #t + 1
 end

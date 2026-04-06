@@ -21,13 +21,30 @@ struct VertexInput
     float4 Color  : COLOR;
 };
 
+struct Transform {
+  float3 Position;
+  float4 Rotation;
+  float3 Scale;
+};
+
+uniform Transform transform;
 uniform float4x4 DefaultProjectionMatrix;
+
+float3 Rotate(float3 v, float4 q)
+{
+  return v + 2.0 * cross(q.xyz, cross(q.xyz, v) + q.w * v);
+}
 
 [shader("vertex")]
 VertexStageOutput vertexMain(VertexInput input)
 {
     VertexStageOutput out;
-    out.sv_position = mul(camera.ViewProjectionMatrix, float4(input.Position.xyz, 1.0));
+
+    float3 Position = input.Position.xyz * transform.Scale;
+    Position = Rotate(Position, transform.Rotation);
+    Position += transform.Position;
+
+    out.sv_position = mul(camera.ViewProjectionMatrix, float4(Position, 1.0));
 
     float2 uv0 = unpackHalf2x16ToFloat(input.TexCoords.x);
     float2 uv1 = unpackHalf2x16ToFloat(input.TexCoords.x >> 16);

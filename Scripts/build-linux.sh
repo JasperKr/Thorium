@@ -9,7 +9,7 @@ rm -f ./build/snap
 FLAGS=""
 
 if [ "$CONFIG" = "Debug" ] || [ "$CONFIG" = "Profile" ]; then
-  FLAGS="$FLAGS -DTRACY_ENABLE=1 -g -O0 -ftime-trace"
+  FLAGS="$FLAGS -DTRACY_ENABLE=1 -g -O0 -ftime-trace -fno-omit-frame-pointer"
   if [ "$CONFIG" == "Profile" ]; then
     FLAGS="$FLAGS -DTRACY_WAIT_FOR_CLIENT=1"
   fi
@@ -30,6 +30,7 @@ cmake -G Ninja -DCMAKE_CXX_COMPILER=clang++ -B build \
   -DCMAKE_C_COMPILER=clang \
   -DCMAKE_CXX_FLAGS="-Wc23-extensions $FLAGS" \
   -DCMAKE_C_FLAGS="-Wc23-extensions $FLAGS"
+  -DCMAKE_EXE_LINKER_FLAGS="-rdynamic"
 
 cmake --build build
 

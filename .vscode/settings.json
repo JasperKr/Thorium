@@ -14,7 +14,7 @@
     // third party libraries when you just want to quickly open a file.
     "files.exclude": {
         // "**/include": true,
-        "**/external": true,
+        // "**/external": true,
         // "**/third_party": true
     }
 }
