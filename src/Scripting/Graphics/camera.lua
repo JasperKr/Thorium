@@ -1,8 +1,8 @@
 ---@class snap.camera
 ---@field position vec3
----@field rotation vec3
+---@field rotation quaternion
 ---@field nextPosition vec3 Next frame's position
----@field nextRotation vec3 Next frame's rotation
+---@field nextRotation quaternion Next frame's rotation
 ---@field resolution vec2
 ---@field fov number
 ---@field near number
@@ -40,7 +40,7 @@ Camera.__index = Camera
 --- Creates a new camera
 ---@param name string
 ---@param position vec3
----@param rotation vec3
+---@param rotation quaternion
 ---@param resolution vec2
 ---@param fov number?
 ---@param near number?
@@ -56,7 +56,7 @@ function snap.graphics.newCamera(name, position, rotation, resolution, fov, near
   self.position = position
   self.rotation = rotation
   self.resolution = resolution or error("No resolution provided for camera")
-  self.fov = fov or math.rad(90)
+  self.fov = fov or 90
   self.near = near or 0.1
   self.far = far or 1000
 
@@ -68,6 +68,7 @@ function snap.graphics.newCamera(name, position, rotation, resolution, fov, near
   local inverseProjectionMatrix = mat4()
   local viewMatrix = mat4()
   local inverseViewMatrix = mat4()
+  local inverseRotationMatrix = mat4()
   local viewProjectionMatrix = mat4()
   local inverseViewProjectionMatrix = mat4()
   local rotationProjectionMatrix = mat4()
@@ -78,9 +79,10 @@ function snap.graphics.newCamera(name, position, rotation, resolution, fov, near
 
   projectionMatrix:invertTranspose(inverseProjectionMatrix)
   local translationMatrix = snap.math.newTranslationMatrix(-position)
-  local rotationMatrix = snap.math.eulerToMatrix(rotation:get())
+  local rotationMatrix = snap.math.quaternionToMatrix(rotation)
+  rotationMatrix:invertTranspose(inverseRotationMatrix)
   rotationMatrix:mul(projectionMatrix, rotationProjectionMatrix)
-  rotationMatrix:invertTranspose(inverseRotationProjectionMatrix)
+  rotationProjectionMatrix:invertTranspose(inverseRotationProjectionMatrix)
 
   translationMatrix:mul(rotationMatrix, viewMatrix)
   viewMatrix:invertTranspose(inverseViewMatrix)
@@ -91,6 +93,7 @@ function snap.graphics.newCamera(name, position, rotation, resolution, fov, near
   self.inverseProjectionMatrix = inverseProjectionMatrix
   self.translationMatrix = translationMatrix
   self.rotationMatrix = rotationMatrix
+  self.inverseRotationMatrix = inverseRotationMatrix
   self.viewMatrix = viewMatrix
   self.inverseViewMatrix = inverseViewMatrix
   self.viewProjectionMatrix = viewProjectionMatrix
@@ -165,9 +168,10 @@ function Camera:UpdateMatrices()
   self.projectionMatrix:invertTranspose(self.inverseProjectionMatrix)
   snap.math.newTranslationMatrix(mathv.unm3(self.position, tempVec3),
     self.translationMatrix)
-  snap.math.eulerToMatrix(self.rotation.x, self.rotation.y, self.rotation.z, self.rotationMatrix)
+  snap.math.quaternionToMatrix(self.rotation, self.rotationMatrix)
+  self.rotationMatrix:invertTranspose(self.inverseRotationMatrix)
   self.rotationMatrix:mul(self.projectionMatrix, self.rotationProjectionMatrix)
-  self.rotationMatrix:invertTranspose(self.inverseRotationProjectionMatrix)
+  self.rotationProjectionMatrix:invertTranspose(self.inverseRotationProjectionMatrix)
 
   self.translationMatrix:mul(self.rotationMatrix, self.viewMatrix)
   self.viewMatrix:invertTranspose(self.inverseViewMatrix)
@@ -249,4 +253,44 @@ function Camera:UpdateGpuBuffers()
   self.bufferData:setUInt32(556, 0) -- ShadowCascadeCount
 
   self.buffer:setData(self.bufferData)
+end
+
+function Camera:getPosition()
+  return self.position:get()
+end
+
+function Camera:getRotation()
+  return self.rotation:get()
+end
+
+function Camera:getResolution()
+  return self.resolution:get()
+end
+
+function Camera:getFOV()
+  return self.fov
+end
+
+function Camera:getNear()
+  return self.near
+end
+
+function Camera:getFar()
+  return self.far
+end
+
+function Camera:SetPosition(x, y, z)
+  self.nextPosition:set(x, y, z)
+end
+
+function Camera:SetRotation(x, y, z, w)
+  self.nextRotation:set(x, y, z, w)
+end
+
+function Camera:SetResolution(x, y)
+  self.resolution:set(x, y)
+end
+
+function Camera:SetFOV(fov)
+  self.fov = fov
 end

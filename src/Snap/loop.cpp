@@ -45,7 +45,7 @@ function snap.run()
   return function()
     snap.event.pull()
 
-    local name, a,b,c,d,e,f = snap.event.pop()
+    local name, a, b, c, d, e, f = snap.event.pop()
     while name do
       if name == "quit" then
         if snap.quit then
@@ -55,10 +55,13 @@ function snap.run()
       end
 
       if snap[name] then
-        snap[name](a,b,c,d,e,f)
+        snap[name](a, b, c, d, e, f)
+      end
+      if snap.any then
+        snap.any(name, a, b, c, d, e, f)
       end
 
-      name, a,b,c,d,e,f = snap.event.pop()
+      name, a, b, c, d, e, f = snap.event.pop()
     end
 
     snap.timer.step()

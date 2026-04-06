@@ -13,10 +13,10 @@ local lastShownTime = 0
 local lastShownImDrawTime = 0
 local count = 0
 
-local commandBufferChannel, canStartChannel, scene = ...
+local commandBufferChannel, canStartChannel, scene, events = ...
 
-local camera = snap.graphics.newCamera("main camera", vec3(0, 0, 0), vec3(0, 0, 0),
-  vec2(snap.graphics.getDimensions()), math.rad(60), 0.1, 1000)
+local camera = snap.graphics.newCamera("main camera", vec3(), quaternion(),
+  vec2(snap.graphics.getDimensions()), 60, 0.1, 1000)
 
 local t = snap.timer.getTime()
 local testImgdata = snap.data.newImagedata(16, 16, "rgba8")
@@ -33,13 +33,27 @@ local vertexformat = {
   { name = "color",    format = "unorm8vec4", location = 2 },
 }
 
-local indices = { 1, 2, 3, 1, 3, 4 }
+-- Cube vertices
 local vertices = {
-  { 0,   0,   0, 0, 1, 1, 1, 1 },
-  { 100, 0,   1, 0, 1, 1, 1, 1 },
-  { 100, 100, 1, 1, 1, 1, 1, 1 },
-  { 0,   100, 0, 1, 1, 1, 1, 1 },
+  { -1, -1, -1, 0, 1, 1, 1, 1 },
+  { 1,  -1, -1, 1, 1, 1, 1, 1 },
+  { 1,  1,  -1, 1, 0, 1, 1, 1 },
+  { -1, 1,  -1, 0, 0, 1, 1, 1 },
+  { -1, -1, 1,  0, 1, 1, 1, 1 },
+  { 1,  -1, 1,  1, 1, 1, 1, 1 },
+  { 1,  1,  1,  1, 0, 1, 1, 1 },
+  { -1, 1,  1,  0, 0, 1, 1, 1 },
 }
+
+local indices = {
+  1, 2, 3, 1, 3, 4, -- back face
+  5, 6, 7, 5, 7, 8, -- front face
+  1, 2, 6, 1, 6, 5, -- bottom face
+  2, 3, 7, 2, 7, 6, -- right face
+  3, 4, 8, 3, 8, 7, -- top face
+  4, 1, 5, 4, 5, 8, -- left face
+}
+
 local mesh
 
 local shader = snap.graphics.newShader("Scripting/Graphics/Shaders/forward.slang")
@@ -76,7 +90,7 @@ local function draw()
   snap.graphics.setShader(shader)
   camera:Update()
   camera:UpdateState()
-  shader:send("transform", "Position", 0, 0, 0)
+  shader:send("transform", "Position", 0, 0, 5)
   shader:send("transform", "Rotation", 0, 0, 0, 1)
   shader:send("transform", "Scale", 1, 1, 1)
   shader:send("CameraData", camera.buffer)
@@ -94,11 +108,72 @@ local function draw()
   end
 end
 
+local isDown = {}
+function snap.mousepressed(x, y, button)
+  isDown[button] = true
+end
+
+function snap.mousereleased(x, y, button)
+  isDown[button] = false
+end
+
+function snap.keypressed(key)
+  isDown[key] = true
+end
+
+function snap.keyreleased(key)
+  isDown[key] = false
+end
+
+function snap.mousemoved(x, y, dx, dy)
+  if not isDown[3] then
+    return
+  end
+
+  local quat = snap.math.eulerToQuaternion(-dy * 0.001, dx * 0.001, 0)
+  local currentQuat = quaternion(camera:getRotation())
+  local newQuat = quat * currentQuat
+  camera:SetRotation(newQuat.x, newQuat.y, newQuat.z, newQuat.w)
+end
+
 local t = snap.timer.getTime()
 
 while true do
   if not (canStartChannel:demand(1)) then
     break
+  end
+
+  local event = events:pop()
+  while event do
+    if snap[event[1]] then
+      snap[event[1]](unpack(event, 2))
+    end
+
+    event = events:pop()
+  end
+
+  if (isDown["a"]) then
+    local left = -camera:GetRight()
+    local x, y, z = camera:getPosition()
+    camera:SetPosition(x + left.x * 0.1, y + left.y * 0.1, z + left.z * 0.1)
+  end
+
+  if (isDown["d"]) then
+    local right = camera:GetRight()
+    local x, y, z = camera:getPosition()
+    camera:SetPosition(x + right.x * 0.1, y + right.y * 0.1, z + right.z * 0.1)
+  end
+
+  if (isDown["w"]) then
+    local forward = camera:GetForward()
+    local x, y, z = camera:getPosition()
+    camera:SetPosition(x + forward.x * 0.1, y + forward.y * 0.1, z + forward.z * 0.1)
+  end
+
+  if (isDown["s"]) then
+    local back = -camera:GetForward()
+    local x, y, z = camera:getPosition()
+    camera:SetPosition(x + back.x * 0.1, y + back.y * 0.1, z + back.z * 0.1)
   end
 
   snap.graphics.aquireGraphics()

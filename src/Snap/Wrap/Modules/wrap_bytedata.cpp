@@ -28,28 +28,14 @@ constexpr auto SetIntFromLuaData(lua_State *state) -> int {
     offset = luaL_checkinteger(state, 2);
   }
 
-  if (lua_istable(state, 3)) {
-    size_t len = lua_objlen(state, 3);
-
-    if ((len * sizeof(T)) + offset > bytedata->GetSize()) {
-      return luaL_error(state, "Offset out of bounds.");
-    }
-
-    for (int i = 0; i < len; ++i) {
-      lua_rawgeti(state, 3, i + 1);
-      auto value = static_cast<T>(luaL_checkinteger(state, -1));
-      std::memcpy(&span[offset + (i * sizeof(T))], &value, sizeof(T));
-      lua_pop(state, 1);
-    }
-  } else if (lua_isnumber(state, 3) != 0) {
-    if (offset + sizeof(T) > bytedata->GetSize()) {
-      return luaL_error(state, "Offset out of bounds.");
-    }
-
-    auto value = static_cast<T>(luaL_checkinteger(state, 3));
-    std::memcpy(&span[offset], &value, sizeof(T));
+  auto top = lua_gettop(state);
+  auto *data = reinterpret_cast<T *>(span.data() + offset); // NOLINT
+  if (((top - 2) * sizeof(T)) + offset > bytedata->GetSize()) {
+    return luaL_error(state, "Offset out of bounds.");
   }
-
+  for (int i = 3; i <= top; ++i) {
+    data[i - 3] = static_cast<T>(luaL_checknumber(state, i)); // NOLINT
+  }
   return 0;
 }
 
@@ -74,19 +60,22 @@ constexpr auto SetFloatFromLuaData(lua_State *state) -> int {
       return luaL_error(state, "Offset out of bounds.");
     }
 
+    auto data = reinterpret_cast<float *>(span.data() + offset); // NOLINT
     for (int i = 0; i < len; ++i) {
       lua_rawgeti(state, 3, i + 1);
-      auto value = static_cast<T>(luaL_checknumber(state, -1));
-      std::memcpy(&span[offset + (i * sizeof(T))], &value, sizeof(T));
-      lua_pop(state, 1);
+      data[i] = static_cast<T>(luaL_checknumber(state, -1)); // NOLINT
     }
   } else if (lua_isnumber(state, 3) != 0) {
     if (offset + sizeof(T) > bytedata->GetSize()) {
       return luaL_error(state, "Offset out of bounds.");
     }
 
-    auto value = static_cast<T>(luaL_checknumber(state, 3));
-    std::memcpy(&span[offset], &value, sizeof(T));
+    auto top = lua_gettop(state);
+    auto *data = reinterpret_cast<float *>(span.data() + offset); // NOLINT
+    for (int i = 3; i <= top; ++i) {
+      data[i - 3] = static_cast<T>(luaL_checknumber(state, i)); // NOLINT
+    }
+
   } else {
     return luaL_error(state, "Invalid value to set.");
   }

@@ -14,7 +14,7 @@ struct VertexStageOutput
 
 struct VertexInput
 {
-    float4 Position : POSITION;
+    float3 Position : POSITION;
     uint2 TexCoords : TEXCOORD;
     uint Normal : NORMAL;
     uint Tangent : TANGENT;
@@ -44,7 +44,7 @@ VertexStageOutput vertexMain(VertexInput input)
     Position = Rotate(Position, transform.Rotation);
     Position += transform.Position;
 
-    out.sv_position = mul(camera.ViewProjectionMatrix, float4(Position, 1.0));
+    out.sv_position = mul(float4(Position, 1.0), camera.ViewProjectionMatrix);
 
     float2 uv0 = unpackHalf2x16ToFloat(input.TexCoords.x);
     float2 uv1 = unpackHalf2x16ToFloat(input.TexCoords.x >> 16);
