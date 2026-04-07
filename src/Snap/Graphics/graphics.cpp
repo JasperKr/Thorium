@@ -193,9 +193,15 @@ static auto CreateDevice(GraphicsContext &context,
   createInfo.queueCreateInfoCount = 1;
   createInfo.pEnabledFeatures = &deviceFeatures;
 
+  VkPhysicalDeviceVertexInputDynamicStateFeaturesEXT feature{};
+  feature.sType =
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VERTEX_INPUT_DYNAMIC_STATE_FEATURES_EXT;
+  feature.vertexInputDynamicState = VK_TRUE;
+
   // --- Vulkan 1.3 features ---
   VkPhysicalDeviceVulkan13Features features13{
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+      .pNext = &feature,
       .synchronization2 = VK_TRUE,
       .dynamicRendering = VK_TRUE,
   };
@@ -226,13 +232,6 @@ static auto CreateDevice(GraphicsContext &context,
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,
       .pNext = &features12,
   };
-
-  // --- Dynamic Rendering ---
-  // VkPhysicalDeviceDynamicRenderingFeatures dynRender{
-  //     .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES,
-  //     .pNext = &features11,
-  //     .dynamicRendering = VK_TRUE,
-  // };
 
   // --- Features2 root ---
   VkPhysicalDeviceFeatures2 features2{
@@ -265,7 +264,8 @@ static auto CreateDevice(GraphicsContext &context,
         VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
         VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME,
         VK_KHR_SPIRV_1_4_EXTENSION_NAME,
-        VK_KHR_SHADER_FLOAT_CONTROLS_EXTENSION_NAME};
+        VK_KHR_SHADER_FLOAT_CONTROLS_EXTENSION_NAME,
+        VK_EXT_VERTEX_INPUT_DYNAMIC_STATE_EXTENSION_NAME};
 
     const auto &supported =
         ExtensionListSupported(requiredExtensions, availableExtensions);

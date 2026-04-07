@@ -29,7 +29,7 @@ snap.graphics.aquireGraphics("load")
 
 local vertexformat = {
   { name = "position",      format = "floatvec3",  location = 0 },
-  { name = "textureCoords", format = "uint32vec2", location = 1 },
+  { name = "textureCoords", format = "floatvec2",  location = 1 },
   { name = "normal",        format = "uint32",     location = 2 },
   { name = "tangent",       format = "uint32",     location = 3 },
   { name = "color",         format = "unorm8vec4", location = 4 },
@@ -44,24 +44,27 @@ local vertexformat = {
 --   { 0,   100, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1 },
 -- }
 
+local r = snap.math.random
+
 local vertices = {
   -- x,  y,  z, t0,t1,n, t, r, g, b, a
-  { -1, -1, -1, 0, 1, 1, 1, 1, 1, 1, 1 },
-  { 1,  -1, -1, 1, 1, 1, 1, 1, 1, 1, 1 },
-  { 1,  1,  -1, 1, 0, 1, 1, 1, 1, 1, 1 },
-  { -1, 1,  -1, 0, 0, 1, 1, 1, 1, 1, 1 },
-  { -1, -1, 1,  0, 1, 1, 1, 1, 1, 1, 1 },
-  { 1,  -1, 1,  1, 1, 1, 1, 1, 1, 1, 1 },
-  { 1,  1,  1,  1, 0, 1, 1, 1, 1, 1, 1 },
-  { -1, 1,  1,  0, 0, 1, 1, 1, 1, 1, 1 },
+  { -1, -1, -1, 0, 1, 1, 1, r(), r(), r(), 1 },
+  { 1,  -1, -1, 1, 1, 1, 1, r(), r(), r(), 1 },
+  { 1,  1,  -1, 1, 0, 1, 1, r(), r(), r(), 1 },
+  { -1, 1,  -1, 0, 0, 1, 1, r(), r(), r(), 1 },
+  { -1, -1, 1,  0, 1, 1, 1, r(), r(), r(), 1 },
+  { 1,  -1, 1,  1, 1, 1, 1, r(), r(), r(), 1 },
+  { 1,  1,  1,  1, 0, 1, 1, r(), r(), r(), 1 },
+  { -1, 1,  1,  0, 0, 1, 1, r(), r(), r(), 1 },
 }
 
 local indices = {
-  1, 2, 3, 1, 3, 4,
-  5, 6, 7, 5, 7, 8,
-  1, 2, 6, 1, 6, 5,
-  2, 3, 7, 2, 7, 6,
-  3, 4, 8, 3, 8, 7,
+  1, 3, 2, 1, 4, 3, -- back face
+  5, 6, 7, 5, 7, 8, -- front face
+  1, 2, 6, 1, 6, 5, -- bottom face
+  2, 3, 7, 2, 7, 6, -- right face
+  3, 4, 8, 3, 8, 7, -- top face
+  4, 1, 5, 4, 5, 8, -- left face
 }
 
 
@@ -155,7 +158,7 @@ snap.keyboard.setEnableTextInput(true)
 function snap.draw()
   startThreadChannel:push(true)
 
-  local buffer = commandsChannel:demand(1)
+  local buffer = commandsChannel:demand(10)
   table.insert(commandBuffers, buffer)
 
   local buffers = commandBuffers

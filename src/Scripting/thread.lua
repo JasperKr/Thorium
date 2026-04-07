@@ -62,7 +62,28 @@ local texture
 local testnumber = ffi.new("float[1]")
 print("Generated noise texture in " .. tostring(snap.timer.getTime() - t) .. " seconds")
 
+local rendertarget
+local depthbuffer
+
 local function draw()
+  snap.graphics.setRenderTarget(
+    { { texture = rendertarget, loadas = "clear", blendmode = { blendmode = "alpha", alphamode = "premultiplied" } },
+      { texture = depthbuffer,  loadas = 1 } })
+  snap.graphics.setShader(shader)
+  snap.graphics.setCullMode("none")
+  camera:Update()
+  camera:UpdateState()
+  shader:send("transform", "Position", 0, 0, 5)
+
+  shader:send("transform", "Rotation", 1, 0, 0, 0)
+  shader:send("transform", "Scale", 1, 1, 1)
+  shader:send("CameraData", camera.buffer)
+  snap.graphics.setCullMode("none")
+  snap.graphics.setWindingOrder("ccw")
+  snap.graphics.setDepthMode("less", true)
+  scene:drawModels()
+  snap.graphics.setShader()
+
   local startTime = snap.timer.getTime()
   Imgui.Begin("Test window")
 
@@ -79,23 +100,19 @@ local function draw()
   scene:drawUIElement()
 
   Imgui.End()
+
+  Imgui.Begin("Test window 2")
+  Imgui.Image(rendertarget, ffi.new("ImVec2", 1000, 1000))
+  Imgui.End()
+
   Imgui.ShowDemoWindow()
 
   snap.gui.endFrame()
   local imStartTime = snap.timer.getTime()
+  snap.graphics.setRenderTarget({ loadas = "clear", blendmode = { blendmode = "alpha", alphamode = "premultiplied" } })
   snap.gui.draw()
   snap.graphics.setScissor();
   lastImDrawTime = lastImDrawTime + snap.timer.getTime() - imStartTime
-
-  snap.graphics.setShader(shader)
-  camera:Update()
-  camera:UpdateState()
-  shader:send("transform", "Position", 0, 0, 5)
-  shader:send("transform", "Rotation", 0, 0, 0, 1)
-  shader:send("transform", "Scale", 1, 1, 1)
-  shader:send("CameraData", camera.buffer)
-  scene:drawModels()
-  snap.graphics.setShader()
 
   lastDrawTime = lastDrawTime + snap.timer.getTime() - startTime
   count = count + 1
@@ -186,9 +203,15 @@ while true do
       indicesData:setUInt32((j - 1) * 4, indices[j] - 1)
     end
     mesh:setIndices(indicesData)
-  end
 
-  snap.graphics.setRenderTarget({ loadas = "clear", blendmode = { blendmode = "alpha", alphamode = "premultiplied" } })
+    snap.scene.loadModel(scene, "Assets/Objects/Forest/treeLOD1.glb")
+
+
+    rendertarget = snap.graphics.newTexture(snap.graphics.getWidth(), snap.graphics.getHeight(),
+      { sampler = true, rendertarget = true })
+    depthbuffer = snap.graphics.newTexture(snap.graphics.getWidth(), snap.graphics.getHeight(),
+      { rendertarget = true, format = "depth32f" })
+  end
 
   local dt = snap.timer.getTime() - t
   t = snap.timer.getTime()

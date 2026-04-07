@@ -1,20 +1,30 @@
 #include "gltfLoader.hpp"
+#include "Graphics/format.hpp"
 #include "Graphics/graphicsContext.hpp"
 #include "Graphics/mesh.hpp"
 #include "Graphics/texture.hpp"
 #include "Graphics/vertexformat.hpp"
 #include "Modules/Math/quaternion.hpp"
 #include "Modules/Math/vector.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/filesystem.hpp"
 #include "Modules/object.hpp"
+#include "Scene/boundingBox.hpp"
+#include "Scene/geometry.hpp"
+#include "Scene/levelOfDetail.hpp"
 #include "Scene/node.hpp"
 #include "Scene/shape.hpp"
 #include "Scene/transform.hpp"
 #include "Scene/userdata.hpp"
 #include "flecs/addons/cpp/entity.hpp"
+#include "flecs/addons/cpp/world.hpp"
 #include "material.hpp"
+#include <algorithm>
+#include <cassert>
+#include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <span>
 #include <string>
 
@@ -23,70 +33,16 @@
 
 #include "vulkan/vulkan_core.h"
 
+#include <unordered_map>
 #include <variant>
 #include <vector>
 
 namespace glTF {
 
-// Instead of heap allocating all loaded data, we store them here.
-// And reference them by the index in the LoadedBuffers vector.
-// This way we can avoid many large heap allocations.
-
-struct BufferData {
-  bool isHoldingView = false;
-  bool isHoldingSpan = false;
-  std::vector<uint8_t> Data;
-  std::span<const uint8_t> SpanData;
-
-  size_t offset = 0;
-  size_t length = 0;
-  size_t refIdx = 0;
-
-  auto GetData() -> std::span<const uint8_t>;
-  [[nodiscard]] auto GetSize() const -> size_t {
-    if (isHoldingView) {
-      return length;
-    }
-    if (isHoldingSpan) {
-      return SpanData.size();
-    }
-    return Data.size();
-  }
-
-  // NOLINTNEXTLINE easily swapped parameters
-  static auto ViewOther(size_t off, size_t len, size_t ref) -> BufferData {
-    BufferData buffData{};
-    buffData.isHoldingView = true;
-    buffData.offset = off;
-    buffData.length = len;
-    buffData.refIdx = ref;
-    return buffData;
-  }
-
-  static auto ViewSpan(std::span<const uint8_t> span) -> BufferData {
-    BufferData buffData{};
-    buffData.isHoldingSpan = true;
-    buffData.SpanData = span;
-    return buffData;
-  }
-};
-
-// NOLINTNEXTLINE
-static std::vector<BufferData> LoadedBuffers;
-
-auto BufferData::GetData() -> std::span<const uint8_t> {
-  if (isHoldingView) {
-    auto parentData = LoadedBuffers[refIdx].GetData();
-    // NOLINTNEXTLINE
-    return {parentData.data() + offset, length};
-  }
-
-  if (isHoldingSpan) {
-    return SpanData;
-  }
-
-  return {Data.data(), Data.size()};
-}
+// NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
+std::vector<std::vector<std::uint8_t>> Buffers;
+std::unordered_map<std::string, std::vector<std::uint8_t>> URICache;
+// NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
 using DataIndex = size_t;
 
@@ -96,41 +52,49 @@ static fastgltf::Parser Parser =
 
 inline auto LoadDataSource(const fastgltf::Asset &asset,
                            const fastgltf::DataSource &dataSource)
-    -> Result<DataIndex>;
+    -> Result<std::span<const uint8_t>>;
 
 inline auto LoadBufferView(const fastgltf::Asset &asset,
                            const fastgltf::BufferView &bufferView)
-    -> Result<DataIndex> {
+    -> Result<std::span<const uint8_t>> {
   const auto &buffer = asset.buffers[bufferView.bufferIndex];
-
-  auto bufferData = LoadDataSource(asset, buffer.data);
-  if (Error::IsError(bufferData)) {
-    return bufferData;
-  }
 
   const auto byteOffset = static_cast<long>(bufferView.byteOffset);
   const auto byteLength = static_cast<long>(bufferView.byteLength);
 
-  // if (byteOffset + byteLength > bufferData.value()->GetSize()) {
-  //   return Error::Unexpected("Buffer view out of bounds.");
-  // }
+  if (byteOffset < 0 || byteLength < 0) {
+    return Error::Unexpected("BufferView has negative byte offset or length.");
+  }
 
-  // return bufferData.value()->View(byteOffset, byteLength);
+  if (bufferView.bufferIndex < 0 ||
+      static_cast<size_t>(bufferView.bufferIndex) >= asset.buffers.size()) {
+    return Error::Unexpected("BufferView has invalid buffer index.");
+  }
 
-  // auto &loadedBuffer = LoadedBuffers[bufferView.bufferIndex];
-  // std::vector<uint8_t> bufferViewData(loadedBuffer.begin() + byteOffset,
-  //                                     loadedBuffer.begin() + byteOffset +
-  //                                         byteLength);
+  if (bufferView.bufferIndex >= Buffers.size()) {
+    return Error::Unexpected("BufferView buffer index out of bounds.");
+  }
 
-  LoadedBuffers.emplace_back(
-      BufferData::ViewOther(byteOffset, byteLength, bufferView.bufferIndex));
-  return LoadedBuffers.size() - 1;
+  if (static_cast<size_t>(byteOffset) + static_cast<size_t>(byteLength) >
+      Buffers[bufferView.bufferIndex].size()) {
+    return Error::Unexpected("BufferView byte range exceeds buffer size.");
+  }
+
+  const auto &data = Buffers[bufferView.bufferIndex];
+
+  return std::span<const uint8_t>(data.data() + byteOffset, // NOLINT
+                                  byteLength);
 }
 
 inline auto LoadURI(const fastgltf::sources::URI &uriSource)
-    -> Result<DataIndex> {
+    -> Result<std::vector<uint8_t>> {
   const auto &uri = uriSource.uri;
   const auto &path = std::string(uri.path()); // (TODO: is this correct?)
+
+  auto iter = URICache.find(path);
+  if (iter != URICache.end()) {
+    return iter->second;
+  }
 
   auto fileResult = Filesystem::ReadFile(path);
 
@@ -138,16 +102,14 @@ inline auto LoadURI(const fastgltf::sources::URI &uriSource)
     return fileResult.error().AsUnexpected();
   }
 
-  LoadedBuffers.emplace_back(
-      BufferData{.isHoldingView = false, .Data = fileResult.value()});
+  URICache[path] = fileResult.value();
 
-  // return fileResult.value();
-  return LoadedBuffers.size() - 1;
+  return fileResult.value();
 }
 
 inline auto LoadDataSource(const fastgltf::Asset &asset,
                            const fastgltf::DataSource &dataSource)
-    -> Result<DataIndex> {
+    -> Result<std::span<const uint8_t>> {
 
   // never monostate
   // std::variant<std::monostate, sources::BufferView, sources::URI, sources::Array, sources::Vector, sources::CustomBuffer, sources::ByteView, sources::Fallback>
@@ -169,29 +131,25 @@ inline auto LoadDataSource(const fastgltf::Asset &asset,
     const auto &arraySource = std::get<fastgltf::sources::Array>(dataSource);
 
     // NOLINTBEGIN
-    auto span = std::span<const uint8_t>(
+
+    auto dataSpan = std::span<const uint8_t>(
         reinterpret_cast<const uint8_t *>(arraySource.bytes.data()),
         arraySource.bytes.size());
 
-    LoadedBuffers.emplace_back(BufferData::ViewSpan(span));
     // NOLINTEND
 
-    return LoadedBuffers.size() - 1;
+    return dataSpan;
   }
   if (std::holds_alternative<fastgltf::sources::Vector>(dataSource)) {
     const auto &vectorSource = std::get<fastgltf::sources::Vector>(dataSource);
 
     // NOLINTBEGIN
-    LoadedBuffers.emplace_back(BufferData{
-        .isHoldingView = false,
-        .Data = {
-            reinterpret_cast<const uint8_t *>(vectorSource.bytes.data()),
-            reinterpret_cast<const uint8_t *>(vectorSource.bytes.data() +
-                                              vectorSource.bytes.size()),
-        }});
+    auto dataSpan = std::span<const uint8_t>(
+        reinterpret_cast<const uint8_t *>(vectorSource.bytes.data()),
+        vectorSource.bytes.size());
     // NOLINTEND
 
-    return LoadedBuffers.size() - 1;
+    return dataSpan;
   }
   if (std::holds_alternative<fastgltf::sources::CustomBuffer>(dataSource)) {
     const auto &customBufferSource =
@@ -205,16 +163,12 @@ inline auto LoadDataSource(const fastgltf::Asset &asset,
 
     // NOLINTBEGIN
 
-    LoadedBuffers.emplace_back(BufferData{
-        .isHoldingView = false,
-        .Data = {
-            reinterpret_cast<const uint8_t *>(byteViewSource.bytes.data()),
-            reinterpret_cast<const uint8_t *>(byteViewSource.bytes.data() +
-                                              byteViewSource.bytes.size()),
-        }});
+    auto dataSpan = std::span<const uint8_t>(
+        reinterpret_cast<const uint8_t *>(byteViewSource.bytes.data()),
+        byteViewSource.bytes.size());
     // NOLINTEND
 
-    return LoadedBuffers.size() - 1;
+    return dataSpan;
   }
 
   return Error::Unexpected("Unsupported data source.");
@@ -240,12 +194,7 @@ inline auto LoadTexture(Graphics::GraphicsContext &context,
     return loadResult.error().AsUnexpected();
   }
 
-  auto dataIdx = loadResult.value();
-
-  auto &data = LoadedBuffers[dataIdx];
-  auto span = data.GetData();
-
-  // return Ref<Graphics::Texture>::Make();
+  auto span = loadResult.value();
 
   auto textureResult = Graphics::LoadFromMemory(
       context, span,
@@ -263,7 +212,11 @@ inline auto LoadTexture(Graphics::GraphicsContext &context,
 inline auto LoadMaterial(Graphics::GraphicsContext &context,
                          const fastgltf::Asset &asset,
                          const fastgltf::Material &gltfMaterial,
-                         Engine::Renderer::Material &material) -> Error {
+                         Ref<Engine::Renderer::LuaMaterial> &luaMaterial)
+    -> Error {
+
+  auto &material = luaMaterial->material;
+
   material.name = gltfMaterial.name;
 
   material.cullMode =
@@ -482,12 +435,493 @@ auto ExtractVertexFormat(const fastgltf::Asset &asset,
     const fastgltf::Accessor &accessor = asset.accessors.at(accessorIndex);
 
     auto size = fastgltf::getComponentByteSize(accessor.componentType);
-    auto count = fastgltf::getNumComponents(accessor.type);
+    auto count = static_cast<int>(fastgltf::getNumComponents(accessor.type));
+
+    auto formatResult = GetVkFormat(accessor.componentType, count);
+
+    if (Error::IsError(formatResult)) {
+      return formatResult.error().AsUnexpected();
+    }
+
+    Graphics::VertexComponent attribute{};
+    attribute.format = formatResult.value();
+    attribute.name = semantic;
+    attribute.binding = 0;
+    attributes.emplace_back(attribute);
+  }
+
+  return Graphics::VertexFormat(attributes);
+}
+
+/// Normalize an integer attribute value to float [0,1] or [-1,1].
+/// Writes `compCount` floats (each 4 bytes) into `dst`.
+inline void NormalizeAttribute(const uint8_t *src, uint8_t *dst,
+                               fastgltf::ComponentType compType,
+                               size_t compCount) {
+
+  const float IntToFloat = 1.0F / 127.0F;
+  const float UIntToFloat = 1.0F / 255.0F;
+  const float ShortToFloat = 1.0F / 32767.0F;
+  const float UShortToFloat = 1.0F / 65535.0F;
+
+  for (size_t i = 0; i < compCount; ++i) {
+    float value = 0.0F;
+    switch (compType) {
+    case fastgltf::ComponentType::Byte: {
+      auto cvalue = static_cast<int8_t>(src[i]); // NOLINT
+      value = std::max(static_cast<float>(cvalue) * IntToFloat, -1.0F);
+      break;
+    }
+    case fastgltf::ComponentType::UnsignedByte: {
+      value = static_cast<float>(src[i]) * UIntToFloat; // NOLINT
+      break;
+    }
+    case fastgltf::ComponentType::Short: {
+      int16_t cvalue{};
+      memcpy(&cvalue, src + (i * 2), 2); // NOLINT
+      value = std::max(static_cast<float>(cvalue) * ShortToFloat, -1.0F);
+      break;
+    }
+    case fastgltf::ComponentType::UnsignedShort: {
+      uint16_t cvalue{};
+      memcpy(&cvalue, src + (i * 2), 2); // NOLINT
+      value = static_cast<float>(cvalue) * UShortToFloat;
+      break;
+    }
+    default:
+      break;
+    }
+    memcpy(dst + (i * sizeof(float)), &value, sizeof(float)); // NOLINT
   }
 }
 
+static inline auto PackToSigned10Bit(float value) -> uint32_t {
+  value = std::max(std::min(value, 1.0F), -1.0F);
+  auto intValue = static_cast<int32_t>(std::round(value * 511.0F)); // NOLINT
+  return static_cast<uint32_t>(intValue) & 0x3FF;                   // NOLINT
+}
+
+static void ConvertNormalToPacked10Bit(const uint8_t *src, uint8_t *dst) {
+  float normalX = 0.0F;
+  float normalY = 0.0F;
+  float normalZ = 0.0F;
+  memcpy(&normalX, src, sizeof(float));                       // NOLINT
+  memcpy(&normalY, src + sizeof(float), sizeof(float));       // NOLINT
+  memcpy(&normalZ, src + (2 * sizeof(float)), sizeof(float)); // NOLINT
+
+  uint32_t packedX = PackToSigned10Bit(normalX);
+  uint32_t packedY = PackToSigned10Bit(normalY);
+  uint32_t packedZ = PackToSigned10Bit(normalZ);
+
+  uint32_t packedNormal =
+      (packedX) | (packedY << 10) | (packedZ << 20); // NOLINT
+
+  memcpy(dst, &packedNormal, sizeof(uint32_t)); // NOLINT
+}
+
+static void ConvertTangentToPacked10Bit(const uint8_t *src, uint8_t *dst) {
+  float tangentX = 0.0F;
+  float tangentY = 0.0F;
+  float tangentZ = 0.0F;
+  float tangentW = 0.0F;
+  memcpy(&tangentX, src, sizeof(float));                       // NOLINT
+  memcpy(&tangentY, src + sizeof(float), sizeof(float));       // NOLINT
+  memcpy(&tangentZ, src + (2 * sizeof(float)), sizeof(float)); // NOLINT
+  memcpy(&tangentW, src + (3 * sizeof(float)), sizeof(float)); // NOLINT
+
+  uint32_t packedX = PackToSigned10Bit(tangentX);
+  uint32_t packedY = PackToSigned10Bit(tangentY);
+  uint32_t packedZ = PackToSigned10Bit(tangentZ);
+  uint32_t packedW = tangentW > 0.0F ? 1 : 0; // Store sign in W
+
+  uint32_t packedTangent =
+      (packedX) | (packedY << 10) | (packedZ << 20) | (packedW << 30); // NOLINT
+
+  memcpy(dst, &packedTangent, sizeof(uint32_t)); // NOLINT
+}
+
+static auto PackToUnsigned8Bit(float value) -> uint {
+  value = std::max(std::min(value, 1.0F), 0.0F);
+  return static_cast<uint32_t>(std::round(value * 255.0F)); // NOLINT
+}
+
+static auto ConvertColorToPacked8Bit(const uint8_t *src, uint8_t *dst) -> void {
+  float colorR = 0.0F;
+  float colorG = 0.0F;
+  float colorB = 0.0F;
+  float colorA = 1.0F;
+  memcpy(&colorR, src, sizeof(float));                       // NOLINT
+  memcpy(&colorG, src + sizeof(float), sizeof(float));       // NOLINT
+  memcpy(&colorB, src + (2 * sizeof(float)), sizeof(float)); // NOLINT
+  memcpy(&colorA, src + (3 * sizeof(float)), sizeof(float)); // NOLINT
+
+  uint32_t packedR = PackToUnsigned8Bit(colorR);
+  uint32_t packedG = PackToUnsigned8Bit(colorG);
+  uint32_t packedB = PackToUnsigned8Bit(colorB);
+  uint32_t packedA = PackToUnsigned8Bit(colorA);
+
+  uint32_t packedColor =
+      (packedR) | (packedG << 8) | (packedB << 16) | (packedA << 24); // NOLINT
+
+  memcpy(dst, &packedColor, sizeof(uint32_t));
+}
+
+// Converter functions; for example, float32vec3 to packed uint 10-bit per component.
+// The key is the semantic, and the value is a function that takes the source data and writes the converted data to the destination buffer.
+const std::unordered_map<std::string,
+                         std::function<void(const uint8_t *src, uint8_t *dst)>>
+    Converters = {
+        {"NORMAL", ConvertNormalToPacked10Bit},
+        {"TANGENT", ConvertTangentToPacked10Bit},
+        {"POSITION",
+         nullptr}, // No conversion for POSITION, but could add one if desired.
+        {"COLOR_0", ConvertColorToPacked8Bit},
+        {"TEXCOORD_0", nullptr}
+
+};
+
+inline auto TriangleTangent(Math::Vec3 vert0, Math::Vec3 vert1,
+                            Math::Vec3 vert2, Math::Vec2 uv0, Math::Vec2 uv1,
+                            Math::Vec2 uv2) -> Math::Vec4 {
+  Math::Vec3 edge1 = vert1 - vert0;
+  Math::Vec3 edge2 = vert2 - vert0;
+  Math::Vec2 deltaUV1 = uv1 - uv0;
+  Math::Vec2 deltaUV2 = uv2 - uv0;
+
+  float factor = 1.0F / (deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y);
+
+  Math::Vec4 tangent{};
+  tangent.x = factor * (deltaUV2.y * edge1.x - deltaUV1.y * edge2.x); // NOLINT
+  tangent.y = factor * (deltaUV2.y * edge1.y - deltaUV1.y * edge2.y); // NOLINT
+  tangent.z = factor * (deltaUV2.y * edge1.z - deltaUV1.y * edge2.z); // NOLINT
+  tangent.w = 0.0F;
+
+  return tangent.Normalize();
+}
+
 // NOLINTNEXTLINE
-inline auto LoadNode(flecs::world world, Graphics::GraphicsContext &context,
+inline auto FillVertexDataDefaults(Graphics::VertexFormat &format,
+                                   const fastgltf::Asset &asset,
+                                   const fastgltf::Primitive &primitive,
+                                   std::vector<uint8_t> &existingData,
+                                   const std::vector<uint8_t> &indices,
+                                   VkIndexType indexType) -> void {
+
+  auto stride = format.GetStride(0);
+
+  // Check for missing attributes and fill with defaults if needed.
+  for (const auto &component : format.GetAttributes()) {
+    bool hasAttribute = false;
+    for (const auto &[semantic, accessorIndex] : primitive.attributes) {
+      auto semanticView = std::string_view(semantic);
+      if (semanticView == component.name) {
+        hasAttribute = true;
+        break;
+      }
+    }
+
+    if (hasAttribute) {
+      continue;
+    }
+
+    PrintAlways("Attribute {} is missing in primitive; filling with defaults.",
+                component.name);
+
+    if (component.name == "TANGENT") {
+      continue;
+
+      auto writeOffset = component.offset;
+      uint32_t positionOffset{};
+      uint32_t uvOffset{};
+
+      // Find POSITION and TEXCOORD_0 offsets.
+      for (const auto &comp : format.GetAttributes()) {
+        if (comp.name == "POSITION") {
+          positionOffset = comp.offset;
+        } else if (comp.name == "TEXCOORD_0") {
+          uvOffset = comp.offset;
+        }
+      }
+
+      if (indexType == VK_INDEX_TYPE_MAX_ENUM) {
+#pragma unroll 2
+        for (size_t vertex = 0; vertex < existingData.size() / stride;
+             vertex += 3) {
+          auto vert0 = existingData.data() + vertex * stride;       // NOLINT
+          auto vert1 = existingData.data() + (vertex + 1) * stride; // NOLINT
+          auto vert2 = existingData.data() + (vertex + 2) * stride; // NOLINT
+
+          Math::Vec3 pos0{};
+          Math::Vec3 pos1{};
+          Math::Vec3 pos2{};
+          Math::Vec2 uv0{};
+          Math::Vec2 uv1{};
+          Math::Vec2 uv2{};
+
+          memcpy(&pos0, vert0 + positionOffset, sizeof(Math::Vec3)); // NOLINT
+          memcpy(&uv0, vert0 + uvOffset, sizeof(Math::Vec2));        // NOLINT
+          memcpy(&pos1, vert1 + positionOffset, sizeof(Math::Vec3)); // NOLINT
+          memcpy(&uv1, vert1 + uvOffset, sizeof(Math::Vec2));        // NOLINT
+          memcpy(&pos2, vert2 + positionOffset, sizeof(Math::Vec3)); // NOLINT
+          memcpy(&uv2, vert2 + uvOffset, sizeof(Math::Vec2));        // NOLINT
+
+          Math::Vec4 tangent = TriangleTangent(pos0, pos1, pos2, uv0, uv1, uv2);
+
+          memcpy(vert0 + writeOffset, &tangent, sizeof(Math::Vec4)); // NOLINT
+          memcpy(vert1 + writeOffset, &tangent, sizeof(Math::Vec4)); // NOLINT
+          memcpy(vert2 + writeOffset, &tangent, sizeof(Math::Vec4)); // NOLINT
+        }
+      } else {
+        size_t indexSize = indexType == VK_INDEX_TYPE_UINT16 ? 2 : 4;
+        size_t triangleCount = indices.size() / (3 * indexSize);
+#pragma unroll 2
+        for (size_t triangle = 0; triangle < triangleCount; ++triangle) {
+          uint32_t index0{};
+          uint32_t index1{};
+          uint32_t index2{};
+
+          if (indexType == VK_INDEX_TYPE_UINT16) {
+            index0 = *reinterpret_cast<const uint16_t *>(         // NOLINT
+                indices.data() + triangle * 3 * indexSize);       // NOLINT
+            index1 = *reinterpret_cast<const uint16_t *>(         // NOLINT
+                indices.data() + (triangle * 3 + 1) * indexSize); // NOLINT
+            index2 = *reinterpret_cast<const uint16_t *>(         // NOLINT
+                indices.data() + (triangle * 3 + 2) * indexSize); // NOLINT
+          } else {
+            index0 = *reinterpret_cast<const uint32_t *>(         // NOLINT
+                indices.data() + triangle * 3 * indexSize);       // NOLINT
+            index1 = *reinterpret_cast<const uint32_t *>(         // NOLINT
+                indices.data() + (triangle * 3 + 1) * indexSize); // NOLINT
+            index2 = *reinterpret_cast<const uint32_t *>(         // NOLINT
+                indices.data() + (triangle * 3 + 2) * indexSize); // NOLINT
+          }
+
+          auto vert0 = existingData.data() + index0 * stride; // NOLINT
+          auto vert1 = existingData.data() + index1 * stride; // NOLINT
+          auto vert2 = existingData.data() + index2 * stride; // NOLINT
+
+          Math::Vec3 pos0{};
+          Math::Vec3 pos1{};
+          Math::Vec3 pos2{};
+          Math::Vec2 uv0{};
+          Math::Vec2 uv1{};
+          Math::Vec2 uv2{};
+
+          memcpy(&pos0, vert0 + positionOffset, sizeof(Math::Vec3)); // NOLINT
+          memcpy(&uv0, vert0 + uvOffset, sizeof(Math::Vec2));        // NOLINT
+          memcpy(&pos1, vert1 + positionOffset, sizeof(Math::Vec3)); // NOLINT
+          memcpy(&uv1, vert1 + uvOffset, sizeof(Math::Vec2));        // NOLINT
+          memcpy(&pos2, vert2 + positionOffset, sizeof(Math::Vec3)); // NOLINT
+          memcpy(&uv2, vert2 + uvOffset, sizeof(Math::Vec2));        // NOLINT
+
+          Math::Vec4 tangent = TriangleTangent(pos0, pos1, pos2, uv0, uv1, uv2);
+
+          memcpy(vert0 + writeOffset, &tangent, sizeof(Math::Vec4)); // NOLINT
+          memcpy(vert1 + writeOffset, &tangent, sizeof(Math::Vec4)); // NOLINT
+          memcpy(vert2 + writeOffset, &tangent, sizeof(Math::Vec4)); // NOLINT
+        }
+      }
+    } else if (component.name == "COLOR_0") {
+      // Fill missing vertex colors with white (1,1,1,1).
+      uint32_t whiteColor = ~0U; // RGBA packed white
+      for (size_t vertex = 0; vertex < existingData.size() / stride; ++vertex) {
+        auto vert = existingData.data() + vertex * stride; // NOLINT
+        memcpy(vert + component.offset, &whiteColor,       // NOLINT
+               sizeof(uint32_t));
+      }
+    } else {
+      // For other attributes, NOOP.
+    }
+  }
+}
+
+inline auto // NOLINTNEXTLINE
+LoadVertexData(Graphics::VertexFormat &format, const fastgltf::Asset &asset,
+               const fastgltf::Primitive &primitive,
+               const std::vector<uint8_t> &indices, VkIndexType indexType)
+    -> Result<std::vector<uint8_t>> {
+  if (primitive.attributes.empty()) {
+    return Error::Unexpected("Primitive has no attributes.");
+  }
+
+  // Determine vertex count from first accessor.
+  const size_t vertexCount =
+      asset.accessors.at(primitive.attributes.begin()->accessorIndex).count;
+
+  // Compute output stride from the vertex format.
+  const size_t outputStride = format.GetStride(0);
+
+  PrintAlways(format.ToString());
+
+  std::vector<uint8_t> result(vertexCount * outputStride, 0);
+
+  for (const auto &[semantic, accessorIndex] : primitive.attributes) {
+    const fastgltf::Accessor &accessor = asset.accessors.at(accessorIndex);
+    std::string_view semanticView(semantic);
+
+    // Find matching vertex component in format.
+    const Graphics::VertexComponent *attribute = nullptr;
+    for (const auto &component : format.GetAttributes()) {
+      if (component.name == semanticView) {
+        attribute = &component;
+        break;
+      }
+    }
+
+    if (attribute == nullptr || attribute->format == VK_FORMAT_UNDEFINED) {
+      return Error::Unexpectedf("Couldn't match Format for: {}", semantic);
+    }
+
+    if (accessor.count != vertexCount) {
+      return Error::Unexpectedf(
+          "Accessor count mismatch for {}: expected {}, got {}", semantic,
+          vertexCount, accessor.count);
+    }
+
+    if (!accessor.bufferViewIndex.has_value()) {
+      return Error::Unexpectedf("Accessor for {} has no bufferView.", semantic);
+    }
+
+    if (accessor.sparse.has_value()) {
+      return Error::Unexpectedf("Sparse accessors not supported for {}.",
+                                semantic);
+    }
+
+    const auto &bufferView =
+        asset.bufferViews.at(accessor.bufferViewIndex.value());
+
+    auto dataSourceResult = LoadBufferView(asset, bufferView);
+    if (Error::IsError(dataSourceResult)) {
+      return dataSourceResult.error().AsUnexpected();
+    }
+
+    auto span = dataSourceResult.value();
+
+    const auto srcComponentSize =
+        fastgltf::getComponentByteSize(accessor.componentType);
+    const auto componentCount =
+        static_cast<size_t>(fastgltf::getNumComponents(accessor.type));
+    const size_t srcElementSize = srcComponentSize * componentCount;
+    auto vkFormatSize = Graphics::Format::GetSize(attribute->format);
+
+    // byteStride of 0 means tightly packed.
+    const size_t srcStride = bufferView.byteStride.value_or(srcElementSize);
+
+    // Bounds check: ensure all vertex data fits within the buffer.
+    const size_t requiredSize =
+        (vertexCount > 0 ? ((vertexCount - 1) * srcStride) + srcElementSize
+                         : 0);
+
+    PrintAlways("Loading attribute {}: vertexCount={}, srcElementSize={}, "
+                "srcStride={}, "
+                "requiredSize={}",
+                semanticView, vertexCount, srcElementSize, srcStride,
+                requiredSize);
+
+    auto spansize = span.size();
+
+    // Check if the accessor's data fits within the buffer view span.
+    if (requiredSize > spansize) {
+      return Error::Unexpectedf(
+          "Buffer too small for attribute {}: need {}, have {}", semanticView,
+          requiredSize, spansize);
+    }
+
+    const size_t dstElementSize = Graphics::Format::GetSize(attribute->format);
+    const size_t dstOffset = attribute->offset;
+
+    // Check if we need normalization (accessor.normalized + integer type).
+    const bool needsNormalize =
+        accessor.normalized &&
+        (accessor.componentType == fastgltf::ComponentType::Byte ||
+         accessor.componentType == fastgltf::ComponentType::UnsignedByte ||
+         accessor.componentType == fastgltf::ComponentType::Short ||
+         accessor.componentType == fastgltf::ComponentType::UnsignedShort);
+
+    if (needsNormalize && srcElementSize != dstElementSize) {
+      return Error::Unexpectedf(
+          "Normalization requires matching src and dst element sizes for {}: "
+          "got src {}, dst {}",
+          semanticView, srcElementSize, dstElementSize);
+    }
+
+    auto resultSize = result.size();
+    auto finalWriteSize =
+        ((vertexCount - 1) * outputStride) + dstOffset + dstElementSize;
+    if (finalWriteSize > resultSize) {
+      return Error::Unexpectedf(
+          "Output buffer too small for attribute {}: need {}, have {}",
+          semanticView, finalWriteSize, resultSize);
+    }
+
+    auto converterIter = Converters.find(std::string(semantic));
+    std::function<void(const uint8_t *src, uint8_t *dst)> converter = nullptr;
+    if (converterIter != Converters.end()) {
+      converter = converterIter->second;
+    }
+
+    PrintAlways("Processing attribute {}: needsNormalize={}, converter={}",
+                semanticView, needsNormalize,
+                converter != nullptr ? "yes" : "no");
+    PrintAlways(
+        "srcElementSize={}, dstElementSize={}, outputStride={}, dstOffset={}",
+        srcElementSize, dstElementSize, outputStride, dstOffset);
+
+    for (size_t value = 0; value < vertexCount; ++value) {
+      const uint8_t *srcPtr = span.data() + value * srcStride; // NOLINT
+      uint8_t *dstPtr =
+          result.data() + value * outputStride + dstOffset; // NOLINT
+
+      if (needsNormalize) {
+        NormalizeAttribute(srcPtr, dstPtr, accessor.componentType,
+                           componentCount);
+      } else {
+        if (converter != nullptr) {
+          converter(srcPtr, dstPtr);
+        } else {
+          memcpy(dstPtr, srcPtr, srcElementSize);
+        }
+      }
+    }
+  }
+
+  FillVertexDataDefaults(format, asset, primitive, result, indices, indexType);
+
+  return result;
+}
+
+inline auto LoadIndexData(const fastgltf::Asset &asset,
+                          const fastgltf::Primitive &primitive)
+    -> Result<std::vector<uint8_t>> {
+  if (!primitive.indicesAccessor.has_value()) {
+    return std::vector<uint8_t>{};
+  }
+
+  const auto &accessor = asset.accessors.at(primitive.indicesAccessor.value());
+
+  assert(accessor.bufferViewIndex.has_value());
+  const auto &bufferView =
+      asset.bufferViews.at(accessor.bufferViewIndex.value());
+
+  auto dataSourceResult = LoadBufferView(asset, bufferView);
+  if (Error::IsError(dataSourceResult)) {
+    return dataSourceResult.error().AsUnexpected();
+  }
+
+  auto span = dataSourceResult.value();
+
+  auto componentSize = fastgltf::getComponentByteSize(accessor.componentType);
+  auto finalOffset = accessor.byteOffset;
+  auto finalLength = accessor.count * componentSize;
+
+  // NOLINTNEXTLINE
+  return std::vector<uint8_t>(span.data() + finalOffset,
+                              span.data() + finalOffset + // NOLINT
+                                  finalLength);
+}
+
+// NOLINTNEXTLINE
+inline auto LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
                      const fastgltf::Asset &asset,
                      const fastgltf::Node &gltfNode)
     -> Result<std::vector<flecs::entity>> {
@@ -500,11 +934,10 @@ inline auto LoadNode(flecs::world world, Graphics::GraphicsContext &context,
   bool isNode = !isMesh && !isSkin && !isCamera && !isLight;
 
   if (isNode) {
-    auto node = world.entity(gltfNode.name.c_str());
+    auto node = world->entity(gltfNode.name.c_str());
     node.add<Engine::Node>();
-    node.add<Engine::Selectable>(
-        Engine::Selectable{.name = std::string(gltfNode.name)});
     node.add<Engine::Transform>();
+    node.add<Engine::Userdata>();
 
     if (std::holds_alternative<fastgltf::TRS>(gltfNode.transform)) {
       const auto &trs = std::get<fastgltf::TRS>(gltfNode.transform);
@@ -542,23 +975,128 @@ inline auto LoadNode(flecs::world world, Graphics::GraphicsContext &context,
     auto meshIndex = *gltfNode.meshIndex;
     const auto &gltfMesh = asset.meshes[meshIndex];
 
-    std::vector<flecs::entity> meshes;
+    std::vector<flecs::entity> shapes;
 
     for (const auto &primitive : gltfMesh.primitives) {
-      // Load each primitive into a shape.
-      // Engine::Shape shape;
-      // shape.name = gltfNode.name;
+      // Each primitive corresponds to a separate mesh in our engine.
+      auto shapeEntity = world->entity(gltfMesh.name.c_str());
+      shapeEntity.add<Engine::Shape>();
+      shapeEntity.add<Engine::BoundingBox>();
+      shapeEntity.add<Engine::Transform>();
 
-      auto mesh =
-          Graphics::Mesh::Create(context, format, vertexCount, debugName);
+      shapes.emplace_back(shapeEntity);
+
+      auto indexDataResult = LoadIndexData(asset, primitive);
+      if (Error::IsError(indexDataResult)) {
+        return indexDataResult.error().AsUnexpected();
+      }
+
+      auto indexData = indexDataResult.value();
+      VkIndexType indexType = VK_INDEX_TYPE_MAX_ENUM;
+      if (!indexData.empty()) {
+        const auto &accessor =
+            asset.accessors.at(primitive.indicesAccessor.value());
+        switch (accessor.componentType) {
+        case fastgltf::ComponentType::UnsignedByte:
+          indexType = VK_INDEX_TYPE_UINT8_EXT;
+          break;
+        case fastgltf::ComponentType::UnsignedShort:
+          indexType = VK_INDEX_TYPE_UINT16;
+          break;
+        case fastgltf::ComponentType::UnsignedInt:
+          indexType = VK_INDEX_TYPE_UINT32;
+          break;
+        default:
+          return Error::Unexpected("Unsupported index component type.");
+        }
+      }
+
+      using Comp = Graphics::VertexComponent;
+
+      /*
+      struct VertexInput
+{
+    float3 Position : POSITION;
+    float2 TexCoords : TEXCOORD;
+    uint Normal : NORMAL;
+    uint Tangent : TANGENT;
+    uint Color  : COLOR;
+};
+      */
+
+      std::vector<Comp> DefaultVertexComponents = {
+          Comp{.name = "POSITION",
+               .location = 0,
+               .binding = 0,
+               .format = VK_FORMAT_R32G32B32_SFLOAT},
+          Comp{.name = "TEXCOORD_0",
+               .location = 1,
+               .binding = 0,
+               .format = VK_FORMAT_R32G32_SFLOAT},
+          Comp{.name = "NORMAL",
+               .location = 2,
+               .binding = 0,
+               .format = VK_FORMAT_R32_UINT},
+          Comp{.name = "TANGENT",
+               .location = 3,
+               .binding = 0,
+               .format = VK_FORMAT_R32_UINT},
+          Comp{.name = "COLOR_0",
+               .location = 4,
+               .binding = 0,
+               .format = VK_FORMAT_R8G8B8A8_SNORM}};
+
+      Graphics::VertexFormat DefaultVertexFormat(DefaultVertexComponents);
+
+      auto vertexFormat = DefaultVertexFormat;
+      auto vertexDataResult =
+          LoadVertexData(vertexFormat, asset, primitive, indexData, indexType);
+      if (Error::IsError(vertexDataResult)) {
+        return vertexDataResult.error().AsUnexpected();
+      }
+
+      auto vertexData = vertexDataResult.value();
+      auto vertexCount = vertexData.size() / vertexFormat.GetStride(0);
+
+      auto meshResult = Graphics::Mesh::Create(
+          context, vertexFormat, vertexCount, std::string(gltfMesh.name));
+
+      if (Error::IsError(meshResult)) {
+        return meshResult.error().AsUnexpected();
+      }
+
+      auto mesh = meshResult.value();
+
+      if (!indexData.empty()) {
+        auto indexBufferResult =
+            mesh->SetIndices(context, indexData, indexType);
+        if (Error::IsError(indexBufferResult)) {
+          return indexBufferResult.AsUnexpected();
+        }
+      }
+
+      auto vertexBufferResult = mesh->SetVertices(context, vertexData);
+      if (Error::IsError(vertexBufferResult)) {
+        return vertexBufferResult.AsUnexpected();
+      }
+      auto geometry = world->entity();
+      geometry.set<Engine::Geometry>(Engine::Geometry{mesh});
+      geometry.add<Engine::Transform>();
+
+      auto lod = world->entity();
+      lod.add<Engine::LevelOfDetail>();
+
+      geometry.child_of(lod);
+      lod.child_of(shapeEntity);
 
       // Load material if present.
       if (primitive.materialIndex.has_value()) {
         const auto &material = asset.materials[primitive.materialIndex.value()];
-        auto &shape = shapeEntity.get_mut<Engine::Shape>();
+        auto rendererMaterial = Ref<Engine::Renderer::LuaMaterial>::Make(
+            std::string(material.name));
 
         auto materialResult =
-            LoadMaterial(context, asset, material, *shape.material);
+            LoadMaterial(context, asset, material, rendererMaterial);
         if (Error::IsError(materialResult)) {
           return materialResult.AsUnexpected();
         }
@@ -584,7 +1122,7 @@ inline auto LoadNode(flecs::world world, Graphics::GraphicsContext &context,
 }
 
 auto LoadGltfModel(Graphics::GraphicsContext &context, const std::string &path,
-                   Engine::Scene &scene) -> Error {
+                   flecs::world *world) -> Error {
   /// Load the file into a data buffer.
 
   auto bytesResult = Filesystem::ReadFile(path);
@@ -621,24 +1159,34 @@ auto LoadGltfModel(Graphics::GraphicsContext &context, const std::string &path,
                          std::string(fastgltf::getErrorName(validationError)));
   }
 
+  Buffers.reserve(asset->buffers.size());
+
+  for (size_t i = 0; i < asset->buffers.size(); ++i) {
+    const auto &buffer = asset->buffers[i];
+    auto bufferDataResult = LoadDataSource(asset.get(), buffer.data);
+    if (Error::IsError(bufferDataResult)) {
+      return bufferDataResult.error();
+    }
+
+    auto bufferData = bufferDataResult.value();
+    Buffers.emplace_back(bufferData.begin(), bufferData.end());
+  }
+
   // loop through scenes
   for (const auto &glTFScene : asset->scenes) {
     PrintInfo("Loading glTF scene: {}", glTFScene.name);
     for (const auto &nodeIndex : glTFScene.nodeIndices) {
       const auto &gltfNode = asset->nodes[nodeIndex];
       PrintInfo("Loading glTF node: {}", gltfNode.name);
-      auto nodeResult = LoadNode(context, asset.get(), gltfNode);
+      auto nodeResult = LoadNode(world, context, asset.get(), gltfNode);
       if (Error::IsError(nodeResult)) {
         return nodeResult.error();
-      }
-
-      for (auto &sceneObject : nodeResult.value()) {
-        scene.hierarchy.emplace_back(std::move(sceneObject));
       }
     }
   }
 
-  LoadedBuffers.clear();
+  Buffers.clear();
+  URICache.clear(); // TODO: consider keeping URI cache across loads
 
   return Error::Success();
 }

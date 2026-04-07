@@ -1,5 +1,9 @@
 #pragma once
 
+#include <cstddef>
+#include <cstdint>
+#include <span>
+#include <utility>
 #include <vector>
 namespace Utils {
 
@@ -14,5 +18,9 @@ void UnorderedErase(std::vector<T> &vect, Pred &&predicate) {
     }
   }
 }
+
+auto InterleaveSpans(
+    std::vector<std::pair<std::span<const uint8_t>, size_t>> &spans)
+    -> std::vector<uint8_t>;
 
 } // namespace Utils

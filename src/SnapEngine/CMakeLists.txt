@@ -1,6 +1,6 @@
 add_library(SnapEngine
   material.cpp
-  # gltfLoader.cpp
+  gltfLoader.cpp
   Editor/gui.cpp
 
   Scene/scene.cpp

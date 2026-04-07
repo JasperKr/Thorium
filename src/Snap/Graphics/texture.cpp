@@ -1335,37 +1335,6 @@ constexpr auto GetRequiredTextureLayout(TextureUsage usage, VkFormat format)
   }
 }
 
-constexpr auto IsStageAllowed(VkPipelineStageFlags2 stage) -> bool {
-  switch (stage) {
-  case (VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT):
-  case (VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT):
-  case (VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT):
-  case (VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT):
-  case (VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT):
-  case (VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT):
-  case (VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT):
-  case (VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT):
-  case (VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT):
-  case (VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT):
-  case (VK_PIPELINE_STAGE_2_TESSELLATION_CONTROL_SHADER_BIT):
-  case (VK_PIPELINE_STAGE_2_TESSELLATION_EVALUATION_SHADER_BIT):
-  case (VK_PIPELINE_STAGE_2_GEOMETRY_SHADER_BIT):
-  case (VK_PIPELINE_STAGE_2_TRANSFER_BIT):
-  case (VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT):
-  case (VK_PIPELINE_STAGE_2_HOST_BIT):
-  case (VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT):
-  case (VK_PIPELINE_STAGE_2_COPY_BIT):
-  case (VK_PIPELINE_STAGE_2_RESOLVE_BIT):
-  case (VK_PIPELINE_STAGE_2_BLIT_BIT):
-  case (VK_PIPELINE_STAGE_2_CLEAR_BIT):
-    return true;
-  default:
-    PrintWarning("IsStageAllowed: Unsupported pipeline stage: {}",
-                 static_cast<uint32_t>(stage));
-    return false;
-  }
-}
-
 auto Texture::UseAs(const GraphicsContext &context, TextureUsage newUsage,
                     VkPipelineStageFlags2 stage) -> Error {
 
@@ -1376,11 +1345,6 @@ auto Texture::UseAs(const GraphicsContext &context, TextureUsage newUsage,
   if (stage == VK_PIPELINE_STAGE_2_NONE) {
     return Error::Create(
         "UseAs: stage must be known when transitioning layouts.");
-  }
-
-  if (!IsStageAllowed(stage)) {
-    return Error::Create(
-        "UseAs: Unsupported pipeline stage for texture usage transition.");
   }
 
   auto layout = GetRequiredTextureLayout(newUsage, format);
@@ -1403,6 +1367,13 @@ auto Texture::UseAs(const GraphicsContext &context, TextureUsage newUsage,
 }
 
 auto Texture::UseAsAttachment(const GraphicsContext &context) -> Error {
+  // Depth/stencil attachments require both early and late fragment test stages
+  if (Image::IsDepthTexture(format) || Image::IsStencilTexture(format)) {
+    auto newPipelineStage = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT |
+                            VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
+    return UseAs(context, TextureUsage::Attachment, newPipelineStage);
+  }
+
   auto newPipelineStage = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
   return UseAs(context, TextureUsage::Attachment, newPipelineStage);
 }

@@ -13,6 +13,7 @@
 #include "Modules/object.hpp"
 #include "slang/slang.h"
 #include "tl/expected.hpp"
+#include <algorithm>
 #include <mutex>
 #include <unordered_set>
 #include <vector>
@@ -465,6 +466,11 @@ auto inline GetColorBlendAttachmentState(const GraphicsContext &context,
     }
     idx++;
 
+    if (rendertarget->texture->IsDepthTexture() ||
+        rendertarget->texture->IsStencilTexture()) {
+      continue;
+    }
+
     blendAttachments.resize(location + 1);
     blendAttachments[location] = rendertarget->blendMode;
   }
@@ -480,21 +486,6 @@ auto inline GetColorBlendAttachmentState(const GraphicsContext &context,
   }
 
   return blendAttachments;
-}
-
-auto inline GetDepthStencilState(const State &state)
-    -> VkPipelineDepthStencilStateCreateInfo {
-  VkPipelineDepthStencilStateCreateInfo depthStencil = {};
-  depthStencil.sType =
-      VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-  depthStencil.depthTestEnable = static_cast<VkBool32>(state.depthTestEnable);
-  depthStencil.depthWriteEnable = static_cast<VkBool32>(state.depthWriteEnable);
-  depthStencil.depthCompareOp = state.depthCompareOp;
-  depthStencil.depthBoundsTestEnable = VK_FALSE;
-  depthStencil.stencilTestEnable =
-      static_cast<VkBool32>(state.stencilTestEnable);
-
-  return depthStencil;
 }
 
 auto inline GetRenderFormatInfo(const GraphicsContext &context,
@@ -535,18 +526,6 @@ inline auto CreateGraphicsPipeline(const GraphicsContext &context, State &state)
 
   auto shaderStages = shaderStagesResult.value();
 
-  VkPipelineVertexInputStateCreateInfo vertexInputInfo = {};
-
-  auto bindings = state.vertexFormat.GetBindings();
-  auto attributes = state.vertexFormat.GetVkAttributes();
-
-  vertexInputInfo.sType =
-      VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-  vertexInputInfo.vertexBindingDescriptionCount = bindings.size();
-  vertexInputInfo.pVertexBindingDescriptions = bindings.data();
-  vertexInputInfo.vertexAttributeDescriptionCount = attributes.size();
-  vertexInputInfo.pVertexAttributeDescriptions = attributes.data();
-
   auto inputAssembly = GetInputAssemblyState(state);
   auto rasterizer = GetRasterizationState(state);
 
@@ -576,9 +555,10 @@ inline auto CreateGraphicsPipeline(const GraphicsContext &context, State &state)
   VkPipelineDynamicStateCreateInfo dynamicState = {};
   dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
 
-  std::array<VkDynamicState, 2> dynamicStates = {
+  std::array<VkDynamicState, 3> dynamicStates = {
       VK_DYNAMIC_STATE_VIEWPORT,
       VK_DYNAMIC_STATE_SCISSOR,
+      VK_DYNAMIC_STATE_VERTEX_INPUT_EXT,
   };
 
   dynamicState.pDynamicStates = dynamicStates.data();
@@ -603,16 +583,26 @@ inline auto CreateGraphicsPipeline(const GraphicsContext &context, State &state)
   auto idx = 0;
   auto formats = std::vector<VkFormat>(state.renderTargets.size() + 1,
                                        VK_FORMAT_UNDEFINED);
+  VkFormat depthFormat = VK_FORMAT_UNDEFINED;
+  VkFormat stencilFormat = VK_FORMAT_UNDEFINED;
 
   for (const auto &rendertarget : state.renderTargets) {
-    int location = rendertarget->location;
-    if (location == -1) {
-      location = idx;
-    }
-    idx++;
 
-    formats.resize(location + 1);
-    formats[location] = rendertarget->texture->format;
+    if (rendertarget->texture->IsDepthTexture()) {
+      depthFormat = rendertarget->texture->format;
+    } else if (rendertarget->texture->IsStencilTexture()) {
+      stencilFormat = rendertarget->texture->format;
+    } else {
+      int location = rendertarget->location;
+      if (location == -1) {
+        location = idx;
+      }
+      idx++;
+
+      formats.resize(location + 1);
+
+      formats[location] = rendertarget->texture->format;
+    }
   }
 
   /// Color Attachments ///
@@ -621,6 +611,8 @@ inline auto CreateGraphicsPipeline(const GraphicsContext &context, State &state)
   renderingCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
   renderingCreateInfo.colorAttachmentCount = formats.size();
   renderingCreateInfo.pColorAttachmentFormats = formats.data();
+  renderingCreateInfo.depthAttachmentFormat = depthFormat;
+  renderingCreateInfo.stencilAttachmentFormat = stencilFormat;
 
   auto colorBlendingResult = GetColorBlendAttachmentState(context, state);
 
@@ -641,7 +633,7 @@ inline auto CreateGraphicsPipeline(const GraphicsContext &context, State &state)
   pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
   pipelineInfo.stageCount = static_cast<uint32_t>(shaderStages.size());
   pipelineInfo.pStages = shaderStages.data();
-  pipelineInfo.pVertexInputState = &vertexInputInfo;
+  pipelineInfo.pVertexInputState = nullptr; // Dynamic vertex input state
   pipelineInfo.pInputAssemblyState = &inputAssembly;
   pipelineInfo.pViewportState = &viewportState;
   pipelineInfo.pRasterizationState = &rasterizer;
@@ -1502,6 +1494,31 @@ auto SetRenderTargets(const GraphicsContext &context,
     return Error::Create("No render targets provided.");
   }
 
+  bool differentFromCurrent =
+      renderTargets.size() != TopOfStack->renderTargets.size();
+
+  for (const auto &target : renderTargets) {
+    if (!differentFromCurrent) {
+      auto iter = std::ranges::find_if(
+          TopOfStack->renderTargets, [&](const auto &currentTarget) -> bool {
+            return currentTarget->texture->image == target->texture->image;
+          });
+
+      if (iter == TopOfStack->renderTargets.end()) {
+        differentFromCurrent = true;
+      }
+    }
+  }
+
+  TopOfStack->renderTargets = renderTargets;
+  SetViewport(nullptr);
+
+  // Only clear if we have the same render targets as before
+  // And have load ops that require clearing
+  if (differentFromCurrent) {
+    return Error::Success();
+  }
+
   if (GetIsCurrentlyRendering()) {
     ClearInfo clearInfo{};
     for (const auto &target : renderTargets) {
@@ -1528,9 +1545,6 @@ auto SetRenderTargets(const GraphicsContext &context,
     }
   }
 
-  TopOfStack->renderTargets = renderTargets;
-  SetViewport(nullptr);
-
   return Error::Success();
 }
 
@@ -1541,11 +1555,6 @@ auto SetLineWidth(float lineWidth) -> void {
 
 auto SetWindingOrder(VkFrontFace frontFace) -> void {
   TopOfStack->frontFace = frontFace;
-  TopOfStack->dirty = true;
-}
-
-auto SetVertexFormat(const VertexFormat &vertexFormat) -> void {
-  TopOfStack->vertexFormat = vertexFormat;
   TopOfStack->dirty = true;
 }
 
@@ -1661,8 +1670,6 @@ auto GetLineWidth() -> float { return TopOfStack->lineWidth; }
 
 auto GetWindingOrder() -> VkFrontFace { return TopOfStack->frontFace; }
 
-auto GetVertexFormat() -> VertexFormat { return TopOfStack->vertexFormat; }
-
 auto GetTopology() -> VkPrimitiveTopology {
   return TopOfStack->primitiveTopology;
 }
@@ -1675,6 +1682,11 @@ auto GetBindPoint() -> VkPipelineBindPoint { return TopOfStack->bindPoint; }
 auto Clear(const GraphicsContext &context, const ClearInfo &clearInfo)
     -> Error {
   ZoneScoped;
+
+  PrintAlways("Clearing render targets with clear info: depth: {}, stencil: "
+              "{}, colors: {}",
+              clearInfo.clearDepth, clearInfo.clearStencil,
+              clearInfo.colors.size());
 
   auto *commandBuffer = Graphics::GetCommandBuffer();
 

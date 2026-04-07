@@ -134,7 +134,7 @@ function snap.graphics.setLineWidth(width) end
 
 --- Sets the winding order for front face determination.
 --- @param clockwise snap.WindingOrder The winding order to set.
-function snap.graphics.setFrontFace(clockwise) end
+function snap.graphics.setWindingOrder(clockwise) end
 
 --- Gets the depth mode.
 --- @return snap.DepthMode depthmode The current depth mode.
@@ -174,7 +174,7 @@ function snap.graphics.getLineWidth() end
 
 --- Gets the current winding order for front face determination.
 --- @return snap.WindingOrder windingorder The current winding order.
-function snap.graphics.getFrontFace() end
+function snap.graphics.getWindingOrder() end
 
 --- Gets the currently set rendertargets.
 --- @return snap.RenderTarget ... The currently set rendertargets

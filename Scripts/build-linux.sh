@@ -44,7 +44,7 @@ cmake --build build
 if [ "$2" == "profile" ]; then
   #rmv radeom memory visualizer. Needs /opt/radeon-gpu-profiler/scripts/setup.sh to be run beforehand
   #rgp for radeon gpu profiler.
-  SDL_VIDEODRIVER=x11 RADV_PERFTEST=rt MESA_VK_TRACE=rmv MESA_VK_TRACE_TRIGGER=/tmp/trigger ./build/snap src/Scripting/main.lua
+  SDL_VIDEODRIVER=x11 RADV_PERFTEST=rt MESA_VK_TRACE=rgp MESA_VK_TRACE_TRIGGER=/tmp/trigger ./build/snap src/Scripting/main.lua
 fi
 
 # if second argument is "run", run the built executable

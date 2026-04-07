@@ -8,14 +8,14 @@ struct VertexStageOutput
     float4 sv_position : SV_Position;
     float3 normal : NORMAL;
     float4 tangent : TANGENT;
-    float4x2 tex_coord : TEXCOORDS;
+    float2 tex_coord : TEXCOORDS;
     float4 color : COLOR;
 };
 
 struct VertexInput
 {
     float3 Position : POSITION;
-    uint2 TexCoords : TEXCOORD;
+    float2 TexCoords : TEXCOORD;
     uint Normal : NORMAL;
     uint Tangent : TANGENT;
     float4 Color  : COLOR;
@@ -46,16 +46,14 @@ VertexStageOutput vertexMain(VertexInput input)
 
     out.sv_position = mul(float4(Position, 1.0), camera.ViewProjectionMatrix);
 
-    float2 uv0 = unpackHalf2x16ToFloat(input.TexCoords.x);
-    float2 uv1 = unpackHalf2x16ToFloat(input.TexCoords.x >> 16);
-    float2 uv2 = unpackHalf2x16ToFloat(input.TexCoords.y);
-    float2 uv3 = unpackHalf2x16ToFloat(input.TexCoords.y >> 16);
+    out.tex_coord = input.TexCoords;
+    float3 normal = UnpackNormal(input.Normal).xyz;
+    out.normal = Rotate(normal, transform.Rotation);
 
-    out.tex_coord = float4x2(uv0, uv1, uv2, uv3);
-    out.normal = UnpackNormal(input.Normal).xyz;
-    out.tangent = UnpackTangent(input.Tangent);
+    float4 tangent = UnpackTangent(input.Tangent);
+    out.tangent = float4(Rotate(tangent.xyz, transform.Rotation), tangent.w);
 
-    out.color = input.Color;
+    out.color = input.Color; //unpackUnorm4x8ToFloat(input.Color);
     return out;
 }
 
@@ -63,7 +61,7 @@ struct FragmentInput
 {
     float3 normal : NORMAL;
     float4 tangent : TANGENT;
-    float4x2 tex_coord : TEXCOORDS;
+    float2 tex_coord : TEXCOORDS;
     float4 color : COLOR;
 };
 
@@ -72,5 +70,9 @@ Sampler2D MainTexture;
 [shader("fragment")]
 float4 fragmentMain(FragmentInput input)
 {
-  return float4(float3(1.0), MainTexture .Sample(float2(input.tex_coord._m00, input.tex_coord._m10)) .r) * input.color;
+  float3 Incoming = normalize(float3(0.0, 1.0, 1.0));
+  float NoL = dot(input.normal, Incoming) * 0.5 + 0.5;
+  float4 texColor = MainTexture.Sample(input.tex_coord);
+
+  return float4((1.0 + texColor.rgb * input.color.rgb) * NoL, texColor.a * input.color.a);
 }

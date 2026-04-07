@@ -2,7 +2,6 @@
 
 #include "Graphics/hash.hpp"
 #include "Graphics/texture.hpp"
-#include "Graphics/vertexformat.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
@@ -143,30 +142,6 @@ struct RenderTarget : Object {
   mutable uint64_t hash;
   auto GetHash() const -> uint64_t;
 
-  // auto operator==(const RenderTarget &other) const -> bool {
-  //   return blendMode.blendEnable == other.blendMode.blendEnable &&
-  //          blendMode.srcColorBlendFactor ==
-  //              other.blendMode.srcColorBlendFactor &&
-  //          blendMode.dstColorBlendFactor ==
-  //              other.blendMode.dstColorBlendFactor &&
-  //          blendMode.colorBlendOp == other.blendMode.colorBlendOp &&
-  //          blendMode.srcAlphaBlendFactor ==
-  //              other.blendMode.srcAlphaBlendFactor &&
-  //          blendMode.dstAlphaBlendFactor ==
-  //              other.blendMode.dstAlphaBlendFactor &&
-  //          blendMode.alphaBlendOp == other.blendMode.alphaBlendOp &&
-  //          blendMode.colorWriteMask == other.blendMode.colorWriteMask &&
-  //          texture->format == other.texture->format &&
-  //          texture->size.width == other.texture->size.width &&
-  //          texture->size.height == other.texture->size.height &&
-  //          texture->size.depth == other.texture->size.depth &&
-  //          texture->mipmapcount == other.texture->mipmapcount &&
-  //          texture->arrayLayers == other.texture->arrayLayers &&
-  //          texture->usage == other.texture->usage &&
-  //          texture->textureType == other.texture->textureType &&
-  //          location == other.location;
-  // }
-
   auto operator==(const RenderTarget &other) const -> bool {
     return GetHash() == other.GetHash();
   }
@@ -203,59 +178,12 @@ struct State {
   Ref<Shader::ShaderModule> shader;
 
   VkPrimitiveTopology primitiveTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-  VertexFormat vertexFormat;
 
   VkPipelineBindPoint bindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
   std::vector<Ref<RenderTarget>> renderTargets;
 
   mutable uint64_t hash;
   auto GetHash() const -> uint64_t;
-
-  // auto operator==(const State &other) const -> bool {
-  //   if (bindPoint != other.bindPoint) {
-  //     return false;
-  //   }
-
-  //   if (bindPoint == VK_PIPELINE_BIND_POINT_COMPUTE) {
-  //     // For compute pipelines, only compare shader
-  //     return shader.get() == other.shader.get();
-  //   }
-
-  //   if (bindPoint != VK_PIPELINE_BIND_POINT_GRAPHICS) {
-  //     return false;
-  //   }
-
-  //   if (renderTargets.size() != other.renderTargets.size()) {
-  //     return false;
-  //   }
-
-  //   if (cullMode != other.cullMode || frontFace != other.frontFace ||
-  //       depthTestEnable != other.depthTestEnable ||
-  //       depthWriteEnable != other.depthWriteEnable ||
-  //       depthCompareOp != other.depthCompareOp ||
-  //       stencilTestEnable != other.stencilTestEnable ||
-  //       polygonMode != other.polygonMode || lineWidth != other.lineWidth ||
-  //       shader->module != other.shader->module ||
-  //       !(vertexFormat == other.vertexFormat) ||
-  //       primitiveTopology != other.primitiveTopology) {
-  //     return false;
-  //   }
-
-  //   for (size_t i = 0; i < renderTargets.size(); ++i) {
-  //     if (renderTargets[i].get() == nullptr ||
-  //         other.renderTargets[i].get() == nullptr) {
-  //       PrintWarning(
-  //           "Comparing render targets with null textures in state equality");
-  //       return false;
-  //     }
-
-  //     if (*renderTargets[i] != *other.renderTargets[i]) {
-  //       return false;
-  //     }
-  //   }
-
-  //   return true;
-  // }
 
   auto operator==(const State &other) const -> bool {
     return GetHash() == other.GetHash();
@@ -409,7 +337,6 @@ auto SetRenderTargets(const GraphicsContext &context,
     -> Error;
 auto SetLineWidth(float lineWidth) -> void;
 auto SetWindingOrder(VkFrontFace frontFace) -> void;
-auto SetVertexFormat(const VertexFormat &vertexFormat) -> void;
 auto SetTopology(VkPrimitiveTopology topology) -> void;
 
 auto GetDepthMode() -> std::tuple<bool, bool, VkCompareOp>;
@@ -423,7 +350,6 @@ auto GetShader() -> Ref<Shader::ShaderModule>;
 auto GetRenderTargets() -> std::vector<Ref<RenderTarget>>;
 auto GetLineWidth() -> float;
 auto GetWindingOrder() -> VkFrontFace;
-auto GetVertexFormat() -> VertexFormat;
 auto GetTopology() -> VkPrimitiveTopology;
 auto SetBindPoint(VkPipelineBindPoint bindPoint) -> void;
 auto GetBindPoint() -> VkPipelineBindPoint;

@@ -1,12 +1,14 @@
 #pragma once
 
 #include "Graphics/format.hpp"
+#include "Graphics/graphicsContext.hpp"
 #include "Graphics/hash.hpp"
 #include <algorithm>
 #include <cassert>
 #include <cstdint>
 #include <functional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "Modules/console.hpp"
@@ -16,10 +18,10 @@ namespace Graphics {
 
 struct VertexComponent {
   std::string name;
-  uint32_t location;
-  uint32_t binding;
-  VkFormat format;
-  uint32_t offset;
+  uint32_t location{};
+  uint32_t binding{};
+  VkFormat format{};
+  uint32_t offset{};
 };
 
 struct VertexFormat {
@@ -49,6 +51,14 @@ public:
     return VkAttributes;
   }
 
+  [[nodiscard]] auto GetVkAttributes2()
+      -> std::vector<VkVertexInputAttributeDescription2EXT> & {
+    if (!constructedBindings) {
+      ConstructBindings();
+    }
+    return VkAttributes2;
+  }
+
   [[nodiscard]] auto GetBindings()
       -> const std::vector<VkVertexInputBindingDescription> & {
     if (!constructedBindings) {
@@ -63,6 +73,33 @@ public:
     }
     assert(binding < Bindings.size());
     return Bindings[binding].stride;
+  }
+
+  [[nodiscard]] auto ToString() const -> std::string {
+    std::string result = "VertexFormat:\n";
+    for (const auto &attribute : Attributes) {
+      result += "  - " + attribute.name + ": " +
+                Format::ToString(attribute.format) +
+                " - offset: " + std::to_string(attribute.offset) + "\n";
+    }
+    return result;
+  }
+
+  auto BindDynamicInputState(VkCommandBuffer commandBuffer) -> void {
+    VkVertexInputBindingDescription2EXT vertexInputInfo = {};
+    auto bindings = GetBindings();
+    auto attributes = GetVkAttributes2();
+
+    vertexInputInfo.sType =
+        VK_STRUCTURE_TYPE_VERTEX_INPUT_BINDING_DESCRIPTION_2_EXT;
+    vertexInputInfo.binding = 0;
+    vertexInputInfo.stride = bindings.at(0).stride;
+    vertexInputInfo.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+    vertexInputInfo.divisor = 1;
+
+    vkCmdSetVertexInputEXT(commandBuffer, 1, &vertexInputInfo,
+                           static_cast<uint32_t>(attributes.size()),
+                           attributes.data());
   }
 
   auto operator==(const VertexFormat &other) const -> bool {
@@ -152,11 +189,23 @@ private:
                                             .offset = component.offset});
     }
 
+    VkAttributes2.reserve(Attributes.size());
+    for (const auto &component : Attributes) {
+      VkAttributes2.emplace_back(VkVertexInputAttributeDescription2EXT{
+          .sType = VK_STRUCTURE_TYPE_VERTEX_INPUT_ATTRIBUTE_DESCRIPTION_2_EXT,
+          .location = component.location,
+          .binding = component.binding,
+          .format = component.format,
+          .offset = component.offset,
+      });
+    }
+
     constructedBindings = true;
   }
 
   std::vector<VkVertexInputBindingDescription> Bindings;
   std::vector<VkVertexInputAttributeDescription> VkAttributes;
+  std::vector<VkVertexInputAttributeDescription2EXT> VkAttributes2;
 };
 
 struct VertexFormatHash {

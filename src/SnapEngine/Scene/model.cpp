@@ -91,8 +91,8 @@ auto LuaModel::Create(lua_State *state) -> int {
 
   if (lua_gettop(state) >= 7) {
     auto *luaMaterial = LuaWrap::ObjectFromLua<Renderer::LuaMaterial>(state, 7);
-    if (luaMaterial != nullptr && luaMaterial->material != nullptr) {
-      entity.set<Renderer::Material>(*luaMaterial->material);
+    if (luaMaterial != nullptr) {
+      entity.set<Renderer::Material>(luaMaterial->material);
     }
   }
 

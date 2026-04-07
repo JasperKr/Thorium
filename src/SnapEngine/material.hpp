@@ -5,6 +5,7 @@
 #include "Modules/object.hpp"
 #include <array>
 #include <string>
+#include <utility>
 
 #include "flecs.h"
 #include "lua.hpp"
@@ -34,6 +35,9 @@ struct Material {
         ambientOcclusionTexture(std::move(ambientOcclusionTexture)),
         reflectanceTexture(std::move(reflectanceTexture)),
         emissiveTexture(std::move(emissiveTexture)) {}
+
+  Material() = default;
+  explicit Material(std::string name) : name(std::move(name)) {}
 
   std::string name;
 
@@ -79,9 +83,10 @@ struct Material {
 };
 
 struct LuaMaterial : Object {
-  explicit LuaMaterial(Material *material) : material(material) {}
+  explicit LuaMaterial(Material material) : material(std::move(material)) {}
+  explicit LuaMaterial(const std::string &name) : material(Material(name)) {}
 
-  Material *material;
+  Material material;
   flecs::entity entity;
 
   static auto GetType() -> const Type * { return &materialType; }

@@ -38,7 +38,6 @@ function snap.graphics.newPerspectiveProjectionMatrixSimple(aspectRatio, fov, ne
   local width                                = height / aspectRatio
   local range                                = far / (far - near)
 
-  -- row-major
   out[1][1], out[1][2], out[1][3], out[1][4] = width, 0, 0, 0
   out[2][1], out[2][2], out[2][3], out[2][4] = 0, height, 0, 0
   out[3][1], out[3][2], out[3][3], out[3][4] = 0, 0, range, 1
