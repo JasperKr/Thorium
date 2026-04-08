@@ -204,7 +204,7 @@ while true do
     end
     mesh:setIndices(indicesData)
 
-    snap.scene.loadModel(scene, "Assets/Objects/Forest/treeLOD1.glb")
+    snap.scene.loadModel(scene, "Assets/Terrain/sponza.glb")
 
 
     rendertarget = snap.graphics.newTexture(snap.graphics.getWidth(), snap.graphics.getHeight(),

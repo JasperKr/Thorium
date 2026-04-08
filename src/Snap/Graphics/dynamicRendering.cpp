@@ -1585,6 +1585,9 @@ auto GetMaximumAllowedViewport() -> VkViewport {
   viewport.width = (std::max)(viewport.width, 1.0F);
   viewport.height = (std::max)(viewport.height, 1.0F);
 
+  viewport.minDepth = 0.0F;
+  viewport.maxDepth = 1.0F;
+
   return viewport;
 }
 

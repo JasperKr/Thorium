@@ -48,7 +48,8 @@ VertexStageOutput vertexMain(VertexInput input)
 
     out.tex_coord = input.TexCoords;
     float3 normal = UnpackNormal(input.Normal).xyz;
-    out.normal = Rotate(normal, transform.Rotation);
+    // out.normal = Rotate(normal, transform.Rotation);
+    out.normal = normal;
 
     float4 tangent = UnpackTangent(input.Tangent);
     out.tangent = float4(Rotate(tangent.xyz, transform.Rotation), tangent.w);

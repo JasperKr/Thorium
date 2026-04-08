@@ -497,8 +497,9 @@ inline void NormalizeAttribute(const uint8_t *src, uint8_t *dst,
 
 static inline auto PackToSigned10Bit(float value) -> uint32_t {
   value = std::max(std::min(value, 1.0F), -1.0F);
-  auto intValue = static_cast<int32_t>(std::round(value * 511.0F)); // NOLINT
-  return static_cast<uint32_t>(intValue) & 0x3FF;                   // NOLINT
+  value = (value * 0.5F) + 0.5F; // Map from [-1,1] to [0,1] NOLINT
+  auto intValue = static_cast<int32_t>(std::round(value * 1023.0F)); // NOLINT
+  return static_cast<uint32_t>(intValue) & 0x3FF;                    // NOLINT
 }
 
 static void ConvertNormalToPacked10Bit(const uint8_t *src, uint8_t *dst) {
@@ -1044,7 +1045,7 @@ inline auto LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
           Comp{.name = "COLOR_0",
                .location = 4,
                .binding = 0,
-               .format = VK_FORMAT_R8G8B8A8_SNORM}};
+               .format = VK_FORMAT_R8G8B8A8_UNORM}};
 
       Graphics::VertexFormat DefaultVertexFormat(DefaultVertexComponents);
 
@@ -1091,15 +1092,15 @@ inline auto LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
 
       // Load material if present.
       if (primitive.materialIndex.has_value()) {
-        const auto &material = asset.materials[primitive.materialIndex.value()];
-        auto rendererMaterial = Ref<Engine::Renderer::LuaMaterial>::Make(
-            std::string(material.name));
+        // const auto &material = asset.materials[primitive.materialIndex.value()];
+        // auto rendererMaterial = Ref<Engine::Renderer::LuaMaterial>::Make(
+        //     std::string(material.name));
 
-        auto materialResult =
-            LoadMaterial(context, asset, material, rendererMaterial);
-        if (Error::IsError(materialResult)) {
-          return materialResult.AsUnexpected();
-        }
+        // auto materialResult =
+        //     LoadMaterial(context, asset, material, rendererMaterial);
+        // if (Error::IsError(materialResult)) {
+        //   return materialResult.AsUnexpected();
+        // }
       }
     }
 
