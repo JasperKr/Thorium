@@ -3,6 +3,7 @@
 #include "Modules/Math/matrix.hpp"
 #include "Modules/Math/vector.hpp"
 #include "Wrap/wrap.hpp"
+#include <imgui.h>
 #include <lua.h>
 
 namespace Engine {
@@ -69,6 +70,11 @@ auto BoundingBox::Construct(const Transform &transform,
 
   Min = worldCenter - worldExtents;
   Max = worldCenter + worldExtents;
+}
+
+auto BoundingBox::DrawGUI() const -> void {
+  ImGui::Text("Min: (%.2f, %.2f, %.2f)", Min.x, Min.y, Min.z);
+  ImGui::Text("Max: (%.2f, %.2f, %.2f)", Max.x, Max.y, Max.z);
 }
 
 auto LuaBoundingBox::GetMin(lua_State *state) -> int {

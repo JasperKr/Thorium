@@ -22,6 +22,7 @@
 #include <string>
 
 namespace Engine {
+inline flecs::entity SelectedEntity;
 
 auto Scene::LoadBinding(lua_State *state) -> int {
   Bindings::LuaBoundStruct<Scene> bindings("Scene");
@@ -34,7 +35,7 @@ auto Scene::LoadBinding(lua_State *state) -> int {
   return 0;
 }
 
-auto DrawEntityHierarchy(const flecs::entity &entity) -> void {
+auto DrawEntity(const flecs::entity &entity) -> void {
   const char *entityName = entity.name();
 
   if (strcmp(entityName, "flecs") == 0) {
@@ -42,10 +43,17 @@ auto DrawEntityHierarchy(const flecs::entity &entity) -> void {
   }
 
   if (entityName == nullptr || std::string_view(entityName).empty()) {
-    entityName = "Unnamed Entity";
+    if (entity != flecs::ChildOf) {
+      entityName = "Unnamed Component";
+    } else {
+      entityName = "Unnamed Entity";
+    }
   }
 
   ImGui::Text("%s", entityName);
+  if (ImGui::IsItemClicked()) {
+    SelectedEntity = entity;
+  }
 
   entity.each([&](flecs::id identifier) -> auto {
     if (identifier.is_entity()) {
@@ -58,9 +66,17 @@ auto DrawEntityHierarchy(const flecs::entity &entity) -> void {
           componentName = "Unnamed Component";
         }
         ImGui::TextDisabled(" - %s", componentName);
+
+        if (ImGui::IsItemClicked()) {
+          SelectedEntity = componentEntity;
+        }
       }
     }
   });
+}
+
+auto DrawEntityHierarchy(const flecs::entity &entity) -> void {
+  DrawEntity(entity);
 
   entity.children([&](flecs::entity child) -> void {
     ImGui::Indent();
@@ -80,9 +96,85 @@ auto Scene::DrawUiElement(lua_State *state) -> int {
   // This is just a placeholder for now
 
   ImGui::Begin(scene->name.c_str());
-  scene->world.entity(0).children(
-      [&](flecs::entity entity) -> void { DrawEntityHierarchy(entity); });
+  if (ImGui::BeginChild("Entity Hierarchy", ImVec2(300, 0),
+                        ImGuiChildFlags_Borders)) {
+    scene->world.entity(0).children(
+        [&](flecs::entity entity) -> void { DrawEntityHierarchy(entity); });
+  }
+  ImGui::EndChild();
+  ImGui::SameLine();
 
+  if (ImGui::BeginChild("Selected Entity", ImVec2(0, 0),
+                        ImGuiChildFlags_Borders)) {
+    if (SelectedEntity.is_valid()) {
+      ImGui::Separator();
+
+      DrawEntity(SelectedEntity);
+
+      SelectedEntity.each([&](flecs::id identifier) -> auto {
+        if (identifier.is_entity()) {
+          auto componentEntity = identifier.entity();
+
+          if (componentEntity != flecs::ChildOf) {
+            const char *componentName = componentEntity.name();
+            if (componentName == nullptr ||
+                std::string_view(componentName).empty()) {
+              componentName = "Unnamed Component";
+            }
+          }
+        }
+      });
+
+      if (SelectedEntity.has<Transform>() &&
+          SelectedEntity.get_ref<Transform>().get() != nullptr) {
+        auto transform = SelectedEntity.get_ref<Transform>();
+        transform->DrawGUI();
+      }
+
+      if (SelectedEntity.has<Geometry>() &&
+          SelectedEntity.get_ref<Geometry>().get() != nullptr) {
+        auto geometry = SelectedEntity.get_ref<Geometry>();
+        geometry->DrawGUI();
+      }
+
+      if (SelectedEntity.has<LevelOfDetail>() &&
+          SelectedEntity.get_ref<LevelOfDetail>().get() != nullptr) {
+        auto lod = SelectedEntity.get_ref<LevelOfDetail>();
+        lod->DrawGUI();
+      }
+
+      if (SelectedEntity.has<Model>() &&
+          SelectedEntity.get_ref<Model>().get() != nullptr) {
+        auto model = SelectedEntity.get_ref<Model>();
+        model->DrawGUI();
+      }
+
+      if (SelectedEntity.has<Userdata>() &&
+          SelectedEntity.get_ref<Userdata>().get() != nullptr) {
+        auto userdata = SelectedEntity.get_ref<Userdata>();
+        userdata->DrawGUI(state);
+      }
+
+      if (SelectedEntity.has<BoundingBox>() &&
+          SelectedEntity.get_ref<BoundingBox>().get() != nullptr) {
+        auto boundingBox = SelectedEntity.get_ref<BoundingBox>();
+        boundingBox->DrawGUI();
+      }
+
+      if (SelectedEntity.has<LocalBounds>() &&
+          SelectedEntity.get_ref<LocalBounds>().get() != nullptr) {
+        auto localBounds = SelectedEntity.get_ref<LocalBounds>();
+        localBounds->DrawGUI();
+      }
+
+      if (SelectedEntity.has<WorldBounds>() &&
+          SelectedEntity.get_ref<WorldBounds>().get() != nullptr) {
+        auto worldBounds = SelectedEntity.get_ref<WorldBounds>();
+        worldBounds->DrawGUI();
+      }
+    }
+  }
+  ImGui::EndChild();
   ImGui::End();
 
   return 0;

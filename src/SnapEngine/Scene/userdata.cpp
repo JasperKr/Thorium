@@ -1,6 +1,7 @@
 #include "userdata.hpp"
 #include "Wrap/wrap.hpp"
 #include "entity.hpp"
+#include <imgui.h>
 #include <lua.h>
 
 namespace Engine {
@@ -63,4 +64,54 @@ auto Userdata::GetUserdata(lua_State *state) -> int {
   // Stack: [entity, "Userdata", userdata]
   return 1;
 }
+
+inline auto LuaToString(lua_State *state, int index) -> std::string {
+  if (lua_isstring(state, index) == 0) {
+    return "<non-string data>";
+  }
+  return lua_tostring(state, index);
+}
+
+inline auto DrawTable(lua_State *state, int index) -> void {
+  lua_pushnil(state);
+  while (lua_next(state, index) != 0) {
+    // Stack: [table, key, value]
+    ImGui::Text("%s: ", LuaToString(state, -2).c_str());
+
+    if (lua_istable(state, -1)) {
+      ImGui::Indent();
+      DrawTable(state, lua_gettop(state));
+      ImGui::Unindent();
+    } else {
+      ImGui::SameLine();
+      ImGui::Text("%s", LuaToString(state, -1).c_str());
+    }
+
+    lua_pop(state, 1); // Pop value, keep key for next iteration
+  }
+  lua_pop(state, 1); // Pop the key
+}
+
+auto Userdata::DrawGUI(lua_State *state) const -> void {
+  ImGui::Text("Userdata Index: %d", userdataIndex);
+  if (state == nullptr) {
+    return;
+  }
+
+  LuaWrap::SetStackToRegistry(state, "Userdata");
+  lua_rawgeti(state, -1, static_cast<int>(userdataIndex));
+
+  if (lua_isnil(state, -1)) {
+    ImGui::Text("No userdata associated with this index");
+    lua_pop(state, 1);
+    return;
+  }
+
+  if (lua_istable(state, -1)) {
+    DrawTable(state, lua_gettop(state));
+  } else {
+    ImGui::Text("Userdata value: %s", LuaToString(state, -1).c_str());
+  }
+}
+
 } // namespace Engine

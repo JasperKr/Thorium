@@ -35,6 +35,8 @@ struct Userdata {
       userdataIndex = 0;
     }
   }
+
+  auto DrawGUI(lua_State *state) const -> void;
 };
 
 } // namespace Engine

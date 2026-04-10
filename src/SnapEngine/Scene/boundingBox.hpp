@@ -24,6 +24,8 @@ struct BoundingBox {
 
   auto Construct(const Transform &transform, const BoundingBox &localBounds)
       -> void;
+
+  auto DrawGUI() const -> void;
 };
 
 static const Type boundingBoxType = Type("BoundingBox");
@@ -58,9 +60,13 @@ struct LuaBoundingBox : Object {
 
 struct LocalBounds {
   BoundingBox Bounds;
+
+  auto DrawGUI() const -> void { Bounds.DrawGUI(); }
 };
 struct WorldBounds {
   BoundingBox Bounds;
+
+  auto DrawGUI() const -> void { Bounds.DrawGUI(); }
 };
 
 extern const LuaWrap::LuaClass BoundingBoxClass;

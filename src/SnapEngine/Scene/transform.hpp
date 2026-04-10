@@ -76,6 +76,8 @@ public:
                      Math::Quaternion rotation = {0.0F, 0.0F, 0.0F, 1.0F},
                      Math::Vec3 scale = {1.0F, 1.0F, 1.0F})
       : Position(position), Rotation(rotation), Scale(scale) {}
+
+  auto DrawGUI() const -> void;
 };
 
 } // namespace Engine

@@ -7,7 +7,9 @@
 #include <string>
 namespace Engine {
 
-struct Model {};
+struct Model {
+  auto DrawGUI() const -> void {}
+};
 
 static const Type modelType = Type("Model");
 

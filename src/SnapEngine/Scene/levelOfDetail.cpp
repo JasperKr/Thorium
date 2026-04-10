@@ -4,11 +4,16 @@
 #include "Scene/geometry.hpp"
 #include "Scene/scene.hpp"
 #include "Wrap/wrap.hpp"
+#include <imgui.h>
 #include <lauxlib.h>
 #include <lua.h>
 #include <lua.hpp>
 
 namespace Engine {
+
+auto LevelOfDetail::DrawGUI() const -> void {
+  ImGui::Text("Transition Threshold: %.2f", TransitionThreshold);
+}
 
 auto LuaLevelOfDetail::GetTransitionThreshold(lua_State *state) -> int {
   auto *luaLevelOfDetail = LuaWrap::ObjectFromLua<LuaLevelOfDetail>(state, 1);

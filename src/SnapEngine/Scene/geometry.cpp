@@ -4,8 +4,17 @@
 #include "Scene/scene.hpp"
 #include "Scene/transform.hpp"
 #include "Wrap/wrap.hpp"
+#include <imgui.h>
 
 namespace Engine {
+
+auto Geometry::DrawGUI() const -> void {
+  if (mesh.isValid()) {
+    ImGui::Text("Mesh: %p", mesh.get());
+  } else {
+    ImGui::Text("Mesh: None");
+  }
+}
 
 auto LuaGeometry::GetMesh(lua_State *state) -> int {
   auto *luaGeometry = LuaWrap::ObjectFromLua<LuaGeometry>(state, 1);

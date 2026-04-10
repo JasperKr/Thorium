@@ -12,6 +12,8 @@ static const Type geometryType = Type("Geometry");
 
 struct Geometry {
   Ref<Graphics::Mesh> mesh;
+
+  auto DrawGUI() const -> void;
 };
 
 struct LuaGeometry : Object {

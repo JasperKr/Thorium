@@ -2,6 +2,8 @@
 
 namespace Engine {
 
-struct Node {};
+struct Node {
+  auto DrawGUI() const -> void {}
+};
 
 } // namespace Engine

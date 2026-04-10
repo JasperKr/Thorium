@@ -5,6 +5,7 @@
 #include "Wrap/wrap.hpp"
 #include "entity.hpp"
 #include "lua.hpp"
+#include <imgui.h>
 
 namespace Engine {
 // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers, readability-magic-numbers)
@@ -201,10 +202,6 @@ auto Transform::UpdateLocalMatrix() -> void {
     return;
   }
 
-  PrintAlways(
-      "Updating local matrix for position ({}), rotation ({}), scale ({})",
-      Position.ToString(), Rotation.ToString(), Scale.ToString());
-
   LocalMatrix =
       Math::Matrix4x4::TransformationMatrix(Position, Scale, Rotation);
   LocalDirty = false;
@@ -223,6 +220,14 @@ auto Transform::UpdateWorldMatrix(const Transform *parent) -> void {
   }
 
   WorldDirty = false;
+}
+
+auto Transform::DrawGUI() const -> void {
+  ImGui::Text("Position: (%.2f, %.2f, %.2f)", Position.x, Position.y,
+              Position.z);
+  ImGui::Text("Rotation: (%.2f, %.2f, %.2f, %.2f)", Rotation.x, Rotation.y,
+              Rotation.z, Rotation.w);
+  ImGui::Text("Scale: (%.2f, %.2f, %.2f)", Scale.x, Scale.y, Scale.z);
 }
 
 // NOLINTEND(cppcoreguidelines-avoid-magic-numbers, readability-magic-numbers)

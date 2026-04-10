@@ -3,6 +3,7 @@
 #include "Modules/object.hpp"
 #include "Wrap/wrap.hpp"
 #include <flecs.h>
+#include <imgui.h>
 #include <lua.hpp>
 namespace Engine {
 
@@ -27,6 +28,14 @@ struct LuaShape : Object {
   static auto GetLODs(lua_State *state) -> int;
 
   static auto Create(lua_State *state) -> int;
+
+  auto DrawGUI() const -> void {
+    const char *shapeName = entity.name();
+    if (shapeName == nullptr || std::string_view(shapeName).empty()) {
+      shapeName = "Unnamed Shape";
+    }
+    ImGui::Text("Shape: %s", shapeName);
+  }
 };
 
 extern const LuaWrap::LuaClass ShapeClass;
