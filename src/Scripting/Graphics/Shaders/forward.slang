@@ -21,13 +21,8 @@ struct VertexInput
     float4 Color  : COLOR;
 };
 
-struct Transform {
-  float3 Position;
-  float4 Rotation;
-  float3 Scale;
-};
-
-uniform Transform transform;
+uniform float4x4 ModelMatrix;
+uniform float3x3 NormalMatrix;
 uniform float4x4 DefaultProjectionMatrix;
 
 float3 Rotate(float3 v, float4 q)
@@ -40,21 +35,18 @@ VertexStageOutput vertexMain(VertexInput input)
 {
     VertexStageOutput out;
 
-    float3 Position = input.Position.xyz * transform.Scale;
-    Position = Rotate(Position, transform.Rotation);
-    Position += transform.Position;
-
-    out.sv_position = mul(float4(Position, 1.0), camera.ViewProjectionMatrix);
+    float4 worldPos = mul(float4(input.Position, 1.0), ModelMatrix);
+    out.sv_position = mul(worldPos, camera.ViewProjectionMatrix);
 
     out.tex_coord = input.TexCoords;
-    float3 normal = UnpackNormal(input.Normal).xyz;
-    // out.normal = Rotate(normal, transform.Rotation);
-    out.normal = normal;
+    float3 normal = normalize(UnpackNormal(input.Normal).xyz);
+    out.normal = mul(float4(normal, 0.0f), ModelMatrix).xyz;
 
     float4 tangent = UnpackTangent(input.Tangent);
-    out.tangent = float4(Rotate(tangent.xyz, transform.Rotation), tangent.w);
+    out.tangent = mul(float4(tangent.xyz, 0.0f), ModelMatrix);
+    out.tangent.w = tangent.w;
 
-    out.color = input.Color; //unpackUnorm4x8ToFloat(input.Color);
+    out.color = input.Color;
     return out;
 }
 

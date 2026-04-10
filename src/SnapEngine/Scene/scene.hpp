@@ -1,5 +1,4 @@
 #pragma once
-#include "Modules/console.hpp"
 #include "Modules/object.hpp"
 #include "Modules/type.hpp"
 #include "Scene/boundingBox.hpp"
@@ -24,16 +23,9 @@ struct Scene : Object {
   flecs::world world;
   std::string name;
 
-  explicit Scene(std::string name) : name(std::move(name)) {
-    world.component<Geometry>();
-    world.component<BoundingBox>();
-    world.component<Transform>();
-    world.component<LevelOfDetail>();
-    world.component<Model>();
-    world.component<Node>();
-    world.component<Shape>();
-    world.component<Userdata>();
-  }
+  explicit Scene();
+
+  explicit Scene(std::string name);
 
   static auto GetType() -> const Type * { return &SceneType; }
   auto GetInstanceType() const -> const Type * override { return &SceneType; }
@@ -41,6 +33,11 @@ struct Scene : Object {
   static auto LoadBinding(lua_State *state) -> int;
   static auto DrawUiElement(lua_State *state) -> int;
   static auto DrawModels(lua_State *state) -> int;
+  static auto Update(lua_State *state) -> int;
+
+  auto Update(double deltaTime) const -> Error;
+  auto UpdateTransforms() const -> void;
+  auto UpdateBoundingBoxes() const -> void;
 };
 
 extern const LuaWrap::LuaClass SceneLuaClass;

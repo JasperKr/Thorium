@@ -21,6 +21,8 @@ struct Quaternion {
   [[nodiscard]] auto Dot(const Quaternion &other) const -> Scalar;
   [[nodiscard]] auto Multiply(const Quaternion &other) const -> Quaternion;
   [[nodiscard]] auto RotateVector(const Vec3 &vec) const -> Vec3;
+
+  [[nodiscard]] auto ToString() const -> std::string;
 };
 
 } // namespace Math

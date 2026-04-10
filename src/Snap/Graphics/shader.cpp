@@ -34,8 +34,7 @@
 namespace Graphics::Shader {
 
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
-thread_local std::unordered_map<const struct ShaderModule *, BoundState>
-    BoundStates;
+thread_local std::unordered_map<VkShaderModule, BoundState> BoundStates;
 static slang::IGlobalSession *GlobalSlangSession = nullptr;
 
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)

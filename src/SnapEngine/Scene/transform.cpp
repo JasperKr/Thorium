@@ -1,5 +1,7 @@
 #include "transform.hpp"
 #include "Modules/Math/mathTypes.hpp"
+#include "Modules/Math/matrix.hpp"
+#include "Modules/console.hpp"
 #include "Wrap/wrap.hpp"
 #include "entity.hpp"
 #include "lua.hpp"
@@ -19,7 +21,7 @@ auto Transform::SetPosition(lua_State *state) -> int {
 
   auto *transform = entity->try_get_mut<Transform>();
   if (transform == nullptr) {
-    entity->set<Transform>({});
+    entity->add<Transform>();
     transform = entity->try_get_mut<Transform>();
   }
 
@@ -60,7 +62,7 @@ auto Transform::SetRotation(lua_State *state) -> int {
 
   auto *transform = entity->try_get_mut<Transform>();
   if (transform == nullptr) {
-    entity->set<Transform>({});
+    entity->add<Transform>();
     transform = entity->try_get_mut<Transform>();
   }
 
@@ -103,7 +105,7 @@ auto Transform::SetScale(lua_State *state) -> int {
 
   auto *transform = entity->try_get_mut<Transform>();
   if (transform == nullptr) {
-    entity->set<Transform>({});
+    entity->add<Transform>();
     transform = entity->try_get_mut<Transform>();
   }
 
@@ -146,7 +148,7 @@ auto Transform::SetTransform(lua_State *state) -> int {
 
   auto *transform = entity->try_get_mut<Transform>();
   if (transform == nullptr) {
-    entity->set<Transform>({});
+    entity->add<Transform>();
     transform = entity->try_get_mut<Transform>();
   }
 
@@ -192,6 +194,35 @@ auto Transform::GetTransform(lua_State *state) -> int {
   lua_pushnumber(state, transform->Scale.z);
 
   return 10;
+}
+
+auto Transform::UpdateLocalMatrix() -> void {
+  if (!LocalDirty) {
+    return;
+  }
+
+  PrintAlways(
+      "Updating local matrix for position ({}), rotation ({}), scale ({})",
+      Position.ToString(), Rotation.ToString(), Scale.ToString());
+
+  LocalMatrix =
+      Math::Matrix4x4::TransformationMatrix(Position, Scale, Rotation);
+  LocalDirty = false;
+  WorldDirty = true;
+}
+
+auto Transform::UpdateWorldMatrix(const Transform *parent) -> void {
+  if (!WorldDirty) {
+    return;
+  }
+
+  if (parent != nullptr) {
+    WorldMatrix = parent->WorldMatrix * LocalMatrix;
+  } else {
+    WorldMatrix = LocalMatrix;
+  }
+
+  WorldDirty = false;
 }
 
 // NOLINTEND(cppcoreguidelines-avoid-magic-numbers, readability-magic-numbers)

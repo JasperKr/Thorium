@@ -1,4 +1,7 @@
 #include "boundingBox.hpp"
+#include "Modules/Math/math.hpp"
+#include "Modules/Math/matrix.hpp"
+#include "Modules/Math/vector.hpp"
 #include "Wrap/wrap.hpp"
 #include <lua.h>
 
@@ -47,6 +50,25 @@ auto BoundingBox::IntersectInPlace(const BoundingBox &other) -> void {
 
 auto BoundingBox::IsValid() const -> bool {
   return Min.x <= Max.x && Min.y <= Max.y && Min.z <= Max.z;
+}
+
+/*
+auto Construct(const Transform &transform, const BoundingBox &localBounds)
+      -> void;
+*/
+
+auto BoundingBox::Construct(const Transform &transform,
+                            const BoundingBox &localBounds) -> void {
+  // Get the 8 corners of the local bounding box
+  auto center = localBounds.GetCenter();
+  auto extents = localBounds.GetSize() * 0.5F; // NOLINT
+  Math::Vec3 worldCenter =
+      Math::Vec3(transform.GetWorldMatrix() * Math::Vec4(center, 1.0F));
+  auto absoluteMatrix = Math::Abs(Math::Matrix3x3(transform.GetWorldMatrix()));
+  auto worldExtents = absoluteMatrix * extents;
+
+  Min = worldCenter - worldExtents;
+  Max = worldCenter + worldExtents;
 }
 
 auto LuaBoundingBox::GetMin(lua_State *state) -> int {

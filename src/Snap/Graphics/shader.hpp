@@ -121,8 +121,7 @@ struct BoundState {
 };
 
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
-extern thread_local std::unordered_map<const struct ShaderModule *, BoundState>
-    BoundStates;
+extern thread_local std::unordered_map<VkShaderModule, BoundState> BoundStates;
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
 struct ShaderModule : Object {
@@ -156,7 +155,7 @@ struct ShaderModule : Object {
   std::vector<slang::PreprocessorMacroDesc> preprocessorMacros;
 
   auto GetState() const -> BoundState & {
-    return BoundStates.try_emplace(this).first->second;
+    return BoundStates.try_emplace(module).first->second;
   }
 
   std::vector<uint8_t> globalUniforms;
@@ -168,9 +167,6 @@ struct ShaderModule : Object {
     auto *ctx = GetCurrentGraphicsContext();
 
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    // for (auto &pair : GetState().descriptorSetLayouts) {
-    //   vkDestroyDescriptorSetLayout(ctx->device, pair.second, nullptr);
-    // }
 
     if (module != VK_NULL_HANDLE) {
       vkDestroyShaderModule(ctx->device, module, nullptr);

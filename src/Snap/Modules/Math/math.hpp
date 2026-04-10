@@ -18,6 +18,9 @@ auto ToQuaternion(Matrix4x4 matrix) -> Quaternion;
 auto ToMatrix(EulerAngle euler) -> Matrix4x4;
 auto ToMatrix(Quaternion quat) -> Matrix4x4;
 
+auto ToMatrix3x3(EulerAngle euler) -> Matrix3x3;
+auto ToMatrix3x3(Quaternion quat) -> Matrix3x3;
+
 }; // namespace Conversions
 // NOLINTEND(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
 
@@ -32,5 +35,37 @@ auto Noise(Scalar x_channel, Scalar y_channel, uint x_wrap, uint y_wrap)
     -> Scalar;
 auto Noise(Scalar x_channel, Scalar y_channel, Scalar z_channel, uint x_wrap,
            uint y_wrap, uint z_wrap) -> Scalar;
+
+auto Abs(Scalar value) -> Scalar;
+auto Abs(Vec2 vec) -> Vec2;
+auto Abs(Vec3 vec) -> Vec3;
+auto Abs(Vec4 vec) -> Vec4;
+auto Abs(Ivec2 vec) -> Ivec2;
+auto Abs(Ivec3 vec) -> Ivec3;
+auto Abs(Ivec4 vec) -> Ivec4;
+auto Abs(Matrix3x3 mat) -> Matrix3x3;
+auto Abs(Matrix4x4 mat) -> Matrix4x4;
+
+auto Floor(Scalar value) -> Scalar;
+auto Floor(Vec2 vec) -> Vec2;
+auto Floor(Vec3 vec) -> Vec3;
+auto Floor(Vec4 vec) -> Vec4;
+auto Floor(Uvec2 vec) -> Uvec2;
+auto Floor(Uvec3 vec) -> Uvec3;
+auto Floor(Uvec4 vec) -> Uvec4;
+auto Floor(Ivec2 vec) -> Ivec2;
+auto Floor(Ivec3 vec) -> Ivec3;
+auto Floor(Ivec4 vec) -> Ivec4;
+
+auto Ceil(Scalar value) -> Scalar;
+auto Ceil(Vec2 vec) -> Vec2;
+auto Ceil(Vec3 vec) -> Vec3;
+auto Ceil(Vec4 vec) -> Vec4;
+auto Ceil(Uvec2 vec) -> Uvec2;
+auto Ceil(Uvec3 vec) -> Uvec3;
+auto Ceil(Uvec4 vec) -> Uvec4;
+auto Ceil(Ivec2 vec) -> Ivec2;
+auto Ceil(Ivec3 vec) -> Ivec3;
+auto Ceil(Ivec4 vec) -> Ivec4;
 
 }; // namespace Math

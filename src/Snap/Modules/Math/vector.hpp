@@ -2,6 +2,7 @@
 
 #include "mathTypes.hpp"
 #include <cstdint>
+#include <string>
 
 namespace Math {
 
@@ -44,6 +45,7 @@ struct Vec2 {
   auto operator==(const Vec2 &other) const -> bool;
   auto operator!=(const Vec2 &other) const -> bool;
 
+  auto operator[](uint32_t index) -> Scalar &;
   auto operator[](uint32_t index) const -> Scalar;
 
   [[nodiscard]] auto Length() const -> Scalar;
@@ -69,6 +71,8 @@ struct Vec2 {
   explicit Vec2(const Uvec2 &vec2);
   explicit Vec2(const Uvec3 &vec3);
   explicit Vec2(const Uvec4 &vec4);
+
+  [[nodiscard]] auto ToString() const -> std::string;
 };
 
 struct Vec3 {
@@ -99,6 +103,7 @@ struct Vec3 {
   auto operator==(const Vec3 &other) const -> bool;
   auto operator!=(const Vec3 &other) const -> bool;
 
+  auto operator[](uint32_t index) -> Scalar &;
   auto operator[](uint32_t index) const -> Scalar;
 
   [[nodiscard]] auto Length() const -> Scalar;
@@ -125,6 +130,10 @@ struct Vec3 {
   explicit Vec3(const Uvec2 &vec2, Scalar z_val = 0.0F);
   explicit Vec3(const Uvec3 &vec3);
   explicit Vec3(const Uvec4 &vec4);
+
+  explicit Vec3(const Vec4 &&vec4);
+
+  [[nodiscard]] auto ToString() const -> std::string;
 };
 
 struct Vec4 {
@@ -156,6 +165,7 @@ struct Vec4 {
   auto operator==(const Vec4 &other) const -> bool;
   auto operator!=(const Vec4 &other) const -> bool;
 
+  auto operator[](uint32_t index) -> Scalar &;
   auto operator[](uint32_t index) const -> Scalar;
 
   [[nodiscard]] auto Length() const -> Scalar;
@@ -182,6 +192,8 @@ struct Vec4 {
   explicit Vec4(const Uvec2 &vec2, Scalar z_val = 0.0F, Scalar w_val = 0.0F);
   explicit Vec4(const Uvec3 &vec3, Scalar w_val = 0.0F);
   explicit Vec4(const Uvec4 &vec4);
+
+  [[nodiscard]] auto ToString() const -> std::string;
 };
 
 struct Uvec2 {
@@ -212,6 +224,7 @@ struct Uvec2 {
   auto operator!=(const Uvec2 &other) const -> bool;
 
   auto operator[](uint32_t index) const -> uint32_t;
+  auto operator[](uint32_t index) -> uint32_t &;
 
   Uvec2(uint32_t x_val, uint32_t y_val) : x(x_val), y(y_val) {}
   Uvec2() = default;
@@ -221,6 +234,8 @@ struct Uvec2 {
   explicit Uvec2(const Ivec2 &vec2);
   explicit Uvec2(const Ivec3 &vec3);
   explicit Uvec2(const Ivec4 &vec4);
+
+  [[nodiscard]] auto ToString() const -> std::string;
 };
 
 struct Uvec3 {
@@ -252,6 +267,7 @@ struct Uvec3 {
   auto operator!=(const Uvec3 &other) const -> bool;
 
   auto operator[](uint32_t index) const -> uint32_t;
+  auto operator[](uint32_t index) -> uint32_t &;
 
   Uvec3(uint32_t x_val, uint32_t y_val, uint32_t z_val)
       : x(x_val), y(y_val), z(z_val) {}
@@ -262,6 +278,8 @@ struct Uvec3 {
   explicit Uvec3(const Ivec2 &vec2, uint32_t z_val = 0);
   explicit Uvec3(const Ivec3 &vec3);
   explicit Uvec3(const Ivec4 &vec4);
+
+  [[nodiscard]] auto ToString() const -> std::string;
 };
 
 struct Uvec4 {
@@ -294,6 +312,7 @@ struct Uvec4 {
   auto operator!=(const Uvec4 &other) const -> bool;
 
   auto operator[](uint32_t index) const -> uint32_t;
+  auto operator[](uint32_t index) -> uint32_t &;
 
   Uvec4(uint32_t x_val, uint32_t y_val, uint32_t z_val, uint32_t w_val)
       : x(x_val), y(y_val), z(z_val), w(w_val) {}
@@ -304,6 +323,8 @@ struct Uvec4 {
   explicit Uvec4(const Ivec2 &vec2, uint32_t z_val = 0, uint32_t w_val = 0);
   explicit Uvec4(const Ivec3 &vec3, uint32_t w_val = 0);
   explicit Uvec4(const Ivec4 &vec4);
+
+  [[nodiscard]] auto ToString() const -> std::string;
 };
 
 struct Ivec2 {
@@ -334,6 +355,7 @@ struct Ivec2 {
   auto operator!=(const Ivec2 &other) const -> bool;
 
   auto operator[](uint32_t index) const -> int32_t;
+  auto operator[](uint32_t index) -> int32_t &;
 
   Ivec2(int32_t x_val, int32_t y_val) : x(x_val), y(y_val) {}
   Ivec2() = default;
@@ -343,6 +365,8 @@ struct Ivec2 {
   explicit Ivec2(const Uvec2 &vec2);
   explicit Ivec2(const Uvec3 &vec3);
   explicit Ivec2(const Uvec4 &vec4);
+
+  [[nodiscard]] auto ToString() const -> std::string;
 };
 
 struct Ivec3 {
@@ -374,6 +398,7 @@ struct Ivec3 {
   auto operator!=(const Ivec3 &other) const -> bool;
 
   auto operator[](uint32_t index) const -> int32_t;
+  auto operator[](uint32_t index) -> int32_t &;
 
   Ivec3(int32_t x_val, int32_t y_val, int32_t z_val)
       : x(x_val), y(y_val), z(z_val) {}
@@ -384,6 +409,8 @@ struct Ivec3 {
   explicit Ivec3(const Uvec2 &vec2, int32_t z_val = 0);
   explicit Ivec3(const Uvec3 &vec3);
   explicit Ivec3(const Uvec4 &vec4);
+
+  [[nodiscard]] auto ToString() const -> std::string;
 };
 
 struct Ivec4 {
@@ -416,6 +443,7 @@ struct Ivec4 {
   auto operator!=(const Ivec4 &other) const -> bool;
 
   auto operator[](uint32_t index) const -> int32_t;
+  auto operator[](uint32_t index) -> int32_t &;
 
   Ivec4(int32_t x_val, int32_t y_val, int32_t z_val, int32_t w_val)
       : x(x_val), y(y_val), z(z_val), w(w_val) {}
@@ -426,6 +454,8 @@ struct Ivec4 {
   explicit Ivec4(const Uvec2 &vec2, int32_t z_val = 0, int32_t w_val = 0);
   explicit Ivec4(const Uvec3 &vec3, int32_t w_val = 0);
   explicit Ivec4(const Uvec4 &vec4);
+
+  [[nodiscard]] auto ToString() const -> std::string;
 };
 
 auto Min(const Vec2 &vec_a, const Vec2 &vec_b) -> Vec2;

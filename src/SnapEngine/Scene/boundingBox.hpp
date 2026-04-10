@@ -3,6 +3,7 @@
 #include "Modules/Math/vector.hpp"
 #include "Modules/object.hpp"
 #include "Modules/type.hpp"
+#include "Scene/transform.hpp"
 #include "Wrap/wrap.hpp"
 #include "flecs.h"
 #include <lua.h>
@@ -20,6 +21,9 @@ struct BoundingBox {
   auto Intersect(const BoundingBox &other, BoundingBox &result) const -> void;
   auto IntersectInPlace(const BoundingBox &other) -> void;
   [[nodiscard]] auto IsValid() const -> bool;
+
+  auto Construct(const Transform &transform, const BoundingBox &localBounds)
+      -> void;
 };
 
 static const Type boundingBoxType = Type("BoundingBox");
@@ -50,6 +54,13 @@ struct LuaBoundingBox : Object {
 
   static auto UnionInPlace(lua_State *state) -> int;
   static auto IntersectInPlace(lua_State *state) -> int;
+};
+
+struct LocalBounds {
+  BoundingBox Bounds;
+};
+struct WorldBounds {
+  BoundingBox Bounds;
 };
 
 extern const LuaWrap::LuaClass BoundingBoxClass;

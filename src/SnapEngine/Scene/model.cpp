@@ -69,11 +69,7 @@ auto LuaModel::Create(lua_State *state) -> int {
     lua_pop(state, 3);
   }
 
-  entity.set<Transform>(Transform{
-      .Position = position,
-      .Rotation = rotation,
-      .Scale = scale,
-  });
+  entity.set<Transform>(Transform(position, rotation, scale));
 
   if (lua_gettop(state) >= 6) {
     luaL_checktype(state, 6, LUA_TTABLE);
@@ -134,9 +130,9 @@ auto LuaModel::GetPosition(lua_State *state) -> int {
     return luaL_error(state, "Transform component not found");
   }
 
-  lua_pushnumber(state, transform->Position.x);
-  lua_pushnumber(state, transform->Position.y);
-  lua_pushnumber(state, transform->Position.z);
+  lua_pushnumber(state, transform->GetPosition().x);
+  lua_pushnumber(state, transform->GetPosition().y);
+  lua_pushnumber(state, transform->GetPosition().z);
 
   return 3;
 }
@@ -152,9 +148,9 @@ auto LuaModel::SetPosition(lua_State *state) -> int {
     return luaL_error(state, "Transform component not found");
   }
 
-  transform->Position.x = static_cast<Math::Scalar>(luaL_checknumber(state, 2));
-  transform->Position.y = static_cast<Math::Scalar>(luaL_checknumber(state, 3));
-  transform->Position.z = static_cast<Math::Scalar>(luaL_checknumber(state, 4));
+  transform->SetPosition(static_cast<Math::Scalar>(luaL_checknumber(state, 2)),
+                         static_cast<Math::Scalar>(luaL_checknumber(state, 3)),
+                         static_cast<Math::Scalar>(luaL_checknumber(state, 4)));
 
   return 0;
 }
@@ -170,10 +166,10 @@ auto LuaModel::GetRotation(lua_State *state) -> int {
     return luaL_error(state, "Transform component not found");
   }
 
-  lua_pushnumber(state, transform->Rotation.x);
-  lua_pushnumber(state, transform->Rotation.y);
-  lua_pushnumber(state, transform->Rotation.z);
-  lua_pushnumber(state, transform->Rotation.w);
+  lua_pushnumber(state, transform->GetRotation().x);
+  lua_pushnumber(state, transform->GetRotation().y);
+  lua_pushnumber(state, transform->GetRotation().z);
+  lua_pushnumber(state, transform->GetRotation().w);
 
   return 4;
 }
@@ -189,10 +185,10 @@ auto LuaModel::SetRotation(lua_State *state) -> int {
     return luaL_error(state, "Transform component not found");
   }
 
-  transform->Rotation.x = static_cast<Math::Scalar>(luaL_checknumber(state, 2));
-  transform->Rotation.y = static_cast<Math::Scalar>(luaL_checknumber(state, 3));
-  transform->Rotation.z = static_cast<Math::Scalar>(luaL_checknumber(state, 4));
-  transform->Rotation.w = static_cast<Math::Scalar>(luaL_checknumber(state, 5));
+  transform->SetRotation(static_cast<Math::Scalar>(luaL_checknumber(state, 2)),
+                         static_cast<Math::Scalar>(luaL_checknumber(state, 3)),
+                         static_cast<Math::Scalar>(luaL_checknumber(state, 4)),
+                         static_cast<Math::Scalar>(luaL_checknumber(state, 5)));
 
   return 0;
 }
@@ -208,9 +204,9 @@ auto LuaModel::GetScale(lua_State *state) -> int {
     return luaL_error(state, "Transform component not found");
   }
 
-  lua_pushnumber(state, transform->Scale.x);
-  lua_pushnumber(state, transform->Scale.y);
-  lua_pushnumber(state, transform->Scale.z);
+  lua_pushnumber(state, transform->GetScale().x);
+  lua_pushnumber(state, transform->GetScale().y);
+  lua_pushnumber(state, transform->GetScale().z);
 
   return 3;
 }
@@ -226,9 +222,9 @@ auto LuaModel::SetScale(lua_State *state) -> int {
     return luaL_error(state, "Transform component not found");
   }
 
-  transform->Scale.x = static_cast<Math::Scalar>(luaL_checknumber(state, 2));
-  transform->Scale.y = static_cast<Math::Scalar>(luaL_checknumber(state, 3));
-  transform->Scale.z = static_cast<Math::Scalar>(luaL_checknumber(state, 4));
+  transform->SetScale(static_cast<Math::Scalar>(luaL_checknumber(state, 2)),
+                      static_cast<Math::Scalar>(luaL_checknumber(state, 3)),
+                      static_cast<Math::Scalar>(luaL_checknumber(state, 4)));
 
   return 0;
 }

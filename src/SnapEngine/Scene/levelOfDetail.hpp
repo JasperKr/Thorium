@@ -19,7 +19,9 @@ struct LevelOfDetail {
     lod.set<LevelOfDetail>(
         LevelOfDetail{.TransitionThreshold = transitionThreshold});
 
-    lod.add<BoundingBox>();
+    lod.add<Engine::WorldBounds>();
+    lod.add<Engine::LocalBounds>();
+    lod.add<Engine::Transform>();
 
     return lod;
   };

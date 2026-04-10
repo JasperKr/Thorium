@@ -1,5 +1,6 @@
 #include "quaternion.hpp"
 #include <cmath>
+#include <sstream>
 
 namespace Math {
 [[nodiscard]] auto Quaternion::Normalize() const -> Quaternion {
@@ -37,4 +38,11 @@ namespace Math {
   Quaternion resQuat = this->Multiply(vecQuat).Multiply(this->Inverse());
   return {resQuat.x, resQuat.y, resQuat.z};
 }
+
+[[nodiscard]] auto Quaternion::ToString() const -> std::string {
+  std::ostringstream oss;
+  oss << "Quaternion(" << x << ", " << y << ", " << z << ", " << w << ")";
+  return oss.str();
+}
+
 } // namespace Math

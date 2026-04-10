@@ -42,7 +42,29 @@ namespace glTF {
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
 std::vector<std::vector<std::uint8_t>> Buffers;
 std::unordered_map<std::string, std::vector<std::uint8_t>> URICache;
+std::unordered_map<std::string, uint16_t> NameDuplicateCount;
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
+
+inline auto GetUniqueName(const std::string &baseName) -> std::string {
+  auto countIter = NameDuplicateCount.find(baseName);
+  uint16_t count = 0;
+  if (countIter != NameDuplicateCount.end()) {
+    count = countIter->second + 1;
+    countIter->second = count;
+  } else {
+    NameDuplicateCount[baseName] = 0;
+  }
+
+  if (count == 0) {
+    return baseName;
+  }
+
+  return baseName + "_" + std::to_string(count);
+}
+
+inline auto GetUniqueName(const char *baseName) -> std::string {
+  return GetUniqueName(std::string(baseName));
+}
 
 using DataIndex = size_t;
 
@@ -305,6 +327,29 @@ inline auto LoadMaterial(Graphics::GraphicsContext &context,
   }
 
   return Error::Success();
+}
+
+auto ComponentTypeToString(fastgltf::ComponentType type) -> std::string_view {
+  switch (type) {
+  case fastgltf::ComponentType::Byte:
+    return "Byte";
+  case fastgltf::ComponentType::UnsignedByte:
+    return "UnsignedByte";
+  case fastgltf::ComponentType::Short:
+    return "Short";
+  case fastgltf::ComponentType::UnsignedShort:
+    return "UnsignedShort";
+  case fastgltf::ComponentType::Int:
+    return "Int";
+  case fastgltf::ComponentType::UnsignedInt:
+    return "UnsignedInt";
+  case fastgltf::ComponentType::Float:
+    return "Float";
+  case fastgltf::ComponentType::Double:
+    return "Double";
+  default:
+    return "Invalid";
+  }
 }
 
 auto GetVkFormat(fastgltf::ComponentType type, int componentCount)
@@ -722,7 +767,8 @@ inline auto FillVertexDataDefaults(Graphics::VertexFormat &format,
           memcpy(vert2 + writeOffset, &tangent, sizeof(Math::Vec4)); // NOLINT
         }
       }
-    } else if (component.name == "COLOR_0") {
+    }
+    if (component.name == "COLOR_0") {
       // Fill missing vertex colors with white (1,1,1,1).
       uint32_t whiteColor = ~0U; // RGBA packed white
       for (size_t vertex = 0; vertex < existingData.size() / stride; ++vertex) {
@@ -808,9 +854,16 @@ LoadVertexData(Graphics::VertexFormat &format, const fastgltf::Asset &asset,
     // byteStride of 0 means tightly packed.
     const size_t srcStride = bufferView.byteStride.value_or(srcElementSize);
 
+    if (srcStride < srcElementSize) {
+      return Error::Unexpectedf(
+          "Buffer view stride too small for {}: need at least {}, got {}",
+          semanticView, srcElementSize, srcStride);
+    }
+
     // Bounds check: ensure all vertex data fits within the buffer.
     const size_t requiredSize =
-        (vertexCount > 0 ? ((vertexCount - 1) * srcStride) + srcElementSize
+        (vertexCount > 0 ? ((vertexCount - 1) * srcStride) + srcElementSize +
+                               accessor.byteOffset
                          : 0);
 
     PrintAlways("Loading attribute {}: vertexCount={}, srcElementSize={}, "
@@ -865,11 +918,15 @@ LoadVertexData(Graphics::VertexFormat &format, const fastgltf::Asset &asset,
                 semanticView, needsNormalize,
                 converter != nullptr ? "yes" : "no");
     PrintAlways(
-        "srcElementSize={}, dstElementSize={}, outputStride={}, dstOffset={}",
-        srcElementSize, dstElementSize, outputStride, dstOffset);
+        "srcElementSize={}, dstElementSize={}, outputStride={}, dstOffset={}, "
+        "accessor.componentType={}, componentCount={}, accessor offset={}",
+        srcElementSize, dstElementSize, outputStride, dstOffset,
+        ComponentTypeToString(accessor.componentType), componentCount,
+        accessor.byteOffset);
 
     for (size_t value = 0; value < vertexCount; ++value) {
-      const uint8_t *srcPtr = span.data() + value * srcStride; // NOLINT
+      const uint8_t *srcPtr =
+          span.data() + value * srcStride + accessor.byteOffset; // NOLINT
       uint8_t *dstPtr =
           result.data() + value * outputStride + dstOffset; // NOLINT
 
@@ -945,11 +1002,11 @@ inline auto LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
 
       auto &transform = node.get_mut<Engine::Transform>();
 
-      transform.Position = Math::Vec3(trs.translation[0], trs.translation[1],
-                                      trs.translation[2]);
-      transform.Rotation = Math::Quaternion(trs.rotation[0], trs.rotation[1],
-                                            trs.rotation[2], trs.rotation[3]);
-      transform.Scale = Math::Vec3(trs.scale[0], trs.scale[1], trs.scale[2]);
+      transform.SetPosition(trs.translation[0], trs.translation[1],
+                            trs.translation[2]);
+      transform.SetRotation(trs.rotation[0], trs.rotation[1], trs.rotation[2],
+                            trs.rotation[3]);
+      transform.SetScale(trs.scale[0], trs.scale[1], trs.scale[2]);
     } else {
       // Shouldn't be hit. Since we specified DecomposeNodeMatrices, all matrices should
       // have been decomposed.
@@ -980,9 +1037,11 @@ inline auto LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
 
     for (const auto &primitive : gltfMesh.primitives) {
       // Each primitive corresponds to a separate mesh in our engine.
-      auto shapeEntity = world->entity(gltfMesh.name.c_str());
+      auto shapeEntity =
+          world->entity(GetUniqueName(gltfMesh.name.c_str()).c_str());
       shapeEntity.add<Engine::Shape>();
-      shapeEntity.add<Engine::BoundingBox>();
+      shapeEntity.add<Engine::WorldBounds>();
+      shapeEntity.add<Engine::LocalBounds>();
       shapeEntity.add<Engine::Transform>();
 
       shapes.emplace_back(shapeEntity);
@@ -1080,12 +1139,17 @@ inline auto LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
       if (Error::IsError(vertexBufferResult)) {
         return vertexBufferResult.AsUnexpected();
       }
-      auto geometry = world->entity();
+      auto geometry = world->entity(
+          GetUniqueName(std::string(gltfMesh.name) + " Geometry").c_str());
       geometry.set<Engine::Geometry>(Engine::Geometry{mesh});
       geometry.add<Engine::Transform>();
 
-      auto lod = world->entity();
+      auto lod = world->entity(
+          GetUniqueName(std::string(gltfMesh.name) + " LOD").c_str());
       lod.add<Engine::LevelOfDetail>();
+      lod.add<Engine::LocalBounds>();
+      lod.add<Engine::WorldBounds>();
+      lod.add<Engine::Transform>();
 
       geometry.child_of(lod);
       lod.child_of(shapeEntity);

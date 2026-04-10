@@ -73,10 +73,6 @@ local function draw()
   snap.graphics.setCullMode("none")
   camera:Update()
   camera:UpdateState()
-  shader:send("transform", "Position", 0, 0, 5)
-
-  shader:send("transform", "Rotation", 1, 0, 0, 0)
-  shader:send("transform", "Scale", 1, 1, 1)
   shader:send("CameraData", camera.buffer)
   snap.graphics.setCullMode("none")
   snap.graphics.setWindingOrder("ccw")
@@ -204,8 +200,7 @@ while true do
     end
     mesh:setIndices(indicesData)
 
-    snap.scene.loadModel(scene, "Assets/Terrain/sponza.glb")
-
+    snap.scene.loadModel(scene, "assets/sponza.glb")
 
     rendertarget = snap.graphics.newTexture(snap.graphics.getWidth(), snap.graphics.getHeight(),
       { sampler = true, rendertarget = true })

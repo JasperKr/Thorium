@@ -107,6 +107,8 @@ end
 
 function snap.update(dt)
   i = i + 1
+
+  scene:update(dt)
 end
 
 function snap.mousemoved(x, y, dx, dy)

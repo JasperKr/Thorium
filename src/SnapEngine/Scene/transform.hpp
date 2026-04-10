@@ -1,15 +1,26 @@
 #pragma once
 
+#include "Modules/Math/mathTypes.hpp"
+#include "Modules/Math/matrix.hpp"
 #include "Modules/Math/quaternion.hpp"
 #include "Modules/Math/vector.hpp"
 #include "lua.hpp"
 
 namespace Engine {
 struct Transform {
+private:
   Math::Vec3 Position{};
-  Math::Quaternion Rotation;
   Math::Vec3 Scale{1.0F, 1.0F, 1.0F};
 
+  bool LocalDirty = true;
+  bool WorldDirty = true;
+
+  Math::Quaternion Rotation;
+
+  Math::Matrix4x4 LocalMatrix;
+  Math::Matrix4x4 WorldMatrix;
+
+public:
   static auto SetPosition(lua_State *state) -> int;
   static auto GetPosition(lua_State *state) -> int;
   static auto SetRotation(lua_State *state) -> int;
@@ -18,6 +29,53 @@ struct Transform {
   static auto GetScale(lua_State *state) -> int;
   static auto SetTransform(lua_State *state) -> int;
   static auto GetTransform(lua_State *state) -> int;
+
+  [[nodiscard]] auto GetLocalMatrix() const -> const Math::Matrix4x4 & {
+    return LocalMatrix;
+  }
+  [[nodiscard]] auto GetWorldMatrix() const -> const Math::Matrix4x4 & {
+    return WorldMatrix;
+  }
+  [[nodiscard]] auto GetPosition() const -> Math::Vec3 { return Position; }
+  [[nodiscard]] auto GetRotation() const -> Math::Quaternion {
+    return Rotation;
+  }
+  [[nodiscard]] auto GetScale() const -> Math::Vec3 { return Scale; }
+  auto SetPosition(const Math::Vec3 &position) -> void {
+    Position = position;
+    LocalDirty = true;
+  }
+  auto SetRotation(const Math::Quaternion &rotation) -> void {
+    Rotation = rotation;
+    LocalDirty = true;
+  }
+  auto SetScale(const Math::Vec3 &scale) -> void {
+    Scale = scale;
+    LocalDirty = true;
+  }
+
+  auto SetPosition(Math::Scalar xPos, Math::Scalar yPos, Math::Scalar zPos)
+      -> void {
+    SetPosition(Math::Vec3(xPos, yPos, zPos));
+  }
+
+  auto SetRotation(Math::Scalar xRot, Math::Scalar yRot, Math::Scalar zRot,
+                   Math::Scalar wRot) -> void {
+    SetRotation(Math::Quaternion(xRot, yRot, zRot, wRot));
+  }
+
+  auto SetScale(Math::Scalar xScale, Math::Scalar yScale, Math::Scalar zScale)
+      -> void {
+    SetScale(Math::Vec3(xScale, yScale, zScale));
+  }
+
+  auto UpdateLocalMatrix() -> void;
+  auto UpdateWorldMatrix(const Transform *parent) -> void;
+
+  explicit Transform(Math::Vec3 position = {},
+                     Math::Quaternion rotation = {0.0F, 0.0F, 0.0F, 1.0F},
+                     Math::Vec3 scale = {1.0F, 1.0F, 1.0F})
+      : Position(position), Rotation(rotation), Scale(scale) {}
 };
 
 } // namespace Engine
