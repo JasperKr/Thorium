@@ -598,7 +598,7 @@ auto inline DeallocateResourceInBlocks(RenderGraph &graph,
 }
 
 auto inline QueryMemoryAlignmentOfTexture(GraphicsContext &context,
-                                          const Ref<Texture::Texture> &texture)
+                                          const Ref<Texture> &texture)
     -> VkDeviceSize {
   VkImageCreateInfo imageInfo = {};
   imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -903,7 +903,7 @@ auto inline GetImageBindingLayout(const RenderGraph &graph,
                                   const ResourceBinding &binding)
     -> VkImageLayout {
   const auto &resource = graph.resources[binding.resource];
-  const auto &texture = std::get<Ref<Texture::Texture>>(resource.info);
+  const auto &texture = std::get<Ref<Texture>>(resource.info);
 
   bool isDepthTexture = Image::IsDepthTexture(texture->format);
   bool isStencilTexture = Image::IsStencilTexture(texture->format);
@@ -1032,7 +1032,7 @@ auto inline CreateGraphLayoutStates(GraphicsContext &context,
       const auto &resource = graph.resources[binding.resource];
 
       if (resource.type == Type::Texture) {
-        const auto &texture = std::get<Ref<Texture::Texture>>(resource.info);
+        const auto &texture = std::get<Ref<Texture>>(resource.info);
 
         auto layout = GetImageBindingLayout(graph, binding);
 
@@ -1091,7 +1091,7 @@ auto inline CreateGraphResourceTransitions(GraphicsContext &context,
 
       // Create transitions only for textures
       if (resource.type == Type::Texture) {
-        const auto &texture = std::get<Ref<Texture::Texture>>(resource.info);
+        const auto &texture = std::get<Ref<Texture>>(resource.info);
 
         auto currentLayoutIterator = currentLayouts.find(resource.handle);
         LayoutState oldLayoutState = {
@@ -1149,7 +1149,7 @@ auto inline CreateGraphResourceTransitions(GraphicsContext &context,
                  resourceHandle);
 
       const auto &resource = graph.resources[resourceHandle];
-      const auto &texture = std::get<Ref<Texture::Texture>>(resource.info);
+      const auto &texture = std::get<Ref<Texture>>(resource.info);
 
       VkImageMemoryBarrier barrier = {};
       barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -1176,7 +1176,7 @@ auto inline TransitionImageLayouts(GraphicsContext &context, RenderGraph &graph,
                                    CompiledPass &compiledPass) -> Error {
   for (const auto &layoutUpdate : compiledPass.layoutUpdates) {
     const auto &resource = graph.resources[layoutUpdate.resource];
-    const auto &texture = std::get<Ref<Texture::Texture>>(resource.info);
+    const auto &texture = std::get<Ref<Texture>>(resource.info);
 
     auto result = texture->TransitionLayout(
         context, layoutUpdate.newState.layout, layoutUpdate.oldState.stages,
@@ -1223,7 +1223,7 @@ auto inline ApplyPassBarriers(VkCommandBuffer commandBuffer,
       allocationInfo.handle = resource.handle;
 
       if (resource.type == Type::Texture) {
-        const auto &tex = std::get<Ref<Texture::Texture>>(resource.info);
+        const auto &tex = std::get<Ref<Texture>>(resource.info);
 
         // Heuristic size (not actual alloc size)
         auto texels = Image::GetTexelCount(tex->size, tex->mipmapcount);
@@ -1298,7 +1298,7 @@ auto inline AllocateResourceMemory(GraphicsContext &context, RenderGraph &graph,
   }
 
   if (resource.type == Type::Texture) {
-    auto &texture = std::get<Ref<Texture::Texture>>(resource.info);
+    auto &texture = std::get<Ref<Texture>>(resource.info);
 
     VkImageCreateInfo imageInfo = {};
     imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -1372,7 +1372,7 @@ auto inline AllocateResourceMemory(GraphicsContext &context, RenderGraph &graph,
 auto inline ValidateResources(const RenderGraph &graph) -> Error {
   for (const auto &resource : graph.resources) {
     if (resource.type == Type::Texture) {
-      const auto &texture = std::get<Ref<Texture::Texture>>(resource.info);
+      const auto &texture = std::get<Ref<Texture>>(resource.info);
       if (texture->image == VK_NULL_HANDLE || texture->view == VK_NULL_HANDLE) {
         return Error::Create("Texture resource not properly allocated");
       }
@@ -1459,7 +1459,7 @@ auto inline AllocateGraphResourceMemory(GraphicsContext &context,
 
   for (auto &resource : graph.resources) {
     if (resource.type == Type::Texture) {
-      auto &texture = std::get<Ref<Texture::Texture>>(resource.info);
+      auto &texture = std::get<Ref<Texture>>(resource.info);
       resource.cost =
           Image::GetTexelCount(texture->size, texture->mipmapcount) *
           Format::GetSize(texture->format);
@@ -1549,7 +1549,7 @@ auto BeginPassRendering(GraphicsContext &context, RenderGraph &graph,
       AttachmentInfo attachInfo =
           GetPassAttachmentInfo(compiledPass.pass, binding);
 
-      auto texture = std::get<Ref<Texture::Texture>>(resource.info);
+      auto texture = std::get<Ref<Texture>>(resource.info);
 
       if (Image::IsDepthTexture(texture->format)) {
         hasDepthAttachment = true;
@@ -1656,9 +1656,9 @@ auto AddTexture(RenderGraph &graph, const TextureDescriptor &descriptor)
   resource.lifetime = descriptor.lifetime;
   resource.type = Type::Texture;
 
-  auto texture = Ref<Texture::Texture>::Make();
+  auto texture = Ref<Texture>::Make();
 
-  bool volumeTexture = descriptor.type == Texture::TextureType::VOLUME;
+  bool volumeTexture = descriptor.type == TextureType::VOLUME;
   uint32_t depth = volumeTexture ? descriptor.depthOrLayers : 1U;
   uint32_t layers = volumeTexture ? 1U : descriptor.depthOrLayers;
 
@@ -1699,8 +1699,7 @@ auto AddBuffer(RenderGraph &graph, BufferDescriptor descriptor)
   return resource.handle;
 }
 
-auto ImportTexture(RenderGraph &graph,
-                   const Ref<Graphics::Texture::Texture> &texture,
+auto ImportTexture(RenderGraph &graph, const Ref<Graphics::Texture> &texture,
                    const LayoutUpdate layoutUpdate) -> ResourceHandle {
 
   assert(texture->image != VK_NULL_HANDLE &&

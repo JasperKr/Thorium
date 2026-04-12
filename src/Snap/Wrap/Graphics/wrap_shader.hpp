@@ -5,7 +5,7 @@
 #include "Wrap/wrap.hpp"
 #include "lua.hpp"
 
-namespace Graphics::Shader {
+namespace Wrap::Graphics::Shader {
 
 auto wrap_Send(lua_State *state) -> int;
 auto wrap_HasUniform(lua_State *state) -> int;
@@ -29,9 +29,9 @@ static const std::vector<luaL_Reg> ShaderLib = {
 extern "C" inline auto luaopen_shader(lua_State *state) -> int {
   PrintDebug("Registering Shader Lua type.");
 
-  LuaWrap::RegisterLuaType(state, Shader::ShaderModule::GetType(),
+  LuaWrap::RegisterLuaType(state, ::Graphics::Shader::ShaderModule::GetType(),
                            ShaderLib); // NOLINT
 
   return 1;
 }
-} // namespace Graphics::Shader
+} // namespace Wrap::Graphics::Shader

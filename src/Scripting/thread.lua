@@ -1,4 +1,10 @@
 Imgui = require("Editor.cimgui.init")
+require("Modules.vec")
+require("Modules.quaternions")
+require("Modules.matrices")
+require("Modules.math")
+require("Modules.helpers")
+require("Graphics.camera")
 local ffi = require("ffi")
 
 local lastDrawTime = 0
@@ -7,7 +13,10 @@ local lastShownTime = 0
 local lastShownImDrawTime = 0
 local count = 0
 
-local doneChannel, canStartChannel, scene = ...
+local commandBufferChannel, canStartChannel, scene, events = ...
+
+local camera = snap.graphics.newCamera("main camera", vec3(), quaternion(),
+  vec2(snap.graphics.getDimensions()), 60, 0.1, 1000)
 
 local t = snap.timer.getTime()
 local testImgdata = snap.data.newImagedata(16, 16, "rgba8")
@@ -18,30 +27,30 @@ for y = 0, 15 do
   end
 end
 
-local vertexformat = {
-  { name = "position", format = "floatvec2",  location = 0 },
-  { name = "uv",       format = "floatvec2",  location = 1 },
-  { name = "color",    format = "unorm8vec4", location = 2 },
-}
-
-local indices = { 1, 2, 3, 1, 3, 4 }
-local vertices = {
-  { 0,   0,   0, 0, 1, 1, 1, 1 },
-  { 100, 0,   1, 0, 1, 1, 1, 1 },
-  { 100, 100, 1, 1, 1, 1, 1, 1 },
-  { 0,   100, 0, 1, 1, 1, 1, 1 },
-}
-local mesh
-
-local shader = snap.graphics.newShader("Scripting/Graphics/Shaders/test.slang")
-local computeshader = snap.graphics.newShader("Scripting/Graphics/Shaders/test2.slang")
-local value = 0.15
+local shader = snap.graphics.newShader("Scripting/Graphics/Shaders/forward.slang")
 
 local texture
 local testnumber = ffi.new("float[1]")
 print("Generated noise texture in " .. tostring(snap.timer.getTime() - t) .. " seconds")
 
+local rendertarget
+local depthbuffer
+
 local function draw()
+  snap.graphics.setRenderTarget(
+    { { texture = rendertarget, loadas = "clear", blendmode = { blendmode = "alpha", alphamode = "premultiplied" } },
+      { texture = depthbuffer,  loadas = 1 } })
+  snap.graphics.setShader(shader)
+  snap.graphics.setCullMode("none")
+  camera:Update()
+  camera:UpdateState()
+  shader:send("CameraData", camera.buffer)
+  snap.graphics.setCullMode("none")
+  snap.graphics.setWindingOrder("ccw")
+  snap.graphics.setDepthMode("less", true)
+  scene:drawModels()
+  snap.graphics.setShader()
+
   local startTime = snap.timer.getTime()
   Imgui.Begin("Test window")
 
@@ -55,32 +64,22 @@ local function draw()
   Imgui.InputFloat("Value", testnumber, 0.01)
 
   Imgui.Separator()
-  scene:drawUiElement()
+  scene:drawUIElement()
 
   Imgui.End()
+
+  Imgui.Begin("Test window 2")
+  Imgui.Image(rendertarget, ffi.new("ImVec2", 1000, 1000))
+  Imgui.End()
+
   Imgui.ShowDemoWindow()
 
   snap.gui.endFrame()
   local imStartTime = snap.timer.getTime()
+  snap.graphics.setRenderTarget({ loadas = "clear", blendmode = { blendmode = "alpha", alphamode = "premultiplied" } })
   snap.gui.draw()
   snap.graphics.setScissor();
   lastImDrawTime = lastImDrawTime + snap.timer.getTime() - imStartTime
-
-  snap.graphics.setShader(computeshader)
-  computeshader:send("PushConstants", "valueToAdd", value)
-  computeshader:send("PushConstants", "textureSize", { 16, 16 })
-  computeshader:send("outTexture", texture)
-  snap.graphics.dispatch(1, 1, 1)
-  value = -value
-
-  -- snap.graphics.setShader(shader)
-  -- shader:send("MainTexture", texture)
-
-  -- for i = 1, 2 do
-  --   snap.graphics.setRenderTarget({ loadas = "clear", blendmode = { blendmode = "alpha", alphamode = i == 2 and "premultiplied" or "alphamultiply" } })
-  --   snap.graphics.draw(mesh)
-  -- end
-  snap.graphics.setShader()
 
   lastDrawTime = lastDrawTime + snap.timer.getTime() - startTime
   count = count + 1
@@ -93,50 +92,91 @@ local function draw()
   end
 end
 
+local isDown = {}
+function snap.mousepressed(x, y, button)
+  isDown[button] = true
+end
+
+function snap.mousereleased(x, y, button)
+  isDown[button] = false
+end
+
+function snap.keypressed(key)
+  isDown[key] = true
+end
+
+function snap.keyreleased(key)
+  isDown[key] = false
+end
+
+function snap.mousemoved(x, y, dx, dy)
+  if not isDown[3] then
+    return
+  end
+
+  local quat = snap.math.eulerToQuaternion(-dy * 0.001, dx * 0.001, 0)
+  local currentQuat = quaternion(camera:getRotation())
+  local newQuat = quat * currentQuat
+  camera:SetRotation(newQuat.x, newQuat.y, newQuat.z, newQuat.w)
+end
+
 local t = snap.timer.getTime()
+local deltaTimestamp = snap.timer.getTime()
 
 while true do
   if not (canStartChannel:demand(1)) then
     break
   end
 
-  snap.graphics.aquireGraphics("gui")
-  if not texture then
-    print("New texture")
-    texture = snap.graphics.newTexture(testImgdata, { storage = true, sampler = true })
+  local delta = snap.timer.getTime() - deltaTimestamp
+  deltaTimestamp = snap.timer.getTime()
 
-    local format = {
-      {
-        name = "test",
-        format = {
-          { name = "position", format = "floatvec2" },
-          { name = "uv",       format = "float" },
-          { name = "color",    format = "float",    arraysize = 4 },
-        }
-      },
-      { name = "test2", format = "uint32" }
-    }
-
-    mesh = snap.graphics.newMesh(vertexformat, vertices, "triangles")
-
-    local indicesData = snap.data.newBytedata(#indices * 4)
-    for j = 1, #indices do
-      indicesData:setUInt32((j - 1) * 4, indices[j] - 1)
+  local event = events:pop()
+  while event do
+    if snap[event[1]] then
+      snap[event[1]](unpack(event, 2))
     end
-    mesh:setIndices(indicesData)
+
+    event = events:pop()
   end
 
-  ---@type snap.DetailedBlendMode
-  local blendmode = {
-    srccolor = "one",
-    dstcolor = "oneminussrcalpha",
-    colorop = "add",
-    srcalpha = "one",
-    dstalpha = "zero",
-    alphaop = "add",
-  }
+  local speed = delta * 10
 
-  snap.graphics.setRenderTarget({ loadas = "clear", blendmode = { blendmode = "alpha", alphamode = "premultiplied" } })
+  if (isDown["a"]) then
+    local left = -camera:GetRight()
+    local x, y, z = camera:getPosition()
+    camera:SetPosition(x + left.x * speed, y + left.y * speed, z + left.z * speed)
+  end
+
+  if (isDown["d"]) then
+    local right = camera:GetRight()
+    local x, y, z = camera:getPosition()
+    camera:SetPosition(x + right.x * speed, y + right.y * speed, z + right.z * speed)
+  end
+
+  if (isDown["w"]) then
+    local forward = camera:GetForward()
+    local x, y, z = camera:getPosition()
+    camera:SetPosition(x + forward.x * speed, y + forward.y * speed, z + forward.z * speed)
+  end
+
+  if (isDown["s"]) then
+    local back = -camera:GetForward()
+    local x, y, z = camera:getPosition()
+    camera:SetPosition(x + back.x * speed, y + back.y * speed, z + back.z * speed)
+  end
+
+  snap.graphics.aquireGraphics()
+  if not texture then
+    texture = snap.graphics.newTexture(testImgdata, { storage = true, sampler = true })
+
+    snap.scene.loadModel(scene, "Assets/Terrain/sponza.glb")
+
+    rendertarget = snap.graphics.newTexture(snap.graphics.getWidth(), snap.graphics.getHeight(),
+      { sampler = true, rendertarget = true })
+    depthbuffer = snap.graphics.newTexture(snap.graphics.getWidth(), snap.graphics.getHeight(),
+      { rendertarget = true, format = "depth32f" })
+  end
 
   local dt = snap.timer.getTime() - t
   t = snap.timer.getTime()
@@ -145,9 +185,7 @@ while true do
 
   draw()
 
-  snap.graphics.submitGraphics()
-
-  doneChannel:push(true)
+  commandBufferChannel:push(snap.graphics.submitGraphics())
 end
 
 print("THREAD #1 EXITING")

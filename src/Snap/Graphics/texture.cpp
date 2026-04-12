@@ -19,6 +19,7 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <mutex>
 #include <public/tracy/Tracy.hpp>
 #include <span>
 #include <string>
@@ -28,7 +29,7 @@
 #include "vulkan/vulkan_core.h"
 // #include <vma/vk_mem_alloc.h>
 
-namespace Graphics::Texture {
+namespace Graphics {
 
 auto GetAspectFlagsForFormat(VkFormat format) -> VkImageAspectFlagBits {
   switch (format) {
@@ -55,7 +56,15 @@ auto GetAspectFlagsForFormat(VkFormat format) -> VkImageAspectFlagBits {
 inline auto SetDebugName(const std::string &debugName, Texture *texture,
                          const GraphicsContext &context) -> Error {
 
-  const auto &debugname = debugName;
+  auto debugname = debugName;
+
+  if (debugName.empty()) {
+    debugname = "Unnamed Texture";
+  }
+
+  std::scoped_lock<std::mutex, std::mutex> lock(
+      Graphics::GraphicsContext::mutexes.device,
+      Graphics::GraphicsContext::mutexes.vmaAllocator);
 
   VkDebugUtilsObjectNameInfoEXT nameInfo = {};
   nameInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
@@ -63,25 +72,22 @@ inline auto SetDebugName(const std::string &debugName, Texture *texture,
   nameInfo.objectHandle = static_cast<uint64_t>(
       reinterpret_cast<uintptr_t>(texture->image)), // NOLINT
       nameInfo.pObjectName = debugname.c_str();
+
   auto error =
       Error::Create(vkSetDebugUtilsObjectNameEXT(context.device, &nameInfo));
   if (Error::IsError(error)) {
     return error;
   }
 
-  {
-    std::lock_guard<std::mutex> lock(
-        Graphics::GraphicsContext::mutexes.vmaAllocator);
-
-    vmaSetAllocationName(context.vmaAllocator, texture->memory,
-                         debugname.c_str());
-  }
+  vmaSetAllocationName(context.vmaAllocator, texture->memory,
+                       debugname.c_str());
 
   return Error::Success();
 }
 
 auto Create2D(const GraphicsContext &context, const TextureCreationInfo &info)
     -> Result<Ref<Texture>> {
+  ZoneScoped;
 
   if (((info.usage & VK_IMAGE_USAGE_STORAGE_BIT) != 0U) &&
       (info.format == VK_FORMAT_R8G8B8A8_SRGB ||
@@ -122,7 +128,8 @@ auto Create2D(const GraphicsContext &context, const TextureCreationInfo &info)
   allocInfo.preferredFlags = 0;
 
   {
-    std::lock_guard<std::mutex> lock(
+    std::scoped_lock<std::mutex, std::mutex> lock(
+        Graphics::GraphicsContext::mutexes.device,
         Graphics::GraphicsContext::mutexes.vmaAllocator);
 
     Error error = Error::Create(vmaCreateImage(context.vmaAllocator, &imageInfo,
@@ -260,7 +267,8 @@ auto CreateCubeMap(const GraphicsContext &context,
   allocInfo.preferredFlags = 0;
 
   {
-    std::lock_guard<std::mutex> lock(
+    std::scoped_lock<std::mutex, std::mutex> lock(
+        Graphics::GraphicsContext::mutexes.device,
         Graphics::GraphicsContext::mutexes.vmaAllocator);
 
     Error error = Error::Create(vmaCreateImage(context.vmaAllocator, &imageInfo,
@@ -345,7 +353,8 @@ auto CreateVolume(const GraphicsContext &context,
   allocInfo.preferredFlags = 0;
 
   {
-    std::lock_guard<std::mutex> lock(
+    std::scoped_lock<std::mutex, std::mutex> lock(
+        Graphics::GraphicsContext::mutexes.device,
         Graphics::GraphicsContext::mutexes.vmaAllocator);
 
     Error error = Error::Create(vmaCreateImage(context.vmaAllocator, &imageInfo,
@@ -430,7 +439,8 @@ auto CreateArray(const GraphicsContext &context,
   allocInfo.preferredFlags = 0;
 
   {
-    std::lock_guard<std::mutex> lock(
+    std::scoped_lock<std::mutex, std::mutex> lock(
+        Graphics::GraphicsContext::mutexes.device,
         Graphics::GraphicsContext::mutexes.vmaAllocator);
 
     Error error = Error::Create(vmaCreateImage(context.vmaAllocator, &imageInfo,
@@ -529,6 +539,7 @@ auto LoadFromFile(GraphicsContext &context, const char *path,
 auto LoadFromMemory(GraphicsContext &context,
                     const std::span<const uint8_t> &data,
                     VkImageUsageFlags usage) -> Result<Ref<Texture>> {
+  ZoneScoped;
 
   auto width = 0;
   auto height = 0;
@@ -547,6 +558,7 @@ auto LoadFromMemory(GraphicsContext &context,
                    .usage = usage | static_cast<uint32_t>(
                                         VK_IMAGE_USAGE_TRANSFER_DST_BIT),
                    .mipmapCount = 1,
+                   .debugName = "Image_FromMemory",
                });
 
   if (Error::IsError(texture)) {
@@ -612,6 +624,7 @@ auto LoadFromMemory(GraphicsContext &context, Image::ImageData &imageData,
                    .usage = usage | static_cast<uint32_t>(
                                         VK_IMAGE_USAGE_TRANSFER_DST_BIT),
                    .mipmapCount = 1,
+                   .debugName = "Image_ImageData",
                });
 
   if (Error::IsError(texture)) {
@@ -1050,6 +1063,8 @@ auto Texture::SetPixels(const GraphicsContext &context,
                         size_t dataHeight, uint32_t mipLevel, // NOLINT
                         uint32_t arrayLayer, VkRect2D source, VkOffset2D target)
     -> Error {
+  ZoneScoped;
+
   if (source.extent.width > size.width || source.extent.height > size.height) {
     return Error::Create(
         "Source rectangle dimensions exceed texture dimensions in SetPixels.");
@@ -1183,8 +1198,8 @@ std::unordered_map<std::pair<VkFormat, TextureType>, Ref<struct Texture>,
 auto UnloadModule() -> void { DefaultTextureCache.clear(); }
 
 auto GetDefaultTexture(const GraphicsContext &context, VkFormat format,
-                       Graphics::Texture::TextureType textureType)
-    -> Result<Ref<Graphics::Texture::Texture>> {
+                       Graphics::TextureType textureType)
+    -> Result<Ref<Graphics::Texture>> {
 
   auto key = std::make_pair(format, textureType);
   auto textureIterator = DefaultTextureCache.find(key);
@@ -1227,16 +1242,16 @@ auto GetDefaultTexture(const GraphicsContext &context, VkFormat format,
   Result<Ref<Texture>> result;
   switch (textureType) {
   case TextureType::DEFAULT:
-    result = Graphics::Texture::Create2D(context, texInfo);
+    result = Graphics::Create2D(context, texInfo);
     break;
   case TextureType::CUBEMAP:
-    result = Graphics::Texture::CreateCubeMap(context, texInfo);
+    result = Graphics::CreateCubeMap(context, texInfo);
     break;
   case TextureType::VOLUME:
-    result = Graphics::Texture::CreateVolume(context, texInfo);
+    result = Graphics::CreateVolume(context, texInfo);
     break;
   case TextureType::ARRAY:
-    result = Graphics::Texture::CreateArray(context, texInfo);
+    result = Graphics::CreateArray(context, texInfo);
     break;
   default:
     return Error::Unexpected("Unsupported texture type for default texture");
@@ -1335,37 +1350,6 @@ constexpr auto GetRequiredTextureLayout(TextureUsage usage, VkFormat format)
   }
 }
 
-constexpr auto IsStageAllowed(VkPipelineStageFlags2 stage) -> bool {
-  switch (stage) {
-  case (VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT):
-  case (VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT):
-  case (VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT):
-  case (VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT):
-  case (VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT):
-  case (VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT):
-  case (VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT):
-  case (VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT):
-  case (VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT):
-  case (VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT):
-  case (VK_PIPELINE_STAGE_2_TESSELLATION_CONTROL_SHADER_BIT):
-  case (VK_PIPELINE_STAGE_2_TESSELLATION_EVALUATION_SHADER_BIT):
-  case (VK_PIPELINE_STAGE_2_GEOMETRY_SHADER_BIT):
-  case (VK_PIPELINE_STAGE_2_TRANSFER_BIT):
-  case (VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT):
-  case (VK_PIPELINE_STAGE_2_HOST_BIT):
-  case (VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT):
-  case (VK_PIPELINE_STAGE_2_COPY_BIT):
-  case (VK_PIPELINE_STAGE_2_RESOLVE_BIT):
-  case (VK_PIPELINE_STAGE_2_BLIT_BIT):
-  case (VK_PIPELINE_STAGE_2_CLEAR_BIT):
-    return true;
-  default:
-    PrintWarning("IsStageAllowed: Unsupported pipeline stage: {}",
-                 static_cast<uint32_t>(stage));
-    return false;
-  }
-}
-
 auto Texture::UseAs(const GraphicsContext &context, TextureUsage newUsage,
                     VkPipelineStageFlags2 stage) -> Error {
 
@@ -1376,11 +1360,6 @@ auto Texture::UseAs(const GraphicsContext &context, TextureUsage newUsage,
   if (stage == VK_PIPELINE_STAGE_2_NONE) {
     return Error::Create(
         "UseAs: stage must be known when transitioning layouts.");
-  }
-
-  if (!IsStageAllowed(stage)) {
-    return Error::Create(
-        "UseAs: Unsupported pipeline stage for texture usage transition.");
   }
 
   auto layout = GetRequiredTextureLayout(newUsage, format);
@@ -1403,6 +1382,13 @@ auto Texture::UseAs(const GraphicsContext &context, TextureUsage newUsage,
 }
 
 auto Texture::UseAsAttachment(const GraphicsContext &context) -> Error {
+  // Depth/stencil attachments require both early and late fragment test stages
+  if (Image::IsDepthTexture(format) || Image::IsStencilTexture(format)) {
+    auto newPipelineStage = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT |
+                            VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
+    return UseAs(context, TextureUsage::Attachment, newPipelineStage);
+  }
+
   auto newPipelineStage = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
   return UseAs(context, TextureUsage::Attachment, newPipelineStage);
 }
@@ -1428,4 +1414,142 @@ auto Texture::UseAsPresentSrc(const GraphicsContext &context) -> Error {
                VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT);
 }
 
-} // namespace Graphics::Texture
+auto Texture::CopyTo(const GraphicsContext &context, Texture &dstTexture,
+                     CopyRegion region) -> Error {
+  if (format != dstTexture.format) {
+    return Error::Create(
+        "CopyTo: Source and destination textures must have the "
+        "same format for copying.");
+  }
+  if (region.extent.width == 0 || region.extent.height == 0 ||
+      region.extent.depth == 0) {
+    return Error::Create("CopyTo: Copy extent must be greater than zero.");
+  }
+  if (region.srcBaseMipLevel >= mipmapcount ||
+      region.dstBaseMipLevel >= dstTexture.mipmapcount) {
+    return Error::Create(
+        "CopyTo: Source and destination mip levels must be within bounds.");
+  }
+
+  if (region.srcBaseArrayLayer >= arrayLayers ||
+      region.dstBaseArrayLayer >= dstTexture.arrayLayers) {
+    return Error::Create(
+        "CopyTo: Source and destination array layers must be within bounds.");
+  }
+
+  if (region.srcOffset.x < 0 || region.srcOffset.y < 0 ||
+      region.srcOffset.z < 0 || region.dstOffset.x < 0 ||
+      region.dstOffset.y < 0 || region.dstOffset.z < 0) {
+    return Error::Create(
+        "CopyTo: Source and destination offsets cannot be negative.");
+  }
+
+  if (region.srcOffset.x + region.extent.width > size.width ||
+      region.srcOffset.y + region.extent.height > size.height ||
+      region.srcOffset.z + region.extent.depth > size.depth) {
+    return Error::Create(
+        "CopyTo: Source offset and extent exceed source texture dimensions.");
+  }
+
+  if (region.dstOffset.x + region.extent.width > dstTexture.size.width ||
+      region.dstOffset.y + region.extent.height > dstTexture.size.height ||
+      region.dstOffset.z + region.extent.depth > dstTexture.size.depth) {
+    return Error::Create(
+        "CopyTo: Destination offset and extent exceed destination texture "
+        "dimensions.");
+  }
+
+  auto *commandBuffer = GetCommandBufferPtr();
+  if (commandBuffer == nullptr) {
+    return Error::Create("CopyTo: Failed to get command buffer for copying.");
+  }
+
+  auto error = UseAsTransferSrc(context);
+  if (Error::IsError(error)) {
+    return error;
+  }
+  error = dstTexture.UseAsTransferDst(context);
+  if (Error::IsError(error)) {
+    return error;
+  }
+
+  VkImageCopy copyRegion = {};
+  copyRegion.srcSubresource.aspectMask = GetAspectFlagsForFormat(format);
+  copyRegion.srcSubresource.mipLevel = region.srcBaseMipLevel;
+  copyRegion.srcSubresource.baseArrayLayer = region.srcBaseArrayLayer;
+  copyRegion.srcSubresource.layerCount = region.layerCount;
+  copyRegion.srcOffset = region.srcOffset;
+  copyRegion.dstSubresource.aspectMask =
+      GetAspectFlagsForFormat(dstTexture.format);
+  copyRegion.dstSubresource.mipLevel = region.dstBaseMipLevel;
+  copyRegion.dstSubresource.baseArrayLayer = region.dstBaseArrayLayer;
+  copyRegion.dstSubresource.layerCount = region.layerCount;
+  copyRegion.dstOffset = region.dstOffset;
+  copyRegion.extent = region.extent;
+
+  // TODO: Check if this is needed after UseAsTransferSrc and UseAsTransferDst
+  // Barrier::UpdateUsage(context, *this,
+  //                      Barrier::ResourceState{
+  //                          .stages = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+  //                          .access = VK_ACCESS_2_TRANSFER_READ_BIT,
+  //                      });
+  // Barrier::UpdateUsage(context, dstTexture,
+  //                      Barrier::ResourceState{
+  //                          .stages = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+  //                          .access = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+  //                      });
+
+  vkCmdCopyImage(commandBuffer, image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                 dstTexture.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1,
+                 &copyRegion);
+
+  MarkUse();
+  dstTexture.MarkUse();
+
+  return Error::Success();
+}
+
+auto Texture::CopyTo(const GraphicsContext &context, Buffer &dstBuffer,
+                     ToBufferCopyRegion region) -> Error {
+  VkBufferImageCopy copyRegion = {};
+  copyRegion.bufferOffset = region.dstOffset;
+  copyRegion.bufferRowLength = region.extent.width;
+  copyRegion.bufferImageHeight = region.extent.height;
+  copyRegion.imageSubresource.aspectMask = GetAspectFlagsForFormat(format);
+  copyRegion.imageSubresource.mipLevel = region.srcBaseMipLevel;
+  copyRegion.imageSubresource.baseArrayLayer = region.srcBaseArrayLayer;
+  copyRegion.imageSubresource.layerCount = region.layerCount;
+  copyRegion.imageOffset = region.srcOffset;
+  copyRegion.imageExtent = region.extent;
+
+  auto *commandBuffer = GetCommandBufferPtr();
+  if (commandBuffer == nullptr) {
+    return Error::Create("CopyTo: Failed to get command buffer for copying.");
+  }
+
+  auto error = UseAsTransferSrc(context);
+  if (Error::IsError(error)) {
+    return error;
+  }
+
+  if ((dstBuffer.usage & VK_BUFFER_USAGE_TRANSFER_DST_BIT) == 0) {
+    return Error::Create(
+        "CopyTo: Destination buffer must have VK_BUFFER_USAGE_TRANSFER_DST_BIT "
+        "usage flag.");
+  }
+
+  // TODO: Check if we need an update usage here after UseAsTransferSrc
+  Barrier::UpdateUsage(context, dstBuffer,
+                       Barrier::ResourceState{
+                           .stages = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                           .access = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+                       });
+  vkCmdCopyImageToBuffer(commandBuffer, image,
+                         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dstBuffer.handle,
+                         1, &copyRegion);
+  dstBuffer.MarkUse();
+  MarkUse();
+  return Error::Success();
+}
+
+} // namespace Graphics

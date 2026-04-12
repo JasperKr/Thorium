@@ -2,6 +2,7 @@
 
 #include "Graphics/barrier.hpp"
 #include "Graphics/graphicsContext.hpp"
+#include "Graphics/semaphoreManager.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Modules/type.hpp"
@@ -27,7 +28,7 @@ struct RenderThreadData {
   uint64_t key = 0;
   int64_t priority = 0; // Tie-breaker for overlapping keys
 
-  VkCommandBuffer commandBuffer = nullptr;
+  VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
   bool drawsToSwapchain = false;
   uint64_t aquiredAtFrame = 0;
 
@@ -35,24 +36,32 @@ struct RenderThreadData {
   uint64_t id;
 };
 
-const Type renderInfoType = Type("Internal RenderThreadInfo");
+const Type renderInfoType = Type("Commands");
+
+// NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
+
+extern std::mutex CommandBufferCacheMutex;
+extern std::vector<std::pair<uint64_t, VkCommandBuffer>> CommandBufferCache;
 
 struct RenderThreadInfo : Object {
   RenderThreadData threadData;
 
-  auto GetInstanceType() const -> Type const * override {
+  static auto GetType() -> Type const * { return &renderInfoType; }
+  [[nodiscard]] auto GetInstanceType() const -> Type const * override {
     return &renderInfoType;
   }
 
-  static auto GetType() -> Type const * { return &renderInfoType; }
+  auto UseDeferredDestruction() const -> bool override { return true; }
+  auto ScheduleDestroy() -> void override {
+    if (threadData.commandBuffer != VK_NULL_HANDLE) {
+      std::lock_guard<std::mutex> lock(CommandBufferCacheMutex);
+      CommandBufferCache.emplace_back(GetSemaphoreValue(),
+                                      threadData.commandBuffer);
+      threadData.commandBuffer = VK_NULL_HANDLE;
+    }
+  }
 };
 
-// NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
-
-extern std::mutex ResultsMutex;
-extern std::vector<Ref<RenderThreadInfo>> Results;
-
-// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 extern thread_local Ref<RenderThreadInfo> CurrentRenderThreadInfo;
 
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
@@ -68,15 +77,13 @@ auto AquireCommandBuffer(Graphics::GraphicsContext &context,
     -> Result<Ref<RenderThreadInfo>>;
 
 // Submit the commands recorded on the current thread
-auto SubmitCommands(Graphics::GraphicsContext &context) -> Error;
+auto SubmitCommands(Graphics::GraphicsContext &context)
+    -> Result<Ref<RenderThreadInfo>>;
 
 // Initialize the render threading module
 auto Initialize(Graphics::GraphicsContext &context) -> Error;
 
 // Deinitialize the render threading module
 auto Deinitialize(Graphics::GraphicsContext &context) -> Error;
-
-// Get all generated command names
-auto GetGeneratedCommands() -> std::vector<std::string>;
 
 } // namespace Graphics::Threading

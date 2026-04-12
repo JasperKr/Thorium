@@ -12,6 +12,8 @@ auto ErrorHandlerMainLoop() -> void {
     return;
   }
 
+  PrintAlways("Entering error handler ...");
+
   while (running) {
     // Events
 
@@ -22,6 +24,7 @@ auto ErrorHandlerMainLoop() -> void {
       case SDL_EVENT_KEY_DOWN:
       case SDL_EVENT_KEY_UP:
         running = false;
+        PrintAlways("Exiting error handler ...");
         break;
       default:
         break;

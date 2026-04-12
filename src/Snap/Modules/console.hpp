@@ -249,7 +249,7 @@ inline void PrintInfo(std::string_view format, Args &&...args) {
   }
 }
 
-inline void PrintLibrary(const std::string &message) {
+inline void PrintLibrary([[maybe_unused]] const std::string &message) {
 #ifndef NDEBUG
   if (LogLevel::Info >= CurrentLogLevel) {
     OBTAIN_LOG_LOCK
@@ -259,7 +259,8 @@ inline void PrintLibrary(const std::string &message) {
 }
 
 template <typename... Args> // NOLINTNEXTLINE args forwarding
-inline void PrintLibrary(std::string_view format, Args &&...args) {
+inline void PrintLibrary([[maybe_unused]] std::string_view format,
+                         [[maybe_unused]] Args &&...args) {
 #ifndef NDEBUG
   if (LogLevel::Info >= CurrentLogLevel) {
     OBTAIN_LOG_LOCK

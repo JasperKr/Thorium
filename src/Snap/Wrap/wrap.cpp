@@ -21,6 +21,10 @@
 #include "Wrap/Modules/wrap_keyboard.hpp"
 #include "Wrap/Modules/wrap_timer.hpp"
 
+// Enable if encountering C++ exceptions
+// Requires the Enable RTTI and Enable Exceptions options to be enabled in CMakeLists.txt
+// #define DEBUG_CPP_EXCEPTION
+
 namespace LuaWrap {
 
 static auto wrap_gc(lua_State *state) -> int {
@@ -34,8 +38,6 @@ static auto wrap_gc(lua_State *state) -> int {
       return 0;
     }
 
-    PrintDebug("Releasing object of type {} in Lua GC",
-               proxy->type != nullptr ? proxy->type->GetName() : "Unknown");
     proxy->object->release();
     proxy->object = nullptr;
 
@@ -236,18 +238,8 @@ auto RegisterLuaModule(lua_State *state, const LuaModule &module) -> void {
   // register Functions to snap.modulename.functionname
   if (!module.Functions.empty()) {
     for (const auto &func : module.Functions) {
-#if !defined(NDEBUG) && DEBUG_CPP_EXCEPTION // If debug build
-      // Wrap function in trampoline to catch exceptions
-      lua_pushlightuserdata(
-          state, // NOLINTNEXTLINE(cppcoreguidelines-pro-type-cstyle-cast)
-          (void *)func.func); // [mt, lightuserdata with function pointer]
-      lua_pushcclosure(state, LuaTrampoline,
-                       1); // [mt, cclosure that calls function pointer]
-#else
       lua_pushcfunction(state, func.func); // [mt, func]
-#endif
-
-      lua_setfield(state, -2, func.name); // [snap, module]
+      lua_setfield(state, -2, func.name);  // [snap, module]
     }
   }
 
@@ -266,18 +258,30 @@ auto RegisterLuaModule(lua_State *state, const LuaModule &module) -> void {
 
 auto RegisterLuaType(lua_State *state, const Type *type,
                      const std::vector<luaL_Reg> &functions) -> void {
+  RegisterLuaType(state, LuaClass{.Name = type->GetName(),
+                                  .Type = type,
+                                  .Methods = functions,
+                                  .Children = {}});
+}
 
-  if (type == nullptr) {
-    PrintError("Cannot register Lua type: type is null");
-    return;
-  }
+auto RegisterLuaType(lua_State *state, const LuaClass &luaClass) -> void {
 
   // Make sure permanent object storage table exists with weak values
   LoadOrCreateStorageTable(state, "SnapObjectStorage"); // [storage]
 
   lua_pop(state, 1); // Remove storage table from stack []
 
-  const auto *name = type->GetName().c_str();
+  if (luaClass.Methods.empty()) {
+    PrintError("Lua type {} has no methods to register.", luaClass.Name);
+    return;
+  }
+
+  if (luaClass.Type == nullptr) {
+    PrintError("Lua type {} has null Type pointer.", luaClass.Name);
+    return;
+  }
+
+  const auto *name = luaClass.Type->GetName().c_str();
 
   luaL_newmetatable(state, name);     // Create metatable [mt]
   lua_pushvalue(state, -1);           // Duplicate metatable [mt, mt]
@@ -299,16 +303,21 @@ auto RegisterLuaType(lua_State *state, const Type *type,
       "__gc", "__index", "__tostring", "type", "typeof", "__eq", "release",
   };
 
-  // Register functions
-  for (const auto &func : functions) {
+  for (const auto &func : luaClass.Methods) {
+    if (func.name == nullptr) {
+      PrintError("Cannot register Lua type {}: function with null name.",
+                 luaClass.Type->GetName());
+      continue;
+    }
+
     // Check for reserved names
     if (ReservedNames.contains(func.name)) {
       PrintError("Cannot register Lua type {}: function name '{}' is "
                  "reserved.",
-                 type->GetName(), func.name);
+                 luaClass.Type->GetName(), func.name);
       continue;
     }
-#if !defined(NDEBUG) && DEBUG_CPP_EXCEPTION // If debug build
+#if !defined(NDEBUG) && defined(DEBUG_CPP_EXCEPTION) // If debug build
     // Wrap function in trampoline to catch exceptions
     lua_pushlightuserdata(
         state, // NOLINTNEXTLINE(cppcoreguidelines-pro-type-cstyle-cast)
@@ -319,9 +328,22 @@ auto RegisterLuaType(lua_State *state, const Type *type,
     lua_pushcfunction(state, func.func); // [mt, func]
 #endif
     lua_setfield(state, -2, func.name); // [mt]
+
+#ifndef NDEBUG
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+    auto firstChar = func.name[0];
+    if (firstChar != '\0' && (std::isupper(firstChar) != 0)) {
+      PrintWarning("Expected camelCase. Got: '{}' in class: '{}'.", func.name,
+                   luaClass.Type->GetName());
+    }
+#endif
   }
 
   lua_pop(state, 1); // []
+
+  for (const auto &child : luaClass.Children) {
+    RegisterLuaType(state, child);
+  }
 }
 
 auto SetupLuaType(lua_State *state, const Type *type, Object *object) -> void {
@@ -446,7 +468,7 @@ auto PushObject(lua_State *state, Object *object) -> void {
 
 // NOLINTNEXTLINE
 static const std::vector<luaL_Reg> SnapModules = {
-    {"graphics", Graphics::luaopen_graphics},
+    {"graphics", Wrap::Graphics::luaopen_graphics},
     {"event", Wrap::Event::luaopen_event},
     {"timer", Wrap::Timer::luaopen_timer},
     {"data", Wrap::Data::luaopen_data},

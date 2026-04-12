@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Graphics/graphicsContext.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "slang/slang.h"
 #include <cstdint>
@@ -159,6 +160,7 @@ enum class StructFieldVariant : uint8_t {
 struct ResourceInfo;
 
 struct StructInfo {
+  std::string name;
   std::vector<ResourceInfo> fields;
   std::vector<uint32_t> fieldOffsets;
 
@@ -256,7 +258,10 @@ struct ResourceInfo {
     }
     if (IsStruct()) {
       const auto &structInfo = std::get<StructInfo>(info);
-      return structInfo.fields[0].offset; // First field offset
+      if (structInfo.fields.size() > 0) {
+        return structInfo.fields[0].GetOffset(); // First field offset
+      }
+      return 0;
     }
     if (IsScalar()) {
       const auto &scalarInfo = std::get<ScalarInfo>(info);
@@ -388,50 +393,22 @@ struct ShaderReflection {
     ResourceInfo globalUBOInfo{};
     globalUBOInfo.name = "Globals";
     globalUBOInfo.stages = VK_SHADER_STAGE_ALL;
-    globalUBOInfo.info = StructInfo{};
-    auto globalUBOStruct = std::get<StructInfo>(globalUBOInfo.info);
+    auto globalUBOStruct = StructInfo{};
+    globalUBOStruct.name = "Globals";
+    globalUBOStruct.fields = resources;
+    globalUBOInfo.info = globalUBOStruct;
 
     if (resources.size() == 0) {
       return;
     }
 
-    uint32_t size = 0;
-
-    for (int i = static_cast<int>(resources.size()) - 1; i >= 0; i--) {
-      const auto &resource = resources[i];
-      if (std::holds_alternative<ScalarInfo>(resource.info)) {
-        auto info = std::get<ScalarInfo>(resource.info);
-        globalUBOStruct.fields.emplace_back(ResourceInfo{
-            .name = resource.name,
-            .info = info,
-        });
-        resources.erase(resources.begin() + static_cast<uint32_t>(i));
-        size = (std::max)(size, info.offset + info.size);
-      } else if (std::holds_alternative<VectorInfo>(resource.info)) {
-        auto info = std::get<VectorInfo>(resource.info);
-        globalUBOStruct.fields.emplace_back(ResourceInfo{
-            .name = resource.name,
-            .info = info,
-        });
-        resources.erase(resources.begin() + static_cast<uint32_t>(i));
-        size = (std::max)(size, info.offset + info.size);
-      } else if (std::holds_alternative<MatrixInfo>(resource.info)) {
-        auto info = std::get<MatrixInfo>(resource.info);
-        globalUBOStruct.fields.emplace_back(ResourceInfo{
-            .name = resource.name,
-            .info = info,
-        });
-        resources.erase(resources.begin() + static_cast<uint32_t>(i));
-        size = (std::max)(size, info.offset + info.size);
-      }
-    }
-
-    if (globalUBOStruct.fields.size() == 0) {
-      return;
+    for (const auto &resource : resources) {
+      globalUBOStruct.size += resource.GetSize();
     }
 
     globals = {
-        .size = size,
+        .name = "Globals",
+        .size = globalUBOStruct.size,
         .set = set,
         .binding = binding,
         .access = SlangResourceAccess::SLANG_RESOURCE_ACCESS_READ,

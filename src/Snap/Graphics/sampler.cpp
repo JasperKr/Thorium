@@ -3,7 +3,7 @@
 #include "Modules/error.hpp"
 #include <unordered_map>
 
-namespace Graphics::Texture {
+namespace Graphics {
 
 std::unordered_map<SamplerDescription, VkSampler, SamplerDescHash>
     SamplerCache; // NOLINT
@@ -60,4 +60,4 @@ auto DestroySamplers(const GraphicsContext &context) -> void {
   SamplerCache.clear();
 }
 
-} // namespace Graphics::Texture
+} // namespace Graphics

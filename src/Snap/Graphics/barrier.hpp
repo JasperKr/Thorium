@@ -8,9 +8,7 @@
 #include <utility>
 #include <vector>
 
-namespace Graphics::Texture {
 struct Texture;
-}
 
 namespace Graphics::Barrier {
 
@@ -117,7 +115,7 @@ struct BarrierSynced {
   bool firstAsyncUsage = false;
 
   [[nodiscard]] virtual auto IsTexture() const -> bool { return false; }
-  [[nodiscard]] virtual auto AsTexture() const -> Texture::Texture const * {
+  [[nodiscard]] virtual auto AsTexture() const -> Texture const * {
     return nullptr;
   }
 };

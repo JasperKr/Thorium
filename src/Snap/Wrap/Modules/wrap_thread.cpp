@@ -94,6 +94,10 @@ auto wrap_GetThreadErrorMessage(lua_State *state) -> int {
   if (thread == nullptr) {
     return luaL_error(state, "Invalid Thread object.");
   }
+  if (thread->GetStatus() != ::Threading::ThreadStatus::Error) {
+    lua_pushnil(state);
+    return 1;
+  }
 
   auto errorMessage = thread->GetErrorMessage();
   lua_pushstring(state, errorMessage.c_str());

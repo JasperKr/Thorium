@@ -1,6 +1,7 @@
 #include "material.hpp"
-#include "Modules/bindings.hpp"
 #include "Wrap/Helpers/lua_enum.hpp"
+#include "Wrap/wrap.hpp"
+#include "entity.hpp"
 #include "lua.hpp"
 #include <cstdint>
 #include <imgui.h>
@@ -22,80 +23,15 @@ const static LuaWrap::LuaEnum<VkCullModeFlags>
                                     {"all", VK_CULL_MODE_FRONT_AND_BACK},
                                 });
 
-auto Material::LoadBinding(lua_State *state) -> int {
-  const std::vector<std::pair<std::string, lua_CFunction>> methods = {
-      {"setTextureUVIndex", wrap_setTextureUVIndex},
-      {"getTextureUVIndex", wrap_getTextureUVIndex},
-  };
-
-  auto binding = Bindings::LuaBoundStruct<Material>("Material");
-  binding.RegisterMember<&Material::name>("Name");
-  binding.RegisterMember<&Material::alphaCutoff>(
-      "AlphaCutoff", "Alpha cutoff value used when AlphaMode is Mask.\n"
-                     "Pixels with alpha below this value will be discarded.");
-  binding.RegisterMember<&Material::shader>(
-      "Shader", "Shader module used for rendering this material.");
-
-  binding.RegisterMember<&Material::preview>(
-      "Preview", "Preview texture for this material, used in the editor.");
-  binding.RegisterMember<&Material::albedoTexture>(
-      "AlbedoTexture", "srgb RGBA texture for base color.");
-  binding.RegisterMember<&Material::normalTexture>(
-      "NormalTexture", "Linear RGB texture for normals.");
-  binding.RegisterMember<&Material::metallicRoughnessTexture>(
-      "MetallicRoughnessTexture",
-      "Linear RG texture where R is metallic and G is roughness.");
-  binding.RegisterMember<&Material::ambientOcclusionTexture>(
-      "AmbientOcclusionTexture", "Linear R texture for ambient occlusion.");
-  binding.RegisterMember<&Material::reflectanceTexture>(
-      "ReflectanceTexture", "Linear R texture for reflectance.");
-  binding.RegisterMember<&Material::emissiveTexture>(
-      "EmissiveTexture", "Linear RGB texture for emissive color.");
-
-  binding.RegisterMember<&Material::albedoFactor>(
-      "AlbedoFactor",
-      "Albedo color factor multiplied with the albedo texture.");
-  binding.RegisterMember<&Material::roughnessFactor>(
-      "RoughnessFactor",
-      "Roughness factor multiplied with the roughness texture.");
-  binding.RegisterMember<&Material::metallicFactor>(
-      "MetallicFactor",
-      "Metallic factor multiplied with the metallic texture.");
-  binding.RegisterMember<&Material::reflectanceFactor>("ReflectanceFactor");
-  binding.RegisterMember<&Material::emissiveFactor>(
-      "EmissiveFactor",
-      "Emissive color factor multiplied with the emissive texture.");
-
-  binding.RegisterEnum<&Material::alphaMode, LuaAlphaModeEnum>(
-      "AlphaMode", "Alpha mode used for rendering this material.");
-  binding.RegisterEnum<&Material::cullMode, LuaCullModeEnum>(
-      "CullMode", "Culling mode used for rendering this material.");
-
-  binding.Register(state, methods);
-
-  return 1;
-}
-
-auto Material::DrawUiElement() -> Error {
-  ImGui::Text("Material: %s", name.c_str());
-
-  auto width =
-      ImGui::GetContentRegionAvail().x - (ImGui::GetStyle().ItemSpacing.x * 2);
-  auto texWidth = preview.isValid() ? preview.get()->GetWidth() : 0;
-
-  if (preview.isValid()) {
-    ImTextureRef ref;
-    ref._TexID = reinterpret_cast<uintptr_t>(preview.get());
-    ImGui::Image(ref, ImVec2());
+auto Material::wrap_setTextureUVIndex(lua_State *state) -> int {
+  auto *entity = LuaWrap::ObjectFromLua<Entity>(state, 1);
+  if (entity == nullptr) {
+    return luaL_error(state, "Invalid Entity");
   }
 
-  return Error::Success();
-}
-
-auto Material::wrap_setTextureUVIndex(lua_State *state) -> int {
-  auto *material = LuaWrap::ObjectFromLua<Material>(state, 1);
+  auto *material = entity->try_get_mut<Material>();
   if (material == nullptr) {
-    return luaL_error(state, "Invalid Material object");
+    return luaL_error(state, "Entity does not have a Material component");
   }
 
   auto textureType = luaL_checkinteger(state, 2);
@@ -114,11 +50,15 @@ auto Material::wrap_setTextureUVIndex(lua_State *state) -> int {
 }
 
 auto Material::wrap_getTextureUVIndex(lua_State *state) -> int {
-  auto *material = LuaWrap::ObjectFromLua<Material>(state, 1);
-  if (material == nullptr) {
-    return luaL_error(state, "Invalid Material object");
+  auto *entity = LuaWrap::ObjectFromLua<Entity>(state, 1);
+  if (entity == nullptr) {
+    return luaL_error(state, "Invalid Entity");
   }
 
+  auto *material = entity->try_get_mut<Material>();
+  if (material == nullptr) {
+    return luaL_error(state, "Entity does not have a Material component");
+  }
   auto textureType = luaL_checkinteger(state, 2);
   if (textureType < 0 ||
       textureType >= static_cast<int>(material->textureUVIndices.size())) {
@@ -126,6 +66,84 @@ auto Material::wrap_getTextureUVIndex(lua_State *state) -> int {
   }
 
   lua_pushinteger(state, material->textureUVIndices.at(textureType));
+
+  return 1;
+}
+
+auto Material::wrap_setCullMode(lua_State *state) -> int {
+  auto *entity = LuaWrap::ObjectFromLua<Entity>(state, 1);
+  if (entity == nullptr) {
+    return luaL_error(state, "Invalid Entity");
+  }
+
+  auto *material = entity->try_get_mut<Material>();
+  if (material == nullptr) {
+    return luaL_error(state, "Entity does not have a Material component");
+  }
+
+  auto result = LuaCullModeEnum.FromLua(state, 2);
+  if (Error::IsError(result)) {
+    return luaL_error(state, "%s", result.error().message.c_str());
+  }
+
+  material->cullMode = result.value();
+  return 0;
+}
+
+auto Material::wrap_getCullMode(lua_State *state) -> int {
+  auto *entity = LuaWrap::ObjectFromLua<Entity>(state, 1);
+  if (entity == nullptr) {
+    return luaL_error(state, "Invalid Entity");
+  }
+
+  auto *material = entity->try_get_mut<Material>();
+  if (material == nullptr) {
+    return luaL_error(state, "Entity does not have a Material component");
+  }
+
+  auto result = LuaCullModeEnum.ToLua(state, material->cullMode);
+  if (Error::IsError(result)) {
+    return luaL_error(state, "%s", result.message.c_str());
+  }
+
+  return 1;
+}
+
+auto Material::wrap_setAlphaMode(lua_State *state) -> int {
+  auto *entity = LuaWrap::ObjectFromLua<Entity>(state, 1);
+  if (entity == nullptr) {
+    return luaL_error(state, "Invalid Entity");
+  }
+
+  auto *material = entity->try_get_mut<Material>();
+  if (material == nullptr) {
+    return luaL_error(state, "Entity does not have a Material component");
+  }
+
+  auto result = LuaAlphaModeEnum.FromLua(state, 2);
+  if (Error::IsError(result)) {
+    return luaL_error(state, "%s", result.error().message.c_str());
+  }
+
+  material->alphaMode = result.value();
+  return 0;
+}
+
+auto Material::wrap_getAlphaMode(lua_State *state) -> int {
+  auto *entity = LuaWrap::ObjectFromLua<Entity>(state, 1);
+  if (entity == nullptr) {
+    return luaL_error(state, "Invalid Entity");
+  }
+
+  auto *material = entity->try_get_mut<Material>();
+  if (material == nullptr) {
+    return luaL_error(state, "Entity does not have a Material component");
+  }
+
+  auto result = LuaAlphaModeEnum.ToLua(state, material->alphaMode);
+  if (Error::IsError(result)) {
+    return luaL_error(state, "%s", result.message.c_str());
+  }
 
   return 1;
 }

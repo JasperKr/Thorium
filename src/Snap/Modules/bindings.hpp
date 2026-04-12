@@ -417,7 +417,7 @@ struct LuaBoundStruct : LuaDocumentingStruct {
     using ElementType = typename V::value_type;
 
     // get entire vector method
-    names.emplace_back(std::string("get") + name);
+    names.emplace_back(std::string("get") + name + "List");
     AddMethod([](lua_State *state) -> int {
       auto obj = LuaWrap::ResultFromLua<typename Traits::Object>(state, 1);
       if (Error::IsError(obj)) {
@@ -433,7 +433,7 @@ struct LuaBoundStruct : LuaDocumentingStruct {
     });
 
     methodInfos.emplace_back(MethodInfo{
-        .name = std::string("get") + name,
+        .name = std::string("get") + name + "List",
         .description = description,
         .parameters =
             {

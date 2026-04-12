@@ -21,16 +21,14 @@ struct SurfaceInfo {
   VkSurfaceCapabilitiesKHR capabilities;
 };
 
-namespace Texture {
 struct Texture;
-}
 
 struct SwapchainInfo {
   VkSwapchainKHR swapchain;
   VkFormat format;
   VkExtent2D extent;
   uint32_t imageCount;
-  std::vector<Ref<Texture::Texture>> textures;
+  std::vector<Ref<Texture>> textures;
   std::vector<VkImage> images;
   std::vector<VkImageView> imageViews;
 };

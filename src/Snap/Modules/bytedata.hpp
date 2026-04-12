@@ -9,11 +9,11 @@
 #include <span>
 namespace Data {
 
-static const Type type = Type("Bytedata");
+static const Type LuaBytedataType = Type("Bytedata");
 
 struct ByteData : Object {
 public:
-  static auto GetType() -> Type const * { return &type; }
+  static auto GetType() -> Type const * { return &LuaBytedataType; }
 
   explicit ByteData(size_t size) : size(size), data(new uint8_t[size]) {}
 
@@ -34,10 +34,8 @@ public:
 
   ~ByteData() override {
     if (parent != nullptr) {
-      PrintDebug("Releasing ByteData view parent");
       parent->release(); // Parent owns the data
     } else {
-      PrintDebug("Releasing ByteData data");
       delete[] data; // We own the data
     }
   }

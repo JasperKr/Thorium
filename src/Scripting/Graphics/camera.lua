@@ -1,8 +1,8 @@
 ---@class snap.camera
 ---@field position vec3
----@field rotation vec3
+---@field rotation quaternion
 ---@field nextPosition vec3 Next frame's position
----@field nextRotation vec3 Next frame's rotation
+---@field nextRotation quaternion Next frame's rotation
 ---@field resolution vec2
 ---@field fov number
 ---@field near number
@@ -27,7 +27,8 @@
 ---@field bloom table
 ---@field linear boolean
 ---@field specular boolean
----@field buffer snap.WrappedBuffer
+---@field buffer snap.Buffer
+---@field bufferData snap.Bytedata
 ---@field textures {static:table, current:table, previous:table, internal:table}
 ---@field interactable boolean
 ---@field lighting {tileBuffer: snap.Texture, indexBuffer: snap.Buffer, indexCounterBuffer: snap.Buffer, indicesPerVoxel: number, tileWidth: number, tileHeight: number}
@@ -39,7 +40,7 @@ Camera.__index = Camera
 --- Creates a new camera
 ---@param name string
 ---@param position vec3
----@param rotation vec3
+---@param rotation quaternion
 ---@param resolution vec2
 ---@param fov number?
 ---@param near number?
@@ -55,7 +56,7 @@ function snap.graphics.newCamera(name, position, rotation, resolution, fov, near
   self.position = position
   self.rotation = rotation
   self.resolution = resolution or error("No resolution provided for camera")
-  self.fov = fov or math.rad(90)
+  self.fov = fov or 90
   self.near = near or 0.1
   self.far = far or 1000
 
@@ -67,6 +68,7 @@ function snap.graphics.newCamera(name, position, rotation, resolution, fov, near
   local inverseProjectionMatrix = mat4()
   local viewMatrix = mat4()
   local inverseViewMatrix = mat4()
+  local inverseRotationMatrix = mat4()
   local viewProjectionMatrix = mat4()
   local inverseViewProjectionMatrix = mat4()
   local rotationProjectionMatrix = mat4()
@@ -77,9 +79,10 @@ function snap.graphics.newCamera(name, position, rotation, resolution, fov, near
 
   projectionMatrix:invertTranspose(inverseProjectionMatrix)
   local translationMatrix = snap.math.newTranslationMatrix(-position)
-  local rotationMatrix = snap.math.eulerToMatrix(rotation:get())
+  local rotationMatrix = snap.math.quaternionToMatrix(rotation)
+  rotationMatrix:invertTranspose(inverseRotationMatrix)
   rotationMatrix:mul(projectionMatrix, rotationProjectionMatrix)
-  rotationMatrix:invertTranspose(inverseRotationProjectionMatrix)
+  rotationProjectionMatrix:invertTranspose(inverseRotationProjectionMatrix)
 
   translationMatrix:mul(rotationMatrix, viewMatrix)
   viewMatrix:invertTranspose(inverseViewMatrix)
@@ -90,6 +93,7 @@ function snap.graphics.newCamera(name, position, rotation, resolution, fov, near
   self.inverseProjectionMatrix = inverseProjectionMatrix
   self.translationMatrix = translationMatrix
   self.rotationMatrix = rotationMatrix
+  self.inverseRotationMatrix = inverseRotationMatrix
   self.viewMatrix = viewMatrix
   self.inverseViewMatrix = inverseViewMatrix
   self.viewProjectionMatrix = viewProjectionMatrix
@@ -118,15 +122,15 @@ function snap.graphics.newCamera(name, position, rotation, resolution, fov, near
   self.bloom = {}
   self.name = name
 
-  self.buffer = snap.graphics.newBuffer({
-    { name = "ViewProjectionMatrix",            format = "floatmat4x4" },
-    { name = "InverseViewProjectionMatrix",     format = "floatmat4x4" },
-    { name = "ViewMatrix",                      format = "floatmat4x4" },
-    { name = "InverseViewMatrix",               format = "floatmat4x4" },
-    { name = "ProjectionMatrix",                format = "floatmat4x4" },
-    { name = "InverseProjectionMatrix",         format = "floatmat4x4" },
-    { name = "RotationProjectionMatrix",        format = "floatmat4x4" },
-    { name = "InverseRotationProjectionMatrix", format = "floatmat4x4" },
+  local cameraElementFormat = {
+    { name = "ViewMatrix",                      format = "floatmat4" },
+    { name = "InverseViewMatrix",               format = "floatmat4" },
+    { name = "ProjectionMatrix",                format = "floatmat4" },
+    { name = "InverseProjectionMatrix",         format = "floatmat4" },
+    { name = "ViewProjectionMatrix",            format = "floatmat4" },
+    { name = "InverseViewProjectionMatrix",     format = "floatmat4" },
+    { name = "RotationProjectionMatrix",        format = "floatmat4" },
+    { name = "InverseRotationProjectionMatrix", format = "floatmat4" },
     { name = "Position",                        format = "floatvec3" },
     { name = "Near",                            format = "float" },
     { name = "Far",                             format = "float" },
@@ -136,7 +140,19 @@ function snap.graphics.newCamera(name, position, rotation, resolution, fov, near
     { name = "Jitter",                          format = "floatvec2" },
     { name = "ProjectionType",                  format = "uint32" },
     { name = "ShadowCascadeCount",              format = "uint32" },
-  }, 2, { shaderstorage = true, debugname = "Camera [" .. name .. "] buffer", usage = "dynamic" })
+  }
+
+  self.buffer = snap.graphics.newBuffer({
+    {
+      name = "camera",
+      format = cameraElementFormat
+    },
+    {
+      name = "previousCamera",
+      format = cameraElementFormat
+    }
+  }, 1, { uniform = true, debugname = "Camera [" .. name .. "] buffer", usage = "dynamic" })
+  self.bufferData = snap.data.newBytedata(self.buffer:getSize())
 
   return self
 end
@@ -152,14 +168,41 @@ function Camera:UpdateMatrices()
   self.projectionMatrix:invertTranspose(self.inverseProjectionMatrix)
   snap.math.newTranslationMatrix(mathv.unm3(self.position, tempVec3),
     self.translationMatrix)
-  snap.math.eulerToMatrix(self.rotation.x, self.rotation.y, self.rotation.z, self.rotationMatrix)
+  snap.math.quaternionToMatrix(self.rotation, self.rotationMatrix)
+  self.rotationMatrix:invertTranspose(self.inverseRotationMatrix)
   self.rotationMatrix:mul(self.projectionMatrix, self.rotationProjectionMatrix)
-  self.rotationMatrix:invertTranspose(self.inverseRotationProjectionMatrix)
+  self.rotationProjectionMatrix:invertTranspose(self.inverseRotationProjectionMatrix)
 
   self.translationMatrix:mul(self.rotationMatrix, self.viewMatrix)
   self.viewMatrix:invertTranspose(self.inverseViewMatrix)
   self.viewMatrix:mul(self.projectionMatrix, self.viewProjectionMatrix)
   self.viewProjectionMatrix:invertTranspose(self.inverseViewProjectionMatrix)
+end
+
+local jitterSequence = {
+  { 0,     0 },
+  { 0.5,   0.5 },
+  { 0.5,   -0.5 },
+  { -0.5,  0.5 },
+  { -0.5,  -0.5 },
+  { 0.25,  0.25 },
+  { 0.25,  -0.25 },
+  { -0.25, 0.25 },
+  { -0.25, -0.25 }
+}
+
+local jitter = { 0, 0 }
+local drawIndex = 0
+
+function Camera:UpdateState()
+  drawIndex = drawIndex + 1
+
+  local jitterIndex = drawIndex % #jitterSequence + 1
+  jitter[1] = jitterSequence[jitterIndex][1] / self.resolution.x
+  jitter[2] = jitterSequence[jitterIndex][2] / self.resolution.y
+
+  self:UpdateMatrices()
+  self:UpdateGpuBuffers()
 end
 
 function Camera:Update()
@@ -189,20 +232,65 @@ function Camera:GetUp()
   return tempVec3
 end
 
-local jitterSequence = {
-  { 0,     0 },
-  { 0.5,   0.5 },
-  { 0.5,   -0.5 },
-  { -0.5,  0.5 },
-  { -0.5,  -0.5 },
-  { 0.25,  0.25 },
-  { 0.25,  -0.25 },
-  { -0.25, 0.25 },
-  { -0.25, -0.25 }
-}
-
-local jitter = { 0, 0 }
-
 function Camera:UpdateGpuBuffers()
+  self.bufferData:setFloat(0, self.viewMatrix:get())
+  self.bufferData:setFloat(64, self.inverseViewMatrix:get())
+  self.bufferData:setFloat(128, self.projectionMatrix:get())
+  self.bufferData:setFloat(192, self.inverseProjectionMatrix:get())
+  self.bufferData:setFloat(256, self.viewProjectionMatrix:get())
+  self.bufferData:setFloat(320, self.inverseViewProjectionMatrix:get())
+  self.bufferData:setFloat(384, self.rotationProjectionMatrix:get())
+  self.bufferData:setFloat(448, self.inverseRotationProjectionMatrix:get())
+  self.bufferData:setFloat(512, self.position:get())
+  self.bufferData:setFloat(524, self.near)
+  self.bufferData:setFloat(528, self.far)
+  self.bufferData:setFloat(532, self.near * self.far)
+  self.bufferData:setFloat(536, self.far - self.near)
+  self.bufferData:setUInt32(540, self.invalidatedHistory and 1 or 0)
+  self.bufferData:setFloat(544, jitter[1])
+  self.bufferData:setFloat(548, jitter[2])
+  self.bufferData:setUInt32(552, 0) -- ProjectionType (0 = perspective, 1 = orthographic)
+  self.bufferData:setUInt32(556, 0) -- ShadowCascadeCount
 
+  self.buffer:setData(self.bufferData)
+end
+
+function Camera:getPosition()
+  return self.position:get()
+end
+
+function Camera:getRotation()
+  return self.rotation:get()
+end
+
+function Camera:getResolution()
+  return self.resolution:get()
+end
+
+function Camera:getFOV()
+  return self.fov
+end
+
+function Camera:getNear()
+  return self.near
+end
+
+function Camera:getFar()
+  return self.far
+end
+
+function Camera:SetPosition(x, y, z)
+  self.nextPosition:set(x, y, z)
+end
+
+function Camera:SetRotation(x, y, z, w)
+  self.nextRotation:set(x, y, z, w)
+end
+
+function Camera:SetResolution(x, y)
+  self.resolution:set(x, y)
+end
+
+function Camera:SetFOV(fov)
+  self.fov = fov
 end

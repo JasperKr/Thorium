@@ -193,9 +193,15 @@ static auto CreateDevice(GraphicsContext &context,
   createInfo.queueCreateInfoCount = 1;
   createInfo.pEnabledFeatures = &deviceFeatures;
 
+  VkPhysicalDeviceVertexInputDynamicStateFeaturesEXT feature{};
+  feature.sType =
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VERTEX_INPUT_DYNAMIC_STATE_FEATURES_EXT;
+  feature.vertexInputDynamicState = VK_TRUE;
+
   // --- Vulkan 1.3 features ---
   VkPhysicalDeviceVulkan13Features features13{
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+      .pNext = &feature,
       .synchronization2 = VK_TRUE,
       .dynamicRendering = VK_TRUE,
   };
@@ -206,6 +212,7 @@ static auto CreateDevice(GraphicsContext &context,
   VkPhysicalDeviceVulkan12Features features12{
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
       .pNext = &features13,
+      .shaderFloat16 = VK_TRUE,
       .descriptorIndexing = VK_TRUE,
       .shaderSampledImageArrayNonUniformIndexing = VK_TRUE,
       .shaderStorageBufferArrayNonUniformIndexing = VK_TRUE,
@@ -225,13 +232,6 @@ static auto CreateDevice(GraphicsContext &context,
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,
       .pNext = &features12,
   };
-
-  // --- Dynamic Rendering ---
-  // VkPhysicalDeviceDynamicRenderingFeatures dynRender{
-  //     .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES,
-  //     .pNext = &features11,
-  //     .dynamicRendering = VK_TRUE,
-  // };
 
   // --- Features2 root ---
   VkPhysicalDeviceFeatures2 features2{
@@ -264,7 +264,8 @@ static auto CreateDevice(GraphicsContext &context,
         VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
         VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME,
         VK_KHR_SPIRV_1_4_EXTENSION_NAME,
-        VK_KHR_SHADER_FLOAT_CONTROLS_EXTENSION_NAME};
+        VK_KHR_SHADER_FLOAT_CONTROLS_EXTENSION_NAME,
+        VK_EXT_VERTEX_INPUT_DYNAMIC_STATE_EXTENSION_NAME};
 
     const auto &supported =
         ExtensionListSupported(requiredExtensions, availableExtensions);
@@ -342,10 +343,17 @@ auto GetThreadContext() -> ThreadContext & {
   return threadContext;
 }
 
+// Will assert if command buffer is null
 auto GetCommandBuffer() -> VkCommandBuffer {
   auto *commandBuffer = GetThreadContext().commandBuffer;
   assert(commandBuffer != nullptr && "Command buffer is null!");
   return commandBuffer;
+}
+
+// May be null
+auto GetCommandBufferPtr() -> VkCommandBuffer {
+  auto &threadContext = GetThreadContext();
+  return threadContext.commandBuffer;
 }
 
 static auto CreateSemaphores(GraphicsContext &context) -> Error {
@@ -381,8 +389,8 @@ static auto CreateSemaphores(GraphicsContext &context) -> Error {
 }
 
 static auto CreateVmaAllocator(GraphicsContext &context) -> Error {
-  std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-  std::lock_guard<std::mutex> lock2(
+  std::scoped_lock<std::mutex, std::mutex> lock(
+      Graphics::GraphicsContext::mutexes.device,
       Graphics::GraphicsContext::mutexes.vmaAllocator);
 
   VmaAllocatorCreateInfo allocatorInfo = {0};
@@ -475,10 +483,7 @@ auto Initialize(GraphicsContext &context, Window::WindowContext &wcontext,
     extensionList.emplace_back(extensions[i]); // NOLINT
   }
 
-  // Resource debug names
-#ifndef NDEBUG // If debug
   extensionList.emplace_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-#endif
 
   VkApplicationInfo appInfo = {};
   appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -551,10 +556,18 @@ auto Initialize(GraphicsContext &context, Window::WindowContext &wcontext,
 }
 
 void Deinitialize(GraphicsContext &context) {
-  std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-  std::lock_guard<std::mutex> lock2(
+  PrintAlways("Deinitializing graphics context...");
+
+  std::scoped_lock<std::mutex, std::mutex> lock(
+      Graphics::GraphicsContext::mutexes.device,
       Graphics::GraphicsContext::mutexes.vmaAllocator);
+
   vkDeviceWaitIdle(context.device);
+
+  for (auto &descriptorPoolInfo : GetThreadContext().descriptorPools) {
+    vkDestroyDescriptorPool(context.device, descriptorPoolInfo.descriptorPool,
+                            nullptr);
+  }
 
   vmaDestroyAllocator(context.vmaAllocator);
 
@@ -567,6 +580,7 @@ void Deinitialize(GraphicsContext &context) {
   }
 
   vkDestroyCommandPool(context.device, GetThreadContext().commandPool, nullptr);
+  GetThreadContext().commandPool = VK_NULL_HANDLE;
   {
     std::lock_guard<std::mutex> lock(CommandPoolsMutex);
     for (auto &pool : CommandPools) {
@@ -580,6 +594,8 @@ void Deinitialize(GraphicsContext &context) {
 
   SDL_DestroyWindow(context.sdlWindow);
   SDL_Quit();
+
+  context.sdlWindow = nullptr;
 }
 
 auto BeginSingleTimeCommands(GraphicsContext &context) -> VkCommandBuffer {

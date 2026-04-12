@@ -9,7 +9,6 @@
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
-#include "Modules/utils.hpp"
 #include "Modules/window.hpp"
 #include "buffer.hpp"
 #include "dynamicRendering.hpp"
@@ -19,10 +18,8 @@
 #include <mutex>
 
 #include "vulkan/vulkan_core.h"
-#include <algorithm>
 #include <array>
 #include <cstdint>
-#include <unordered_map>
 #include <vector>
 
 #include "../external/tracy/public/tracy/Tracy.hpp"
@@ -34,21 +31,6 @@ StitchInfo GlobalStitchInfo{};
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 SwapchainManager::SwapchainManager swapchainManager;
-
-auto UseCommands(uint64_t key) -> void {
-  GlobalStitchInfo.orderingKeys.emplace_back(key);
-#ifndef NDEBUG
-  GlobalStitchInfo.orderingNames.emplace_back(std::to_string(key));
-#endif
-}
-
-auto UseCommands(const std::string &name) -> void {
-  uint64_t hash = std::hash<std::string>{}(name);
-  GlobalStitchInfo.orderingKeys.emplace_back(hash);
-#ifndef NDEBUG
-  GlobalStitchInfo.orderingNames.emplace_back(name);
-#endif
-}
 
 static void ResetCommandBuffers(Graphics::GraphicsContext &context) {
   auto &cmdBuffers = GlobalStitchInfo.commandBuffers.at(context.frameIndex);
@@ -96,8 +78,7 @@ static auto EndRecording(Graphics::GraphicsContext &context,
   return Error::Success();
 }
 
-void TransitionColorToPresent(VkCommandBuffer cmd,
-                              Ref<Texture::Texture> &texture) {
+void TransitionColorToPresent(VkCommandBuffer cmd, Ref<Texture> &texture) {
 
   VkImageMemoryBarrier2 barrier2 = {};
   barrier2.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
@@ -156,10 +137,18 @@ auto AquireNextSwapchainImage(Graphics::GraphicsContext &context) -> Error {
 
   if (context.inFlight[context.frameIndex] != VK_NULL_HANDLE) {
     ZoneScopedN("Wait for in-flight fence");
-    vkWaitForFences(context.device, 1, &context.inFlight[context.frameIndex],
-                    VK_TRUE, UINT64_MAX);
+    auto result = Error::Create(vkWaitForFences(
+        context.device, 1, &context.inFlight[context.frameIndex], VK_TRUE,
+        UINT64_MAX));
+    if (Error::IsError(result)) {
+      return result;
+    }
 
-    vkResetFences(context.device, 1, &context.inFlight[context.frameIndex]);
+    result = Error::Create(vkResetFences(
+        context.device, 1, &context.inFlight[context.frameIndex]));
+    if (Error::IsError(result)) {
+      return result;
+    }
   }
 
   {
@@ -176,9 +165,12 @@ auto AquireNextSwapchainImage(Graphics::GraphicsContext &context) -> Error {
 
   if (context.imageInFlight[context.swapchainImageIndex] != VK_NULL_HANDLE) {
     ZoneScopedN("Wait for image in-flight fence");
-    vkWaitForFences(context.device, 1,
-                    &context.imageInFlight[context.swapchainImageIndex],
-                    VK_TRUE, UINT64_MAX);
+    auto result = Error::Create(vkWaitForFences(
+        context.device, 1, &context.imageInFlight[context.swapchainImageIndex],
+        VK_TRUE, UINT64_MAX));
+    if (Error::IsError(result)) {
+      return result;
+    }
   }
 
   return Error::Success();
@@ -338,7 +330,7 @@ auto InitializeRendering(Graphics::GraphicsContext &context,
     context.swapchainInfo.textures[context.swapchainImageIndex]->currentLayout =
         VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     context.swapchainInfo.textures[context.swapchainImageIndex]->lastUsage =
-        Texture::TextureUsage::Unknown;
+        TextureUsage::Unknown;
     context.swapchainInfo.textures[context.swapchainImageIndex]
         ->lastPipelineStage = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT;
   }
@@ -353,17 +345,13 @@ auto DeinitilizeRendering(GraphicsContext &context) -> void {
 }
 
 inline auto
-GetOrderedCommands(GraphicsContext &context,
-                   std::vector<Threading::RenderThreadData> &threadRenderdatas)
+PrepareCommands(GraphicsContext &context,
+                const std::vector<Ref<Threading::RenderThreadInfo>> &commands)
     -> Error {
   ZoneScoped;
 
-  std::unordered_map<uint64_t, std::vector<Threading::RenderThreadData>>
-      unorderedThreadRenderdatas;
-
   {
-    std::lock_guard<std::mutex> lock(Threading::ResultsMutex);
-    for (auto &threadInfo : Threading::Results) {
+    for (const auto &threadInfo : commands) {
       if (threadInfo->threadData.drawsToSwapchain &&
           threadInfo->threadData.aquiredAtFrame != context.currentFrame) {
         return Error::Createf(
@@ -374,65 +362,29 @@ GetOrderedCommands(GraphicsContext &context,
             threadInfo->threadData.name, threadInfo->threadData.aquiredAtFrame,
             context.currentFrame);
       }
-
-      unorderedThreadRenderdatas[threadInfo->threadData.key].emplace_back(
-          threadInfo->threadData);
     }
   }
 
   auto unorderedSemaphoreValues = Graphics::GetPendingTimelineValues();
   std::vector<uint64_t> orderedSemaphoreValues = {};
 
-  int idx = 0;
-  for (auto key : GlobalStitchInfo.orderingKeys) {
-    auto found = unorderedThreadRenderdatas.find(key);
-    if (found != unorderedThreadRenderdatas.end()) {
-      std::ranges::sort(found->second,
-                        [](const Threading::RenderThreadData &first,
-                           const Threading::RenderThreadData &second) -> bool {
-                          if (first.priority == second.priority) {
-                            return first.id < second.id;
-                          }
-                          return first.priority > second.priority;
-                        });
-
-      for (auto &data : found->second) {
-        threadRenderdatas.emplace_back(data);
-
-        auto semaphoreIter = unorderedSemaphoreValues.find(data.commandBuffer);
-        if (semaphoreIter != unorderedSemaphoreValues.end()) {
-          orderedSemaphoreValues.emplace_back(semaphoreIter->second);
-          unorderedSemaphoreValues.erase(semaphoreIter);
-        } else {
-          PrintError("No pending timeline value found for command buffer {}",
-                     (void *)data.commandBuffer);
-        }
-
-        Utils::UnorderedErase(
-            Threading::Results,
-            [&](const Ref<Threading::RenderThreadInfo> &info) -> bool {
-              return info->threadData.id == data.id;
-            });
-      }
+  for (const auto &command : commands) {
+    auto iter =
+        unorderedSemaphoreValues.find(command->threadData.commandBuffer);
+    if (iter != unorderedSemaphoreValues.end()) {
+      orderedSemaphoreValues.emplace_back(iter->second);
     } else {
-      PrintWarning("No recorded command buffer found for key {}", key);
-
-#ifndef NDEBUG
-      return Error::Createf("Missing command buffer for '{}' (key: {})",
-                            GlobalStitchInfo.orderingNames.at(idx), key);
-#else
-      return Error::Createf("Missing command buffer for key {}", key);
-#endif
+      return Error::Createf(
+          "No pending timeline value found for command buffer of thread {}",
+          command->threadData.name);
     }
-
-    idx++;
   }
 
   Graphics::SetPendingTimelineValues(orderedSemaphoreValues);
 
   // Insert a command buffer before each recorded command buffer to handle resource barriers
   // And one at the end to transition the swapchain image to present
-  size_t totalCommandBuffers = threadRenderdatas.size() + 1;
+  size_t totalCommandBuffers = commands.size() + 1;
   auto &commandBuffers = GlobalStitchInfo.commandBuffers.at(context.frameIndex);
 
   if (commandBuffers.size() < totalCommandBuffers) {
@@ -463,17 +415,17 @@ GetOrderedCommands(GraphicsContext &context,
   return Error::Success();
 }
 
-inline auto SubmitBarriers(
-    const GraphicsContext &context,
-    const std::vector<Threading::RenderThreadData> &threadRenderdatas) {
+inline auto
+SubmitBarriers(const GraphicsContext &context,
+               const std::vector<Ref<Threading::RenderThreadInfo>> &commands) {
   ZoneScoped;
 
-  for (size_t i = 0; i < threadRenderdatas.size(); i++) {
-    assert(i < threadRenderdatas.size());
+  for (size_t i = 0; i < commands.size(); i++) {
+    assert(i < commands.size());
     assert(context.frameIndex < GlobalStitchInfo.commandBuffers.size());
     assert(i < GlobalStitchInfo.commandBuffers.at(context.frameIndex).size());
 
-    const auto &threadData = threadRenderdatas.at(i);
+    const auto &threadData = commands.at(i)->threadData;
     auto *commandBuffer =
         GlobalStitchInfo.commandBuffers.at(context.frameIndex).at(i);
 
@@ -519,36 +471,29 @@ inline auto SubmitBarriers(
     GlobalStitchInfo.usedCommandBuffers.emplace_back(begunCmdBuffer);
   }
 
-  GlobalStitchInfo.orderingKeys.clear();
-
-#ifndef NDEBUG
-  GlobalStitchInfo.orderingNames.clear();
-#endif
-
   return Error::Success();
 }
 
 inline auto GetFinalCommandBuffers(
     const GraphicsContext &context,
     std::vector<VkCommandBuffer> &finalCommandBuffers,
-    const std::vector<Threading::RenderThreadData> &threadRenderdatas)
-    -> size_t {
+    const std::vector<Ref<Threading::RenderThreadInfo>> &commands) -> size_t {
   ZoneScoped;
 
   // all thread command buffers + barrier command buffers + 1 present transition
-  finalCommandBuffers.resize((threadRenderdatas.size() * 2) + 1);
+  finalCommandBuffers.resize((commands.size() * 2) + 1);
 
   size_t index = 0;
 
-  for (size_t i = 0; i < threadRenderdatas.size(); i++) {
-    assert(i < threadRenderdatas.size());
+  for (size_t i = 0; i < commands.size(); i++) {
+    assert(i < commands.size());
     assert(context.frameIndex < GlobalStitchInfo.commandBuffers.size());
     assert(i < GlobalStitchInfo.commandBuffers.at(context.frameIndex).size());
     assert(index + 1 < finalCommandBuffers.size());
 
     auto *stitchBuffer =
         GlobalStitchInfo.commandBuffers.at(context.frameIndex).at(i);
-    auto *threadBuffer = threadRenderdatas.at(i).commandBuffer;
+    auto *threadBuffer = commands.at(i)->threadData.commandBuffer;
 
     // If no barriers were needed for this thread, skip its barrier command buffer
     if (GlobalStitchInfo.usedCommandBuffers.at(i)) {
@@ -559,16 +504,18 @@ inline auto GetFinalCommandBuffers(
 
   // Add final present transition command buffer
   assert(context.frameIndex < GlobalStitchInfo.commandBuffers.size());
-  assert(threadRenderdatas.size() <
+  assert(commands.size() <
          GlobalStitchInfo.commandBuffers.at(context.frameIndex).size());
   finalCommandBuffers.at(index) =
       GlobalStitchInfo.commandBuffers.at(context.frameIndex)
-          .at(threadRenderdatas.size());
+          .at(commands.size());
 
   return index;
 }
 
-auto Present(Graphics::GraphicsContext &context) -> Error {
+auto Present(Graphics::GraphicsContext &context,
+             const std::vector<Ref<Threading::RenderThreadInfo>> &commands)
+    -> Error {
   ZoneScoped;
 
   auto validateResult = DynamicRendering::FinalizeFrame(context);
@@ -576,22 +523,19 @@ auto Present(Graphics::GraphicsContext &context) -> Error {
     return validateResult;
   }
 
-  std::vector<Threading::RenderThreadData> threadRenderdatas{};
-
-  auto orderResult = GetOrderedCommands(context, threadRenderdatas);
+  auto orderResult = PrepareCommands(context, commands);
   if (Error::IsError(orderResult)) {
     return orderResult;
   }
 
-  auto barrierResult = SubmitBarriers(context, threadRenderdatas);
+  auto barrierResult = SubmitBarriers(context, commands);
   if (Error::IsError(barrierResult)) {
     return barrierResult;
   }
 
   std::vector<VkCommandBuffer> finalCommandBuffers;
 
-  size_t index =
-      GetFinalCommandBuffers(context, finalCommandBuffers, threadRenderdatas);
+  size_t index = GetFinalCommandBuffers(context, finalCommandBuffers, commands);
 
   // Start present transition command buffer
   auto *presentTransitionBuffer = finalCommandBuffers.at(index);

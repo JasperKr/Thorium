@@ -1,11 +1,103 @@
 #include "vector.hpp"
-#include "Modules/Math/math.hpp"
+#include <algorithm>
 #include <cassert>
 #include <cmath>
 #include <cstdint>
+#include <sstream>
 
 namespace Math {
 // Index operator overloads for all vector types
+
+[[nodiscard]] auto Vec2::ToString() const -> std::string {
+  std::ostringstream oss;
+  oss << "Vec2(" << x << ", " << y << ")";
+  return oss.str();
+}
+
+[[nodiscard]] auto Vec3::ToString() const -> std::string {
+  std::ostringstream oss;
+  oss << "Vec3(" << x << ", " << y << ", " << z << ")";
+  return oss.str();
+}
+
+[[nodiscard]] auto Vec4::ToString() const -> std::string {
+  std::ostringstream oss;
+  oss << "Vec4(" << x << ", " << y << ", " << z << ", " << w << ")";
+  return oss.str();
+}
+
+[[nodiscard]] auto Uvec2::ToString() const -> std::string {
+  std::ostringstream oss;
+  oss << "Uvec2(" << x << ", " << y << ")";
+  return oss.str();
+}
+
+[[nodiscard]] auto Uvec3::ToString() const -> std::string {
+  std::ostringstream oss;
+  oss << "Uvec3(" << x << ", " << y << ", " << z << ")";
+  return oss.str();
+}
+
+[[nodiscard]] auto Uvec4::ToString() const -> std::string {
+  std::ostringstream oss;
+  oss << "Uvec4(" << x << ", " << y << ", " << z << ", " << w << ")";
+  return oss.str();
+}
+
+[[nodiscard]] auto Ivec2::ToString() const -> std::string {
+  std::ostringstream oss;
+  oss << "Ivec2(" << x << ", " << y << ")";
+  return oss.str();
+}
+
+[[nodiscard]] auto Ivec3::ToString() const -> std::string {
+  std::ostringstream oss;
+  oss << "Ivec3(" << x << ", " << y << ", " << z << ")";
+  return oss.str();
+}
+
+[[nodiscard]] auto Ivec4::ToString() const -> std::string {
+  std::ostringstream oss;
+  oss << "Ivec4(" << x << ", " << y << ", " << z << ", " << w << ")";
+  return oss.str();
+}
+auto Vec2::operator[](uint32_t index) -> Scalar & {
+  switch (index) {
+  case 0:
+    return x;
+  case 1:
+    return y;
+  default:
+    assert(false && "Vec2 index out of range");
+    return x; // Return x as a fallback to silence compiler warning
+  }
+}
+
+auto Vec2::operator[](uint32_t index) const -> Scalar {
+  switch (index) {
+  case 0:
+    return x;
+  case 1:
+    return y;
+  default:
+    assert(false && "Vec2 index out of range");
+    return 0;
+  }
+}
+
+auto Vec3::operator[](uint32_t index) -> Scalar & {
+  switch (index) {
+  case 0:
+    return x;
+  case 1:
+    return y;
+  case 2:
+    return z;
+  default:
+    assert(false && "Vec3 index out of range");
+    return x; // Return x as a fallback to silence compiler warning
+  }
+}
 
 // Vec3
 auto Vec3::operator[](uint32_t index) const -> Scalar {
@@ -19,6 +111,22 @@ auto Vec3::operator[](uint32_t index) const -> Scalar {
   default:
     assert(false && "Vec3 index out of range");
     return 0;
+  }
+}
+
+// Vec4
+auto Vec4::operator[](uint32_t index) -> Scalar & {
+  switch (index) {
+  case 0:
+    return x;
+  case 1:
+    return y;
+  case 2:
+    return z;
+  case 3:
+    return w;
+  default:
+    assert(false && "Vec4 index out of range");
   }
 }
 
@@ -39,6 +147,18 @@ auto Vec4::operator[](uint32_t index) const -> Scalar {
   }
 }
 
+auto Uvec2::operator[](uint32_t index) -> uint32_t & {
+  switch (index) {
+  case 0:
+    return x;
+  case 1:
+    return y;
+  default:
+    assert(false && "Uvec2 index out of range");
+    return x; // Return x as a fallback to silence compiler warning
+  }
+}
+
 // Uvec2
 auto Uvec2::operator[](uint32_t index) const -> uint32_t {
   switch (index) {
@@ -49,6 +169,20 @@ auto Uvec2::operator[](uint32_t index) const -> uint32_t {
   default:
     assert(false && "Uvec2 index out of range");
     return 0;
+  }
+}
+
+auto Uvec3::operator[](uint32_t index) -> uint32_t & {
+  switch (index) {
+  case 0:
+    return x;
+  case 1:
+    return y;
+  case 2:
+    return z;
+  default:
+    assert(false && "Uvec3 index out of range");
+    return x; // Return x as a fallback to silence compiler warning
   }
 }
 
@@ -64,6 +198,22 @@ auto Uvec3::operator[](uint32_t index) const -> uint32_t {
   default:
     assert(false && "Uvec3 index out of range");
     return 0;
+  }
+}
+
+auto Uvec4::operator[](uint32_t index) -> uint32_t & {
+  switch (index) {
+  case 0:
+    return x;
+  case 1:
+    return y;
+  case 2:
+    return z;
+  case 3:
+    return w;
+  default:
+    assert(false && "Uvec4 index out of range");
+    return x; // Return x as a fallback to silence compiler warning
   }
 }
 
@@ -84,6 +234,18 @@ auto Uvec4::operator[](uint32_t index) const -> uint32_t {
   }
 }
 
+auto Ivec2::operator[](uint32_t index) -> int32_t & {
+  switch (index) {
+  case 0:
+    return x;
+  case 1:
+    return y;
+  default:
+    assert(false && "Ivec2 index out of range");
+    return x; // Return x as a fallback to silence compiler warning
+  }
+}
+
 // Ivec2
 auto Ivec2::operator[](uint32_t index) const -> int32_t {
   switch (index) {
@@ -94,6 +256,20 @@ auto Ivec2::operator[](uint32_t index) const -> int32_t {
   default:
     assert(false && "Ivec2 index out of range");
     return 0;
+  }
+}
+
+auto Ivec3::operator[](uint32_t index) -> int32_t & {
+  switch (index) {
+  case 0:
+    return x;
+  case 1:
+    return y;
+  case 2:
+    return z;
+  default:
+    assert(false && "Ivec3 index out of range");
+    return x; // Return x as a fallback to silence compiler warning
   }
 }
 
@@ -109,6 +285,22 @@ auto Ivec3::operator[](uint32_t index) const -> int32_t {
   default:
     assert(false && "Ivec3 index out of range");
     return 0;
+  }
+}
+
+auto Ivec4::operator[](uint32_t index) -> int32_t & {
+  switch (index) {
+  case 0:
+    return x;
+  case 1:
+    return y;
+  case 2:
+    return z;
+  case 3:
+    return w;
+  default:
+    assert(false && "Ivec4 index out of range");
+    return x; // Return x as a fallback to silence compiler warning
   }
 }
 
@@ -252,17 +444,6 @@ Vec2::Vec2(const Uvec3 &vec3)
     : x(static_cast<Scalar>(vec3.x)), y(static_cast<Scalar>(vec3.y)) {}
 Vec2::Vec2(const Uvec4 &vec4)
     : x(static_cast<Scalar>(vec4.x)), y(static_cast<Scalar>(vec4.y)) {}
-auto Vec2::operator[](uint32_t index) const -> Scalar {
-  switch (index) {
-  case 0:
-    return x;
-  case 1:
-    return y;
-  default:
-    assert(false && "Vec2 index out of range");
-    return 0;
-  }
-}
 
 ///// Vec3 /////
 
@@ -402,6 +583,7 @@ Vec3::Vec3(const Uvec3 &vec3)
 Vec3::Vec3(const Uvec4 &vec4)
     : x(static_cast<Scalar>(vec4.x)), y(static_cast<Scalar>(vec4.y)),
       z(static_cast<Scalar>(vec4.z)) {}
+Vec3::Vec3(const Vec4 &&vec4) : x(vec4.x), y(vec4.y), z(vec4.z) {}
 
 ///// Vec4 /////
 
@@ -1153,5 +1335,77 @@ Ivec4::Ivec4(const Uvec3 &vec3, int32_t w_val)
 Ivec4::Ivec4(const Uvec4 &vec4)
     : x(static_cast<int32_t>(vec4.x)), y(static_cast<int32_t>(vec4.y)),
       z(static_cast<int32_t>(vec4.z)), w(static_cast<int32_t>(vec4.w)) {}
+
+auto Min(const Vec2 &vec_a, const Vec2 &vec_b) -> Vec2 {
+  return {std::fmin(vec_a.x, vec_b.x), std::fmin(vec_a.y, vec_b.y)};
+}
+auto Min(const Vec3 &vec_a, const Vec3 &vec_b) -> Vec3 {
+  return {std::fmin(vec_a.x, vec_b.x), std::fmin(vec_a.y, vec_b.y),
+          std::fmin(vec_a.z, vec_b.z)};
+}
+auto Min(const Vec4 &vec_a, const Vec4 &vec_b) -> Vec4 {
+  return {std::fmin(vec_a.x, vec_b.x), std::fmin(vec_a.y, vec_b.y),
+          std::fmin(vec_a.z, vec_b.z), std::fmin(vec_a.w, vec_b.w)};
+}
+
+auto Max(const Vec2 &vec_a, const Vec2 &vec_b) -> Vec2 {
+  return {std::fmax(vec_a.x, vec_b.x), std::fmax(vec_a.y, vec_b.y)};
+}
+auto Max(const Vec3 &vec_a, const Vec3 &vec_b) -> Vec3 {
+  return {std::fmax(vec_a.x, vec_b.x), std::fmax(vec_a.y, vec_b.y),
+          std::fmax(vec_a.z, vec_b.z)};
+}
+auto Max(const Vec4 &vec_a, const Vec4 &vec_b) -> Vec4 {
+  return {std::fmax(vec_a.x, vec_b.x), std::fmax(vec_a.y, vec_b.y),
+          std::fmax(vec_a.z, vec_b.z), std::fmax(vec_a.w, vec_b.w)};
+}
+
+auto Min(const Uvec2 &vec_a, const Uvec2 &vec_b) -> Uvec2 {
+  return {std::min(vec_a.x, vec_b.x), std::min(vec_a.y, vec_b.y)};
+}
+auto Min(const Uvec3 &vec_a, const Uvec3 &vec_b) -> Uvec3 {
+  return {std::min(vec_a.x, vec_b.x), std::min(vec_a.y, vec_b.y),
+          std::min(vec_a.z, vec_b.z)};
+}
+auto Min(const Uvec4 &vec_a, const Uvec4 &vec_b) -> Uvec4 {
+  return {std::min(vec_a.x, vec_b.x), std::min(vec_a.y, vec_b.y),
+          std::min(vec_a.z, vec_b.z), std::min(vec_a.w, vec_b.w)};
+}
+
+auto Max(const Uvec2 &vec_a, const Uvec2 &vec_b) -> Uvec2 {
+  return {std::max(vec_a.x, vec_b.x), std::max(vec_a.y, vec_b.y)};
+}
+auto Max(const Uvec3 &vec_a, const Uvec3 &vec_b) -> Uvec3 {
+  return {std::max(vec_a.x, vec_b.x), std::max(vec_a.y, vec_b.y),
+          std::max(vec_a.z, vec_b.z)};
+}
+auto Max(const Uvec4 &vec_a, const Uvec4 &vec_b) -> Uvec4 {
+  return {std::max(vec_a.x, vec_b.x), std::max(vec_a.y, vec_b.y),
+          std::max(vec_a.z, vec_b.z), std::max(vec_a.w, vec_b.w)};
+}
+
+auto Min(const Ivec2 &vec_a, const Ivec2 &vec_b) -> Ivec2 {
+  return {std::min(vec_a.x, vec_b.x), std::min(vec_a.y, vec_b.y)};
+}
+auto Min(const Ivec3 &vec_a, const Ivec3 &vec_b) -> Ivec3 {
+  return {std::min(vec_a.x, vec_b.x), std::min(vec_a.y, vec_b.y),
+          std::min(vec_a.z, vec_b.z)};
+}
+auto Min(const Ivec4 &vec_a, const Ivec4 &vec_b) -> Ivec4 {
+  return {std::min(vec_a.x, vec_b.x), std::min(vec_a.y, vec_b.y),
+          std::min(vec_a.z, vec_b.z), std::min(vec_a.w, vec_b.w)};
+}
+
+auto Max(const Ivec2 &vec_a, const Ivec2 &vec_b) -> Ivec2 {
+  return {std::max(vec_a.x, vec_b.x), std::max(vec_a.y, vec_b.y)};
+}
+auto Max(const Ivec3 &vec_a, const Ivec3 &vec_b) -> Ivec3 {
+  return {std::max(vec_a.x, vec_b.x), std::max(vec_a.y, vec_b.y),
+          std::max(vec_a.z, vec_b.z)};
+}
+auto Max(const Ivec4 &vec_a, const Ivec4 &vec_b) -> Ivec4 {
+  return {std::max(vec_a.x, vec_b.x), std::max(vec_a.y, vec_b.y),
+          std::max(vec_a.z, vec_b.z), std::max(vec_a.w, vec_b.w)};
+}
 
 } // namespace Math

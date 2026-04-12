@@ -4,6 +4,7 @@
 #include "vulkan/vulkan_core.h"
 #include <algorithm>
 #include <atomic>
+#include <condition_variable>
 #include <cstdint>
 #include <mutex>
 #include <shared_mutex>
@@ -19,6 +20,8 @@ VkSemaphore globalTimelineSemaphore{};
 
 // Current CPU timeline value for generating unique semaphore values
 std::atomic<uint64_t> currentCPUTimelineValue{};
+std::condition_variable timelineCompletionCV{};
+std::mutex timelineCompletionMutex{};
 
 // Mutex to protect timeline sets
 std::shared_mutex timelineSetsMutex{};
@@ -77,8 +80,6 @@ auto UpdateSemaphoreValues(const GraphicsContext &context) -> Result<uint64_t> {
   std::lock_guard lock(timelineSetsMutex);
 
   if (sortedPendingTimelineValues.empty()) {
-    PrintWarning("No sorting pending timeline values to update");
-
     for (const auto &pair : pendingTimelineValues) {
       sortedUncompletedTimelineValues.emplace_back(pair.second);
     }
@@ -167,6 +168,11 @@ auto UpdateSemaphoreValues(const GraphicsContext &context) -> Result<uint64_t> {
   sortedUncompletedTimelineValues.erase(
       sortedUncompletedTimelineValues.begin(),
       sortedUncompletedTimelineValues.begin() + newStart);
+
+  {
+    std::lock_guard lock(timelineCompletionMutex);
+    timelineCompletionCV.notify_all();
+  }
 
   return latestValue;
 }

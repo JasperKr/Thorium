@@ -2,6 +2,7 @@
 #include "Graphics/format.hpp"
 #include "Graphics/hash.hpp"
 #include "Graphics/reflect.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include <algorithm>
 #include <cassert>
@@ -20,6 +21,8 @@ namespace Graphics {
 BufferFormat::BufferFormat(std::vector<BufferComponent> components,
                            Standard std)
     : Components(std::move(components)) {
+
+  PrintAlways("Creating buffer format with {} components", Components.size());
 
   CalculateStride(std);
 }
@@ -182,13 +185,26 @@ inline auto AlignUp(size_t offset, size_t alignment) -> size_t {
   return (offset + alignment - 1) & ~(alignment - 1);
 }
 
+auto BufferFormat::Offset(size_t offset) -> void {
+  for (auto &component : Components) {
+    component.offset += offset;
+
+    if (std::holds_alternative<BufferFormat>(component.format)) {
+      auto &format = std::get<BufferFormat>(component.format);
+      format.Offset(offset);
+    }
+  }
+}
+
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
-auto BufferFormat::CalculateStride(Standard std) -> void {
+auto BufferFormat::CalculateStride(Standard std) -> size_t {
   if (Components.empty()) {
-    return;
+    PrintWarning("Buffer format has no components, stride will be 0");
+    return 0;
   }
 
   size_t offset = 0;
+
   size_t maxAlignment = 0;
   for (auto &format : Components) {
     size_t baseAlign = 0;
@@ -202,15 +218,13 @@ auto BufferFormat::CalculateStride(Standard std) -> void {
               : Graphics::Format::GetVec4Variant(vulkanFormat);
       auto alignResult = GetAlignment(alignFormat);
       if (Error::IsError(alignResult)) {
-        return;
+        return 0;
       }
 
       baseAlign = alignResult.value();
     } else if (std::holds_alternative<BufferFormat>(format.format)) {
       auto bufferFormat = std::get<BufferFormat>(format.format);
-      if (!bufferFormat.initialized) {
-        bufferFormat.CalculateStride(std);
-      }
+      bufferFormat.CalculateStride(std);
 
       baseAlign = bufferFormat.alignment;
     }
@@ -227,9 +241,6 @@ auto BufferFormat::CalculateStride(Standard std) -> void {
     case Standard::Std430:
       compAlignment = baseAlign;
       break;
-    default:
-      assert(false && "Something went very wrong");
-      break;
     }
     maxAlignment = std::max(maxAlignment, compAlignment);
     size_t size = 0;
@@ -240,16 +251,17 @@ auto BufferFormat::CalculateStride(Standard std) -> void {
       size = Graphics::Format::GetSize(vulkanFormat);
     } else if (std::holds_alternative<BufferFormat>(format.format)) {
       auto bufferFormat = std::get<BufferFormat>(format.format);
-      if (!bufferFormat.initialized) {
-        bufferFormat.CalculateStride(std);
-      }
-
-      size = bufferFormat.stride;
+      size = bufferFormat.CalculateStride(std);
     }
 
     // Align component
     offset = AlignUp(offset, compAlignment);
     format.offset = offset;
+
+    if (std::holds_alternative<BufferFormat>(format.format)) {
+      auto &bufferFormat = std::get<BufferFormat>(format.format);
+      bufferFormat.Offset(offset);
+    }
 
     // Add padding
     if (format.arraySize == 1) {
@@ -261,9 +273,6 @@ auto BufferFormat::CalculateStride(Standard std) -> void {
         break;
       case Standard::Std430:
         offset += AlignUp(size, compAlignment) * format.arraySize;
-        break;
-      default:
-        assert(false && "Something went very wrong");
         break;
       }
     }
@@ -285,6 +294,8 @@ auto BufferFormat::CalculateStride(Standard std) -> void {
   }
 
   initialized = true;
+
+  return stride;
 }
 
 auto BufferFormat::FlattenComponentTree() -> void {
@@ -310,11 +321,11 @@ auto BufferFormat::FlattenComponentTree() -> void {
 }
 
 [[nodiscard]] auto BufferFormat::FormatAt(size_t componentOffset) -> VkFormat {
-  componentOffset %= FlatComponents.size();
-
   if (FlatComponents.empty()) {
     FlattenComponentTree();
   }
+
+  componentOffset %= FlatComponents.size();
 
   return FlatComponents[componentOffset];
 }
@@ -346,6 +357,40 @@ auto BufferFormat::FlattenComponentTree() -> void {
   output << baseTabs << "};\n";
 
   return output.str();
+}
+
+[[nodiscard]] auto BufferFormat::NeedsPadding(Standard std) const
+    -> PaddingResult {
+  size_t offset = 0;
+  for (const auto &component : Components) {
+    if (component.offset != offset) {
+      return {
+          .needsPadding = true,
+          .needsPaddingAt = component.name,
+          .amountOfPadding = component.offset - offset,
+      };
+    }
+
+    size_t size = 0;
+    if (std::holds_alternative<VkFormat>(component.format)) {
+      auto vulkanFormat = std::get<VkFormat>(component.format);
+      size = Graphics::Format::GetSize(vulkanFormat);
+    } else if (std::holds_alternative<BufferFormat>(component.format)) {
+      auto bufferFormat = std::get<BufferFormat>(component.format);
+      size = bufferFormat.GetStride();
+
+      auto paddingResult = bufferFormat.NeedsPadding(std);
+      if (paddingResult.needsPadding) {
+        return paddingResult;
+      }
+    }
+
+    offset += size * component.arraySize;
+  }
+
+  return {
+      .needsPadding = false,
+  };
 }
 
 } // namespace Graphics

@@ -27,19 +27,35 @@ std::mutex ResultsMutex{};
 std::vector<Ref<RenderThreadInfo>> Results{};
 
 thread_local Ref<RenderThreadInfo> CurrentRenderThreadInfo;
-thread_local inline std::vector<std::pair<uint64_t, VkCommandBuffer>>
-    ThreadCommandBuffers;
+
+std::mutex CommandBufferCacheMutex;
+std::vector<std::pair<uint64_t, VkCommandBuffer>> CommandBufferCache;
+
 inline std::atomic<uint64_t> threadDataIDCounter = 0;
 
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
 auto GetCachedCommandBuffer(const GraphicsContext &context)
     -> std::optional<VkCommandBuffer> {
-  for (auto it = ThreadCommandBuffers.begin(); it != ThreadCommandBuffers.end();
+
+  uint64_t completedValue = UINT64_MAX;
+
+  {
+    std::lock_guard lock(Graphics::GraphicsContext::mutexes.device);
+    auto result = Error::Create(vkGetSemaphoreCounterValue(
+        context.device, globalTimelineSemaphore, &completedValue));
+
+    if (Error::IsError(result)) {
+      return std::nullopt;
+    }
+  }
+
+  std::lock_guard<std::mutex> lock(CommandBufferCacheMutex);
+  for (auto it = CommandBufferCache.begin(); it != CommandBufferCache.end();
        ++it) {
-    if (!IsInUse(it->first)) {
+    if (it->first <= completedValue) {
       auto *commandBuffer = it->second;
-      ThreadCommandBuffers.erase(it);
+      CommandBufferCache.erase(it);
       return commandBuffer;
     }
   }
@@ -109,6 +125,8 @@ inline auto GetDescriptorPool(ThreadContext &tcontext) -> Error {
   }
 
   if (pool == VK_NULL_HANDLE) {
+    // TODO: FUUUCK
+    PrintAlways("Creating new descriptor pool");
     auto createResult = CreateDescriptorPool(tcontext);
 
     if (Error::IsError(createResult)) {
@@ -119,12 +137,12 @@ inline auto GetDescriptorPool(ThreadContext &tcontext) -> Error {
 
     tcontext.descriptorPools.push_back(
         {pool, GetSemaphoreValue()}); // Add new pool to the list
-  }
 
-  tcontext.descriptorPool = pool;
-
-  {
+    tcontext.descriptorPool = pool;
+  } else {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+
+    tcontext.descriptorPool = pool;
     auto resetResult = Error::Create(
         vkResetDescriptorPool(context.device, tcontext.descriptorPool, 0));
 
@@ -166,6 +184,7 @@ auto AquireCommandBuffer(Graphics::GraphicsContext &context,
   auto cachedCmdBuffer = GetCachedCommandBuffer(context);
 
   if (!cachedCmdBuffer.has_value()) {
+    PrintAlways("Allocating new command buffer for thread '{}'", info.name);
     VkCommandBufferAllocateInfo allocInfo = {};
     allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
     allocInfo.commandPool = tcontext.commandPool;
@@ -229,45 +248,38 @@ auto AquireCommandBuffer(Graphics::GraphicsContext &context,
   return threadInfo;
 }
 
-auto SubmitCommands(Graphics::GraphicsContext &context) -> Error {
+auto SubmitCommands(Graphics::GraphicsContext &context)
+    -> Result<Ref<RenderThreadInfo>> {
   auto validateResult = DynamicRendering::FinalizeFrame(context);
   if (Error::IsError(validateResult)) {
-    return validateResult;
+    return validateResult.AsUnexpected();
   }
 
   auto flushResult = FlushBufferUploads(context);
   if (Error::IsError(flushResult)) {
-    return flushResult;
+    return flushResult.AsUnexpected();
   }
 
-  auto &threadInfo = *CurrentRenderThreadInfo;
+  auto threadInfo = Ref<RenderThreadInfo>(CurrentRenderThreadInfo.get());
 
   auto endResult =
-      Error::Create(vkEndCommandBuffer(threadInfo.threadData.commandBuffer));
+      Error::Create(vkEndCommandBuffer(threadInfo->threadData.commandBuffer));
   if (Error::IsError(endResult)) {
-    return endResult;
+    return endResult.AsUnexpected();
   }
 
-  threadInfo.threadData.resourceSyncs = Barrier::GlobalResourceSyncTimeline;
-  threadInfo.threadData.usageUpdates = Barrier::GlobalResourceStateUpdates;
-  threadInfo.threadData.drawsToSwapchain =
+  threadInfo->threadData.resourceSyncs = Barrier::GlobalResourceSyncTimeline;
+  threadInfo->threadData.usageUpdates = Barrier::GlobalResourceStateUpdates;
+  threadInfo->threadData.drawsToSwapchain =
       Graphics::DynamicRendering::DrawnToSwapchain;
 
   auto timelineValue = GetSemaphoreValue();
 
-  ThreadCommandBuffers.emplace_back(timelineValue,
-                                    threadInfo.threadData.commandBuffer);
-
   GetThreadContext().commandBuffer = VK_NULL_HANDLE;
-
-  {
-    std::lock_guard<std::mutex> lock(ResultsMutex);
-    Results.emplace_back(&threadInfo);
-  }
 
   CurrentRenderThreadInfo.reset();
 
-  return Error::Success();
+  return threadInfo;
 }
 
 inline auto CreateCommandPool(ThreadContext &tcontext) -> Error {
@@ -338,31 +350,26 @@ auto Deinitialize(Graphics::GraphicsContext &context) -> Error {
     return err;
   }
 
-  Graphics::ShutdownWrapGraphics();
+  Wrap::Graphics::ShutdownWrapGraphics();
 
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
 
-    vkDeviceWaitIdle(context.device);
+    // TODO: Delay thread destruction until this isn't needed anymore since this will never fire if another thread is doing shit
+    auto result = vkDeviceWaitIdle(context.device);
+    if (Error::IsError(result)) {
+      return Error::Create(result);
+    }
 
     for (auto &descriptorPoolInfo : GetThreadContext().descriptorPools) {
       vkDestroyDescriptorPool(context.device, descriptorPoolInfo.descriptorPool,
                               nullptr);
     }
+
+    GetThreadContext().descriptorPools.clear();
   }
 
   return Error::Success();
-}
-
-auto GetGeneratedCommands() -> std::vector<std::string> {
-  std::lock_guard<std::mutex> lock(ResultsMutex);
-  std::vector<std::string> commandNames;
-  commandNames.reserve(Results.size());
-
-  for (const auto &info : Results) {
-    commandNames.emplace_back(info->threadData.name);
-  }
-  return commandNames;
 }
 
 } // namespace Graphics::Threading

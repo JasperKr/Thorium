@@ -3,10 +3,11 @@
 #include "Graphics/shader.hpp"
 #include "Graphics/texture.hpp"
 #include "Modules/object.hpp"
-#include "drawable.hpp"
 #include <array>
 #include <string>
+#include <utility>
 
+#include "flecs.h"
 #include "lua.hpp"
 
 #include <vulkan/vulkan_core.h>
@@ -18,11 +19,26 @@ enum class AlphaMode : uint8_t {
   Blend = 2,
 };
 
-using TexRef = Ref<Graphics::Texture::Texture>;
+using TexRef = Ref<Graphics::Texture>;
 
 const Type materialType = Type("Material");
 
-struct Material : Object, Engine::UiElement {
+struct Material {
+  Material(std::string name, Ref<Graphics::Shader::ShaderModule> shader,
+           TexRef preview, TexRef albedoTexture, TexRef normalTexture,
+           TexRef metallicRoughnessTexture, TexRef ambientOcclusionTexture,
+           TexRef reflectanceTexture, TexRef emissiveTexture)
+      : name(std::move(name)), shader(std::move(shader)),
+        preview(std::move(preview)), albedoTexture(std::move(albedoTexture)),
+        normalTexture(std::move(normalTexture)),
+        metallicRoughnessTexture(std::move(metallicRoughnessTexture)),
+        ambientOcclusionTexture(std::move(ambientOcclusionTexture)),
+        reflectanceTexture(std::move(reflectanceTexture)),
+        emissiveTexture(std::move(emissiveTexture)) {}
+
+  Material() = default;
+  explicit Material(std::string name) : name(std::move(name)) {}
+
   std::string name;
 
   VkCullModeFlags cullMode = VK_CULL_MODE_BACK_BIT;
@@ -56,14 +72,6 @@ struct Material : Object, Engine::UiElement {
   // NOLINTNEXTLINE (magic numbers)
   std::array<uint8_t, 7> textureUVIndices = {0};
 
-  static auto GetType() -> Type const * { return &materialType; }
-  auto GetInstanceType() const -> const Type * override {
-    return &materialType;
-  }
-
-  auto DrawUiElement() -> Error override;
-  static auto LoadBinding(lua_State *state) -> int;
-
   static auto wrap_setCullMode(lua_State *state) -> int;
   static auto wrap_getCullMode(lua_State *state) -> int;
 
@@ -73,4 +81,16 @@ struct Material : Object, Engine::UiElement {
   static auto wrap_setTextureUVIndex(lua_State *state) -> int;
   static auto wrap_getTextureUVIndex(lua_State *state) -> int;
 };
+
+struct LuaMaterial : Object {
+  flecs::entity entity;
+
+  static auto GetType() -> const Type * { return &materialType; }
+  auto GetInstanceType() const -> const Type * override {
+    return &materialType;
+  }
+
+  static auto Create(lua_State *state) -> int;
+};
+
 } // namespace Engine::Renderer

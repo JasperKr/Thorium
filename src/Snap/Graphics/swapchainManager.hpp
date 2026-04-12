@@ -13,7 +13,7 @@ namespace Graphics::SwapchainManager {
 
 struct OldSwapchain {
   VkSwapchainKHR swapchain = VK_NULL_HANDLE;
-  std::vector<Ref<Texture::Texture>> textures;
+  std::vector<Ref<Texture>> textures;
   uint64_t lastFrameUsed = 0;
 
   std::vector<VkSemaphore> imageReady;
@@ -32,7 +32,7 @@ public:
       -> void;
   auto GetCurrentSwapchain() -> VkSwapchainKHR;
   auto GetCurrentSwapchainTexture(const GraphicsContext &context)
-      -> Ref<Texture::Texture>;
+      -> Ref<Texture>;
 
   auto NewFrame(GraphicsContext &context, Window::WindowContext &windowContext,
                 uint64_t currentFrame) -> Error;
@@ -48,7 +48,7 @@ private:
   std::vector<OldSwapchain> oldSwapchains;
 
   VkSwapchainKHR currentSwapchain = VK_NULL_HANDLE;
-  std::vector<Ref<Texture::Texture>> currentTextures;
+  std::vector<Ref<Texture>> currentTextures;
   uint64_t lastFrameUsed = 0;
 
   bool isDirty = false;

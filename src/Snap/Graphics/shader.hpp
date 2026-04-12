@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Graphics/Buffers/push.hpp"
-#include "Graphics/Buffers/structured.hpp"
 #include "Graphics/buffer.hpp"
 #include "Graphics/texture.hpp"
 #include "Modules/Math/vector.hpp"
@@ -33,8 +32,8 @@ struct ShaderExtern {
 };
 
 struct ImageTransitionInfo {
-  Texture::Texture *texture{};
-  Texture::TextureUsage newUsage = Texture::TextureUsage::Unknown;
+  Texture *texture{};
+  TextureUsage newUsage = TextureUsage::Unknown;
   // Unused for: Attachments, TransferSrc, TransferDst
   VkPipelineStageFlags2 newStage = VK_PIPELINE_STAGE_2_NONE;
 };
@@ -50,7 +49,7 @@ struct DescriptorWriteInfo {
   VkBufferView pTexelBufferView{};
 
   Buffer *bufferPtr{};
-  Texture::Texture *imagePtr{};
+  Texture *imagePtr{};
   VkAccessFlagBits2 bufferAccessBits{};
 
   ImageTransitionInfo transition;
@@ -73,7 +72,7 @@ struct DescriptorWriteInfo {
   }
 };
 
-static const Type type = Type("Shader");
+static const Type LuaShaderType = Type("Shader");
 
 constexpr auto
 ShaderStageFlagsToPipelineStageFlags(VkShaderStageFlags shaderStages)
@@ -107,22 +106,19 @@ ShaderStageFlagsToPipelineStageFlags(VkShaderStageFlags shaderStages)
 }
 
 struct BoundState {
-  std::unordered_map<uint64_t, Buffer *> boundBuffers;
-  std::unordered_map<uint64_t, std::pair<Buffer *, BufferInfo>>
+  std::unordered_map<uint64_t, Ref<Buffer>> boundBuffers;
+  std::unordered_map<uint64_t, std::pair<Ref<Buffer>, BufferInfo>>
       userBoundBuffers;
 
-  std::unordered_map<uint64_t, Texture::Texture *> boundTextures;
-  std::unordered_map<uint64_t, std::pair<Texture::Texture *, SamplerInfo>>
+  std::unordered_map<uint64_t, Ref<Texture>> boundTextures;
+  std::unordered_map<uint64_t, std::pair<Ref<Texture>, SamplerInfo>>
       userBoundTextures;
 
   std::unordered_map<uint32_t, VkDescriptorSet> descriptorSets;
-  std::vector<DescriptorWriteInfo> pendingDescriptorWrites;
-  // std::vector<ImageTransitionInfo> pendingImageTransitions;
 };
 
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
-extern thread_local std::unordered_map<const struct ShaderModule *, BoundState>
-    BoundStates;
+extern thread_local std::unordered_map<VkShaderModule, BoundState> BoundStates;
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
 struct ShaderModule : Object {
@@ -156,7 +152,7 @@ struct ShaderModule : Object {
   std::vector<slang::PreprocessorMacroDesc> preprocessorMacros;
 
   auto GetState() const -> BoundState & {
-    return BoundStates.try_emplace(this).first->second;
+    return BoundStates.try_emplace(module).first->second;
   }
 
   std::vector<uint8_t> globalUniforms;
@@ -168,9 +164,6 @@ struct ShaderModule : Object {
     auto *ctx = GetCurrentGraphicsContext();
 
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    // for (auto &pair : GetState().descriptorSetLayouts) {
-    //   vkDestroyDescriptorSetLayout(ctx->device, pair.second, nullptr);
-    // }
 
     if (module != VK_NULL_HANDLE) {
       vkDestroyShaderModule(ctx->device, module, nullptr);
@@ -188,10 +181,10 @@ struct ShaderModule : Object {
             const std::span<const uint8_t> &data) -> Error;
 
   auto Send(const GraphicsContext &context, const ResourceKey &key,
-            StructuredBuffer *buffer) -> Error;
+            const Ref<Buffer> &buffer) -> Error;
 
   auto Send(const GraphicsContext &context, const ResourceKey &key,
-            Graphics::Texture::Texture *texture) -> Error;
+            const Ref<Graphics::Texture> &texture) -> Error;
 
   auto GetUniform(const ResourceKey &key) const -> Result<const ResourceInfo>;
   auto GetSlotDescription(uint32_t set, uint32_t binding)
@@ -210,7 +203,7 @@ struct ShaderModule : Object {
 
   auto hash() const -> size_t;
 
-  static auto GetType() -> Type const * { return &type; }
+  static auto GetType() -> Type const * { return &LuaShaderType; }
 
   [[nodiscard]] auto GetInstanceType() const -> Type const * override {
     return ShaderModule::GetType();
@@ -223,8 +216,8 @@ struct ShaderModule : Object {
   }
 
 private:
-  auto FlushGlobals(const GraphicsContext &context, VkPipelineLayout layout,
-                    VkPipelineStageFlags2 dstStage) -> Error;
+  auto BindGlobalUBO(const GraphicsContext &context, VkPipelineLayout layout,
+                     VkPipelineStageFlags2 dstStage) -> Error;
 };
 
 extern Ref<ShaderModule> DefaultShaderModule; // NOLINT

@@ -2,7 +2,6 @@
 
 #include "Graphics/hash.hpp"
 #include "Graphics/texture.hpp"
-#include "Graphics/vertexformat.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
@@ -33,6 +32,11 @@ extern std::vector<VkPipeline> Pipelines;
 // Only used for cleanup
 extern std::mutex PipelineLayoutsMutex;
 extern std::vector<VkPipelineLayout> PipelineLayouts;
+
+extern std::mutex DescriptorSetLayoutCacheMutex;
+extern std::unordered_map<struct DescriptorSetLayoutKey, VkDescriptorSetLayout,
+                          struct DescriptorSetLayoutKeyHash>
+    DescriptorSetLayoutCache;
 
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
@@ -121,19 +125,15 @@ struct DescriptorSetLayoutKeyHash {
   }
 };
 
-extern std::unordered_map<DescriptorSetLayoutKey, VkDescriptorSetLayout,
-                          DescriptorSetLayoutKeyHash>
-    DescriptorSetLayoutCache; // NOLINT
-
 // NOLINTNEXTLINE
 extern thread_local bool DrawnToSwapchain;
 
-const static Type type = Type("RenderTarget");
+const static Type LuaRendertargetType = Type("RenderTarget");
 
 struct RenderTarget : Object {
   VkPipelineColorBlendAttachmentState blendMode = {};
   VkClearValue clearValue = {};
-  Ref<Texture::Texture> texture;
+  Ref<Texture> texture;
   int location = -1; // Default to index in the render target array
   int layer = 0;
   mutable bool dirty = true;
@@ -143,35 +143,11 @@ struct RenderTarget : Object {
   mutable uint64_t hash;
   auto GetHash() const -> uint64_t;
 
-  // auto operator==(const RenderTarget &other) const -> bool {
-  //   return blendMode.blendEnable == other.blendMode.blendEnable &&
-  //          blendMode.srcColorBlendFactor ==
-  //              other.blendMode.srcColorBlendFactor &&
-  //          blendMode.dstColorBlendFactor ==
-  //              other.blendMode.dstColorBlendFactor &&
-  //          blendMode.colorBlendOp == other.blendMode.colorBlendOp &&
-  //          blendMode.srcAlphaBlendFactor ==
-  //              other.blendMode.srcAlphaBlendFactor &&
-  //          blendMode.dstAlphaBlendFactor ==
-  //              other.blendMode.dstAlphaBlendFactor &&
-  //          blendMode.alphaBlendOp == other.blendMode.alphaBlendOp &&
-  //          blendMode.colorWriteMask == other.blendMode.colorWriteMask &&
-  //          texture->format == other.texture->format &&
-  //          texture->size.width == other.texture->size.width &&
-  //          texture->size.height == other.texture->size.height &&
-  //          texture->size.depth == other.texture->size.depth &&
-  //          texture->mipmapcount == other.texture->mipmapcount &&
-  //          texture->arrayLayers == other.texture->arrayLayers &&
-  //          texture->usage == other.texture->usage &&
-  //          texture->textureType == other.texture->textureType &&
-  //          location == other.location;
-  // }
-
   auto operator==(const RenderTarget &other) const -> bool {
     return GetHash() == other.GetHash();
   }
 
-  static auto GetType() -> Type const * { return &type; }
+  static auto GetType() -> Type const * { return &LuaRendertargetType; }
 
   [[nodiscard]] auto GetInstanceType() const -> Type const * override {
     return RenderTarget::GetType();
@@ -203,59 +179,12 @@ struct State {
   Ref<Shader::ShaderModule> shader;
 
   VkPrimitiveTopology primitiveTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-  VertexFormat vertexFormat;
 
   VkPipelineBindPoint bindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
   std::vector<Ref<RenderTarget>> renderTargets;
 
   mutable uint64_t hash;
   auto GetHash() const -> uint64_t;
-
-  // auto operator==(const State &other) const -> bool {
-  //   if (bindPoint != other.bindPoint) {
-  //     return false;
-  //   }
-
-  //   if (bindPoint == VK_PIPELINE_BIND_POINT_COMPUTE) {
-  //     // For compute pipelines, only compare shader
-  //     return shader.get() == other.shader.get();
-  //   }
-
-  //   if (bindPoint != VK_PIPELINE_BIND_POINT_GRAPHICS) {
-  //     return false;
-  //   }
-
-  //   if (renderTargets.size() != other.renderTargets.size()) {
-  //     return false;
-  //   }
-
-  //   if (cullMode != other.cullMode || frontFace != other.frontFace ||
-  //       depthTestEnable != other.depthTestEnable ||
-  //       depthWriteEnable != other.depthWriteEnable ||
-  //       depthCompareOp != other.depthCompareOp ||
-  //       stencilTestEnable != other.stencilTestEnable ||
-  //       polygonMode != other.polygonMode || lineWidth != other.lineWidth ||
-  //       shader->module != other.shader->module ||
-  //       !(vertexFormat == other.vertexFormat) ||
-  //       primitiveTopology != other.primitiveTopology) {
-  //     return false;
-  //   }
-
-  //   for (size_t i = 0; i < renderTargets.size(); ++i) {
-  //     if (renderTargets[i].get() == nullptr ||
-  //         other.renderTargets[i].get() == nullptr) {
-  //       PrintWarning(
-  //           "Comparing render targets with null textures in state equality");
-  //       return false;
-  //     }
-
-  //     if (*renderTargets[i] != *other.renderTargets[i]) {
-  //       return false;
-  //     }
-  //   }
-
-  //   return true;
-  // }
 
   auto operator==(const State &other) const -> bool {
     return GetHash() == other.GetHash();
@@ -295,7 +224,7 @@ inline auto HashBlendmode(VkPipelineColorBlendAttachmentState const &blendMode)
   return hash;
 }
 
-inline auto HashTexture(const Texture::Texture *texture) -> size_t {
+inline auto HashTexture(const Texture *texture) -> size_t {
   size_t hash = 0;
 
   AddToHash(hash, std::hash<VkFormat>()(texture->format));
@@ -305,7 +234,7 @@ inline auto HashTexture(const Texture::Texture *texture) -> size_t {
   AddToHash(hash, std::hash<uint32_t>()(texture->mipmapcount));
   AddToHash(hash, std::hash<uint32_t>()(texture->arrayLayers));
   AddToHash(hash, std::hash<VkImageUsageFlags>()(texture->usage));
-  AddToHash(hash, std::hash<Texture::TextureType>()(texture->textureType));
+  AddToHash(hash, std::hash<TextureType>()(texture->textureType));
 
   return hash;
 }
@@ -409,7 +338,6 @@ auto SetRenderTargets(const GraphicsContext &context,
     -> Error;
 auto SetLineWidth(float lineWidth) -> void;
 auto SetWindingOrder(VkFrontFace frontFace) -> void;
-auto SetVertexFormat(const VertexFormat &vertexFormat) -> void;
 auto SetTopology(VkPrimitiveTopology topology) -> void;
 
 auto GetDepthMode() -> std::tuple<bool, bool, VkCompareOp>;
@@ -423,7 +351,6 @@ auto GetShader() -> Ref<Shader::ShaderModule>;
 auto GetRenderTargets() -> std::vector<Ref<RenderTarget>>;
 auto GetLineWidth() -> float;
 auto GetWindingOrder() -> VkFrontFace;
-auto GetVertexFormat() -> VertexFormat;
 auto GetTopology() -> VkPrimitiveTopology;
 auto SetBindPoint(VkPipelineBindPoint bindPoint) -> void;
 auto GetBindPoint() -> VkPipelineBindPoint;
@@ -438,7 +365,7 @@ struct ClearInfo {
 
 auto Clear(const GraphicsContext &context, const ClearInfo &clearInfo) -> Error;
 
-auto UsedInPass(const Texture::Texture &texture) -> bool;
+auto UsedInPass(const Texture &texture) -> bool;
 
 } // namespace DynamicRendering
 } // namespace Graphics

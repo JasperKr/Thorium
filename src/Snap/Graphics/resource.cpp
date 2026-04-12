@@ -7,14 +7,14 @@
 
 namespace Graphics {
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
-std::vector<Ref<Texture::Texture>> ReleasedTextures{};
+std::vector<Ref<Texture>> ReleasedTextures{};
 std::vector<Ref<Buffer>> ReleasedBuffers{};
 
 std::mutex ReleasedTexturesMutex{};
 std::mutex ReleasedBuffersMutex{};
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
-auto ScheduleDestruction(Texture::Texture *texture) -> void {
+auto ScheduleDestruction(Texture *texture) -> void {
   std::lock_guard<std::mutex> lock(ReleasedTexturesMutex);
 
 #ifndef NDEBUG
@@ -62,15 +62,14 @@ auto ProcessReleasedResources(GraphicsContext &context) -> void {
   {
     std::lock_guard<std::mutex> lock(ReleasedTexturesMutex);
 
-    Utils::UnorderedErase(
-        ReleasedTextures,
-        [&](const Ref<Graphics::Texture::Texture> &res) -> auto {
-          if (CanBeDestroyed(res->GetTimestamp())) {
-            res->isDestroyed = true;
-            return true;
-          }
-          return false;
-        });
+    Utils::UnorderedErase(ReleasedTextures,
+                          [&](const Ref<Graphics::Texture> &res) -> auto {
+                            if (CanBeDestroyed(res->GetTimestamp())) {
+                              res->isDestroyed = true;
+                              return true;
+                            }
+                            return false;
+                          });
   }
 
   {

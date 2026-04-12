@@ -132,11 +132,14 @@ auto Matrix4x4::Transpose() -> Matrix4x4 {
   return result;
 }
 
-auto Matrix4x4::operator*(const Matrix4x4 &other) -> Matrix4x4 {
+auto Matrix4x4::operator*(const Matrix4x4 &other) const -> Matrix4x4 {
   Matrix4x4 result{};
+#pragma unroll
   for (size_t row = 0; row < Rows; ++row) {
+#pragma unroll
     for (size_t col = 0; col < Cols; ++col) {
       Scalar sum = 0.0F;
+#pragma unroll
       for (size_t k = 0; k < Cols; ++k) {
         sum += At(row, k) * other.At(k, col);
       }
@@ -146,7 +149,24 @@ auto Matrix4x4::operator*(const Matrix4x4 &other) -> Matrix4x4 {
   return result;
 }
 
+// auto operator*(const Vec4 &vec) const -> Vec4;
+
+auto Matrix4x4::operator*(const Vec4 &vec) const -> Vec4 {
+  Vec4 result{};
+#pragma unroll
+  for (size_t row = 0; row < Rows; ++row) {
+    Scalar sum = 0.0F;
+#pragma unroll
+    for (size_t col = 0; col < Cols; ++col) {
+      sum += At(row, col) * vec[col];
+    }
+    result[row] = sum;
+  }
+  return result;
+}
+
 auto Matrix4x4::operator==(const Matrix4x4 &other) const -> bool {
+#pragma unroll
   for (size_t i = 0; i < Size; ++i) {
     if (this->elements.at(i) != other.elements.at(i)) {
       return false;
@@ -169,11 +189,16 @@ auto Matrix4x4::Inverse() const -> Matrix4x4 {
 
   Matrix4x4 result;
 
+#pragma unroll
   for (size_t i = 0; i < Size; ++i) {
     result.At(i) = inv.At(i) * invDet;
   }
 
   return result;
+}
+
+auto Matrix4x4::InverseTranspose() const -> Matrix4x4 {
+  return Inverse().Transpose();
 }
 
 auto Matrix4x4::operator!=(const Matrix4x4 &other) const -> bool {
@@ -192,22 +217,6 @@ auto Matrix4x4::operator[](size_t index) const -> Scalar {
   assert(index < Size);
 #endif
   return elements.at(index);
-}
-
-auto Matrix4x4::Translate(Vec3 translation) -> Matrix4x4 {
-  Matrix4x4 result = *this;
-  result.At(0, 3) += translation.x;
-  result.At(1, 3) += translation.y;
-  result.At(2, 3) += translation.z;
-  return result;
-}
-
-auto Matrix4x4::Scale(Vec3 scale) -> Matrix4x4 {
-  Matrix4x4 result = *this;
-  result.At(0, 0) *= scale.x;
-  result.At(1, 1) *= scale.y;
-  result.At(2, 2) *= scale.z;
-  return result;
 }
 
 auto Matrix4x4::Perspective(Scalar left, Scalar right, Scalar bottom,
@@ -295,6 +304,155 @@ auto Matrix4x4::TransformationMatrix(Vec3 translation, Vec3 scale,
 }
 
 auto Matrix4x4::ToString() const -> std::string {
+  std::string result;
+  for (size_t row = 0; row < Rows; ++row) {
+    result += "| ";
+    for (size_t col = 0; col < Cols; ++col) {
+      result += std::to_string(At(row, col)) + " ";
+    }
+    result += "|";
+    if (row < Rows - 1) {
+      result += "\n";
+    }
+  }
+  return result;
+}
+
+auto Matrix3x3::At(size_t row, size_t col) -> Scalar & {
+#ifndef NDEBUG
+  assert(row < 3 && col < 3);
+#endif
+  return elements.at((row * Cols) + col);
+}
+
+auto Matrix3x3::At(size_t row, size_t col) const -> Scalar {
+#ifndef NDEBUG
+  assert(row < 3 && col < 3);
+#endif
+  return elements.at((row * Cols) + col);
+}
+
+auto Matrix3x3::At(size_t index) -> Scalar & {
+#ifndef NDEBUG
+  assert(index < Size);
+#endif
+  return elements.at(index);
+}
+
+auto Matrix3x3::At(size_t index) const -> Scalar {
+#ifndef NDEBUG
+  assert(index < Size);
+#endif
+  return elements.at(index);
+}
+
+Matrix3x3::Matrix3x3() {
+  At(0) = 1.0F;
+  At(1, 1) = 1.0F;
+  At(2, 2) = 1.0F;
+}
+
+auto Matrix3x3::Transpose() -> Matrix3x3 {
+  Matrix3x3 result{};
+#pragma unroll
+  for (size_t row = 0; row < Rows; ++row) {
+#pragma unroll
+    for (size_t col = 0; col < Cols; ++col) {
+      // NOLINTNEXTLINE, clangd thinks row, col are swapped, but that's intentional
+      result.At(col, row) = At(row, col);
+    }
+  }
+  return result;
+}
+
+auto Matrix3x3::operator*(const Matrix3x3 &other) const -> Matrix3x3 {
+  Matrix3x3 result{};
+#pragma unroll
+  for (size_t row = 0; row < Rows; ++row) {
+#pragma unroll
+    for (size_t col = 0; col < Cols; ++col) {
+      Scalar sum = 0.0F;
+#pragma unroll
+      for (size_t k = 0; k < Cols; ++k) {
+        sum += At(row, k) * other.At(k, col);
+      }
+      result.At(row, col) = sum;
+    }
+  }
+  return result;
+}
+
+auto Matrix3x3::operator*(const Vec3 &vec) const -> Vec3 {
+  Vec3 result{};
+  for (size_t row = 0; row < Rows; ++row) {
+    Scalar sum = 0.0F;
+    for (size_t col = 0; col < Cols; ++col) {
+      sum += At(row, col) * vec[col];
+    }
+    result[row] = sum;
+  }
+  return result;
+}
+
+auto Matrix3x3::operator==(const Matrix3x3 &other) const -> bool {
+  for (size_t i = 0; i < Size; ++i) {
+    if (this->elements.at(i) != other.elements.at(i)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+auto Matrix3x3::operator!=(const Matrix3x3 &other) const -> bool {
+  return !(*this == other);
+}
+
+auto Matrix3x3::Determinant() const -> std::pair<Scalar, Matrix3x3> {
+  // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers, readability-magic-numbers)
+  Scalar det = (At(0) * (At(4) * At(8) - At(5) * At(7))) -
+               (At(1) * (At(3) * At(8) - At(5) * At(6))) +
+               (At(2) * (At(3) * At(7) - At(4) * At(6)));
+
+  Matrix3x3 cofactorMatrix{};
+  cofactorMatrix.At(0) = (At(4) * At(8)) - (At(5) * At(7));
+  cofactorMatrix.At(1) = -((At(3) * At(8)) - (At(5) * At(6)));
+  cofactorMatrix.At(2) = (At(3) * At(7)) - (At(4) * At(6));
+  cofactorMatrix.At(3) = -((At(1) * At(8)) - (At(2) * At(7)));
+  cofactorMatrix.At(4) = (At(0) * At(8)) - (At(2) * At(6));
+  cofactorMatrix.At(5) = -((At(0) * At(7)) - (At(1) * At(6)));
+  cofactorMatrix.At(6) = (At(1) * At(5)) - (At(2) * At(4));
+  cofactorMatrix.At(7) = -((At(0) * At(5)) - (At(2) * At(3)));
+  cofactorMatrix.At(8) = (At(0) * At(4)) - (At(1) * At(3));
+  // NOLINTEND(cppcoreguidelines-avoid-magic-numbers, readability-magic-numbers)
+
+  return {det, cofactorMatrix};
+}
+
+auto Matrix3x3::Inverse() const -> Matrix3x3 {
+  return InverseTranspose().Transpose();
+}
+
+auto Matrix3x3::InverseTranspose() const -> Matrix3x3 {
+  auto detPair = Determinant();
+  auto det = detPair.first;
+  auto cofactorMatrix = detPair.second;
+
+  if (det == 0.0F) {
+    return Matrix3x3{NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN};
+  }
+
+  Scalar invDet = 1.0F / det;
+
+  Matrix3x3 result;
+
+  for (size_t i = 0; i < Size; ++i) {
+    result.At(i) = cofactorMatrix.At(i) * invDet;
+  }
+
+  return result;
+}
+
+auto Matrix3x3::ToString() const -> std::string {
   std::string result;
   for (size_t row = 0; row < Rows; ++row) {
     result += "| ";

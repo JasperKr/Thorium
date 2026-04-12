@@ -16,7 +16,7 @@
 #include "tl/expected.hpp"
 #include <vulkan/vulkan.h>
 
-#if __has_include(<stacktrace>) && not defined(__unix__)
+#if __cpp_lib_stacktrace
 #include <vector>
 #define STD_STACKTRACE_SUPPORTED 1
 #include <stacktrace>
@@ -130,10 +130,10 @@ inline auto GetStackTrace(uint32_t level = 0) -> std::string {
   char **symbols = backtrace_symbols(stack.data(), frames);
 
   std::string trace;
-  // for (int i = 0; i < frames; i++) {
-  //   // NOLINTNEXTLINE
-  //   trace += std::string(symbols[i]) + "\n";
-  // }
+  for (int i = 0; i < frames; i++) {
+    // NOLINTNEXTLINE
+    trace += std::string(symbols[i]) + "\n";
+  }
 
   free(symbols); // NOLINT
   return trace;
@@ -252,7 +252,7 @@ auto Error::SetupTraceback() -> void {
 auto Error::Create(const std::string &message, int32_t code, uint32_t level)
     -> Error {
   Error err = Error{
-      .message = message, .code = code, .backtrace = GetStackTrace(level)};
+      .message = message, .backtrace = GetStackTrace(level), .code = code};
 #if defined(LOG_ERRORS)
   if (code < 0) {
     PrintError("{}", err.ToString());
@@ -266,7 +266,7 @@ auto Error::Create(const char *message, int32_t code) -> Error {
 }
 
 auto Error::Success() -> Error {
-  return {.message = "", .code = 0, .backtrace = ""};
+  return {.message = "", .backtrace = "", .code = 0};
 }
 
 auto Error::IsError(const Error &error) -> bool { return error.code < 0; }

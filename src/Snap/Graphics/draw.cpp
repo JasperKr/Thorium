@@ -3,6 +3,7 @@
 #include "Graphics/buffer.hpp"
 #include "Graphics/dynamicRendering.hpp"
 #include "Graphics/graphics.hpp"
+#include "Graphics/graphicsContext.hpp"
 #include "Graphics/mesh.hpp"
 #include "Modules/error.hpp"
 #include <cassert>
@@ -87,8 +88,6 @@ auto Draw(GraphicsContext &context, Mesh &mesh, uint32_t instanceCount)
   ZoneScoped;
 
   auto *commandBuffer = GetCommandBuffer();
-  VertexFormat &format = mesh.GetVertexFormat();
-  uint32_t stride = format.GetStride(0);
 
   if (commandBuffer == nullptr) {
     return Error::Create("Failed to get command buffer for draw call.");
@@ -100,9 +99,12 @@ auto Draw(GraphicsContext &context, Mesh &mesh, uint32_t instanceCount)
   }
 
   DynamicRendering::SetBindPoint(VK_PIPELINE_BIND_POINT_GRAPHICS);
-  DynamicRendering::SetVertexFormat(format);
+  // DynamicRendering::SetVertexFormat(mesh.GetVertexFormat());
   DynamicRendering::SetTopology(mesh.GetTopology());
 
+  VkVertexInputBindingDescription2EXT vertexInputInfo = {};
+  auto vertexFormat = mesh.GetVertexFormat();
+  vertexFormat.BindDynamicInputState(commandBuffer);
   auto error = DynamicRendering::PrepareRendering(context);
   if (Error::IsError(error)) {
     return error;
@@ -195,7 +197,8 @@ auto DrawIndirect(GraphicsContext &context, Mesh &mesh,
   }
 
   DynamicRendering::SetBindPoint(VK_PIPELINE_BIND_POINT_GRAPHICS);
-  DynamicRendering::SetVertexFormat(mesh.GetVertexFormat());
+  auto vertexFormat = mesh.GetVertexFormat();
+  vertexFormat.BindDynamicInputState(commandBuffer);
   DynamicRendering::SetTopology(mesh.GetTopology());
 
   auto error = DynamicRendering::PrepareRendering(context);
@@ -239,7 +242,7 @@ auto Draw(GraphicsContext &context, const VkPrimitiveTopology &topology,
   }
 
   DynamicRendering::SetBindPoint(VK_PIPELINE_BIND_POINT_GRAPHICS);
-  DynamicRendering::SetVertexFormat({});
+  vkCmdSetVertexInputEXT(commandBuffer, 0, nullptr, 0, nullptr);
   DynamicRendering::SetTopology(topology);
 
   auto error = DynamicRendering::PrepareRendering(context);
@@ -263,7 +266,7 @@ auto Draw(GraphicsContext &context, const Ref<Buffer> &indexBuffer,
   }
 
   DynamicRendering::SetBindPoint(VK_PIPELINE_BIND_POINT_GRAPHICS);
-  DynamicRendering::SetVertexFormat({});
+  vkCmdSetVertexInputEXT(commandBuffer, 0, nullptr, 0, nullptr);
   DynamicRendering::SetTopology(topology);
 
   auto error = DynamicRendering::PrepareRendering(context);

@@ -1,7 +1,6 @@
 #include "wrap_format.hpp"
 #include "Graphics/bufferformat.hpp"
 #include "Graphics/format.hpp"
-#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include <string>
 #include <vector>
@@ -78,13 +77,13 @@ auto SimpleFormatFromLua(lua_State *state, int index,
     -> Result<::Graphics::BufferFormat> {
   std::vector<::Graphics::BufferComponent> components;
 
-  if (lua_type(state, -1) == LUA_TSTRING) {
-    const auto &str = luaL_checkstring(state, -1);
+  if (lua_type(state, index) == LUA_TSTRING) {
+    const auto &str = luaL_checkstring(state, index);
     auto format = ::Graphics::Format::FromString(str);
     components.push_back(
         ::Graphics::BufferComponent{.name = "Default", .format = format});
   } else {
-    auto luatypename = std::string(luaL_typename(state, -1));
+    auto luatypename = std::string(luaL_typename(state, index));
     return Error::Unexpectedf("Buffer format: Expected string, got {}",
                               luatypename);
   }

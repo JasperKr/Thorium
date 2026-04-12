@@ -4,7 +4,7 @@
 #include "vulkan/vulkan_core.h"
 #include <unordered_map>
 
-namespace Graphics::Texture {
+namespace Graphics {
 
 struct SamplerDescription {
   VkFilter magFilter;
@@ -66,4 +66,4 @@ auto GetOrCreateSampler(const GraphicsContext &context,
 
 auto DestroySamplers(const GraphicsContext &context) -> void;
 
-}; // namespace Graphics::Texture
+}; // namespace Graphics

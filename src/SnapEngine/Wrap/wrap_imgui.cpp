@@ -107,7 +107,7 @@ inline auto ChangeMouseState(ImGuiIO &inout) -> Error {
 
 inline auto HandleImguiCreateTextureEvent(Graphics::GraphicsContext &context,
                                           ImTextureData *tex) -> Error {
-  Graphics::Texture::TextureCreationInfo createInfo{
+  Graphics::TextureCreationInfo createInfo{
       .width = static_cast<uint32_t>(tex->Width),
       .height = static_cast<uint32_t>(tex->Height),
       .depth = 1,
@@ -116,9 +116,10 @@ inline auto HandleImguiCreateTextureEvent(Graphics::GraphicsContext &context,
       .usage = static_cast<uint32_t>(VK_IMAGE_USAGE_SAMPLED_BIT) |
                static_cast<uint32_t>(VK_IMAGE_USAGE_TRANSFER_DST_BIT),
       .mipmapCount = 1,
+      .debugName = "Imgui Texture",
   };
 
-  auto textureCreationResult = Graphics::Texture::Create2D(context, createInfo);
+  auto textureCreationResult = Graphics::Create2D(context, createInfo);
 
   if (Error::IsError(textureCreationResult)) {
     return textureCreationResult.error();
@@ -163,7 +164,7 @@ inline auto HandleImguiCreateTextureEvent(Graphics::GraphicsContext &context,
 
 inline auto HandleImguiDestroyTextureEvent(ImTextureData *tex) -> Error {
   auto *texture = // NOLINTNEXTLINE reinterpret-cast
-      reinterpret_cast<Graphics::Texture::Texture *>(tex->GetTexID());
+      reinterpret_cast<Graphics::Texture *>(tex->GetTexID());
 
   if (texture == nullptr) {
     return Error::Create("Attempted to destroy null ImGui texture.");
@@ -188,7 +189,7 @@ inline auto HandleImguiUpdateTextureEvent(Graphics::GraphicsContext &context,
                                                      tex->BytesPerPixel));
 
   auto *texture = // NOLINTNEXTLINE reinterpret-cast
-      reinterpret_cast<Graphics::Texture::Texture *>(tex->GetTexID());
+      reinterpret_cast<Graphics::Texture *>(tex->GetTexID());
 
   std::lock_guard<std::mutex> lock(texture->mutex);
 
@@ -321,14 +322,15 @@ inline auto DrawTemporaryCommandLists(Graphics::GraphicsContext &ctx,
         Graphics::DynamicRendering::SetScissor(&scissorRect);
 
         auto *texture = // NOLINTNEXTLINE
-            reinterpret_cast<Graphics::Texture::Texture *>(pcmd.GetTexID());
+            reinterpret_cast<Graphics::Texture *>(pcmd.GetTexID());
 
         if (texture == nullptr) {
           return Error::Create("ImGui texture is null");
         }
 
+        auto texRef = Ref<Graphics::Texture>(texture);
         auto sendResult =
-            ::Gui::ImGuiShaderRGBA8->Send(ctx, {"MainTexture"}, texture);
+            ::Gui::ImGuiShaderRGBA8->Send(ctx, {"MainTexture"}, texRef);
         if (Error::IsError(sendResult)) {
           return sendResult;
         }
@@ -541,13 +543,6 @@ auto Shutdown() -> Error {
   auto shutdownResult = Gui::ShutdownImGui();
   if (Error::IsError(shutdownResult)) {
     return shutdownResult;
-  }
-
-  // Debug log reference counts of meshes
-
-  for (auto &temporaryCommandList : TemporaryCommandLists) {
-    PrintInfo("Imgui Temporary Mesh Ref Count: {}",
-              temporaryCommandList.Mesh->getReferenceCount());
   }
 
   TemporaryCommandLists.clear();

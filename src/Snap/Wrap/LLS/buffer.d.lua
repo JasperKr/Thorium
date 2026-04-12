@@ -115,7 +115,7 @@ function Buffer:clear(value, offset, size) end
 ---|"halfmat4x3" # 24 byte 4x3 half
 ---|"halfmat4x4" # 32 byte 4x4 half-precision float matrix
 
----@alias snap.BufferFormatElement { name: string, format: snap.BufferFormatComponentFormat }
+---@alias snap.BufferFormatElement { name: string, format: snap.BufferFormatComponentFormat|snap.BufferFormatElement[] }
 ---@alias snap.BufferFormat snap.BufferFormatElement[]
 
 ---@alias snap.EvaluatedBufferFormatElement { name: string, offset: integer, format: snap.BufferFormatComponentFormat }
@@ -155,6 +155,12 @@ function Buffer:getComponentOffset(name) end
 --- Gets the debug name of the buffer
 --- @return string debugName
 function Buffer:getDebugName() end
+
+--- Gets if the buffer format has padding between components
+--- @return boolean hasPadding
+--- @return string? component The name of the component for which padding was added, or nil if no padding was added
+--- @return integer? paddingSize The size of the padding in bytes, or nil if no padding was added
+function Buffer:hasPadding() end
 
 --- Creates a new buffer
 --- @param format snap.BufferFormat|snap.BufferFormatComponentFormat The format of the buffer

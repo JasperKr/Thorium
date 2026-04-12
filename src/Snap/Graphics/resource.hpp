@@ -15,9 +15,6 @@ struct GraphicsResource {
   auto operator=(const GraphicsResource &) -> GraphicsResource & = delete;
   auto operator=(GraphicsResource &&) -> GraphicsResource & = delete;
 
-  // Callback for when the resource is no longer in use by the GPU
-  virtual auto OnUnused() -> bool = 0;
-
   // Call when the resource is used
   auto Use() -> void {
     timelineValue = (std::max)(timelineValue, GetSemaphoreValue());
@@ -41,7 +38,7 @@ private:
 };
 
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
-extern std::vector<Ref<Texture::Texture>> ReleasedTextures;
+extern std::vector<Ref<Texture>> ReleasedTextures;
 extern std::vector<Ref<Buffer>> ReleasedBuffers;
 
 extern std::mutex ReleasedTexturesMutex;
@@ -51,7 +48,7 @@ extern std::mutex ReleasedBuffersMutex;
 
 auto ProcessReleasedResources(GraphicsContext &context) -> void;
 
-auto ScheduleDestruction(Texture::Texture *texture) -> void;
+auto ScheduleDestruction(Texture *texture) -> void;
 auto ScheduleDestruction(Buffer *buffer) -> void;
 
 } // namespace Graphics

@@ -1,30 +1,66 @@
 #!/usr/bin/env bash
 set -e
 
+read -p "This script will fetch all dependencies for the project. Do you want to proceed? (y/n) " -n 1 -r
+echo    # move to a new line
+if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    echo "Aborting."
+    exit 1
+fi
+
 git submodule update --init --recursive
 
 # Create include folders
 mkdir -p include/tl include/vma include/stb include/volk include/shaderc
 
 # Fetch TL expected.hpp
-curl -L https://raw.githubusercontent.com/TartanLlama/expected/master/include/tl/expected.hpp -o include/tl/expected.hpp
+if [ ! -f "include/tl/expected.hpp" ]; then
+    echo "Fetching tl::expected..."
+    curl -L https://raw.githubusercontent.com/TartanLlama/expected/master/include/tl/expected.hpp -o include/tl/expected.hpp
+else
+    echo "tl::expected already exists, skipping fetch."
+fi
 
 # Fetch VMA
-curl -L https://raw.githubusercontent.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator/master/include/vk_mem_alloc.h -o include/vma/vk_mem_alloc.h
+if [ ! -f "include/vma/vk_mem_alloc.h" ]; then
+    echo "Fetching Vulkan Memory Allocator..."
+    mkdir -p include/vma
+    curl -L https://raw.githubusercontent.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator/master/include/vk_mem_alloc.h -o include/vma/vk_mem_alloc.h
+else
+    echo "Vulkan Memory Allocator already exists, skipping fetch."
+fi
 
 # Fetch Volk
-curl -L https://raw.githubusercontent.com/zeux/volk/master/volk.h -o include/volk/volk.h
-curl -L https://raw.githubusercontent.com/zeux/volk/master/volk.c -o include/volk/volk.c
+if [ ! -f "include/volk/volk.h" ] || [ ! -f "include/volk/volk.c" ]; then
+    echo "Fetching Volk..."
+    mkdir -p include/volk
+    curl -L https://raw.githubusercontent.com/zeux/volk/master/volk.h -o include/volk/volk.h
+    curl -L https://raw.githubusercontent.com/zeux/volk/master/volk.c -o include/volk/volk.c
+else
+    echo "Volk already exists, skipping fetch."
+fi
 
 # Fetch stb_image
-curl -L https://raw.githubusercontent.com/nothings/stb/master/stb_image.h -o include/stb/stb_image.h
+if [ ! -f "include/stb/stb_image.h" ]; then
+    echo "Fetching stb_image..."
+    mkdir -p include/stb
+    curl -L https://raw.githubusercontent.com/nothings/stb/master/stb_image.h -o include/stb/stb_image.h
+else
+    echo "stb_image already exists, skipping fetch."
+fi
 
 # Fetch stb_perlin
-curl -L https://raw.githubusercontent.com/nothings/stb/master/stb_perlin.h -o include/stb/stb_perlin.h
+if [ ! -f "include/stb/stb_perlin.h" ]; then
+    echo "Fetching stb_perlin..."
+    mkdir -p include/stb
+    curl -L https://raw.githubusercontent.com/nothings/stb/master/stb_perlin.h -o include/stb/stb_perlin.h
+else
+    echo "stb_perlin already exists, skipping fetch."
+fi
 
 # Fetch embree pre-built binearies for Linux x86_64
 URL="https://github.com/embree/embree/releases/download/v4.4.0/embree-4.4.0.x86_64.linux.tar.gz"
-if [ ! -d "temp_embree" ]; then
+if [ ! -d "include/embree" ] || [ -z "$(ls -A include/embree)" ]; then
     mkdir -p temp_embree
     curl -L "$URL" -o "temp_embree/embree.tar.gz"
     tar -xzf "temp_embree/embree.tar.gz" -C temp_embree
@@ -79,14 +115,16 @@ if [ ! -d "./include/slang/" ] || [ -z "$(ls -A ./include/slang/)" ]; then
     rm -rf "$TEMP_DIR"
 fi
 
-echo "Fetching float-16"
-URL="https://github.com/fengwang/float16_t.git"
-if [ ! -d "float16_t_temp" ]; then
-    git clone --depth 1 "$URL" float16_t_temp
+if [ ! -f "include/float16_t/float16_t.hpp" ]; then
+    echo "Fetching float-16"
+    URL="https://github.com/fengwang/float16_t.git"
+    if [ ! -d "float16_t_temp" ]; then
+        git clone --depth 1 "$URL" float16_t_temp
+    fi
+    mkdir -p include/float16_t
+    cp float16_t_temp/float16_t.hpp include/float16_t/float16_t.hpp
+    rm -rf float16_t_temp
 fi
-mkdir -p include/float16_t
-cp float16_t_temp/float16_t.hpp include/float16_t/float16_t.hpp
-rm -rf float16_t_temp
 
 # Download https://github.com/spnda/fastgltf.git to temp/fastgltf and copy temp/fastgltf/include/fastgltf/* to include/fastgltf/
 URL="https://github.com/spnda/fastgltf.git"

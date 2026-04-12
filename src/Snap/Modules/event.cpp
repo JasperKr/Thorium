@@ -2,6 +2,7 @@
 #include "Modules/Peripherals/keyboard.hpp"
 #include "Modules/window.hpp"
 #include "SDL3/SDL_events.h"
+#include <format>
 #include <mutex>
 #include <queue>
 
@@ -103,7 +104,7 @@ inline auto FromSDLEvent(const SDL_Event &sdlEvent) -> Event {
     break;
   }
   default:
-    event.Name = "unknown: {}" + std::to_string(sdlEvent.type);
+    event.Name = std::format("SDL_EventType{}", std::to_string(sdlEvent.type));
     break;
   }
 

@@ -19,12 +19,10 @@
 #include "Wrap/wrap_engine.hpp"
 #include "Wrap/wrap_imgui.hpp"
 #include <filesystem>
+#include <lua.h>
 #include <public/tracy/Tracy.hpp>
 #include <string>
 #include <vector>
-
-// Enable if encountering C++ exceptions
-// #define DEBUG_CPP_EXCEPTION
 
 #include <vulkan/vulkan.h>
 
@@ -44,7 +42,7 @@ function snap.run()
   return function()
     snap.event.pull()
 
-    local name, a,b,c,d,e,f = snap.event.pop()
+    local name, a, b, c, d, e, f = snap.event.pop()
     while name do
       if name == "quit" then
         if snap.quit then
@@ -54,10 +52,13 @@ function snap.run()
       end
 
       if snap[name] then
-        snap[name](a,b,c,d,e,f)
+        snap[name](a, b, c, d, e, f)
+      end
+      if snap.any then
+        snap.any(name, a, b, c, d, e, f)
       end
 
-      name, a,b,c,d,e,f = snap.event.pop()
+      name, a, b, c, d, e, f = snap.event.pop()
     end
 
     snap.timer.step()
@@ -69,11 +70,15 @@ function snap.run()
     end
 
     if snap.graphics then
+      local commandBuffers
+
       if snap.draw then
-        snap.draw()
+        commandBuffers = snap.draw()
       end
 
-      snap.graphics.present()
+      if commandBuffers then
+        snap.graphics.present(commandBuffers)
+      end
     end
   end
 end
@@ -88,6 +93,14 @@ auto LoadLua(lua_State *state, const std::vector<std::string> &launchArgs)
   PrintDebug("Loading main Lua script...");
   if (launchArgs.empty()) {
     return Error::Create("No launch arguments provided for Lua script.");
+  }
+
+  lua_getglobal(state, "debug");
+  lua_getfield(state, -1, "traceback");
+  lua_remove(state, -2); // remove debug table from stack
+  if (!lua_isfunction(state, -1)) {
+    lua_pop(state, 1); // remove non-function from stack
+    return Error::Create("debug.traceback is not a function.");
   }
 
   lua_getglobal(state, "package");
@@ -127,7 +140,7 @@ auto LoadLua(lua_State *state, const std::vector<std::string> &launchArgs)
   }
 
   // Call the loaded chunk
-  if (lua_pcall(state, static_cast<int>(launchArgs.size()), 0, 0) != LUA_OK) {
+  if (lua_pcall(state, static_cast<int>(launchArgs.size()), 0, 1) != LUA_OK) {
     if (lua_type(state, -1) != LUA_TSTRING) {
       lua_pop(state, 1); // Remove non-string error from stack
       return Error::Create("Failed to run main Lua script: Unknown error");
@@ -140,7 +153,7 @@ auto LoadLua(lua_State *state, const std::vector<std::string> &launchArgs)
 
     std::string luaErrorMessage = lua_tostring(state, -1);
     lua_pop(state, 1); // Remove error message from stack
-    return Error::Create(luaErrorMessage);
+    return Error::Create("Failed to run main Lua script: " + luaErrorMessage);
   }
 
   // Get snap.run function
@@ -350,6 +363,7 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
       Event::ExitCode = 1;
 
       mainLoopResult = Error::Create(luaErrorMessage);
+      PrintError("Error in main loop: {}", luaErrorMessage);
     }
     FrameMarkEnd("Frame");
 
@@ -382,11 +396,11 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
     PrintError("Error during ImGui shutdown: {}", shutdownResult.message);
   }
 
-  Graphics::ShutdownWrapGraphics();
+  Wrap::Graphics::ShutdownWrapGraphics();
 
   Graphics::DeinitilizeRendering(context);
 
-  Graphics::Texture::UnloadModule();
+  Graphics::UnloadModule();
 
   Graphics::ProcessReleasedResources(context);
 
@@ -430,7 +444,7 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
 
   PrintInfo("Destroying samplers...");
 
-  Graphics::Texture::DestroySamplers(context);
+  Graphics::DestroySamplers(context);
 
   PrintInfo("Destroying graphics context...");
 

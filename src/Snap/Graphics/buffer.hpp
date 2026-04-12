@@ -2,9 +2,11 @@
 
 #include "Graphics/barrier.hpp"
 #include "Graphics/graphics.hpp"
+#include "Modules/bytedata.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "graphics.hpp"
+#include <condition_variable>
 #include <cstdint>
 #include <mutex>
 #include <span>
@@ -29,12 +31,28 @@ struct BufferCreationInfo {
   std::string debugName;
 };
 
+const static Type LuaBufferReadbackType = Type("BufferReadback");
+
+struct BufferReadback : Object {
+  static auto GetType() -> Type const * { return &LuaBufferReadbackType; }
+  auto GetInstanceType() const -> Type const * override {
+    return BufferReadback::GetType();
+  }
+
+  Ref<Data::ByteData> data;
+  bool completed = false;
+  Error error = Error::Success();
+
+  std::mutex mutex;
+  std::condition_variable conditionVar;
+};
+
 auto FlushBufferUploads(const GraphicsContext &context) -> Error;
 auto LoadBufferModule(const GraphicsContext &context) -> Error;
 auto UnloadLocalBufferModule(const GraphicsContext &context) -> Error;
 auto UnloadBufferModule(const GraphicsContext &context) -> Error;
 
-static const Type bufferType = Type("Internal Buffer");
+static const Type LuaInternalBufferType = Type("InternalBuffer");
 
 struct Buffer : Object, Barrier::BarrierSynced {
   Buffer() = default;
@@ -92,6 +110,9 @@ struct Buffer : Object, Barrier::BarrierSynced {
   auto CopyTo(const GraphicsContext &context, Buffer &dstBuffer,
               size_t srcIndex, size_t dstIndex, size_t size) -> Error;
 
+  auto CopyTo(const GraphicsContext &context, Texture &dstTexture,
+              VkBufferImageCopy region) -> Error;
+
   auto MapMemory(const GraphicsContext &context) -> Error;
   auto UnmapMemory(const GraphicsContext &context) -> void;
 
@@ -100,7 +121,7 @@ struct Buffer : Object, Barrier::BarrierSynced {
              VkDeviceSize offset = 0, VkDeviceSize size = VK_WHOLE_SIZE)
       -> Error;
 
-  static auto GetType() -> Type const * { return &bufferType; }
+  static auto GetType() -> Type const * { return &LuaInternalBufferType; }
 
   [[nodiscard]] auto GetInstanceType() const -> Type const * override {
     return Buffer::GetType();
@@ -117,6 +138,11 @@ struct Buffer : Object, Barrier::BarrierSynced {
   auto UploadRing(const GraphicsContext &context,
                   std::span<const uint8_t> data, // NOLINTNEXTLINE
                   VkDeviceSize offset, VkDeviceSize size) const -> Error;
+
+  auto Readback(const GraphicsContext &context, VkDeviceSize offset = 0,
+                VkDeviceSize size = VK_WHOLE_SIZE,
+                const Ref<Data::ByteData> &output = Ref<Data::ByteData>())
+      -> Result<Ref<BufferReadback>>;
 
   std::string debugName;
 };

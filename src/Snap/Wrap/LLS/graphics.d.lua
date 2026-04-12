@@ -134,7 +134,7 @@ function snap.graphics.setLineWidth(width) end
 
 --- Sets the winding order for front face determination.
 --- @param clockwise snap.WindingOrder The winding order to set.
-function snap.graphics.setFrontFace(clockwise) end
+function snap.graphics.setWindingOrder(clockwise) end
 
 --- Gets the depth mode.
 --- @return snap.DepthMode depthmode The current depth mode.
@@ -174,7 +174,7 @@ function snap.graphics.getLineWidth() end
 
 --- Gets the current winding order for front face determination.
 --- @return snap.WindingOrder windingorder The current winding order.
-function snap.graphics.getFrontFace() end
+function snap.graphics.getWindingOrder() end
 
 --- Gets the currently set rendertargets.
 --- @return snap.RenderTarget ... The currently set rendertargets
@@ -189,7 +189,7 @@ function snap.graphics.getRenderTargets() end
 function snap.graphics.setRenderTarget(...) end
 
 --- Aquires a local graphics context for the current thread.
---- @param identifier string | integer The identifier of the graphics context to aquire.
+--- @param identifier string | integer | nil The identifier of the graphics context to aquire.
 --- @param priority number? The priority, Tie-breaker for commands with matching identifiers. Higher priority contexts are executed first.
 function snap.graphics.aquireGraphics(identifier, priority) end
 

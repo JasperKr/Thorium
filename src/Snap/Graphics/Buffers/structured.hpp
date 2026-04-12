@@ -6,13 +6,12 @@
 
 #include "Graphics/buffer.hpp"
 #include "Graphics/bufferformat.hpp"
-#include "Graphics/graphics.hpp"
 #include "Modules/error.hpp"
 #include "Modules/type.hpp"
 
 namespace Graphics {
 
-const Type type = Type("Buffer");
+const Type LuaBufferType = Type("Buffer");
 
 struct StructuredBufferCreationInfo {
   VkMemoryPropertyFlags memoryFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
@@ -39,7 +38,7 @@ struct StructuredBuffer : Object {
 
   auto ScheduleDestroy() -> void override { buffer.reset(); }
 
-  static auto GetType() -> Type const * { return &type; }
+  static auto GetType() -> Type const * { return &LuaBufferType; }
   [[nodiscard]] auto GetInstanceType() const -> Type const * override {
     return StructuredBuffer::GetType();
   }

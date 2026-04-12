@@ -15,7 +15,7 @@
 #include <cstdint>
 namespace Image {
 
-static const Type type = Type("ImageData");
+static const Type LuaImageDataType = Type("ImageData");
 
 struct ImageData : Object {
 public:
@@ -63,7 +63,7 @@ public:
   static auto Create(const Data::ByteData &byteData) -> Result<Ref<ImageData>>;
   static auto Create(const std::span<uint8_t> &data) -> Result<Ref<ImageData>>;
 
-  static auto GetType() -> Type const * { return &type; }
+  static auto GetType() -> Type const * { return &LuaImageDataType; }
 
   [[nodiscard]] auto GetInstanceType() const -> Type const * override {
     return ImageData::GetType();
