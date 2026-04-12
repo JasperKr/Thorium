@@ -18,7 +18,7 @@
 struct [[nodiscard]] Error {
   std::string message;
   std::string backtrace;
-  int32_t code = -1;
+  int32_t code = 0; // Default to 0 for success, negative for errors
 
   [[nodiscard]] auto ToString() const -> std::string;
 

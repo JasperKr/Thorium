@@ -1,6 +1,7 @@
 #pragma once
 #include "Graphics/graphicsState.hpp"
 #include "Modules/error.hpp"
+#include <public/tracy/Tracy.hpp>
 #include <span>
 #include <variant>
 
@@ -114,6 +115,8 @@ using ImageLoadResultVariant = std::variant<float *, stbi_uc *>;
 inline auto FromMemory(const std::span<const uint8_t> &data, int &outWidth,
                        int &outHeight, VkFormat &outFormat)
     -> Result<ImageLoadResultVariant> {
+  ZoneScoped;
+
   int texWidth = 0;
   int texHeight = 0;
   int texChannels = 0;
@@ -121,6 +124,8 @@ inline auto FromMemory(const std::span<const uint8_t> &data, int &outWidth,
   // check for LDR formats, supported by default stbi_load
   if (stbi_is_hdr_from_memory(data.data(), static_cast<int>(data.size())) ==
       0) {
+    ZoneScopedN("stbi_load_from_memory");
+
     stbi_uc *pixels = stbi_load_from_memory(
         data.data(), static_cast<int>(data.size()), &texWidth, &texHeight,
         &texChannels, STBI_rgb_alpha);
@@ -138,6 +143,8 @@ inline auto FromMemory(const std::span<const uint8_t> &data, int &outWidth,
 
   if (stbi_is_hdr_from_memory(data.data(), static_cast<int>(data.size())) !=
       0) {
+    ZoneScopedN("stbi_loadf_from_memory");
+
     float *pixels = stbi_loadf_from_memory(
         data.data(), static_cast<int>(data.size()), &texWidth, &texHeight,
         &texChannels, STBI_rgb_alpha); // force 4 channels

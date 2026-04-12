@@ -137,12 +137,12 @@ inline auto GetDescriptorPool(ThreadContext &tcontext) -> Error {
 
     tcontext.descriptorPools.push_back(
         {pool, GetSemaphoreValue()}); // Add new pool to the list
-  }
 
-  tcontext.descriptorPool = pool;
-
-  {
+    tcontext.descriptorPool = pool;
+  } else {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+
+    tcontext.descriptorPool = pool;
     auto resetResult = Error::Create(
         vkResetDescriptorPool(context.device, tcontext.descriptorPool, 0));
 
@@ -355,12 +355,18 @@ auto Deinitialize(Graphics::GraphicsContext &context) -> Error {
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
 
-    vkDeviceWaitIdle(context.device);
+    // TODO: Delay thread destruction until this isn't needed anymore since this will never fire if another thread is doing shit
+    auto result = vkDeviceWaitIdle(context.device);
+    if (Error::IsError(result)) {
+      return Error::Create(result);
+    }
 
     for (auto &descriptorPoolInfo : GetThreadContext().descriptorPools) {
       vkDestroyDescriptorPool(context.device, descriptorPoolInfo.descriptorPool,
                               nullptr);
     }
+
+    GetThreadContext().descriptorPools.clear();
   }
 
   return Error::Success();

@@ -28,7 +28,7 @@ struct RenderThreadData {
   uint64_t key = 0;
   int64_t priority = 0; // Tie-breaker for overlapping keys
 
-  VkCommandBuffer commandBuffer = nullptr;
+  VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
   bool drawsToSwapchain = false;
   uint64_t aquiredAtFrame = 0;
 

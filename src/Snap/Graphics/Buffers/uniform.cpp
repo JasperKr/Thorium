@@ -5,6 +5,7 @@
 #include <public/tracy/Tracy.hpp>
 #include <vector>
 
+#include "Modules/utils.hpp"
 #include "vulkan/vulkan_core.h"
 
 namespace Graphics {
@@ -70,7 +71,7 @@ void FrameUniformBufferObject::SetData(const Graphics::GraphicsContext &context,
   }
 
   // NOLINTNEXTLINE, pointer arithmetic
-  memcpy(localData.data() + atOffset, data.data(), data.size());
+  std::memcpy(localData.data() + atOffset, data.data(), data.size());
 }
 
 auto FrameUniformBufferObject::Flush(const Graphics::GraphicsContext &context)
@@ -123,12 +124,8 @@ auto FrameUniformBufferObject::Flush(const Graphics::GraphicsContext &context)
   auto initialOffset = offset;
 
   offset += static_cast<uint32_t>(localData.size());
-
-  auto alignment =
-      context.deviceProperties.limits.minUniformBufferOffsetAlignment;
-
-  // Align offset to minUniformBufferOffsetAlignment
-  offset = (offset + alignment - 1) & ~(alignment - 1);
+  offset = Utils::AlignUp(
+      offset, context.deviceProperties.limits.minUniformBufferOffsetAlignment);
 
   lastFlushSize = offset - initialOffset; // Use the difference as flushed size
   localData.clear();

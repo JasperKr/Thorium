@@ -40,4 +40,16 @@ auto InterleaveSpans(
   return output;
 }
 
+auto AlignUp(size_t value, size_t alignment) -> size_t {
+  assert(alignment != 0 && (alignment & (alignment - 1)) == 0 &&
+         "Alignment must be a non-zero power of two.");
+  return (value + alignment - 1) & ~(alignment - 1);
+}
+
+auto AlignDown(size_t value, size_t alignment) -> size_t {
+  assert(alignment != 0 && (alignment & (alignment - 1)) == 0 &&
+         "Alignment must be a non-zero power of two.");
+  return value & ~(alignment - 1);
+}
+
 } // namespace Utils

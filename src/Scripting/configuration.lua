@@ -10,7 +10,7 @@ function snap.config(config)
 
   -- "adaptive" | "immediate" | "replace" | "enabled"
   ---@type snap.VsyncMode
-  config.window.vsync = "enabled"
+  config.window.vsync = "immediate"
 
   config.graphics.hardwareRaytracing = "optional"
   config.graphics.inlineRaytracing = "optional"

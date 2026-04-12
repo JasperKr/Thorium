@@ -46,6 +46,53 @@ inline std::atomic<uint64_t> currentTimelineValue = 0;
 
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
+inline auto NameBuffer(VkBuffer buffer, VmaAllocation memory,
+                       const std::string &name) -> Error {
+  auto *contextPtr = GetCurrentGraphicsContext();
+
+  if (contextPtr == nullptr) {
+    return Error::Create(
+        "Attempted to name a buffer, but no graphics context is current.");
+  }
+
+  if (name.empty()) {
+    return Error::Create("Buffer name cannot be empty.");
+  }
+
+  if (buffer == VK_NULL_HANDLE) {
+    return Error::Create("Buffer handle is null.");
+  }
+
+  if (memory == VK_NULL_HANDLE) {
+    return Error::Create("Buffer memory handle is null.");
+  }
+
+  auto &context = *contextPtr;
+
+  VkDebugUtilsObjectNameInfoEXT debugNameInfo{
+      .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+      .objectType = VK_OBJECT_TYPE_BUFFER,
+      .objectHandle =
+          static_cast<uint64_t>(reinterpret_cast<uintptr_t>(buffer)), // NOLINT
+      .pObjectName = name.c_str(),
+  };
+  auto result = Error::Create(
+      vkSetDebugUtilsObjectNameEXT(context.device, &debugNameInfo));
+
+  if (Error::IsError(result)) {
+    return result;
+  }
+
+  {
+    std::lock_guard<std::mutex> lock(
+        Graphics::GraphicsContext::mutexes.vmaAllocator);
+
+    vmaSetAllocationName(context.vmaAllocator, memory, name.c_str());
+  }
+
+  return Error::Success();
+}
+
 auto LoadBufferModule(const GraphicsContext &context) -> Error {
   VkSemaphoreTypeCreateInfo timelineInfo = {
       .sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
@@ -59,8 +106,8 @@ auto LoadBufferModule(const GraphicsContext &context) -> Error {
   };
 
   {
-    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    std::lock_guard<std::mutex> lock2(uploadSemaphoreMutex);
+    std::scoped_lock<std::mutex, std::mutex> lock(
+        Graphics::GraphicsContext::mutexes.device, uploadSemaphoreMutex);
     auto result = Error::Create(
         vkCreateSemaphore(context.device, &semInfo, nullptr, &uploadSemaphore));
     if (Error::IsError(result)) {
@@ -72,8 +119,15 @@ auto LoadBufferModule(const GraphicsContext &context) -> Error {
 }
 
 auto UnloadLocalBufferModule(const GraphicsContext &context) -> Error {
-  StagingBuffers.clear();
+  for (auto &stagingBuffer : StagingBuffers) {
+    std::lock_guard<std::mutex> lock(
+        Graphics::GraphicsContext::mutexes.vmaAllocator);
 
+    vmaDestroyBuffer(context.vmaAllocator, stagingBuffer.buffer,
+                     stagingBuffer.memory);
+  }
+
+  StagingBuffers.clear();
   UploadBuffers.clear();
 
   return Error::Success();
@@ -81,8 +135,8 @@ auto UnloadLocalBufferModule(const GraphicsContext &context) -> Error {
 
 auto UnloadBufferModule(const GraphicsContext &context) -> Error {
   if (uploadSemaphore != nullptr) {
-    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    std::lock_guard<std::mutex> lock2(uploadSemaphoreMutex);
+    std::scoped_lock<std::mutex, std::mutex> lock(
+        Graphics::GraphicsContext::mutexes.device, uploadSemaphoreMutex);
     vkDestroySemaphore(context.device, uploadSemaphore, nullptr);
     uploadSemaphore = nullptr;
   }
@@ -95,8 +149,8 @@ auto FlushBufferUploads(const GraphicsContext &context) -> Error {
   // Check staging buffers for completed uploads
   uint64_t completedValue = 0;
   {
-    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    std::lock_guard<std::mutex> lock2(uploadSemaphoreMutex);
+    std::scoped_lock<std::mutex, std::mutex> lock(
+        Graphics::GraphicsContext::mutexes.device, uploadSemaphoreMutex);
     auto result = Error::Create(vkGetSemaphoreCounterValue(
         context.device, uploadSemaphore, &completedValue));
     if (Error::IsError(result)) {
@@ -110,10 +164,6 @@ auto FlushBufferUploads(const GraphicsContext &context) -> Error {
       std::lock_guard<std::mutex> lock(
           Graphics::GraphicsContext::mutexes.vmaAllocator);
 
-      // Upload completed, destroy staging buffer
-      if (stagingBufferIterator->memory != VK_NULL_HANDLE) {
-        vmaUnmapMemory(context.vmaAllocator, stagingBufferIterator->memory);
-      }
       vmaDestroyBuffer(context.vmaAllocator, stagingBufferIterator->buffer,
                        stagingBufferIterator->memory);
       stagingBufferIterator = StagingBuffers.erase(stagingBufferIterator);
@@ -203,6 +253,12 @@ auto Buffer::UploadLarge(const GraphicsContext &context,
     if (result != VK_SUCCESS) {
       return Error::Create(result);
     }
+  }
+
+  auto nameResult = NameBuffer(stagingBuffer, stagingMemory, "Staging Buffer");
+  if (Error::IsError(nameResult)) {
+    // Not critical.
+    PrintError("Failed to name staging buffer: {}", nameResult.ToString());
   }
 
   void *mapped = nullptr;
@@ -424,26 +480,9 @@ auto Buffer::Create(const GraphicsContext &context,
   }
 
   if (!buffer->debugName.empty()) {
-    VkDebugUtilsObjectNameInfoEXT debugNameInfo{
-        .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-        .objectType = VK_OBJECT_TYPE_BUFFER,
-        .objectHandle = static_cast<uint64_t>(
-            reinterpret_cast<uintptr_t>(buffer->handle)), // NOLINT
-        .pObjectName = buffer->debugName.c_str(),
-    };
-    auto result = Error::Create(
-        vkSetDebugUtilsObjectNameEXT(context.device, &debugNameInfo));
-
-    if (Error::IsError(result)) {
-      return result.AsUnexpected();
-    }
-
-    {
-      std::lock_guard<std::mutex> lock(
-          Graphics::GraphicsContext::mutexes.vmaAllocator);
-
-      vmaSetAllocationName(context.vmaAllocator, buffer->memory,
-                           buffer->debugName.c_str());
+    auto err = NameBuffer(buffer->handle, buffer->memory, buffer->debugName);
+    if (Error::IsError(err)) {
+      PrintWarning("Failed to set debug name for buffer: {}", err.message);
     }
   } else {
     PrintWarning("No debug name set for buffer.");
@@ -581,7 +620,9 @@ auto Buffer::CopyTo(const GraphicsContext &context, Texture &dstTexture,
 }
 
 auto Buffer::ScheduleDestroy() -> void {
-  assert(!released);
+  if (released) {
+    return;
+  }
   assert(handle != nullptr);
 
   ScheduleDestruction(this);
@@ -740,7 +781,8 @@ auto Buffer::Readback(const GraphicsContext &context,
 Buffer::~Buffer() {
   auto *context = GetCurrentGraphicsContext();
 
-  std::lock_guard<std::mutex> lock(
+  std::scoped_lock<std::mutex, std::mutex> lock(
+      Graphics::GraphicsContext::mutexes.device,
       Graphics::GraphicsContext::mutexes.vmaAllocator);
 
   if (persistentMapping && mappedData != nullptr) {

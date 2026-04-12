@@ -1,6 +1,7 @@
 #include "shader.hpp"
 #include "Buffers/uniform.hpp"
 #include "Graphics/Buffers/push.hpp"
+#include "Graphics/graphicsContext.hpp"
 #include "Graphics/reflect.hpp"
 #include "Graphics/texture.hpp"
 #include "Modules/Math/vector.hpp"
@@ -8,6 +9,7 @@
 #include "Modules/error.hpp"
 #include "Modules/filesystem.hpp"
 #include "Modules/object.hpp"
+#include "Modules/utils.hpp"
 #include "Modules/window.hpp"
 #include "graphics.hpp"
 #include "shaderc/shaderc.h"
@@ -635,10 +637,10 @@ auto ShaderModule::Send(const GraphicsContext &context, const ResourceKey &key,
 }
 
 auto ShaderModule::Send(const GraphicsContext &context, const ResourceKey &key,
-                        StructuredBuffer *buffer) -> Error {
+                        const Ref<Buffer> &buffer) -> Error {
   ZoneScopedN("ShaderModule::Send structured buffer");
 
-  if (buffer == nullptr) {
+  if (!buffer.isValid()) {
     return Error::Create("Buffer is null.");
   }
 
@@ -651,8 +653,7 @@ auto ShaderModule::Send(const GraphicsContext &context, const ResourceKey &key,
     if (bufferInfo.name == *key.begin()) {
       auto locationKey = SetBindingToSlot(bufferInfo.set, bufferInfo.binding);
 
-      GetState().userBoundBuffers[locationKey] = {buffer->GetBuffer(),
-                                                  bufferInfo};
+      GetState().userBoundBuffers[locationKey] = {buffer, bufferInfo};
 
       return Error::Success();
     }
@@ -704,31 +705,31 @@ auto ShaderModule::hash() const -> size_t {
   return reinterpret_cast<size_t>(module); // NOLINT
 }
 
-auto ShaderModule::FlushGlobals(const GraphicsContext &context,
-                                VkPipelineLayout layout,
-                                VkPipelineStageFlags2 dstStage) -> Error {
+auto ShaderModule::BindGlobalUBO(const GraphicsContext &context,
+                                 VkPipelineLayout layout,
+                                 VkPipelineStageFlags2 dstStage) -> Error {
   ZoneScoped;
 
-  auto &buffer = GetGlobalUniformBuffer(context.frameIndex);
-  buffer.SetData(context, globalUniforms, 0);
-  auto uboFlushResult = buffer.Flush(context);
-
-  if (Error::IsError(uboFlushResult)) {
-    return uboFlushResult.error();
-  }
-
   if (reflection.hasGlobals) {
-    // UBO buffer can be resized, we update every frame for now;
-    // TODO: dynamic UBO offsets using VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC
-    // and only update size when a draw requires more space.
+    auto &buffer = GetGlobalUniformBuffer(context.frameIndex);
+
+    auto offset = buffer.GetOffset();
+    PrintAlways("Flushing global UBO at offset {}.", offset);
+
+    buffer.SetData(context, globalUniforms, 0);
+    auto uboFlushResult = buffer.Flush(context);
+
+    if (Error::IsError(uboFlushResult)) {
+      return uboFlushResult.error();
+    }
+
     VkDescriptorBufferInfo bufferInfo{};
 
     bufferInfo.buffer = buffer.GetBuffer()->handle;
-    bufferInfo.offset = buffer.GetOffset() - buffer.GetLastFlushSize();
-
-    assert(reflection.globals.size > 0);
-
-    bufferInfo.range = buffer.GetLastFlushSize();
+    bufferInfo.offset = 0;
+    bufferInfo.range = Utils::AlignUp(
+        reflection.globals.size,
+        context.deviceProperties.limits.minUniformBufferOffsetAlignment);
 
     VkWriteDescriptorSet descriptorWrite{};
     descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -744,15 +745,19 @@ auto ShaderModule::FlushGlobals(const GraphicsContext &context,
 
     descriptorWrite.dstBinding = reflection.globals.binding;
     descriptorWrite.dstArrayElement = 0;
-    descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
     descriptorWrite.descriptorCount = 1;
     descriptorWrite.pBufferInfo = &bufferInfo;
-
     {
       std::lock_guard<std::mutex> lock(
           Graphics::GraphicsContext::mutexes.device);
+
       vkUpdateDescriptorSets(context.device, 1, &descriptorWrite, 0, nullptr);
     }
+
+    vkCmdBindDescriptorSets(GetThreadContext().commandBuffer,
+                            VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0, 1,
+                            &descriptorWrite.dstSet, 1, &offset);
   }
 
   return Error::Success();
@@ -760,7 +765,6 @@ auto ShaderModule::FlushGlobals(const GraphicsContext &context,
 
 inline auto BindTextures(const GraphicsContext &context,
                          std::vector<VkWriteDescriptorSet> &writes,
-                         std::unordered_set<uint64_t> &updatedSets,
                          ShaderReflection &reflection, BoundState &state)
     -> Error {
   ZoneScoped;
@@ -861,7 +865,6 @@ inline auto BindTextures(const GraphicsContext &context,
 
 inline auto BindBuffers(const GraphicsContext &context,
                         std::vector<VkWriteDescriptorSet> &writes,
-                        std::unordered_set<uint64_t> &updatedSets,
                         ShaderReflection &reflection, BoundState &state)
     -> Error {
   ZoneScoped;
@@ -939,30 +942,24 @@ auto ShaderModule::FlushDescriptors(const GraphicsContext &context,
     return validateResult;
   }
 
-  static Graphics::Buffer *currentUBOBuffer;
-
-  auto updateResult = FlushGlobals(context, layout, dstStage);
-  if (Error::IsError(updateResult)) {
-    return updateResult;
-  }
-
   auto &state = GetState();
 
   thread_local std::vector<VkWriteDescriptorSet> writes;
-  thread_local std::unordered_set<uint64_t> updatedSets;
   writes.clear();
-  updatedSets.clear();
 
-  auto textureResult =
-      BindTextures(context, writes, updatedSets, reflection, state);
+  auto textureResult = BindTextures(context, writes, reflection, state);
   if (Error::IsError(textureResult)) {
     return textureResult;
   }
 
-  auto bufferResult =
-      BindBuffers(context, writes, updatedSets, reflection, state);
+  auto bufferResult = BindBuffers(context, writes, reflection, state);
   if (Error::IsError(bufferResult)) {
     return bufferResult;
+  }
+
+  auto bindGlobalUBOResult = BindGlobalUBO(context, layout, dstStage);
+  if (Error::IsError(bindGlobalUBOResult)) {
+    return bindGlobalUBOResult;
   }
 
   {
@@ -971,7 +968,6 @@ auto ShaderModule::FlushDescriptors(const GraphicsContext &context,
     vkUpdateDescriptorSets(context.device, writes.size(), writes.data(), 0,
                            nullptr);
   }
-  state.pendingDescriptorWrites.clear();
 
   auto *commandBuffer = GetCommandBuffer();
 
@@ -997,6 +993,10 @@ auto ShaderModule::FlushDescriptors(const GraphicsContext &context,
   descriptorSetList.reserve(state.descriptorSets.size());
   uint32_t set = 0;
   for (const auto &setPair : state.descriptorSets) {
+    if (reflection.hasGlobals && setPair.first == reflection.globals.set) {
+      continue; // Global UBO is bound separately with dynamic offset, so we skip it here.
+    }
+
     // I assume slang will always output sets in order
     // Unless the user manually assigns set numbers out of order
     // In that case, don't, lol

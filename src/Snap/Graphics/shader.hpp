@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Graphics/Buffers/push.hpp"
-#include "Graphics/Buffers/structured.hpp"
 #include "Graphics/buffer.hpp"
 #include "Graphics/texture.hpp"
 #include "Modules/Math/vector.hpp"
@@ -116,8 +115,6 @@ struct BoundState {
       userBoundTextures;
 
   std::unordered_map<uint32_t, VkDescriptorSet> descriptorSets;
-  std::vector<DescriptorWriteInfo> pendingDescriptorWrites;
-  // std::vector<ImageTransitionInfo> pendingImageTransitions;
 };
 
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
@@ -184,7 +181,7 @@ struct ShaderModule : Object {
             const std::span<const uint8_t> &data) -> Error;
 
   auto Send(const GraphicsContext &context, const ResourceKey &key,
-            StructuredBuffer *buffer) -> Error;
+            const Ref<Buffer> &buffer) -> Error;
 
   auto Send(const GraphicsContext &context, const ResourceKey &key,
             const Ref<Graphics::Texture> &texture) -> Error;
@@ -219,8 +216,8 @@ struct ShaderModule : Object {
   }
 
 private:
-  auto FlushGlobals(const GraphicsContext &context, VkPipelineLayout layout,
-                    VkPipelineStageFlags2 dstStage) -> Error;
+  auto BindGlobalUBO(const GraphicsContext &context, VkPipelineLayout layout,
+                     VkPipelineStageFlags2 dstStage) -> Error;
 };
 
 extern Ref<ShaderModule> DefaultShaderModule; // NOLINT

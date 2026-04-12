@@ -134,9 +134,12 @@ auto Matrix4x4::Transpose() -> Matrix4x4 {
 
 auto Matrix4x4::operator*(const Matrix4x4 &other) const -> Matrix4x4 {
   Matrix4x4 result{};
+#pragma unroll
   for (size_t row = 0; row < Rows; ++row) {
+#pragma unroll
     for (size_t col = 0; col < Cols; ++col) {
       Scalar sum = 0.0F;
+#pragma unroll
       for (size_t k = 0; k < Cols; ++k) {
         sum += At(row, k) * other.At(k, col);
       }
@@ -150,8 +153,10 @@ auto Matrix4x4::operator*(const Matrix4x4 &other) const -> Matrix4x4 {
 
 auto Matrix4x4::operator*(const Vec4 &vec) const -> Vec4 {
   Vec4 result{};
+#pragma unroll
   for (size_t row = 0; row < Rows; ++row) {
     Scalar sum = 0.0F;
+#pragma unroll
     for (size_t col = 0; col < Cols; ++col) {
       sum += At(row, col) * vec[col];
     }
@@ -161,6 +166,7 @@ auto Matrix4x4::operator*(const Vec4 &vec) const -> Vec4 {
 }
 
 auto Matrix4x4::operator==(const Matrix4x4 &other) const -> bool {
+#pragma unroll
   for (size_t i = 0; i < Size; ++i) {
     if (this->elements.at(i) != other.elements.at(i)) {
       return false;
@@ -183,6 +189,7 @@ auto Matrix4x4::Inverse() const -> Matrix4x4 {
 
   Matrix4x4 result;
 
+#pragma unroll
   for (size_t i = 0; i < Size; ++i) {
     result.At(i) = inv.At(i) * invDet;
   }
@@ -347,7 +354,9 @@ Matrix3x3::Matrix3x3() {
 
 auto Matrix3x3::Transpose() -> Matrix3x3 {
   Matrix3x3 result{};
+#pragma unroll
   for (size_t row = 0; row < Rows; ++row) {
+#pragma unroll
     for (size_t col = 0; col < Cols; ++col) {
       // NOLINTNEXTLINE, clangd thinks row, col are swapped, but that's intentional
       result.At(col, row) = At(row, col);
@@ -358,9 +367,12 @@ auto Matrix3x3::Transpose() -> Matrix3x3 {
 
 auto Matrix3x3::operator*(const Matrix3x3 &other) const -> Matrix3x3 {
   Matrix3x3 result{};
+#pragma unroll
   for (size_t row = 0; row < Rows; ++row) {
+#pragma unroll
     for (size_t col = 0; col < Cols; ++col) {
       Scalar sum = 0.0F;
+#pragma unroll
       for (size_t k = 0; k < Cols; ++k) {
         sum += At(row, k) * other.At(k, col);
       }

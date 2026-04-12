@@ -1,5 +1,6 @@
 #include "swapchainManager.hpp"
 
+#include "Graphics/graphicsContext.hpp"
 #include "Graphics/graphicsState.hpp"
 #include "Graphics/texture.hpp"
 #include "Modules/console.hpp"
@@ -256,7 +257,11 @@ auto SwapchainManager::Deinitialize(GraphicsContext &context) -> void {
       std::lock_guard<std::mutex> lock(
           Graphics::GraphicsContext::mutexes.device);
       vkDestroyImageView(context.device, view, nullptr);
+      // We do not destroy the image here because it is owned by the swapchain.
     }
+
+    texture->image = nullptr;
+    texture->view = VK_NULL_HANDLE;
   }
 
   currentTextures.clear();
@@ -275,6 +280,9 @@ auto SwapchainManager::Deinitialize(GraphicsContext &context) -> void {
     for (auto &semaphore : context.imageReady) {
       vkDestroySemaphore(context.device, semaphore, nullptr);
     }
+
+    context.imageInFlight.clear();
+    context.imageReady.clear();
   }
 
   currentSwapchain = VK_NULL_HANDLE;
@@ -320,7 +328,7 @@ auto SwapchainManager::CleanupOldSwapchains(GraphicsContext &context,
         auto swapchainImageCount = oldSwapchain.textures.size();
         if (currentFrame - oldSwapchain.lastFrameUsed >
             swapchainImageCount * 2) {
-          for (const auto &texture : oldSwapchain.textures) {
+          for (auto &texture : oldSwapchain.textures) {
             auto *image = texture->image;
             auto *view = texture->view;
 
@@ -329,6 +337,9 @@ auto SwapchainManager::CleanupOldSwapchains(GraphicsContext &context,
                   Graphics::GraphicsContext::mutexes.device);
               vkDestroyImageView(context.device, view, nullptr);
             }
+
+            texture->image = nullptr;
+            texture->view = VK_NULL_HANDLE;
           }
 
           oldSwapchain.textures.clear();
@@ -337,6 +348,7 @@ auto SwapchainManager::CleanupOldSwapchains(GraphicsContext &context,
               Graphics::GraphicsContext::mutexes.device);
           vkDestroySwapchainKHR(context.device, oldSwapchain.swapchain,
                                 nullptr);
+          oldSwapchain.swapchain = VK_NULL_HANDLE;
 
           for (auto &fence : oldSwapchain.imageInFlight) {
             vkDestroyFence(context.device, fence, nullptr);
@@ -345,6 +357,9 @@ auto SwapchainManager::CleanupOldSwapchains(GraphicsContext &context,
           for (auto &semaphore : oldSwapchain.imageReady) {
             vkDestroySemaphore(context.device, semaphore, nullptr);
           }
+
+          oldSwapchain.imageInFlight.clear();
+          oldSwapchain.imageReady.clear();
 
           return true;
         }

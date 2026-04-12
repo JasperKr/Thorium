@@ -569,37 +569,6 @@ auto SetupFromType(slang::VariableLayoutReflection *variableLayout,
   return resourceInfo;
 }
 
-auto ReflectGlobals(Graphics::GraphicsContext &context,
-                    slang::ProgramLayout *programLayout,
-                    ShaderReflection &reflection) -> Error {
-  VkDescriptorSetLayoutBinding binding = {};
-
-  auto *scopeTypeLayout =
-      programLayout->getGlobalParamsVarLayout()->getTypeLayout();
-
-  binding.binding =
-      programLayout->getGlobalParamsVarLayout()->getBindingIndex();
-  binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-  binding.descriptorCount = 1;
-  binding.stageFlags = VK_SHADER_STAGE_ALL;
-
-  VkDescriptorSetLayoutCreateInfo layoutCreateInfo = {};
-  layoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-  layoutCreateInfo.bindingCount = 1;
-  layoutCreateInfo.pBindings = &binding;
-  VkDescriptorSetLayout descriptorSetLayout = {};
-  {
-    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    auto result = Error::Create(vkCreateDescriptorSetLayout(
-        context.device, &layoutCreateInfo, nullptr, &descriptorSetLayout));
-    if (Error::IsError(result)) {
-      return result;
-    }
-  }
-
-  return Error::Success();
-}
-
 auto ReflectShader(Graphics::GraphicsContext &context,
                    slang::ProgramLayout *programLayout,
                    ShaderReflection &outReflection) -> Error {

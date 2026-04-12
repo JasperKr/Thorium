@@ -34,10 +34,8 @@ public:
 
   ~ByteData() override {
     if (parent != nullptr) {
-      PrintDebug("Releasing ByteData view parent");
       parent->release(); // Parent owns the data
     } else {
-      PrintDebug("Releasing ByteData data");
       delete[] data; // We own the data
     }
   }

@@ -23,4 +23,7 @@ auto InterleaveSpans(
     std::vector<std::pair<std::span<const uint8_t>, size_t>> &spans)
     -> std::vector<uint8_t>;
 
+auto AlignUp(size_t value, size_t alignment) -> size_t;
+auto AlignDown(size_t value, size_t alignment) -> size_t;
+
 } // namespace Utils

@@ -5,6 +5,7 @@
 #include "Wrap/wrap.hpp"
 #include "entity.hpp"
 #include "lua.hpp"
+#include <format>
 #include <imgui.h>
 
 namespace Engine {
@@ -219,7 +220,7 @@ auto Transform::UpdateWorldMatrix(const Transform *parent) -> void {
     WorldMatrix = LocalMatrix;
   }
 
-  WorldDirty = false;
+  // WorldDirty = false;
 }
 
 auto Transform::DrawGUI() const -> void {
@@ -228,6 +229,10 @@ auto Transform::DrawGUI() const -> void {
   ImGui::Text("Rotation: (%.2f, %.2f, %.2f, %.2f)", Rotation.x, Rotation.y,
               Rotation.z, Rotation.w);
   ImGui::Text("Scale: (%.2f, %.2f, %.2f)", Scale.x, Scale.y, Scale.z);
+  ImGui::Text("%s",
+              std::format("Local Matrix:\n{}", LocalMatrix.ToString()).c_str());
+  ImGui::Text("%s",
+              std::format("World Matrix:\n{}", WorldMatrix.ToString()).c_str());
 }
 
 // NOLINTEND(cppcoreguidelines-avoid-magic-numbers, readability-magic-numbers)

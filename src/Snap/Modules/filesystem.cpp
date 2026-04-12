@@ -71,22 +71,17 @@ auto ReadFile(const std::string &path, int64_t readLength)
     len = readLength; // Checked to be valid above
   }
 
-  std::vector<unsigned char> data;
-  data.resize((size_t)len);
+  std::vector<unsigned char> data(len);
 
   const auto read = PHYSFS_readBytes(file, data.data(), len);
-  int error = PHYSFS_close(file);
 
-  if (error == PHYSFS_ERR_ERROR) {
+  if (PHYSFS_close(file) == PHYSFS_ERR_ERROR) {
     return Error::Unexpected("Failed to close file");
   }
 
   if (read != len) {
     return Error::Unexpected("Failed to read entire file");
   }
-
-  data.resize(read);
-  data.shrink_to_fit();
 
   return data;
 }

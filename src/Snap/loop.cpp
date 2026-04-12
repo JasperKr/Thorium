@@ -24,9 +24,6 @@
 #include <string>
 #include <vector>
 
-// Enable if encountering C++ exceptions
-// #define DEBUG_CPP_EXCEPTION
-
 #include <vulkan/vulkan.h>
 
 #include "lua.hpp"

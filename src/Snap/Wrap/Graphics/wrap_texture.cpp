@@ -695,15 +695,16 @@ static inline auto TextureFromWidthAndHeight(lua_State *state)
   auto width = static_cast<uint32_t>(luaL_checkinteger(state, 1));
   auto height = static_cast<uint32_t>(luaL_checkinteger(state, 2));
 
-  auto result =
-      ::Graphics::Create2D(*ctx, ::Graphics::TextureCreationInfo{
-                                     .width = width,
-                                     .height = height,
-                                     .format = ::Graphics::DefaultPixelFormat,
-                                     .usage = VK_IMAGE_USAGE_SAMPLED_BIT |
-                                              VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-                                     .mipmapCount = 1,
-                                 });
+  auto result = ::Graphics::Create2D(
+      *ctx,
+      ::Graphics::TextureCreationInfo{
+          .width = width,
+          .height = height,
+          .format = ::Graphics::DefaultPixelFormat,
+          .usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+          .mipmapCount = 1,
+          .debugName = "LuaTexture FromWidthAndHeight",
+      });
   if (Error::IsError(result)) {
     return result.error().AsUnexpected();
   }
@@ -726,14 +727,15 @@ static inline auto TextureFromWidthHeightAndOptions(lua_State *state)
   auto usage = TextureUsageToVkImageUsage(options.format, options.usage);
   PrintAlways("Creating texture with format: {}", (uint32_t)options.format);
 
-  auto result =
-      ::Graphics::Create2D(*ctx, ::Graphics::TextureCreationInfo{
-                                     .width = width,
-                                     .height = height,
-                                     .format = options.format,
-                                     .usage = usage,
-                                     .mipmapCount = options.mipmaps ? 0 : 1,
-                                 });
+  auto result = ::Graphics::Create2D(
+      *ctx, ::Graphics::TextureCreationInfo{
+                .width = width,
+                .height = height,
+                .format = options.format,
+                .usage = usage,
+                .mipmapCount = options.mipmaps ? 0 : 1,
+                .debugName = "LuaTexture FromWidthHeightAndOptions",
+            });
   if (Error::IsError(result)) {
     return result.error().AsUnexpected();
   }

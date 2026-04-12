@@ -156,13 +156,23 @@ struct Texture : Object, Barrier::BarrierSynced {
       return;
     }
 
-    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    std::lock_guard<std::mutex> lock2(
+    std::scoped_lock<std::mutex, std::mutex> lock(
+        Graphics::GraphicsContext::mutexes.device,
         Graphics::GraphicsContext::mutexes.vmaAllocator);
 
     auto *context = GetCurrentGraphicsContext();
+
+    if (context == nullptr || context->device == VK_NULL_HANDLE ||
+        context->vmaAllocator == VK_NULL_HANDLE) {
+      return;
+    }
+
     vkDestroyImageView(context->device, view, nullptr);
     vmaDestroyImage(context->vmaAllocator, image, memory);
+
+    image = VK_NULL_HANDLE;
+    view = VK_NULL_HANDLE;
+    memory = VK_NULL_HANDLE;
   }
 
   enum TextureType textureType = TextureType::DEFAULT;

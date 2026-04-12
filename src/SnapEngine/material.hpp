@@ -83,10 +83,6 @@ struct Material {
 };
 
 struct LuaMaterial : Object {
-  explicit LuaMaterial(Material material) : material(std::move(material)) {}
-  explicit LuaMaterial(const std::string &name) : material(Material(name)) {}
-
-  Material material;
   flecs::entity entity;
 
   static auto GetType() -> const Type * { return &materialType; }

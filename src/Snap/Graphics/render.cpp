@@ -137,10 +137,18 @@ auto AquireNextSwapchainImage(Graphics::GraphicsContext &context) -> Error {
 
   if (context.inFlight[context.frameIndex] != VK_NULL_HANDLE) {
     ZoneScopedN("Wait for in-flight fence");
-    vkWaitForFences(context.device, 1, &context.inFlight[context.frameIndex],
-                    VK_TRUE, UINT64_MAX);
+    auto result = Error::Create(vkWaitForFences(
+        context.device, 1, &context.inFlight[context.frameIndex], VK_TRUE,
+        UINT64_MAX));
+    if (Error::IsError(result)) {
+      return result;
+    }
 
-    vkResetFences(context.device, 1, &context.inFlight[context.frameIndex]);
+    result = Error::Create(vkResetFences(
+        context.device, 1, &context.inFlight[context.frameIndex]));
+    if (Error::IsError(result)) {
+      return result;
+    }
   }
 
   {
@@ -157,9 +165,12 @@ auto AquireNextSwapchainImage(Graphics::GraphicsContext &context) -> Error {
 
   if (context.imageInFlight[context.swapchainImageIndex] != VK_NULL_HANDLE) {
     ZoneScopedN("Wait for image in-flight fence");
-    vkWaitForFences(context.device, 1,
-                    &context.imageInFlight[context.swapchainImageIndex],
-                    VK_TRUE, UINT64_MAX);
+    auto result = Error::Create(vkWaitForFences(
+        context.device, 1, &context.imageInFlight[context.swapchainImageIndex],
+        VK_TRUE, UINT64_MAX));
+    if (Error::IsError(result)) {
+      return result;
+    }
   }
 
   return Error::Success();

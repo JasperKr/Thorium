@@ -21,6 +21,10 @@
 #include "Wrap/Modules/wrap_keyboard.hpp"
 #include "Wrap/Modules/wrap_timer.hpp"
 
+// Enable if encountering C++ exceptions
+// Requires the Enable RTTI and Enable Exceptions options to be enabled in CMakeLists.txt
+// #define DEBUG_CPP_EXCEPTION
+
 namespace LuaWrap {
 
 static auto wrap_gc(lua_State *state) -> int {
@@ -313,7 +317,7 @@ auto RegisterLuaType(lua_State *state, const LuaClass &luaClass) -> void {
                  luaClass.Type->GetName(), func.name);
       continue;
     }
-#if !defined(NDEBUG) && DEBUG_CPP_EXCEPTION // If debug build
+#if !defined(NDEBUG) && defined(DEBUG_CPP_EXCEPTION) // If debug build
     // Wrap function in trampoline to catch exceptions
     lua_pushlightuserdata(
         state, // NOLINTNEXTLINE(cppcoreguidelines-pro-type-cstyle-cast)

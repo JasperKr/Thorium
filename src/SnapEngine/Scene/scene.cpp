@@ -1,6 +1,7 @@
 #include "scene.hpp"
 #include "Graphics/draw.hpp"
 #include "Graphics/dynamicRendering.hpp"
+#include "Graphics/uniformWriter.hpp"
 #include "Modules/Math/matrix.hpp"
 #include "Modules/bindings.hpp"
 #include "Modules/console.hpp"
@@ -11,8 +12,10 @@
 #include "Scene/geometry.hpp"
 #include "Scene/levelOfDetail.hpp"
 #include "Scene/model.hpp"
+#include "Scene/node.hpp"
 #include "Scene/shape.hpp"
 #include "Scene/transform.hpp"
+#include "Scene/userdata.hpp"
 #include "Wrap/wrap.hpp"
 #include "flecs/addons/cpp/c_types.hpp"
 #include "flecs/addons/cpp/mixins/id/decl.hpp"
@@ -22,6 +25,7 @@
 #include <string>
 
 namespace Engine {
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 inline flecs::entity SelectedEntity;
 
 auto Scene::LoadBinding(lua_State *state) -> int {
@@ -59,7 +63,7 @@ auto DrawEntity(const flecs::entity &entity) -> void {
     if (identifier.is_entity()) {
       auto componentEntity = identifier.entity();
 
-      if (componentEntity != flecs::ChildOf) {
+      if (componentEntity != flecs::ChildOf && componentEntity.is_valid()) {
         const char *componentName = componentEntity.name();
         if (componentName == nullptr ||
             std::string_view(componentName).empty()) {
@@ -115,7 +119,7 @@ auto Scene::DrawUiElement(lua_State *state) -> int {
         if (identifier.is_entity()) {
           auto componentEntity = identifier.entity();
 
-          if (componentEntity != flecs::ChildOf) {
+          if (componentEntity != flecs::ChildOf && componentEntity.is_valid()) {
             const char *componentName = componentEntity.name();
             if (componentName == nullptr ||
                 std::string_view(componentName).empty()) {
@@ -143,11 +147,11 @@ auto Scene::DrawUiElement(lua_State *state) -> int {
         lod->DrawGUI();
       }
 
-      if (SelectedEntity.has<Model>() &&
-          SelectedEntity.get_ref<Model>().get() != nullptr) {
-        auto model = SelectedEntity.get_ref<Model>();
-        model->DrawGUI();
-      }
+      // if (SelectedEntity.has<Model>() &&
+      //     SelectedEntity.get_ref<Model>().get() != nullptr) {
+      //   auto model = SelectedEntity.get_ref<Model>();
+      //   model->DrawGUI();
+      // }
 
       if (SelectedEntity.has<Userdata>() &&
           SelectedEntity.get_ref<Userdata>().get() != nullptr) {
@@ -192,32 +196,32 @@ auto Scene::DrawModels(lua_State *state) -> int {
 
   auto shader = Graphics::DynamicRendering::GetShader();
 
-  scene->world.each<Geometry>([&](flecs::entity entity,
-                                  const Geometry &geometry) -> void {
-    auto worldMatrix = entity.get<Transform>().GetWorldMatrix();
-    auto normalMatrix = Math::Matrix3x3(worldMatrix).InverseTranspose();
+  scene->world.each<Geometry>(
+      [&](flecs::entity entity, const Geometry &geometry) -> void {
+        auto worldMatrix = entity.get<Transform>().GetWorldMatrix();
+        auto normalMatrix = Math::Matrix3x3(worldMatrix).InverseTranspose();
 
-    auto sendErr = shader->Send(*ctx, {"ModelMatrix"}, worldMatrix.byteSpan());
+        auto sendErr = Graphics::Shader::UniformWriter::Send(
+            shader, *ctx, {"ModelMatrix"}, worldMatrix);
 
-    if (Error::IsError(sendErr)) {
-      drawResult = sendErr;
-      return;
-    }
+        if (Error::IsError(sendErr)) {
+          drawResult = sendErr;
+          return;
+        }
 
-    // TODO: We do not automatically account for internal matrix padding, so the shader expects
-    // float3x3 but we need to send a float4x3 since std140 layout rules require each row to be aligned to a vec4.
-    sendErr = shader->Send(*ctx, {"NormalMatrix"}, normalMatrix.byteSpan());
+        sendErr = Graphics::Shader::UniformWriter::Send(
+            shader, *ctx, {"NormalMatrix"}, normalMatrix);
 
-    if (Error::IsError(sendErr)) {
-      drawResult = sendErr;
-      return;
-    }
+        if (Error::IsError(sendErr)) {
+          drawResult = sendErr;
+          return;
+        }
 
-    auto result = Graphics::Draw(*ctx, *geometry.mesh);
-    if (Error::IsError(result)) {
-      drawResult = result;
-    }
-  });
+        auto result = Graphics::Draw(*ctx, *geometry.mesh);
+        if (Error::IsError(result)) {
+          drawResult = result;
+        }
+      });
 
   if (Error::IsError(drawResult)) {
     return luaL_error(state, "%s", drawResult.ToString().c_str());
@@ -238,16 +242,13 @@ Scene::Scene(std::string name) : name(std::move(name)) {
   world.component<Userdata>();
 
   auto transformSystem =
-      world.system<Engine::Transform>()
-          .cascade(flecs::ChildOf) // ensures parent first
-          .each([](flecs::entity entity, Transform &transform) -> auto {
+      world.system<Engine::Transform, Engine::Transform *>()
+          .term_at(1)
+          .parent()
+          .cascade()
+          .each([](Transform &transform, Transform *parentTransform) -> auto {
             transform.UpdateLocalMatrix();
-            if (auto parent = entity.parent()) {
-              const auto &parentTransform = parent.get<Transform>();
-              transform.UpdateWorldMatrix(&parentTransform);
-            } else {
-              transform.UpdateWorldMatrix(nullptr);
-            }
+            transform.UpdateWorldMatrix(parentTransform);
           });
 
   auto boundingBoxSystem =

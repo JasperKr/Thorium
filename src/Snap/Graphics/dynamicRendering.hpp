@@ -33,6 +33,11 @@ extern std::vector<VkPipeline> Pipelines;
 extern std::mutex PipelineLayoutsMutex;
 extern std::vector<VkPipelineLayout> PipelineLayouts;
 
+extern std::mutex DescriptorSetLayoutCacheMutex;
+extern std::unordered_map<struct DescriptorSetLayoutKey, VkDescriptorSetLayout,
+                          struct DescriptorSetLayoutKeyHash>
+    DescriptorSetLayoutCache;
+
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
 struct DescriptorSetLayoutKey {
@@ -119,10 +124,6 @@ struct DescriptorSetLayoutKeyHash {
     return hasher.get();
   }
 };
-
-extern std::unordered_map<DescriptorSetLayoutKey, VkDescriptorSetLayout,
-                          DescriptorSetLayoutKeyHash>
-    DescriptorSetLayoutCache; // NOLINT
 
 // NOLINTNEXTLINE
 extern thread_local bool DrawnToSwapchain;

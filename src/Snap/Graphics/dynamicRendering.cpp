@@ -19,7 +19,6 @@
 #include <vector>
 
 #include "vulkan/vulkan_core.h"
-#include <algorithm>
 #include <array>
 #include <cassert>
 #include <cstdint>
@@ -58,6 +57,11 @@ thread_local State *TopOfStack = nullptr;
 
 thread_local bool StateUpdated = false;
 
+std::mutex DescriptorSetLayoutCacheMutex;
+std::unordered_map<DescriptorSetLayoutKey, VkDescriptorSetLayout,
+                   DescriptorSetLayoutKeyHash>
+    DescriptorSetLayoutCache;
+
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
 inline auto GetRenderExtent(const GraphicsContext &context, const State &state)
@@ -69,10 +73,6 @@ inline auto GetRenderExtent(const GraphicsContext &context, const State &state)
   };
 }
 
-std::unordered_map<DescriptorSetLayoutKey, VkDescriptorSetLayout,
-                   DescriptorSetLayoutKeyHash>
-    DescriptorSetLayoutCache; // NOLINT
-
 auto GetDescriptorSetLayout(const DescriptorSetLayoutKey &layoutKey,
                             const GraphicsContext &context)
     -> Result<VkDescriptorSetLayout> {
@@ -80,6 +80,8 @@ auto GetDescriptorSetLayout(const DescriptorSetLayoutKey &layoutKey,
 
   const auto &bindings = layoutKey.bindings;
   VkDescriptorSetLayout descriptorSetLayout = VK_NULL_HANDLE;
+
+  std::lock_guard<std::mutex> lock(DescriptorSetLayoutCacheMutex);
 
   if (DescriptorSetLayoutCache.contains(layoutKey)) {
     descriptorSetLayout = DescriptorSetLayoutCache.at(layoutKey);
@@ -228,7 +230,7 @@ auto FillDescriptorSets(const GraphicsContext &context,
   if (shader->reflection.hasGlobals) {
     auto layoutBinding = VkDescriptorSetLayoutBinding{
         .binding = shader->reflection.globals.binding,
-        .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
         .descriptorCount = 1,
         .stageFlags = VK_SHADER_STAGE_ALL,
         .pImmutableSamplers = nullptr,
@@ -321,11 +323,15 @@ auto CreateDescriptorSets(const GraphicsContext &context,
       static_cast<uint32_t>(AllocationLayouts.size());
   allocInfo.pSetLayouts = AllocationLayouts.data();
 
-  std::vector<VkDescriptorSet> allocatedSets(AllocationLayouts.size());
+  std::vector<VkDescriptorSet> allocatedSets(AllocationLayouts.size(),
+                                             VK_NULL_HANDLE);
 
   {
     ZoneScopedN("Allocate descriptor sets");
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+
+    assert(context.device != VK_NULL_HANDLE &&
+           "Vulkan device is null during descriptor set allocation");
 
     auto error = Error::Create(vkAllocateDescriptorSets(
         context.device, &allocInfo, allocatedSets.data()));
@@ -894,12 +900,6 @@ auto FlushCompute(const GraphicsContext &context) -> Result<bool> {
   UsedShaderModules.emplace_back(TopOfStack->shader);
 
   CurrentPipelineLayout = pipelineResult.value().second;
-  auto error = TopOfStack->shader->FlushDescriptors(
-      context, pipelineResult.value().second,
-      VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
-  if (Error::IsError(error)) {
-    return error.AsUnexpected();
-  }
 
   PrintDebug("Binding pipeline");
 
@@ -972,15 +972,8 @@ auto FlushGraphics(const GraphicsContext &context) -> Result<bool> {
   // We should check if the layout is compatible, and only clear if not
   TopOfStack->shader->ClearBindingCache();
 
-  auto error = TopOfStack->shader->FlushDescriptors(
-      context, pipelineResult.value().second,
-      VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT |
-          VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT);
-  if (Error::IsError(error)) {
-    return error.AsUnexpected();
-  }
-
   PrintDebug("Binding pipeline");
+
   {
     ZoneScopedN("vkCmdBindPipeline");
     vkCmdBindPipeline(commandBuffer, TopOfStack->bindPoint,
@@ -1014,26 +1007,23 @@ auto Flush(const GraphicsContext &context) -> Result<bool> {
 }
 
 auto Destroy(const GraphicsContext &context) -> void {
-  {
-    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    std::lock_guard<std::mutex> lock2(PipelinesMutex);
-    for (const auto &pipeline : Pipelines) {
+  std::scoped_lock<std::mutex, std::mutex> lock(
+      Graphics::GraphicsContext::mutexes.device, PipelinesMutex);
+  for (const auto &pipeline : Pipelines) {
+    if (pipeline != VK_NULL_HANDLE) {
       vkDestroyPipeline(context.device, pipeline, nullptr);
     }
   }
-  {
-    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    std::lock_guard<std::mutex> lock2(PipelineLayoutsMutex);
-    for (const auto &layout : PipelineLayouts) {
-      vkDestroyPipelineLayout(context.device, layout, nullptr);
-    }
+  for (const auto &layout : PipelineLayouts) {
+    vkDestroyPipelineLayout(context.device, layout, nullptr);
   }
-  {
-    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    for (auto &layouts : DynamicRendering::DescriptorSetLayoutCache) {
-      vkDestroyDescriptorSetLayout(context.device, layouts.second, nullptr);
-    }
+  for (auto &layouts : DynamicRendering::DescriptorSetLayoutCache) {
+    vkDestroyDescriptorSetLayout(context.device, layouts.second, nullptr);
   }
+
+  Pipelines.clear();
+  PipelineLayouts.clear();
+  DynamicRendering::DescriptorSetLayoutCache.clear();
 }
 
 inline auto BeginRendering(const GraphicsContext &context) -> Error {
@@ -1329,6 +1319,21 @@ auto PrepareRendering(const GraphicsContext &context) -> Error {
     return insertionResult;
   }
 
+  VkPipelineStageFlags2 stageFlags = 0;
+
+  if (TopOfStack->bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS) {
+    stageFlags |= VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT;
+    stageFlags |= VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+  } else if (TopOfStack->bindPoint == VK_PIPELINE_BIND_POINT_COMPUTE) {
+    stageFlags |= VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+  }
+
+  auto error = TopOfStack->shader->FlushDescriptors(
+      context, CurrentPipelineLayout, stageFlags);
+  if (Error::IsError(error)) {
+    return error;
+  }
+
   if (updatedState || !GetIsCurrentlyRendering()) {
     if (TopOfStack->bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS &&
         !GetIsCurrentlyRendering()) {
@@ -1338,21 +1343,22 @@ auto PrepareRendering(const GraphicsContext &context) -> Error {
         return beginResult;
       }
     }
-  }
 
-  if (TopOfStack->bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS) {
-    ZoneScopedN("Set Viewport And Scissor");
+    // TODO: I moved this as an optimization, Is it still correct?
+    if (TopOfStack->bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS) {
+      ZoneScopedN("Set Viewport And Scissor");
 
-    auto viewport = GetClippedViewport();
-    auto scissor = GetScissor();
+      auto viewport = GetClippedViewport();
+      auto scissor = GetScissor();
 
-    if (Graphics::GetCommandBuffer() == VK_NULL_HANDLE) {
-      return Error::Create(
-          "Tried to set viewport and scissor, but command buffer is null.");
+      if (Graphics::GetCommandBuffer() == VK_NULL_HANDLE) {
+        return Error::Create(
+            "Tried to set viewport and scissor, but command buffer is null.");
+      }
+
+      vkCmdSetViewport(Graphics::GetCommandBuffer(), 0, 1, &viewport);
+      vkCmdSetScissor(Graphics::GetCommandBuffer(), 0, 1, &scissor);
     }
-
-    vkCmdSetViewport(Graphics::GetCommandBuffer(), 0, 1, &viewport);
-    vkCmdSetScissor(Graphics::GetCommandBuffer(), 0, 1, &scissor);
   }
 
   Graphics::GetIsStateDirty() = false;

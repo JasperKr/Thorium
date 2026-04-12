@@ -461,27 +461,27 @@ function mat3F:writeToTable(t, index)
   t[index + i] = self[3][3]
 end
 
-function mat4F:get()
+function mat4F:getTransposed()
   return self[1][1], self[1][2], self[1][3], self[1][4],
       self[2][1], self[2][2], self[2][3], self[2][4],
       self[3][1], self[3][2], self[3][3], self[3][4],
       self[4][1], self[4][2], self[4][3], self[4][4]
 end
 
-function mat3F:get()
+function mat3F:getTransposed()
   return self[1][1], self[1][2], self[1][3],
       self[2][1], self[2][2], self[2][3],
       self[3][1], self[3][2], self[3][3]
 end
 
-function mat4F:getTransposed()
+function mat4F:get()
   return self[1][1], self[2][1], self[3][1], self[4][1],
       self[1][2], self[2][2], self[3][2], self[4][2],
       self[1][3], self[2][3], self[3][3], self[4][3],
       self[1][4], self[2][4], self[3][4], self[4][4]
 end
 
-function mat3F:getTransposed()
+function mat3F:get()
   return self[1][1], self[2][1], self[3][1],
       self[1][2], self[2][2], self[3][2],
       self[1][3], self[2][3], self[3][3]

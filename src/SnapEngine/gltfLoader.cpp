@@ -25,6 +25,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <public/tracy/Tracy.hpp>
 #include <span>
 #include <string>
 
@@ -132,6 +133,7 @@ inline auto LoadURI(const fastgltf::sources::URI &uriSource)
 inline auto LoadDataSource(const fastgltf::Asset &asset,
                            const fastgltf::DataSource &dataSource)
     -> Result<std::span<const uint8_t>> {
+  ZoneScoped;
 
   // never monostate
   // std::variant<std::monostate, sources::BufferView, sources::URI, sources::Array, sources::Vector, sources::CustomBuffer, sources::ByteView, sources::Fallback>
@@ -200,6 +202,8 @@ inline auto LoadTexture(Graphics::GraphicsContext &context,
                         const fastgltf::Asset &asset,
                         const fastgltf::TextureInfo &gltfTexture)
     -> Result<Ref<Graphics::Texture>> {
+  ZoneScoped;
+
   const auto &texture = asset.textures[gltfTexture.textureIndex];
   const auto &sampler = texture.samplerIndex.has_value()
                             ? asset.samplers[texture.samplerIndex.value()]
@@ -236,38 +240,46 @@ inline auto LoadMaterial(Graphics::GraphicsContext &context,
                          const fastgltf::Material &gltfMaterial,
                          Ref<Engine::Renderer::LuaMaterial> &luaMaterial)
     -> Error {
+  ZoneScoped;
 
-  auto &material = luaMaterial->material;
+  // auto &material = luaMaterial->material;
+  auto *material =
+      luaMaterial->entity.try_get_mut<Engine::Renderer::Material>();
 
-  material.name = gltfMaterial.name;
+  if (material == nullptr) {
+    return Error::Createf(
+        "Failed to get mutable reference to Material component.");
+  }
 
-  material.cullMode =
+  material->name = gltfMaterial.name;
+
+  material->cullMode =
       gltfMaterial.doubleSided ? VK_CULL_MODE_NONE : VK_CULL_MODE_BACK_BIT;
 
-  material.alphaCutoff = gltfMaterial.alphaCutoff;
-  material.roughnessFactor = gltfMaterial.pbrData.roughnessFactor;
-  material.metallicFactor = gltfMaterial.pbrData.metallicFactor;
-  material.albedoFactor = Math::Vec4(gltfMaterial.pbrData.baseColorFactor[0],
-                                     gltfMaterial.pbrData.baseColorFactor[1],
-                                     gltfMaterial.pbrData.baseColorFactor[2],
-                                     gltfMaterial.pbrData.baseColorFactor[3]);
+  material->alphaCutoff = gltfMaterial.alphaCutoff;
+  material->roughnessFactor = gltfMaterial.pbrData.roughnessFactor;
+  material->metallicFactor = gltfMaterial.pbrData.metallicFactor;
+  material->albedoFactor = Math::Vec4(gltfMaterial.pbrData.baseColorFactor[0],
+                                      gltfMaterial.pbrData.baseColorFactor[1],
+                                      gltfMaterial.pbrData.baseColorFactor[2],
+                                      gltfMaterial.pbrData.baseColorFactor[3]);
 
   // The alpha mode is exactly the same enum as our AlphaMode.
   // But for type safety, we do a manual mapping.
 
   switch (gltfMaterial.alphaMode) {
   case fastgltf::AlphaMode::Opaque:
-    material.alphaMode = Engine::Renderer::AlphaMode::Opaque;
+    material->alphaMode = Engine::Renderer::AlphaMode::Opaque;
     break;
   case fastgltf::AlphaMode::Mask:
-    material.alphaMode = Engine::Renderer::AlphaMode::Mask;
+    material->alphaMode = Engine::Renderer::AlphaMode::Mask;
     break;
   case fastgltf::AlphaMode::Blend:
-    material.alphaMode = Engine::Renderer::AlphaMode::Blend;
+    material->alphaMode = Engine::Renderer::AlphaMode::Blend;
     break;
   }
 
-  material.emissiveFactor =
+  material->emissiveFactor =
       Math::Vec3(gltfMaterial.emissiveFactor[0], gltfMaterial.emissiveFactor[1],
                  gltfMaterial.emissiveFactor[2]);
 
@@ -279,7 +291,7 @@ inline auto LoadMaterial(Graphics::GraphicsContext &context,
       return albedoTextureLoadResult.error();
     }
 
-    material.albedoTexture = albedoTextureLoadResult.value();
+    material->albedoTexture = albedoTextureLoadResult.value();
   }
 
   if (gltfMaterial.pbrData.metallicRoughnessTexture.has_value()) {
@@ -290,7 +302,7 @@ inline auto LoadMaterial(Graphics::GraphicsContext &context,
       return metallicRoughnessLoadResult.error();
     }
 
-    material.metallicRoughnessTexture = metallicRoughnessLoadResult.value();
+    material->metallicRoughnessTexture = metallicRoughnessLoadResult.value();
   }
 
   if (gltfMaterial.occlusionTexture.has_value()) {
@@ -301,7 +313,7 @@ inline auto LoadMaterial(Graphics::GraphicsContext &context,
       return aoTextureLoadResult.error();
     }
 
-    material.ambientOcclusionTexture = aoTextureLoadResult.value();
+    material->ambientOcclusionTexture = aoTextureLoadResult.value();
   }
 
   if (gltfMaterial.normalTexture.has_value()) {
@@ -312,7 +324,7 @@ inline auto LoadMaterial(Graphics::GraphicsContext &context,
       return normalTextureLoadResult.error();
     }
 
-    material.normalTexture = normalTextureLoadResult.value();
+    material->normalTexture = normalTextureLoadResult.value();
   }
 
   if (gltfMaterial.emissiveTexture.has_value()) {
@@ -323,7 +335,7 @@ inline auto LoadMaterial(Graphics::GraphicsContext &context,
       return emissiveTextureLoadResult.error();
     }
 
-    material.emissiveTexture = emissiveTextureLoadResult.value();
+    material->emissiveTexture = emissiveTextureLoadResult.value();
   }
 
   return Error::Success();
@@ -988,6 +1000,8 @@ inline auto LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
   bool isCamera = gltfNode.cameraIndex.has_value();
   bool isLight = gltfNode.lightIndex.has_value();
 
+  ZoneScoped;
+
   // Note: checking if children aren't empty might cull some nodes, should check if this is an issue.
   bool isNode = !isMesh && !isSkin && !isCamera && !isLight;
 
@@ -1155,17 +1169,22 @@ inline auto LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
       lod.child_of(shapeEntity);
 
       // Load material if present.
-      if (primitive.materialIndex.has_value()) {
-        // const auto &material = asset.materials[primitive.materialIndex.value()];
-        // auto rendererMaterial = Ref<Engine::Renderer::LuaMaterial>::Make(
-        //     std::string(material.name));
+      // if (primitive.materialIndex.has_value()) {
+      //   const auto &material = asset.materials[primitive.materialIndex.value()];
+      //   auto rendererMaterial = Ref<Engine::Renderer::LuaMaterial>::Make();
+      //   auto materialEntity = world->entity(
+      //       GetUniqueName(std::string(material.name) + " Material").c_str());
+      //   materialEntity.add<Engine::Renderer::Material>();
+      //   rendererMaterial->entity = materialEntity;
 
-        // auto materialResult =
-        //     LoadMaterial(context, asset, material, rendererMaterial);
-        // if (Error::IsError(materialResult)) {
-        //   return materialResult.AsUnexpected();
-        // }
-      }
+      //   auto materialResult =
+      //       LoadMaterial(context, asset, material, rendererMaterial);
+      //   if (Error::IsError(materialResult)) {
+      //     return materialResult.AsUnexpected();
+      //   }
+
+      //   rendererMaterial->entity.child_of(geometry);
+      // }
     }
 
     return shapes;
@@ -1250,8 +1269,8 @@ auto LoadGltfModel(Graphics::GraphicsContext &context, const std::string &path,
     }
   }
 
-  Buffers.clear();
-  URICache.clear(); // TODO: consider keeping URI cache across loads
+  // Buffers.clear();
+  // URICache.clear(); // TODO: consider keeping URI cache across loads
 
   return Error::Success();
 }

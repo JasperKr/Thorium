@@ -44,6 +44,23 @@ local vertexformat = {
 --   { 0,   100, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1 },
 -- }
 
+local bit = require("bit")
+local function encodeNormal(x, y, z)
+  x = x * 0.5 + 0.5
+  y = y * 0.5 + 0.5
+  z = z * 0.5 + 0.5
+
+  x = x * 1023
+  y = y * 1023
+  z = z * 1023
+
+  return bit.bor(
+    bit.lshift(z, 20),
+    bit.lshift(y, 10),
+    x
+  )
+end
+
 local r = snap.math.random
 
 local vertices = {
@@ -67,37 +84,95 @@ local indices = {
   4, 1, 5, 4, 5, 8, -- left face
 }
 
+local unpackedVertices = {}
 
-local mesh = snap.graphics.newMesh(vertexformat, vertices, "triangles")
-local indicesData = snap.data.newBytedata(#indices * 4)
-for j = 1, #indices do
-  indicesData:setUInt32((j - 1) * 4, indices[j] - 1)
+for i = 1, #indices, 3 do
+  local v1 = vertices[indices[i]]
+  local v2 = vertices[indices[i + 1]]
+  local v3 = vertices[indices[i + 2]]
+
+  local edge1 = { v2[1] - v1[1], v2[2] - v1[2], v2[3] - v1[3] }
+  local edge2 = { v3[1] - v1[1], v3[2] - v1[2], v3[3] - v1[3] }
+
+  -- local normal = {
+  --   edge1[2] * edge2[3] - edge1[3] * edge2[2],
+  --   edge1[3] * edge2[1] - edge1[1] * edge2[3],
+  --   edge1[1] * edge2[2] - edge1[2] * edge2[1],
+  -- }
+  local normalX = edge1[2] * edge2[3] - edge1[3] * edge2[2]
+  local normalY = edge1[3] * edge2[1] - edge1[1] * edge2[3]
+  local normalZ = edge1[1] * edge2[2] - edge1[2] * edge2[1]
+
+  -- local length = math.sqrt(normal[1] ^ 2 + normal[2] ^ 2 + normal[3] ^ 2)
+  local length = math.sqrt(normalX ^ 2 + normalY ^ 2 + normalZ ^ 2)
+  -- normal = { normal[1] / length, normal[2] / length, normal[3] / length }
+  normalX = normalX / length
+  normalY = normalY / length
+  normalZ = normalZ / length
+
+  table.insert(unpackedVertices, {
+    v1[1],
+    v1[2],
+    v1[3],
+    v1[4],
+    v1[5],
+    encodeNormal(normalX, normalY, normalZ),
+    encodeNormal(0, 0, 0),
+    v1[8],
+    v1[9],
+    v1[10],
+    v1[11],
+  })
+
+  table.insert(unpackedVertices, {
+    v2[1],
+    v2[2],
+    v2[3],
+    v2[4],
+    v2[5],
+    encodeNormal(normalX, normalY, normalZ),
+    encodeNormal(0, 0, 0),
+    v2[8],
+    v2[9],
+    v2[10],
+    v2[11],
+  })
+
+  table.insert(unpackedVertices, {
+    v3[1],
+    v3[2],
+    v3[3],
+    v3[4],
+    v3[5],
+    encodeNormal(normalX, normalY, normalZ),
+    encodeNormal(0, 0, 0),
+    v3[8],
+    v3[9],
+    v3[10],
+    v3[11],
+  })
 end
-mesh:setIndices(indicesData)
+
+
+local mesh = snap.graphics.newMesh(vertexformat, unpackedVertices, "triangles")
 
 table.insert(commandBuffers, snap.graphics.submitGraphics())
-
-local geometries = {}
-
-for i = 1, 4 do
-  local geometry = scene:createGeometry("Test geometry " .. i, mesh)
-  table.insert(geometries, geometry)
-end
 
 local lod = scene:createLOD("Test LOD")
 local lod2 = scene:createLOD("Test LOD 2")
 local lod3 = scene:createLOD("Test LOD 3", 0.25)
-local lod4 = scene:createLOD("Test LOD 4", 0.125)
 
-lod:addGeometry(geometries[1])
-lod2:addGeometry(geometries[2])
-lod3:addGeometry(geometries[3])
-lod4:addGeometry(geometries[4])
+lod:addGeometry(scene:createGeometry("Test geometry " .. i, mesh))
+lod2:addGeometry(scene:createGeometry("Test geometry " .. i, mesh))
+lod3:addGeometry(scene:createGeometry("Test geometry " .. i, mesh))
 
-local shape = scene:createShape("Test shape", { lod, lod2, lod3 })
-local shape2 = scene:createShape("Test shape 2", { lod4 })
+local shape = scene:createShape("Test shape", { lod })
+local shape2 = scene:createShape("Test shape 2", { lod2 })
+local shape3 = scene:createShape("Test shape 3", { lod3 })
 
-local model = scene:createModel("Test model", { 100, 10, 0 }, { 0, 0, 0, 1 }, { 1, 1, 1 }, { shape, shape2 })
+local model = scene:createModel("Test model", { 0, 0, 0 }, { 0, 0, 0, 1 }, { 1, 1, 1 }, { shape })
+local model2 = scene:createModel("Test model 2", { 0, 5, 0 }, { 0, 0, 0, 1 }, { 1, 1, 1 }, { shape2 })
+local model3 = scene:createModel("Test model 3", { 0, 10, 0 }, { 0, 0, 0, 1 }, { 1, 1, 1 }, { shape3 })
 
 thread:start(commandsChannel, startThreadChannel, scene, events)
 
@@ -160,7 +235,19 @@ snap.keyboard.setEnableTextInput(true)
 function snap.draw()
   startThreadChannel:push(true)
 
-  local buffer = commandsChannel:demand(10)
+  local buffer
+
+  while not buffer do
+    buffer = commandsChannel:demand(1)
+    if thread:getError() then
+      -- error("Render thread error: " .. thread:getError())
+      snap.event.quit()
+      scene:release()
+      collectgarbage("collect")
+      collectgarbage("collect")
+      return
+    end
+  end
   table.insert(commandBuffers, buffer)
 
   local buffers = commandBuffers

@@ -389,8 +389,8 @@ static auto CreateSemaphores(GraphicsContext &context) -> Error {
 }
 
 static auto CreateVmaAllocator(GraphicsContext &context) -> Error {
-  std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-  std::lock_guard<std::mutex> lock2(
+  std::scoped_lock<std::mutex, std::mutex> lock(
+      Graphics::GraphicsContext::mutexes.device,
       Graphics::GraphicsContext::mutexes.vmaAllocator);
 
   VmaAllocatorCreateInfo allocatorInfo = {0};
@@ -483,10 +483,7 @@ auto Initialize(GraphicsContext &context, Window::WindowContext &wcontext,
     extensionList.emplace_back(extensions[i]); // NOLINT
   }
 
-  // Resource debug names
-#ifndef NDEBUG // If debug
   extensionList.emplace_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-#endif
 
   VkApplicationInfo appInfo = {};
   appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -559,9 +556,12 @@ auto Initialize(GraphicsContext &context, Window::WindowContext &wcontext,
 }
 
 void Deinitialize(GraphicsContext &context) {
-  std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-  std::lock_guard<std::mutex> lock2(
+  PrintAlways("Deinitializing graphics context...");
+
+  std::scoped_lock<std::mutex, std::mutex> lock(
+      Graphics::GraphicsContext::mutexes.device,
       Graphics::GraphicsContext::mutexes.vmaAllocator);
+
   vkDeviceWaitIdle(context.device);
 
   for (auto &descriptorPoolInfo : GetThreadContext().descriptorPools) {
@@ -580,6 +580,7 @@ void Deinitialize(GraphicsContext &context) {
   }
 
   vkDestroyCommandPool(context.device, GetThreadContext().commandPool, nullptr);
+  GetThreadContext().commandPool = VK_NULL_HANDLE;
   {
     std::lock_guard<std::mutex> lock(CommandPoolsMutex);
     for (auto &pool : CommandPools) {
@@ -593,6 +594,8 @@ void Deinitialize(GraphicsContext &context) {
 
   SDL_DestroyWindow(context.sdlWindow);
   SDL_Quit();
+
+  context.sdlWindow = nullptr;
 }
 
 auto BeginSingleTimeCommands(GraphicsContext &context) -> VkCommandBuffer {

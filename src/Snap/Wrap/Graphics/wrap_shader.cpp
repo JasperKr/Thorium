@@ -4,7 +4,6 @@
 #include "Graphics/reflect.hpp"
 #include "Graphics/shader.hpp"
 #include "Modules/bytedata.hpp"
-#include "Modules/console.hpp"
 #include "Wrap/Graphics/wrap_reflection.hpp"
 #include "Wrap/wrap.hpp"
 #include "Wrap/wrap_utils.hpp"
@@ -77,8 +76,8 @@ auto wrap_Send(lua_State *state) -> int {
                                                            valueOffset)) {
     auto *buffer = LuaWrap::ObjectFromLua<::Graphics::StructuredBuffer>(
         state, valueOffset);
-    auto result =
-        shader->Send(*::Graphics::GetCurrentGraphicsContext(), key, buffer);
+    auto result = shader->Send(*::Graphics::GetCurrentGraphicsContext(), key,
+                               buffer->GetBuffer());
     if (Error::IsError(result)) {
       return luaL_error(state, "%s", result.message.c_str());
     }

@@ -1,19 +1,10 @@
 #pragma once
 #include "Modules/object.hpp"
 #include "Modules/type.hpp"
-#include "Scene/boundingBox.hpp"
-#include "Scene/geometry.hpp"
-#include "Scene/levelOfDetail.hpp"
-#include "Scene/model.hpp"
-#include "Scene/node.hpp"
-#include "Scene/shape.hpp"
-#include "Scene/transform.hpp"
-#include "Scene/userdata.hpp"
 #include "Wrap/wrap.hpp"
 #include "flecs.h"
 #include <lua.hpp>
 #include <string>
-#include <utility>
 
 namespace Engine {
 
@@ -24,7 +15,6 @@ struct Scene : Object {
   std::string name;
 
   explicit Scene();
-
   explicit Scene(std::string name);
 
   static auto GetType() -> const Type * { return &SceneType; }

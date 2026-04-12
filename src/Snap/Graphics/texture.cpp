@@ -19,6 +19,7 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <mutex>
 #include <public/tracy/Tracy.hpp>
 #include <span>
 #include <string>
@@ -55,7 +56,15 @@ auto GetAspectFlagsForFormat(VkFormat format) -> VkImageAspectFlagBits {
 inline auto SetDebugName(const std::string &debugName, Texture *texture,
                          const GraphicsContext &context) -> Error {
 
-  const auto &debugname = debugName;
+  auto debugname = debugName;
+
+  if (debugName.empty()) {
+    debugname = "Unnamed Texture";
+  }
+
+  std::scoped_lock<std::mutex, std::mutex> lock(
+      Graphics::GraphicsContext::mutexes.device,
+      Graphics::GraphicsContext::mutexes.vmaAllocator);
 
   VkDebugUtilsObjectNameInfoEXT nameInfo = {};
   nameInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
@@ -63,25 +72,22 @@ inline auto SetDebugName(const std::string &debugName, Texture *texture,
   nameInfo.objectHandle = static_cast<uint64_t>(
       reinterpret_cast<uintptr_t>(texture->image)), // NOLINT
       nameInfo.pObjectName = debugname.c_str();
+
   auto error =
       Error::Create(vkSetDebugUtilsObjectNameEXT(context.device, &nameInfo));
   if (Error::IsError(error)) {
     return error;
   }
 
-  {
-    std::lock_guard<std::mutex> lock(
-        Graphics::GraphicsContext::mutexes.vmaAllocator);
-
-    vmaSetAllocationName(context.vmaAllocator, texture->memory,
-                         debugname.c_str());
-  }
+  vmaSetAllocationName(context.vmaAllocator, texture->memory,
+                       debugname.c_str());
 
   return Error::Success();
 }
 
 auto Create2D(const GraphicsContext &context, const TextureCreationInfo &info)
     -> Result<Ref<Texture>> {
+  ZoneScoped;
 
   if (((info.usage & VK_IMAGE_USAGE_STORAGE_BIT) != 0U) &&
       (info.format == VK_FORMAT_R8G8B8A8_SRGB ||
@@ -122,7 +128,8 @@ auto Create2D(const GraphicsContext &context, const TextureCreationInfo &info)
   allocInfo.preferredFlags = 0;
 
   {
-    std::lock_guard<std::mutex> lock(
+    std::scoped_lock<std::mutex, std::mutex> lock(
+        Graphics::GraphicsContext::mutexes.device,
         Graphics::GraphicsContext::mutexes.vmaAllocator);
 
     Error error = Error::Create(vmaCreateImage(context.vmaAllocator, &imageInfo,
@@ -260,7 +267,8 @@ auto CreateCubeMap(const GraphicsContext &context,
   allocInfo.preferredFlags = 0;
 
   {
-    std::lock_guard<std::mutex> lock(
+    std::scoped_lock<std::mutex, std::mutex> lock(
+        Graphics::GraphicsContext::mutexes.device,
         Graphics::GraphicsContext::mutexes.vmaAllocator);
 
     Error error = Error::Create(vmaCreateImage(context.vmaAllocator, &imageInfo,
@@ -345,7 +353,8 @@ auto CreateVolume(const GraphicsContext &context,
   allocInfo.preferredFlags = 0;
 
   {
-    std::lock_guard<std::mutex> lock(
+    std::scoped_lock<std::mutex, std::mutex> lock(
+        Graphics::GraphicsContext::mutexes.device,
         Graphics::GraphicsContext::mutexes.vmaAllocator);
 
     Error error = Error::Create(vmaCreateImage(context.vmaAllocator, &imageInfo,
@@ -430,7 +439,8 @@ auto CreateArray(const GraphicsContext &context,
   allocInfo.preferredFlags = 0;
 
   {
-    std::lock_guard<std::mutex> lock(
+    std::scoped_lock<std::mutex, std::mutex> lock(
+        Graphics::GraphicsContext::mutexes.device,
         Graphics::GraphicsContext::mutexes.vmaAllocator);
 
     Error error = Error::Create(vmaCreateImage(context.vmaAllocator, &imageInfo,
@@ -529,6 +539,7 @@ auto LoadFromFile(GraphicsContext &context, const char *path,
 auto LoadFromMemory(GraphicsContext &context,
                     const std::span<const uint8_t> &data,
                     VkImageUsageFlags usage) -> Result<Ref<Texture>> {
+  ZoneScoped;
 
   auto width = 0;
   auto height = 0;
@@ -547,6 +558,7 @@ auto LoadFromMemory(GraphicsContext &context,
                    .usage = usage | static_cast<uint32_t>(
                                         VK_IMAGE_USAGE_TRANSFER_DST_BIT),
                    .mipmapCount = 1,
+                   .debugName = "Image_FromMemory",
                });
 
   if (Error::IsError(texture)) {
@@ -612,6 +624,7 @@ auto LoadFromMemory(GraphicsContext &context, Image::ImageData &imageData,
                    .usage = usage | static_cast<uint32_t>(
                                         VK_IMAGE_USAGE_TRANSFER_DST_BIT),
                    .mipmapCount = 1,
+                   .debugName = "Image_ImageData",
                });
 
   if (Error::IsError(texture)) {
@@ -1050,6 +1063,8 @@ auto Texture::SetPixels(const GraphicsContext &context,
                         size_t dataHeight, uint32_t mipLevel, // NOLINT
                         uint32_t arrayLayer, VkRect2D source, VkOffset2D target)
     -> Error {
+  ZoneScoped;
+
   if (source.extent.width > size.width || source.extent.height > size.height) {
     return Error::Create(
         "Source rectangle dimensions exceed texture dimensions in SetPixels.");
