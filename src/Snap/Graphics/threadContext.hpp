@@ -2,6 +2,7 @@
 
 #include <vector>
 
+#include "Graphics/descriptors.hpp"
 #include "vulkan/vulkan_core.h"
 
 namespace Graphics {
@@ -18,5 +19,8 @@ struct ThreadContext {
 
   std::vector<DescriptorPoolInfo> descriptorPools;  // Descriptor pool info
   VkDescriptorPool descriptorPool = VK_NULL_HANDLE; // Current descriptor pool
+
+  DescriptorHeap samplerHeap;
+  DescriptorHeap resourceHeap;
 };
 } // namespace Graphics

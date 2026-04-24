@@ -170,7 +170,7 @@ while true do
   if not texture then
     texture = snap.graphics.newTexture(testImgdata, { storage = true, sampler = true })
 
-    snap.scene.loadModel(scene, "Assets/Terrain/sponza.glb")
+    -- snap.scene.loadModel(scene, "Assets/Terrain/sponza.glb")
 
     rendertarget = snap.graphics.newTexture(snap.graphics.getWidth(), snap.graphics.getHeight(),
       { sampler = true, rendertarget = true })

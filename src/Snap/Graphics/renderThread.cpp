@@ -313,6 +313,20 @@ auto Initialize(Graphics::GraphicsContext &context) -> Error {
   auto &tcontext = GetThreadContext();
   tcontext.graphicsContext = &context;
 
+  auto heapResult =
+      DescriptorHeap::Create(context, DescriptorHeap::HeapType::Sampler);
+  if (Error::IsError(heapResult)) {
+    return heapResult.error();
+  }
+  tcontext.samplerHeap = heapResult.value();
+
+  heapResult =
+      DescriptorHeap::Create(context, DescriptorHeap::HeapType::Resource);
+  if (Error::IsError(heapResult)) {
+    return heapResult.error();
+  }
+  tcontext.resourceHeap = heapResult.value();
+
   PrintDebug("Creating command pool for render thread...");
 
   auto poolCreationResult = CreateCommandPool(tcontext);

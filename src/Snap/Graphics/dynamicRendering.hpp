@@ -34,9 +34,6 @@ extern std::mutex PipelineLayoutsMutex;
 extern std::vector<VkPipelineLayout> PipelineLayouts;
 
 extern std::mutex DescriptorSetLayoutCacheMutex;
-extern std::unordered_map<struct DescriptorSetLayoutKey, VkDescriptorSetLayout,
-                          struct DescriptorSetLayoutKeyHash>
-    DescriptorSetLayoutCache;
 
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
@@ -299,7 +296,7 @@ struct StateHash {
 };
 
 extern thread_local std::unordered_map<
-    State, std::pair<VkPipeline, VkPipelineLayout>,
+    State, VkPipeline,
     StateHash> // NOLINTNEXTLINE Pipeline cacheBegunRendering
     PipelineCache;
 extern thread_local std::vector<Ref<Shader::ShaderModule>>

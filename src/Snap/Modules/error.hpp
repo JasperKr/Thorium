@@ -87,6 +87,8 @@ struct [[nodiscard]] Error {
   }
 
   [[nodiscard]] auto AsUnexpected() const -> tl::unexpected<Error>;
+
+  explicit operator bool() const { return IsError(); }
 };
 
 template <typename T> using Result = tl::expected<T, Error>;

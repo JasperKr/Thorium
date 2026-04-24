@@ -63,8 +63,13 @@ static auto FindPhysicalDevice(GraphicsContext &context) -> Error {
   const int DiscreteGPUScore = 1000;
 
   for (uint32_t i = 0; i < gpuCount; i++) {
+    VkPhysicalDeviceDescriptorHeapPropertiesEXT heapProperties{};
+    heapProperties.sType =
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_PROPERTIES_EXT;
+
     VkPhysicalDeviceProperties2 deviceProperties{
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
+        .pNext = &heapProperties,
     };
 
     vkGetPhysicalDeviceProperties2(gpus.at(i), &deviceProperties);
@@ -80,11 +85,14 @@ static auto FindPhysicalDevice(GraphicsContext &context) -> Error {
     // Higher max image dimension gets a higher score
     score += static_cast<int>(
         deviceProperties.properties.limits.maxImageDimension2D);
+    PrintAlways("Evaluating GPU: {} (score: {})",
+                deviceProperties.properties.deviceName, score);
 
     if (score > bestGpuScore) {
       bestGpuScore = score;
       bestGpuIndex = static_cast<int>(i);
       context.deviceProperties = deviceProperties.properties;
+      context.descriptorHeapProperties = heapProperties;
     }
   }
 
@@ -262,10 +270,8 @@ static auto CreateDevice(GraphicsContext &context,
         VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
         VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
         VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
-        VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME,
-        VK_KHR_SPIRV_1_4_EXTENSION_NAME,
-        VK_KHR_SHADER_FLOAT_CONTROLS_EXTENSION_NAME,
-        VK_EXT_VERTEX_INPUT_DYNAMIC_STATE_EXTENSION_NAME};
+        VK_EXT_VERTEX_INPUT_DYNAMIC_STATE_EXTENSION_NAME,
+        VK_EXT_DESCRIPTOR_HEAP_EXTENSION_NAME};
 
     const auto &supported =
         ExtensionListSupported(requiredExtensions, availableExtensions);
@@ -285,14 +291,10 @@ static auto CreateDevice(GraphicsContext &context,
 
     if (!allRequiredSupported) {
       if (settings.hardwareRaytracing == extRequired) {
-        return Error::Create(
-            "Some Hardware raytracing extensions are not supported:\n" +
-            errmsg);
+        return Error::Create("Some Hardware extensions are not supported:\n" +
+                             errmsg);
       }
-      PrintInfo(
-          "Some Hardware raytracing extensions are not supported, skipping "
-          "hardware raytracing:\n{}",
-          errmsg);
+      PrintWarning("Some Hardware extensions are not supported:\n{}", errmsg);
     } else {
       PrintInfo("Enabled hardware raytracing support.");
 
@@ -539,9 +541,25 @@ auto Initialize(GraphicsContext &context, Window::WindowContext &wcontext,
   }
   PrintDebug("called: CreateVmaAllocator...");
 
-  GetThreadContext().graphicsContext = &context;
+  auto &threadContext = GetThreadContext();
 
-  error = CreateCommandPool(GetThreadContext());
+  threadContext.graphicsContext = &context;
+
+  auto heapResult =
+      DescriptorHeap::Create(context, DescriptorHeap::HeapType::Sampler);
+  if (Error::IsError(heapResult)) {
+    return heapResult.error();
+  }
+  threadContext.samplerHeap = heapResult.value();
+
+  heapResult =
+      DescriptorHeap::Create(context, DescriptorHeap::HeapType::Resource);
+  if (Error::IsError(heapResult)) {
+    return heapResult.error();
+  }
+  threadContext.resourceHeap = heapResult.value();
+
+  error = CreateCommandPool(threadContext);
   if (Error::IsError(error)) {
     return error;
   }

@@ -87,6 +87,8 @@ struct Buffer : Object, Barrier::BarrierSynced {
   // Set by cleanup function otherwise we'll try to defer destruction again
   bool isDestroyed = false;
 
+  VkDeviceAddress deviceAddress{};
+
   auto GetTimestamp() const -> uint64_t { return lastUsedTimestamp; }
   auto MarkUse() -> void;
 

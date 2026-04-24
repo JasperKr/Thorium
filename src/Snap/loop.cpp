@@ -295,16 +295,15 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
 
   PrintDebug("Shader modules loaded successfully.");
 
-  result = Graphics::InitializeRendering(context, wcontext);
-
-  if (Error::IsError(result)) {
-    return result;
+  error = Graphics::InitializeRendering(context, wcontext);
+  if (Error::IsError(error)) {
+    return error;
   }
 
-  auto rendertargetLoadError = Graphics::DynamicRendering::Load(context);
+  error = Graphics::DynamicRendering::Load(context);
 
-  if (Error::IsError(rendertargetLoadError)) {
-    return rendertargetLoadError;
+  if (Error::IsError(error)) {
+    return error;
   }
 
   PrintDebug("Rendertargets loaded successfully.");

@@ -54,6 +54,7 @@ struct GraphicsContext {
   SwapchainInfo swapchainInfo;
   SurfaceInfo surfaceInfo;
   VkPhysicalDeviceProperties deviceProperties;
+  VkPhysicalDeviceDescriptorHeapPropertiesEXT descriptorHeapProperties;
 
   // per frame-in-flight
   std::vector<VkSemaphore> imageAvailable;

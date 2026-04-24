@@ -2,6 +2,7 @@
 #include "Graphics/barrier.hpp"
 #include "Graphics/dynamicRendering.hpp"
 #include "Graphics/graphics.hpp"
+#include "Graphics/graphicsContext.hpp"
 #include "Graphics/graphicsState.hpp"
 #include "Graphics/resource.hpp"
 #include "Graphics/semaphoreManager.hpp"
@@ -15,6 +16,7 @@
 #include <cassert>
 #include <cstdint>
 #include <mutex>
+#include <shared_mutex>
 #include <span>
 #include <thread>
 #include <vector>
@@ -447,6 +449,10 @@ auto Buffer::Create(const GraphicsContext &context,
     return Error::Unexpected("Cannot create buffer with size VK_WHOLE_SIZE.");
   }
 
+  std::scoped_lock<std::mutex, std::mutex> lock(
+      Graphics::GraphicsContext::mutexes.vmaAllocator,
+      Graphics::GraphicsContext::mutexes.device);
+
   auto buffer = Ref<Buffer>::Make();
 
   buffer->debugName = info.debugName;
@@ -467,16 +473,12 @@ auto Buffer::Create(const GraphicsContext &context,
                     static_cast<uint32_t>(
                         VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
 
-  {
-    std::lock_guard<std::mutex> lock(
-        Graphics::GraphicsContext::mutexes.vmaAllocator);
-    VkResult result =
-        vmaCreateBuffer(context.vmaAllocator, &bufferInfo, &allocInfo,
-                        &buffer->handle, &buffer->memory, nullptr);
+  VkResult result =
+      vmaCreateBuffer(context.vmaAllocator, &bufferInfo, &allocInfo,
+                      &buffer->handle, &buffer->memory, nullptr);
 
-    if (result != VK_SUCCESS) {
-      return Error::Unexpected(result);
-    }
+  if (result != VK_SUCCESS) {
+    return Error::Unexpected(result);
   }
 
   if (!buffer->debugName.empty()) {
@@ -495,20 +497,13 @@ auto Buffer::Create(const GraphicsContext &context,
   PrintDebug("Buffer created with handle {}", (void *)buffer->handle);
 
   VmaAllocationInfo memRequirements;
-  {
-    std::lock_guard<std::mutex> lock(
-        Graphics::GraphicsContext::mutexes.vmaAllocator);
 
-    vmaGetAllocationInfo(context.vmaAllocator, buffer->memory,
-                         &memRequirements);
-  }
+  vmaGetAllocationInfo(context.vmaAllocator, buffer->memory, &memRequirements);
+
   buffer->sizeInBytes = memRequirements.size;
 
   if (info.persistentMapping) {
     PrintDebug("Persistently mapping buffer memory.");
-
-    std::lock_guard<std::mutex> lock(
-        Graphics::GraphicsContext::mutexes.vmaAllocator);
 
     VkResult result =
         vmaMapMemory(context.vmaAllocator, buffer->memory, &buffer->mappedData);
@@ -516,6 +511,14 @@ auto Buffer::Create(const GraphicsContext &context,
       return Error::Unexpected(result);
     }
   }
+
+  const VkBufferDeviceAddressInfo bufferAddressInfo = {
+      .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+      .buffer = buffer->handle,
+  };
+
+  buffer->deviceAddress =
+      vkGetBufferDeviceAddress(context.device, &bufferAddressInfo);
 
   PrintDebug("Buffer size in bytes: {}", buffer->sizeInBytes);
   buffer->lastUsedTimestamp = GetSemaphoreValue();
