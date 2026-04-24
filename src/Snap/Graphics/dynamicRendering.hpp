@@ -11,6 +11,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <unordered_map>
+#include <utility>
+#include <variant>
 #include <vector>
 
 #include <vulkan/vulkan_core.h>
@@ -23,6 +25,106 @@ struct ShaderModule;
 
 namespace DynamicRendering {
 
+struct PipelineLayout {
+  VkPipelineLayout layout;
+  std::vector<VkDescriptorSetLayout> descriptorSetLayouts;
+};
+
+struct ResourceBinding {
+  uint32_t binding;
+  VkDescriptorType descriptorType;
+
+  std::variant<VkDescriptorImageInfo, VkDescriptorBufferInfo> resourceInfo;
+};
+
+struct DescriptorKey {
+  VkDescriptorSetLayout layout;
+  std::vector<ResourceBinding> bindings; // sorted by binding
+
+  auto operator==(const DescriptorKey &other) const -> bool {
+    if (layout != other.layout) {
+      return false;
+    }
+
+    if (bindings.size() != other.bindings.size()) {
+      return false;
+    }
+
+    for (size_t i = 0; i < bindings.size(); ++i) {
+      const auto &firstBinding = bindings[i];
+      const auto &secondBinding = other.bindings[i];
+
+      if (firstBinding.binding != secondBinding.binding) {
+        return false;
+      }
+
+      if (std::holds_alternative<VkDescriptorImageInfo>(
+              firstBinding.resourceInfo) &&
+          std::holds_alternative<VkDescriptorImageInfo>(
+              secondBinding.resourceInfo)) {
+        const auto &firstImageInfo =
+            std::get<VkDescriptorImageInfo>(firstBinding.resourceInfo);
+        const auto &secondImageInfo =
+            std::get<VkDescriptorImageInfo>(secondBinding.resourceInfo);
+
+        if (firstImageInfo.imageView != secondImageInfo.imageView ||
+            firstImageInfo.sampler != secondImageInfo.sampler ||
+            firstImageInfo.imageLayout != secondImageInfo.imageLayout) {
+          return false;
+        }
+      } else if (std::holds_alternative<VkDescriptorBufferInfo>(
+                     firstBinding.resourceInfo) &&
+                 std::holds_alternative<VkDescriptorBufferInfo>(
+                     secondBinding.resourceInfo)) {
+        const auto &firstBufferInfo =
+            std::get<VkDescriptorBufferInfo>(firstBinding.resourceInfo);
+        const auto &secondBufferInfo =
+            std::get<VkDescriptorBufferInfo>(secondBinding.resourceInfo);
+
+        if (firstBufferInfo.buffer != secondBufferInfo.buffer ||
+            firstBufferInfo.offset != secondBufferInfo.offset ||
+            firstBufferInfo.range != secondBufferInfo.range) {
+          return false;
+        }
+      } else {
+        // One is image info, the other is buffer info
+        return false;
+      }
+    }
+
+    return true;
+  }
+};
+
+struct DescriptorKeyHash {
+  auto operator()(const DescriptorKey &key) const noexcept -> size_t {
+    Hash::Hasher hasher{};
+
+    hasher.add(key.layout);
+
+    for (const auto &binding : key.bindings) {
+      hasher.add(binding.binding);
+
+      if (std::holds_alternative<VkDescriptorImageInfo>(binding.resourceInfo)) {
+        const auto &imageInfo =
+            std::get<VkDescriptorImageInfo>(binding.resourceInfo);
+        hasher.add(imageInfo.imageView);
+        hasher.add(imageInfo.sampler);
+        hasher.add(imageInfo.imageLayout);
+      } else if (std::holds_alternative<VkDescriptorBufferInfo>(
+                     binding.resourceInfo)) {
+        const auto &bufferInfo =
+            std::get<VkDescriptorBufferInfo>(binding.resourceInfo);
+        hasher.add(bufferInfo.buffer);
+        hasher.add(bufferInfo.offset);
+        hasher.add(bufferInfo.range);
+      }
+    }
+
+    return hasher.get();
+  }
+};
+
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
 
 // Only used for cleanup
@@ -31,12 +133,18 @@ extern std::vector<VkPipeline> Pipelines;
 
 // Only used for cleanup
 extern std::mutex PipelineLayoutsMutex;
-extern std::vector<VkPipelineLayout> PipelineLayouts;
+extern std::vector<PipelineLayout> PipelineLayouts;
 
 extern std::mutex DescriptorSetLayoutCacheMutex;
 extern std::unordered_map<struct DescriptorSetLayoutKey, VkDescriptorSetLayout,
                           struct DescriptorSetLayoutKeyHash>
     DescriptorSetLayoutCache;
+
+// Key to cache descriptor sets based on layout and resource pointers
+// Immutable pointers but a weak reference is needed to avoid keeping resources alive indefinitely
+extern thread_local std::unordered_map<DescriptorKey, VkDescriptorSet,
+                                       DescriptorKeyHash>
+    DescriptorSetCache;
 
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
@@ -194,7 +302,8 @@ struct State {
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
 extern thread_local std::vector<State> StateStack;
 
-extern thread_local State LastState;
+extern thread_local State LastStateStorage;
+extern thread_local State *LastState;
 
 extern thread_local State *TopOfStack;
 
@@ -298,13 +407,15 @@ struct StateHash {
   }
 };
 
+// NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
+
 extern thread_local std::unordered_map<
-    State, std::pair<VkPipeline, VkPipelineLayout>,
-    StateHash> // NOLINTNEXTLINE Pipeline cacheBegunRendering
+    State, std::pair<VkPipeline, PipelineLayout>, StateHash>
     PipelineCache;
-extern thread_local std::vector<Ref<Shader::ShaderModule>>
-    UsedShaderModules;                                      // NOLINT
-extern thread_local VkPipelineLayout CurrentPipelineLayout; // NOLINT
+extern thread_local std::vector<Ref<Shader::ShaderModule>> UsedShaderModules;
+extern thread_local PipelineLayout CurrentPipelineLayout;
+
+// NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
 auto FinalizeFrame(const GraphicsContext &context) -> Error;
 auto BeginFrame(const GraphicsContext &context) -> Error;

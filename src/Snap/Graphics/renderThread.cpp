@@ -145,6 +145,7 @@ inline auto GetDescriptorPool(ThreadContext &tcontext) -> Error {
     tcontext.descriptorPool = pool;
     auto resetResult = Error::Create(
         vkResetDescriptorPool(context.device, tcontext.descriptorPool, 0));
+    DynamicRendering::DescriptorSetCache.clear();
 
     if (Error::IsError(resetResult)) {
       return resetResult;
@@ -243,7 +244,8 @@ auto AquireCommandBuffer(Graphics::GraphicsContext &context,
     return frameBeginResult.AsUnexpected();
   }
 
-  GetGlobalUniformBuffer(context.frameIndex).NewFrame();
+  // Should not be done here
+  // GetGlobalUniformBuffer(context.frameIndex).NewFrame();
 
   return threadInfo;
 }

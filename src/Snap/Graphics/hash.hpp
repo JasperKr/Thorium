@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 namespace Hash {
 
 struct Hasher {
@@ -17,6 +18,8 @@ struct Hasher {
     value ^= value + prime + (value << shift) + (value >> shift2);
     return *this;
   }
+
+  auto add(void *ptr) -> Hasher & { return add(std::hash<void *>()(ptr)); }
 
   [[nodiscard]] auto get() const -> size_t { return value; }
 };

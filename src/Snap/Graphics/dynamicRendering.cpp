@@ -1,4 +1,5 @@
 #include "dynamicRendering.hpp"
+#include "Graphics/Buffers/uniform.hpp"
 #include "Graphics/barrier.hpp"
 #include "Graphics/graphics.hpp"
 #include "Graphics/graphicsState.hpp"
@@ -11,11 +12,13 @@
 #include "Modules/error.hpp"
 #include "Modules/image.hpp"
 #include "Modules/object.hpp"
+#include "Modules/utils.hpp"
 #include "slang/slang.h"
 #include "tl/expected.hpp"
 #include <algorithm>
 #include <mutex>
 #include <unordered_set>
+#include <variant>
 #include <vector>
 
 #include "vulkan/vulkan_core.h"
@@ -35,11 +38,11 @@ namespace Graphics::DynamicRendering {
 
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
 
-thread_local std::unordered_map<State, std::pair<VkPipeline, VkPipelineLayout>,
+thread_local std::unordered_map<State, std::pair<VkPipeline, PipelineLayout>,
                                 StateHash>
     PipelineCache{};
 thread_local std::vector<Ref<Shader::ShaderModule>> UsedShaderModules{};
-thread_local VkPipelineLayout CurrentPipelineLayout; // NOLINT
+thread_local PipelineLayout CurrentPipelineLayout; // NOLINT
 
 // Only used for cleanup
 std::mutex PipelinesMutex;
@@ -47,11 +50,12 @@ std::vector<VkPipeline> Pipelines;
 
 // Only used for cleanup
 std::mutex PipelineLayoutsMutex;
-std::vector<VkPipelineLayout> PipelineLayouts;
+std::vector<PipelineLayout> PipelineLayouts;
 
 thread_local std::vector<State> StateStack{};
 
-thread_local State LastState;
+thread_local State LastStateStorage;
+thread_local State *LastState = nullptr;
 
 thread_local State *TopOfStack = nullptr;
 
@@ -61,6 +65,10 @@ std::mutex DescriptorSetLayoutCacheMutex;
 std::unordered_map<DescriptorSetLayoutKey, VkDescriptorSetLayout,
                    DescriptorSetLayoutKeyHash>
     DescriptorSetLayoutCache;
+
+thread_local std::unordered_map<DescriptorKey, VkDescriptorSet,
+                                DescriptorKeyHash>
+    DescriptorSetCache{};
 
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
@@ -91,8 +99,6 @@ auto GetDescriptorSetLayout(const DescriptorSetLayoutKey &layoutKey,
     layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
     layoutInfo.pBindings = bindings.data();
 
-    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-
     auto error = Error::Create(vkCreateDescriptorSetLayout(
         context.device, &layoutInfo, nullptr, &descriptorSetLayout));
 
@@ -106,85 +112,9 @@ auto GetDescriptorSetLayout(const DescriptorSetLayoutKey &layoutKey,
   return descriptorSetLayout;
 }
 
-auto GetPipelineLayout(const GraphicsContext &context,
-                       const Shader::ShaderModule *shader)
-    -> Result<VkPipelineLayout> {
-  ZoneScoped;
-  auto pushConstantRanges = std::vector<VkPushConstantRange>{};
-
-  for (const auto &buffer : shader->pushBuffers) {
-    VkPushConstantRange pushConstantRange = {};
-    pushConstantRange.stageFlags = buffer.GetStageFlags();
-    pushConstantRange.offset = buffer.GetBufferOffset();
-    pushConstantRange.size = static_cast<uint32_t>(buffer.GetBufferSize());
-    if (pushConstantRange.size == 0) {
-      return Error::Unexpected(
-          "Push buffer has zero size in shader reflection");
-    }
-
-    PrintDebug("Adding push constant range: offset {}, size {}",
-               pushConstantRange.offset, pushConstantRange.size);
-
-    pushConstantRanges.emplace_back(pushConstantRange);
-  }
-
-  PrintDebug("Creating pipeline layout from shader reflection");
-
-  std::vector<VkDescriptorSetLayout> setLayouts{};
-
-  auto maxSet = 0U;
-  for (const auto &pair : shader->bindingInfos) {
-    maxSet = (std::max)(maxSet, pair.first);
-  }
-
-  PrintDebug("Max descriptor set index: {}", maxSet);
-
-  setLayouts.resize(maxSet + 1);
-
-  for (const auto &pair : shader->bindingInfos) {
-    DescriptorSetLayoutKey layoutKey{};
-    layoutKey.flags = 0;
-    layoutKey.bindings = pair.second;
-    // No binding flags for now
-    layoutKey.bindingFlags = {};
-
-    auto layoutResult = GetDescriptorSetLayout(layoutKey, context);
-    if (Error::IsError(layoutResult)) {
-      return layoutResult.error().AsUnexpected();
-    }
-
-    setLayouts[pair.first] = layoutResult.value();
-  }
-
-  VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
-  pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-  pipelineLayoutInfo.setLayoutCount = static_cast<uint32_t>(setLayouts.size());
-  pipelineLayoutInfo.pSetLayouts = setLayouts.data();
-  pipelineLayoutInfo.pushConstantRangeCount = pushConstantRanges.size();
-  pipelineLayoutInfo.pPushConstantRanges = pushConstantRanges.data();
-  VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
-
-  Error error;
-  {
-    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    error = Error::Create(vkCreatePipelineLayout(
-        context.device, &pipelineLayoutInfo, nullptr, &pipelineLayout));
-  }
-
-  if (Error::IsError(error)) {
-    return error.AsUnexpected();
-  }
-
-  {
-    std::lock_guard<std::mutex> lock(PipelineLayoutsMutex);
-    PipelineLayouts.emplace_back(pipelineLayout);
-  }
-
-  return pipelineLayout;
-}
-
-auto FillDescriptorSets(const GraphicsContext &context,
-                        Shader::ShaderModule *shader) -> Error {
+auto TryCreateShaderDescriptorBindingInfo(const GraphicsContext &context,
+                                          Shader::ShaderModule *shader)
+    -> Error {
   ZoneScoped;
 
   // No need to fill if already done
@@ -240,7 +170,144 @@ auto FillDescriptorSets(const GraphicsContext &context,
         layoutBinding);
   }
 
+  for (auto &setPair : shader->bindingInfos) {
+    std::ranges::sort(setPair.second,
+                      [](const VkDescriptorSetLayoutBinding &first,
+                         const VkDescriptorSetLayoutBinding &second) -> bool {
+                        return first.binding < second.binding;
+                      });
+  }
+
   return Error::Success();
+}
+
+inline auto DescriptorTypeToString(VkDescriptorType type) -> std::string {
+  switch (type) {
+  case VK_DESCRIPTOR_TYPE_SAMPLER:
+    return "SAMPLER";
+  case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
+    return "COMBINED_IMAGE_SAMPLER";
+  case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
+    return "SAMPLED_IMAGE";
+  case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
+    return "STORAGE_IMAGE";
+  case VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER:
+    return "UNIFORM_TEXEL_BUFFER";
+  case VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER:
+    return "STORAGE_TEXEL_BUFFER";
+  case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
+    return "UNIFORM_BUFFER";
+  case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
+    return "STORAGE_BUFFER";
+  case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC:
+    return "UNIFORM_BUFFER_DYNAMIC";
+  case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC:
+    return "STORAGE_BUFFER_DYNAMIC";
+  case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
+    return "INPUT_ATTACHMENT";
+  case VK_DESCRIPTOR_TYPE_INLINE_UNIFORM_BLOCK:
+    return "INLINE_UNIFORM_BLOCK";
+  case VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR:
+    return "ACCELERATION_STRUCTURE_KHR";
+  case VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_NV:
+    return "ACCELERATION_STRUCTURE_NV";
+  case VK_DESCRIPTOR_TYPE_SAMPLE_WEIGHT_IMAGE_QCOM:
+    return "SAMPLE_WEIGHT_IMAGE_QCOM";
+  case VK_DESCRIPTOR_TYPE_BLOCK_MATCH_IMAGE_QCOM:
+    return "BLOCK_MATCH_IMAGE_QCOM";
+  case VK_DESCRIPTOR_TYPE_TENSOR_ARM:
+    return "TENSOR_ARM";
+  case VK_DESCRIPTOR_TYPE_MUTABLE_EXT:
+    return "MUTABLE_EXT";
+  case VK_DESCRIPTOR_TYPE_PARTITIONED_ACCELERATION_STRUCTURE_NV:
+    return "PARTITIONED_ACCELERATION_STRUCTURE_NV";
+  case VK_DESCRIPTOR_TYPE_MAX_ENUM:
+    return "MAX_ENUM";
+    break;
+  }
+}
+
+auto GetPipelineLayout(const GraphicsContext &context,
+                       Shader::ShaderModule *shader) -> Result<PipelineLayout> {
+  ZoneScoped;
+  auto pushConstantRanges = std::vector<VkPushConstantRange>{};
+
+  for (const auto &buffer : shader->pushBuffers) {
+    VkPushConstantRange pushConstantRange = {};
+    pushConstantRange.stageFlags = buffer.GetStageFlags();
+    pushConstantRange.offset = buffer.GetBufferOffset();
+    pushConstantRange.size = static_cast<uint32_t>(buffer.GetBufferSize());
+    if (pushConstantRange.size == 0) {
+      return Error::Unexpected(
+          "Push buffer has zero size in shader reflection");
+    }
+
+    PrintDebug("Adding push constant range: offset {}, size {}",
+               pushConstantRange.offset, pushConstantRange.size);
+
+    pushConstantRanges.emplace_back(pushConstantRange);
+  }
+
+  PrintDebug("Creating pipeline layout from shader reflection");
+
+  std::vector<VkDescriptorSetLayout> setLayouts{};
+
+  auto error = TryCreateShaderDescriptorBindingInfo(context, shader);
+  if (Error::IsError(error)) {
+    return error.AsUnexpected();
+  }
+
+  // Find the maximum set index from the shader reflection
+  uint32_t maxSet = 0;
+  for (const auto &setPair : shader->bindingInfos) {
+    maxSet = std::max<unsigned long>(setPair.first, maxSet);
+  }
+
+  setLayouts.resize(maxSet + 1);
+
+  // For each set, build the DescriptorSetLayoutKey and get the layout
+  for (const auto &setPair : shader->bindingInfos) {
+    DescriptorSetLayoutKey layoutKey;
+    layoutKey.flags = 0;
+    layoutKey.bindings = setPair.second;
+    layoutKey.bindingFlags = {};
+
+    auto layoutResult = GetDescriptorSetLayout(layoutKey, context);
+    if (Error::IsError(layoutResult)) {
+      return layoutResult.error().AsUnexpected();
+    }
+    setLayouts[setPair.first] = layoutResult.value();
+  }
+
+  PrintDebug("Max descriptor set index: {}", maxSet);
+
+  VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
+  pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+  pipelineLayoutInfo.setLayoutCount = static_cast<uint32_t>(setLayouts.size());
+  pipelineLayoutInfo.pSetLayouts = setLayouts.data();
+  pipelineLayoutInfo.pushConstantRangeCount = pushConstantRanges.size();
+  pipelineLayoutInfo.pPushConstantRanges = pushConstantRanges.data();
+  VkPipelineLayout pipelineLayout = VK_NULL_HANDLE;
+
+  {
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+    error = Error::Create(vkCreatePipelineLayout(
+        context.device, &pipelineLayoutInfo, nullptr, &pipelineLayout));
+  }
+
+  if (Error::IsError(error)) {
+    return error.AsUnexpected();
+  }
+
+  {
+    std::lock_guard<std::mutex> lock(PipelineLayoutsMutex);
+    PipelineLayouts.emplace_back(pipelineLayout);
+  }
+
+  return PipelineLayout{
+      .layout = pipelineLayout,
+      .descriptorSetLayouts = std::move(setLayouts),
+  };
 }
 
 auto BindDefaultTextures(const GraphicsContext &context,
@@ -252,7 +319,7 @@ auto BindDefaultTextures(const GraphicsContext &context,
     if (resource.IsSampler()) {
       const auto &samplerInfo = std::get<SamplerInfo>(resource.info);
       auto key = SetBindingToSlot(samplerInfo.set, samplerInfo.binding);
-      if (state.boundTextures.contains(key)) {
+      if (state.userBoundTextures.contains(key)) {
         continue;
       }
 
@@ -275,80 +342,8 @@ auto BindDefaultTextures(const GraphicsContext &context,
 
       auto defaultTexture = defaultTextureResult.value();
 
-      if (!state.userBoundTextures.contains(key)) {
-        state.userBoundTextures[key] = {defaultTexture, samplerInfo};
-      }
+      state.userBoundTextures[key] = {defaultTexture, samplerInfo};
     }
-  }
-
-  return Error::Success();
-}
-
-auto CreateDescriptorSets(const GraphicsContext &context,
-                          Shader::ShaderModule *shader) -> Error {
-  ZoneScoped;
-
-  auto fillResult = FillDescriptorSets(context, shader);
-  if (Error::IsError(fillResult)) {
-    return fillResult;
-  }
-
-  std::vector<VkDescriptorSetLayout> AllocationLayouts{};
-  std::unordered_map<uint32_t, uint32_t> IndexToSet;
-
-  for (const auto &setBinding : shader->bindingInfos) {
-    uint32_t setIndex = setBinding.first;
-    const auto &bindings = setBinding.second;
-
-    DescriptorSetLayoutKey layoutKey{};
-    layoutKey.flags = 0;
-    layoutKey.bindings = bindings;
-    layoutKey.bindingFlags = {};
-
-    auto layoutResult = GetDescriptorSetLayout(layoutKey, context);
-    if (Error::IsError(layoutResult)) {
-      return layoutResult.error();
-    }
-
-    auto *descriptorSetLayout = layoutResult.value();
-
-    IndexToSet[AllocationLayouts.size()] = setIndex;
-    AllocationLayouts.emplace_back(descriptorSetLayout);
-  }
-
-  VkDescriptorSetAllocateInfo allocInfo{};
-  allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-  allocInfo.descriptorPool = GetThreadContext().descriptorPool;
-  allocInfo.descriptorSetCount =
-      static_cast<uint32_t>(AllocationLayouts.size());
-  allocInfo.pSetLayouts = AllocationLayouts.data();
-
-  std::vector<VkDescriptorSet> allocatedSets(AllocationLayouts.size(),
-                                             VK_NULL_HANDLE);
-
-  {
-    ZoneScopedN("Allocate descriptor sets");
-    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-
-    assert(context.device != VK_NULL_HANDLE &&
-           "Vulkan device is null during descriptor set allocation");
-
-    auto error = Error::Create(vkAllocateDescriptorSets(
-        context.device, &allocInfo, allocatedSets.data()));
-    if (Error::IsError(error)) {
-      return error;
-    }
-  }
-
-  for (size_t i = 0; i < allocatedSets.size(); i++) {
-    auto setIndex = IndexToSet.at(static_cast<uint32_t>(i));
-
-    shader->GetState().descriptorSets[setIndex] = allocatedSets.at(i);
-  }
-
-  auto bindResult = BindDefaultTextures(context, shader);
-  if (Error::IsError(bindResult)) {
-    return bindResult;
   }
 
   return Error::Success();
@@ -516,7 +511,7 @@ auto inline GetRenderFormatInfo(const GraphicsContext &context,
 }
 
 inline auto CreateGraphicsPipeline(const GraphicsContext &context, State &state)
-    -> Result<std::pair<VkPipeline, VkPipelineLayout>> {
+    -> Result<std::pair<VkPipeline, PipelineLayout>> {
   ZoneScoped;
   if (state.bindPoint != VK_PIPELINE_BIND_POINT_GRAPHICS) {
     return Error::Unexpected(
@@ -655,7 +650,7 @@ inline auto CreateGraphicsPipeline(const GraphicsContext &context, State &state)
     return layoutResult.error().AsUnexpected();
   }
 
-  pipelineInfo.layout = layoutResult.value();
+  pipelineInfo.layout = layoutResult.value().layout;
   pipelineInfo.renderPass = VK_NULL_HANDLE; // Not needed
   pipelineInfo.subpass = 0;
   pipelineInfo.pNext = &renderingCreateInfo;
@@ -679,12 +674,11 @@ inline auto CreateGraphicsPipeline(const GraphicsContext &context, State &state)
     Pipelines.emplace_back(pipeline);
   }
 
-  return std::pair<VkPipeline, VkPipelineLayout>(pipeline,
-                                                 layoutResult.value());
+  return std::pair<VkPipeline, PipelineLayout>(pipeline, layoutResult.value());
 }
 
 inline auto CreateComputePipeline(const GraphicsContext &context, State &state)
-    -> Result<std::pair<VkPipeline, VkPipelineLayout>> {
+    -> Result<std::pair<VkPipeline, PipelineLayout>> {
   ZoneScoped;
 
   VkComputePipelineCreateInfo pipelineInfo = {};
@@ -707,7 +701,7 @@ inline auto CreateComputePipeline(const GraphicsContext &context, State &state)
     return layoutResult.error().AsUnexpected();
   }
 
-  pipelineInfo.layout = layoutResult.value();
+  pipelineInfo.layout = layoutResult.value().layout;
 
   PrintDebug("Creating compute pipeline...");
 
@@ -728,12 +722,11 @@ inline auto CreateComputePipeline(const GraphicsContext &context, State &state)
     Pipelines.emplace_back(pipeline);
   }
 
-  return std::pair<VkPipeline, VkPipelineLayout>(pipeline,
-                                                 layoutResult.value());
+  return std::pair<VkPipeline, PipelineLayout>(pipeline, layoutResult.value());
 }
 
 inline auto CreatePipeline(const GraphicsContext &context, State &state)
-    -> Result<std::pair<VkPipeline, VkPipelineLayout>> {
+    -> Result<std::pair<VkPipeline, PipelineLayout>> {
   ZoneScoped;
   if (state.bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS) {
     return CreateGraphicsPipeline(context, state);
@@ -746,7 +739,7 @@ inline auto CreatePipeline(const GraphicsContext &context, State &state)
 }
 
 inline auto GetPipeline(const GraphicsContext &context, State &state)
-    -> Result<std::pair<VkPipeline, VkPipelineLayout>> {
+    -> Result<std::pair<VkPipeline, PipelineLayout>> {
   ZoneScoped;
 
   PrintDebug("Getting pipeline from cache");
@@ -855,8 +848,7 @@ auto Reset(const GraphicsContext &context) -> Error {
 
   StateStack.emplace_back(defaultStateResult.value());
   TopOfStack = &StateStack.back();
-
-  LastState = State();
+  LastState = nullptr;
 
   return Error::Success();
 }
@@ -864,7 +856,7 @@ auto Reset(const GraphicsContext &context) -> Error {
 auto Shutdown(const GraphicsContext &context) -> Error {
   StateStack.clear();
   UsedShaderModules.clear();
-  LastState = State();
+  LastState = nullptr;
   TopOfStack = nullptr;
 
   return Error::Success();
@@ -875,11 +867,6 @@ auto FlushCompute(const GraphicsContext &context) -> Result<bool> {
 
   if (TopOfStack->bindPoint != VK_PIPELINE_BIND_POINT_COMPUTE) {
     return Error::Unexpected("Current state is not a compute pipeline.");
-  }
-
-  auto result = CreateDescriptorSets(context, TopOfStack->shader.get());
-  if (Error::IsError(result)) {
-    return result.AsUnexpected();
   }
 
   auto pipelineResult = GetPipeline(context, *TopOfStack);
@@ -895,8 +882,6 @@ auto FlushCompute(const GraphicsContext &context) -> Result<bool> {
 
   assert(TopOfStack->shader->stages.at(0) == VK_SHADER_STAGE_COMPUTE_BIT);
 
-  // TODO: Only clear on incompatible layout
-  TopOfStack->shader->ClearBindingCache();
   UsedShaderModules.emplace_back(TopOfStack->shader);
 
   CurrentPipelineLayout = pipelineResult.value().second;
@@ -934,11 +919,6 @@ auto FlushGraphics(const GraphicsContext &context) -> Result<bool> {
     }
   }
 
-  auto result = CreateDescriptorSets(context, TopOfStack->shader.get());
-  if (Error::IsError(result)) {
-    return result.AsUnexpected();
-  }
-
   auto pipelineResult = GetPipeline(context, *TopOfStack);
   if (Error::IsError(pipelineResult)) {
     return pipelineResult.error().AsUnexpected();
@@ -968,9 +948,6 @@ auto FlushGraphics(const GraphicsContext &context) -> Result<bool> {
   }
 
   CurrentPipelineLayout = pipelineResult.value().second;
-  // TODO: Optimise this so we can avoid clearing the entire cache
-  // We should check if the layout is compatible, and only clear if not
-  TopOfStack->shader->ClearBindingCache();
 
   PrintDebug("Binding pipeline");
 
@@ -986,12 +963,13 @@ auto FlushGraphics(const GraphicsContext &context) -> Result<bool> {
 auto Flush(const GraphicsContext &context) -> Result<bool> {
   ZoneScoped;
 
-  if (!Graphics::GetIsStateDirty() &&
-      TopOfStack->GetHash() == LastState.GetHash()) {
+  if (!Graphics::GetIsStateDirty() && LastState != nullptr &&
+      TopOfStack->GetHash() == LastState->GetHash()) {
     return false;
   }
 
-  LastState = *TopOfStack;
+  LastStateStorage = *TopOfStack; // Copy current state to last state storage
+  LastState = &LastStateStorage;  // Point last state to the storage
 
   if (TopOfStack->bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS) {
     auto result = FlushGraphics(context);
@@ -1015,7 +993,7 @@ auto Destroy(const GraphicsContext &context) -> void {
     }
   }
   for (const auto &layout : PipelineLayouts) {
-    vkDestroyPipelineLayout(context.device, layout, nullptr);
+    vkDestroyPipelineLayout(context.device, layout.layout, nullptr);
   }
   for (auto &layouts : DynamicRendering::DescriptorSetLayoutCache) {
     vkDestroyDescriptorSetLayout(context.device, layouts.second, nullptr);
@@ -1130,8 +1108,6 @@ inline auto BeginRendering(const GraphicsContext &context) -> Error {
     renderingInfo.pStencilAttachment = nullptr;
   }
 
-  PrintDebug("Beginning rendering pass");
-
   if (Graphics::GetCommandBuffer() == VK_NULL_HANDLE) {
     return Error::Create(
         "Tried to begin rendering, but command buffer is null.");
@@ -1140,7 +1116,6 @@ inline auto BeginRendering(const GraphicsContext &context) -> Error {
   vkCmdBeginRendering(Graphics::GetCommandBuffer(), &renderingInfo);
   GetIsCurrentlyRendering() = true;
 
-  TopOfStack->shader->ClearBindingCache(); // :(
   UsedShaderModules.emplace_back(TopOfStack->shader);
 
   for (auto &rendertarget : TopOfStack->renderTargets) {
@@ -1163,18 +1138,26 @@ auto EndRendering(const GraphicsContext &context) -> void {
   }
 }
 
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 auto InsertResourceBarriers(const GraphicsContext &context) -> Error {
   ZoneScoped;
 
   auto &shader = TopOfStack->shader;
 
-  for (auto &bufferPair : shader->GetState().boundBuffers) {
+  for (auto &bufferPair : shader->GetState().userBoundBuffers) {
     auto &buffer = bufferPair.second;
     auto key = bufferPair.first;
+
+    if (key == 0U) {
+      continue; // Skip slot 0, 0; set, binding = 0, 0; ubo.
+    }
 
     auto infoResult = shader->GetSlotDescription(key);
     if (Error::IsError(infoResult)) {
       return infoResult.error();
+    }
+    if (!infoResult.value().Is<BufferInfo>()) {
+      return Error::Create("Expected buffer info for bound buffer slot.");
     }
 
     auto info = infoResult.value().GetInfo<BufferInfo>();
@@ -1220,14 +1203,14 @@ auto InsertResourceBarriers(const GraphicsContext &context) -> Error {
       }
     }
 
-    Barrier::UpdateUsage(context, *buffer,
+    Barrier::UpdateUsage(context, *buffer.first,
                          {
                              .stages = stages,
                              .access = access,
                          });
   }
 
-  for (auto &texturePair : shader->GetState().boundTextures) {
+  for (auto &texturePair : shader->GetState().userBoundTextures) {
     auto &texture = texturePair.second;
     auto key = texturePair.first;
 
@@ -1279,11 +1262,252 @@ auto InsertResourceBarriers(const GraphicsContext &context) -> Error {
       }
     }
 
-    Barrier::UpdateUsage(context, *texture,
+    Barrier::UpdateUsage(context, *texture.first,
                          {
                              .stages = stages,
                              .access = access,
                          });
+  }
+
+  return Error::Success();
+}
+
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
+auto BindDescriptorSets(const GraphicsContext &context,
+                        VkPipelineStageFlags2 stage) -> Error {
+  ZoneScoped;
+  auto &shader = TopOfStack->shader;
+
+  VkPipelineStageFlags2 stageFlags = 0;
+
+  if (TopOfStack->bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS) {
+    stageFlags |= VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT;
+    stageFlags |= VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+  } else if (TopOfStack->bindPoint == VK_PIPELINE_BIND_POINT_COMPUTE) {
+    stageFlags |= VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+  }
+
+  int setIndex = 0;
+  for (const auto &layout : CurrentPipelineLayout.descriptorSetLayouts) {
+    DescriptorKey key = {
+        .layout = layout,
+        .bindings = {},
+    };
+
+    for (const auto &pair : shader->GetState().userBoundBuffers) {
+      const auto location = pair.first;
+      const auto buffer = pair.second;
+      const auto &[set, binding] = SlotToSetBinding(location);
+
+      if (set != setIndex || !buffer.first.isValid()) {
+        continue;
+      }
+
+      VkDescriptorType descriptorType = VK_DESCRIPTOR_TYPE_MAX_ENUM;
+
+      auto info = shader->GetSlotDescription(location);
+      if (Error::IsError(info)) {
+        return info.error();
+      }
+      if (!info.value().Is<BufferInfo>()) {
+        return Error::Create("Expected buffer info for bound buffer slot.");
+      }
+      auto bufferInfo = info.value().GetInfo<BufferInfo>();
+
+      if (bufferInfo.bufferType == BufferType::Uniform) {
+        descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+      } else if (bufferInfo.bufferType == BufferType::Storage) {
+        descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+      } else {
+        return Error::Create("Unknown buffer type for descriptor set binding.");
+      }
+
+      key.bindings.emplace_back(ResourceBinding{
+          .binding = binding,
+          .descriptorType = descriptorType,
+          .resourceInfo =
+              VkDescriptorBufferInfo{
+                  .buffer = buffer.first->handle,
+                  .offset = 0,
+                  .range = VK_WHOLE_SIZE,
+              },
+      });
+    }
+
+    std::vector<uint32_t> dynamicOffsets;
+
+    for (const auto &pair : shader->GetState().userBoundTextures) {
+      const auto location = pair.first;
+      const auto &texture = pair.second.first;
+      const auto &samplerInfo = pair.second.second;
+      const auto &[set, binding] = SlotToSetBinding(location);
+
+      if (set != setIndex) {
+        continue;
+      }
+
+      auto usage = samplerInfo.access == SLANG_RESOURCE_ACCESS_READ
+                       ? TextureUsage::Sampler
+                       : TextureUsage::Storage;
+
+      Error result;
+      switch (usage) {
+      case TextureUsage::Sampler:
+        result = texture->UseAsSampler(context, stage);
+        break;
+      case TextureUsage::Storage:
+        result = texture->UseAsStorage(context, stage);
+        break;
+      case TextureUsage::Attachment:
+        result = texture->UseAsAttachment(context);
+        break;
+      case TextureUsage::TransferSrc:
+        result = texture->UseAsTransferSrc(context);
+        break;
+      case TextureUsage::TransferDst:
+        result = texture->UseAsTransferDst(context);
+        break;
+      case TextureUsage::PresentSrc:
+        result = texture->UseAsPresentSrc(context);
+        break;
+      case TextureUsage::Unknown:
+        result = Error::Create(
+            "Cannot transition image with unknown usage in shader flush.");
+        break;
+      }
+
+      if (Error::IsError(result)) {
+        return result;
+      }
+
+      key.bindings.emplace_back(ResourceBinding{
+          .binding = binding,
+          .descriptorType = samplerInfo.access == SLANG_RESOURCE_ACCESS_READ
+                                ? VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
+                                : VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+          .resourceInfo =
+              VkDescriptorImageInfo{
+                  .sampler = texture->GetSampler(context),
+                  .imageView = texture->view,
+                  .imageLayout = texture->currentLayout,
+              },
+      });
+    }
+
+    if (shader->reflection.hasGlobals) {
+      const auto set = shader->reflection.globals.set;
+      const auto binding = shader->reflection.globals.binding;
+
+      if (set != setIndex) {
+        continue;
+      }
+
+      auto buffer = GetGlobalUniformBuffer(context.frameIndex);
+
+      dynamicOffsets.emplace_back(buffer.GetOffset());
+
+      buffer.SetData(context, shader->globalUniforms, 0);
+      shader->globalUniforms.clear();
+
+      auto flushResult = buffer.Flush(context);
+      if (Error::IsError(flushResult)) {
+        return flushResult.error();
+      }
+
+      key.bindings.emplace_back(ResourceBinding{
+          .binding = binding,
+          .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
+          .resourceInfo =
+              VkDescriptorBufferInfo{
+                  .buffer = buffer.GetBuffer()->handle,
+                  .offset = 0,
+                  .range = Utils::AlignUp(shader->reflection.globals.size,
+                                          context.deviceProperties.limits
+                                              .minUniformBufferOffsetAlignment),
+              },
+      });
+    }
+
+    auto iter = DescriptorSetCache.find(key);
+
+    if (iter != DescriptorSetCache.end()) {
+      vkCmdBindDescriptorSets(
+          Graphics::GetCommandBuffer(), TopOfStack->bindPoint,
+          CurrentPipelineLayout.layout, setIndex, 1, &iter->second,
+          dynamicOffsets.size(), dynamicOffsets.data());
+    } else {
+      VkDescriptorSetAllocateInfo allocInfo = {};
+      allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+      allocInfo.descriptorPool = GetThreadContext().descriptorPool;
+      allocInfo.descriptorSetCount = 1;
+      allocInfo.pSetLayouts = &layout;
+      VkDescriptorSet descriptorSet = nullptr;
+
+      {
+        std::lock_guard<std::mutex> lock(
+            Graphics::GraphicsContext::mutexes.device);
+
+        auto error = Error::Create(vkAllocateDescriptorSets(
+            context.device, &allocInfo, &descriptorSet));
+        if (Error::IsError(error)) {
+          return error;
+        }
+      }
+
+      std::vector<VkWriteDescriptorSet> writeDescriptorSets;
+      std::vector<VkDescriptorBufferInfo> bufferInfos;
+      std::vector<VkDescriptorImageInfo> imageInfos;
+
+      writeDescriptorSets.reserve(key.bindings.size());
+      bufferInfos.reserve(key.bindings.size());
+      imageInfos.reserve(key.bindings.size());
+
+      for (const auto &binding : key.bindings) {
+        VkWriteDescriptorSet write = {};
+        write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        write.dstSet = descriptorSet;
+        write.dstBinding = binding.binding;
+        write.dstArrayElement = 0;
+        write.descriptorCount = 1;
+        write.descriptorType = binding.descriptorType;
+
+        // clang-format off
+        if (std::holds_alternative<VkDescriptorBufferInfo>(binding.resourceInfo)) {
+          bufferInfos.emplace_back(std::get<VkDescriptorBufferInfo>(binding.resourceInfo));
+          write.pBufferInfo = &bufferInfos.back();
+
+        } else if (std::holds_alternative<VkDescriptorImageInfo>(binding.resourceInfo)) {
+          imageInfos.emplace_back(std::get<VkDescriptorImageInfo>(binding.resourceInfo));
+          write.pImageInfo = &imageInfos.back();
+        } else {
+          return Error::Create("Unknown resource info type in descriptor set binding.");
+        }
+        // clang-format on
+
+        writeDescriptorSets.emplace_back(write);
+      }
+
+      {
+        std::lock_guard<std::mutex> lock(
+            Graphics::GraphicsContext::mutexes.device);
+
+        vkUpdateDescriptorSets(
+            context.device, static_cast<uint32_t>(writeDescriptorSets.size()),
+            writeDescriptorSets.data(), 0, nullptr);
+      }
+
+      assert(CurrentPipelineLayout.layout != nullptr);
+      assert(descriptorSet != VK_NULL_HANDLE);
+
+      vkCmdBindDescriptorSets(
+          Graphics::GetCommandBuffer(), TopOfStack->bindPoint,
+          CurrentPipelineLayout.layout, setIndex, 1, &descriptorSet,
+          dynamicOffsets.size(), dynamicOffsets.data());
+
+      DescriptorSetCache[key] = descriptorSet;
+    }
+
+    setIndex++;
   }
 
   return Error::Success();
@@ -1301,12 +1525,12 @@ auto PrepareRendering(const GraphicsContext &context) -> Error {
   auto updatedState = flushResult.value();
 
   {
-    assert(CurrentPipelineLayout != nullptr);
+    assert(CurrentPipelineLayout.layout != nullptr);
     ZoneScopedN("Flush push buffer data");
     for (auto &pushBuffer : TopOfStack->shader->pushBuffers) {
       FlushInfo info{
           .commandBuffer = GetCommandBuffer(),
-          .pipelineLayout = CurrentPipelineLayout,
+          .pipelineLayout = CurrentPipelineLayout.layout,
       };
 
       pushBuffer.FlushData(info);
@@ -1319,19 +1543,33 @@ auto PrepareRendering(const GraphicsContext &context) -> Error {
     return insertionResult;
   }
 
-  VkPipelineStageFlags2 stageFlags = 0;
+  auto stages = VK_PIPELINE_STAGE_2_NONE;
 
-  if (TopOfStack->bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS) {
-    stageFlags |= VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT;
-    stageFlags |= VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
-  } else if (TopOfStack->bindPoint == VK_PIPELINE_BIND_POINT_COMPUTE) {
-    stageFlags |= VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+  for (const auto &stage : TopOfStack->shader->stages) {
+    switch (stage) {
+    case VK_SHADER_STAGE_VERTEX_BIT:
+      stages |= VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT;
+      break;
+    case VK_SHADER_STAGE_FRAGMENT_BIT:
+      stages |= VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+      break;
+    case VK_SHADER_STAGE_COMPUTE_BIT:
+      stages |= VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+      break;
+    default:
+      break;
+    }
   }
 
-  auto error = TopOfStack->shader->FlushDescriptors(
-      context, CurrentPipelineLayout, stageFlags);
-  if (Error::IsError(error)) {
-    return error;
+  auto bindDefaultResult =
+      BindDefaultTextures(context, TopOfStack->shader.get());
+  if (Error::IsError(bindDefaultResult)) {
+    return bindDefaultResult;
+  }
+
+  auto bindResult = BindDescriptorSets(context, stages);
+  if (Error::IsError(bindResult)) {
+    return bindResult;
   }
 
   if (updatedState || !GetIsCurrentlyRendering()) {
@@ -1403,9 +1641,6 @@ auto BeginFrame(const GraphicsContext &context) -> Error {
   TopOfStack = &StateStack.back();
   DrawnToSwapchain = false;
 
-  for (const auto &shader : UsedShaderModules) {
-    shader->ClearBindingCache(); // Clear binding cache of last command buffer
-  }
   UsedShaderModules.clear();
 
   return Error::Success();
@@ -1691,11 +1926,6 @@ auto GetBindPoint() -> VkPipelineBindPoint { return TopOfStack->bindPoint; }
 auto Clear(const GraphicsContext &context, const ClearInfo &clearInfo)
     -> Error {
   ZoneScoped;
-
-  PrintAlways("Clearing render targets with clear info: depth: {}, stencil: "
-              "{}, colors: {}",
-              clearInfo.clearDepth, clearInfo.clearStencil,
-              clearInfo.colors.size());
 
   auto *commandBuffer = Graphics::GetCommandBuffer();
 

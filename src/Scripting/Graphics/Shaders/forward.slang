@@ -67,5 +67,5 @@ float4 fragmentMain(FragmentInput input)
   float NoL = dot(input.normal, Incoming) * 0.5 + 0.5;
   float4 texColor = MainTexture.Sample(input.tex_coord);
 
-  return float4((texColor.rgb * input.color.rgb) * NoL, texColor.a * input.color.a);
+  return float4((texColor.rgb * input.normal.rgb) * NoL, texColor.a * input.color.a);
 }

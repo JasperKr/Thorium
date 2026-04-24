@@ -38,40 +38,6 @@ struct ImageTransitionInfo {
   VkPipelineStageFlags2 newStage = VK_PIPELINE_STAGE_2_NONE;
 };
 
-struct DescriptorWriteInfo {
-  uint32_t dstSet{};
-  uint32_t dstBinding{};
-  uint32_t dstArrayElement{};
-  uint32_t descriptorCount{};
-  VkDescriptorType descriptorType = VK_DESCRIPTOR_TYPE_MAX_ENUM;
-  VkDescriptorImageInfo pImageInfo{};
-  VkDescriptorBufferInfo pBufferInfo{};
-  VkBufferView pTexelBufferView{};
-
-  Buffer *bufferPtr{};
-  Texture *imagePtr{};
-  VkAccessFlagBits2 bufferAccessBits{};
-
-  ImageTransitionInfo transition;
-
-  [[nodiscard]] auto GetWrite(
-      const std::unordered_map<uint32_t, VkDescriptorSet> &descriptorSets) const
-      -> VkWriteDescriptorSet {
-    VkWriteDescriptorSet write{};
-    write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    write.pNext = nullptr;
-    write.dstSet = descriptorSets.at(dstSet);
-    write.dstBinding = dstBinding;
-    write.dstArrayElement = dstArrayElement;
-    write.descriptorCount = descriptorCount;
-    write.descriptorType = descriptorType;
-    write.pImageInfo = &pImageInfo;
-    write.pBufferInfo = &pBufferInfo;
-    write.pTexelBufferView = &pTexelBufferView;
-    return write;
-  }
-};
-
 static const Type LuaShaderType = Type("Shader");
 
 constexpr auto
@@ -106,15 +72,11 @@ ShaderStageFlagsToPipelineStageFlags(VkShaderStageFlags shaderStages)
 }
 
 struct BoundState {
-  std::unordered_map<uint64_t, Ref<Buffer>> boundBuffers;
   std::unordered_map<uint64_t, std::pair<Ref<Buffer>, BufferInfo>>
       userBoundBuffers;
 
-  std::unordered_map<uint64_t, Ref<Texture>> boundTextures;
   std::unordered_map<uint64_t, std::pair<Ref<Texture>, SamplerInfo>>
       userBoundTextures;
-
-  std::unordered_map<uint32_t, VkDescriptorSet> descriptorSets;
 };
 
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
@@ -142,9 +104,10 @@ struct ShaderModule : Object {
   Slang::ComPtr<slang::IComponentType> linkedProgram;
 
   std::unordered_map<SlangStage, size_t> entryPointToStageIndex;
+
+  // Set -> (Texture, Sampler)
   std::unordered_map<uint32_t, std::vector<VkDescriptorSetLayoutBinding>>
       bindingInfos;
-  std::unordered_map<uint32_t, VkDescriptorSetLayout> descriptorSetLayouts;
 
   ShaderReflection reflection;
   std::vector<PushBuffer> pushBuffers;
@@ -191,9 +154,6 @@ struct ShaderModule : Object {
       -> Result<const ResourceInfo>;
   auto GetSlotDescription(uint64_t slot) -> Result<const ResourceInfo>;
 
-  auto FlushDescriptors(const GraphicsContext &context, VkPipelineLayout layout,
-                        VkPipelineStageFlags2 dstStage) -> Error;
-
   auto GetThreadgroupSize() const -> Result<Math::Uvec3>;
   auto GetWaveSize() const -> uint32_t;
 
@@ -208,16 +168,6 @@ struct ShaderModule : Object {
   [[nodiscard]] auto GetInstanceType() const -> Type const * override {
     return ShaderModule::GetType();
   }
-
-  auto ClearBindingCache() const -> void {
-    auto &state = GetState();
-    state.boundBuffers.clear();
-    state.boundTextures.clear();
-  }
-
-private:
-  auto BindGlobalUBO(const GraphicsContext &context, VkPipelineLayout layout,
-                     VkPipelineStageFlags2 dstStage) -> Error;
 };
 
 extern Ref<ShaderModule> DefaultShaderModule; // NOLINT
