@@ -7,6 +7,7 @@
 #include "Graphics/render.hpp"
 #include "Graphics/renderThread.hpp"
 #include "Graphics/shader.hpp"
+#include "Graphics/snapshot.hpp"
 #include "Graphics/texture.hpp"
 #include "Graphics/vertexformat.hpp"
 #include "Modules/color.hpp"
@@ -764,6 +765,12 @@ auto wrap_AquireCommandBuffer(lua_State *state) -> int {
   info.priority = static_cast<int>(luaL_optinteger(state, 2, 0));
 
   auto result = ::Graphics::Threading::AquireCommandBuffer(*ctx, info);
+
+  // Optional boolean arg at idx 3 can be used to indicate that we want to create a performance snapshot for this command buffer
+  if (lua_toboolean(state, 3) != 0) {
+    ::Graphics::Snapshot::StartSnapshot();
+  }
+
   if (Error::IsError(result)) {
     return luaL_error(state, "%s", result.error().message.c_str());
   }
@@ -785,6 +792,17 @@ auto wrap_SubmitCommandBuffer(lua_State *state) -> int {
 
   LuaWrap::PushObject(state, ::Graphics::Threading::RenderThreadInfo::GetType(),
                       submitResult.value().get());
+
+  if (!::Graphics::Snapshot::GetCurrentSnapshot()->events.empty()) {
+    auto *snapshot = ::Graphics::Snapshot::GetCurrentSnapshot();
+
+    LuaWrap::PushObject(state, ::Graphics::Snapshot::ThreadSnapshot::GetType(),
+                        snapshot);
+
+    ::Graphics::Snapshot::EndSnapshot();
+
+    return 2;
+  }
 
   return 1;
 }

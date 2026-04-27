@@ -248,6 +248,9 @@ add_library(snap_core OBJECT
     Graphics/bufferformat.cpp
     Graphics/swapchainManager.cpp
     Graphics/uniformWriter.cpp
+    Graphics/format.cpp
+    Graphics/snapshot.cpp
+    Graphics/blendmode.cpp
 
 # Graphics Buffers
     Graphics/Buffers/push.cpp
@@ -285,6 +288,7 @@ add_library(snap_core OBJECT
     Wrap/Graphics/wrap_shader.cpp
     Wrap/Graphics/wrap_buffer.cpp
     Wrap/Graphics/wrap_format.cpp
+    Wrap/Graphics/wrap_snapshot.cpp
     Wrap/Modules/wrap_event.cpp
     Wrap/Modules/wrap_timer.cpp
     Wrap/Modules/wrap_data.cpp

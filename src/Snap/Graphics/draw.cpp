@@ -5,6 +5,7 @@
 #include "Graphics/graphics.hpp"
 #include "Graphics/graphicsContext.hpp"
 #include "Graphics/mesh.hpp"
+#include "Graphics/snapshot.hpp"
 #include "Modules/error.hpp"
 #include <cassert>
 #include <cstdint>
@@ -109,6 +110,10 @@ auto Draw(GraphicsContext &context, Mesh &mesh, uint32_t instanceCount)
   if (Error::IsError(error)) {
     return error;
   }
+
+  auto vertexCount = mesh.GetVertexCount();
+
+  // auto drawEvent = ::Graphics::Snapshot::DrawEvent();
 
   {
     ZoneScopedN("Vk Draw");

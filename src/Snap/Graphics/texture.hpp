@@ -14,6 +14,7 @@
 #include "vulkan/vulkan_core.h"
 #include <algorithm>
 #include <cstdint>
+#include <string>
 
 namespace Graphics {
 
@@ -84,6 +85,8 @@ struct Texture : Object, Barrier::BarrierSynced {
   VkImageView view = VK_NULL_HANDLE;
   VmaAllocation memory = VK_NULL_HANDLE;
   VkSampler sampler = VK_NULL_HANDLE;
+
+  std::string debugName;
 
   uint64_t sizeInBytes = 0;
   uint64_t lastUsedTimestamp{};
@@ -245,6 +248,14 @@ struct Texture : Object, Barrier::BarrierSynced {
 
   [[nodiscard]] auto GetInstanceType() const -> Type const * override {
     return GetType();
+  }
+
+  [[nodiscard]] auto GetDebugName() const -> std::string {
+    if (!debugName.empty()) {
+      return debugName;
+    }
+
+    return "Unnamed Texture";
   }
 };
 

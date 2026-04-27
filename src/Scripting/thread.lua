@@ -92,6 +92,9 @@ local function draw()
   end
 end
 
+local createSnapshot = false
+local snapshot
+
 local isDown = {}
 function snap.mousepressed(x, y, button)
   isDown[button] = true
@@ -103,6 +106,9 @@ end
 
 function snap.keypressed(key)
   isDown[key] = true
+  if key == "f5" then
+    createSnapshot = true
+  end
 end
 
 function snap.keyreleased(key)
@@ -165,8 +171,12 @@ while true do
     local x, y, z = camera:getPosition()
     camera:SetPosition(x + back.x * speed, y + back.y * speed, z + back.z * speed)
   end
+  if createSnapshot then
+    print("Requesting snapshot creation")
+  end
 
-  snap.graphics.aquireGraphics()
+  snap.graphics.aquireGraphics(nil, nil, createSnapshot)
+  createSnapshot = false
   if not texture then
     texture = snap.graphics.newTexture(testImgdata, { storage = true, sampler = true })
 
@@ -184,8 +194,15 @@ while true do
   snap.gui.newFrame(dt)
 
   draw()
+  if snapshot then
+    print("Drawing snapshot")
+    snapshot:draw()
+  end
 
-  commandBufferChannel:push(snap.graphics.submitGraphics())
+  local commands
+  commands, snapshot = snap.graphics.submitGraphics()
+
+  commandBufferChannel:push(commands)
 end
 
 print("THREAD #1 EXITING")

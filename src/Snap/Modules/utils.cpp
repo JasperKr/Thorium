@@ -1,5 +1,6 @@
 #include "utils.hpp"
 #include "Modules/console.hpp"
+#include <algorithm>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -50,6 +51,19 @@ auto AlignDown(size_t value, size_t alignment) -> size_t {
   assert(alignment != 0 && (alignment & (alignment - 1)) == 0 &&
          "Alignment must be a non-zero power of two.");
   return value & ~(alignment - 1);
+}
+
+auto Subspan(std::span<const uint8_t> span, size_t offset, size_t size)
+    -> std::span<const uint8_t> {
+  auto range = std::min(offset + size, span.size());
+  return span.subspan(offset, range - offset);
+}
+
+auto Subspan(std::vector<uint8_t> &vec, size_t offset, size_t size)
+    -> std::span<uint8_t> {
+  auto range = std::min(offset + size, vec.size());
+  // NOLINTNEXTLINE, because of pointer arithmetic
+  return {vec.data() + offset, range - offset};
 }
 
 } // namespace Utils

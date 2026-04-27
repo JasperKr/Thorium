@@ -81,6 +81,7 @@ inline auto SetDebugName(const std::string &debugName, Texture *texture,
 
   vmaSetAllocationName(context.vmaAllocator, texture->memory,
                        debugname.c_str());
+  texture->debugName = debugname;
 
   return Error::Success();
 }

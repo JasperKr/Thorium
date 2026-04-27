@@ -26,4 +26,9 @@ auto InterleaveSpans(
 auto AlignUp(size_t value, size_t alignment) -> size_t;
 auto AlignDown(size_t value, size_t alignment) -> size_t;
 
+auto Subspan(std::span<const uint8_t> span, size_t offset, size_t size)
+    -> std::span<const uint8_t>;
+auto Subspan(std::vector<uint8_t> &vec, size_t offset, size_t size)
+    -> std::span<uint8_t>;
+
 } // namespace Utils

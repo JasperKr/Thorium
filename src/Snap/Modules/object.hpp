@@ -111,6 +111,8 @@ public:
     return ptr != other.ptr;
   }
 
+  explicit operator bool() const { return ptr != nullptr; }
+
 private:
   T *ptr = nullptr;
 };

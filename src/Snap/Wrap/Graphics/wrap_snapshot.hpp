@@ -1,0 +1,27 @@
+#pragma once
+
+#include "Graphics/snapshot.hpp"
+#include "Modules/console.hpp"
+#include "Wrap/wrap.hpp"
+#include "lua.hpp"
+
+namespace Wrap::Graphics::Snapshot {
+
+// TODO: At some point i might want to read snapshot data from Lua
+auto wrap_Draw(lua_State *state) -> int;
+
+// NOLINTNEXTLINE
+static const std::vector<luaL_Reg> SnapshotLib = {
+    {"draw", wrap_Draw},
+};
+
+extern "C" inline auto luaopen_shader(lua_State *state) -> int {
+  PrintDebug("Registering Snapshot Lua type.");
+
+  LuaWrap::RegisterLuaType(state,
+                           ::Graphics::Snapshot::ThreadSnapshot::GetType(),
+                           SnapshotLib); // NOLINT
+
+  return 1;
+}
+} // namespace Wrap::Graphics::Snapshot
