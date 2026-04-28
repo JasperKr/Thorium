@@ -28,6 +28,7 @@ struct TimerFrameInfo {
 
 auto GetFPS() -> double;
 auto GetTime() -> double;
+auto GetTimeNS() -> uint64_t;
 auto GetDelta() -> double;
 auto GetAverageDelta() -> double;
 void Sleep(double seconds, bool precise = false);

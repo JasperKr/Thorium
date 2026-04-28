@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Graphics/reflect.hpp"
+#include "Graphics/graphicsState.hpp"
 #include "Modules/error.hpp"
 #include <cassert>
 #include <cstddef>
@@ -39,8 +39,9 @@ private:
   auto CalculateStride(Standard std) -> size_t;
   auto Offset(size_t offset) -> void;
 
-  [[nodiscard]] auto FindComponent(ResourceKey::const_iterator iterator,
-                                   ResourceKey::const_iterator end) const
+  [[nodiscard]] auto
+  FindComponent(Graphics::ResourceKey::const_iterator iterator,
+                Graphics::ResourceKey::const_iterator end) const
       -> std::optional<BufferComponent>;
 
 public:

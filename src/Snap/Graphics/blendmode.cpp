@@ -133,7 +133,7 @@ auto ToString(VkBlendFactor srcColorBlendFactor,
               VkBlendFactor dstAlphaBlendFactor, VkBlendOp alphaBlendOp)
     -> std::tuple<bool, std::string, std::string> {
 
-  if (srcColorBlendFactor == VK_BLEND_FACTOR_SRC_ALPHA &&
+  if (srcColorBlendFactor == VK_BLEND_FACTOR_ONE &&
       dstColorBlendFactor == VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA &&
       colorBlendOp == VK_BLEND_OP_ADD &&
       srcAlphaBlendFactor == VK_BLEND_FACTOR_ONE &&

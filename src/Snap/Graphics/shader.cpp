@@ -1,8 +1,8 @@
 #include "shader.hpp"
-#include "Buffers/uniform.hpp"
 #include "Graphics/Buffers/push.hpp"
 #include "Graphics/graphicsContext.hpp"
 #include "Graphics/reflect.hpp"
+#include "Graphics/snapshot.hpp"
 #include "Graphics/texture.hpp"
 #include "Modules/Math/vector.hpp"
 #include "Modules/console.hpp"
@@ -22,7 +22,6 @@
 #include <public/tracy/Tracy.hpp>
 #include <span>
 #include <string_view>
-#include <unordered_set>
 #include <utility>
 
 #include "vulkan/vulkan_core.h"
@@ -521,15 +520,18 @@ auto ShaderModule::Create(
 
   for (auto &layout : shader->reflection.resources) {
     if (layout.IsBuffer()) {
-      auto &bufferInfo = std::get<BufferInfo>(layout.info);
+      auto &bufferInfo = std::get<Reflect::BufferInfo>(layout.info);
 
-      if (bufferInfo.bufferType == BufferType::PushConstant) {
+      if (bufferInfo.bufferType == Reflect::BufferType::PushConstant) {
         auto result = PushBuffer(layout);
 
         shader->pushBuffers.emplace_back(result);
       }
     }
   }
+
+  Snapshot::CaptureEvent(
+      Snapshot::ShaderModuleCreateEvent(shader->module, shader->moduleName));
 
   return shader;
 }
@@ -546,14 +548,15 @@ inline auto ValidateBuffers(const ShaderModule *shader) -> Error {
       continue;
     }
 
-    const auto &bufferInfo = std::get<BufferInfo>(resource.info);
+    const auto &bufferInfo = std::get<Reflect::BufferInfo>(resource.info);
 
     // Not sent by the user
-    if (bufferInfo.bufferType == BufferType::PushConstant) {
+    if (bufferInfo.bufferType == Reflect::BufferType::PushConstant) {
       continue;
     }
 
-    auto locationKey = SetBindingToSlot(bufferInfo.set, bufferInfo.binding);
+    auto locationKey =
+        Utils::SetBindingToSlot(bufferInfo.set, bufferInfo.binding);
 
     if (!shader->GetState().userBoundBuffers.contains(locationKey)) {
       return Error::Create("Storage buffer '" + resource.name +
@@ -573,7 +576,7 @@ void append(ResourceKey &dest, const ResourceKey &src) {
 }
 
 auto ShaderModule::GetUniform(const ResourceKey &key) const
-    -> Result<const ResourceInfo> {
+    -> Result<const Reflect::ResourceInfo> {
   for (const auto &pushBuffer : pushBuffers) {
     const auto *const info = pushBuffer.GetUniform(key.begin(), key.end());
     if (info == nullptr) {
@@ -598,7 +601,7 @@ auto ShaderModule::GetUniform(const ResourceKey &key) const
     }
   }
 
-  const auto &str = ResourceKeyToString(key);
+  const auto &str = Reflect::ResourceKeyToString(key);
   return Error::Unexpectedf("Uniform `{} not found.", str);
 }
 
@@ -608,7 +611,7 @@ auto ShaderModule::Send(const GraphicsContext &context, const ResourceKey &key,
 
   for (auto &pushBuffer : pushBuffers) {
     PrintDebug("Checking push buffer {} for key: {}...",
-               pushBuffer.GetLayout().name, ResourceKeyToString(key));
+               pushBuffer.GetLayout().name, Reflect::ResourceKeyToString(key));
     if (pushBuffer.ContainsUniform(key.begin(), key.end())) {
       return pushBuffer.SetData(key, data);
     }
@@ -621,7 +624,7 @@ auto ShaderModule::Send(const GraphicsContext &context, const ResourceKey &key,
   const auto *info =
       reflection.globals.ResolvePath(globalsKey.begin(), globalsKey.end());
   if (info == nullptr) {
-    return Error::Create("Uniform `" + ResourceKeyToString(key) +
+    return Error::Create("Uniform `" + Reflect::ResourceKeyToString(key) +
                          "` not found.");
   }
 
@@ -645,13 +648,14 @@ auto ShaderModule::Send(const GraphicsContext &context, const ResourceKey &key,
   }
 
   for (const auto &resource : reflection.resources) {
-    if (!std::holds_alternative<BufferInfo>(resource.info)) {
+    if (!std::holds_alternative<Reflect::BufferInfo>(resource.info)) {
       continue;
     }
 
-    const auto &bufferInfo = std::get<BufferInfo>(resource.info);
+    const auto &bufferInfo = std::get<Reflect::BufferInfo>(resource.info);
     if (bufferInfo.name == *key.begin()) {
-      auto locationKey = SetBindingToSlot(bufferInfo.set, bufferInfo.binding);
+      auto locationKey =
+          Utils::SetBindingToSlot(bufferInfo.set, bufferInfo.binding);
 
       GetState().userBoundBuffers[locationKey] = {buffer, bufferInfo};
 
@@ -677,13 +681,13 @@ auto ShaderModule::Send(const GraphicsContext &context, const ResourceKey &key,
   auto &state = GetState();
 
   for (const auto &resource : reflection.resources) {
-    if (!std::holds_alternative<SamplerInfo>(resource.info)) {
+    if (!std::holds_alternative<Reflect::SamplerInfo>(resource.info)) {
       continue;
     }
 
-    const auto &samplerInfo = std::get<SamplerInfo>(resource.info);
+    const auto &samplerInfo = std::get<Reflect::SamplerInfo>(resource.info);
     if (resource.name == *key.begin()) { // TODO: Fix this search
-      auto key = SetBindingToSlot(samplerInfo.set, samplerInfo.binding);
+      auto key = Utils::SetBindingToSlot(samplerInfo.set, samplerInfo.binding);
 
       if ((samplerInfo.access == SLANG_RESOURCE_ACCESS_WRITE ||
            samplerInfo.access == SLANG_RESOURCE_ACCESS_READ_WRITE) &&
@@ -717,9 +721,9 @@ auto ShaderModule::GetThreadgroupSize() const -> Result<Math::Uvec3> {
 auto ShaderModule::GetWaveSize() const -> uint32_t { return waveSize; }
 
 auto ShaderModule::GetSlotDescription(uint32_t set, uint32_t binding) // NOLINT
-    -> Result<const ResourceInfo> {
+    -> Result<const Reflect::ResourceInfo> {
 
-  auto key = SetBindingToSlot(set, binding);
+  auto key = Utils::SetBindingToSlot(set, binding);
 
   auto iter = reflection.slotToInfo.find(key);
   if (iter == reflection.slotToInfo.end()) {
@@ -732,11 +736,11 @@ auto ShaderModule::GetSlotDescription(uint32_t set, uint32_t binding) // NOLINT
 }
 
 auto ShaderModule::GetSlotDescription(uint64_t slot)
-    -> Result<const ResourceInfo> {
+    -> Result<const Reflect::ResourceInfo> {
 
   auto iter = reflection.slotToInfo.find(slot);
   if (iter == reflection.slotToInfo.end()) {
-    const auto &[set, binding] = SlotToSetBinding(slot);
+    const auto &[set, binding] = Utils::SlotToSetBinding(slot);
     return Error::Unexpectedf(
         "Slot (set: {}, binding: {}) not found in shader reflection.", set,
         binding);

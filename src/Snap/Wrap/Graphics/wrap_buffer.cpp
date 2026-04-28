@@ -1,5 +1,6 @@
 #include "Wrap/Graphics/wrap_buffer.hpp"
 #include "Graphics/barrier.hpp"
+#include "Graphics/snapshot.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Wrap/Graphics/wrap_format.hpp"
@@ -191,6 +192,20 @@ auto wrap_SetData(lua_State *state) -> int {
                                        .access = VK_ACCESS_2_HOST_WRITE_BIT,
                                    });
 
+  VkDeviceSize offset = 0;
+  if (lua_gettop(state) >= 3) {
+    offset = static_cast<VkDeviceSize>(luaL_checkinteger(state, 3));
+  }
+
+  VkDeviceSize size = VK_WHOLE_SIZE;
+  if (lua_gettop(state) >= 4) {
+    size = static_cast<VkDeviceSize>(luaL_checkinteger(state, 4));
+  }
+
+  ::Graphics::Snapshot::CaptureEvent(
+      ::Graphics::Snapshot::StructuredBufferUploadEvent(
+          buffer->GetBuffer()->handle, buffer->GetFormat()));
+
   if (lua_istable(state, 2)) {
     // table of numbers
 
@@ -224,6 +239,13 @@ auto wrap_SetData(lua_State *state) -> int {
 
       lua_pop(state, 1);
     }
+
+    auto result = buffer->GetBuffer()->SetData(*ctx, data, offset, size);
+    if (Error::IsError(result)) {
+      return luaL_error(state, "Failed to set buffer data: %s",
+                        result.message.c_str());
+    }
+
   } else {
     auto sourceOffset = 0;
 
@@ -243,28 +265,16 @@ auto wrap_SetData(lua_State *state) -> int {
       return luaL_error(state, "Expected ByteData or table as second argument");
     }
 
-    const auto dataSpan = bytedata->GetDataSpan();
+    auto result = buffer->GetBuffer()->SetData(*ctx, bytedata->GetDataSpan(),
+                                               offset, size);
 
-    data.resize(dataSpan.size());
+    PrintAlways("Set buffer data from ByteData, size: {}, offset: {}",
+                bytedata->GetDataSpan().size(), offset);
 
-    // NOLINTNEXTLINE; pointer arithmetic
-    std::memcpy(data.data(), dataSpan.data() + sourceOffset, dataSpan.size());
-  }
-
-  VkDeviceSize offset = 0;
-  if (lua_gettop(state) >= 3) {
-    offset = static_cast<VkDeviceSize>(luaL_checkinteger(state, 3));
-  }
-
-  VkDeviceSize size = VK_WHOLE_SIZE;
-  if (lua_gettop(state) >= 4) {
-    size = static_cast<VkDeviceSize>(luaL_checkinteger(state, 4));
-  }
-
-  auto result = buffer->GetBuffer()->SetData(*ctx, data, offset, size);
-  if (Error::IsError(result)) {
-    return luaL_error(state, "Failed to set buffer data: %s",
-                      result.message.c_str());
+    if (Error::IsError(result)) {
+      return luaL_error(state, "Failed to set buffer data: %s",
+                        result.message.c_str());
+    }
   }
 
   return 0;

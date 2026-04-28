@@ -26,6 +26,7 @@ inline auto SecondsToMilli(double seconds) -> uint64_t {
 }
 
 auto GetTime() -> double { return NanoToSeconds(SDL_GetTicksNS()); }
+auto GetTimeNS() -> uint64_t { return SDL_GetTicksNS(); }
 auto GetDelta() -> double { return NanoToSeconds(GetTimerInfo().deltaTime); }
 auto GetAverageDelta() -> double {
   return NanoToSeconds(GetTimerInfo().averageDeltaTime);

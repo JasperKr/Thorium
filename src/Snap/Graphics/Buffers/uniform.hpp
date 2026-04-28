@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Graphics/buffer.hpp"
-#include "Graphics/graphics.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include <cstdint>

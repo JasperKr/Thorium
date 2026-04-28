@@ -69,7 +69,7 @@ auto BufferFormat::GetComponentOffset(const ResourceKey &name) const
 
   return Error::Unexpected(
       "Buffer format does not contain component with name: " +
-      ResourceKeyToString(name));
+      Reflect::ResourceKeyToString(name));
 }
 
 auto BufferFormat::operator==(const BufferFormat &other) const -> bool {
@@ -345,7 +345,7 @@ auto BufferFormat::FlattenComponentTree() -> void {
     if (std::holds_alternative<VkFormat>(component.format)) {
       auto format = std::get<VkFormat>(component.format);
       auto formatname = Graphics::Format::ToString(format);
-      output << std::format("{}{} {}{};\n", tabs, component.name, formatname,
+      output << std::format("{}{}: {}{};\n", tabs, component.name, formatname,
                             arrayStr);
     } else {
       auto format = std::get<Graphics::BufferFormat>(component.format);

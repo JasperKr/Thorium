@@ -5,6 +5,7 @@
 #include <span>
 #include <vector>
 
+#include "Graphics/graphicsState.hpp"
 #include "Graphics/reflect.hpp"
 #include "Modules/error.hpp"
 
@@ -16,12 +17,12 @@ struct FlushInfo {
 
 struct PushBuffer {
 public:
-  explicit PushBuffer(const ResourceInfo &layout,
+  explicit PushBuffer(const Reflect::ResourceInfo &layout,
                       VkShaderStageFlags stage = VK_SHADER_STAGE_ALL);
 
   [[nodiscard]] auto GetBufferOffset() const -> size_t;
   [[nodiscard]] auto GetBufferSize() const -> size_t;
-  [[nodiscard]] auto GetLayout() const -> const ResourceInfo &;
+  [[nodiscard]] auto GetLayout() const -> const Reflect::ResourceInfo &;
   auto FlushData(FlushInfo &info) -> void;
 
   auto SetData(const ResourceKey &key, const std::span<const uint8_t> &values)
@@ -36,10 +37,10 @@ public:
       -> bool;
   [[nodiscard]] auto GetUniform(ResourceKey::const_iterator iterator,
                                 ResourceKey::const_iterator end) const
-      -> const ResourceInfo *;
+      -> const Reflect::ResourceInfo *;
 
 private:
-  ResourceInfo layout;
+  Reflect::ResourceInfo layout;
   std::vector<uint8_t> data;
   VkShaderStageFlags stageFlags{VK_SHADER_STAGE_ALL};
 };

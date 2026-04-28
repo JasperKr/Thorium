@@ -8,12 +8,6 @@ namespace Graphics::BlendMode {
 
 auto ToString(VkBlendFactor blendFactor) -> std::string;
 auto ToString(VkBlendOp blendOp) -> std::string;
-auto IsDefaultBlendmode(VkBlendFactor srcColorBlendFactor,
-                        VkBlendFactor dstColorBlendFactor,
-                        VkBlendOp colorBlendOp,
-                        VkBlendFactor srcAlphaBlendFactor,
-                        VkBlendFactor dstAlphaBlendFactor,
-                        VkBlendOp alphaBlendOp) -> bool;
 auto ToString(VkBlendFactor srcColorBlendFactor,
               VkBlendFactor dstColorBlendFactor, VkBlendOp colorBlendOp,
               VkBlendFactor srcAlphaBlendFactor,

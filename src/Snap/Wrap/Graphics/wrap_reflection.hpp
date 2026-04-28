@@ -1,13 +1,13 @@
 #pragma once
 
-#include "Graphics/reflect.hpp"
+#include "Graphics/graphicsState.hpp"
 #include "lua.hpp"
 
 // linked list of strings as key and a count of valid entries
 inline auto ResourceKeyFromLua(lua_State *state, int index)
-    -> std::pair<ResourceKey, int32_t> {
+    -> std::pair<Graphics::ResourceKey, int32_t> {
   auto count = lua_gettop(state);
-  ResourceKey root;
+  Graphics::ResourceKey root;
   auto iterator = root.before_begin();
 
   for (int i = index; i <= count; ++i) {
@@ -22,12 +22,12 @@ inline auto ResourceKeyFromLua(lua_State *state, int index)
 }
 
 inline auto ResourceKeyFromLuaTable(lua_State *state, int index)
-    -> ResourceKey {
+    -> Graphics::ResourceKey {
   if (index < 0) {
     index = lua_gettop(state) + index + 1;
   }
 
-  ResourceKey root;
+  Graphics::ResourceKey root;
   auto iterator = root.before_begin();
 
   luaL_checktype(state, index, LUA_TTABLE);
@@ -44,15 +44,15 @@ inline auto ResourceKeyFromLuaTable(lua_State *state, int index)
 }
 
 inline auto ResourceKeyFromSingleLuaObject(lua_State *state, int index)
-    -> ResourceKey {
+    -> Graphics::ResourceKey {
   // Just a single string, treat it as a key with one part
   if (lua_type(state, index) == LUA_TSTRING) {
-    return ResourceKey{luaL_checkstring(state, index)};
+    return Graphics::ResourceKey{luaL_checkstring(state, index)};
   }
   // A table, treat it as a list of strings
   if (lua_type(state, index) == LUA_TTABLE) {
     return ResourceKeyFromLuaTable(state, index);
   }
   // Invalid type, return empty key
-  return ResourceKey{};
+  return Graphics::ResourceKey{};
 }

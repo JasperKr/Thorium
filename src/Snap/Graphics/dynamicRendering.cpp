@@ -5,6 +5,7 @@
 #include "Graphics/graphicsState.hpp"
 #include "Graphics/reflect.hpp"
 #include "Graphics/shader.hpp"
+#include "Graphics/snapshot.hpp"
 #include "Graphics/texture.hpp"
 #include "Modules/Math/matrix.hpp"
 #include "Modules/color.hpp"
@@ -124,15 +125,16 @@ auto TryCreateShaderDescriptorBindingInfo(const GraphicsContext &context,
 
   for (auto &layout : shader->reflection.resources) {
     if (layout.IsBuffer()) {
-      auto &bufferInfo = std::get<BufferInfo>(layout.info);
+      auto &bufferInfo = std::get<Reflect::BufferInfo>(layout.info);
 
-      if (bufferInfo.bufferType == BufferType::Uniform ||
-          bufferInfo.bufferType == BufferType::Storage) {
+      if (bufferInfo.bufferType == Reflect::BufferType::Uniform ||
+          bufferInfo.bufferType == Reflect::BufferType::Storage) {
         auto layoutBinding = VkDescriptorSetLayoutBinding{
             .binding = bufferInfo.binding,
-            .descriptorType = bufferInfo.bufferType == BufferType::Uniform
-                                  ? VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
-                                  : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+            .descriptorType =
+                bufferInfo.bufferType == Reflect::BufferType::Uniform
+                    ? VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
+                    : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
             .descriptorCount = 1,
             .stageFlags = VK_SHADER_STAGE_ALL,
             .pImmutableSamplers = nullptr,
@@ -141,7 +143,7 @@ auto TryCreateShaderDescriptorBindingInfo(const GraphicsContext &context,
         shader->bindingInfos[bufferInfo.set].emplace_back(layoutBinding);
       }
     } else if (layout.IsSampler()) {
-      auto &imageInfo = std::get<SamplerInfo>(layout.info);
+      auto &imageInfo = std::get<Reflect::SamplerInfo>(layout.info);
 
       auto layoutBinding = VkDescriptorSetLayoutBinding{
           .binding = imageInfo.binding,
@@ -317,8 +319,8 @@ auto BindDefaultTextures(const GraphicsContext &context,
 
   for (const auto &resource : shader->reflection.resources) {
     if (resource.IsSampler()) {
-      const auto &samplerInfo = std::get<SamplerInfo>(resource.info);
-      auto key = SetBindingToSlot(samplerInfo.set, samplerInfo.binding);
+      const auto &samplerInfo = std::get<Reflect::SamplerInfo>(resource.info);
+      auto key = Utils::SetBindingToSlot(samplerInfo.set, samplerInfo.binding);
       if (state.userBoundTextures.contains(key)) {
         continue;
       }
@@ -1156,11 +1158,11 @@ auto InsertResourceBarriers(const GraphicsContext &context) -> Error {
     if (Error::IsError(infoResult)) {
       return infoResult.error();
     }
-    if (!infoResult.value().Is<BufferInfo>()) {
+    if (!infoResult.value().Is<Reflect::BufferInfo>()) {
       return Error::Create("Expected buffer info for bound buffer slot.");
     }
 
-    auto info = infoResult.value().GetInfo<BufferInfo>();
+    auto info = infoResult.value().GetInfo<Reflect::BufferInfo>();
 
     VkAccessFlags2 access = 0;
 
@@ -1219,7 +1221,7 @@ auto InsertResourceBarriers(const GraphicsContext &context) -> Error {
       return infoResult.error();
     }
 
-    auto info = infoResult.value().GetInfo<SamplerInfo>();
+    auto info = infoResult.value().GetInfo<Reflect::SamplerInfo>();
 
     VkAccessFlags2 access = 0;
 
@@ -1297,7 +1299,7 @@ auto BindDescriptorSets(const GraphicsContext &context,
     for (const auto &pair : shader->GetState().userBoundBuffers) {
       const auto location = pair.first;
       const auto buffer = pair.second;
-      const auto &[set, binding] = SlotToSetBinding(location);
+      const auto &[set, binding] = Utils::SlotToSetBinding(location);
 
       if (set != setIndex || !buffer.first.isValid()) {
         continue;
@@ -1309,14 +1311,14 @@ auto BindDescriptorSets(const GraphicsContext &context,
       if (Error::IsError(info)) {
         return info.error();
       }
-      if (!info.value().Is<BufferInfo>()) {
+      if (!info.value().Is<Reflect::BufferInfo>()) {
         return Error::Create("Expected buffer info for bound buffer slot.");
       }
-      auto bufferInfo = info.value().GetInfo<BufferInfo>();
+      auto bufferInfo = info.value().GetInfo<Reflect::BufferInfo>();
 
-      if (bufferInfo.bufferType == BufferType::Uniform) {
+      if (bufferInfo.bufferType == Reflect::BufferType::Uniform) {
         descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-      } else if (bufferInfo.bufferType == BufferType::Storage) {
+      } else if (bufferInfo.bufferType == Reflect::BufferType::Storage) {
         descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
       } else {
         return Error::Create("Unknown buffer type for descriptor set binding.");
@@ -1340,7 +1342,7 @@ auto BindDescriptorSets(const GraphicsContext &context,
       const auto location = pair.first;
       const auto &texture = pair.second.first;
       const auto &samplerInfo = pair.second.second;
-      const auto &[set, binding] = SlotToSetBinding(location);
+      const auto &[set, binding] = Utils::SlotToSetBinding(location);
 
       if (set != setIndex) {
         continue;
@@ -1405,6 +1407,9 @@ auto BindDescriptorSets(const GraphicsContext &context,
       auto buffer = GetGlobalUniformBuffer(context.frameIndex);
 
       dynamicOffsets.emplace_back(buffer.GetOffset());
+
+      Snapshot::CaptureEvent(Snapshot::StructuredBufferUploadEvent(
+          buffer.GetBuffer()->handle, shader->reflection.globalBufferFormat));
 
       buffer.SetData(context, shader->globalUniforms, 0);
       shader->globalUniforms.clear();

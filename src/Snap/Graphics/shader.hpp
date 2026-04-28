@@ -72,10 +72,10 @@ ShaderStageFlagsToPipelineStageFlags(VkShaderStageFlags shaderStages)
 }
 
 struct BoundState {
-  std::unordered_map<uint64_t, std::pair<Ref<Buffer>, BufferInfo>>
+  std::unordered_map<uint64_t, std::pair<Ref<Buffer>, Reflect::BufferInfo>>
       userBoundBuffers;
 
-  std::unordered_map<uint64_t, std::pair<Ref<Texture>, SamplerInfo>>
+  std::unordered_map<uint64_t, std::pair<Ref<Texture>, Reflect::SamplerInfo>>
       userBoundTextures;
 };
 
@@ -109,7 +109,7 @@ struct ShaderModule : Object {
   std::unordered_map<uint32_t, std::vector<VkDescriptorSetLayoutBinding>>
       bindingInfos;
 
-  ShaderReflection reflection;
+  Reflect::ShaderReflection reflection;
   std::vector<PushBuffer> pushBuffers;
 
   std::vector<slang::PreprocessorMacroDesc> preprocessorMacros;
@@ -149,10 +149,11 @@ struct ShaderModule : Object {
   auto Send(const GraphicsContext &context, const ResourceKey &key,
             const Ref<Graphics::Texture> &texture) -> Error;
 
-  auto GetUniform(const ResourceKey &key) const -> Result<const ResourceInfo>;
+  auto GetUniform(const ResourceKey &key) const
+      -> Result<const Reflect::ResourceInfo>;
   auto GetSlotDescription(uint32_t set, uint32_t binding)
-      -> Result<const ResourceInfo>;
-  auto GetSlotDescription(uint64_t slot) -> Result<const ResourceInfo>;
+      -> Result<const Reflect::ResourceInfo>;
+  auto GetSlotDescription(uint64_t slot) -> Result<const Reflect::ResourceInfo>;
 
   auto GetThreadgroupSize() const -> Result<Math::Uvec3>;
   auto GetWaveSize() const -> uint32_t;

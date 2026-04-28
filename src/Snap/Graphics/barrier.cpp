@@ -2,6 +2,7 @@
 #include "Graphics/dynamicRendering.hpp"
 #include "Graphics/graphics.hpp"
 
+#include "Graphics/snapshot.hpp"
 #include "vulkan/vulkan_core.h"
 #include <array>
 #include <cassert>
@@ -215,6 +216,13 @@ auto UpdateUsage(const GraphicsContext &context, BarrierSynced &resource,
 
     DynamicRendering::EndRendering(context);
     vkCmdPipelineBarrier2(Graphics::GetCommandBuffer(), &depInfo);
+
+    Snapshot::CaptureEvent(Snapshot::BarrierEvent(ResourceSync{
+        .srcStages = barrier.srcStageMask,
+        .srcAccess = barrier.srcAccessMask,
+        .dstStages = barrier.dstStageMask,
+        .dstAccess = barrier.dstAccessMask,
+    }));
 
     // Update to new usage
     previousAccess = usage.access;

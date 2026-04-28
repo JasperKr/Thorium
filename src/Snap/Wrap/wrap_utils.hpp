@@ -166,30 +166,30 @@ inline auto SetData(double luaNumber, uint8_t *dataPtr, VkFormat format)
   return Error::Success();
 }
 
-inline auto SetData(double luaNumber, uint8_t *dataPtr, ScalarType format)
-    -> Error {
+inline auto SetData(double luaNumber, uint8_t *dataPtr,
+                    ::Graphics::Reflect::ScalarType format) -> Error {
   switch (format) {
-  case ScalarType::Float: {
+  case ::Graphics::Reflect::ScalarType::Float: {
     auto value = static_cast<float>(luaNumber);
     std::memcpy(dataPtr, &value, sizeof(float));
     break;
   }
-  case ScalarType::Int: {
+  case ::Graphics::Reflect::ScalarType::Int: {
     auto value = static_cast<int32_t>(luaNumber);
     std::memcpy(dataPtr, &value, sizeof(int32_t));
     break;
   }
-  case ScalarType::UInt: {
+  case ::Graphics::Reflect::ScalarType::UInt: {
     auto value = static_cast<uint32_t>(luaNumber);
     std::memcpy(dataPtr, &value, sizeof(uint32_t));
     break;
   }
-  case ScalarType::Bool: {
+  case ::Graphics::Reflect::ScalarType::Bool: {
     auto value = static_cast<uint32_t>(luaNumber != 0.0);
     std::memcpy(dataPtr, &value, sizeof(uint32_t));
     break;
   }
-  case ScalarType::Unknown:
+  case ::Graphics::Reflect::ScalarType::Unknown:
     return Error::Create("Unsupported format `Unknown` for SetData.");
   }
 

@@ -6,7 +6,8 @@
 
 namespace Graphics {
 
-PushBuffer::PushBuffer(const ResourceInfo &layout, VkShaderStageFlags stage)
+PushBuffer::PushBuffer(const Reflect::ResourceInfo &layout,
+                       VkShaderStageFlags stage)
     : layout(layout), stageFlags(stage) {
 
   if (!layout.IsBuffer()) {
@@ -14,35 +15,37 @@ PushBuffer::PushBuffer(const ResourceInfo &layout, VkShaderStageFlags stage)
     return;
   }
 
-  const auto &bufferInfo = std::get<BufferInfo>(layout.info);
+  const auto &bufferInfo = std::get<Reflect::BufferInfo>(layout.info);
 
-  if (std::holds_alternative<ScalarInfo>(bufferInfo.info)) {
-    data.resize(std::get<ScalarInfo>(bufferInfo.info).size);
-  } else if (std::holds_alternative<VectorInfo>(bufferInfo.info)) {
-    data.resize(std::get<VectorInfo>(bufferInfo.info).size);
-  } else if (std::holds_alternative<MatrixInfo>(bufferInfo.info)) {
-    data.resize(std::get<MatrixInfo>(bufferInfo.info).size);
-  } else if (std::holds_alternative<StructInfo>(bufferInfo.info)) {
-    data.resize(std::get<StructInfo>(bufferInfo.info).size);
+  if (std::holds_alternative<Reflect::ScalarInfo>(bufferInfo.info)) {
+    data.resize(std::get<Reflect::ScalarInfo>(bufferInfo.info).size);
+  } else if (std::holds_alternative<Reflect::VectorInfo>(bufferInfo.info)) {
+    data.resize(std::get<Reflect::VectorInfo>(bufferInfo.info).size);
+  } else if (std::holds_alternative<Reflect::MatrixInfo>(bufferInfo.info)) {
+    data.resize(std::get<Reflect::MatrixInfo>(bufferInfo.info).size);
+  } else if (std::holds_alternative<Reflect::StructInfo>(bufferInfo.info)) {
+    data.resize(std::get<Reflect::StructInfo>(bufferInfo.info).size);
   }
 }
 
 auto PushBuffer::GetBufferSize() const -> size_t {
-  const auto &bufferInfo = std::get<BufferInfo>(layout.info);
-  if (std::holds_alternative<StructInfo>(bufferInfo.info)) {
-    return std::get<StructInfo>(bufferInfo.info).size;
+  const auto &bufferInfo = std::get<Reflect::BufferInfo>(layout.info);
+  if (std::holds_alternative<Reflect::StructInfo>(bufferInfo.info)) {
+    return std::get<Reflect::StructInfo>(bufferInfo.info).size;
   }
   return bufferInfo.size;
 }
 
-auto PushBuffer::GetLayout() const -> const ResourceInfo & { return layout; }
+auto PushBuffer::GetLayout() const -> const Reflect::ResourceInfo & {
+  return layout;
+}
 
 auto PushBuffer::FlushData(FlushInfo &info) -> void {
-  auto &bufferInfo = std::get<BufferInfo>(layout.info);
+  auto &bufferInfo = std::get<Reflect::BufferInfo>(layout.info);
   auto bufferSize = bufferInfo.size;
 
   if (bufferInfo.IsStruct()) {
-    bufferSize = std::get<StructInfo>(bufferInfo.info).size;
+    bufferSize = std::get<Reflect::StructInfo>(bufferInfo.info).size;
   }
 
   vkCmdPushConstants(info.commandBuffer, info.pipelineLayout, stageFlags,
@@ -56,14 +59,14 @@ auto PushBuffer::ContainsUniform(ResourceKey::const_iterator iterator,
     return *iterator == layout.name;
   }
 
-  const auto &bufferInfo = std::get<BufferInfo>(layout.info);
+  const auto &bufferInfo = std::get<Reflect::BufferInfo>(layout.info);
 
   return bufferInfo.ResolvePath(iterator, end) != nullptr;
 }
 
 auto PushBuffer::GetUniform(ResourceKey::const_iterator iterator,
                             ResourceKey::const_iterator end) const
-    -> const ResourceInfo * {
+    -> const Reflect::ResourceInfo * {
   if (std::next(iterator) == end) {
     if (*iterator == layout.name) {
       return &layout;
@@ -72,7 +75,7 @@ auto PushBuffer::GetUniform(ResourceKey::const_iterator iterator,
     return nullptr;
   }
 
-  const auto &bufferInfo = std::get<BufferInfo>(layout.info);
+  const auto &bufferInfo = std::get<Reflect::BufferInfo>(layout.info);
 
   return bufferInfo.ResolvePath(iterator, end);
 }
@@ -82,16 +85,16 @@ auto PushBuffer::GetStageFlags() const -> VkShaderStageFlags {
 }
 
 auto PushBuffer::GetBufferOffset() const -> size_t {
-  // const auto &bufferInfo = std::get<BufferInfo>(layout.info); // TODO: Use this?
+  // const auto &bufferInfo = std::get<Reflect::BufferInfo>(layout.info); // TODO: Use this?
   return layout.offset;
 }
 
 auto PushBuffer::SetData(const ResourceKey &key,
                          const std::span<const uint8_t> &values) -> Error {
 
-  auto &bufferInfo = std::get<BufferInfo>(layout.info);
+  auto &bufferInfo = std::get<Reflect::BufferInfo>(layout.info);
 
-  if (!std::holds_alternative<StructInfo>(bufferInfo.info)) {
+  if (!std::holds_alternative<Reflect::StructInfo>(bufferInfo.info)) {
     return Error::Create(
         "SetData with key only supported for struct push buffers");
   }
@@ -118,7 +121,7 @@ auto PushBuffer::SetData(const ResourceKey &key,
 }
 
 auto PushBuffer::SetData(const std::span<const uint8_t> &values) -> Error {
-  auto &bufferInfo = std::get<BufferInfo>(layout.info);
+  auto &bufferInfo = std::get<Reflect::BufferInfo>(layout.info);
 
   if (!bufferInfo.IsScalar() && !bufferInfo.IsVector() &&
       !bufferInfo.IsMatrix()) {

@@ -1,5 +1,4 @@
 #include "utils.hpp"
-#include "Modules/console.hpp"
 #include <algorithm>
 #include <cassert>
 #include <cstddef>
@@ -64,6 +63,16 @@ auto Subspan(std::vector<uint8_t> &vec, size_t offset, size_t size)
   auto range = std::min(offset + size, vec.size());
   // NOLINTNEXTLINE, because of pointer arithmetic
   return {vec.data() + offset, range - offset};
+}
+
+auto SetBindingToSlot(uint32_t set, uint32_t binding) -> uint64_t {
+  return (static_cast<uint64_t>(set) << 32U) | binding; // NOLINT
+}
+
+auto SlotToSetBinding(uint64_t slot) -> std::pair<uint32_t, uint32_t> {
+  auto set = static_cast<uint32_t>((slot >> 32U) & UINT32_MAX); // NOLINT
+  auto binding = static_cast<uint32_t>(slot & UINT32_MAX);
+  return {set, binding};
 }
 
 } // namespace Utils

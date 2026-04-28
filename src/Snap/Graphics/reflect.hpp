@@ -1,8 +1,10 @@
 #pragma once
 
+#include "Graphics/bufferformat.hpp"
 #include "Graphics/graphicsContext.hpp"
-#include "Modules/console.hpp"
+#include "Graphics/graphicsState.hpp"
 #include "Modules/error.hpp"
+#include "Modules/utils.hpp"
 #include "slang/slang.h"
 #include <cstdint>
 #include <forward_list>
@@ -13,6 +15,8 @@
 #include <vector>
 
 #include "vulkan/vulkan_core.h"
+
+namespace Graphics::Reflect {
 
 enum class ScalarType : uint8_t {
   Unknown,
@@ -60,6 +64,19 @@ inline auto ToVectorType(uint8_t elementCount) -> VectorType {
   return VectorType::Unknown;
 }
 
+inline auto VectorChannelCount(VectorType vectorType) -> uint8_t {
+  switch (vectorType) {
+  case VectorType::Vector2:
+    return 2;
+  case VectorType::Vector3:
+    return 3;
+  case VectorType::Vector4:
+    return 4;
+  default:
+    return 0;
+  }
+}
+
 enum class MatrixType : uint8_t {
   Unknown,
   Matrix2x2,
@@ -72,6 +89,32 @@ enum class MatrixType : uint8_t {
   Matrix4x2,
   Matrix4x3,
 };
+
+inline auto MatrixDimensions(MatrixType matrixType)
+    -> std::pair<uint8_t, uint8_t> {
+  switch (matrixType) {
+  case MatrixType::Matrix2x2:
+    return {2, 2};
+  case MatrixType::Matrix3x3:
+    return {3, 3};
+  case MatrixType::Matrix4x4:
+    return {4, 4};
+  case MatrixType::Matrix2x3:
+    return {2, 3};
+  case MatrixType::Matrix2x4:
+    return {2, 4};
+  case MatrixType::Matrix3x2:
+    return {3, 2};
+  case MatrixType::Matrix3x4:
+    return {3, 4};
+  case MatrixType::Matrix4x2:
+    return {4, 2};
+  case MatrixType::Matrix4x3:
+    return {4, 3};
+  default:
+    return {0, 0};
+  }
+}
 
 inline auto ToMatrixType(uint8_t rowCount, uint8_t columnCount) -> MatrixType {
   if (rowCount == 2 && columnCount == 2) {
@@ -105,9 +148,8 @@ inline auto ToMatrixType(uint8_t rowCount, uint8_t columnCount) -> MatrixType {
   return MatrixType::Unknown;
 }
 
-using ResourceKey = std::forward_list<std::string>;
-
-static inline auto ResourceKeyToString(const ResourceKey &key) -> std::string {
+static inline auto ResourceKeyToString(const Graphics::ResourceKey &key)
+    -> std::string {
   std::string result;
   for (const auto &part : key) {
     if (!result.empty()) {
@@ -167,8 +209,9 @@ struct StructInfo {
   uint32_t size;
   uint32_t alignment;
 
-  [[nodiscard]] auto ResolvePath(ResourceKey::const_iterator iterator,
-                                 ResourceKey::const_iterator end) const
+  [[nodiscard]] auto
+  ResolvePath(Graphics::ResourceKey::const_iterator iterator,
+              Graphics::ResourceKey::const_iterator end) const
       -> const ResourceInfo *;
 };
 
@@ -214,8 +257,9 @@ struct BufferInfo {
 
   std::variant<StructInfo, ScalarInfo, VectorInfo, MatrixInfo> info;
 
-  [[nodiscard]] auto ResolvePath(ResourceKey::const_iterator iterator,
-                                 ResourceKey::const_iterator end) const
+  [[nodiscard]] auto
+  ResolvePath(Graphics::ResourceKey::const_iterator iterator,
+              Graphics::ResourceKey::const_iterator end) const
       -> const ResourceInfo *;
 
   [[nodiscard]] auto ToString() const -> std::string;
@@ -302,8 +346,9 @@ struct ResourceInfo {
 
     return 0;
   }
-  [[nodiscard]] auto ResolvePath(ResourceKey::const_iterator iterator,
-                                 ResourceKey::const_iterator end) const
+  [[nodiscard]] auto
+  ResolvePath(Graphics::ResourceKey::const_iterator iterator,
+              Graphics::ResourceKey::const_iterator end) const
       -> const ResourceInfo *;
 
   std::variant<SamplerInfo, ScalarInfo, VectorInfo, MatrixInfo, BufferInfo,
@@ -372,24 +417,18 @@ struct ResourceInfo {
   }
 };
 
-inline auto SetBindingToSlot(uint32_t set, uint32_t binding) -> uint64_t {
-  return (static_cast<uint64_t>(set) << 32U) | binding; // NOLINT
-}
-
-inline auto SlotToSetBinding(uint64_t slot) -> std::pair<uint32_t, uint32_t> {
-  auto set = static_cast<uint32_t>((slot >> 32U) & UINT32_MAX); // NOLINT
-  auto binding = static_cast<uint32_t>(slot & UINT32_MAX);
-  return {set, binding};
-}
+auto ResourceInfoToBufferFormat(const ResourceInfo &info, Standard std)
+    -> Result<std::variant<Graphics::BufferFormat, Graphics::BufferComponent>>;
 
 struct ShaderReflection {
   std::vector<ResourceInfo> resources;
   std::unordered_map<uint64_t, ResourceInfo> slotToInfo;
   BufferInfo globals;
+  Graphics::BufferFormat globalBufferFormat;
   bool hasGlobals{false};
 
   // NOLINTNEXTLINE
-  auto ConstructUBOStruct(uint32_t set, uint32_t binding) -> void {
+  auto ConstructUBOStruct(uint32_t set, uint32_t binding) -> Error {
     ResourceInfo globalUBOInfo{};
     globalUBOInfo.name = "Globals";
     globalUBOInfo.stages = VK_SHADER_STAGE_ALL;
@@ -399,7 +438,7 @@ struct ShaderReflection {
     globalUBOInfo.info = globalUBOStruct;
 
     if (resources.size() == 0) {
-      return;
+      return {};
     }
 
     for (const auto &resource : resources) {
@@ -416,12 +455,28 @@ struct ShaderReflection {
         .info = globalUBOStruct,
     };
 
-    slotToInfo.emplace(SetBindingToSlot(set, binding), globalUBOInfo);
+    slotToInfo.emplace(Utils::SetBindingToSlot(set, binding), globalUBOInfo);
+
+    auto infoResult =
+        ResourceInfoToBufferFormat(globalUBOInfo, Standard::Std140);
+    if (Error::IsError(infoResult)) {
+      return infoResult.error();
+    }
+    auto formatOrComponent = infoResult.value();
+    if (std::holds_alternative<Graphics::BufferFormat>(formatOrComponent)) {
+      globalBufferFormat = std::get<Graphics::BufferFormat>(formatOrComponent);
+    } else {
+      return Error::Create("Global UBO struct must not be a literal.");
+    }
 
     hasGlobals = true;
+
+    return {};
   }
 };
 
 auto ReflectShader(Graphics::GraphicsContext &context,
                    slang::ProgramLayout *programLayout,
                    ShaderReflection &outReflection) -> Error;
+
+} // namespace Graphics::Reflect

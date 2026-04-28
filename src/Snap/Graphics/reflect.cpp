@@ -1,4 +1,5 @@
 #include "reflect.hpp"
+#include "Graphics/bufferformat.hpp"
 #include "Graphics/graphicsContext.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
@@ -8,10 +9,12 @@
 #include <cassert>
 #include <iterator>
 
+namespace Graphics::Reflect {
+
 // Resolve path for struct fields is exclusive to the struct resource info
 // Since structs are nameless and their name is only described by the parent resource info
-auto StructInfo::ResolvePath(ResourceKey::const_iterator iterator,
-                             ResourceKey::const_iterator end) const
+auto StructInfo::ResolvePath(Graphics::ResourceKey::const_iterator iterator,
+                             Graphics::ResourceKey::const_iterator end) const
     -> const ResourceInfo * {
 
   if (iterator == end) {
@@ -43,8 +46,8 @@ auto StructInfo::ResolvePath(ResourceKey::const_iterator iterator,
   return field;
 }
 
-auto ResourceInfo::ResolvePath(ResourceKey::const_iterator iterator,
-                               ResourceKey::const_iterator end) const
+auto ResourceInfo::ResolvePath(Graphics::ResourceKey::const_iterator iterator,
+                               Graphics::ResourceKey::const_iterator end) const
     -> const ResourceInfo * {
   // Last element and name does not match, return nullptr
   if (iterator == end || *iterator != name) {
@@ -65,8 +68,8 @@ auto ResourceInfo::ResolvePath(ResourceKey::const_iterator iterator,
   return structInfo.ResolvePath(std::next(iterator), end);
 }
 
-auto BufferInfo::ResolvePath(ResourceKey::const_iterator iterator,
-                             ResourceKey::const_iterator end) const
+auto BufferInfo::ResolvePath(Graphics::ResourceKey::const_iterator iterator,
+                             Graphics::ResourceKey::const_iterator end) const
     -> const ResourceInfo * {
   if (std::next(iterator) == end) {
     return nullptr;
@@ -399,9 +402,8 @@ auto SetupResource(slang::VariableLayoutReflection *variableLayout,
     resourceInfo.stages = SlangStageToVkStage(variableLayout->getStage());
     resourceInfo.info = samplerInfo;
 
-    reflection
-        .slotToInfo[SetBindingToSlot(samplerInfo.set, samplerInfo.binding)] =
-        resourceInfo;
+    reflection.slotToInfo[Utils::SetBindingToSlot(
+        samplerInfo.set, samplerInfo.binding)] = resourceInfo;
   } else if (maskedShape == SLANG_STRUCTURED_BUFFER ||
              maskedShape == SLANG_BYTE_ADDRESS_BUFFER) {
     // SSBO
@@ -425,9 +427,8 @@ auto SetupResource(slang::VariableLayoutReflection *variableLayout,
     resourceInfo.stages = SlangStageToVkStage(variableLayout->getStage());
     resourceInfo.info = bufferInfo;
 
-    reflection
-        .slotToInfo[SetBindingToSlot(bufferInfo.set, bufferInfo.binding)] =
-        resourceInfo;
+    reflection.slotToInfo[Utils::SetBindingToSlot(
+        bufferInfo.set, bufferInfo.binding)] = resourceInfo;
   } else {
     return Error::Unexpected("Unsupported resource shape in reflection.");
   }
@@ -502,9 +503,8 @@ auto SetupFromType(slang::VariableLayoutReflection *variableLayout,
     resourceInfo.stages = SlangStageToVkStage(variableLayout->getStage());
     resourceInfo.info = bufferInfo;
 
-    reflection
-        .slotToInfo[SetBindingToSlot(bufferInfo.set, bufferInfo.binding)] =
-        resourceInfo;
+    reflection.slotToInfo[Utils::SetBindingToSlot(
+        bufferInfo.set, bufferInfo.binding)] = resourceInfo;
     break;
   }
   case slang::TypeReflection::Kind::Resource: {
@@ -593,10 +593,9 @@ auto ReflectShader(Graphics::GraphicsContext &context,
   }
 
   auto *globalParamsLayout = programLayout->getGlobalParamsVarLayout();
-  outReflection.ConstructUBOStruct(globalParamsLayout->getBindingSpace(),
-                                   globalParamsLayout->getBindingIndex());
-
-  return Error::Success();
+  return outReflection.ConstructUBOStruct(
+      globalParamsLayout->getBindingSpace(),
+      globalParamsLayout->getBindingIndex());
 }
 
 auto BufferInfo::ToString() const -> std::string {
@@ -629,3 +628,163 @@ auto BufferInfo::ToString() const -> std::string {
 
   return result;
 }
+
+auto ScalarTypeToVkFormat(ScalarType type, int count) -> VkFormat {
+  switch (type) {
+  case ScalarType::Float:
+    switch (count) {
+    case 1:
+      return VK_FORMAT_R32_SFLOAT;
+    case 2:
+      return VK_FORMAT_R32G32_SFLOAT;
+    case 3:
+      return VK_FORMAT_R32G32B32_SFLOAT;
+    case 4:
+      return VK_FORMAT_R32G32B32A32_SFLOAT;
+    default:
+      return VK_FORMAT_UNDEFINED;
+    }
+  case ScalarType::Int:
+    switch (count) {
+    case 1:
+      return VK_FORMAT_R32_SINT;
+    case 2:
+      return VK_FORMAT_R32G32_SINT;
+    case 3:
+      return VK_FORMAT_R32G32B32_SINT;
+    case 4:
+      return VK_FORMAT_R32G32B32A32_SINT;
+    default:
+      return VK_FORMAT_UNDEFINED;
+    }
+  case ScalarType::UInt:
+  case ScalarType::Bool:
+    switch (count) {
+    case 1:
+      return VK_FORMAT_R32_UINT;
+    case 2:
+      return VK_FORMAT_R32G32_UINT;
+    case 3:
+      return VK_FORMAT_R32G32B32_UINT;
+    case 4:
+      return VK_FORMAT_R32G32B32A32_UINT;
+    default:
+      return VK_FORMAT_UNDEFINED;
+    }
+  default:
+    return VK_FORMAT_UNDEFINED;
+  }
+}
+
+auto ResourceInfoToBufferFormat(const ResourceInfo &info, Standard std)
+    -> Result<std::variant<Graphics::BufferFormat, Graphics::BufferComponent>> {
+  if (std::holds_alternative<BufferInfo>(info.info)) {
+    const auto &bufferInfo = std::get<BufferInfo>(info.info);
+
+    if (bufferInfo.IsStruct()) {
+      return ResourceInfoToBufferFormat(
+          ResourceInfo{
+              .name = bufferInfo.name,
+              .stages = info.stages,
+              .info = std::get<StructInfo>(bufferInfo.info),
+          },
+          std);
+    }
+    if (bufferInfo.IsScalar()) {
+      return ResourceInfoToBufferFormat(
+          ResourceInfo{
+              .name = bufferInfo.name,
+              .stages = info.stages,
+              .info = std::get<ScalarInfo>(bufferInfo.info),
+          },
+          std);
+    }
+    if (bufferInfo.IsVector()) {
+      return ResourceInfoToBufferFormat(
+          ResourceInfo{
+              .name = bufferInfo.name,
+              .stages = info.stages,
+              .info = std::get<VectorInfo>(bufferInfo.info),
+          },
+          std);
+    }
+    if (bufferInfo.IsMatrix()) {
+      return ResourceInfoToBufferFormat(
+          ResourceInfo{
+              .name = bufferInfo.name,
+              .stages = info.stages,
+              .info = std::get<MatrixInfo>(bufferInfo.info),
+          },
+          std);
+    }
+  }
+
+  if (std::holds_alternative<StructInfo>(info.info)) {
+    const auto &structInfo = std::get<StructInfo>(info.info);
+
+    std::vector<Graphics::BufferComponent> components;
+
+    for (const auto &field : structInfo.fields) {
+      auto fieldFormatResult = ResourceInfoToBufferFormat(field, std);
+      if (Error::IsError(fieldFormatResult)) {
+        continue; // Sampler or Buffer or whatever, skip it since it cannot be part of the buffer format
+      }
+
+      auto fieldFormatOrComponent = fieldFormatResult.value();
+
+      if (std::holds_alternative<Graphics::BufferComponent>(
+              fieldFormatOrComponent)) {
+        components.emplace_back(
+            std::get<Graphics::BufferComponent>(fieldFormatOrComponent));
+        continue;
+      }
+
+      auto bufferField = Graphics::BufferComponent{};
+      bufferField.name = field.name;
+      bufferField.offset = field.GetOffset();
+      bufferField.format =
+          std::get<Graphics::BufferFormat>(fieldFormatOrComponent);
+
+      components.emplace_back(bufferField);
+    }
+
+    return Graphics::BufferFormat(components, std);
+  }
+
+  if (std::holds_alternative<ScalarInfo>(info.info)) {
+    const auto &scalarInfo = std::get<ScalarInfo>(info.info);
+    auto component = Graphics::BufferComponent{};
+    component.name = info.name;
+    component.offset = scalarInfo.offset;
+    component.format = ScalarTypeToVkFormat(scalarInfo.type, 1);
+    return component;
+  }
+
+  if (std::holds_alternative<VectorInfo>(info.info)) {
+    const auto &vectorInfo = std::get<VectorInfo>(info.info);
+    auto component = Graphics::BufferComponent{};
+    component.name = info.name;
+    component.offset = vectorInfo.offset;
+    component.format = ScalarTypeToVkFormat(
+        vectorInfo.scalarType, VectorChannelCount(vectorInfo.vectorType));
+    return component;
+  }
+
+  if (std::holds_alternative<MatrixInfo>(info.info)) {
+    const auto &matrixInfo = std::get<MatrixInfo>(info.info);
+    auto component = Graphics::BufferComponent{};
+    component.name = info.name;
+    component.offset = matrixInfo.offset;
+
+    auto [colums, rows] = MatrixDimensions(matrixInfo.matrixType);
+
+    component.format = ScalarTypeToVkFormat(ScalarType::Float, colums);
+    component.arraySize = rows;
+
+    return component;
+  }
+
+  return Error::Unexpected("Unsupported resource info type for buffer format.");
+}
+
+} // namespace Graphics::Reflect

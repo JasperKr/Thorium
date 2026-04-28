@@ -1,5 +1,7 @@
 #pragma once
 
+#include <forward_list>
+#include <string>
 #include <vulkan/vulkan_core.h>
 namespace Graphics {
 
@@ -36,5 +38,7 @@ constexpr VkPipelineColorBlendAttachmentState DefaultBlendMode = {
 
 constexpr uint32_t FRAMES_IN_FLIGHT = 2;
 constexpr uint32_t MAX_SWAPCHAIN_IMAGES = 4;
+
+using ResourceKey = std::forward_list<std::string>;
 
 } // namespace Graphics

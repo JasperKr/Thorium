@@ -15,7 +15,7 @@ static const std::vector<luaL_Reg> SnapshotLib = {
     {"draw", wrap_Draw},
 };
 
-extern "C" inline auto luaopen_shader(lua_State *state) -> int {
+extern "C" inline auto luaopen_snapshot(lua_State *state) -> int {
   PrintDebug("Registering Snapshot Lua type.");
 
   LuaWrap::RegisterLuaType(state,

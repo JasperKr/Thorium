@@ -1,5 +1,4 @@
 #include "uniform.hpp"
-#include "Graphics/graphics.hpp"
 #include "Graphics/graphicsState.hpp"
 #include <cassert>
 #include <public/tracy/Tracy.hpp>

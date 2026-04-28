@@ -35,6 +35,7 @@ print("Generated noise texture in " .. tostring(snap.timer.getTime() - t) .. " s
 
 local rendertarget
 local depthbuffer
+local snapshot
 
 local function draw()
   snap.graphics.setRenderTarget(
@@ -74,6 +75,10 @@ local function draw()
 
   Imgui.ShowDemoWindow()
 
+  if snapshot then
+    snapshot:draw()
+  end
+
   snap.gui.endFrame()
   local imStartTime = snap.timer.getTime()
   snap.graphics.setRenderTarget({ loadas = "clear", blendmode = { blendmode = "alpha", alphamode = "premultiplied" } })
@@ -93,7 +98,6 @@ local function draw()
 end
 
 local createSnapshot = false
-local snapshot
 
 local isDown = {}
 function snap.mousepressed(x, y, button)
@@ -194,13 +198,11 @@ while true do
   snap.gui.newFrame(dt)
 
   draw()
-  if snapshot then
-    print("Drawing snapshot")
-    snapshot:draw()
-  end
 
-  local commands
-  commands, snapshot = snap.graphics.submitGraphics()
+  local commands, newSnapshot = snap.graphics.submitGraphics()
+  if newSnapshot then
+    snapshot = newSnapshot
+  end
 
   commandBufferChannel:push(commands)
 end

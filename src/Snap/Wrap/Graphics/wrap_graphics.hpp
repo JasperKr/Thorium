@@ -4,6 +4,7 @@
 #include "Wrap/Graphics/wrap_mesh.hpp"
 #include "Wrap/Graphics/wrap_rendertarget.hpp"
 #include "Wrap/Graphics/wrap_shader.hpp"
+#include "Wrap/Graphics/wrap_snapshot.hpp"
 #include "Wrap/Graphics/wrap_texture.hpp"
 #include "Wrap/wrap.hpp"
 #include "lua.hpp"
@@ -107,10 +108,9 @@ static const std::vector<luaL_Reg> GraphicsLib = {
 };
 
 const static std::vector<lua_CFunction> childrenInitFunctions = {
-    Texture::luaopen_texture,
-    Mesh::luaopen_mesh,
-    Shader::luaopen_shader,
-    Buffer::luaopen_buffer,
+    Texture::luaopen_texture,   Mesh::luaopen_mesh,
+    Shader::luaopen_shader,     Buffer::luaopen_buffer,
+    Snapshot::luaopen_snapshot,
 };
 
 extern "C" inline auto luaopen_graphics(lua_State *state) -> int {

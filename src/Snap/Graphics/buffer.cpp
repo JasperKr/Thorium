@@ -5,6 +5,7 @@
 #include "Graphics/graphicsState.hpp"
 #include "Graphics/resource.hpp"
 #include "Graphics/semaphoreManager.hpp"
+#include "Graphics/snapshot.hpp"
 #include "Modules/bytedata.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
@@ -396,11 +397,17 @@ auto Buffer::Upload(const GraphicsContext &context,
   }
 
   auto uploadSize = size == VK_WHOLE_SIZE ? data.size() : size;
+  PrintAlways("Uploading buffer data, size: {}, offset: {}", uploadSize,
+              offset);
 
   if (uploadSize + offset > this->size) {
     return Error::Create(
         "Error uploading data, cannot upload more data than is allocated.");
   }
+
+  Snapshot::CaptureEvent(Snapshot::BufferUploadEvent(
+      handle, memory, offset, uploadSize, // NOLINTNEXTLINE
+      std::vector<uint8_t>(data.data(), data.data() + uploadSize)));
 
   if (isStagingBuffer) {
     // We know this will be a large upload,

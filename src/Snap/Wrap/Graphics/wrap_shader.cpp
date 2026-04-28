@@ -12,6 +12,8 @@
 #include <cstdint>
 namespace Wrap::Graphics::Shader {
 
+using namespace ::Graphics::Reflect;
+
 // TODO: Add externs input support
 // Modulename, {name=value, ...}
 auto wrap_NewShader(lua_State *state) -> int {

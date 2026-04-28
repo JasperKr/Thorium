@@ -15,6 +15,8 @@
 
 namespace Graphics {
 
+using namespace Snapshot;
+
 auto BindMesh(GraphicsContext &context, VkCommandBuffer cmdBuffer,
               const Mesh &mesh) -> Error {
   ZoneScoped;
@@ -113,8 +115,6 @@ auto Draw(GraphicsContext &context, Mesh &mesh, uint32_t instanceCount)
 
   auto vertexCount = mesh.GetVertexCount();
 
-  // auto drawEvent = ::Graphics::Snapshot::DrawEvent();
-
   {
     ZoneScopedN("Vk Draw");
     MeshDrawRange range = mesh.GetDrawRange();
@@ -122,8 +122,13 @@ auto Draw(GraphicsContext &context, Mesh &mesh, uint32_t instanceCount)
     if (mesh.GetIndexCount() > 0) {
       vkCmdDrawIndexed(commandBuffer, range.Count, instanceCount, range.Offset,
                        0, 0);
+
+      CaptureEvent(DrawIndexedEvent(mesh.GetIndexCount(), instanceCount,
+                                    range.Offset, 0, 0));
     } else {
       vkCmdDraw(commandBuffer, range.Count, instanceCount, range.Offset, 0);
+
+      CaptureEvent(DrawEvent(vertexCount, instanceCount, 0, 0));
     }
   }
 
@@ -161,6 +166,8 @@ auto Dispatch(GraphicsContext &context, const Math::Uvec3 &threadgroups)
 
   vkCmdDispatch(commandBuffer, threadgroups.x, threadgroups.y, threadgroups.z);
 
+  CaptureEvent(DispatchEvent(threadgroups.x, threadgroups.y, threadgroups.z));
+
   return Error::Success();
 }
 
@@ -181,6 +188,8 @@ auto DispatchIndirect(GraphicsContext &context,
   }
 
   vkCmdDispatchIndirect(commandBuffer, indirectBuffer->handle, offset);
+
+  CaptureEvent(DispatchIndirectEvent(indirectBuffer->handle, offset));
 
   return Error::Success();
 }
@@ -218,6 +227,9 @@ auto DrawIndirect(GraphicsContext &context, Mesh &mesh,
 
   vkCmdDrawIndirect(commandBuffer, indirectBuffer->handle, offset, count,
                     sizeof(VkDrawIndirectCommand));
+
+  CaptureEvent(DrawIndirectEvent(indirectBuffer->handle, offset, count,
+                                 sizeof(VkDrawIndirectCommand)));
 
   {
     std::lock_guard<std::mutex> lock(mesh.GetVertexBuffer()->mutex);
@@ -257,6 +269,8 @@ auto Draw(GraphicsContext &context, const VkPrimitiveTopology &topology,
 
   vkCmdDraw(commandBuffer, vertexCount, instanceCount, 0, 0);
 
+  CaptureEvent(DrawEvent(vertexCount, instanceCount, 0, 0));
+
   return Error::Success();
 }
 
@@ -294,6 +308,8 @@ auto Draw(GraphicsContext &context, const Ref<Buffer> &indexBuffer,
   }
 
   vkCmdDrawIndexed(commandBuffer, indexCount, instanceCount, 0, 0, 0);
+
+  CaptureEvent(DrawIndexedEvent(indexCount, instanceCount, 0, 0, 0));
 
   return Error::Success();
 }

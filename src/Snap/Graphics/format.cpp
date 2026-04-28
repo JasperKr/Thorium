@@ -710,11 +710,12 @@ auto ToString(VkFormat format, uint8_t const *data) -> std::string {
 
   for (size_t i = 0; i < channelCount; ++i) {
     auto channelStr = BaseTypeToString(baseFormat, data + offset);
+    offset += stride;
+    values += channelStr;
+
     if (i < channelCount - 1) {
       values += ", ";
     }
-    offset += stride;
-    values += channelStr;
   }
 
   // NOLINTEND(cppcoreguidelines-pro-bounds-pointer-arithmetic)

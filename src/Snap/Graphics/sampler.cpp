@@ -1,4 +1,5 @@
 #include "sampler.hpp"
+#include "Graphics/snapshot.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include <unordered_map>
@@ -48,6 +49,15 @@ auto GetOrCreateSampler(const GraphicsContext &context,
     }
   }
 
+  Snapshot::CaptureEvent(Snapshot::SamplerCreateEvent(
+      vkSampler, description.magFilter, description.minFilter,
+      description.mipmapMode, description.addressModeU,
+      description.addressModeV, description.addressModeW,
+      description.mipLodBias, description.anisotropyEnable,
+      description.maxAnisotropy, description.compareEnable,
+      description.compareOp, description.minLod, description.maxLod,
+      description.borderColor));
+
   SamplerCache[description] = vkSampler;
   return vkSampler;
 }
@@ -55,6 +65,7 @@ auto GetOrCreateSampler(const GraphicsContext &context,
 auto DestroySamplers(const GraphicsContext &context) -> void {
   std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
   for (auto &pair : SamplerCache) {
+    Snapshot::CaptureEvent(Snapshot::SamplerDestroyEvent(pair.second));
     vkDestroySampler(context.device, pair.second, nullptr);
   }
   SamplerCache.clear();

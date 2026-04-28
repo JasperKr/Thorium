@@ -793,13 +793,12 @@ auto wrap_SubmitCommandBuffer(lua_State *state) -> int {
   LuaWrap::PushObject(state, ::Graphics::Threading::RenderThreadInfo::GetType(),
                       submitResult.value().get());
 
-  if (!::Graphics::Snapshot::GetCurrentSnapshot()->events.empty()) {
-    auto *snapshot = ::Graphics::Snapshot::GetCurrentSnapshot();
+  auto *snapshot = ::Graphics::Snapshot::GetCurrentSnapshot();
+  ::Graphics::Snapshot::EndSnapshot();
 
+  if (snapshot != nullptr) {
     LuaWrap::PushObject(state, ::Graphics::Snapshot::ThreadSnapshot::GetType(),
                         snapshot);
-
-    ::Graphics::Snapshot::EndSnapshot();
 
     return 2;
   }
