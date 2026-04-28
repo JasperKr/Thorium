@@ -33,7 +33,7 @@ struct RenderThreadData {
   uint64_t aquiredAtFrame = 0;
 
   std::string name;
-  uint64_t id;
+  uint64_t id{};
 };
 
 const Type renderInfoType = Type("Commands");
@@ -44,6 +44,11 @@ extern std::mutex CommandBufferCacheMutex;
 extern std::vector<std::pair<uint64_t, VkCommandBuffer>> CommandBufferCache;
 
 struct RenderThreadInfo : Object {
+  RenderThreadInfo(const RenderThreadInfo &) = delete;
+  RenderThreadInfo(RenderThreadInfo &&) = delete;
+  auto operator=(const RenderThreadInfo &) -> RenderThreadInfo & = delete;
+  auto operator=(RenderThreadInfo &&) -> RenderThreadInfo & = delete;
+  explicit RenderThreadInfo() : threadData() {}
   RenderThreadData threadData;
 
   static auto GetType() -> Type const * { return &renderInfoType; }
@@ -51,8 +56,9 @@ struct RenderThreadInfo : Object {
     return &renderInfoType;
   }
 
-  auto UseDeferredDestruction() const -> bool override { return true; }
-  auto ScheduleDestroy() -> void override {
+  auto UseDeferredDestruction() const -> bool override { return false; }
+
+  ~RenderThreadInfo() override {
     if (threadData.commandBuffer != VK_NULL_HANDLE) {
       std::lock_guard<std::mutex> lock(CommandBufferCacheMutex);
       CommandBufferCache.emplace_back(GetSemaphoreValue(),

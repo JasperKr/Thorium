@@ -217,12 +217,16 @@ auto UpdateUsage(const GraphicsContext &context, BarrierSynced &resource,
     DynamicRendering::EndRendering(context);
     vkCmdPipelineBarrier2(Graphics::GetCommandBuffer(), &depInfo);
 
-    Snapshot::CaptureEvent(Snapshot::BarrierEvent(ResourceSync{
+    auto sync = ResourceSync{
         .srcStages = barrier.srcStageMask,
         .srcAccess = barrier.srcAccessMask,
         .dstStages = barrier.dstStageMask,
         .dstAccess = barrier.dstAccessMask,
-    }));
+    };
+
+    auto event = Snapshot::BarrierEvent(sync);
+
+    Snapshot::CaptureEvent(event);
 
     // Update to new usage
     previousAccess = usage.access;
@@ -292,7 +296,7 @@ auto UpdateUsageVirtual(BarrierSynced &resource, const ResourceState &usage)
 }
 
 auto InsertBarrier(ResourceSync &barrier) -> void {
-  GlobalResourceSyncTimeline.push_back(barrier);
+  GlobalResourceSyncTimeline.emplace_back(barrier);
   FrameBarrierCount++;
 }
 

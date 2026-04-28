@@ -149,7 +149,8 @@ struct StructuredBufferUploadEvent : public Event {
 
   Handle bufferHandle{};
   BufferFormat format;
-  BufferUploadEvent *uploadEvent{};
+  BufferUploadEvent uploadEvent;
+  bool hasAssociatedUploadEvent{false};
 
   StructuredBufferUploadEvent() : Event(EventType::Structured_Buffer_Upload) {}
   StructuredBufferUploadEvent(Handle bufferHandle, BufferFormat format)
@@ -575,12 +576,10 @@ struct SetPushConstantsEvent : public Event {
 
 struct BarrierEvent : public Event {
   Barrier::ResourceSync sync{};
-  std::vector<Barrier::ResourceSync> currentTimeline;
 
   BarrierEvent() : Event(EventType::Barrier) {}
-  explicit BarrierEvent(Barrier::ResourceSync sync)
-      : Event(EventType::Barrier), sync(sync),
-        currentTimeline(Barrier::GlobalResourceSyncTimeline) {}
+  explicit BarrierEvent(const Barrier::ResourceSync &sync)
+      : Event(EventType::Barrier), sync(sync) {}
 
   auto DrawVariantImGui(struct ThreadSnapshot const *parent) const
       -> void override;
@@ -621,9 +620,9 @@ template <typename T> auto CaptureEvent(const T &event) -> bool {
     return false;
   }
 
+  auto index = currentSnapshot->events.size();
   currentSnapshot->events.emplace_back(std::make_unique<T>(event));
 
-  auto index = currentSnapshot->events.size() - 1;
   const auto &newEvent = currentSnapshot->events[index];
 
   if (index > 0) {
@@ -639,7 +638,8 @@ template <typename T> auto CaptureEvent(const T &event) -> bool {
           static_cast<BufferUploadEvent *>(newEvent.get());
       // NOLINTEND(cppcoreguidelines-pro-type-static-cast-downcast)
 
-      structuredEvent->uploadEvent = bufferUploadEvent;
+      structuredEvent->uploadEvent = *bufferUploadEvent;
+      structuredEvent->hasAssociatedUploadEvent = true;
     }
   }
 

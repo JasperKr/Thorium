@@ -122,7 +122,7 @@ auto EventTypeFromString(const std::string &str) -> EventType {
 }
 
 auto GetInternalSnapshot() -> ThreadSnapshot & {
-  thread_local ThreadSnapshot currentSnapshot;
+  thread_local ThreadSnapshot currentSnapshot{};
   return currentSnapshot;
 }
 
@@ -149,6 +149,10 @@ auto StartSnapshot() -> void {
 auto EndSnapshot() -> void {
   auto &currentSnapshot = GetInternalSnapshot();
   currentSnapshot.active = false;
+  currentSnapshot.renderStates = {};
+  currentSnapshot.threadId = 0;
+  currentSnapshot.threadName = {};
+  currentSnapshot.events.clear();
 }
 auto RenderSnapshot(const ThreadSnapshot &snapshot) -> void {
   int index = 1;
@@ -421,21 +425,17 @@ auto BufferUploadEvent::DrawVariantImGui(ThreadSnapshot const *parent) const
 inline auto
 DrawComponentData(const std::span<const uint8_t> &data,
                   const BufferComponent &component, // NOLINTNEXTLINE
-                  VkDeviceSize sourceOffset, VkDeviceSize rawOffset) -> void {
+                  VkDeviceSize offset, VkDeviceSize rawOffset) -> void {
   auto format = std::get<VkFormat>(component.format);
   auto formatSize = Format::GetSize(format);
 
-  auto finalOffset = component.offset + sourceOffset;
-
-  bool withinSpan =
-      finalOffset + (formatSize * component.arraySize) <= data.size();
-  if (finalOffset < rawOffset || !withinSpan) {
+  bool withinSpan = offset + (formatSize * component.arraySize) <= data.size();
+  if (offset < rawOffset || !withinSpan) {
     ImGui::Text("No data available.");
     return;
   }
 
-  auto span = Utils::Subspan(data, sourceOffset + component.offset,
-                             formatSize * component.arraySize);
+  auto span = Utils::Subspan(data, offset, formatSize * component.arraySize);
 
   if (component.arraySize > 1) {
     if (component.isMatrix) {
@@ -492,20 +492,25 @@ inline auto DrawBufferData(const std::span<const uint8_t> &data,
     return;
   }
 
-  auto span = Utils::Subspan(data, offset, size);
-
   for (const auto &component : format.GetComponents()) {
-    ImGui::Text("Component: %s", component.name.c_str());
+    auto componentOffset = component.offset + offset;
 
-    auto componentOffset = component.offset;
+    if (componentOffset >= rawOffset + size) {
+      ImGui::TextColored(ImVec4(1.0F, 0.0F, 0.0F, 1.0F),
+                         "No more data available.");
+      break;
+    }
+
+    ImGui::Text("%s =", component.name.c_str());
+    ImGui::SameLine();
 
     if (std::holds_alternative<VkFormat>(component.format)) {
-      DrawComponentData(span, component, componentOffset, rawOffset);
+      DrawComponentData(data, component, componentOffset, rawOffset);
     } else {
       auto nestedFormat = std::get<BufferFormat>(component.format);
 
       for (int element = 0; element < component.arraySize; element++) {
-        DrawBufferData(span, nestedFormat, componentOffset,
+        DrawBufferData(data, nestedFormat, componentOffset,
                        nestedFormat.GetStride(), rawOffset);
       }
     }
@@ -515,24 +520,37 @@ inline auto DrawBufferData(const std::span<const uint8_t> &data,
 auto StructuredBufferUploadEvent::DrawVariantImGui(
     ThreadSnapshot const *parent) const -> void {
   ImGui::Text("Buffer Handle: %p", bufferHandle);
-  ImGui::Text("Format: %s", format.ToString().c_str());
+  ImGui::Text("Stride: %lu", format.GetStride());
 
-  auto *uploadEvent = this->uploadEvent;
-  if (uploadEvent == nullptr) {
+  if (ImGui::TreeNode("Extra Info")) {
+    ImGui::Text("Memory Handle: %p", bufferHandle);
+    ImGui::Text("Format: %s", format.ToString().c_str());
+    ImGui::TreePop();
+  }
+
+  if (!hasAssociatedUploadEvent) {
     ImGui::Text("No associated BufferUploadEvent found.");
     return;
   }
 
-  if (uploadEvent->size % format.GetStride() != 0) {
+  auto uploadEvent = this->uploadEvent;
+  if (uploadEvent.size % format.GetStride() != 0) {
     ImGui::Text("Warning: Structured data upload of size (%lu) is "
                 "not a multiple of format stride (%lu).",
-                uploadEvent->size, format.GetStride());
+                uploadEvent.size, format.GetStride());
   }
 
   ImGui::Separator();
 
-  DrawBufferData(uploadEvent->data, format, 0, uploadEvent->size,
-                 uploadEvent->offset);
+  uploadEvent.DrawVariantImGui(parent);
+
+  ImGui::Separator();
+
+  if (ImGui::TreeNode("Buffer Data")) {
+    DrawBufferData(uploadEvent.data, format, 0, uploadEvent.size,
+                   uploadEvent.offset);
+    ImGui::TreePop();
+  }
 };
 
 /*

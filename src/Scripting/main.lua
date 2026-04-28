@@ -247,8 +247,8 @@ function snap.draw()
       collectgarbage("collect")
       return
     end
+    table.insert(commandBuffers, buffer)
   end
-  table.insert(commandBuffers, buffer)
 
   local buffers = commandBuffers
   commandBuffers = {}

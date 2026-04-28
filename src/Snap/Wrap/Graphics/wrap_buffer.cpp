@@ -268,9 +268,6 @@ auto wrap_SetData(lua_State *state) -> int {
     auto result = buffer->GetBuffer()->SetData(*ctx, bytedata->GetDataSpan(),
                                                offset, size);
 
-    PrintAlways("Set buffer data from ByteData, size: {}, offset: {}",
-                bytedata->GetDataSpan().size(), offset);
-
     if (Error::IsError(result)) {
       return luaL_error(state, "Failed to set buffer data: %s",
                         result.message.c_str());

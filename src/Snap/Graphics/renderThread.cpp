@@ -262,7 +262,8 @@ auto SubmitCommands(Graphics::GraphicsContext &context)
     return flushResult.AsUnexpected();
   }
 
-  auto threadInfo = Ref<RenderThreadInfo>(CurrentRenderThreadInfo.get());
+  auto threadInfo = Ref<RenderThreadInfo>::Make();
+  threadInfo->threadData = CurrentRenderThreadInfo->threadData;
 
   auto endResult =
       Error::Create(vkEndCommandBuffer(threadInfo->threadData.commandBuffer));

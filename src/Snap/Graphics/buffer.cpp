@@ -397,8 +397,6 @@ auto Buffer::Upload(const GraphicsContext &context,
   }
 
   auto uploadSize = size == VK_WHOLE_SIZE ? data.size() : size;
-  PrintAlways("Uploading buffer data, size: {}, offset: {}", uploadSize,
-              offset);
 
   if (uploadSize + offset > this->size) {
     return Error::Create(
