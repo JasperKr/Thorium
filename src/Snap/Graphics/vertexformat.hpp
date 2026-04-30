@@ -78,9 +78,10 @@ public:
   [[nodiscard]] auto ToString() const -> std::string {
     std::string result = "VertexFormat:\n";
     for (const auto &attribute : Attributes) {
-      result += "  - " + attribute.name + ": " +
-                Format::ToString(attribute.format) +
-                " - offset: " + std::to_string(attribute.offset) + "\n";
+      auto formatStr = Format::ToString(attribute.format);
+      auto offsetStr = std::to_string(attribute.offset);
+      result = std::format("{}  - {}: {} - offset: {}\n", result,
+                           attribute.name, formatStr, offsetStr);
     }
     return result;
   }

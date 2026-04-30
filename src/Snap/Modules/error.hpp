@@ -6,6 +6,7 @@
 #include "slang/slang.h"
 #include <cstdint>
 #include <format>
+#include <string_view>
 
 #if defined(LOG_ERRORS)
 #include "Modules/console.hpp"
@@ -15,19 +16,26 @@
 #include "tl/expected.hpp"
 #include <vulkan/vulkan.h>
 
+using ErrorCode = int16_t;
+using ErrorLevel = uint16_t;
+
 struct [[nodiscard]] Error {
   std::string message;
   std::string backtrace;
-  int32_t code = 0; // Default to 0 for success, negative for errors
+  ErrorCode code = 0; // Default to 0 for success, negative for errors
 
   [[nodiscard]] auto ToString() const -> std::string;
 
   static auto SetupTraceback() -> void;
 
-  static auto Create(const std::string &message, int32_t code = -1, // NOLINT
-                     uint32_t level = 0U) -> Error;
+  static auto Create(const std::string &message, ErrorCode code = -1, // NOLINT
+                     ErrorLevel level = 0U) -> Error;
+  static auto Create(const std::string_view &message,
+                     ErrorCode code = -1, // NOLINT
+                     ErrorLevel level = 0U) -> Error;
 
-  static auto Create(const char *message, int32_t code = -1) -> Error;
+  static auto Create(const char *message, ErrorCode code = -1,
+                     ErrorLevel level = 0U) -> Error;
 
   static auto Success() -> Error;
 
@@ -45,12 +53,12 @@ struct [[nodiscard]] Error {
   static auto Create(VkResult result) -> Error;
 
   // NOLINTNEXTLINE
-  static auto Create(SlangResult result, uint32_t level = 0) -> Error;
+  static auto Create(SlangResult result, ErrorLevel level = 0) -> Error;
 
   static auto Create(Slang::ComPtr<slang::IBlob> &diagnosticsBlob,
-                     uint32_t level = 0) -> Error;
+                     ErrorLevel level = 0) -> Error;
 
-  static auto Unexpected(const std::string &message, int32_t code = -1)
+  static auto Unexpected(const std::string &message, ErrorCode code = -1)
       -> tl::unexpected<Error>;
 
   static auto Unexpected(VkResult result) -> tl::unexpected<Error>;

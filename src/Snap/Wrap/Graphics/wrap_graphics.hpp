@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Graphics/renderThread.hpp"
 #include "Wrap/Graphics/wrap_buffer.hpp"
 #include "Wrap/Graphics/wrap_mesh.hpp"
 #include "Wrap/Graphics/wrap_rendertarget.hpp"
@@ -60,6 +61,8 @@ auto wrap_CopyTexture(lua_State *state) -> int;
 auto wrap_CopyBufferToTexture(lua_State *state) -> int;
 auto wrap_CopyTextureToBuffer(lua_State *state) -> int;
 
+auto wrap_Clear(lua_State *state) -> int;
+
 auto ShutdownWrapGraphics() -> void;
 
 // NOLINTNEXTLINE
@@ -105,6 +108,7 @@ static const std::vector<luaL_Reg> GraphicsLib = {
     {"copyTexture", wrap_CopyTexture},
     {"copyBufferToTexture", wrap_CopyBufferToTexture},
     {"copyTextureToBuffer", wrap_CopyTextureToBuffer},
+    {"clear", wrap_Clear},
 };
 
 const static std::vector<lua_CFunction> childrenInitFunctions = {
@@ -120,6 +124,9 @@ extern "C" inline auto luaopen_graphics(lua_State *state) -> int {
       .ChildrenInitFunctions = childrenInitFunctions, // NOLINT
 
   };
+
+  LuaWrap::RegisterLuaType(
+      state, ::Graphics::Threading::RenderThreadInfo::GetType(), {});
 
   RegisterLuaModule(state, module);
   return 1;

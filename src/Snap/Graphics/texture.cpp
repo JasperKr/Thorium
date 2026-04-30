@@ -19,10 +19,12 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <format>
 #include <mutex>
 #include <public/tracy/Tracy.hpp>
 #include <span>
 #include <string>
+#include <string_view>
 
 #define VMA_VULKAN_VERSION 1004000
 
@@ -1216,24 +1218,28 @@ auto GetDefaultTexture(const GraphicsContext &context, VkFormat format,
   texInfo.usage = static_cast<uint32_t>(VK_IMAGE_USAGE_SAMPLED_BIT) |
                   static_cast<uint32_t>(VK_IMAGE_USAGE_TRANSFER_DST_BIT) |
                   static_cast<uint32_t>(VK_IMAGE_USAGE_STORAGE_BIT);
-  texInfo.debugName =
-      "Default_Texture_" + Format::ImageFormatToString(format) + "_";
+
+  std::string_view textureTypeName;
+
   switch (textureType) {
   case TextureType::DEFAULT:
-    texInfo.debugName += "2D";
+    textureTypeName = "2D";
     break;
   case TextureType::CUBEMAP:
-    texInfo.debugName += "Cubemap";
+    textureTypeName = "Cubemap";
     break;
   case TextureType::VOLUME:
-    texInfo.debugName += "Volume";
+    textureTypeName = "Volume";
     break;
   case TextureType::ARRAY:
-    texInfo.debugName += "Array";
+    textureTypeName = "Array";
     break;
   default:
     return Error::Unexpected("Unsupported texture type for default texture");
   }
+
+  texInfo.debugName = std::format("Default_Texture_{}_{}", textureTypeName,
+                                  Format::ImageFormatToString(format));
 
   if (textureType == TextureType::CUBEMAP) {
     texInfo.depth = 6; // NOLINT

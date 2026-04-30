@@ -24,13 +24,15 @@
 #include <cstring>
 #include <lauxlib.h>
 #include <lua.h>
+#include <utility>
 #include <vector>
 
 namespace Wrap::Graphics {
 auto wrap_Present(lua_State *state) -> int {
   auto &ctx = *::Graphics::GetCurrentGraphicsContext();
 
-  std::vector<Ref<::Graphics::Threading::RenderThreadInfo>> commands;
+  static std::vector<Ref<::Graphics::Threading::RenderThreadInfo>> commands;
+  commands.clear();
 
   luaL_checktype(state, 1, LUA_TTABLE);
 
@@ -45,6 +47,7 @@ auto wrap_Present(lua_State *state) -> int {
     }
 
     commands.emplace_back(renderInfo);
+    lua_pop(state, 1);
   }
 
   auto result = Present(ctx, commands);
@@ -797,8 +800,17 @@ auto wrap_SubmitCommandBuffer(lua_State *state) -> int {
   ::Graphics::Snapshot::EndSnapshot();
 
   if (snapshot != nullptr) {
+    // We copy the snapshot data to a new object so the next one isn't overwritten
+    auto snapshotCopyResult = Ref<::Graphics::Snapshot::ThreadSnapshot>::Make(
+        std::vector<std::unique_ptr<::Graphics::Snapshot::Event>>{},
+        std::vector<::Graphics::DynamicRendering::State>{}, snapshot->threadId,
+        snapshot->threadName, false);
+
+    snapshotCopyResult->events = std::move(snapshot->events);
+    snapshotCopyResult->renderStates = std::move(snapshot->renderStates);
+
     LuaWrap::PushObject(state, ::Graphics::Snapshot::ThreadSnapshot::GetType(),
-                        snapshot);
+                        snapshotCopyResult.get());
 
     return 2;
   }

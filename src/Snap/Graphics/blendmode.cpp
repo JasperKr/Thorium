@@ -5,7 +5,7 @@
 
 namespace Graphics::BlendMode {
 
-auto ToString(VkBlendFactor blendFactor) -> std::string {
+auto ToString(VkBlendFactor blendFactor) -> std::string_view {
   switch (blendFactor) {
   case VK_BLEND_FACTOR_ZERO:
     return "zero";
@@ -51,7 +51,7 @@ auto ToString(VkBlendFactor blendFactor) -> std::string {
 
   return "unknown blend factor";
 }
-auto ToString(VkBlendOp blendOp) -> std::string {
+auto ToString(VkBlendOp blendOp) -> std::string_view {
   switch (blendOp) {
   case VK_BLEND_OP_ADD:
     return "add";

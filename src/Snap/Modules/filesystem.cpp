@@ -345,7 +345,7 @@ auto GetErrorCode() -> uint32_t { return PHYSFS_getLastErrorCode(); }
 auto GetError() -> Error {
   return Error::Create("Filesystem error occurred: " +
                            std::string(GetErrorString()),
-                       static_cast<int32_t>(GetErrorCode()));
+                       static_cast<ErrorCode>(GetErrorCode()));
 }
 
 inline auto GetSourceDirectoryStorage() -> std::string & {

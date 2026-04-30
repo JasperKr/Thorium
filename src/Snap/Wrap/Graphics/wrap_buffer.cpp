@@ -136,7 +136,7 @@ inline auto BuildBufferFormatTree(lua_State *state,
     lua_pushstring(state, "format");
     if (std::holds_alternative<VkFormat>(component.format)) {
       auto vkFormat = std::get<VkFormat>(component.format);
-      lua_pushstring(state, ::Graphics::Format::ToString(vkFormat).c_str());
+      lua_pushstring(state, ::Graphics::Format::ToString(vkFormat).data());
     } else if (std::holds_alternative<::Graphics::BufferFormat>(
                    component.format)) {
       auto bufferFormat = std::get<::Graphics::BufferFormat>(component.format);

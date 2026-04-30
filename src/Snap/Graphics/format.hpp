@@ -7,8 +7,8 @@ namespace Graphics::Format {
 auto GetChannelCount(VkFormat format) -> uint32_t;
 auto GetSize(VkFormat format) -> uint32_t;
 auto StringToImageFormat(const std::string &format) -> VkFormat;
-auto ImageFormatToString(VkFormat format) -> std::string;
-auto ToString(VkFormat format, size_t arraySize = 1) -> std::string;
+auto ImageFormatToString(VkFormat format) -> std::string_view;
+auto ToString(VkFormat format, size_t arraySize = 1) -> std::string_view;
 auto FromString(const std::string &format) -> VkFormat;
 auto StringToArraySize(const std::string &format) -> size_t;
 auto GetVec4Variant(VkFormat format) -> VkFormat;

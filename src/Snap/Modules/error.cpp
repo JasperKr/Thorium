@@ -2,7 +2,6 @@
 
 #include "slang/slang-com-ptr.h"
 #include "slang/slang.h"
-#include <cstdint>
 #include <cstring>
 #include <iostream>
 #include <sstream>
@@ -93,7 +92,7 @@ inline auto CleanupTracebackLine(const std::string &line) -> std::string {
   return "\t" + sanitizedLine;
 }
 
-inline auto GetStackTrace(uint32_t level = 0) -> std::string {
+inline auto GetStackTrace(ErrorLevel level = 0) -> std::string {
   const int MaxStackDepth = 64;
 
 #ifndef STD_STACKTRACE_SUPPORTED
@@ -174,7 +173,7 @@ inline auto GetStackTrace(uint32_t level = 0) -> std::string {
   return "Unable to get stack trace on this platform.";
 }
 
-inline auto VkResultToString(int32_t result) -> std::string {
+inline auto VkResultToString(ErrorCode result) -> std::string_view {
   switch (result) {
   case VK_SUCCESS:
     return "VK_SUCCESS";
@@ -249,7 +248,7 @@ auto Error::SetupTraceback() -> void {
 #endif
 }
 
-auto Error::Create(const std::string &message, int32_t code, uint32_t level)
+auto Error::Create(const std::string &message, ErrorCode code, ErrorLevel level)
     -> Error {
   Error err = Error{
       .message = message, .backtrace = GetStackTrace(level), .code = code};
@@ -261,12 +260,19 @@ auto Error::Create(const std::string &message, int32_t code, uint32_t level)
   return err;
 }
 
-auto Error::Create(const char *message, int32_t code) -> Error {
-  return Create(std::string(message), code, 1);
+auto Error::Create(const std::string_view &message, ErrorCode code,
+                   ErrorLevel level) -> Error {
+  return Create(std::string(message), code, level);
+}
+
+auto Error::Create(const char *message, ErrorCode code, ErrorLevel level)
+    -> Error {
+  return Create(std::string(message), code, level);
 }
 
 auto Error::Success() -> Error {
-  return {.message = "", .backtrace = "", .code = 0};
+  static const Error success = {.message = "", .backtrace = "", .code = 0};
+  return success;
 }
 
 auto Error::IsError(const Error &error) -> bool { return error.code < 0; }
@@ -290,7 +296,7 @@ auto Error::Create(VkResult result) -> Error {
 }
 
 // NOLINTNEXTLINE
-auto Error::Create(SlangResult result, uint32_t level) -> Error {
+auto Error::Create(SlangResult result, ErrorLevel level) -> Error {
   if (SLANG_SUCCEEDED(result)) {
     return Success();
   }
@@ -298,7 +304,7 @@ auto Error::Create(SlangResult result, uint32_t level) -> Error {
   auto len = strlen(slang::getLastInternalErrorMessage());
   if (len > 0) {
     return Create(slang::getLastInternalErrorMessage(),
-                  static_cast<int32_t>(result), level + 1);
+                  static_cast<ErrorCode>(result), level + 1);
   }
 
   /*
@@ -328,23 +334,23 @@ auto Error::Create(SlangResult result, uint32_t level) -> Error {
   // Check if the result is in the predefined map
   auto errStrIterator = SlangResultToStringMap.find(result);
   if (errStrIterator != SlangResultToStringMap.end()) {
-    return Create(errStrIterator->second, static_cast<int32_t>(result),
+    return Create(errStrIterator->second, static_cast<ErrorCode>(result),
                   level + 1);
   }
 
-  auto errorBit = (static_cast<uint32_t>(result) >> 31U) & 0x1U; // NOLINT
-  auto facilityBits = SLANG_GET_RESULT_FACILITY(result);         // NOLINT
-  auto codeBits = SLANG_GET_RESULT_CODE(result);                 // NOLINT
+  auto errorBit = (static_cast<ErrorLevel>(result) >> 31U) & 0x1U; // NOLINT
+  auto facilityBits = SLANG_GET_RESULT_FACILITY(result);           // NOLINT
+  auto codeBits = SLANG_GET_RESULT_CODE(result);                   // NOLINT
 
   std::ostringstream oss;
   oss << "SlangResult Error - Severity: "
       << (errorBit == 1U ? "Error" : "Success")
       << ", Facility: " << facilityBits << ", Code: " << codeBits;
-  return Create(oss.str(), static_cast<int32_t>(result), level + 1);
+  return Create(oss.str(), static_cast<ErrorCode>(result), level + 1);
 }
 
-auto Error::Create(Slang::ComPtr<slang::IBlob> &diagnosticsBlob, uint32_t level)
-    -> Error {
+auto Error::Create(Slang::ComPtr<slang::IBlob> &diagnosticsBlob,
+                   ErrorLevel level) -> Error {
   if (diagnosticsBlob.readRef() == nullptr) {
     return Success();
   }
@@ -354,7 +360,7 @@ auto Error::Create(Slang::ComPtr<slang::IBlob> &diagnosticsBlob, uint32_t level)
                 level + 1);
 }
 
-auto Error::Unexpected(const std::string &message, int32_t code)
+auto Error::Unexpected(const std::string &message, ErrorCode code)
     -> tl::unexpected<Error> {
   return tl::unexpected<Error>(Create(message, code, 1));
 }

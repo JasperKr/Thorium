@@ -19,6 +19,7 @@
 #include "slang/slang.h"
 #include "tl/expected.hpp"
 #include <array>
+#include <format>
 #include <public/tracy/Tracy.hpp>
 #include <span>
 #include <string_view>
@@ -163,7 +164,7 @@ static auto GetShaderCCompiler() -> shaderc::Compiler & {
 
 static inline auto
 SpvCompilationStatusToString(const shaderc_compilation_status result)
-    -> std::string {
+    -> std::string_view {
   switch (result) {
   case shaderc_compilation_status_success:
     return "Compilation succeeded.";
@@ -229,7 +230,7 @@ const std::vector<SlangStage> SlangStages = {
     SLANG_STAGE_CALLABLE,
 };
 
-auto SlangStageToString(SlangStage stage) -> std::string {
+auto SlangStageToString(SlangStage stage) -> std::string_view {
   switch (stage) {
   case SLANG_STAGE_VERTEX:
     return "vertex";
@@ -328,7 +329,8 @@ static inline auto LoadSlang(GraphicsContext &context,
   auto allowedEntryPointCount = SlangStages.size();
   for (SlangInt32 i = 0; i < allowedEntryPointCount; i++) {
     auto stage = SlangStages.at(i);
-    auto entryPointName = SlangStageToString(stage) + "Main";
+    // auto entryPointName = SlangStageToString(stage) + "Main";
+    auto entryPointName = std::format("{}Main", SlangStageToString(stage));
 
     Slang::ComPtr<slang::IEntryPoint> entryPoint = nullptr;
 

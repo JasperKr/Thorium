@@ -391,8 +391,7 @@ auto wrap_GetFormat(lua_State *state) -> int {
 
   VkFormat format = texture->GetFormat();
 
-  lua_pushstring(state,
-                 ::Graphics::Format::ImageFormatToString(format).c_str());
+  lua_pushstring(state, ::Graphics::Format::ImageFormatToString(format).data());
   return 1;
 }
 

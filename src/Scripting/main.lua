@@ -15,7 +15,6 @@ local startThreadChannel = snap.thread.newChannel()
 local events = snap.thread.newChannel()
 local scene = snap.scene.newScene("Main")
 print(scene:getName())
-local commandBuffers = {}
 
 snap.graphics.aquireGraphics("load")
 
@@ -156,8 +155,6 @@ end
 
 local mesh = snap.graphics.newMesh(vertexformat, unpackedVertices, "triangles")
 
-table.insert(commandBuffers, snap.graphics.submitGraphics())
-
 local lod = scene:createLOD("Test LOD")
 local lod2 = scene:createLOD("Test LOD 2")
 local lod3 = scene:createLOD("Test LOD 3", 0.25)
@@ -232,13 +229,25 @@ end
 
 snap.keyboard.setEnableTextInput(true)
 
+local firstFrame = true
+local commandBuffers = {}
+
 function snap.draw()
   startThreadChannel:push(true)
 
-  local buffer
+  -- for i, buffer in ipairs(commandBuffers) do
+  --   buffer:release()
+  -- end
 
-  while not buffer do
-    buffer = commandsChannel:demand(1)
+  table.clear(commandBuffers)
+
+  if firstFrame then
+    firstFrame = false
+    table.insert(commandBuffers, snap.graphics.submitGraphics())
+  end
+
+  local buffer = commandsChannel:demand(30)
+  while buffer do
     if thread:getError() then
       -- error("Render thread error: " .. thread:getError())
       snap.event.quit()
@@ -248,10 +257,12 @@ function snap.draw()
       return
     end
     table.insert(commandBuffers, buffer)
+    buffer = commandsChannel:pop()
   end
 
-  local buffers = commandBuffers
-  commandBuffers = {}
+  -- snap.graphics.aquireGraphics()
+  -- snap.graphics.clear(0, 0, 0, 1)
+  -- table.insert(commandBuffers, snap.graphics.submitGraphics())
 
-  return buffers
+  return commandBuffers
 end

@@ -250,7 +250,7 @@ struct Texture : Object, Barrier::BarrierSynced {
     return GetType();
   }
 
-  [[nodiscard]] auto GetDebugName() const -> std::string {
+  [[nodiscard]] auto GetDebugName() const -> std::string_view {
     if (!debugName.empty()) {
       return debugName;
     }

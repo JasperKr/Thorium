@@ -108,6 +108,8 @@ auto GetDescriptorSetLayout(const DescriptorSetLayoutKey &layoutKey,
     }
 
     DescriptorSetLayoutCache[layoutKey] = descriptorSetLayout;
+    PrintAlways("Descriptor set layout cache size: {}",
+                DescriptorSetLayoutCache.size());
   }
 
   return descriptorSetLayout;
@@ -183,7 +185,7 @@ auto TryCreateShaderDescriptorBindingInfo(const GraphicsContext &context,
   return Error::Success();
 }
 
-inline auto DescriptorTypeToString(VkDescriptorType type) -> std::string {
+inline auto DescriptorTypeToString(VkDescriptorType type) -> std::string_view {
   switch (type) {
   case VK_DESCRIPTOR_TYPE_SAMPLER:
     return "SAMPLER";
@@ -304,6 +306,7 @@ auto GetPipelineLayout(const GraphicsContext &context,
   {
     std::lock_guard<std::mutex> lock(PipelineLayoutsMutex);
     PipelineLayouts.emplace_back(pipelineLayout);
+    PrintAlways("Pipeline layout count: {}", PipelineLayouts.size());
   }
 
   return PipelineLayout{

@@ -595,18 +595,24 @@ struct ThreadSnapshot : Object {
   std::string threadName;
   bool active{false};
 
-  [[nodiscard]] auto GetName() const -> std::string {
+  [[nodiscard]] auto GetName() const -> std::string_view {
     if (!threadName.empty()) {
       return threadName;
     }
 
-    return "Thread " + std::to_string(threadId);
+    return "Unnamed Thread";
   }
 
   static auto GetType() -> Type const * { return &ThreadSnapshotType; }
   [[nodiscard]] auto GetInstanceType() const -> Type const * override {
     return GetType();
   }
+
+  ThreadSnapshot(std::vector<std::unique_ptr<Event>> events,
+                 std::vector<DynamicRendering::State> renderStates,
+                 uint64_t threadId, std::string threadName, bool active)
+      : events(std::move(events)), renderStates(std::move(renderStates)),
+        threadId(threadId), threadName(std::move(threadName)), active(active) {}
 };
 
 // NOLINTEND(bugprone-easily-swappable-parameters)

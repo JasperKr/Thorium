@@ -30,7 +30,6 @@ end
 local shader = snap.graphics.newShader("Scripting/Graphics/Shaders/forward.slang")
 
 local texture
-local testnumber = ffi.new("float[1]")
 print("Generated noise texture in " .. tostring(snap.timer.getTime() - t) .. " seconds")
 
 local rendertarget
@@ -60,9 +59,9 @@ local function draw()
   Imgui.Text("DT: " .. tostring(snap.timer.getDelta()))
   Imgui.Text("Last Draw Time (ms): " .. tostring(lastShownTime * 1000))
   Imgui.Text("Last ImGui Draw Time (ms): " .. tostring(lastShownImDrawTime * 1000))
-
-  Imgui.Separator()
-  Imgui.InputFloat("Value", testnumber, 0.01)
+  local toMb = 1 / 1024
+  local memUsage = collectgarbage("count") * toMb
+  Imgui.Text(string.format("Lua Memory Usage: %.1f MB", memUsage))
 
   Imgui.Separator()
   scene:drawUIElement()

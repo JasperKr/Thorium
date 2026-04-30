@@ -6,8 +6,8 @@
 
 namespace Graphics::BlendMode {
 
-auto ToString(VkBlendFactor blendFactor) -> std::string;
-auto ToString(VkBlendOp blendOp) -> std::string;
+auto ToString(VkBlendFactor blendFactor) -> std::string_view;
+auto ToString(VkBlendOp blendOp) -> std::string_view;
 auto ToString(VkBlendFactor srcColorBlendFactor,
               VkBlendFactor dstColorBlendFactor, VkBlendOp colorBlendOp,
               VkBlendFactor srcAlphaBlendFactor,

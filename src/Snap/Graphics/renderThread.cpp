@@ -23,9 +23,6 @@ namespace Graphics::Threading {
 
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
 
-std::mutex ResultsMutex{};
-std::vector<Ref<RenderThreadInfo>> Results{};
-
 thread_local Ref<RenderThreadInfo> CurrentRenderThreadInfo;
 
 std::mutex CommandBufferCacheMutex;
@@ -65,9 +62,9 @@ auto GetCachedCommandBuffer(const GraphicsContext &context)
 
 inline auto CreateDescriptorPool(ThreadContext &tcontext)
     -> Result<VkDescriptorPool> {
-  constexpr uint32_t poolSize = 4096;
+  constexpr uint32_t poolSize = 512;
 
-  std::vector<VkDescriptorPoolSize> poolSizes = {
+  static const std::vector<VkDescriptorPoolSize> poolSizes = {
       {.type = VK_DESCRIPTOR_TYPE_SAMPLER, .descriptorCount = poolSize},
       {.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
        .descriptorCount = poolSize},
@@ -87,7 +84,7 @@ inline auto CreateDescriptorPool(ThreadContext &tcontext)
        .descriptorCount = poolSize},
   };
 
-  VkDescriptorPoolCreateInfo poolInfo = {};
+  thread_local VkDescriptorPoolCreateInfo poolInfo = {};
   poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
   poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
   poolInfo.maxSets = poolSize * static_cast<uint32_t>(poolSizes.size());
@@ -98,6 +95,9 @@ inline auto CreateDescriptorPool(ThreadContext &tcontext)
 
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+
+    PrintAlways("Creating new descriptor pool with max sets: {}",
+                poolInfo.maxSets);
 
     Error error = Error::Create(vkCreateDescriptorPool(
         tcontext.graphicsContext->device, &poolInfo, nullptr, &descriptorPool));
@@ -125,7 +125,6 @@ inline auto GetDescriptorPool(ThreadContext &tcontext) -> Error {
   }
 
   if (pool == VK_NULL_HANDLE) {
-    // TODO: FUUUCK
     PrintAlways("Creating new descriptor pool");
     auto createResult = CreateDescriptorPool(tcontext);
 
@@ -262,23 +261,24 @@ auto SubmitCommands(Graphics::GraphicsContext &context)
     return flushResult.AsUnexpected();
   }
 
-  auto threadInfo = Ref<RenderThreadInfo>::Make();
-  threadInfo->threadData = CurrentRenderThreadInfo->threadData;
-
-  auto endResult =
-      Error::Create(vkEndCommandBuffer(threadInfo->threadData.commandBuffer));
+  auto endResult = Error::Create(
+      vkEndCommandBuffer(CurrentRenderThreadInfo->threadData.commandBuffer));
   if (Error::IsError(endResult)) {
     return endResult.AsUnexpected();
   }
 
-  threadInfo->threadData.resourceSyncs = Barrier::GlobalResourceSyncTimeline;
-  threadInfo->threadData.usageUpdates = Barrier::GlobalResourceStateUpdates;
-  threadInfo->threadData.drawsToSwapchain =
+  CurrentRenderThreadInfo->threadData.resourceSyncs =
+      Barrier::GlobalResourceSyncTimeline;
+  CurrentRenderThreadInfo->threadData.usageUpdates =
+      Barrier::GlobalResourceStateUpdates;
+  CurrentRenderThreadInfo->threadData.drawsToSwapchain =
       Graphics::DynamicRendering::DrawnToSwapchain;
 
   auto timelineValue = GetSemaphoreValue();
 
   GetThreadContext().commandBuffer = VK_NULL_HANDLE;
+
+  auto threadInfo = CurrentRenderThreadInfo;
 
   CurrentRenderThreadInfo.reset();
 

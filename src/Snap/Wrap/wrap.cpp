@@ -271,11 +271,6 @@ auto RegisterLuaType(lua_State *state, const LuaClass &luaClass) -> void {
 
   lua_pop(state, 1); // Remove storage table from stack []
 
-  if (luaClass.Methods.empty()) {
-    PrintError("Lua type {} has no methods to register.", luaClass.Name);
-    return;
-  }
-
   if (luaClass.Type == nullptr) {
     PrintError("Lua type {} has null Type pointer.", luaClass.Name);
     return;
@@ -374,6 +369,9 @@ auto SetupLuaType(lua_State *state, const Type *type, Object *object) -> void {
   lua_pop(state, 1);
 
   if (!hasGC) {
+    PrintWarning("Lua type {} does not have a __gc method. Meaning stuff like "
+                 ":type, etc... will not work either.",
+                 name);
     // Add GC function
     lua_pushcfunction(state, wrap_gc); // [userdata, mt, wrap__gc]
     lua_setfield(state, -2, "__gc");   // mt.__gc = wrap__gc [userdata, mt]

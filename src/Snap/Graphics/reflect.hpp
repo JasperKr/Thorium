@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <forward_list>
 #include <string>
+#include <string_view>
 #include <sys/types.h>
 #include <unordered_map>
 #include <variant>
@@ -355,7 +356,7 @@ struct ResourceInfo {
                StructInfo>
       info;
 
-  [[nodiscard]] auto GetTypename() const -> std::string {
+  [[nodiscard]] auto GetTypename() const -> std::string_view {
     if (IsBuffer()) {
       return "Buffer";
     }
@@ -378,8 +379,8 @@ struct ResourceInfo {
   }
 
   [[nodiscard]] auto ToString() const -> std::string {
-    std::string result = "Resource Name: " + name + " Type: " + GetTypename() +
-                         " Offset: " + std::to_string(GetOffset()) + "\n";
+    auto result = std::format("Resource Name: {} Type: {} Offset: {}\n", name,
+                              GetTypename(), GetOffset());
 
     if (IsBuffer()) {
       const auto &bufferInfo = std::get<BufferInfo>(info);

@@ -98,7 +98,7 @@ auto wrap_Send(lua_State *state) -> int {
           uniformInfo.IsMatrix())) {
       return luaL_error(
           state, "Unable to send uniform `%s`: expected %s, got number",
-          ResourceKeyToString(key).c_str(), uniformInfo.GetTypename().c_str());
+          ResourceKeyToString(key).c_str(), uniformInfo.GetTypename().data());
     }
 
     ScalarType scalarType{};
@@ -213,7 +213,7 @@ auto wrap_Send(lua_State *state) -> int {
 
     return luaL_error(state, "Unable to send uniform `%s`: expected %s, got %s",
                       ResourceKeyToString(key).c_str(),
-                      resourceInfo->GetTypename().c_str(),
+                      resourceInfo->GetTypename().data(),
                       luaL_typename(state, valueOffset));
   }
 

@@ -234,7 +234,7 @@ auto StringToImageFormat(const std::string &format) -> VkFormat {
 }
 
 // NOLINTNEXTLINE
-auto ImageFormatToString(VkFormat format) -> std::string {
+auto ImageFormatToString(VkFormat format) -> std::string_view {
   static const std::unordered_map<VkFormat, std::string> FormatToString = {
       {VK_FORMAT_R8G8B8A8_UNORM, "rgba8"},
       {VK_FORMAT_R8G8B8A8_SRGB, "srgba8"},
@@ -274,7 +274,7 @@ auto ImageFormatToString(VkFormat format) -> std::string {
   return "undefined";
 }
 
-auto ToString(VkFormat format, size_t arraySize) -> std::string {
+auto ToString(VkFormat format, size_t arraySize) -> std::string_view {
   switch (format) {
   case VK_FORMAT_R32_SFLOAT:
     return "float";

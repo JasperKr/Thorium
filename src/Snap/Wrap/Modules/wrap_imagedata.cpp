@@ -140,7 +140,7 @@ auto wrap_GetFormat(lua_State *state) -> int {
   auto format = imagedata->GetFormat();
   auto formatStr = Graphics::Format::ImageFormatToString(format);
 
-  lua_pushstring(state, formatStr.c_str());
+  lua_pushstring(state, formatStr.data());
 
   return 1;
 }

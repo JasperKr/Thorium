@@ -4,6 +4,7 @@
 #include "Modules/Math/quaternion.hpp"
 #include "Modules/Math/vector.hpp"
 #include "Modules/type.hpp"
+#include "Modules/utils.hpp"
 #include "Wrap/Helpers/lua_enum.hpp"
 #include <cstdint>
 #include <ostream>
@@ -100,12 +101,8 @@ inline auto LuaTypeName(BindingLuaType bindingType) -> std::string {
   static std::vector<std::string> types;
   types.clear();
   auto bindings = static_cast<uint32_t>(bindingType);
-  auto mask = bindings;
 
-  while (mask != 0U) {
-    auto bit = mask & -mask;
-    mask &= ~bit;
-
+  for (auto bit : Utils::BitMaskRange(bindings)) {
     switch (static_cast<BindingLuaType>(bit)) {
     case BindingLuaType::Integer:
       types.emplace_back("integer");

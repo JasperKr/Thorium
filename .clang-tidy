@@ -11,7 +11,8 @@ Checks: >
   concurrency-*,
   -cppcoreguidelines-pro-type-vararg,
   -hicpp-vararg,
-  -bugprone-reserved-identifier
+  -bugprone-reserved-identifier,
+  -bugprone-suspicious-stringview-data-usage
 
 # -cppcoreguidelines-pro-type-reinterpret-cast
 # -hicpp-no-array-decay

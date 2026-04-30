@@ -5,11 +5,11 @@
 #include "Graphics/graphics.hpp"
 #include "Modules/utils.hpp"
 #include <cstdint>
-#include <format>
 #include <imgui.h>
 #include <memory>
 #include <string>
 #include <variant>
+#include <vector>
 #include <vulkan/vulkan_core.h>
 
 namespace Graphics::Snapshot {
@@ -122,7 +122,9 @@ auto EventTypeFromString(const std::string &str) -> EventType {
 }
 
 auto GetInternalSnapshot() -> ThreadSnapshot & {
-  thread_local ThreadSnapshot currentSnapshot{};
+  thread_local ThreadSnapshot currentSnapshot(
+      std::vector<std::unique_ptr<::Graphics::Snapshot::Event>>{},
+      std::vector<::Graphics::DynamicRendering::State>{}, 0, "", false);
   return currentSnapshot;
 }
 
@@ -149,10 +151,10 @@ auto StartSnapshot() -> void {
 auto EndSnapshot() -> void {
   auto &currentSnapshot = GetInternalSnapshot();
   currentSnapshot.active = false;
-  currentSnapshot.renderStates = {};
-  currentSnapshot.threadId = 0;
-  currentSnapshot.threadName = {};
-  currentSnapshot.events.clear();
+  // currentSnapshot.renderStates = {};
+  // currentSnapshot.threadId = 0;
+  // currentSnapshot.threadName = {};
+  // currentSnapshot.events = std::vector<std::unique_ptr<Event>>{};
 }
 auto RenderSnapshot(const ThreadSnapshot &snapshot) -> void {
   int index = 1;
@@ -216,9 +218,11 @@ inline void BooleanFlag(const char *label, bool value,
 inline auto DrawRendertargetImGui(const DynamicRendering::RenderTarget *target,
                                   int index) -> void {
   if (target != nullptr) {
-    if (ImGui::TreeNode("%s", "%s", target->texture->GetDebugName().c_str())) {
+    auto name = target->texture->GetDebugName();
+
+    if (ImGui::TreeNode("Rendertarget", "%s", name.data())) {
       ImGui::Text("Format: %s",
-                  Format::ImageFormatToString(target->texture->format).c_str());
+                  Format::ImageFormatToString(target->texture->format).data());
 
       auto blend = target->blendMode;
       BooleanFlag("Blend Mode:", blend.blendEnable != 0U);
@@ -230,21 +234,21 @@ inline auto DrawRendertargetImGui(const DynamicRendering::RenderTarget *target,
         ImGui::SetItemTooltip(
             "Blend State:\nSrc-Color=%s\nDst-Color=%s\nColor Op=%s"
             "\nSrc Alpha=%s\nDst Alpha=%s\nAlpha Op=%s",
-            BlendMode::ToString(blend.srcColorBlendFactor).c_str(),
-            BlendMode::ToString(blend.dstColorBlendFactor).c_str(),
-            BlendMode::ToString(blend.colorBlendOp).c_str(),
-            BlendMode::ToString(blend.srcAlphaBlendFactor).c_str(),
-            BlendMode::ToString(blend.dstAlphaBlendFactor).c_str(),
-            BlendMode::ToString(blend.alphaBlendOp).c_str());
+            BlendMode::ToString(blend.srcColorBlendFactor).data(),
+            BlendMode::ToString(blend.dstColorBlendFactor).data(),
+            BlendMode::ToString(blend.colorBlendOp).data(),
+            BlendMode::ToString(blend.srcAlphaBlendFactor).data(),
+            BlendMode::ToString(blend.dstAlphaBlendFactor).data(),
+            BlendMode::ToString(blend.alphaBlendOp).data());
       } else {
         ImGui::Text("Blend State:\nSrc-Color=%s\nDst-Color=%s\nColor Op=%s"
                     "\nSrc Alpha=%s\nDst Alpha=%s\nAlpha Op=%s",
-                    BlendMode::ToString(blend.srcColorBlendFactor).c_str(),
-                    BlendMode::ToString(blend.dstColorBlendFactor).c_str(),
-                    BlendMode::ToString(blend.colorBlendOp).c_str(),
-                    BlendMode::ToString(blend.srcAlphaBlendFactor).c_str(),
-                    BlendMode::ToString(blend.dstAlphaBlendFactor).c_str(),
-                    BlendMode::ToString(blend.alphaBlendOp).c_str());
+                    BlendMode::ToString(blend.srcColorBlendFactor).data(),
+                    BlendMode::ToString(blend.dstColorBlendFactor).data(),
+                    BlendMode::ToString(blend.colorBlendOp).data(),
+                    BlendMode::ToString(blend.srcAlphaBlendFactor).data(),
+                    BlendMode::ToString(blend.dstAlphaBlendFactor).data(),
+                    BlendMode::ToString(blend.alphaBlendOp).data());
       }
 
       ImGui::Text("Clear Value: R=%.2f, G=%.2f, B=%.2f, A=%.2f",
@@ -581,7 +585,7 @@ auto TextureCreateEvent::DrawVariantImGui(ThreadSnapshot const *parent) const
   ImGui::Text("Mip Levels: %u", mipLevels);
   ImGui::Text("Array Layers: %u", arrayLayers);
   ImGui::Text("Format: %s",
-              Format::ToString(static_cast<VkFormat>(format)).c_str());
+              Format::ToString(static_cast<VkFormat>(format)).data());
   ImGui::Text("Usage: %u", usage);
   ImGui::Text("Properties: %u", properties);
 };
@@ -602,7 +606,7 @@ auto TextureUploadEvent::DrawVariantImGui(ThreadSnapshot const *parent) const
   ImGui::Text("Mip Level: %u", mipLevel);
   ImGui::Text("Array Layer: %u", arrayLayer);
   ImGui::Text("Format: %s",
-              Format::ToString(static_cast<VkFormat>(format)).c_str());
+              Format::ToString(static_cast<VkFormat>(format)).data());
   ImGui::Text("Data Size: %zu bytes", dataSize);
 };
 
@@ -775,7 +779,7 @@ auto SetIndexBufferEvent::DrawVariantImGui(ThreadSnapshot const *parent) const
 };
 
 inline auto PipelineStageFlag2ToString(VkPipelineStageFlags2 flag)
-    -> std::string {
+    -> std::string_view {
   switch (flag) {
     // clang-format off
   case VK_PIPELINE_STAGE_2_NONE: {return "NONE";}
@@ -817,7 +821,7 @@ inline auto PipelineStageFlag2ToString(VkPipelineStageFlags2 flag)
   case VK_PIPELINE_STAGE_2_SUBPASS_SHADER_BIT_HUAWEI: {return "SUBPASS_SHADER_BIT_HUAWEI";}
   // clang-format on
   default:
-    return std::format("Unknown Pipeline Stage Flag: {}", flag);
+    return "Unknown Pipeline Stage Flag";
   }
 }
 
@@ -887,7 +891,7 @@ auto BarrierEvent::DrawVariantImGui(ThreadSnapshot const *parent) const
     ImGui::Text("None");
   } else {
     for (const auto &stage : Utils::BitMaskRange(sync.srcStages)) {
-      ImGui::Text("%s", PipelineStageFlag2ToString(stage).c_str());
+      ImGui::Text("%s", PipelineStageFlag2ToString(stage).data());
     }
   }
   ImGui::Unindent();
@@ -907,7 +911,7 @@ auto BarrierEvent::DrawVariantImGui(ThreadSnapshot const *parent) const
     ImGui::Text("None");
   } else {
     for (const auto &stage : Utils::BitMaskRange(sync.dstStages)) {
-      ImGui::Text("%s", PipelineStageFlag2ToString(stage).c_str());
+      ImGui::Text("%s", PipelineStageFlag2ToString(stage).data());
     }
   }
   ImGui::Unindent();

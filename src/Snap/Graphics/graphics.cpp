@@ -436,6 +436,11 @@ inline auto CreateCommandPool(ThreadContext &tcontext) -> Error {
     }
   }
 
+  {
+    std::lock_guard<std::mutex> lock(CommandPoolsMutex);
+    CommandPools.emplace_back(tcontext.commandPool);
+  }
+
   return Error::Success();
 }
 
