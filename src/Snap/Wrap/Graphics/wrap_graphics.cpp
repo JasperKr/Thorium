@@ -764,7 +764,7 @@ auto wrap_AquireCommandBuffer(lua_State *state) -> int {
   }
 
   ::Graphics::Threading::AquireInfo info{};
-  info.name = luaL_optstring(state, 1, "Unnamed Command Buffer");
+  info.name = luaL_optstring(state, 1, "Unnamed Graphics Commands");
   info.priority = static_cast<int>(luaL_optinteger(state, 2, 0));
 
   auto result = ::Graphics::Threading::AquireCommandBuffer(*ctx, info);

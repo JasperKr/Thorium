@@ -269,7 +269,6 @@ add_library(snap_core OBJECT
     Modules/Peripherals/keyboard.cpp
     Modules/thread.cpp
     Modules/channel.cpp
-    Modules/utils.cpp
     Modules/error.cpp
     Modules/window.cpp
     Modules/reflectBindings.cpp
@@ -279,6 +278,10 @@ add_library(snap_core OBJECT
     Modules/Math/matrix.cpp
     Modules/Math/quaternion.cpp
     Modules/Math/math.cpp
+
+# Helpers
+    Modules/Helpers/hasher.cpp
+    Modules/Helpers/utils.cpp
 
 # Wrappers
     Wrap/Graphics/wrap_graphics.cpp

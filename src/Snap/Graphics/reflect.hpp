@@ -3,8 +3,8 @@
 #include "Graphics/bufferformat.hpp"
 #include "Graphics/graphicsContext.hpp"
 #include "Graphics/graphicsState.hpp"
+#include "Modules/Helpers/utils.hpp"
 #include "Modules/error.hpp"
-#include "Modules/utils.hpp"
 #include "slang/slang.h"
 #include <cstdint>
 #include <forward_list>

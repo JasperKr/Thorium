@@ -4,7 +4,7 @@
 #include <public/tracy/Tracy.hpp>
 #include <vector>
 
-#include "Modules/utils.hpp"
+#include "Modules/Helpers/utils.hpp"
 #include "vulkan/vulkan_core.h"
 
 namespace Graphics {

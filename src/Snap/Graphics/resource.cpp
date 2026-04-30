@@ -2,8 +2,8 @@
 #include "Graphics/buffer.hpp"
 #include "Graphics/semaphoreManager.hpp"
 #include "Graphics/texture.hpp"
+#include "Modules/Helpers/utils.hpp"
 #include "Modules/console.hpp"
-#include "Modules/utils.hpp"
 
 namespace Graphics {
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)

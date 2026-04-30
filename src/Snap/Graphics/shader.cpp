@@ -4,12 +4,12 @@
 #include "Graphics/reflect.hpp"
 #include "Graphics/snapshot.hpp"
 #include "Graphics/texture.hpp"
+#include "Modules/Helpers/utils.hpp"
 #include "Modules/Math/vector.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/filesystem.hpp"
 #include "Modules/object.hpp"
-#include "Modules/utils.hpp"
 #include "Modules/window.hpp"
 #include "graphics.hpp"
 #include "shaderc/shaderc.h"
@@ -475,7 +475,20 @@ static inline auto LoadSlang(GraphicsContext &context,
     if (Error::IsError(error)) {
       return error;
     }
+
+    VkDebugUtilsObjectNameInfoEXT nameInfo = {};
+    nameInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
+    nameInfo.objectType = VK_OBJECT_TYPE_SHADER_MODULE;
+
+    // NOLINTNEXTLINE
+    nameInfo.objectHandle = reinterpret_cast<uint64_t>(shader->module);
+    nameInfo.pObjectName = shader->moduleName.c_str();
+
+    vkSetDebugUtilsObjectNameEXT(context.device, &nameInfo);
   }
+
+  Snapshot::CaptureEvent(
+      Snapshot::ShaderModuleCreateEvent(shader->module, shader->moduleName));
 
   PrintDebug("Shader module created successfully.");
 

@@ -265,7 +265,8 @@ static auto CreateDevice(GraphicsContext &context,
         VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME,
         VK_KHR_SPIRV_1_4_EXTENSION_NAME,
         VK_KHR_SHADER_FLOAT_CONTROLS_EXTENSION_NAME,
-        VK_EXT_VERTEX_INPUT_DYNAMIC_STATE_EXTENSION_NAME};
+        VK_EXT_VERTEX_INPUT_DYNAMIC_STATE_EXTENSION_NAME,
+        VK_EXT_DEBUG_UTILS_EXTENSION_NAME};
 
     const auto &supported =
         ExtensionListSupported(requiredExtensions, availableExtensions);

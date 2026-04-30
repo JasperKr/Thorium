@@ -1,7 +1,7 @@
 #include "bufferformat.hpp"
 #include "Graphics/format.hpp"
-#include "Graphics/hash.hpp"
 #include "Graphics/reflect.hpp"
+#include "Modules/Helpers/hasher.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include <algorithm>
@@ -97,17 +97,17 @@ auto BufferFormat::operator==(const BufferFormat &other) const -> bool {
     auto end = attribute.name.end();
 
     for (auto it = begin; it != end; ++it) {
-      hasher.add(std::hash<std::string>()(&*it));
+      hasher.Add(std::hash<std::string>()(&*it));
     }
 
-    // hasher.add(std::hash<uint32_t>()(attribute.format));
+    // hasher.Add(std::hash<uint32_t>()(attribute.format));
     if (std::holds_alternative<VkFormat>(attribute.format)) {
-      hasher.add(std::hash<uint32_t>()(std::get<VkFormat>(attribute.format)));
+      hasher.Add(std::hash<uint32_t>()(std::get<VkFormat>(attribute.format)));
     } else {
-      hasher.add(std::get<BufferFormat>(attribute.format).GetHash());
+      hasher.Add(std::get<BufferFormat>(attribute.format).GetHash());
     }
   }
-  return hasher.get();
+  return hasher.Get();
 }
 
 auto GetAlignment(VkFormat format) -> Result<size_t> {

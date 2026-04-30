@@ -605,6 +605,17 @@ auto Present(Graphics::GraphicsContext &context,
     return error;
   }
 
+  {
+    std::lock_guard<std::mutex> lock(Threading::CommandBufferCacheMutex);
+    for (const auto &command : commands) {
+      if (command->threadData.commandBuffer != nullptr) {
+        Threading::CommandBufferCache.emplace_back(
+            GetSemaphoreValue(), command->threadData.commandBuffer);
+        command->threadData.commandBuffer = nullptr;
+      }
+    }
+  }
+
   error = PrepareRecording(context);
 
   if (Error::IsError(error)) {

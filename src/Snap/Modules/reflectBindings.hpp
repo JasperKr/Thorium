@@ -1,10 +1,10 @@
 #pragma once
 
+#include "Modules/Helpers/utils.hpp"
 #include "Modules/Math/matrix.hpp"
 #include "Modules/Math/quaternion.hpp"
 #include "Modules/Math/vector.hpp"
 #include "Modules/type.hpp"
-#include "Modules/utils.hpp"
 #include "Wrap/Helpers/lua_enum.hpp"
 #include <cstdint>
 #include <ostream>

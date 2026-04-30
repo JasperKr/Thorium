@@ -184,7 +184,7 @@ auto AquireCommandBuffer(Graphics::GraphicsContext &context,
   auto cachedCmdBuffer = GetCachedCommandBuffer(context);
 
   if (!cachedCmdBuffer.has_value()) {
-    PrintAlways("Allocating new command buffer for thread '{}'", info.name);
+    PrintAlways("Allocating new command buffer for '{}'", info.name);
     VkCommandBufferAllocateInfo allocInfo = {};
     allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
     allocInfo.commandPool = tcontext.commandPool;

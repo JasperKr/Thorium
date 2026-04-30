@@ -7,13 +7,13 @@
 #include "Graphics/shader.hpp"
 #include "Graphics/snapshot.hpp"
 #include "Graphics/texture.hpp"
+#include "Modules/Helpers/utils.hpp"
 #include "Modules/Math/matrix.hpp"
 #include "Modules/color.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/image.hpp"
 #include "Modules/object.hpp"
-#include "Modules/utils.hpp"
 #include "slang/slang.h"
 #include "tl/expected.hpp"
 #include <algorithm>
@@ -39,9 +39,10 @@ namespace Graphics::DynamicRendering {
 
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
 
-thread_local std::unordered_map<State, std::pair<VkPipeline, PipelineLayout>,
-                                StateHash>
-    PipelineCache{};
+constexpr size_t PipelineCacheSize = 512UL;
+
+LRUCache<State, std::pair<VkPipeline, PipelineLayout>, StateHash>
+    PipelineCache(PipelineCacheSize);
 thread_local std::vector<Ref<Shader::ShaderModule>> UsedShaderModules{};
 thread_local PipelineLayout CurrentPipelineLayout; // NOLINT
 
@@ -672,7 +673,7 @@ inline auto CreateGraphicsPipeline(const GraphicsContext &context, State &state)
       return error.AsUnexpected();
     }
   }
-  PipelineCache[state] = {pipeline, layoutResult.value()};
+  PipelineCache.emplace(state, std::make_pair(pipeline, layoutResult.value()));
 
   {
     std::lock_guard<std::mutex> lock(PipelinesMutex);
@@ -720,7 +721,7 @@ inline auto CreateComputePipeline(const GraphicsContext &context, State &state)
     }
   }
 
-  PipelineCache[state] = {pipeline, layoutResult.value()};
+  PipelineCache.emplace(state, std::make_pair(pipeline, layoutResult.value()));
 
   {
     std::lock_guard<std::mutex> lock(PipelinesMutex);
@@ -747,16 +748,10 @@ inline auto GetPipeline(const GraphicsContext &context, State &state)
     -> Result<std::pair<VkPipeline, PipelineLayout>> {
   ZoneScoped;
 
-  PrintDebug("Getting pipeline from cache");
+  auto *pipeline = PipelineCache.get(state);
 
-  auto cacheIterator = PipelineCache.find(state);
-
-  PrintDebug("Cache iterator found");
-
-  if (cacheIterator != PipelineCache.end()) {
-    PrintDebug("Pipeline found in cache");
-
-    return cacheIterator->second;
+  if (pipeline != nullptr) {
+    return *pipeline;
   }
 
   auto result = CreatePipeline(context, state);
@@ -1014,9 +1009,6 @@ inline auto BeginRendering(const GraphicsContext &context) -> Error {
 
   VkRenderingInfo renderingInfo = {};
   renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
-
-  auto viewport = GetClippedViewport();
-  auto scissor = GetScissor();
 
   renderingInfo.renderArea.offset = {.x = 0, .y = 0};
   renderingInfo.renderArea.extent = GetRenderExtent(context, *TopOfStack);
@@ -1521,8 +1513,48 @@ auto BindDescriptorSets(const GraphicsContext &context,
   return Error::Success();
 }
 
+auto compareScissors(const State &first, const State &second) -> bool {
+  if (first.hasScissor != second.hasScissor) {
+    return false;
+  }
+
+  if (first.hasScissor && second.hasScissor) {
+    if (first.scissor.offset.x != second.scissor.offset.x ||
+        first.scissor.offset.y != second.scissor.offset.y ||
+        first.scissor.extent.width != second.scissor.extent.width ||
+        first.scissor.extent.height != second.scissor.extent.height) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+auto compareViewports(const State &first, const State &second) -> bool {
+  if (first.hasViewport != second.hasViewport) {
+    return false;
+  }
+
+  if (first.hasViewport && second.hasViewport) {
+    if (first.viewport.x != second.viewport.x ||
+        first.viewport.y != second.viewport.y ||
+        first.viewport.width != second.viewport.width ||
+        first.viewport.height != second.viewport.height) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 auto PrepareRendering(const GraphicsContext &context) -> Error {
   ZoneScoped;
+
+  // Flush updates the last state so we need to compare before updating it
+  bool sameViewport =
+      LastState != nullptr && compareViewports(*TopOfStack, *LastState);
+  bool sameScissor =
+      LastState != nullptr && compareScissors(*TopOfStack, *LastState);
 
   auto flushResult = Flush(context);
 
@@ -1580,31 +1612,33 @@ auto PrepareRendering(const GraphicsContext &context) -> Error {
     return bindResult;
   }
 
-  if (updatedState || !GetIsCurrentlyRendering()) {
-    if (TopOfStack->bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS &&
-        !GetIsCurrentlyRendering()) {
-      auto beginResult = BeginRendering(context);
+  bool wasRendering = GetIsCurrentlyRendering();
 
-      if (Error::IsError(beginResult)) {
-        return beginResult;
-      }
+  if (TopOfStack->bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS &&
+      !wasRendering) {
+    auto beginResult = BeginRendering(context);
+
+    if (Error::IsError(beginResult)) {
+      return beginResult;
     }
+  }
 
-    // TODO: I moved this as an optimization, Is it still correct?
-    if (TopOfStack->bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS) {
-      ZoneScopedN("Set Viewport And Scissor");
+  if ((TopOfStack->bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS &&
+       !sameViewport) ||
+      !wasRendering) {
+    ZoneScopedN("Set Viewport And Scissor");
 
-      auto viewport = GetClippedViewport();
-      auto scissor = GetScissor();
+    auto viewport = GetClippedViewport();
+    vkCmdSetViewport(Graphics::GetCommandBuffer(), 0, 1, &viewport);
+  }
 
-      if (Graphics::GetCommandBuffer() == VK_NULL_HANDLE) {
-        return Error::Create(
-            "Tried to set viewport and scissor, but command buffer is null.");
-      }
+  if ((TopOfStack->bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS &&
+       !sameScissor) ||
+      !wasRendering) {
+    ZoneScopedN("Set Scissor");
 
-      vkCmdSetViewport(Graphics::GetCommandBuffer(), 0, 1, &viewport);
-      vkCmdSetScissor(Graphics::GetCommandBuffer(), 0, 1, &scissor);
-    }
+    auto scissor = GetScissor();
+    vkCmdSetScissor(Graphics::GetCommandBuffer(), 0, 1, &scissor);
   }
 
   Graphics::GetIsStateDirty() = false;

@@ -2,7 +2,7 @@
 
 #include "Graphics/format.hpp"
 #include "Graphics/graphicsContext.hpp"
-#include "Graphics/hash.hpp"
+#include "Modules/Helpers/hasher.hpp"
 #include <algorithm>
 #include <cassert>
 #include <cstdint>
@@ -128,13 +128,13 @@ public:
   [[nodiscard]] auto GetHash() const -> size_t {
     Hash::Hasher hasher{};
     for (const auto &attribute : Attributes) {
-      hasher.add(std::hash<std::string>()(attribute.name));
-      hasher.add(std::hash<uint32_t>()(attribute.location));
-      hasher.add(std::hash<uint32_t>()(attribute.binding));
-      hasher.add(std::hash<uint32_t>()(attribute.format));
-      hasher.add(std::hash<uint32_t>()(attribute.offset));
+      hasher.Add(std::hash<std::string>()(attribute.name));
+      hasher.Add(std::hash<uint32_t>()(attribute.location));
+      hasher.Add(std::hash<uint32_t>()(attribute.binding));
+      hasher.Add(std::hash<uint32_t>()(attribute.format));
+      hasher.Add(std::hash<uint32_t>()(attribute.offset));
     }
-    return hasher.get();
+    return hasher.Get();
   }
 
 private:

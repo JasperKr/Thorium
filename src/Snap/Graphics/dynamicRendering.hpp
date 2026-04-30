@@ -1,7 +1,8 @@
 #pragma once
 
-#include "Graphics/hash.hpp"
 #include "Graphics/texture.hpp"
+#include "Modules/Helpers/LRU-Cache.hpp"
+#include "Modules/Helpers/hasher.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
@@ -11,7 +12,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <unordered_map>
-#include <utility>
 #include <variant>
 #include <vector>
 
@@ -100,28 +100,28 @@ struct DescriptorKeyHash {
   auto operator()(const DescriptorKey &key) const noexcept -> size_t {
     Hash::Hasher hasher{};
 
-    hasher.add(key.layout);
+    hasher.Add(key.layout);
 
     for (const auto &binding : key.bindings) {
-      hasher.add(binding.binding);
+      hasher.Add(binding.binding);
 
       if (std::holds_alternative<VkDescriptorImageInfo>(binding.resourceInfo)) {
         const auto &imageInfo =
             std::get<VkDescriptorImageInfo>(binding.resourceInfo);
-        hasher.add(imageInfo.imageView);
-        hasher.add(imageInfo.sampler);
-        hasher.add(imageInfo.imageLayout);
+        hasher.Add(imageInfo.imageView);
+        hasher.Add(imageInfo.sampler);
+        hasher.Add(imageInfo.imageLayout);
       } else if (std::holds_alternative<VkDescriptorBufferInfo>(
                      binding.resourceInfo)) {
         const auto &bufferInfo =
             std::get<VkDescriptorBufferInfo>(binding.resourceInfo);
-        hasher.add(bufferInfo.buffer);
-        hasher.add(bufferInfo.offset);
-        hasher.add(bufferInfo.range);
+        hasher.Add(bufferInfo.buffer);
+        hasher.Add(bufferInfo.offset);
+        hasher.Add(bufferInfo.range);
       }
     }
 
-    return hasher.get();
+    return hasher.Get();
   }
 };
 
@@ -209,27 +209,27 @@ struct DescriptorSetLayoutKeyHash {
   auto operator()(DescriptorSetLayoutKey const &key) const noexcept -> size_t {
     Hash::Hasher hasher{};
 
-    hasher.add(key.flags);
+    hasher.Add(key.flags);
 
     for (const auto &binding : key.bindings) {
-      hasher.add(binding.binding);
-      hasher.add(binding.descriptorType);
-      hasher.add(binding.descriptorCount);
-      hasher.add(binding.stageFlags);
+      hasher.Add(binding.binding);
+      hasher.Add(binding.descriptorType);
+      hasher.Add(binding.descriptorCount);
+      hasher.Add(binding.stageFlags);
 
       if (binding.pImmutableSamplers != nullptr) {
         for (uint32_t i = 0; i < binding.descriptorCount; ++i) {
           // NOLINTNEXTLINE, reinterpret cast And pointer arithmetic
-          hasher.add(reinterpret_cast<size_t>(binding.pImmutableSamplers[i]));
+          hasher.Add(reinterpret_cast<size_t>(binding.pImmutableSamplers[i]));
         }
       }
     }
 
     for (VkDescriptorBindingFlags flag : key.bindingFlags) {
-      hasher.add(flag);
+      hasher.Add(flag);
     }
 
-    return hasher.get();
+    return hasher.Get();
   }
 };
 
@@ -309,97 +309,77 @@ extern thread_local State *TopOfStack;
 
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
-inline auto AddToHash(size_t &hash, size_t value) -> void {
-  constexpr uint32_t prime = 0x9e3779b9;
-  constexpr uint32_t shift = 6;
-  constexpr uint32_t shift2 = 2;
-
-  hash ^= value + prime + (hash << shift) + (hash >> shift2);
-}
-
 inline auto HashBlendmode(VkPipelineColorBlendAttachmentState const &blendMode)
     -> size_t {
-  size_t hash = 0;
+  Hash::Hasher hasher{};
 
-  AddToHash(hash, std::hash<bool>()(blendMode.blendEnable != 0U));
-  AddToHash(hash, std::hash<VkBlendFactor>()(blendMode.srcColorBlendFactor));
-  AddToHash(hash, std::hash<VkBlendFactor>()(blendMode.dstColorBlendFactor));
-  AddToHash(hash, std::hash<VkBlendOp>()(blendMode.colorBlendOp));
-  AddToHash(hash, std::hash<VkBlendFactor>()(blendMode.srcAlphaBlendFactor));
-  AddToHash(hash, std::hash<VkBlendFactor>()(blendMode.dstAlphaBlendFactor));
-  AddToHash(hash, std::hash<VkBlendOp>()(blendMode.alphaBlendOp));
-  AddToHash(hash, std::hash<uint32_t>()(blendMode.colorWriteMask));
+  hasher.Add(std::hash<bool>()(blendMode.blendEnable != 0U));
+  hasher.Add(std::hash<VkBlendFactor>()(blendMode.srcColorBlendFactor));
+  hasher.Add(std::hash<VkBlendFactor>()(blendMode.dstColorBlendFactor));
+  hasher.Add(std::hash<VkBlendOp>()(blendMode.colorBlendOp));
+  hasher.Add(std::hash<VkBlendFactor>()(blendMode.srcAlphaBlendFactor));
+  hasher.Add(std::hash<VkBlendFactor>()(blendMode.dstAlphaBlendFactor));
+  hasher.Add(std::hash<VkBlendOp>()(blendMode.alphaBlendOp));
+  hasher.Add(std::hash<uint32_t>()(blendMode.colorWriteMask));
 
-  return hash;
+  return hasher.Get();
 }
 
 inline auto HashTexture(const Texture *texture) -> size_t {
-  size_t hash = 0;
+  Hash::Hasher hasher{};
 
-  AddToHash(hash, std::hash<VkFormat>()(texture->format));
-  AddToHash(hash, std::hash<uint32_t>()(texture->size.width));
-  AddToHash(hash, std::hash<uint32_t>()(texture->size.height));
-  AddToHash(hash, std::hash<uint32_t>()(texture->size.depth));
-  AddToHash(hash, std::hash<uint32_t>()(texture->mipmapcount));
-  AddToHash(hash, std::hash<uint32_t>()(texture->arrayLayers));
-  AddToHash(hash, std::hash<VkImageUsageFlags>()(texture->usage));
-  AddToHash(hash, std::hash<TextureType>()(texture->textureType));
+  hasher.Add(std::hash<VkFormat>()(texture->format));
+  hasher.Add(std::hash<uint32_t>()(texture->size.width));
+  hasher.Add(std::hash<uint32_t>()(texture->size.height));
+  hasher.Add(std::hash<uint32_t>()(texture->size.depth));
+  hasher.Add(std::hash<uint32_t>()(texture->mipmapcount));
+  hasher.Add(std::hash<uint32_t>()(texture->arrayLayers));
+  hasher.Add(std::hash<VkImageUsageFlags>()(texture->usage));
+  hasher.Add(std::hash<TextureType>()(texture->textureType));
 
-  return hash;
+  return hasher.Get();
 }
 
 inline auto HashRenderTarget(const RenderTarget *renderTarget) -> size_t {
-  size_t hash = 0;
+  Hash::Hasher hasher{};
 
-  AddToHash(hash, HashBlendmode(renderTarget->blendMode));
-  AddToHash(hash, HashTexture(renderTarget->texture.get()));
+  hasher.Add(HashBlendmode(renderTarget->blendMode));
+  hasher.Add(HashTexture(renderTarget->texture.get()));
 
-  return hash;
+  return hasher.Get();
 }
 
 struct StateHash {
   static auto Hash(const State &state) -> size_t {
-    size_t hash = 0;
-
-    constexpr uint32_t prime = 0x9e3779b9;
-    constexpr uint32_t shift = 6;
-    constexpr uint32_t shift2 = 2;
+    Hash::Hasher hasher{};
 
     // Special case for compute pipelines
     if (state.bindPoint == VK_PIPELINE_BIND_POINT_COMPUTE) {
-      AddToHash(hash, std::hash<VkPipelineBindPoint>()(state.bindPoint));
-      AddToHash(hash, state.shader.get() == nullptr ? 0 : state.shader->hash());
-      return hash;
+      hasher.Add(std::hash<VkPipelineBindPoint>()(state.bindPoint));
+      hasher.Add(state.shader.get() == nullptr ? 0 : state.shader->hash());
+      return hasher.Get();
     }
 
     if (state.bindPoint != VK_PIPELINE_BIND_POINT_GRAPHICS) {
       PrintError("Trying to hash unsupported pipeline bind point.");
     }
 
-    AddToHash(hash, std::hash<VkCullModeFlags>()(state.cullMode));
-    AddToHash(hash, std::hash<VkFrontFace>()(state.frontFace));
-    AddToHash(hash, std::hash<bool>()(state.depthTestEnable));
-    AddToHash(hash, std::hash<bool>()(state.depthWriteEnable));
-    AddToHash(hash, std::hash<VkCompareOp>()(state.depthCompareOp));
-    AddToHash(hash, std::hash<bool>()(state.stencilTestEnable));
-    AddToHash(hash, std::hash<VkPolygonMode>()(state.polygonMode));
-    AddToHash(hash, std::hash<float>()(state.lineWidth));
-    AddToHash(hash, std::hash<float>()(state.viewport.x));
-    AddToHash(hash, std::hash<float>()(state.viewport.y));
-    AddToHash(hash, std::hash<float>()(state.viewport.width));
-    AddToHash(hash, std::hash<float>()(state.viewport.height));
-    AddToHash(hash, std::hash<int32_t>()(state.scissor.offset.x));
-    AddToHash(hash, std::hash<int32_t>()(state.scissor.offset.y));
-    AddToHash(hash, std::hash<uint32_t>()(state.scissor.extent.width));
-    AddToHash(hash, std::hash<uint32_t>()(state.scissor.extent.height));
-    AddToHash(hash, state.shader.get() == nullptr ? 0 : state.shader->hash());
-    AddToHash(hash, std::hash<VkPipelineBindPoint>()(state.bindPoint));
+    hasher.Add(std::hash<VkCullModeFlags>()(state.cullMode));
+    hasher.Add(std::hash<VkFrontFace>()(state.frontFace));
+    hasher.Add(std::hash<bool>()(state.depthTestEnable));
+    hasher.Add(std::hash<bool>()(state.depthWriteEnable));
+    hasher.Add(std::hash<VkCompareOp>()(state.depthCompareOp));
+    hasher.Add(std::hash<bool>()(state.stencilTestEnable));
+    hasher.Add(std::hash<VkPolygonMode>()(state.polygonMode));
+    hasher.Add(std::hash<float>()(state.lineWidth));
+    hasher.Add(state.shader.get() == nullptr ? 0 : state.shader->hash());
+    hasher.Add(std::hash<VkPipelineBindPoint>()(state.bindPoint));
 
     for (const auto &renderTarget : state.renderTargets) {
-      AddToHash(hash, HashRenderTarget(renderTarget.get()));
+      hasher.Add(HashRenderTarget(renderTarget.get()));
     }
 
-    return hash;
+    return hasher.Get();
   }
 
   auto operator()(const State &state) const -> size_t {
@@ -409,9 +389,9 @@ struct StateHash {
 
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
 
-extern thread_local std::unordered_map<
-    State, std::pair<VkPipeline, PipelineLayout>, StateHash>
+extern LRUCache<State, std::pair<VkPipeline, PipelineLayout>, StateHash>
     PipelineCache;
+
 extern thread_local std::vector<Ref<Shader::ShaderModule>> UsedShaderModules;
 extern thread_local PipelineLayout CurrentPipelineLayout;
 
