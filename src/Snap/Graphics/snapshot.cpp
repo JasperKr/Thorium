@@ -193,6 +193,7 @@ void Event::DrawVariantImGui(ThreadSnapshot const *parent) const {}
 Event::~Event() = default;
 
 GraphicsEvent::GraphicsEvent() {
+#if Enable_Snapshots
   auto state = *Graphics::DynamicRendering::TopOfStack;
   auto *snapshot = GetCurrentSnapshot();
   if (snapshot != nullptr) {
@@ -201,6 +202,9 @@ GraphicsEvent::GraphicsEvent() {
   } else {
     renderState = -1;
   }
+#else
+  renderState = -1; // NOLINT
+#endif
 }
 
 inline void BooleanFlag(const char *label, bool value,

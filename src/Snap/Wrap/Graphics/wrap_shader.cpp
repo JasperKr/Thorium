@@ -171,16 +171,16 @@ auto wrap_Send(lua_State *state) -> int {
                           "Unable to send uniform `%s`: unknown scalar type",
                           ResourceKeyToString(key).c_str());
       case ScalarType::Float:
-        data.push_back(std::bit_cast<uint32_t>(
+        data.emplace_back(std::bit_cast<uint32_t>(
             static_cast<float>(lua_tonumber(state, -1)))); // NOLINT
         break;
       case ScalarType::Int:
       case ScalarType::UInt:
-        data.push_back(
+        data.emplace_back(
             static_cast<uint32_t>(lua_tointeger(state, -1))); // NOLINT
         break;
       case ScalarType::Bool:
-        data.push_back(lua_toboolean(state, -1));
+        data.emplace_back(lua_toboolean(state, -1));
         break;
       }
 

@@ -667,7 +667,7 @@ static inline auto TextureFromImagedataArrayAndOptions(lua_State *state)
   for (size_t i = 0; i < len; ++i) {
     lua_rawgeti(state, 1, static_cast<int>(i + 1));
     auto *imageData = LuaWrap::ObjectFromLua<Image::ImageData>(state, -1);
-    slices.push_back(imageData);
+    slices.emplace_back(imageData);
     lua_pop(state, 1);
   }
 

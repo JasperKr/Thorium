@@ -166,13 +166,7 @@ auto Matrix4x4::operator*(const Vec4 &vec) const -> Vec4 {
 }
 
 auto Matrix4x4::operator==(const Matrix4x4 &other) const -> bool {
-#pragma unroll
-  for (size_t i = 0; i < Size; ++i) {
-    if (this->elements.at(i) != other.elements.at(i)) {
-      return false;
-    }
-  }
-  return true;
+  return elements == other.elements;
 }
 
 auto Matrix4x4::Inverse() const -> Matrix4x4 {
@@ -395,12 +389,7 @@ auto Matrix3x3::operator*(const Vec3 &vec) const -> Vec3 {
 }
 
 auto Matrix3x3::operator==(const Matrix3x3 &other) const -> bool {
-  for (size_t i = 0; i < Size; ++i) {
-    if (this->elements.at(i) != other.elements.at(i)) {
-      return false;
-    }
-  }
-  return true;
+  return elements == other.elements;
 }
 
 auto Matrix3x3::operator!=(const Matrix3x3 &other) const -> bool {

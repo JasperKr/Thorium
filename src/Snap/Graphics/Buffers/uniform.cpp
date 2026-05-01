@@ -1,16 +1,21 @@
 #include "uniform.hpp"
 #include "Graphics/graphicsState.hpp"
 #include <cassert>
+#include <cstddef>
 #include <public/tracy/Tracy.hpp>
 #include <vector>
 
 #include "Modules/Helpers/utils.hpp"
+#include "Modules/console.hpp"
 #include "vulkan/vulkan_core.h"
 
 namespace Graphics {
 
 thread_local std::vector<FrameUniformBufferObject>
     ThreadUniformBuffers{}; // NOLINT
+
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+std::atomic<int> UniformBufferObjectCount{0};
 
 auto InitializeUniformBufferModule(GraphicsContext &context) -> Error {
   for (uint32_t j = 0; j < FRAMES_IN_FLIGHT; j++) {
@@ -39,11 +44,12 @@ auto GetGlobalUniformBuffer(uint32_t frameIndex) -> FrameUniformBufferObject & {
 auto FrameUniformBufferObject::Create(GraphicsContext &context)
     -> Result<FrameUniformBufferObject> {
 
-  FrameUniformBufferObject obj{};
-  obj.size = InitialUniformBufferSize;
+  PrintAlways("Creating frame uniform buffer of size {} bytes",
+              InitialUniformBufferSize);
 
+  FrameUniformBufferObject obj{};
   BufferCreationInfo info{};
-  info.size = obj.size;
+  info.size = InitialUniformBufferSize;
   info.persistentMapping = true;
   info.stagingBuffer = true;
   info.properties = static_cast<uint32_t>(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) |
@@ -62,38 +68,33 @@ auto FrameUniformBufferObject::Create(GraphicsContext &context)
   return obj;
 }
 
-void FrameUniformBufferObject::SetData(const Graphics::GraphicsContext &context,
-                                       const std::span<const uint8_t> &data,
-                                       uint32_t atOffset) {
-  if (atOffset + data.size() > localData.size()) {
-    localData.resize(atOffset + data.size());
-  }
-
-  // NOLINTNEXTLINE, pointer arithmetic
-  std::memcpy(localData.data() + atOffset, data.data(), data.size());
-}
-
-auto FrameUniformBufferObject::Flush(const Graphics::GraphicsContext &context)
-    -> Result<bool> {
+auto FrameUniformBufferObject::Write(const Graphics::GraphicsContext &context,
+                                     const std::span<const uint8_t> &data,
+                                     size_t writeOffset) -> Result<bool> {
   ZoneScoped;
 
-  if (localData.size() > MaximumUniformBufferSize) {
+  if (data.size_bytes() == 0) {
+    return false;
+  }
+
+  if (data.size_bytes() > MaximumUniformBufferSize) {
     return Error::Unexpected(
         "Tried to set uniform buffer data larger than maximum. (holy shit)");
   }
 
   bool resized = false;
-  if (localData.size() + offset > size) {
-    while (localData.size() + offset > size) {
-      size *= 2;
-      if (size > MaximumUniformBufferSize) {
+  size_t bufferSize = buffer->size;
+  if (data.size_bytes() + offset > bufferSize) {
+    while (data.size_bytes() + offset > bufferSize) {
+      bufferSize *= 2;
+      if (bufferSize > MaximumUniformBufferSize) {
         return Error::Unexpected(
             "Uniform buffer exceeded maximum allowed size.");
       }
     }
 
     Graphics::BufferCreationInfo info{};
-    info.size = size;
+    info.size = bufferSize;
     info.persistentMapping = true;
     info.stagingBuffer = true;
     info.properties =
@@ -119,15 +120,12 @@ auto FrameUniformBufferObject::Flush(const Graphics::GraphicsContext &context)
                            .access = VK_ACCESS_2_HOST_WRITE_BIT,
                        });
 
-  auto result = buffer->SetData(context, localData, offset);
+  auto result = buffer->SetData(context, data, offset + writeOffset);
   auto initialOffset = offset;
 
-  offset += static_cast<uint32_t>(localData.size());
+  offset += static_cast<uint32_t>(data.size_bytes() + writeOffset);
   offset = Utils::AlignUp(
       offset, context.deviceProperties.limits.minUniformBufferOffsetAlignment);
-
-  lastFlushSize = offset - initialOffset; // Use the difference as flushed size
-  localData.clear();
 
   if (Error::IsError(result)) {
     return result.AsUnexpected();

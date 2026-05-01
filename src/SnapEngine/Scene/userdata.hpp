@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Modules/console.hpp"
 #include "lua.hpp"
 #include <cstdint>
 #include <vector>

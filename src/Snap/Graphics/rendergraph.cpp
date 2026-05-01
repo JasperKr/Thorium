@@ -2,7 +2,6 @@
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/image.hpp"
-#include "graphics.hpp"
 #include "texture.hpp"
 #include "tl/expected.hpp"
 #include <unordered_map>
@@ -879,7 +878,7 @@ auto inline GetDescriptorType(const Resource &resource,
     count += (std::max)(1U, static_cast<uint32_t>(static_cast<double>(count) *
                                                   AllocationMuliplier));
 
-    poolSizes.push_back(
+    poolSizes.emplace_back(
         VkDescriptorPoolSize{.type = type, .descriptorCount = count});
   }
 
@@ -1363,6 +1362,7 @@ auto inline AllocateResourceMemory(GraphicsContext &context, RenderGraph &graph,
       VkResult result =
           vmaCreateBuffer(context.vmaAllocator, &bufferInfo, &allocInfo,
                           &buffer->handle, &buffer->memory, nullptr);
+      PrintAlways("New vma buffer");
     }
   }
 

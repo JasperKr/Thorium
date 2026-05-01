@@ -80,7 +80,7 @@ auto SimpleFormatFromLua(lua_State *state, int index,
   if (lua_type(state, index) == LUA_TSTRING) {
     const auto &str = luaL_checkstring(state, index);
     auto format = ::Graphics::Format::FromString(str);
-    components.push_back(
+    components.emplace_back(
         ::Graphics::BufferComponent{.name = "Default", .format = format});
   } else {
     auto luatypename = std::string(luaL_typename(state, index));

@@ -1,5 +1,7 @@
 #include <cstdint>
+#include <mutex>
 #include <optional>
+#include <queue>
 #include <string>
 #include <variant>
 #include <vector>
@@ -17,6 +19,12 @@ struct Event {
   std::string Name;
   std::vector<EventValue> Values;
 };
+
+// NOLINTNEXTLINE
+extern std::queue<Event> Events;
+
+// NOLINTNEXTLINE
+extern std::mutex EventsMutex;
 
 auto Pull() -> void;
 auto Pop() -> std::optional<Event>;

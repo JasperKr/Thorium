@@ -8,16 +8,6 @@
 
 #include "Modules/event.hpp"
 
-auto operator new(std ::size_t count) -> void * {
-  auto *ptr = malloc(count); // NOLINT
-  TracyAlloc(ptr, count);
-  return ptr;
-}
-void operator delete(void *ptr) noexcept {
-  TracyFree(ptr);
-  free(ptr); // NOLINT
-}
-
 auto main(int argCount, char **argValues) -> int {
   std::vector<std::string> args;
   args.reserve(argCount);

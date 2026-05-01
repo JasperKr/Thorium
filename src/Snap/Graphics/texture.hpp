@@ -257,6 +257,15 @@ struct Texture : Object, Barrier::BarrierSynced {
 
     return "Unnamed Texture";
   }
+
+  auto operator==(const Texture &other) const -> bool {
+    return image == other.image && view == other.view &&
+           memory == other.memory && format == other.format;
+  }
+
+  auto operator!=(const Texture &other) const -> bool {
+    return !(*this == other);
+  }
 };
 
 struct TextureCreationInfo {

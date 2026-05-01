@@ -14,6 +14,9 @@
 #include <utility>
 #include <vector>
 #include <vulkan/vulkan_core.h>
+
+#define Enable_Snapshots 0
+
 namespace Graphics::Snapshot {
 
 enum class EventType : uint8_t {
@@ -620,6 +623,7 @@ struct ThreadSnapshot : Object {
 auto GetCurrentSnapshot() -> ThreadSnapshot *;
 
 template <typename T> auto CaptureEvent(const T &event) -> bool {
+#if Enable_Snapshots
   auto *currentSnapshot = GetCurrentSnapshot();
 
   if (currentSnapshot == nullptr) {
@@ -648,6 +652,7 @@ template <typename T> auto CaptureEvent(const T &event) -> bool {
       structuredEvent->hasAssociatedUploadEvent = true;
     }
   }
+#endif
 
   return true;
 }

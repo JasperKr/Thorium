@@ -15,6 +15,12 @@ public:
     Value value;
   };
 
+private:
+  using iterator = typename std::list<Entry>::iterator;
+  using const_iterator = typename std::list<Entry>::const_iterator;
+  using ListIt = typename std::list<Entry>::iterator;
+
+public:
   auto contains(const Key &key) const -> bool {
     std::lock_guard lock(m_mutex);
     return m_map.find(key) != m_map.end();
@@ -108,9 +114,35 @@ public:
     return m_map.size();
   }
 
-private:
-  using ListIt = typename std::list<Entry>::iterator;
+  // Begin iterator (most recently used)
+  auto begin() -> iterator {
+    std::lock_guard lock(m_mutex);
+    return m_list.begin();
+  }
+  auto begin() const -> const_iterator {
+    std::lock_guard lock(m_mutex);
+    return m_list.begin();
+  }
+  auto cbegin() const -> const_iterator {
+    std::lock_guard lock(m_mutex);
+    return m_list.cbegin();
+  }
 
+  // End iterator
+  auto end() -> iterator {
+    std::lock_guard lock(m_mutex);
+    return m_list.end();
+  }
+  auto end() const -> const_iterator {
+    std::lock_guard lock(m_mutex);
+    return m_list.end();
+  }
+  auto cend() const -> const_iterator {
+    std::lock_guard lock(m_mutex);
+    return m_list.cend();
+  }
+
+private:
   void
   touch(typename std::unordered_map<Key, ListIt, Hash>::iterator iterator) {
     // move to front (most recently used)

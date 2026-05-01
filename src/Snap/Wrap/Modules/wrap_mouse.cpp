@@ -22,7 +22,8 @@ namespace Wrap::Mouse {
 auto Wrap_IsDown(lua_State *state) -> int {
   int keyCount = lua_gettop(state);
   bool anyDown = false;
-  std::vector<bool> mouseStates;
+  thread_local std::vector<bool> mouseStates;
+  mouseStates.clear();
   mouseStates.reserve(static_cast<size_t>(keyCount));
   auto mouseState = SDL_GetMouseState(nullptr, nullptr);
 

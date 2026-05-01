@@ -6,8 +6,8 @@ namespace Hash {
 struct Hasher {
   Hasher() = default;
 
-  auto Add(size_t value) -> Hasher &;
-  auto Add(void *ptr) -> Hasher &;
+  auto Add(size_t value) -> void;
+  auto Add(void *ptr) -> void;
 
   [[nodiscard]] auto Get() const -> size_t;
 

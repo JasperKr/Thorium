@@ -2,7 +2,6 @@
 
 #include "Modules/error.hpp"
 #include "buffer.hpp"
-#include "graphics.hpp"
 #include "shader.hpp"
 #include "texture.hpp"
 #include <unordered_map>

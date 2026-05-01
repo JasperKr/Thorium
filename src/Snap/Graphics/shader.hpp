@@ -159,7 +159,23 @@ struct ShaderModule : Object {
   auto GetWaveSize() const -> uint32_t;
 
   auto operator==(const ShaderModule &other) const -> bool {
-    return module == other.module;
+    if (module != other.module) {
+      PrintAlways("Shader modules not equal: {} vs {}", (void *)module,
+                  (void *)other.module);
+      return false;
+    }
+
+    if (stages != other.stages) {
+      PrintAlways("Shader stages not equal");
+      return false;
+    }
+
+    if (externs != other.externs) {
+      PrintAlways("Shader externs not equal");
+      return false;
+    }
+
+    return true;
   }
 
   auto hash() const -> size_t;

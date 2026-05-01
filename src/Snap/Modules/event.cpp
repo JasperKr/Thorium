@@ -12,12 +12,12 @@ namespace Event {
 bool MainLoopRunning = true;
 
 // NOLINTNEXTLINE
-static std::queue<Event> events;
+std::queue<Event> Events;
 
 // Events can be pushed from multiple threads (only in the case of an error event, so this mutex won't be contended basically ever)
 // But just to be safe if is here.
 // NOLINTNEXTLINE
-static std::mutex eventsMutex;
+std::mutex EventsMutex;
 
 inline auto FromSDLEvent(const SDL_Event &sdlEvent) -> Event {
   Event event;
@@ -112,27 +112,27 @@ inline auto FromSDLEvent(const SDL_Event &sdlEvent) -> Event {
 }
 
 auto Push(const Event &event) -> void {
-  std::lock_guard<std::mutex> lock(eventsMutex);
-  events.emplace(event);
+  std::lock_guard<std::mutex> lock(EventsMutex);
+  Events.emplace(event);
 }
 
 auto Pull() -> void {
-  std::lock_guard<std::mutex> lock(eventsMutex);
+  std::lock_guard<std::mutex> lock(EventsMutex);
   SDL_Event event;
 
   while (SDL_PollEvent(&event)) {
-    events.emplace(FromSDLEvent(event));
+    Events.emplace(FromSDLEvent(event));
   }
 }
 
 auto Pop() -> std::optional<Event> {
-  std::lock_guard<std::mutex> lock(eventsMutex);
-  if (events.empty()) {
+  std::lock_guard<std::mutex> lock(EventsMutex);
+  if (Events.empty()) {
     return std::nullopt;
   }
 
-  Event event = events.front();
-  events.pop();
+  Event event = Events.front();
+  Events.pop();
 
   return event;
 }

@@ -20,6 +20,7 @@
 #include "Wrap/wrap_imgui.hpp"
 #include <filesystem>
 #include <lua.h>
+#include <mutex>
 #include <public/tracy/Tracy.hpp>
 #include <string>
 #include <vector>
@@ -349,6 +350,10 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
 
   while (Event::MainLoopRunning) {
     runCallback.push();
+
+    if (context.currentFrame % 1000 == 0) {
+      PrintAlways("Current memory usage: {} bytes", Utils::GetMemoryUsage());
+    }
 
     FrameMarkStart("Frame");
     if (lua_pcall(state, 0, 1, tracebackIndex) != LUA_OK) {

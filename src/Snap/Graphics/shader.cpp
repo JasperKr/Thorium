@@ -548,6 +548,9 @@ auto ShaderModule::Create(
   Snapshot::CaptureEvent(
       Snapshot::ShaderModuleCreateEvent(shader->module, shader->moduleName));
 
+  shader->globalUniforms.resize(
+      shader->reflection.globalBufferFormat.GetStride());
+
   return shader;
 }
 
@@ -644,9 +647,8 @@ auto ShaderModule::Send(const GraphicsContext &context, const ResourceKey &key,
   }
 
   size_t offset = info->GetOffset();
-  if (offset + data.size() > globalUniforms.size()) {
-    globalUniforms.resize(offset + data.size());
-  }
+  assert(offset + data.size() <= globalUniforms.size() &&
+         "Data exceeds global uniform buffer size.");
 
   // NOLINTNEXTLINE, pointer arithmetic
   memcpy(globalUniforms.data() + offset, data.data(), data.size());

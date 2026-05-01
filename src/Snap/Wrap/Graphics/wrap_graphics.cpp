@@ -229,16 +229,6 @@ auto wrap_SetShader(lua_State *state) -> int {
   return 0;
 }
 
-auto wrap_SetLineWidth(lua_State *state) -> int {
-  auto *ctx = ::Graphics::GetCurrentGraphicsContext();
-  auto lineWidth = static_cast<float>(luaL_checknumber(state, 1));
-  if (lineWidth <= 0.0F) {
-    return luaL_error(state, "Line width must be greater than 0.");
-  }
-  ::Graphics::DynamicRendering::SetLineWidth(lineWidth);
-  return 0;
-}
-
 // Options: ccw, cw
 auto wrap_SetWindingOrder(lua_State *state) -> int {
   auto *ctx = ::Graphics::GetCurrentGraphicsContext();
@@ -405,12 +395,6 @@ auto wrap_GetRenderTargets(lua_State *state) -> int {
     lua_rawseti(state, -2, static_cast<int>(i + 1));
   }
 
-  return 1;
-}
-auto wrap_GetLineWidth(lua_State *state) -> int {
-  auto *ctx = ::Graphics::GetCurrentGraphicsContext();
-  auto lineWidth = ::Graphics::DynamicRendering::GetLineWidth();
-  lua_pushnumber(state, static_cast<lua_Number>(lineWidth));
   return 1;
 }
 auto wrap_GetWindingOrder(lua_State *state) -> int {

@@ -23,7 +23,7 @@ inline auto EnumFromLua(lua_State *state, int index,
   if (iter == enumMap.end()) {
     std::vector<std::string> validKeys;
     for (const auto &[key, _] : enumMap) {
-      validKeys.push_back(key);
+      validKeys.emplace_back(key);
     }
 
     std::string validKeysStr;
@@ -89,10 +89,10 @@ public:
     for (const auto &[key, value] : entries) {
       EnumMap[key] = value;
       ReverseEnumMap[value] = key;
-      options.push_back(key);
+      options.emplace_back(key);
     }
 
-    RegisteredEnums.push_back(*this);
+    RegisteredEnums.emplace_back(*this);
   }
 
   auto FromLua(lua_State *state, int index) const -> Result<T> {

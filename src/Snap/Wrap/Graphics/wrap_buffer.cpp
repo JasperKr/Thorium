@@ -1,7 +1,6 @@
 #include "Wrap/Graphics/wrap_buffer.hpp"
 #include "Graphics/barrier.hpp"
 #include "Graphics/snapshot.hpp"
-#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Wrap/Graphics/wrap_format.hpp"
 #include "Wrap/Graphics/wrap_reflection.hpp"
@@ -160,7 +159,6 @@ auto wrap_GetFormat(lua_State *state) -> int {
   }
 
   auto format = buffer->GetFormat();
-  PrintAlways(format.ToString());
 
   BuildBufferFormatTree(state, format);
 
@@ -184,7 +182,8 @@ auto wrap_SetData(lua_State *state) -> int {
     return luaL_error(state, "Expected Buffer as first argument");
   }
 
-  std::vector<uint8_t> data{};
+  thread_local std::vector<uint8_t> data{};
+  data.clear();
 
   ::Graphics::Barrier::UpdateUsage(*ctx, *buffer->GetBuffer(),
                                    ::Graphics::Barrier::ResourceState{

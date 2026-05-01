@@ -29,7 +29,6 @@ auto wrap_SetViewport(lua_State *state) -> int;
 auto wrap_SetScissor(lua_State *state) -> int;
 auto wrap_ClipScissor(lua_State *state) -> int;
 auto wrap_SetShader(lua_State *state) -> int;
-auto wrap_SetLineWidth(lua_State *state) -> int;
 auto wrap_SetWindingOrder(lua_State *state) -> int;
 
 auto wrap_GetDepthMode(lua_State *state) -> int;
@@ -39,7 +38,6 @@ auto wrap_GetViewport(lua_State *state) -> int;
 auto wrap_GetScissor(lua_State *state) -> int;
 auto wrap_GetShader(lua_State *state) -> int;
 auto wrap_GetRenderTargets(lua_State *state) -> int;
-auto wrap_GetLineWidth(lua_State *state) -> int;
 auto wrap_GetWindingOrder(lua_State *state) -> int;
 
 auto wrap_Draw(lua_State *state) -> int;
@@ -79,7 +77,6 @@ static const std::vector<luaL_Reg> GraphicsLib = {
     {"clipScissor", wrap_ClipScissor},
     {"setShader", wrap_SetShader},
     {"setRenderTarget", ::Graphics::DynamicRendering::wrap_SetRenderTargets},
-    {"setLineWidth", wrap_SetLineWidth},
     {"setWindingOrder", wrap_SetWindingOrder},
     {"getDepthMode", wrap_GetDepthMode},
     {"getCullMode", wrap_GetCullMode},
@@ -88,7 +85,6 @@ static const std::vector<luaL_Reg> GraphicsLib = {
     {"getScissor", wrap_GetScissor},
     {"getShader", wrap_GetShader},
     {"getRenderTargets", wrap_GetRenderTargets},
-    {"getLineWidth", wrap_GetLineWidth},
     {"getWindingOrder", wrap_GetWindingOrder},
     {"newTexture", Texture::wrap_NewTexture},
     {"newMesh", Mesh::wrap_NewMesh},

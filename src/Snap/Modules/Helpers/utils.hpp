@@ -78,4 +78,6 @@ template <class T> struct BitMaskRange {
   auto end() const -> it { return {0}; }
 };
 
+auto GetMemoryUsage() -> size_t;
+
 } // namespace Utils

@@ -3,8 +3,10 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
 #include <span>
+#include <unistd.h>
 
 namespace Utils {
 
@@ -74,5 +76,55 @@ auto SlotToSetBinding(uint64_t slot) -> std::pair<uint32_t, uint32_t> {
   auto binding = static_cast<uint32_t>(slot & UINT32_MAX);
   return {set, binding};
 }
+
+#if defined(__linux__)
+auto GetMemoryUsage() -> size_t {
+  // Read memory usage from /proc/self/statm
+  FILE *file = fopen("/proc/self/statm", "r"); // NOLINT
+  if (file == nullptr) {
+    return 0; // Could not open file
+  }
+
+  size_t residentPages = 0;
+  if (fscanf(file, "%*s %zu", &residentPages) != 1) {
+    fclose(file); // NOLINT
+    return 0;     // Could not read resident pages
+  }
+  fclose(file); // NOLINT
+
+  // Get the system page size
+  long pageSize = sysconf(_SC_PAGESIZE);
+  if (pageSize <= 0) {
+    return 0; // Could not get page size
+  }
+
+  return residentPages * static_cast<size_t>(pageSize);
+}
+#elif defined(_WIN32)
+auto GetMemoryUsage() -> size_t {
+  // Windows implementation using GetProcessMemoryInfo
+  PROCESS_MEMORY_COUNTERS memCounters;
+  if (GetProcessMemoryInfo(GetCurrentProcess(), &memCounters,
+                           sizeof(memCounters))) {
+    return memCounters.WorkingSetSize; // Resident memory usage in bytes
+  }
+  return 0; // Could not get memory info
+}
+#elif defined(__APPLE__)
+auto GetMemoryUsage() -> size_t {
+  // macOS implementation using task_info
+  struct mach_task_basic_info info;
+  mach_msg_type_number_t infoCount = MACH_TASK_BASIC_INFO_COUNT;
+  if (task_info(mach_task_self(), MACH_TASK_BASIC_INFO, (task_info_t)&info,
+                &infoCount) == KERN_SUCCESS) {
+    return info.resident_size; // Resident memory usage in bytes
+  }
+  return 0; // Could not get memory info
+}
+#else
+auto GetMemoryUsage() -> size_t {
+  return 0; // Unsupported platform
+}
+#endif
 
 } // namespace Utils

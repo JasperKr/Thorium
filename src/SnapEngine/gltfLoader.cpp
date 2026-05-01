@@ -4,7 +4,6 @@
 #include "Graphics/mesh.hpp"
 #include "Graphics/texture.hpp"
 #include "Graphics/vertexformat.hpp"
-#include "Modules/Math/quaternion.hpp"
 #include "Modules/Math/vector.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
@@ -1098,7 +1097,7 @@ inline auto LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
 };
       */
 
-      std::vector<Comp> DefaultVertexComponents = {
+      static std::vector<Comp> DefaultVertexComponents = {
           Comp{.name = "POSITION",
                .location = 0,
                .binding = 0,

@@ -232,6 +232,31 @@ inline auto DescriptorTypeToString(VkDescriptorType type) -> std::string_view {
   }
 }
 
+auto State::ToString() const -> std::string {
+  std::string result;
+
+  result = std::format("Shader: {}\n", shader ? shader->moduleName : "null");
+
+  for (size_t i = 0; i < renderTargets.size(); ++i) {
+    const auto &target = renderTargets[i];
+    result = std::format("{}Render Target {}: {}\n", result, i,
+                         target ? target->texture->GetDebugName() : "null");
+  }
+
+  result = std::format("{}Depth Test Enable: {}\n", result,
+                       depthTestEnable ? "true" : "false");
+  result = std::format("{}Depth Write Enable: {}\n", result,
+                       depthWriteEnable ? "true" : "false");
+  result = std::format("{}Depth Compare Op: {}\n", result, (int)depthCompareOp);
+  result = std::format("{}Stencil Test Enable: {}\n", result,
+                       stencilTestEnable ? "true" : "false");
+  result = std::format("{}Polygon Mode: {}\n", result, (int)polygonMode);
+  result =
+      std::format("{}Bind Point: {}", result, static_cast<uint32_t>(bindPoint));
+
+  return result;
+}
+
 auto GetPipelineLayout(const GraphicsContext &context,
                        Shader::ShaderModule *shader) -> Result<PipelineLayout> {
   ZoneScoped;
@@ -415,7 +440,7 @@ auto inline GetRasterizationState(const State &state)
   rasterizer.depthClampEnable = VK_FALSE;
   rasterizer.rasterizerDiscardEnable = VK_FALSE;
   rasterizer.polygonMode = state.polygonMode;
-  rasterizer.lineWidth = state.lineWidth;
+  rasterizer.lineWidth = 1.0F;
   rasterizer.cullMode = state.cullMode;
   rasterizer.frontFace = state.frontFace;
   rasterizer.depthBiasEnable = VK_FALSE;
@@ -858,6 +883,7 @@ auto Shutdown(const GraphicsContext &context) -> Error {
   UsedShaderModules.clear();
   LastState = nullptr;
   TopOfStack = nullptr;
+  PipelineCache.clear();
 
   return Error::Success();
 }
@@ -964,7 +990,8 @@ auto Flush(const GraphicsContext &context) -> Result<bool> {
   ZoneScoped;
 
   if (!Graphics::GetIsStateDirty() && LastState != nullptr &&
-      TopOfStack->GetHash() == LastState->GetHash()) {
+      TopOfStack->GetHash() == LastState->GetHash() &&
+      *TopOfStack == *LastState) {
     return false;
   }
 
@@ -1406,10 +1433,8 @@ auto BindDescriptorSets(const GraphicsContext &context,
       Snapshot::CaptureEvent(Snapshot::StructuredBufferUploadEvent(
           buffer.GetBuffer()->handle, shader->reflection.globalBufferFormat));
 
-      buffer.SetData(context, shader->globalUniforms, 0);
-      shader->globalUniforms.clear();
+      auto flushResult = buffer.Write(context, shader->globalUniforms);
 
-      auto flushResult = buffer.Flush(context);
       if (Error::IsError(flushResult)) {
         return flushResult.error();
       }
@@ -1831,11 +1856,6 @@ auto SetRenderTargets(const GraphicsContext &context,
   return Error::Success();
 }
 
-auto SetLineWidth(float lineWidth) -> void {
-  TopOfStack->lineWidth = lineWidth;
-  TopOfStack->dirty = true;
-}
-
 auto SetWindingOrder(VkFrontFace frontFace) -> void {
   TopOfStack->frontFace = frontFace;
   TopOfStack->dirty = true;
@@ -1951,8 +1971,6 @@ auto GetShader() -> Ref<Shader::ShaderModule> {
 auto GetRenderTargets() -> std::vector<Ref<RenderTarget>> {
   return TopOfStack->renderTargets;
 }
-
-auto GetLineWidth() -> float { return TopOfStack->lineWidth; }
 
 auto GetWindingOrder() -> VkFrontFace { return TopOfStack->frontFace; }
 

@@ -1,14 +1,20 @@
 #pragma once
 
 #include "Graphics/buffer.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
+#include <atomic>
+#include <cstddef>
 #include <cstdint>
 
 constexpr size_t InitialUniformBufferSize = 64L * 1024; // 64 KB
 
 // 16 MB; allows for doubling in size 8x
 constexpr size_t MaximumUniformBufferSize = 64L * 1024 * 1024;
+
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+extern std::atomic<int> UniformBufferObjectCount;
 
 namespace Graphics {
 
@@ -17,18 +23,14 @@ public:
   static auto Create(GraphicsContext &context)
       -> Result<FrameUniformBufferObject>;
 
-  void SetData(const Graphics::GraphicsContext &context,
-               const std::span<const uint8_t> &data, uint32_t atOffset);
-
-  auto Flush(const Graphics::GraphicsContext &context) -> Result<bool>;
+  auto Write(const Graphics::GraphicsContext &context,
+             const std::span<const uint8_t> &data, size_t writeOffset = 0UL)
+      -> Result<bool>;
 
   auto ScheduleDestroy() -> void { buffer.reset(); }
 
-  [[nodiscard]] auto GetOffset() const -> uint32_t { return offset; }
-  [[nodiscard]] auto GetSize() const -> uint32_t { return size; }
-  [[nodiscard]] auto GetLastFlushSize() const -> uint32_t {
-    return lastFlushSize;
-  }
+  [[nodiscard]] auto GetOffset() const -> size_t { return offset; }
+  [[nodiscard]] auto GetSize() const -> size_t { return buffer->size; }
   [[nodiscard]] auto GetBuffer() const -> Ref<Graphics::Buffer> {
     return buffer;
   }
@@ -36,11 +38,8 @@ public:
 
 private:
   Ref<Graphics::Buffer> buffer;
-  std::vector<uint8_t> localData;
 
-  uint32_t size{};
-  uint32_t lastFlushSize{};
-  uint32_t offset{};
+  size_t offset{};
 };
 
 extern thread_local std::vector<FrameUniformBufferObject>

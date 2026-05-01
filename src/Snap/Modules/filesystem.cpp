@@ -459,13 +459,13 @@ auto Sanitize(const std::string &path) -> std::string {
       if (!parts.empty()) {
         // if previous part is also .., keep it
         if (parts.back() == "..") {
-          parts.push_back(part);
+          parts.emplace_back(part);
         } else {
           parts.pop_back();
         }
       }
     } else if (part != "." || start == 0) { // remove ./ parts if not at start
-      parts.push_back(part);
+      parts.emplace_back(part);
     }
     start = end + 1;
     end = sanitized.find('/', start);
@@ -475,13 +475,13 @@ auto Sanitize(const std::string &path) -> std::string {
   if (lastPart == "..") {
     if (!parts.empty()) {
       if (parts.back() == "..") {
-        parts.push_back(lastPart);
+        parts.emplace_back(lastPart);
       } else {
         parts.pop_back();
       }
     }
   } else if (lastPart != ".") {
-    parts.push_back(lastPart);
+    parts.emplace_back(lastPart);
   }
 
   sanitized.clear();

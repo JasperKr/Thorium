@@ -585,13 +585,12 @@ void Deinitialize(GraphicsContext &context) {
     vkDestroyFence(context.device, fence, nullptr);
   }
 
-  vkDestroyCommandPool(context.device, GetThreadContext().commandPool, nullptr);
-  GetThreadContext().commandPool = VK_NULL_HANDLE;
   {
     std::lock_guard<std::mutex> lock(CommandPoolsMutex);
     for (auto &pool : CommandPools) {
       vkDestroyCommandPool(context.device, pool, nullptr);
     }
+    CommandPools.clear();
   }
 
   vkDestroyDevice(context.device, nullptr);

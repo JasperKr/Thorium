@@ -252,7 +252,26 @@ struct RenderTarget : Object {
   auto GetHash() const -> uint64_t;
 
   auto operator==(const RenderTarget &other) const -> bool {
-    return GetHash() == other.GetHash();
+    if (*texture != *other.texture) {
+      return false;
+    }
+
+    if (location != other.location || layer != other.layer) {
+      return false;
+    }
+
+    if (blendMode.blendEnable != other.blendMode.blendEnable ||
+        blendMode.srcColorBlendFactor != other.blendMode.srcColorBlendFactor ||
+        blendMode.dstColorBlendFactor != other.blendMode.dstColorBlendFactor ||
+        blendMode.colorBlendOp != other.blendMode.colorBlendOp ||
+        blendMode.srcAlphaBlendFactor != other.blendMode.srcAlphaBlendFactor ||
+        blendMode.dstAlphaBlendFactor != other.blendMode.dstAlphaBlendFactor ||
+        blendMode.alphaBlendOp != other.blendMode.alphaBlendOp ||
+        blendMode.colorWriteMask != other.blendMode.colorWriteMask) {
+      return false;
+    }
+
+    return true;
   }
 
   static auto GetType() -> Type const * { return &LuaRendertargetType; }
@@ -276,7 +295,6 @@ struct State {
   VkCompareOp depthCompareOp = VK_COMPARE_OP_LESS;
   bool stencilTestEnable = false;
   VkPolygonMode polygonMode = VK_POLYGON_MODE_FILL;
-  float lineWidth = 1.0F;
   VkViewport viewport;
   VkRect2D scissor;
 
@@ -295,8 +313,35 @@ struct State {
   auto GetHash() const -> uint64_t;
 
   auto operator==(const State &other) const -> bool {
-    return GetHash() == other.GetHash();
+    if (renderTargets.size() != other.renderTargets.size()) {
+      return false;
+    }
+
+    if (*shader != *other.shader) {
+      return false;
+    }
+
+    if (cullMode != other.cullMode || frontFace != other.frontFace ||
+        depthTestEnable != other.depthTestEnable ||
+        depthWriteEnable != other.depthWriteEnable ||
+        depthCompareOp != other.depthCompareOp ||
+        stencilTestEnable != other.stencilTestEnable ||
+        polygonMode != other.polygonMode ||
+        primitiveTopology != other.primitiveTopology ||
+        bindPoint != other.bindPoint) {
+      return false;
+    }
+
+    for (size_t i = 0; i < renderTargets.size(); ++i) {
+      if (*renderTargets[i] != *other.renderTargets[i]) {
+        return false;
+      }
+    }
+
+    return true;
   }
+
+  auto ToString() const -> std::string;
 };
 
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
@@ -371,7 +416,6 @@ struct StateHash {
     hasher.Add(std::hash<VkCompareOp>()(state.depthCompareOp));
     hasher.Add(std::hash<bool>()(state.stencilTestEnable));
     hasher.Add(std::hash<VkPolygonMode>()(state.polygonMode));
-    hasher.Add(std::hash<float>()(state.lineWidth));
     hasher.Add(state.shader.get() == nullptr ? 0 : state.shader->hash());
     hasher.Add(std::hash<VkPipelineBindPoint>()(state.bindPoint));
 
@@ -427,7 +471,6 @@ auto SetShader(const Ref<Shader::ShaderModule> &shader) -> void;
 auto SetRenderTargets(const GraphicsContext &context,
                       const std::vector<Ref<RenderTarget>> &renderTargets)
     -> Error;
-auto SetLineWidth(float lineWidth) -> void;
 auto SetWindingOrder(VkFrontFace frontFace) -> void;
 auto SetTopology(VkPrimitiveTopology topology) -> void;
 
@@ -440,7 +483,6 @@ auto GetMaximumAllowedViewport() -> VkViewport;
 auto GetScissor() -> VkRect2D;
 auto GetShader() -> Ref<Shader::ShaderModule>;
 auto GetRenderTargets() -> std::vector<Ref<RenderTarget>>;
-auto GetLineWidth() -> float;
 auto GetWindingOrder() -> VkFrontFace;
 auto GetTopology() -> VkPrimitiveTopology;
 auto SetBindPoint(VkPipelineBindPoint bindPoint) -> void;
