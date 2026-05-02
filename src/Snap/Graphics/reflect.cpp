@@ -7,6 +7,7 @@
 
 #include "vulkan/vulkan_core.h"
 #include <cassert>
+#include <format>
 #include <iterator>
 
 namespace Graphics::Reflect {
@@ -21,7 +22,7 @@ auto StructInfo::ResolvePath(Graphics::ResourceKey::const_iterator iterator,
     return nullptr;
   }
 
-  const ResourceInfo *field = nullptr;
+  thread_local const ResourceInfo *field = nullptr;
 
   for (const auto &currentField : fields) {
     if (currentField.name == *iterator) {
@@ -123,10 +124,7 @@ auto SetupVariant(slang::VariableLayoutReflection *layout)
         scalarInfo.size = static_cast<uint32_t>(fieldType->getSize());
         scalarInfo.offset = static_cast<uint32_t>(fieldVariable->getOffset());
         scalarInfo.type = FromScalarType(fieldType->getScalarType());
-        ResourceInfo fieldInfo{
-            .name = fieldVariable->getName(),
-            .info = scalarInfo,
-        };
+        ResourceInfo fieldInfo(fieldVariable->getName(), scalarInfo);
 
         structInfo.fields.emplace_back(fieldInfo);
 
@@ -140,10 +138,7 @@ auto SetupVariant(slang::VariableLayoutReflection *layout)
         vectorInfo.scalarType = FromScalarType(fieldType->getScalarType());
         vectorInfo.vectorType = ToVectorType(fieldType->getElementCount());
 
-        ResourceInfo fieldInfo{
-            .name = fieldVariable->getName(),
-            .info = vectorInfo,
-        };
+        ResourceInfo fieldInfo(fieldVariable->getName(), vectorInfo);
 
         structInfo.fields.emplace_back(fieldInfo);
 
@@ -157,10 +152,7 @@ auto SetupVariant(slang::VariableLayoutReflection *layout)
         matrixInfo.matrixType =
             ToMatrixType(fieldType->getRowCount(), fieldType->getColumnCount());
 
-        ResourceInfo fieldInfo{
-            .name = fieldVariable->getName(),
-            .info = matrixInfo,
-        };
+        ResourceInfo fieldInfo(fieldVariable->getName(), matrixInfo);
 
         structInfo.fields.emplace_back(fieldInfo);
 
@@ -174,9 +166,7 @@ auto SetupVariant(slang::VariableLayoutReflection *layout)
 
         auto structFieldInfo = result.value();
 
-        ResourceInfo fieldInfo{
-            .name = fieldVariable->getName(),
-        };
+        ResourceInfo fieldInfo(fieldVariable->getName());
 
         if (std::holds_alternative<StructInfo>(structFieldInfo)) {
           fieldInfo.info = std::get<StructInfo>(structFieldInfo);
@@ -381,7 +371,7 @@ auto SetupResource(slang::VariableLayoutReflection *variableLayout,
   auto kind = typeLayout->getKind();
   auto shape = typeLayout->getResourceShape();
   auto access = typeLayout->getResourceAccess();
-  auto resourceInfo = ResourceInfo{};
+  auto resourceInfo = ResourceInfo();
 
   // Masked out shape flags
   auto maskedShape = shape & SLANG_RESOURCE_BASE_SHAPE_MASK;
@@ -444,7 +434,7 @@ auto SetupFromType(slang::VariableLayoutReflection *variableLayout,
   const auto *typeName = typeLayout->getType()->getName();
   const auto *paramName = variableLayout->getName();
 
-  auto resourceInfo = ResourceInfo{};
+  auto resourceInfo = ResourceInfo();
 
   switch (typeLayout->getKind()) {
   case slang::TypeReflection::Kind::Struct: {
@@ -599,7 +589,8 @@ auto ReflectShader(Graphics::GraphicsContext &context,
 }
 
 auto BufferInfo::ToString() const -> std::string {
-  std::string result = "Buffer Name: " + name + " Type: ";
+  // std::string result = "Buffer Name: " + name + " Type: ";
+  std::string result = std::format("Buffer Name: {} Type: ", name);
   switch (bufferType) {
   case BufferType::Uniform:
     result += "Uniform";
@@ -683,38 +674,26 @@ auto ResourceInfoToBufferFormat(const ResourceInfo &info, Standard std)
 
     if (bufferInfo.IsStruct()) {
       return ResourceInfoToBufferFormat(
-          ResourceInfo{
-              .name = bufferInfo.name,
-              .stages = info.stages,
-              .info = std::get<StructInfo>(bufferInfo.info),
-          },
+          ResourceInfo(bufferInfo.name, info.stages,
+                       std::get<StructInfo>(bufferInfo.info)),
           std);
     }
     if (bufferInfo.IsScalar()) {
       return ResourceInfoToBufferFormat(
-          ResourceInfo{
-              .name = bufferInfo.name,
-              .stages = info.stages,
-              .info = std::get<ScalarInfo>(bufferInfo.info),
-          },
+          ResourceInfo(bufferInfo.name, info.stages,
+                       std::get<ScalarInfo>(bufferInfo.info)),
           std);
     }
     if (bufferInfo.IsVector()) {
       return ResourceInfoToBufferFormat(
-          ResourceInfo{
-              .name = bufferInfo.name,
-              .stages = info.stages,
-              .info = std::get<VectorInfo>(bufferInfo.info),
-          },
+          ResourceInfo(bufferInfo.name, info.stages,
+                       std::get<VectorInfo>(bufferInfo.info)),
           std);
     }
     if (bufferInfo.IsMatrix()) {
       return ResourceInfoToBufferFormat(
-          ResourceInfo{
-              .name = bufferInfo.name,
-              .stages = info.stages,
-              .info = std::get<MatrixInfo>(bufferInfo.info),
-          },
+          ResourceInfo(bufferInfo.name, info.stages,
+                       std::get<MatrixInfo>(bufferInfo.info)),
           std);
     }
   }

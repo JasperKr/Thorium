@@ -250,6 +250,11 @@ auto Error::SetupTraceback() -> void {
 
 auto Error::Create(const std::string &message, ErrorCode code, ErrorLevel level)
     -> Error {
+
+  if (code >= 0) {
+    return {.message = message, .backtrace = "", .code = code};
+  }
+
   Error err = Error{
       .message = message, .backtrace = GetStackTrace(level), .code = code};
 #if defined(LOG_ERRORS)

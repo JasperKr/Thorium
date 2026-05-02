@@ -628,7 +628,8 @@ auto Present(Graphics::GraphicsContext &context,
     return error;
   }
 
-  GetGlobalUniformBuffer(context.frameIndex).NewFrame();
+  auto &buffer = GetGlobalUniformBuffer(context.frameIndex);
+  buffer.NewFrame();
 
   return Error::Success();
 }

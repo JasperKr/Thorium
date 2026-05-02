@@ -9,6 +9,7 @@ namespace Graphics {
 PushBuffer::PushBuffer(const Reflect::ResourceInfo &layout,
                        VkShaderStageFlags stage)
     : layout(layout), stageFlags(stage) {
+  PrintError("Constructing PushBuffer with layout: {}", layout.name);
 
   if (!layout.IsBuffer()) {
     PrintError("PushBuffer layout must be a buffer.");
@@ -41,7 +42,7 @@ auto PushBuffer::GetLayout() const -> const Reflect::ResourceInfo & {
 }
 
 auto PushBuffer::FlushData(FlushInfo &info) -> void {
-  auto &bufferInfo = std::get<Reflect::BufferInfo>(layout.info);
+  const auto &bufferInfo = std::get<Reflect::BufferInfo>(layout.info);
   auto bufferSize = bufferInfo.size;
 
   if (bufferInfo.IsStruct()) {
@@ -92,7 +93,7 @@ auto PushBuffer::GetBufferOffset() const -> size_t {
 auto PushBuffer::SetData(const ResourceKey &key,
                          const std::span<const uint8_t> &values) -> Error {
 
-  auto &bufferInfo = std::get<Reflect::BufferInfo>(layout.info);
+  const auto &bufferInfo = std::get<Reflect::BufferInfo>(layout.info);
 
   if (!std::holds_alternative<Reflect::StructInfo>(bufferInfo.info)) {
     return Error::Create(
@@ -121,7 +122,7 @@ auto PushBuffer::SetData(const ResourceKey &key,
 }
 
 auto PushBuffer::SetData(const std::span<const uint8_t> &values) -> Error {
-  auto &bufferInfo = std::get<Reflect::BufferInfo>(layout.info);
+  const auto &bufferInfo = std::get<Reflect::BufferInfo>(layout.info);
 
   if (!bufferInfo.IsScalar() && !bufferInfo.IsVector() &&
       !bufferInfo.IsMatrix()) {

@@ -251,6 +251,7 @@ add_library(snap_core OBJECT
     Graphics/format.cpp
     Graphics/snapshot.cpp
     Graphics/blendmode.cpp
+    Graphics/allocations.cpp
 
 # Graphics Buffers
     Graphics/Buffers/push.cpp

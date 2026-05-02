@@ -1,5 +1,6 @@
 #include "swapchainManager.hpp"
 
+#include "Graphics/allocations.hpp"
 #include "Graphics/graphicsContext.hpp"
 #include "Graphics/graphicsState.hpp"
 #include "Graphics/texture.hpp"
@@ -256,7 +257,7 @@ auto SwapchainManager::Deinitialize(GraphicsContext &context) -> void {
     {
       std::lock_guard<std::mutex> lock(
           Graphics::GraphicsContext::mutexes.device);
-      vkDestroyImageView(context.device, view, nullptr);
+      vkDestroyImageView(context.device, view, GetAllocationCallbacks());
       // We do not destroy the image here because it is owned by the swapchain.
     }
 
@@ -268,17 +269,18 @@ auto SwapchainManager::Deinitialize(GraphicsContext &context) -> void {
 
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    vkDestroySwapchainKHR(context.device, currentSwapchain, nullptr);
+    vkDestroySwapchainKHR(context.device, currentSwapchain,
+                          GetAllocationCallbacks());
   }
 
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
     for (auto &fence : context.imageInFlight) {
-      vkDestroyFence(context.device, fence, nullptr);
+      vkDestroyFence(context.device, fence, GetAllocationCallbacks());
     }
 
     for (auto &semaphore : context.imageReady) {
-      vkDestroySemaphore(context.device, semaphore, nullptr);
+      vkDestroySemaphore(context.device, semaphore, GetAllocationCallbacks());
     }
 
     context.imageInFlight.clear();
@@ -335,7 +337,8 @@ auto SwapchainManager::CleanupOldSwapchains(GraphicsContext &context,
             {
               std::lock_guard<std::mutex> lock(
                   Graphics::GraphicsContext::mutexes.device);
-              vkDestroyImageView(context.device, view, nullptr);
+              vkDestroyImageView(context.device, view,
+                                 GetAllocationCallbacks());
             }
 
             texture->image = nullptr;
@@ -347,15 +350,16 @@ auto SwapchainManager::CleanupOldSwapchains(GraphicsContext &context,
           std::lock_guard<std::mutex> lock(
               Graphics::GraphicsContext::mutexes.device);
           vkDestroySwapchainKHR(context.device, oldSwapchain.swapchain,
-                                nullptr);
+                                GetAllocationCallbacks());
           oldSwapchain.swapchain = VK_NULL_HANDLE;
 
           for (auto &fence : oldSwapchain.imageInFlight) {
-            vkDestroyFence(context.device, fence, nullptr);
+            vkDestroyFence(context.device, fence, GetAllocationCallbacks());
           }
 
           for (auto &semaphore : oldSwapchain.imageReady) {
-            vkDestroySemaphore(context.device, semaphore, nullptr);
+            vkDestroySemaphore(context.device, semaphore,
+                               GetAllocationCallbacks());
           }
 
           oldSwapchain.imageInFlight.clear();
@@ -422,14 +426,16 @@ inline auto CreateFences(GraphicsContext &context) -> Error {
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
     for (int i = 0; i < MAX_SWAPCHAIN_IMAGES; i++) {
-      Error error = Error::Create(vkCreateFence(
-          context.device, &fenceInfo, nullptr, &context.imageInFlight.at(i)));
+      Error error = Error::Create(vkCreateFence(context.device, &fenceInfo,
+                                                GetAllocationCallbacks(),
+                                                &context.imageInFlight.at(i)));
       if (Error::IsError(error)) {
         return error;
       }
 
-      error = Error::Create(vkCreateSemaphore(
-          context.device, &semaphoreInfo, nullptr, &context.imageReady.at(i)));
+      error = Error::Create(vkCreateSemaphore(context.device, &semaphoreInfo,
+                                              GetAllocationCallbacks(),
+                                              &context.imageReady.at(i)));
       if (Error::IsError(error)) {
         return error;
       }
@@ -500,8 +506,9 @@ auto SwapchainManager::CreateVkSwapchain(GraphicsContext &context,
 
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    Error error = Error::Create(vkCreateSwapchainKHR(
-        context.device, &swapchainInfo, nullptr, &currentSwapchain));
+    Error error = Error::Create(
+        vkCreateSwapchainKHR(context.device, &swapchainInfo,
+                             GetAllocationCallbacks(), &currentSwapchain));
 
     if (Error::IsError(error)) {
       return error;
@@ -553,8 +560,9 @@ auto SwapchainManager::CreateVkSwapchain(GraphicsContext &context,
       imageViewInfo.subresourceRange.layerCount = 1;
 
       VkImageView imageView = VK_NULL_HANDLE;
-      Error error = Error::Create(vkCreateImageView(
-          context.device, &imageViewInfo, nullptr, &imageView));
+      Error error = Error::Create(
+          vkCreateImageView(context.device, &imageViewInfo,
+                            GetAllocationCallbacks(), &imageView));
 
       context.swapchainInfo.imageViews[i] = imageView;
     }

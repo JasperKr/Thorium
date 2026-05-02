@@ -1,4 +1,5 @@
 #include "buffer.hpp"
+#include "Graphics/allocations.hpp"
 #include "Graphics/barrier.hpp"
 #include "Graphics/dynamicRendering.hpp"
 #include "Graphics/graphics.hpp"
@@ -109,8 +110,8 @@ auto LoadBufferModule(const GraphicsContext &context) -> Error {
   {
     std::scoped_lock<std::mutex, std::mutex> lock(
         Graphics::GraphicsContext::mutexes.device, uploadSemaphoreMutex);
-    auto result = Error::Create(
-        vkCreateSemaphore(context.device, &semInfo, nullptr, &uploadSemaphore));
+    auto result = Error::Create(vkCreateSemaphore(
+        context.device, &semInfo, GetAllocationCallbacks(), &uploadSemaphore));
     if (Error::IsError(result)) {
       return result;
     }
@@ -138,7 +139,8 @@ auto UnloadBufferModule(const GraphicsContext &context) -> Error {
   if (uploadSemaphore != nullptr) {
     std::scoped_lock<std::mutex, std::mutex> lock(
         Graphics::GraphicsContext::mutexes.device, uploadSemaphoreMutex);
-    vkDestroySemaphore(context.device, uploadSemaphore, nullptr);
+    vkDestroySemaphore(context.device, uploadSemaphore,
+                       GetAllocationCallbacks());
     uploadSemaphore = nullptr;
   }
 
@@ -403,9 +405,11 @@ auto Buffer::Upload(const GraphicsContext &context,
         "Error uploading data, cannot upload more data than is allocated.");
   }
 
+#if Enable_Snapshots
   Snapshot::CaptureEvent(Snapshot::BufferUploadEvent(
       handle, memory, offset, uploadSize, // NOLINTNEXTLINE
       std::vector<uint8_t>(data.data(), data.data() + uploadSize)));
+#endif
 
   if (isStagingBuffer) {
     // We know this will be a large upload,

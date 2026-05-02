@@ -42,7 +42,7 @@ private:
   [[nodiscard]] auto
   FindComponent(Graphics::ResourceKey::const_iterator iterator,
                 Graphics::ResourceKey::const_iterator end) const
-      -> std::optional<BufferComponent>;
+      -> BufferComponent const *;
 
 public:
   [[nodiscard]] auto GetVkComponents() -> const std::vector<VkFormat> & {

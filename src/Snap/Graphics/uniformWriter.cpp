@@ -8,6 +8,7 @@
 #include "Modules/object.hpp"
 #include <array>
 #include <cstdint>
+#include <span>
 
 namespace Graphics::Shader {
 auto UniformWriter::Send(const Ref<ShaderModule> &shader,
@@ -120,15 +121,18 @@ auto UniformWriter::Send(const Ref<ShaderModule> &shader,
 auto UniformWriter::Send(const Ref<ShaderModule> &shader,
                          const GraphicsContext &context, const ResourceKey &key,
                          const Math::Matrix4x4 &value) -> Error {
-  return shader->Send(context, key,
-                      SpanGenericType<Math::Matrix4x4>::GetSpan(value));
+  const auto &span = value.byteSpan();
+  return shader->Send(context, key, span);
 };
 
 auto UniformWriter::Send(const Ref<ShaderModule> &shader,
                          const GraphicsContext &context, const ResourceKey &key,
                          const Math::Matrix3x3 &value) -> Error {
   // Matrix4x3 since uniforms are std140 aligned
-  static std::array<float, 12> matrix3x3Data; // NOLINT
+  thread_local std::array<float, 12> matrix3x3Data; // NOLINT
+  thread_local std::span<uint8_t> matrix3x3Span(
+      reinterpret_cast<uint8_t *>(matrix3x3Data.data()), // NOLINT
+      matrix3x3Data.size() * sizeof(float));
 
 #pragma unroll
   for (int row = 0; row < Math::Matrix3x3::Rows; row++) {
@@ -139,8 +143,7 @@ auto UniformWriter::Send(const Ref<ShaderModule> &shader,
     }
   }
 
-  return shader->Send(
-      context, key,
-      SpanGenericType<std::array<float, 12>>::GetSpan(matrix3x3Data)); // NOLINT
+  return shader->Send(context, key,
+                      matrix3x3Span); // NOLINT
 };
 } // namespace Graphics::Shader

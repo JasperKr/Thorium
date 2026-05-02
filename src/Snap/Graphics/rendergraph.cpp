@@ -1,4 +1,5 @@
 #include "rendergraph.hpp"
+#include "Graphics/allocations.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/image.hpp"
@@ -613,8 +614,8 @@ auto inline QueryMemoryAlignmentOfTexture(GraphicsContext &context,
   imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 
   VkImage tempImage = nullptr;
-  VkResult result =
-      vkCreateImage(context.device, &imageInfo, nullptr, &tempImage);
+  VkResult result = vkCreateImage(context.device, &imageInfo,
+                                  GetAllocationCallbacks(), &tempImage);
   if (result != VK_SUCCESS) {
     return 0; // failed to create image
   }
@@ -622,7 +623,7 @@ auto inline QueryMemoryAlignmentOfTexture(GraphicsContext &context,
   VkMemoryRequirements memRequirements;
   vkGetImageMemoryRequirements(context.device, tempImage, &memRequirements);
 
-  vkDestroyImage(context.device, tempImage, nullptr);
+  vkDestroyImage(context.device, tempImage, GetAllocationCallbacks());
 
   return memRequirements.alignment;
 }
@@ -637,8 +638,8 @@ auto inline QueryMemoryAlignmentOfBuffer(GraphicsContext &context,
   bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
   VkBuffer tempBuffer = nullptr;
-  VkResult result =
-      vkCreateBuffer(context.device, &bufferInfo, nullptr, &tempBuffer);
+  VkResult result = vkCreateBuffer(context.device, &bufferInfo,
+                                   GetAllocationCallbacks(), &tempBuffer);
   if (result != VK_SUCCESS) {
     return 0; // failed to create buffer
   }
@@ -646,7 +647,7 @@ auto inline QueryMemoryAlignmentOfBuffer(GraphicsContext &context,
   VkMemoryRequirements memRequirements;
   vkGetBufferMemoryRequirements(context.device, tempBuffer, &memRequirements);
 
-  vkDestroyBuffer(context.device, tempBuffer, nullptr);
+  vkDestroyBuffer(context.device, tempBuffer, GetAllocationCallbacks());
 
   return memRequirements.alignment;
 }
@@ -1537,7 +1538,8 @@ auto BeginPassRendering(GraphicsContext &context, RenderGraph &graph,
     }
   }
 
-  std::vector<VkRenderingAttachmentInfo> colorAttachments;
+  thread_local std::vector<VkRenderingAttachmentInfo> colorAttachments;
+  colorAttachments.clear();
   colorAttachments.resize(maxColorAttachmentIndex + 1);
 
   bool hasDepthAttachment = false;

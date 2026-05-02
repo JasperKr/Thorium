@@ -37,10 +37,10 @@ auto BufferFormat::GetComponentOffset(size_t componentIndex) const -> size_t {
 
 auto BufferFormat::FindComponent(ResourceKey::const_iterator iterator,
                                  ResourceKey::const_iterator end) const
-    -> std::optional<BufferComponent> {
+    -> BufferComponent const * {
 
   if (std::next(iterator) == end) {
-    return std::nullopt;
+    return nullptr;
   }
 
   const auto &name = *iterator;
@@ -52,18 +52,18 @@ auto BufferFormat::FindComponent(ResourceKey::const_iterator iterator,
         return format.FindComponent(std::next(iterator), end);
       }
 
-      return Component;
+      return &Component;
     }
   }
 
-  return std::nullopt;
+  return nullptr;
 }
 
 auto BufferFormat::GetComponentOffset(const ResourceKey &name) const
     -> Result<size_t> {
-  auto component = FindComponent(name.begin(), name.end());
+  const auto *component = FindComponent(name.begin(), name.end());
 
-  if (component.has_value()) {
+  if (component != nullptr) {
     return component->offset;
   }
 

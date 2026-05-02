@@ -4,6 +4,7 @@
 #include "Graphics/graphicsContext.hpp"
 #include "Graphics/graphicsState.hpp"
 #include "Modules/Helpers/utils.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "slang/slang.h"
 #include <cstdint>
@@ -12,6 +13,7 @@
 #include <string_view>
 #include <sys/types.h>
 #include <unordered_map>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -203,7 +205,7 @@ enum class StructFieldVariant : uint8_t {
 struct ResourceInfo;
 
 struct StructInfo {
-  std::string name;
+  const char *name;
   std::vector<ResourceInfo> fields;
   std::vector<uint32_t> fieldOffsets;
 
@@ -224,7 +226,7 @@ enum class BufferType : uint8_t {
 };
 
 struct BufferInfo {
-  std::string name;
+  const char *name;
 
   uint32_t size;
   uint32_t offset; // For push constants
@@ -267,7 +269,41 @@ struct BufferInfo {
 };
 
 struct ResourceInfo {
-  std::string name;
+  ResourceInfo() { PrintWarning("constructing ResourceInfo"); }
+  explicit ResourceInfo(const char *name) : name(name) {}
+  ResourceInfo(const char *name,
+               std::variant<SamplerInfo, ScalarInfo, VectorInfo, MatrixInfo,
+                            BufferInfo, StructInfo>
+                   info)
+      : name(name), info(std::move(info)) {}
+  ResourceInfo(const char *name, VkShaderStageFlags stages,
+               std::variant<SamplerInfo, ScalarInfo, VectorInfo, MatrixInfo,
+                            BufferInfo, StructInfo>
+                   info)
+      : name(name), stages(stages), info(std::move(info)) {}
+  ResourceInfo(const ResourceInfo &other)
+      : name(other.name), stages(other.stages), info(other.info) {}
+  ResourceInfo(ResourceInfo &&other) noexcept
+      : name(other.name), stages(other.stages), info(std::move(other.info)) {}
+  auto operator=(const ResourceInfo &other) -> ResourceInfo & {
+    if (this != &other) {
+      name = other.name;
+      stages = other.stages;
+      info = other.info;
+    }
+    return *this;
+  }
+  auto operator=(ResourceInfo &&other) noexcept -> ResourceInfo & {
+    if (this != &other) {
+      name = other.name;
+      stages = other.stages;
+      info = std::move(other.info);
+    }
+    return *this;
+  }
+  ~ResourceInfo() = default;
+
+  const char *name{};
   VkShaderStageFlags stages = VK_SHADER_STAGE_ALL;
   uint32_t offset{0};
 
@@ -292,6 +328,13 @@ struct ResourceInfo {
   template <typename T>
   [[nodiscard]] constexpr auto GetInfo() const -> const T & {
     return std::get<T>(info);
+  }
+  template <typename T>
+  [[nodiscard]] constexpr auto GetInfoPtr() const -> const T * {
+    if (std::holds_alternative<T>(info)) {
+      return &std::get<T>(info);
+    }
+    return nullptr;
   }
   template <typename T> [[nodiscard]] constexpr auto Is() const -> bool {
     return std::holds_alternative<T>(info);
@@ -458,7 +501,7 @@ struct ShaderReflection {
 
     slotToInfo.emplace(Utils::SetBindingToSlot(set, binding), globalUBOInfo);
 
-    auto infoResult =
+    const auto &infoResult =
         ResourceInfoToBufferFormat(globalUBOInfo, Standard::Std140);
     if (Error::IsError(infoResult)) {
       return infoResult.error();

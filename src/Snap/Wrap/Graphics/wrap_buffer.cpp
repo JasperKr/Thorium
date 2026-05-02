@@ -201,9 +201,11 @@ auto wrap_SetData(lua_State *state) -> int {
     size = static_cast<VkDeviceSize>(luaL_checkinteger(state, 4));
   }
 
+#if Enable_Snapshots
   ::Graphics::Snapshot::CaptureEvent(
       ::Graphics::Snapshot::StructuredBufferUploadEvent(
           buffer->GetBuffer()->handle, buffer->GetFormat()));
+#endif
 
   if (lua_istable(state, 2)) {
     // table of numbers

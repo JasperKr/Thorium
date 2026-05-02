@@ -89,25 +89,25 @@ auto wrap_Send(lua_State *state) -> int {
 
     data.reserve(sizeof(uint32_t) * static_cast<size_t>(varargsCount));
 
-    auto uniformResult = shader->GetUniform(key);
-    if (Error::IsError(uniformResult)) {
-      return luaL_error(state, "%s", uniformResult.error().message.c_str());
+    const auto *uniformInfo = shader->GetUniform(key);
+    if (uniformInfo == nullptr) {
+      return luaL_error(state, "Uniform `%s` not found.",
+                        ResourceKeyToString(key).c_str());
     }
-    const auto &uniformInfo = uniformResult.value();
-    if (!(uniformInfo.IsScalar() || uniformInfo.IsVector() ||
-          uniformInfo.IsMatrix())) {
+    if (!(uniformInfo->IsScalar() || uniformInfo->IsVector() ||
+          uniformInfo->IsMatrix())) {
       return luaL_error(
           state, "Unable to send uniform `%s`: expected %s, got number",
-          ResourceKeyToString(key).c_str(), uniformInfo.GetTypename().data());
+          ResourceKeyToString(key).c_str(), uniformInfo->GetTypename().data());
     }
 
     ScalarType scalarType{};
 
-    if (uniformInfo.Is<ScalarInfo>()) {
-      scalarType = uniformInfo.GetInfo<ScalarInfo>().type;
-    } else if (uniformInfo.Is<VectorInfo>()) {
-      scalarType = uniformInfo.GetInfo<VectorInfo>().scalarType;
-    } else if (uniformInfo.Is<MatrixInfo>()) {
+    if (uniformInfo->Is<ScalarInfo>()) {
+      scalarType = uniformInfo->GetInfo<ScalarInfo>().type;
+    } else if (uniformInfo->Is<VectorInfo>()) {
+      scalarType = uniformInfo->GetInfo<VectorInfo>().scalarType;
+    } else if (uniformInfo->Is<MatrixInfo>()) {
       scalarType = ScalarType::Float;
     }
 
@@ -142,9 +142,10 @@ auto wrap_Send(lua_State *state) -> int {
     uint64_t tableLength = lua_objlen(state, valueOffset);
     data.reserve(sizeof(uint32_t) * static_cast<size_t>(tableLength));
 
-    auto info = shader->GetUniform(key);
-    if (Error::IsError(info)) {
-      return luaL_error(state, "%s", info.error().message.c_str());
+    const auto *info = shader->GetUniform(key);
+    if (info == nullptr) {
+      return luaL_error(state, "Uniform `%s` not found.",
+                        ResourceKeyToString(key).c_str());
     }
 
     for (uint64_t i = 0; i < tableLength; ++i) {
@@ -206,9 +207,10 @@ auto wrap_Send(lua_State *state) -> int {
       return luaL_error(state, "%s", result.message.c_str());
     }
   } else {
-    const auto resourceInfo = shader->GetUniform(key);
-    if (Error::IsError(resourceInfo)) {
-      return luaL_error(state, "%s", resourceInfo.error().message.c_str());
+    const auto *resourceInfo = shader->GetUniform(key);
+    if (resourceInfo == nullptr) {
+      return luaL_error(state, "Uniform `%s` not found.",
+                        ResourceKeyToString(key).c_str());
     }
 
     return luaL_error(state, "Unable to send uniform `%s`: expected %s, got %s",

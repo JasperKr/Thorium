@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Graphics/allocations.hpp"
 #include "Graphics/barrier.hpp"
 #include "Graphics/sampler.hpp"
 #include "Graphics/semaphoreManager.hpp"
@@ -170,7 +171,7 @@ struct Texture : Object, Barrier::BarrierSynced {
       return;
     }
 
-    vkDestroyImageView(context->device, view, nullptr);
+    vkDestroyImageView(context->device, view, GetAllocationCallbacks());
     vmaDestroyImage(context->vmaAllocator, image, memory);
 
     image = VK_NULL_HANDLE;

@@ -1,4 +1,5 @@
 #include "sampler.hpp"
+#include "Graphics/allocations.hpp"
 #include "Graphics/snapshot.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
@@ -39,8 +40,8 @@ auto GetOrCreateSampler(const GraphicsContext &context,
   VkSampler vkSampler = VK_NULL_HANDLE;
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    VkResult result =
-        vkCreateSampler(context.device, &samplerInfo, nullptr, &vkSampler);
+    VkResult result = vkCreateSampler(context.device, &samplerInfo,
+                                      GetAllocationCallbacks(), &vkSampler);
 
     if (result != VK_SUCCESS) {
       PrintError("Failed to create sampler: {}\n",
@@ -49,6 +50,7 @@ auto GetOrCreateSampler(const GraphicsContext &context,
     }
   }
 
+#if Enable_Snapshots
   Snapshot::CaptureEvent(Snapshot::SamplerCreateEvent(
       vkSampler, description.magFilter, description.minFilter,
       description.mipmapMode, description.addressModeU,
@@ -57,6 +59,7 @@ auto GetOrCreateSampler(const GraphicsContext &context,
       description.maxAnisotropy, description.compareEnable,
       description.compareOp, description.minLod, description.maxLod,
       description.borderColor));
+#endif
 
   SamplerCache[description] = vkSampler;
   return vkSampler;
@@ -65,8 +68,10 @@ auto GetOrCreateSampler(const GraphicsContext &context,
 auto DestroySamplers(const GraphicsContext &context) -> void {
   std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
   for (auto &pair : SamplerCache) {
+#if Enable_Snapshots
     Snapshot::CaptureEvent(Snapshot::SamplerDestroyEvent(pair.second));
-    vkDestroySampler(context.device, pair.second, nullptr);
+#endif
+    vkDestroySampler(context.device, pair.second, GetAllocationCallbacks());
   }
   SamplerCache.clear();
 }

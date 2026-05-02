@@ -7,7 +7,8 @@
 inline auto ResourceKeyFromLua(lua_State *state, int index)
     -> std::pair<Graphics::ResourceKey, int32_t> {
   auto count = lua_gettop(state);
-  Graphics::ResourceKey root;
+  thread_local Graphics::ResourceKey root;
+  root.clear();
   auto iterator = root.before_begin();
 
   for (int i = index; i <= count; ++i) {
@@ -27,7 +28,8 @@ inline auto ResourceKeyFromLuaTable(lua_State *state, int index)
     index = lua_gettop(state) + index + 1;
   }
 
-  Graphics::ResourceKey root;
+  thread_local Graphics::ResourceKey root;
+  root.clear();
   auto iterator = root.before_begin();
 
   luaL_checktype(state, index, LUA_TTABLE);

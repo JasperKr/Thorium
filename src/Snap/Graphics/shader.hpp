@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Graphics/Buffers/push.hpp"
+#include "Graphics/allocations.hpp"
 #include "Graphics/buffer.hpp"
 #include "Graphics/texture.hpp"
 #include "Modules/Math/vector.hpp"
@@ -71,12 +72,12 @@ ShaderStageFlagsToPipelineStageFlags(VkShaderStageFlags shaderStages)
   return pipelineStages;
 }
 
-struct BoundState {
-  std::unordered_map<uint64_t, std::pair<Ref<Buffer>, Reflect::BufferInfo>>
-      userBoundBuffers;
+using BoundBufferPair = std::pair<Ref<Buffer>, const Reflect::BufferInfo *>;
+using BoundTexturePair = std::pair<Ref<Texture>, const Reflect::SamplerInfo *>;
 
-  std::unordered_map<uint64_t, std::pair<Ref<Texture>, Reflect::SamplerInfo>>
-      userBoundTextures;
+struct BoundState {
+  std::unordered_map<uint64_t, BoundBufferPair> userBoundBuffers;
+  std::unordered_map<uint64_t, BoundTexturePair> userBoundTextures;
 };
 
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
@@ -129,7 +130,7 @@ struct ShaderModule : Object {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
 
     if (module != VK_NULL_HANDLE) {
-      vkDestroyShaderModule(ctx->device, module, nullptr);
+      vkDestroyShaderModule(ctx->device, module, GetAllocationCallbacks());
       module = VK_NULL_HANDLE;
     }
   }
@@ -150,10 +151,10 @@ struct ShaderModule : Object {
             const Ref<Graphics::Texture> &texture) -> Error;
 
   auto GetUniform(const ResourceKey &key) const
-      -> Result<const Reflect::ResourceInfo>;
+      -> const Reflect::ResourceInfo *;
   auto GetSlotDescription(uint32_t set, uint32_t binding)
-      -> Result<const Reflect::ResourceInfo>;
-  auto GetSlotDescription(uint64_t slot) -> Result<const Reflect::ResourceInfo>;
+      -> const Reflect::ResourceInfo *;
+  auto GetSlotDescription(uint64_t slot) -> const Reflect::ResourceInfo *;
 
   auto GetThreadgroupSize() const -> Result<Math::Uvec3>;
   auto GetWaveSize() const -> uint32_t;

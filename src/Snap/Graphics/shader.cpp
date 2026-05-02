@@ -1,5 +1,6 @@
 #include "shader.hpp"
 #include "Graphics/Buffers/push.hpp"
+#include "Graphics/allocations.hpp"
 #include "Graphics/graphicsContext.hpp"
 #include "Graphics/reflect.hpp"
 #include "Graphics/snapshot.hpp"
@@ -469,8 +470,9 @@ static inline auto LoadSlang(GraphicsContext &context,
   moduleCreateInfo.pCode = data.data();
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    Error error = Error::Create(vkCreateShaderModule(
-        context.device, &moduleCreateInfo, nullptr, &shader->module));
+    Error error = Error::Create(
+        vkCreateShaderModule(context.device, &moduleCreateInfo,
+                             GetAllocationCallbacks(), &shader->module));
 
     if (Error::IsError(error)) {
       return error;
@@ -487,8 +489,10 @@ static inline auto LoadSlang(GraphicsContext &context,
     vkSetDebugUtilsObjectNameEXT(context.device, &nameInfo);
   }
 
+#if Enable_Snapshots
   Snapshot::CaptureEvent(
       Snapshot::ShaderModuleCreateEvent(shader->module, shader->moduleName));
+#endif
 
   PrintDebug("Shader module created successfully.");
 
@@ -535,7 +539,7 @@ auto ShaderModule::Create(
 
   for (auto &layout : shader->reflection.resources) {
     if (layout.IsBuffer()) {
-      auto &bufferInfo = std::get<Reflect::BufferInfo>(layout.info);
+      const auto &bufferInfo = std::get<Reflect::BufferInfo>(layout.info);
 
       if (bufferInfo.bufferType == Reflect::BufferType::PushConstant) {
         auto result = PushBuffer(layout);
@@ -545,8 +549,10 @@ auto ShaderModule::Create(
     }
   }
 
+#if Enable_Snapshots
   Snapshot::CaptureEvent(
       Snapshot::ShaderModuleCreateEvent(shader->module, shader->moduleName));
+#endif
 
   shader->globalUniforms.resize(
       shader->reflection.globalBufferFormat.GetStride());
@@ -577,8 +583,7 @@ inline auto ValidateBuffers(const ShaderModule *shader) -> Error {
         Utils::SetBindingToSlot(bufferInfo.set, bufferInfo.binding);
 
     if (!shader->GetState().userBoundBuffers.contains(locationKey)) {
-      return Error::Create("Storage buffer '" + resource.name +
-                           "' not set up in shader.");
+      return Error::Createf("Buffer '{}' not set up in shader.", resource.name);
     }
   }
 
@@ -594,33 +599,34 @@ void append(ResourceKey &dest, const ResourceKey &src) {
 }
 
 auto ShaderModule::GetUniform(const ResourceKey &key) const
-    -> Result<const Reflect::ResourceInfo> {
+    -> const Reflect::ResourceInfo * {
   for (const auto &pushBuffer : pushBuffers) {
-    const auto *const info = pushBuffer.GetUniform(key.begin(), key.end());
+    const auto *info = pushBuffer.GetUniform(key.begin(), key.end());
     if (info == nullptr) {
       continue;
     }
-    return *info;
+    return info;
   }
 
   // check global ubo
-  ResourceKey globalsKey = {"Globals"};
+  thread_local ResourceKey globalsKey;
+  globalsKey.clear();
+  globalsKey.emplace_front("Globals");
   append(globalsKey, key);
 
   const auto *info =
       reflection.globals.ResolvePath(globalsKey.begin(), globalsKey.end());
   if (info != nullptr) {
-    return *info;
+    return info;
   }
 
   for (const auto &resource : reflection.resources) {
     if (resource.name == *key.begin()) {
-      return resource;
+      return &resource;
     }
   }
 
-  const auto &str = Reflect::ResourceKeyToString(key);
-  return Error::Unexpectedf("Uniform `{} not found.", str);
+  return nullptr;
 }
 
 auto ShaderModule::Send(const GraphicsContext &context, const ResourceKey &key,
@@ -628,15 +634,15 @@ auto ShaderModule::Send(const GraphicsContext &context, const ResourceKey &key,
   ZoneScopedN("ShaderModule::Send data span");
 
   for (auto &pushBuffer : pushBuffers) {
-    PrintDebug("Checking push buffer {} for key: {}...",
-               pushBuffer.GetLayout().name, Reflect::ResourceKeyToString(key));
     if (pushBuffer.ContainsUniform(key.begin(), key.end())) {
       return pushBuffer.SetData(key, data);
     }
   }
 
   // check global ubo
-  ResourceKey globalsKey = {"Globals"};
+  thread_local ResourceKey globalsKey = {};
+  globalsKey.clear();
+  globalsKey.emplace_front("Globals");
   append(globalsKey, key);
 
   const auto *info =
@@ -674,7 +680,8 @@ auto ShaderModule::Send(const GraphicsContext &context, const ResourceKey &key,
       auto locationKey =
           Utils::SetBindingToSlot(bufferInfo.set, bufferInfo.binding);
 
-      GetState().userBoundBuffers[locationKey] = {buffer, bufferInfo};
+      GetState().userBoundBuffers[locationKey] =
+          BoundBufferPair{buffer, &bufferInfo};
 
       return Error::Success();
     }
@@ -713,7 +720,7 @@ auto ShaderModule::Send(const GraphicsContext &context, const ResourceKey &key,
             "Texture does not support storage access required by shader.");
       }
 
-      state.userBoundTextures[key] = {texture, samplerInfo};
+      state.userBoundTextures[key] = {texture, &samplerInfo};
 
       return Error::Success();
     }
@@ -738,32 +745,28 @@ auto ShaderModule::GetThreadgroupSize() const -> Result<Math::Uvec3> {
 auto ShaderModule::GetWaveSize() const -> uint32_t { return waveSize; }
 
 auto ShaderModule::GetSlotDescription(uint32_t set, uint32_t binding) // NOLINT
-    -> Result<const Reflect::ResourceInfo> {
+    -> const Reflect::ResourceInfo * {
 
   auto key = Utils::SetBindingToSlot(set, binding);
 
   auto iter = reflection.slotToInfo.find(key);
   if (iter == reflection.slotToInfo.end()) {
-    return Error::Unexpectedf(
-        "Slot (set: {}, binding: {}) not found in shader reflection.", set,
-        binding);
+    return nullptr;
   }
 
-  return iter->second;
+  return &iter->second;
 }
 
 auto ShaderModule::GetSlotDescription(uint64_t slot)
-    -> Result<const Reflect::ResourceInfo> {
+    -> const Reflect::ResourceInfo * {
 
   auto iter = reflection.slotToInfo.find(slot);
   if (iter == reflection.slotToInfo.end()) {
     const auto &[set, binding] = Utils::SlotToSetBinding(slot);
-    return Error::Unexpectedf(
-        "Slot (set: {}, binding: {}) not found in shader reflection.", set,
-        binding);
+    return nullptr;
   }
 
-  return iter->second;
+  return &iter->second;
 }
 
 } // namespace Graphics::Shader

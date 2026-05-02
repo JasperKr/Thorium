@@ -1,4 +1,5 @@
 #include "texture.hpp"
+#include "Graphics/allocations.hpp"
 #include "Graphics/barrier.hpp"
 #include "Graphics/buffer.hpp"
 #include "Graphics/dynamicRendering.hpp"
@@ -166,8 +167,8 @@ auto Create2D(const GraphicsContext &context, const TextureCreationInfo &info)
 
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    auto error = Error::Create(
-        vkCreateImageView(context.device, &viewInfo, nullptr, &texture->view));
+    auto error = Error::Create(vkCreateImageView(
+        context.device, &viewInfo, GetAllocationCallbacks(), &texture->view));
 
     if (Error::IsError(error)) {
       return error.AsUnexpected();
@@ -301,8 +302,8 @@ auto CreateCubeMap(const GraphicsContext &context,
 
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    auto error = Error::Create(
-        vkCreateImageView(context.device, &viewInfo, nullptr, &texture->view));
+    auto error = Error::Create(vkCreateImageView(
+        context.device, &viewInfo, GetAllocationCallbacks(), &texture->view));
 
     if (Error::IsError(error)) {
       return error.AsUnexpected();
@@ -387,8 +388,8 @@ auto CreateVolume(const GraphicsContext &context,
 
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    auto error = Error::Create(
-        vkCreateImageView(context.device, &viewInfo, nullptr, &texture->view));
+    auto error = Error::Create(vkCreateImageView(
+        context.device, &viewInfo, GetAllocationCallbacks(), &texture->view));
 
     if (Error::IsError(error)) {
       return error.AsUnexpected();
@@ -473,8 +474,8 @@ auto CreateArray(const GraphicsContext &context,
 
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    auto error = Error::Create(
-        vkCreateImageView(context.device, &viewInfo, nullptr, &texture->view));
+    auto error = Error::Create(vkCreateImageView(
+        context.device, &viewInfo, GetAllocationCallbacks(), &texture->view));
 
     if (Error::IsError(error)) {
       return error.AsUnexpected();

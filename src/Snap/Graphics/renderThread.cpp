@@ -1,5 +1,6 @@
 #include "Graphics/renderThread.hpp"
 #include "Graphics/Buffers/uniform.hpp"
+#include "Graphics/allocations.hpp"
 #include "Graphics/buffer.hpp"
 #include "Graphics/dynamicRendering.hpp"
 #include "Graphics/graphics.hpp"
@@ -99,8 +100,9 @@ inline auto CreateDescriptorPool(ThreadContext &tcontext)
     PrintAlways("Creating new descriptor pool with max sets: {}",
                 poolInfo.maxSets);
 
-    Error error = Error::Create(vkCreateDescriptorPool(
-        tcontext.graphicsContext->device, &poolInfo, nullptr, &descriptorPool));
+    Error error = Error::Create(
+        vkCreateDescriptorPool(tcontext.graphicsContext->device, &poolInfo,
+                               GetAllocationCallbacks(), &descriptorPool));
 
     if (Error::IsError(error)) {
       return error.AsUnexpected();
@@ -243,8 +245,7 @@ auto AquireCommandBuffer(Graphics::GraphicsContext &context,
     return frameBeginResult.AsUnexpected();
   }
 
-  // Should not be done here
-  // GetGlobalUniformBuffer(context.frameIndex).NewFrame();
+  GetGlobalUniformBuffer(context.frameIndex).NewFrame();
 
   return threadInfo;
 }
@@ -297,7 +298,7 @@ inline auto CreateCommandPool(ThreadContext &tcontext) -> Error {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
     Error error = Error::Create(
         vkCreateCommandPool(tcontext.graphicsContext->device, &poolInfo,
-                            nullptr, &tcontext.commandPool));
+                            GetAllocationCallbacks(), &tcontext.commandPool));
 
     if (Error::IsError(error)) {
       return error;
@@ -315,6 +316,8 @@ inline auto CreateCommandPool(ThreadContext &tcontext) -> Error {
 auto Initialize(Graphics::GraphicsContext &context) -> Error {
   auto &tcontext = GetThreadContext();
   tcontext.graphicsContext = &context;
+
+  GlobalAllocations.RegisterNewThreadAllocations();
 
   PrintDebug("Creating command pool for render thread...");
 
@@ -366,7 +369,7 @@ auto Deinitialize(Graphics::GraphicsContext &context) -> Error {
 
     for (auto &descriptorPoolInfo : GetThreadContext().descriptorPools) {
       vkDestroyDescriptorPool(context.device, descriptorPoolInfo.descriptorPool,
-                              nullptr);
+                              GetAllocationCallbacks());
     }
 
     GetThreadContext().descriptorPools.clear();

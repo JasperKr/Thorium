@@ -87,9 +87,9 @@ public:
   }
 
   auto BindDynamicInputState(VkCommandBuffer commandBuffer) -> void {
-    VkVertexInputBindingDescription2EXT vertexInputInfo = {};
-    auto bindings = GetBindings();
-    auto attributes = GetVkAttributes2();
+    thread_local VkVertexInputBindingDescription2EXT vertexInputInfo = {};
+    const auto &bindings = GetBindings();
+    auto &attributes = GetVkAttributes2();
 
     vertexInputInfo.sType =
         VK_STRUCTURE_TYPE_VERTEX_INPUT_BINDING_DESCRIPTION_2_EXT;

@@ -226,7 +226,9 @@ auto UpdateUsage(const GraphicsContext &context, BarrierSynced &resource,
 
     auto event = Snapshot::BarrierEvent(sync);
 
+#if Enable_Snapshots
     Snapshot::CaptureEvent(event);
+#endif
 
     // Update to new usage
     previousAccess = usage.access;

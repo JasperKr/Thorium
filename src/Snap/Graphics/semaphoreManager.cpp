@@ -1,4 +1,5 @@
 #include "Graphics/semaphoreManager.hpp"
+#include "Graphics/allocations.hpp"
 #include "Modules/console.hpp"
 
 #include "vulkan/vulkan_core.h"
@@ -190,8 +191,9 @@ auto InitializeGlobalTimelineSemaphore(GraphicsContext &context) -> Error {
 
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    auto result = Error::Create(vkCreateSemaphore(
-        context.device, &semInfo, nullptr, &globalTimelineSemaphore));
+    auto result = Error::Create(vkCreateSemaphore(context.device, &semInfo,
+                                                  GetAllocationCallbacks(),
+                                                  &globalTimelineSemaphore));
     if (Error::IsError(result)) {
       return result;
     }
@@ -203,7 +205,8 @@ auto InitializeGlobalTimelineSemaphore(GraphicsContext &context) -> Error {
 auto DeInitializeGlobalTimelineSemaphore(GraphicsContext &context) -> void {
   if (globalTimelineSemaphore != VK_NULL_HANDLE) {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    vkDestroySemaphore(context.device, globalTimelineSemaphore, nullptr);
+    vkDestroySemaphore(context.device, globalTimelineSemaphore,
+                       GetAllocationCallbacks());
     globalTimelineSemaphore = VK_NULL_HANDLE;
   }
 }

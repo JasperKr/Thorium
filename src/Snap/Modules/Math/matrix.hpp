@@ -81,6 +81,7 @@ struct Matrix4x4 {
   [[nodiscard]] auto ToString() const -> std::string;
 
   [[nodiscard]] auto data() const -> const Scalar * { return elements.data(); }
+  static auto size() -> size_t { return Size; }
   [[nodiscard]] auto byteSpan() const
       -> std::span<const uint8_t> { // NOLINTNEXTLINE reinterpret cast
     return {reinterpret_cast<const uint8_t *>(elements.data()),
@@ -133,6 +134,7 @@ struct Matrix3x3 {
   [[nodiscard]] auto ToString() const -> std::string;
 
   [[nodiscard]] auto data() const -> const Scalar * { return elements.data(); }
+  static auto size() -> size_t { return Size; }
 
   [[nodiscard]] auto byteSpan() const
       -> std::span<const uint8_t> { // NOLINTNEXTLINE reinterpret cast

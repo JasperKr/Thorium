@@ -1,4 +1,5 @@
 #include "graphics.hpp"
+#include "Graphics/allocations.hpp"
 #include "Graphics/deviceSettings.hpp"
 #include "Graphics/graphicsContext.hpp"
 #include "Graphics/graphicsState.hpp"
@@ -323,8 +324,9 @@ static auto CreateDevice(GraphicsContext &context,
   createInfo.ppEnabledExtensionNames = deviceExtensions.data();
 
   std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-  Error error = Error::Create(vkCreateDevice(
-      context.physicalDevice, &createInfo, nullptr, &context.device));
+  Error error =
+      Error::Create(vkCreateDevice(context.physicalDevice, &createInfo,
+                                   GetAllocationCallbacks(), &context.device));
 
   if (Error::IsError(error)) {
     return error;
@@ -371,14 +373,15 @@ static auto CreateSemaphores(GraphicsContext &context) -> Error {
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
     for (int i = 0; i < FRAMES_IN_FLIGHT; i++) {
-      Error error = Error::Create(
-          vkCreateSemaphore(context.device, &semaphoreInfo, nullptr,
-                            &context.imageAvailable.at(i)));
+      Error error = Error::Create(vkCreateSemaphore(
+          context.device, &semaphoreInfo, GetAllocationCallbacks(),
+          &context.imageAvailable.at(i)));
       if (Error::IsError(error)) {
         return error;
       }
 
-      error = Error::Create(vkCreateFence(context.device, &fenceInfo, nullptr,
+      error = Error::Create(vkCreateFence(context.device, &fenceInfo,
+                                          GetAllocationCallbacks(),
                                           &context.inFlight.at(i)));
       if (Error::IsError(error)) {
         return error;
@@ -399,7 +402,7 @@ static auto CreateVmaAllocator(GraphicsContext &context) -> Error {
   allocatorInfo.device = context.device;
   allocatorInfo.instance = context.instance;
   allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_4;
-  allocatorInfo.pAllocationCallbacks = nullptr;
+  allocatorInfo.pAllocationCallbacks = GetAllocationCallbacks();
   allocatorInfo.flags = VMA_ALLOCATOR_CREATE_EXTERNALLY_SYNCHRONIZED_BIT;
 
   VmaVulkanFunctions vulkanFunctions;
@@ -430,7 +433,7 @@ inline auto CreateCommandPool(ThreadContext &tcontext) -> Error {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
     Error error = Error::Create(
         vkCreateCommandPool(tcontext.graphicsContext->device, &poolInfo,
-                            nullptr, &tcontext.commandPool));
+                            GetAllocationCallbacks(), &tcontext.commandPool));
 
     if (Error::IsError(error)) {
       return error;
@@ -448,6 +451,9 @@ inline auto CreateCommandPool(ThreadContext &tcontext) -> Error {
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 auto Initialize(GraphicsContext &context, Window::WindowContext &wcontext,
                 const DeviceSettings &deviceSettings) -> Error {
+
+  GlobalAllocations.RegisterNewThreadAllocations();
+
   PrintDebug("Initializing Volk...");
   Error error = Error::Create(volkInitialize());
 
@@ -506,8 +512,8 @@ auto Initialize(GraphicsContext &context, Window::WindowContext &wcontext,
   createInfo.ppEnabledExtensionNames = extensionList.data();
   createInfo.pApplicationInfo = &appInfo;
 
-  error =
-      Error::Create(vkCreateInstance(&createInfo, nullptr, &context.instance));
+  error = Error::Create(vkCreateInstance(&createInfo, GetAllocationCallbacks(),
+                                         &context.instance));
 
   if (Error::IsError(error)) {
     return error;
@@ -572,30 +578,31 @@ void Deinitialize(GraphicsContext &context) {
 
   for (auto &descriptorPoolInfo : GetThreadContext().descriptorPools) {
     vkDestroyDescriptorPool(context.device, descriptorPoolInfo.descriptorPool,
-                            nullptr);
+                            GetAllocationCallbacks());
   }
 
   vmaDestroyAllocator(context.vmaAllocator);
 
   for (VkSemaphore semaphore : context.imageAvailable) {
-    vkDestroySemaphore(context.device, semaphore, nullptr);
+    vkDestroySemaphore(context.device, semaphore, GetAllocationCallbacks());
   }
 
   for (VkFence fence : context.inFlight) {
-    vkDestroyFence(context.device, fence, nullptr);
+    vkDestroyFence(context.device, fence, GetAllocationCallbacks());
   }
 
   {
     std::lock_guard<std::mutex> lock(CommandPoolsMutex);
     for (auto &pool : CommandPools) {
-      vkDestroyCommandPool(context.device, pool, nullptr);
+      vkDestroyCommandPool(context.device, pool, GetAllocationCallbacks());
     }
     CommandPools.clear();
   }
 
-  vkDestroyDevice(context.device, nullptr);
-  vkDestroySurfaceKHR(context.instance, context.surface, nullptr);
-  vkDestroyInstance(context.instance, nullptr);
+  vkDestroyDevice(context.device, GetAllocationCallbacks());
+  vkDestroySurfaceKHR(context.instance, context.surface,
+                      GetAllocationCallbacks());
+  vkDestroyInstance(context.instance, GetAllocationCallbacks());
 
   SDL_DestroyWindow(context.sdlWindow);
   SDL_Quit();

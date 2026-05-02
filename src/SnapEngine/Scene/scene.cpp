@@ -196,32 +196,35 @@ auto Scene::DrawModels(lua_State *state) -> int {
 
   auto shader = Graphics::DynamicRendering::GetShader();
 
-  scene->world.each<Geometry>(
-      [&](flecs::entity entity, const Geometry &geometry) -> void {
-        auto worldMatrix = entity.get<Transform>().GetWorldMatrix();
-        auto normalMatrix = Math::Matrix3x3(worldMatrix).InverseTranspose();
+  scene->world.each<Geometry>([&](flecs::entity entity,
+                                  const Geometry &geometry) -> void {
+    const auto &worldMatrix = entity.get<Transform>().GetWorldMatrix();
+    const auto &normalMatrix = Math::Matrix3x3(worldMatrix).InverseTranspose();
 
-        auto sendErr = Graphics::Shader::UniformWriter::Send(
-            shader, *ctx, {"ModelMatrix"}, worldMatrix);
+    static auto modelMatrixKey = Graphics::ResourceKey{"ModelMatrix"};
+    static auto normalMatrixKey = Graphics::ResourceKey{"NormalMatrix"};
 
-        if (Error::IsError(sendErr)) {
-          drawResult = sendErr;
-          return;
-        }
+    auto sendErr = Graphics::Shader::UniformWriter::Send(
+        shader, *ctx, modelMatrixKey, worldMatrix);
 
-        sendErr = Graphics::Shader::UniformWriter::Send(
-            shader, *ctx, {"NormalMatrix"}, normalMatrix);
+    if (Error::IsError(sendErr)) {
+      drawResult = sendErr;
+      return;
+    }
 
-        if (Error::IsError(sendErr)) {
-          drawResult = sendErr;
-          return;
-        }
+    sendErr = Graphics::Shader::UniformWriter::Send(
+        shader, *ctx, normalMatrixKey, normalMatrix);
 
-        auto result = Graphics::Draw(*ctx, *geometry.mesh);
-        if (Error::IsError(result)) {
-          drawResult = result;
-        }
-      });
+    if (Error::IsError(sendErr)) {
+      drawResult = sendErr;
+      return;
+    }
+
+    auto result = Graphics::Draw(*ctx, *geometry.mesh);
+    if (Error::IsError(result)) {
+      drawResult = result;
+    }
+  });
 
   if (Error::IsError(drawResult)) {
     return luaL_error(state, "%s", drawResult.ToString().c_str());
