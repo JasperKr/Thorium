@@ -192,9 +192,9 @@ target_include_directories(tracy
     SYSTEM PUBLIC ${CMAKE_SOURCE_DIR}/external/tracy
 )
 
-target_compile_definitions(tracy
-    PUBLIC TRACY_ENABLE
-)
+# target_compile_definitions(tracy
+    # PUBLIC TRACY_ENABLE
+# )
 
 target_link_libraries(tracy
     PUBLIC Threads::Threads

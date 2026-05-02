@@ -352,19 +352,6 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
   while (Event::MainLoopRunning) {
     runCallback.push();
 
-    if (context.currentFrame % 5000 == 0) {
-      PrintAlways("Current memory usage: {} bytes", Utils::GetMemoryUsage());
-      const auto &stats = Graphics::GlobalAllocations.GetTotalStats();
-      PrintAlways("Total Vulkan allocations: {}", stats.totalAllocationCount);
-      PrintAlways("Currently allocated Vulkan memory: {} bytes",
-                  stats.currentlyAllocated);
-      PrintAlways("Total Vulkan memory allocated since start: {} bytes",
-                  stats.totalAllocated);
-      PrintAlways("Total Vulkan memory freed since start: {} bytes",
-                  stats.totalFreed);
-      PrintAlways("Total Vulkan frees since start: {}", stats.totalFreeCount);
-    }
-
     FrameMarkStart("Frame");
     if (lua_pcall(state, 0, 1, tracebackIndex) != LUA_OK) {
       std::string luaErrorMessage;
