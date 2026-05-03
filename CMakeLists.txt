@@ -71,6 +71,9 @@ target_link_libraries(snap
 
 target_link_options(snap PRIVATE
     $<$<CONFIG:Debug>:-rdynamic>
+    $<$<CONFIG:Debug>:-fsanitize=address>
+    $<$<CONFIG:Debug>:-fno-omit-frame-pointer>
+    $<$<CONFIG:Debug>:-g>
 )
 
 # -------------------------------

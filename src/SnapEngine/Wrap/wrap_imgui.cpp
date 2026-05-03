@@ -10,7 +10,6 @@
 #include "Graphics/vertexformat.hpp"
 #include "Modules/Peripherals/keyboard.hpp"
 #include "Modules/Peripherals/mouse.hpp"
-#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/imagedata.hpp"
 #include "Modules/object.hpp"
@@ -51,14 +50,6 @@ auto EndFrame(lua_State *state) -> int {
   ImGui::EndFrame();
   return 0;
 }
-
-struct TemporaryCommandList {
-  int32_t MaxVertexCount = INT32_MIN;
-  int32_t MaxIndexCount = INT32_MIN;
-  ImDrawList *DrawList = nullptr;
-
-  Ref<Graphics::Mesh> Mesh;
-};
 
 const Graphics::VertexFormat format{{
     Graphics::VertexComponent{.name = "Position",
@@ -226,7 +217,7 @@ inline auto HandleImguiUpdateTextureEvent(Graphics::GraphicsContext &context,
   return Error::Success();
 }
 
-static inline std::vector<TemporaryCommandList> TemporaryCommandLists; // NOLINT
+std::vector<TemporaryCommandList> TemporaryCommandLists; // NOLINT
 
 inline auto SetupTemporaryCommandLists(ImDrawData *drawData,
                                        Graphics::GraphicsContext &ctx)
@@ -539,15 +530,20 @@ auto MouseWheelMoved(lua_State *state) -> int {
   return 0;
 }
 
-auto Shutdown() -> Error {
+auto Shutdown(lua_State *state) -> int {
   auto shutdownResult = Gui::ShutdownImGui();
   if (Error::IsError(shutdownResult)) {
-    return shutdownResult;
+    return luaL_error(state, "Failed to shutdown ImGui: %s",
+                      shutdownResult.message.c_str());
   }
 
+  // TemporaryCommandLists.clear();
+  for (auto &temporaryCommandList : TemporaryCommandLists) {
+    temporaryCommandList.Mesh.reset();
+  }
   TemporaryCommandLists.clear();
 
-  return Error::Success();
+  return 0;
 }
 
 auto GetImguiContextPtr(lua_State *state) -> int {

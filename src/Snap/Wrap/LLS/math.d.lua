@@ -2,18 +2,6 @@
 
 error("Do not require this file")
 
---[[
-{"eulerToQuaternion", wrap_EulerToQuaternion},
-    {"eulerToMatrix", wrap_EulerToMatrix},
-    {"quaternionToEuler", wrap_QuaternionToEuler},
-    {"quaternionToMatrix", wrap_QuaternionToMatrix},
-    {"matrixToEuler", wrap_MatrixToEuler},
-    {"matrixToQuaternion", wrap_MatrixToQuaternion},
-    {"random", wrap_Random},
-    {"noise", wrap_Noise},
-    {"noiseWrapped", wrap_NoiseWrapped},
-]]
-
 --- Converts an euler angle to a quaternion
 --- @param yaw number
 --- @param pitch number
@@ -63,6 +51,40 @@ function snap.math.matrixToEuler(matrix) end
 --- @return number z
 --- @return number w
 function snap.math.matrixToQuaternion(matrix) end
+
+--[[
+auto wrap_TranslationMatrix(lua_State *state) -> int;
+auto wrap_ScaleMatrix(lua_State *state) -> int;
+auto wrap_TransformMatrix(lua_State *state) -> int;
+]]
+
+--- Creates a translation matrix
+--- @param x number
+--- @param y number
+--- @param z number
+--- @return number[16] matrix
+function snap.math.translationMatrix(x, y, z) end
+
+--- Creates a scale matrix
+--- @param x number
+--- @param y number
+--- @param z number
+--- @return number[16] matrix
+function snap.math.scaleMatrix(x, y, z) end
+
+--- Creates a transform matrix from a translation, rotation and scale
+--- @param translationX number
+--- @param translationY number
+--- @param translationZ number
+--- @param scaleX number
+--- @param scaleY number
+--- @param scaleZ number
+--- @param rotationX number
+--- @param rotationY number
+--- @param rotationZ number
+--- @return number[16] matrix
+function snap.math.transformMatrix(translationX, translationY, translationZ, scaleX, scaleY, scaleZ, rotationX, rotationY,
+                                   rotationZ) end
 
 --- Returns a random integer between min and max
 --- @overload fun(max: integer): integer Returns a random integer between 0 and max inclusive

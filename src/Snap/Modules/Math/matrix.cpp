@@ -280,6 +280,16 @@ auto Matrix4x4::TranslationMatrix(Vec3 translation) -> Matrix4x4 {
   result.At(2, 3) = translation.z;
   return result;
 }
+
+auto Matrix4x4::TranslationMatrix(Scalar x_pos, Scalar y_pos, Scalar z_pos)
+    -> Matrix4x4 {
+  Matrix4x4 result;
+  result.At(0, 3) = x_pos;
+  result.At(1, 3) = y_pos;
+  result.At(2, 3) = z_pos;
+  return result;
+}
+
 auto Matrix4x4::ScaleMatrix(Vec3 scale) -> Matrix4x4 {
   Matrix4x4 result;
   result.At(0, 0) = scale.x;
@@ -288,11 +298,32 @@ auto Matrix4x4::ScaleMatrix(Vec3 scale) -> Matrix4x4 {
   return result;
 }
 
+auto Matrix4x4::ScaleMatrix(Scalar x_scale, Scalar y_scale, Scalar z_scale)
+    -> Matrix4x4 {
+  Matrix4x4 result;
+  result.At(0, 0) = x_scale;
+  result.At(1, 1) = y_scale;
+  result.At(2, 2) = z_scale;
+  return result;
+}
+
 // NOLINTNEXTLINE
 auto Matrix4x4::TransformationMatrix(Vec3 translation, Vec3 scale,
                                      Quaternion rotation) -> Matrix4x4 {
   Matrix4x4 translationMatrix = Matrix4x4::TranslationMatrix(translation);
   Matrix4x4 scaleMatrix = Matrix4x4::ScaleMatrix(scale);
+  Matrix4x4 rotationMatrix = Conversions::ToMatrix(rotation);
+  return translationMatrix * rotationMatrix * scaleMatrix;
+}
+
+auto Matrix4x4::TransformationMatrix(Scalar x_pos, Scalar y_pos, Scalar z_pos,
+                                     Scalar x_scale, Scalar y_scale,
+                                     Scalar z_scale, Scalar x_rot, Scalar y_rot,
+                                     Scalar z_rot, Scalar w_rot) -> Matrix4x4 {
+  Matrix4x4 translationMatrix =
+      Matrix4x4::TranslationMatrix(x_pos, y_pos, z_pos);
+  Matrix4x4 scaleMatrix = Matrix4x4::ScaleMatrix(x_scale, y_scale, z_scale);
+  Quaternion rotation{x_rot, y_rot, z_rot, w_rot};
   Matrix4x4 rotationMatrix = Conversions::ToMatrix(rotation);
   return translationMatrix * rotationMatrix * scaleMatrix;
 }

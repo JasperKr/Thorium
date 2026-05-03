@@ -65,8 +65,8 @@ struct Mesh : Object {
   [[nodiscard]] auto GetTopology() const -> VkPrimitiveTopology;
 
   auto SetVertices(GraphicsContext &context,
-                   const std::span<uint8_t> &vertexData, uint64_t offset = 0)
-      -> Error;
+                   const std::span<const uint8_t> &vertexData,
+                   uint64_t offset = 0) -> Error;
   auto SetIndices(GraphicsContext &context, const std::span<uint8_t> &indexData,
                   VkIndexType format) -> Error;
 
@@ -84,7 +84,7 @@ struct Mesh : Object {
 
 private:
   auto UploadVertices(GraphicsContext &context,
-                      const std::span<uint8_t> &vertices, uint64_t offset)
+                      const std::span<const uint8_t> &vertices, uint64_t offset)
       -> Error;
   auto UploadIndices(GraphicsContext &context,
                      const std::span<uint8_t> &indices, uint64_t offset,

@@ -1,7 +1,6 @@
 #include "loop.hpp"
 #include "Editor/gui.hpp"
 #include "Graphics/Buffers/uniform.hpp"
-#include "Graphics/allocations.hpp"
 #include "Graphics/buffer.hpp"
 #include "Graphics/dynamicRendering.hpp"
 #include "Graphics/graphics.hpp"
@@ -18,7 +17,6 @@
 #include "Modules/window.hpp"
 #include "Wrap/Graphics/wrap_graphics.hpp"
 #include "Wrap/wrap_engine.hpp"
-#include "Wrap/wrap_imgui.hpp"
 #include <filesystem>
 #include <lua.h>
 #include <mutex>
@@ -392,11 +390,6 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
 
   // Force all deferred destructions to happen now
   Graphics::GetDeferredDestructionAllowed() = false;
-
-  auto shutdownResult = Wrap::Imgui::Shutdown();
-  if (Error::IsError(shutdownResult)) {
-    PrintError("Error during ImGui shutdown: {}", shutdownResult.message);
-  }
 
   Wrap::Graphics::ShutdownWrapGraphics();
 

@@ -5,6 +5,7 @@
 #include <vector>
 #include <vulkan/vulkan_core.h>
 namespace Graphics {
+// #define ENABLE_VULKAN_ALLOCATOR_TRACKING
 
 struct AllocationStats {
   size_t totalAllocated = 0;

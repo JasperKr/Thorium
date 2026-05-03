@@ -68,9 +68,15 @@ auto GetThreadAllocations() -> ThreadAllocations & {
   return allocations;
 }
 
+#ifdef ENABLE_VULKAN_ALLOCATOR_TRACKING
 auto GetAllocationCallbacks() -> const VkAllocationCallbacks * {
   return &GetThreadAllocations().callbacks;
 }
+#else
+auto GetAllocationCallbacks() -> const VkAllocationCallbacks * {
+  return nullptr; // Use default Vulkan allocator
+}
+#endif
 
 Allocations GlobalAllocations{}; // NOLINT
 

@@ -1,8 +1,8 @@
 table.new = require("table.new")
 table.clear = require("table.clear")
 
-local mathModule = snap.math or {}
-snap.math = mathModule
+local mathModule = engine.math or {}
+engine.math = mathModule
 
 mathModule.PI2 = math.pi * 2
 mathModule.PI05 = math.pi * 0.5
@@ -419,7 +419,7 @@ do -- define rotation conversions
     local cb = math.cos(pitch)
     local sb = math.sin(pitch)
 
-    local m = out or mat4()
+    local m = out or matrix4x4()
     m[1][1] = ch * ca
     m[1][2] = sh * sb - ch * sa * cb
     m[1][3] = ch * sa * sb + sh * cb
@@ -435,7 +435,7 @@ do -- define rotation conversions
 
   ---@return matrix4x4 m
   function mathModule.quaternionToMatrix(q, out)
-    local m = out or mat4()
+    local m = out or matrix4x4()
 
     m[1][1] = (q.x * q.x - q.y * q.y - q.z * q.z + q.w * q.w)
     m[2][2] = (-q.x * q.x + q.y * q.y - q.z * q.z + q.w * q.w)
@@ -587,7 +587,7 @@ end
 ---@param position vec3
 ---@return matrix4x4
 function mathModule.newTranslationMatrix(position, out)
-  local m = out or mat4()
+  local m = out or matrix4x4()
   m[4][1] = position.x
   m[4][2] = position.y
   m[4][3] = position.z
@@ -625,7 +625,7 @@ do
   end
 end
 
-local tempMatrix = mat4()
+local tempMatrix = matrix4x4()
 
 ---@param matrix matrix4x4
 ---@param frustum table?
@@ -749,7 +749,7 @@ function mathModule.frustumSphere(fru, x, y, z, r)
   return true
 end
 
----@class snap.ray
+---@class engine.ray
 ---@field position vec3
 ---@field direction vec3
 ---@field length number
@@ -759,11 +759,11 @@ end
 ---@param position vec3
 ---@param direction vec3
 ---@param length number
----@return snap.ray
+---@return engine.ray
 function mathModule.newRay(position, direction, length)
-  snap.assertType(position, "vec3")
-  snap.assertType(direction, "vec3")
-  snap.assertType(length, "number")
+  engine.assertType(position, "vec3")
+  engine.assertType(direction, "vec3")
+  engine.assertType(length, "number")
 
   return {
     position = position,
@@ -775,8 +775,8 @@ end
 ---returns a ray that goes from the camera position to the x,y position
 ---@param x number [0 - 1]
 ---@param y number [0 - 1]
----@param camera snap.camera
----@return snap.ray ray length undefined
+---@param camera engine.camera
+---@return engine.ray ray length undefined
 function mathModule.screenPositionToRay(x, y, camera, outRay)
   local vx, vy, vz, vw = camera.inverseProjectionMatrix:vMulSepW1(
     (x - 0.5) * 2.0,
@@ -1585,7 +1585,7 @@ function mathModule.triangleTangent(p1, p2, p3)
 end
 
 function mathModule.newScaleMatrix(scale)
-  local mat = mat4()
+  local mat = matrix4x4()
   mat[1][1] = scale.x
   mat[2][2] = scale.y
   mat[3][3] = scale.z
@@ -1631,8 +1631,8 @@ function mathModule.slerp(qa, qb, t, out)
   return qm
 end
 
-local scaleMatrix = mat4()
-local rotationMatrix = mat4()
+local scaleMatrix = matrix4x4()
+local rotationMatrix = matrix4x4()
 
 function mathModule.newTransform(translation, rotation, scale, out)
   scaleMatrix:setFromNumbers(
@@ -1644,7 +1644,7 @@ function mathModule.newTransform(translation, rotation, scale, out)
 
   mathModule.quaternionToMatrix(rotation, rotationMatrix)
 
-  local rotationScaleMatrix = rotationMatrix:mul(scaleMatrix, out or mat4())
+  local rotationScaleMatrix = rotationMatrix:mul(scaleMatrix, out or matrix4x4())
 
   rotationScaleMatrix[4][1] = translation.x
   rotationScaleMatrix[4][2] = translation.y

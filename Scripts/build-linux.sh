@@ -9,7 +9,7 @@ rm -f ./build/snap
 FLAGS=""
 
 if [ "$CONFIG" = "Debug" ]; then
-  FLAGS="$FLAGS -g -O0 -ftime-trace -fno-omit-frame-pointer"
+  FLAGS="$FLAGS -g -O1 -ftime-trace -fno-omit-frame-pointer"
   CONFIG="Debug"
 elif [ "$CONFIG" = "Profile" ]; then
   FLAGS="$FLAGS -DTRACY_ENABLE=1 -DTRACY_WAIT_FOR_CLIENT=1 -O3 -g -ftime-trace -fno-omit-frame-pointer"
@@ -17,7 +17,7 @@ elif [ "$CONFIG" = "Profile" ]; then
 elif [ "$CONFIG" == "Release" ]; then
   FLAGS="$FLAGS -O3"
 elif [ "$CONFIG" == "RelWithDebInfo" ]; then
-  FLAGS="$FLAGS -O0 -g -ftime-trace"
+  FLAGS="$FLAGS -O2 -g -ftime-trace"
 fi
 
 echo "Building with configuration: $CONFIG"

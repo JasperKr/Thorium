@@ -1,9 +1,15 @@
 #!/usr/bin/env bash
 set -e
 
-read -p "This script will fetch all dependencies for the project. Do you want to proceed? (y/n) " -n 1 -r
+
+read -p "This script will fetch all dependencies for the project. Do you want to proceed? (y/n/o)
+Yes / No / Override: " -n 1 -r
 echo    # move to a new line
-if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+if [[ $REPLY =~ ^[Oo]$ ]]; then
+    override=1
+elif [[ $REPLY =~ ^[Yy]$ ]]; then
+    override=0
+else
     echo "Aborting."
     exit 1
 fi
@@ -13,16 +19,18 @@ git submodule update --init --recursive
 # Create include folders
 mkdir -p include/tl include/vma include/stb include/volk include/shaderc
 
+
 # Fetch TL expected.hpp
-if [ ! -f "include/tl/expected.hpp" ]; then
+if [ "$override" -eq 1 ] || [ ! -f "include/tl/expected.hpp" ]; then
     echo "Fetching tl::expected..."
     curl -L https://raw.githubusercontent.com/TartanLlama/expected/master/include/tl/expected.hpp -o include/tl/expected.hpp
 else
     echo "tl::expected already exists, skipping fetch."
 fi
 
+
 # Fetch VMA
-if [ ! -f "include/vma/vk_mem_alloc.h" ]; then
+if [ "$override" -eq 1 ] || [ ! -f "include/vma/vk_mem_alloc.h" ]; then
     echo "Fetching Vulkan Memory Allocator..."
     mkdir -p include/vma
     curl -L https://raw.githubusercontent.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator/master/include/vk_mem_alloc.h -o include/vma/vk_mem_alloc.h
@@ -30,8 +38,9 @@ else
     echo "Vulkan Memory Allocator already exists, skipping fetch."
 fi
 
+
 # Fetch Volk
-if [ ! -f "include/volk/volk.h" ] || [ ! -f "include/volk/volk.c" ]; then
+if [ "$override" -eq 1 ] || [ ! -f "include/volk/volk.h" ] || [ ! -f "include/volk/volk.c" ]; then
     echo "Fetching Volk..."
     mkdir -p include/volk
     curl -L https://raw.githubusercontent.com/zeux/volk/master/volk.h -o include/volk/volk.h
@@ -40,8 +49,9 @@ else
     echo "Volk already exists, skipping fetch."
 fi
 
+
 # Fetch stb_image
-if [ ! -f "include/stb/stb_image.h" ]; then
+if [ "$override" -eq 1 ] || [ ! -f "include/stb/stb_image.h" ]; then
     echo "Fetching stb_image..."
     mkdir -p include/stb
     curl -L https://raw.githubusercontent.com/nothings/stb/master/stb_image.h -o include/stb/stb_image.h
@@ -49,8 +59,9 @@ else
     echo "stb_image already exists, skipping fetch."
 fi
 
+
 # Fetch stb_perlin
-if [ ! -f "include/stb/stb_perlin.h" ]; then
+if [ "$override" -eq 1 ] || [ ! -f "include/stb/stb_perlin.h" ]; then
     echo "Fetching stb_perlin..."
     mkdir -p include/stb
     curl -L https://raw.githubusercontent.com/nothings/stb/master/stb_perlin.h -o include/stb/stb_perlin.h
@@ -58,9 +69,10 @@ else
     echo "stb_perlin already exists, skipping fetch."
 fi
 
-# Fetch embree pre-built binearies for Linux x86_64
+
+# Fetch embree pre-built binaries for Linux x86_64
 URL="https://github.com/embree/embree/releases/download/v4.4.0/embree-4.4.0.x86_64.linux.tar.gz"
-if [ ! -d "include/embree" ] || [ -z "$(ls -A include/embree)" ]; then
+if [ "$override" -eq 1 ] || [ ! -d "include/embree" ] || [ -z "$(ls -A include/embree)" ]; then
     mkdir -p temp_embree
     curl -L "$URL" -o "temp_embree/embree.tar.gz"
     tar -xzf "temp_embree/embree.tar.gz" -C temp_embree
@@ -71,20 +83,20 @@ if [ ! -d "include/embree" ] || [ -z "$(ls -A include/embree)" ]; then
     rm -rf temp_embree
 fi
 
-# Shaderc: clone repository and copy necessary include
 
-# check if the folder is empty, otherwise skip
-if [ -z "$(ls -A include/shaderc)" ]; then
-  echo "Fetching shaderc..."
-  git clone --depth 1 https://github.com/google/shaderc.git temp_shaderc
-  cp -r temp_shaderc/include/* include/shaderc/
+# Shaderc: clone repository and copy necessary include
+if [ "$override" -eq 1 ] || [ -z "$(ls -A include/shaderc)" ]; then
+    echo "Fetching shaderc..."
+    git clone --depth 1 https://github.com/google/shaderc.git temp_shaderc
+    cp -r temp_shaderc/include/* include/shaderc/
 else
-  echo "shaderc include folder is not empty, skipping fetch."
+    echo "shaderc include folder is not empty, skipping fetch."
 fi
 rm -rf temp_shaderc
 
-# If "./include/slang/" is missing or empty:
-if [ ! -d "./include/slang/" ] || [ -z "$(ls -A ./include/slang/)" ]; then
+
+# If "./include/slang/" is missing or empty, or override is set:
+if [ "$override" -eq 1 ] || [ ! -d "./include/slang/" ] || [ -z "$(ls -A ./include/slang/)" ]; then
     URL="https://github.com/shader-slang/slang/releases/download/v2025.23.1/slang-2025.23.1-linux-x86_64.zip"
     TEMP_DIR="./slang_download"
 
@@ -104,18 +116,17 @@ if [ ! -d "./include/slang/" ] || [ -z "$(ls -A ./include/slang/)" ]; then
     if [ ! -d "./bin/slang/" ]; then
         mkdir -p "./bin/slang/"
     fi
-    # cp -rL "$TEMP_DIR/contents/bin/"* "./bin/slang/"
     find "$TEMP_DIR/contents/bin" -maxdepth 1 -type f -exec cp {} ./bin/slang/ \;
     if [ ! -d "./lib/slang/" ]; then
         mkdir -p "./lib/slang/"
     fi
-    # cp -rL "$TEMP_DIR/contents/lib/"* "./lib/slang/"
     find "$TEMP_DIR/contents/lib" -maxdepth 1 -type f -exec cp {} ./lib/slang/ \;
     echo "Cleaning up..."
     rm -rf "$TEMP_DIR"
 fi
 
-if [ ! -f "include/float16_t/float16_t.hpp" ]; then
+
+if [ "$override" -eq 1 ] || [ ! -f "include/float16_t/float16_t.hpp" ]; then
     echo "Fetching float-16"
     URL="https://github.com/fengwang/float16_t.git"
     if [ ! -d "float16_t_temp" ]; then
@@ -126,13 +137,16 @@ if [ ! -f "include/float16_t/float16_t.hpp" ]; then
     rm -rf float16_t_temp
 fi
 
+
 # Download https://github.com/spnda/fastgltf.git to temp/fastgltf and copy temp/fastgltf/include/fastgltf/* to include/fastgltf/
 URL="https://github.com/spnda/fastgltf.git"
-if [ ! -d "include/fastgltf" ]; then
+if [ "$override" -eq 1 ] || [ ! -d "include/fastgltf" ]; then
+    rm -rf include/fastgltf
     git clone --depth 1 "$URL" include/fastgltf
 fi
 URL="https://github.com/simdjson/simdjson/releases/download/v4.2.4/singleheader.zip"
-if [ ! -d "include/simdjson" ]; then
+if [ "$override" -eq 1 ] || [ ! -d "include/simdjson" ]; then
+    rm -rf include/simdjson
     mkdir -p include/simdjson
     curl -L "$URL" -o "include/simdjson/singleheader.zip"
     unzip -q "include/simdjson/singleheader.zip" -d "include/simdjson/"

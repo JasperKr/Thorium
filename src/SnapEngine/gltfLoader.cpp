@@ -1128,7 +1128,7 @@ inline auto LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
         return vertexDataResult.error().AsUnexpected();
       }
 
-      auto vertexData = vertexDataResult.value();
+      const auto &vertexData = vertexDataResult.value();
       auto vertexCount = vertexData.size() / vertexFormat.GetStride(0);
 
       auto meshResult = Graphics::Mesh::Create(

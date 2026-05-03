@@ -32,8 +32,8 @@ static auto VertexFormatSize(VertexFormat &format, uint32_t binding)
 }
 
 auto Mesh::UploadVertices(GraphicsContext &context,
-                          const std::span<uint8_t> &vertices, uint64_t offset)
-    -> Error {
+                          const std::span<const uint8_t> &vertices,
+                          uint64_t offset) -> Error {
   ZoneScoped;
 
   Barrier::UpdateUsage(context, *VertexBuffer,
@@ -179,8 +179,8 @@ void Mesh::SetDrawRange(MeshDrawRange range) {
 }
 
 auto Mesh::SetVertices(GraphicsContext &context,
-                       const std::span<uint8_t> &vertexData, uint64_t offset)
-    -> Error {
+                       const std::span<const uint8_t> &vertexData,
+                       uint64_t offset) -> Error {
   return UploadVertices(context, vertexData, offset);
 }
 auto Mesh::SetIndices(GraphicsContext &context,

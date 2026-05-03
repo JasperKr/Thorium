@@ -73,10 +73,20 @@ struct Matrix4x4 {
   static auto Orthographic(Scalar width, Scalar height, Scalar nearPlane,
                            Scalar farPlane) -> Matrix4x4;
   static auto TranslationMatrix(Vec3 translation) -> Matrix4x4;
+  static auto TranslationMatrix(Scalar x_pos, Scalar y_pos, Scalar z_pos)
+      -> Matrix4x4;
   static auto ScaleMatrix(Vec3 scale) -> Matrix4x4;
+  static auto ScaleMatrix(Scalar x_scale, Scalar y_scale, Scalar z_scale)
+      -> Matrix4x4;
   static auto RotationMatrix(Quaternion rotation) -> Matrix4x4;
+  static auto RotationMatrix(Scalar x_rot, Scalar y_rot, Scalar z_rot,
+                             Scalar w_rot) -> Matrix4x4;
   static auto TransformationMatrix(Vec3 translation, Vec3 scale,
                                    Quaternion rotation) -> Matrix4x4;
+  static auto TransformationMatrix(Scalar x_pos, Scalar y_pos, Scalar z_pos,
+                                   Scalar x_scale, Scalar y_scale,
+                                   Scalar z_scale, Scalar x_rot, Scalar y_rot,
+                                   Scalar z_rot, Scalar w_rot) -> Matrix4x4;
 
   [[nodiscard]] auto ToString() const -> std::string;
 

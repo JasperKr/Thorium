@@ -65,21 +65,21 @@ function snap.graphics.newCamera(name, position, rotation, resolution, fov, near
 
   local aspectRatio = resolution.x / resolution.y
 
-  local inverseProjectionMatrix = mat4()
-  local viewMatrix = mat4()
-  local inverseViewMatrix = mat4()
-  local inverseRotationMatrix = mat4()
-  local viewProjectionMatrix = mat4()
-  local inverseViewProjectionMatrix = mat4()
-  local rotationProjectionMatrix = mat4()
-  local inverseRotationProjectionMatrix = mat4()
+  local inverseProjectionMatrix = matrix4x4()
+  local viewMatrix = matrix4x4()
+  local inverseViewMatrix = matrix4x4()
+  local inverseRotationMatrix = matrix4x4()
+  local viewProjectionMatrix = matrix4x4()
+  local inverseViewProjectionMatrix = matrix4x4()
+  local rotationProjectionMatrix = matrix4x4()
+  local inverseRotationProjectionMatrix = matrix4x4()
 
-  local projectionMatrix = snap.graphics.newPerspectiveProjectionMatrixSimple(aspectRatio, self.fov, self.near,
+  local projectionMatrix = engine.graphics.newPerspectiveProjectionMatrixSimple(aspectRatio, self.fov, self.near,
     self.far)
 
   projectionMatrix:invertTranspose(inverseProjectionMatrix)
   local translationMatrix = snap.math.newTranslationMatrix(-position)
-  local rotationMatrix = snap.math.quaternionToMatrix(rotation)
+  local rotationMatrix = mat4snap.math.quaternionToMatrix(rotation:get())
   rotationMatrix:invertTranspose(inverseRotationMatrix)
   rotationMatrix:mul(projectionMatrix, rotationProjectionMatrix)
   rotationProjectionMatrix:invertTranspose(inverseRotationProjectionMatrix)

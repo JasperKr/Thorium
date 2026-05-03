@@ -1548,7 +1548,7 @@ end
 ---@return number
 local function lerp(angle, target, turnrate, dt)
   local dist = target - angle
-  dist = (dist + math.pi) % snap.math.PI2 - math.pi
+  dist = (dist + math.pi) % engine.math.PI2 - math.pi
   local step = turnrate * dt
   if dist <= step then
     angle = target

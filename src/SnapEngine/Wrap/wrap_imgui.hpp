@@ -1,11 +1,23 @@
 #pragma once
 
-#include "Modules/error.hpp"
+#include "Graphics/mesh.hpp"
 #include "Wrap/wrap.hpp"
 #include "lua.hpp"
+#include <imgui.h>
 #include <lua.h>
 
 namespace Wrap::Imgui {
+
+struct TemporaryCommandList {
+  int32_t MaxVertexCount = INT32_MIN;
+  int32_t MaxIndexCount = INT32_MIN;
+  ImDrawList *DrawList = nullptr;
+
+  Ref<Graphics::Mesh> Mesh;
+};
+
+extern std::vector<TemporaryCommandList> TemporaryCommandLists; // NOLINT
+
 auto NewFrame(lua_State *state) -> int;
 auto EndFrame(lua_State *state) -> int;
 auto Draw(lua_State *state) -> int;
@@ -23,7 +35,8 @@ auto TextInput(lua_State *state) -> int;
 auto GetImguiContextPtr(lua_State *state) -> int;
 auto GetImguiFontAtlasPtr(lua_State *state) -> int;
 
-auto Shutdown() -> Error;
+// Should only be called once, not per-thread.
+auto Shutdown(lua_State *state) -> int;
 
 // NOLINTNEXTLINE
 static const std::vector<luaL_Reg> ImGuiLib = {
@@ -39,7 +52,7 @@ static const std::vector<luaL_Reg> ImGuiLib = {
     {"textInput", TextInput},
     {"getContextPtr", GetImguiContextPtr},
     {"getFontAtlasPtr", GetImguiFontAtlasPtr},
-
+    {"shutdown", Shutdown},
 };
 
 const static std::vector<lua_CFunction> childrenInitFunctions = {};

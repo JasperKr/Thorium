@@ -297,8 +297,9 @@ static inline auto LoadSlang(GraphicsContext &context,
   sessionDesc.preprocessorMacroCount =
       static_cast<uint32_t>(shader->preprocessorMacros.size());
 
-  slang::ISession *session = nullptr;
-  auto result = GlobalSlangSession->createSession(sessionDesc, &session);
+  Slang::ComPtr<slang::ISession> session;
+  auto result =
+      GlobalSlangSession->createSession(sessionDesc, session.writeRef());
 
   if (Error::IsError(result)) {
     return Error::Create(result);

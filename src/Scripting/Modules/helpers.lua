@@ -1,4 +1,4 @@
-snap.helpers = snap.helpers or {}
+engine.helpers = engine.helpers or {}
 
 ---@param left number
 ---@param right number
@@ -8,8 +8,8 @@ snap.helpers = snap.helpers or {}
 ---@param far number
 ---@param out matrix4x4?
 ---@return matrix4x4
-function snap.graphics.newOrthographicProjectionMatrix(left, right, top, bottom, near, far, out)
-  out = out or mat4()
+function engine.graphics.newOrthographicProjectionMatrix(left, right, top, bottom, near, far, out)
+  out = out or matrix4x4()
 
   out:setFromNumbers(
     2 / (right - left), 0, 0, -(right + left) / (right - left),
@@ -21,8 +21,8 @@ function snap.graphics.newOrthographicProjectionMatrix(left, right, top, bottom,
   return out
 end
 
-function snap.graphics.newPerspectiveProjectionMatrix(left, right, top, bottom, near, far)
-  return mat4(
+function engine.graphics.newPerspectiveProjectionMatrix(left, right, top, bottom, near, far)
+  return matrix4x4(
     (near * 2) / (right - left), 0, (right + left) / (right - left), 0,
     0, -(near * 2) / (top - bottom), (top + bottom) / (top - bottom), 0,
     0, 0, -((far + near) / (far - near)), -(2 * far * near) / (far - near),
@@ -30,9 +30,9 @@ function snap.graphics.newPerspectiveProjectionMatrix(left, right, top, bottom, 
   )
 end
 
-function snap.graphics.newPerspectiveProjectionMatrixSimple(aspectRatio, fov, near, far, out)
+function engine.graphics.newPerspectiveProjectionMatrixSimple(aspectRatio, fov, near, far, out)
   local tanHalfFov                           = math.tan(math.rad(fov / 2))
-  out                                        = out or mat4()
+  out                                        = out or matrix4x4()
 
   local height                               = 1 / tanHalfFov
   local width                                = height / aspectRatio

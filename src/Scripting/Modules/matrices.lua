@@ -1,112 +1,117 @@
 ---@diagnostic disable: lowercase-global
+local ffi = require("ffi")
 
 jit.on(true, true)
 
 local mat4Mt = {}
 ---@class matrix4x4
 local mat4F = {
-  { 0, 0, 0, 0 },
-  { 0, 0, 0, 0 },
-  { 0, 0, 0, 0 },
-  { 0, 0, 0, 0 }
+  [0] = { [0] = 0, 0, 0, 0 },
+  [1] = { [0] = 0, 0, 0, 0 },
+  [2] = { [0] = 0, 0, 0, 0 },
+  [3] = { [0] = 0, 0, 0, 0 }
 }
 local mat3Mt = {}
 ---@class matrix3x3
 local mat3F = {
-  { 0, 0, 0 },
-  { 0, 0, 0 },
-  { 0, 0, 0 }
+  [0] = { [0] = 0, 0, 0 },
+  [1] = { [0] = 0, 0, 0 },
+  [2] = { [0] = 0, 0, 0 }
 }
 
----@return matrix4x4 matrix
-function mat4(...)
-  local inputs = { ... }
+ffi.cdef [[
+typedef struct {
+  float m[16];
+} Rmatrix4x4;
 
-  local data
-  if #inputs == 1 then
-    data = inputs[1]
-  else
-    data = inputs
-  end
-  local matrix
-  if #data == 16 then
-    matrix = {}
-    for i = 1, 4 do
-      matrix[i] = {}
-      for j = 1, 4 do
-        matrix[i][j] = data[(j - 1) * 4 + i]
+typedef struct {
+  float m[9];
+} Rmatrix3x3;
+]]
+
+ffi.metatype("Rmatrix4x4", mat4Mt)
+ffi.metatype("Rmatrix3x3", mat3Mt)
+
+---@return matrix4x4 matrix
+function matrix4x4(...)
+  local matrix = ffi.new("Rmatrix4x4")
+  if select("#", ...) == 16 then
+    for column = 0, 3 do
+      for row = 0, 3 do
+        local idx = (column * 4 + row)
+        matrix.m[idx] = select(idx + 1, ...)
       end
     end
-  elseif #data == 4 then -- 4x {x,y,z,w}
-    matrix = {}
-    for i = 1, 4 do
-      matrix[i] = {}
-      for j = 1, 4 do
-        matrix[i][j] = data[i][j]
-      end
+  elseif select("#", ...) == 4 then
+    -- 4x {x=.,y=.,z=.,w=.}
+    for rowIdx = 0, 3 do
+      local row = select(rowIdx + 1, ...)
+      matrix.m[rowIdx * 4 + 0] = row.x
+      matrix.m[rowIdx * 4 + 1] = row.y
+      matrix.m[rowIdx * 4 + 2] = row.z
+      matrix.m[rowIdx * 4 + 3] = row.w
     end
   else
-    matrix = {
-      { 1, 0, 0, 0 },
-      { 0, 1, 0, 0 },
-      { 0, 0, 1, 0 },
-      { 0, 0, 0, 1 }
-    }
+    matrix.m[0] = 1
+    matrix.m[5] = 1
+    matrix.m[10] = 1
+    matrix.m[15] = 1
   end
-  setmetatable(matrix, mat4Mt)
 
   return matrix
 end
 
 ---@return matrix3x3 matrix
-function mat3(...)
-  local m = { ... }
-  local matrix
-  if type(m[1]) == "table" then
-    matrix = unpack(m)
-  elseif #m == 9 then
-    matrix = {}
-    for i = 1, 3 do
-      matrix[i] = {}
-      for j = 1, 3 do
-        matrix[i][j] = m[(i - 1) * 3 + j]
+
+function matrix3x3(...)
+  local matrix = ffi.new("Rmatrix3x3")
+  if select("#", ...) == 9 then
+    for column = 0, 2 do
+      for row = 0, 2 do
+        local idx = (column * 3 + row)
+        matrix.m[idx] = select(idx + 1, ...)
       end
     end
+  elseif select("#", ...) == 3 then
+    -- 3x {x=.,y=.,z=.}
+    for rowIdx = 0, 2 do
+      local row = select(rowIdx + 1, ...)
+      matrix.m[rowIdx * 3 + 0] = row.x
+      matrix.m[rowIdx * 3 + 1] = row.y
+      matrix.m[rowIdx * 3 + 2] = row.z
+    end
   else
-    matrix = {
-      { 1, 0, 0 },
-      { 0, 0, 0 },
-      { 0, 1, 1 }
-    }
+    matrix.m[0] = 1
+    matrix.m[4] = 1
+    matrix.m[8] = 1
   end
-  setmetatable(matrix, mat3Mt)
-
   return matrix
 end
 
 mat3F.type = "matrix_3x3"
 mat4F.type = "matrix_4x4"
 function mat4Mt.__tostring(self)
-  local t = tostring
-  local m = self
-  local str = "[\n"
-  str = str .. "   " .. t(m[1][1]) .. ", " .. t(m[2][1]) .. ", " .. t(m[3][1]) .. ", " .. t(m[4][1]) .. "\n"
-  str = str .. "   " .. t(m[1][2]) .. ", " .. t(m[2][2]) .. ", " .. t(m[3][2]) .. ", " .. t(m[4][2]) .. "\n"
-  str = str .. "   " .. t(m[1][3]) .. ", " .. t(m[2][3]) .. ", " .. t(m[3][3]) .. ", " .. t(m[4][3]) .. "\n"
-  str = str .. "   " .. t(m[1][4]) .. ", " .. t(m[2][4]) .. ", " .. t(m[3][4]) .. ", " .. t(m[4][4]) .. "\n"
+  local m = self.m
 
-  return str .. "] "
+  local str = string.format("[\n  %s, %s, %s, %s,\n  %s, %s, %s, %s,\n  %s, %s, %s, %s,\n  %s, %s, %s, %s\n]",
+    tostring(m[0]), tostring(m[1]), tostring(m[2]), tostring(m[3]),
+    tostring(m[4]), tostring(m[5]), tostring(m[6]), tostring(m[7]),
+    tostring(m[8]), tostring(m[9]), tostring(m[10]), tostring(m[11]),
+    tostring(m[12]), tostring(m[13]), tostring(m[14]), tostring(m[15])
+  )
+
+  return str
 end
 
 function mat3Mt.__tostring(self)
-  local t = tostring
-  local m = self
-  local str = "[\n"
-  str = str .. "   " .. t(m[1][1]) .. ", " .. t(m[2][1]) .. ", " .. t(m[3][1]) .. "\n"
-  str = str .. "   " .. t(m[1][2]) .. ", " .. t(m[2][2]) .. ", " .. t(m[3][2]) .. "\n"
-  str = str .. "   " .. t(m[1][3]) .. ", " .. t(m[2][3]) .. ", " .. t(m[3][3]) .. "\n"
+  local m = self.m
+  local str = string.format("[\n  %s, %s, %s,\n  %s, %s, %s,\n  %s, %s, %s\n]",
+    tostring(m[0]), tostring(m[1]), tostring(m[2]),
+    tostring(m[3]), tostring(m[4]), tostring(m[5]),
+    tostring(m[6]), tostring(m[7]), tostring(m[8])
+  )
 
-  return str .. "] "
+  return str
 end
 
 --- Multiply a matrix by a vector.
@@ -116,108 +121,79 @@ end
 function mat4F:vMul(vector, out)
   out = out or vec4()
 
-  local m = self
-  out.x = m[1][1] * vector.x + m[2][1] * vector.y + m[3][1] * vector.z + m[4][1] * vector.w
-  out.y = m[1][2] * vector.x + m[2][2] * vector.y + m[3][2] * vector.z + m[4][2] * vector.w
-  out.z = m[1][3] * vector.x + m[2][3] * vector.y + m[3][3] * vector.z + m[4][3] * vector.w
-  out.w = m[1][4] * vector.x + m[2][4] * vector.y + m[3][4] * vector.z + m[4][4] * vector.w
+  local m = self.m
+  out.x = m[0] * vector.x + m[4] * vector.y + m[8] * vector.z + m[12] * vector.w
+  out.y = m[1] * vector.x + m[5] * vector.y + m[9] * vector.z + m[13] * vector.w
+  out.z = m[2] * vector.x + m[6] * vector.y + m[10] * vector.z + m[14] * vector.w
+  out.w = m[3] * vector.x + m[7] * vector.y + m[11] * vector.z + m[15] * vector.w
 
   return out
 end
 
 function mat4F:vMulSep(x, y, z, w)
-  local m = self
-  local x1 = m[1][1] * x + m[2][1] * y + m[3][1] * z + m[4][1] * w
-  local y1 = m[1][2] * x + m[2][2] * y + m[3][2] * z + m[4][2] * w
-  local z1 = m[1][3] * x + m[2][3] * y + m[3][3] * z + m[4][3] * w
-  local w1 = m[1][4] * x + m[2][4] * y + m[3][4] * z + m[4][4] * w
+  local m = self.m
+  local x1 = m[0] * x + m[4] * y + m[8] * z + m[12] * w
+  local y1 = m[1] * x + m[5] * y + m[9] * z + m[13] * w
+  local z1 = m[2] * x + m[6] * y + m[10] * z + m[14] * w
+  local w1 = m[3] * x + m[7] * y + m[11] * z + m[15] * w
 
   return x1, y1, z1, w1
 end
 
 function mat4F:vMulSepW1(x, y, z)
-  local m = self
-  local x1 = m[1][1] * x + m[2][1] * y + m[3][1] * z + m[4][1]
-  local y1 = m[1][2] * x + m[2][2] * y + m[3][2] * z + m[4][2]
-  local z1 = m[1][3] * x + m[2][3] * y + m[3][3] * z + m[4][3]
-  local w1 = m[1][4] * x + m[2][4] * y + m[3][4] * z + m[4][4]
+  local m = self.m
+  local x1 = m[0] * x + m[4] * y + m[8] * z + m[12]
+  local y1 = m[1] * x + m[5] * y + m[9] * z + m[13]
+  local z1 = m[2] * x + m[6] * y + m[10] * z + m[14]
+  local w1 = m[3] * x + m[7] * y + m[11] * z + m[15]
 
   return x1, y1, z1, w1
 end
 
 function mat4F:vMulSepW0(x, y, z)
-  local m = self
-  local x1 = m[1][1] * x + m[2][1] * y + m[3][1] * z
-  local y1 = m[1][2] * x + m[2][2] * y + m[3][2] * z
-  local z1 = m[1][3] * x + m[2][3] * y + m[3][3] * z
-  local w1 = m[1][4] * x + m[2][4] * y + m[3][4] * z
+  local m = self.m
+  local x1 = m[0] * x + m[4] * y + m[8] * z
+  local y1 = m[1] * x + m[5] * y + m[9] * z
+  local z1 = m[2] * x + m[6] * y + m[10] * z
+  local w1 = m[3] * x + m[7] * y + m[11] * z
 
   return x1, y1, z1, w1
 end
 
 function mat3F:vMul(vector)
-  local x = self[1][1] * vector.x + self[2][1] * vector.y + self[3][1] * vector.z
-  local y = self[1][2] * vector.x + self[2][2] * vector.y + self[3][2] * vector.z
-  local z = self[1][3] * vector.x + self[2][3] * vector.y + self[3][3] * vector.z
+  local m = self.m
+  local x = m[0] * vector.x + m[3] * vector.y + m[6] * vector.z
+  local y = m[1] * vector.x + m[4] * vector.y + m[7] * vector.z
+  local z = m[2] * vector.x + m[5] * vector.y + m[8] * vector.z
 
   return vec3(x, y, z)
 end
 
 function mat3F:vMulSep(x, y, z)
-  local x1 = self[1][1] * x + self[2][1] * y + self[3][1] * z
-  local y1 = self[1][2] * x + self[2][2] * y + self[3][2] * z
-  local z1 = self[1][3] * x + self[2][3] * y + self[3][3] * z
+  local m = self.m
+  local x1 = m[0] * x + m[3] * y + m[6] * z
+  local y1 = m[1] * x + m[4] * y + m[7] * z
+  local z1 = m[2] * x + m[5] * y + m[8] * z
 
   return x1, y1, z1
 end
 
-function mat4Mt.__add(x, y)
-  local v = mat4()
-  if type(y) == "table" then
-    for i = 1, 4 do
-      for j = 1, 4 do
-        v[i][j] = x[i][j] + y[i][j]
-      end
-    end
-  else
-    for i = 1, 4 do
-      for j = 1, 4 do
-        v[i][j] = x[i][j] + y
-      end
-    end
-  end
-
-  return v
-end
-
-function mat3Mt.__add(x, y)
-  local v = mat3()
-  if type(y) == "table" then
-    for i = 1, 3 do
-      for j = 1, 3 do
-        v[i][j] = x[i][j] + y[i][j]
-      end
-    end
-  else
-    for i = 1, 3 do
-      for j = 1, 3 do
-        v[i][j] = x[i][j] + y
-      end
-    end
-  end
-
-  return v
-end
-
 mat4Mt.__index = mat4F
-
 mat3Mt.__index = mat3F
 
 function mat4Mt.__mul(x, y)
-  local m = mat4()
-  for i = 1, 4 do
-    for j = 1, 4 do
-      m[i][j] = x[i][1] * y[1][j] + x[i][2] * y[2][j] + x[i][3] * y[3][j] + x[i][4] * y[4][j]
+  -- local m = matrix4x4()
+  -- for i = 1, 4 do
+  --   for j = 1, 4 do
+  --     m[i][j] = x[i][1] * y[1][j] + x[i][2] * y[2][j] + x[i][3] * y[3][j] + x[i][4] * y[4][j]
+  --   end
+  -- end
+  local m = ffi.new("Rmatrix4x4")
+  for i = 0, 3 do
+    for j = 0, 3 do
+      local idx = i * 4 + j
+      m.m[idx] = x.m[i * 4 + 0] * y.m[0 * 4 + j] + x.m[i * 4 + 1] * y.m[1 * 4 + j] +
+          x.m[i * 4 + 2] * y.m[2 * 4 + j] + x.m[i * 4 + 3] * y.m[3 * 4 + j]
     end
   end
 
@@ -225,83 +201,25 @@ function mat4Mt.__mul(x, y)
 end
 
 function mat3Mt.__mul(x, y)
-  local m = mat3()
-  for i = 1, 3 do
-    for j = 1, 3 do
-      m[i][j] = x[i][1] * y[1][j] + x[i][2] * y[2][j] + x[i][3] * y[3][j]
+  -- local m = matrix3x3()
+  -- for i = 1, 3 do
+  --   for j = 1, 3 do
+  --     m[i][j] = x[i][1] * y[1][j] + x[i][2] * y[2][j] + x[i][3] * y[3][j]
+  --   end
+  -- end
+  local m = ffi.new("Rmatrix3x3")
+  for i = 0, 2 do
+    for j = 0, 2 do
+      local idx = i * 3 + j
+      m.m[idx] = x.m[i * 3 + 0] * y.m[0 * 3 + j] + x.m[i * 3 + 1] * y.m[1 * 3 + j] +
+          x.m[i * 3 + 2] * y.m[2 * 3 + j]
     end
   end
 
   return m
 end
 
-function mat4Mt.__div(x, y)
-  local v = mat4()
-  for i = 1, 4 do
-    for j = 1, 4 do
-      v[i][j] = x[i][j] / y[i][j]
-    end
-  end
-
-  return v
-end
-
-function mat3Mt.__div(x, y)
-  local v = mat3()
-  for i = 1, 3 do
-    for j = 1, 3 do
-      v[i][j] = x[i][j] / y[i][j]
-    end
-  end
-
-  return v
-end
-
-function mat4Mt.__sub(x, y)
-  local v = mat4()
-  for i = 1, 4 do
-    for j = 1, 4 do
-      v[i][j] = x[i][j] - y[i][j]
-    end
-  end
-
-  return v
-end
-
-function mat3Mt.__sub(x, y)
-  local v = mat3()
-  for i = 1, 3 do
-    for j = 1, 3 do
-      v[i][j] = x[i][j] - y[i][j]
-    end
-  end
-
-  return v
-end
-
-function mat4Mt.__unm(x)
-  local v = mat4()
-  for i = 1, 4 do
-    for j = 1, 4 do
-      v[i][j] = -x[i][j]
-    end
-  end
-
-  return v
-end
-
-function mat3Mt.__unm(x)
-  local v = mat4()
-  for i = 1, 3 do
-    for j = 1, 3 do
-      v[i][j] = -x[i][j]
-    end
-  end
-
-  return v
-end
-
-local temp4x4 = mat4()
+local temp4x4 = matrix4x4()
 
 function mat4F:mul(y, out)
   if self == out then
@@ -309,16 +227,23 @@ function mat4F:mul(y, out)
     return self:set(temp4x4)
   end
 
-  for i = 1, 4 do
-    for j = 1, 4 do
-      out[i][j] = self[i][1] * y[1][j] + self[i][2] * y[2][j] + self[i][3] * y[3][j] + self[i][4] * y[4][j]
+  -- for i = 1, 4 do
+  --   for j = 1, 4 do
+  --     out[i][j] = self[i][1] * y[1][j] + self[i][2] * y[2][j] + self[i][3] * y[3][j] + self[i][4] * y[4][j]
+  --   end
+  -- end
+  for i = 0, 3 do
+    for j = 0, 3 do
+      local idx = i * 4 + j
+      out.m[idx] = self.m[i * 4 + 0] * y.m[0 * 4 + j] + self.m[i * 4 + 1] * y.m[1 * 4 + j] +
+          self.m[i * 4 + 2] * y.m[2 * 4 + j] + self.m[i * 4 + 3] * y.m[3 * 4 + j]
     end
   end
 
   return out
 end
 
-local temp3x3 = mat3()
+local temp3x3 = matrix3x3()
 
 function mat3F:mul(y, out)
   if self == out then
@@ -326,27 +251,54 @@ function mat3F:mul(y, out)
     return self:set(temp3x3)
   end
 
-  for i = 1, 3 do
-    for j = 1, 3 do
-      out[i][j] = self[i][1] * y[1][j] + self[i][2] * y[2][j] + self[i][3] * y[3][j]
+  -- for i = 1, 3 do
+  --   for j = 1, 3 do
+  --     out[i][j] = self[i][1] * y[1][j] + self[i][2] * y[2][j] + self[i][3] * y[3][j]
+  --   end
+  -- end
+  for i = 0, 2 do
+    for j = 0, 2 do
+      local idx = i * 3 + j
+      out.m[idx] = self.m[i * 3 + 0] * y.m[0 * 3 + j] + self.m[i * 3 + 1] * y.m[1 * 3 + j] +
+          self.m[i * 3 + 2] * y.m[2 * 3 + j]
     end
   end
 
   return out
 end
 
-local tempMat4_2 = mat4()
+local tempMat4_2 = matrix4x4()
 function mat4F:transpose(out)
-  local v = out or mat4()
+  local v = out or matrix4x4()
 
   if out == self then
     v = tempMat4_2
   end
 
-  v[1][1], v[1][2], v[1][3], v[1][4] = self[1][1], self[2][1], self[3][1], self[4][1]
-  v[2][1], v[2][2], v[2][3], v[2][4] = self[1][2], self[2][2], self[3][2], self[4][2]
-  v[3][1], v[3][2], v[3][3], v[3][4] = self[1][3], self[2][3], self[3][3], self[4][3]
-  v[4][1], v[4][2], v[4][3], v[4][4] = self[1][4], self[2][4], self[3][4], self[4][4]
+  -- v[1][1], v[1][2], v[1][3], v[1][4] = self[1][1], self[2][1], self[3][1], self[4][1]
+  -- v[2][1], v[2][2], v[2][3], v[2][4] = self[1][2], self[2][2], self[3][2], self[4][2]
+  -- v[3][1], v[3][2], v[3][3], v[3][4] = self[1][3], self[2][3], self[3][3], self[4][3]
+  -- v[4][1], v[4][2], v[4][3], v[4][4] = self[1][4], self[2][4], self[3][4], self[4][4]
+  local m = self.m
+  -- v.m[0] = m[0]
+  v.m[1] = m[4]
+  v.m[2] = m[8]
+  v.m[3] = m[12]
+
+  v.m[4] = m[1]
+  -- v.m[5] = m[5]
+  v.m[6] = m[9]
+  v.m[7] = m[13]
+
+  v.m[8] = m[2]
+  v.m[9] = m[6]
+  -- v.m[10] = m[10]
+  v.m[11] = m[14]
+
+  v.m[12] = m[3]
+  v.m[13] = m[7]
+  v.m[14] = m[11]
+  -- v.m[15] = m[15]
 
   if out == self then
     self:set(v)
@@ -356,122 +308,147 @@ function mat4F:transpose(out)
 end
 
 function mat3F:transpose(out)
-  local v = out or mat3()
-  v[1][1], v[1][2], v[1][3] = self[1][1], self[2][1], self[3][1]
-  v[2][1], v[2][2], v[2][3] = self[1][2], self[2][2], self[3][2]
-  v[3][1], v[3][2], v[3][3] = self[1][3], self[2][3], self[3][3]
+  local v = out or matrix3x3()
+  local m = self.m
+  -- v.m[0] = m[0]
+  v.m[1] = m[3]
+  v.m[2] = m[6]
+
+  v.m[3] = m[1]
+  -- v.m[4] = m[4]
+  v.m[5] = m[7]
+
+  v.m[6] = m[2]
+  v.m[7] = m[5]
+  -- v.m[8] = m[8]
 
   return v
 end
 
-local tempMat4_1 = mat4()
-
 function mat4F:transposeSelf()
-  local v = tempMat4_1
+  local m = self.m
+  -- v.m[0] = m[0]
+  m[1] = m[4]
+  m[2] = m[8]
+  m[3] = m[12]
 
-  v[1][1], v[1][2], v[1][3], v[1][4] = self[1][1], self[2][1], self[3][1], self[4][1]
-  v[2][1], v[2][2], v[2][3], v[2][4] = self[1][2], self[2][2], self[3][2], self[4][2]
-  v[3][1], v[3][2], v[3][3], v[3][4] = self[1][3], self[2][3], self[3][3], self[4][3]
-  v[4][1], v[4][2], v[4][3], v[4][4] = self[1][4], self[2][4], self[3][4], self[4][4]
+  m[4] = m[1]
+  -- m.m[5] = m[5]
+  m[6] = m[9]
+  m[7] = m[13]
 
-  return self:set(v)
+  m[8] = m[2]
+  m[9] = m[6]
+  -- m.m[10] = m[10]
+  m[11] = m[14]
+
+  m[12] = m[3]
+  m[13] = m[7]
+  m[14] = m[11]
+  -- m.m[15] = m[15]
+
+  return self
 end
 
-local tempMat3_1 = mat3()
-
 function mat3F:transposeSelf()
-  local v = tempMat3_1
+  local m = self.m
 
-  v[1][1], v[1][2], v[1][3] = self[1][1], self[2][1], self[3][1]
-  v[2][1], v[2][2], v[2][3] = self[1][2], self[2][2], self[3][2]
-  v[3][1], v[3][2], v[3][3] = self[1][3], self[2][3], self[3][3]
+  -- v.m[0] = m[0]
+  m[1] = m[3]
+  m[2] = m[6]
 
-  return self:set(v)
+  m[3] = m[1]
+  -- m.m[4] = m[4]
+  m[5] = m[7]
+
+  m[6] = m[2]
+  m[7] = m[5]
+  -- m.m[8] = m[8]
+
+  return self
 end
 
 function mat4F:copy()
-  local v = {}
-
-  v[1] = { self[1][1], self[1][2], self[1][3], self[1][4] }
-  v[2] = { self[2][1], self[2][2], self[2][3], self[2][4] }
-  v[3] = { self[3][1], self[3][2], self[3][3], self[3][4] }
-  v[4] = { self[4][1], self[4][2], self[4][3], self[4][4] }
-
-  return setmetatable(v, mat4Mt)
+  return ffi.new("Rmatrix4x4", self.m)
 end
 
 function mat3F:copy()
-  local v = {}
-  v[1] = { self[1][1], self[1][2], self[1][3] }
-  v[2] = { self[2][1], self[2][2], self[2][3] }
-  v[3] = { self[3][1], self[3][2], self[3][3] }
-
-  return setmetatable(v, mat3Mt)
+  return ffi.new("Rmatrix3x3", self.m)
 end
 
 function mat4F:table()
+  local m = self.m
+
   return {
-    self[1][1], self[1][2], self[1][3], self[1][4],
-    self[2][1], self[2][2], self[2][3], self[2][4],
-    self[3][1], self[3][2], self[3][3], self[3][4],
-    self[4][1], self[4][2], self[4][3], self[4][4]
+    m[0], m[1], m[2], m[3],
+    m[4], m[5], m[6], m[7],
+    m[8], m[9], m[10], m[11],
+    m[12], m[13], m[14], m[15]
   }
 end
 
 function mat3F:table()
+  local m = self.m
+
   return {
-    self[1][1], self[1][2], self[1][3],
-    self[2][1], self[2][2], self[2][3],
-    self[3][1], self[3][2], self[3][3]
+    m[0], m[1], m[2],
+    m[3], m[4], m[5],
+    m[6], m[7], m[8]
   }
 end
 
 function mat4F:writeToTable(t, index)
   local i = 0
 
-  t[index + i] = self[1][1]; i = i + 1
-  t[index + i] = self[1][2]; i = i + 1
-  t[index + i] = self[1][3]; i = i + 1
-  t[index + i] = self[1][4]; i = i + 1
-  t[index + i] = self[2][1]; i = i + 1
-  t[index + i] = self[2][2]; i = i + 1
-  t[index + i] = self[2][3]; i = i + 1
-  t[index + i] = self[2][4]; i = i + 1
-  t[index + i] = self[3][1]; i = i + 1
-  t[index + i] = self[3][2]; i = i + 1
-  t[index + i] = self[3][3]; i = i + 1
-  t[index + i] = self[3][4]; i = i + 1
-  t[index + i] = self[4][1]; i = i + 1
-  t[index + i] = self[4][2]; i = i + 1
-  t[index + i] = self[4][3]; i = i + 1
-  t[index + i] = self[4][4]
+  t[index + i] = self.m[i]; i = i + 1
+  t[index + i] = self.m[i]; i = i + 1
+  t[index + i] = self.m[i]; i = i + 1
+  t[index + i] = self.m[i]; i = i + 1
+  t[index + i] = self.m[i]; i = i + 1
+  t[index + i] = self.m[i]; i = i + 1
+  t[index + i] = self.m[i]; i = i + 1
+  t[index + i] = self.m[i]; i = i + 1
+  t[index + i] = self.m[i]; i = i + 1
+  t[index + i] = self.m[i]; i = i + 1
+  t[index + i] = self.m[i]; i = i + 1
+  t[index + i] = self.m[i]; i = i + 1
+  t[index + i] = self.m[i]; i = i + 1
+  t[index + i] = self.m[i]; i = i + 1
+  t[index + i] = self.m[i]; i = i + 1
+  t[index + i] = self.m[i]
 end
 
 function mat3F:writeToTable(t, index)
   local i = 0
 
-  t[index + i] = self[1][1]; i = i + 1
-  t[index + i] = self[1][2]; i = i + 1
-  t[index + i] = self[1][3]; i = i + 1
-  t[index + i] = self[2][1]; i = i + 1
-  t[index + i] = self[2][2]; i = i + 1
-  t[index + i] = self[2][3]; i = i + 1
-  t[index + i] = self[3][1]; i = i + 1
-  t[index + i] = self[3][2]; i = i + 1
-  t[index + i] = self[3][3]
+  t[index + i] = self.m[i]; i = i + 1
+  t[index + i] = self.m[i]; i = i + 1
+  t[index + i] = self.m[i]; i = i + 1
+  t[index + i] = self.m[i]; i = i + 1
+  t[index + i] = self.m[i]; i = i + 1
+  t[index + i] = self.m[i]; i = i + 1
+  t[index + i] = self.m[i]; i = i + 1
+  t[index + i] = self.m[i]; i = i + 1
+  t[index + i] = self.m[i]
 end
 
 function mat4F:getTransposed()
-  return self[1][1], self[1][2], self[1][3], self[1][4],
-      self[2][1], self[2][2], self[2][3], self[2][4],
-      self[3][1], self[3][2], self[3][3], self[3][4],
-      self[4][1], self[4][2], self[4][3], self[4][4]
+  -- return self[1][1], self[1][2], self[1][3], self[1][4],
+  --     self[2][1], self[2][2], self[2][3], self[2][4],
+  --     self[3][1], self[3][2], self[3][3], self[3][4],
+  --     self[4][1], self[4][2], self[4][3], self[4][4]
+  local m = self.m
+  return m[0], m[4], m[8], m[12],
+      m[1], m[5], m[9], m[13],
+      m[
 end
 
 function mat3F:getTransposed()
-  return self[1][1], self[1][2], self[1][3],
-      self[2][1], self[2][2], self[2][3],
-      self[3][1], self[3][2], self[3][3]
+  -- return self[1][1], self[1][2], self[1][3],
+  --     self[2][1], self[2][2], self[2][3],
+  --     self[3][1], self[3][2], self[3][3]
+  local m = self.m
+  return 
 end
 
 function mat4F:get()
@@ -487,7 +464,7 @@ function mat3F:get()
       self[1][3], self[2][3], self[3][3]
 end
 
-local inv = mat4()
+local inv = matrix4x4()
 
 -- translated from love12's github: https://github.com/love2d/love/blob/12.0-development/src/common/Matrix.cpp matrix4:invert
 --- Inverts the matrix.
@@ -617,7 +594,7 @@ function mat4F:invertTranspose(out)
     end
   end
 
-  return (out or mat4()):set(inv)
+  return (out or matrix4x4()):set(inv)
 end
 
 -- translated from love12's github: https://github.com/love2d/love/blob/12.0-development/src/common/Matrix.cpp
@@ -644,15 +621,15 @@ function mat3F:invertTranspose(out)
   m[6] = -invdet * (e[1] * e[8] - e[7] * e[2])
   m[9] = invdet * (e[1] * e[5] - e[4] * e[2])
 
-  return (out or mat3):setFromNumbers(m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8], m[9])
+  return (out or matrix3x3):setFromNumbers(m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8], m[9])
 end
 
-local tempMat4 = mat4()
+local tempMat4 = matrix4x4()
 function mat4F:invert(out)
   return self:invertTranspose(tempMat4):transpose(out)
 end
 
-local tempMat3 = mat3()
+local tempMat3 = matrix3x3()
 function mat3F:invert(out)
   return self:invertTranspose(tempMat3):transpose(out)
 end

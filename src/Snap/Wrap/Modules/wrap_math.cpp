@@ -16,6 +16,45 @@ inline auto checkscalar(lua_State *state, int index) -> Scalar {
   return static_cast<Scalar>(luaL_checknumber(state, index));
 }
 
+inline auto MatrixToLua(lua_State *state, const Matrix &mat) -> int {
+  // Row-major order
+  for (int column = 0; column < Matrix::Cols; ++column) {
+    for (int row = 0; row < Matrix::Rows; ++row) {
+      lua_pushnumber(state, mat.At(row, column));
+    }
+  }
+
+  return Matrix::Cols * Matrix::Rows;
+}
+
+inline auto MatrixToLua(lua_State *state, const ::Math::Matrix3x3 &mat) -> int {
+  // Row-major order
+  for (int column = 0; column < ::Math::Matrix3x3::Cols; ++column) {
+    for (int row = 0; row < ::Math::Matrix3x3::Rows; ++row) {
+      lua_pushnumber(state, mat.At(row, column));
+    }
+  }
+
+  return ::Math::Matrix3x3::Cols * ::Math::Matrix3x3::Rows;
+}
+
+inline auto QuaternionToLua(lua_State *state, const Quaternion &quat) -> int {
+  lua_pushnumber(state, quat.x);
+  lua_pushnumber(state, quat.y);
+  lua_pushnumber(state, quat.z);
+  lua_pushnumber(state, quat.w);
+
+  return 4;
+}
+
+inline auto EulerToLua(lua_State *state, const EulerAngle &euler) -> int {
+  lua_pushnumber(state, euler.yaw);
+  lua_pushnumber(state, euler.pitch);
+  lua_pushnumber(state, euler.roll);
+
+  return 3;
+}
+
 auto wrap_EulerToQuaternion(lua_State *state) -> int {
   auto yaw = checkscalar(state, 1);
   auto pitch = checkscalar(state, 2);
@@ -38,14 +77,7 @@ auto wrap_EulerToMatrix(lua_State *state) -> int {
 
   auto mat = ToMatrix(EulerAngle{yaw, pitch, roll});
 
-  // Row-major order
-  for (int column = 0; column < 4; ++column) {
-    for (int row = 0; row < 4; ++row) {
-      lua_pushnumber(state, mat.At(row, column));
-    }
-  }
-
-  return 16; // NOLINT
+  return MatrixToLua(state, mat);
 }
 
 auto wrap_QuaternionToEuler(lua_State *state) -> int {
@@ -56,11 +88,7 @@ auto wrap_QuaternionToEuler(lua_State *state) -> int {
 
   auto euler = ToEuler(Quaternion{quat_x, quat_y, quat_z, quat_w});
 
-  lua_pushnumber(state, euler.yaw);
-  lua_pushnumber(state, euler.pitch);
-  lua_pushnumber(state, euler.roll);
-
-  return 3;
+  return EulerToLua(state, euler);
 }
 auto wrap_QuaternionToMatrix(lua_State *state) -> int {
   auto quat_x = checkscalar(state, 1);
@@ -70,14 +98,7 @@ auto wrap_QuaternionToMatrix(lua_State *state) -> int {
 
   auto mat = ToMatrix(Quaternion{quat_x, quat_y, quat_z, quat_w});
 
-  // Row-major order
-  for (int column = 0; column < 4; ++column) {
-    for (int row = 0; row < 4; ++row) {
-      lua_pushnumber(state, mat.At(row, column));
-    }
-  }
-
-  return 16; // NOLINT
+  return MatrixToLua(state, mat);
 }
 
 auto wrap_MatrixToEuler(lua_State *state) -> int {
@@ -99,11 +120,7 @@ auto wrap_MatrixToEuler(lua_State *state) -> int {
 
   auto euler = ToEuler(mat);
 
-  lua_pushnumber(state, euler.yaw);
-  lua_pushnumber(state, euler.pitch);
-  lua_pushnumber(state, euler.roll);
-
-  return 3;
+  return EulerToLua(state, euler);
 }
 auto wrap_MatrixToQuaternion(lua_State *state) -> int {
   if (lua_objlen(state, 1) != 16) { // NOLINT
@@ -123,12 +140,33 @@ auto wrap_MatrixToQuaternion(lua_State *state) -> int {
 
   auto quat = ToQuaternion(mat);
 
-  lua_pushnumber(state, quat.x);
-  lua_pushnumber(state, quat.y);
-  lua_pushnumber(state, quat.z);
-  lua_pushnumber(state, quat.w);
+  return QuaternionToLua(state, quat);
+}
 
-  return 4;
+auto wrap_TranslationMatrix(lua_State *state) -> int {
+  auto mat = Matrix::TranslationMatrix(
+      checkscalar(state, 1), checkscalar(state, 2), checkscalar(state, 3));
+
+  return MatrixToLua(state, mat);
+}
+
+auto wrap_ScaleMatrix(lua_State *state) -> int {
+  auto mat = Matrix::ScaleMatrix(checkscalar(state, 1), checkscalar(state, 2),
+                                 checkscalar(state, 3));
+
+  return MatrixToLua(state, mat);
+}
+
+auto wrap_TransformMatrix(lua_State *state) -> int {
+  // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
+  auto mat = Matrix::TransformationMatrix(
+      checkscalar(state, 1), checkscalar(state, 2), checkscalar(state, 3),
+      checkscalar(state, 4), checkscalar(state, 5), checkscalar(state, 6),
+      checkscalar(state, 7), checkscalar(state, 8), checkscalar(state, 9),
+      checkscalar(state, 10));
+  // NOLINTEND(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
+
+  return MatrixToLua(state, mat);
 }
 
 auto wrap_Random(lua_State *state) -> int {

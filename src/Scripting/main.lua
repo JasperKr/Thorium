@@ -1,5 +1,6 @@
 local i = 0
 snap.threaderror = error
+engine = engine or {}
 
 print("Starting thread 1")
 require("Modules.vec")
@@ -222,6 +223,7 @@ function snap.quit()
   startThreadChannel:push(false)
 
   thread:wait()
+  snap.gui.shutdown()
 
   print("Quitting the application.")
   return 1
