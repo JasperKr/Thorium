@@ -19,6 +19,7 @@
 #include "Wrap/wrap.hpp"
 #include "flecs/addons/cpp/c_types.hpp"
 #include "flecs/addons/cpp/mixins/id/decl.hpp"
+#include "material.hpp"
 #include <imgui.h>
 #include <lauxlib.h>
 #include <lua.hpp>
@@ -194,7 +195,7 @@ auto Scene::DrawModels(lua_State *state) -> int {
   auto *ctx = Graphics::GetCurrentGraphicsContext();
   Error drawResult = Error::Success();
 
-  auto shader = Graphics::DynamicRendering::GetShader();
+  const auto &shader = Graphics::DynamicRendering::GetShader();
 
   scene->world.each<Geometry>([&](flecs::entity entity,
                                   const Geometry &geometry) -> void {
@@ -219,6 +220,22 @@ auto Scene::DrawModels(lua_State *state) -> int {
       drawResult = sendErr;
       return;
     }
+
+    entity.children([&](flecs::entity child) -> void {
+      if (child.has<Engine::Renderer::Material>()) {
+        const auto &material = child.get<Engine::Renderer::Material>();
+        if (!material.albedoTexture.isValid()) {
+          return;
+        }
+
+        static auto materialKey = Graphics::ResourceKey{"MainTexture"};
+        auto err = shader->Send(*ctx, materialKey, material.albedoTexture);
+        if (Error::IsError(err)) {
+          drawResult = err;
+          return;
+        }
+      }
+    });
 
     auto result = Graphics::Draw(*ctx, *geometry.mesh);
     if (Error::IsError(result)) {

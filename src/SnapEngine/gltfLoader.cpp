@@ -293,49 +293,49 @@ inline auto LoadMaterial(Graphics::GraphicsContext &context,
     material->albedoTexture = albedoTextureLoadResult.value();
   }
 
-  if (gltfMaterial.pbrData.metallicRoughnessTexture.has_value()) {
-    auto metallicRoughnessLoadResult = LoadTexture(
-        context, asset, gltfMaterial.pbrData.metallicRoughnessTexture.value());
+  // if (gltfMaterial.pbrData.metallicRoughnessTexture.has_value()) {
+  //   auto metallicRoughnessLoadResult = LoadTexture(
+  //       context, asset, gltfMaterial.pbrData.metallicRoughnessTexture.value());
 
-    if (Error::IsError(metallicRoughnessLoadResult)) {
-      return metallicRoughnessLoadResult.error();
-    }
+  //   if (Error::IsError(metallicRoughnessLoadResult)) {
+  //     return metallicRoughnessLoadResult.error();
+  //   }
 
-    material->metallicRoughnessTexture = metallicRoughnessLoadResult.value();
-  }
+  //   material->metallicRoughnessTexture = metallicRoughnessLoadResult.value();
+  // }
 
-  if (gltfMaterial.occlusionTexture.has_value()) {
-    auto aoTextureLoadResult =
-        LoadTexture(context, asset, gltfMaterial.occlusionTexture.value());
+  // if (gltfMaterial.occlusionTexture.has_value()) {
+  //   auto aoTextureLoadResult =
+  //       LoadTexture(context, asset, gltfMaterial.occlusionTexture.value());
 
-    if (Error::IsError(aoTextureLoadResult)) {
-      return aoTextureLoadResult.error();
-    }
+  //   if (Error::IsError(aoTextureLoadResult)) {
+  //     return aoTextureLoadResult.error();
+  //   }
 
-    material->ambientOcclusionTexture = aoTextureLoadResult.value();
-  }
+  //   material->ambientOcclusionTexture = aoTextureLoadResult.value();
+  // }
 
-  if (gltfMaterial.normalTexture.has_value()) {
-    auto normalTextureLoadResult =
-        LoadTexture(context, asset, gltfMaterial.normalTexture.value());
+  // if (gltfMaterial.normalTexture.has_value()) {
+  //   auto normalTextureLoadResult =
+  //       LoadTexture(context, asset, gltfMaterial.normalTexture.value());
 
-    if (Error::IsError(normalTextureLoadResult)) {
-      return normalTextureLoadResult.error();
-    }
+  //   if (Error::IsError(normalTextureLoadResult)) {
+  //     return normalTextureLoadResult.error();
+  //   }
 
-    material->normalTexture = normalTextureLoadResult.value();
-  }
+  //   material->normalTexture = normalTextureLoadResult.value();
+  // }
 
-  if (gltfMaterial.emissiveTexture.has_value()) {
-    auto emissiveTextureLoadResult =
-        LoadTexture(context, asset, gltfMaterial.emissiveTexture.value());
+  // if (gltfMaterial.emissiveTexture.has_value()) {
+  //   auto emissiveTextureLoadResult =
+  //       LoadTexture(context, asset, gltfMaterial.emissiveTexture.value());
 
-    if (Error::IsError(emissiveTextureLoadResult)) {
-      return emissiveTextureLoadResult.error();
-    }
+  //   if (Error::IsError(emissiveTextureLoadResult)) {
+  //     return emissiveTextureLoadResult.error();
+  //   }
 
-    material->emissiveTexture = emissiveTextureLoadResult.value();
-  }
+  //   material->emissiveTexture = emissiveTextureLoadResult.value();
+  // }
 
   return Error::Success();
 }
@@ -1168,22 +1168,22 @@ inline auto LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
       lod.child_of(shapeEntity);
 
       // Load material if present.
-      // if (primitive.materialIndex.has_value()) {
-      //   const auto &material = asset.materials[primitive.materialIndex.value()];
-      //   auto rendererMaterial = Ref<Engine::Renderer::LuaMaterial>::Make();
-      //   auto materialEntity = world->entity(
-      //       GetUniqueName(std::string(material.name) + " Material").c_str());
-      //   materialEntity.add<Engine::Renderer::Material>();
-      //   rendererMaterial->entity = materialEntity;
+      if (primitive.materialIndex.has_value()) {
+        const auto &material = asset.materials[primitive.materialIndex.value()];
+        auto rendererMaterial = Ref<Engine::Renderer::LuaMaterial>::Make();
+        auto materialEntity = world->entity(
+            GetUniqueName(std::string(material.name) + " Material").c_str());
+        materialEntity.add<Engine::Renderer::Material>();
+        rendererMaterial->entity = materialEntity;
 
-      //   auto materialResult =
-      //       LoadMaterial(context, asset, material, rendererMaterial);
-      //   if (Error::IsError(materialResult)) {
-      //     return materialResult.AsUnexpected();
-      //   }
+        auto materialResult =
+            LoadMaterial(context, asset, material, rendererMaterial);
+        if (Error::IsError(materialResult)) {
+          return materialResult.AsUnexpected();
+        }
 
-      //   rendererMaterial->entity.child_of(geometry);
-      // }
+        rendererMaterial->entity.child_of(geometry);
+      }
     }
 
     return shapes;

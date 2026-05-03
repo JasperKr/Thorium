@@ -21,8 +21,11 @@ local count = 0
 
 local commandBufferChannel, canStartChannel, scene, events = ...
 
+local cameraWidth = snap.graphics.getWidth() * 3 / 4
+local cameraHeight = snap.graphics.getHeight() * 3 / 4
+
 local camera = snap.graphics.newCamera("main camera", vec3(), quaternion(),
-  vec2(snap.graphics.getDimensions()), 60, 0.1, 1000)
+  vec2(cameraWidth, cameraHeight), 60, 0.1, 1000)
 
 local t = snap.timer.getTime()
 local testImgdata = snap.data.newImagedata(16, 16, "rgba8")
@@ -75,7 +78,7 @@ local function draw()
   Imgui.End()
 
   Imgui.Begin("Test window 2")
-  Imgui.Image(rendertarget, ffi.new("ImVec2", 1000, 1000))
+  Imgui.Image(rendertarget, ffi.new("ImVec2", cameraWidth, cameraHeight))
   Imgui.End()
 
   Imgui.ShowDemoWindow()

@@ -20,6 +20,7 @@
 #include "slang/slang.h"
 #include "tl/expected.hpp"
 #include <array>
+#include <cstring>
 #include <format>
 #include <public/tracy/Tracy.hpp>
 #include <span>
@@ -703,15 +704,13 @@ auto ShaderModule::Send(const GraphicsContext &context, const ResourceKey &key,
     return Error::Create("Texture has no valid image view.");
   }
 
-  auto &state = GetState();
-
   for (const auto &resource : reflection.resources) {
     if (!std::holds_alternative<Reflect::SamplerInfo>(resource.info)) {
       continue;
     }
 
     const auto &samplerInfo = std::get<Reflect::SamplerInfo>(resource.info);
-    if (resource.name == *key.begin()) { // TODO: Fix this search
+    if (strcmp(resource.name, key.begin()->c_str()) == 0) {
       auto key = Utils::SetBindingToSlot(samplerInfo.set, samplerInfo.binding);
 
       if ((samplerInfo.access == SLANG_RESOURCE_ACCESS_WRITE ||
@@ -721,7 +720,7 @@ auto ShaderModule::Send(const GraphicsContext &context, const ResourceKey &key,
             "Texture does not support storage access required by shader.");
       }
 
-      state.userBoundTextures[key] = {texture, &samplerInfo};
+      GetState().userBoundTextures[key] = {texture, &samplerInfo};
 
       return Error::Success();
     }

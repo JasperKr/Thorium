@@ -1362,11 +1362,11 @@ inline auto BindBufferDesciptors(DescriptorKey &key, auto &shader,
 
 inline auto BindTextureDescriptors(const GraphicsContext &context,
                                    VkPipelineStageFlags2 stage,
-                                   DescriptorKey &key, auto &shader,
-                                   const Shader::BoundState &state,
+                                   DescriptorKey &key,
+                                   Ref<Shader::ShaderModule> &shader,
                                    int setIndex) -> Error {
 
-  for (const auto &pair : state.userBoundTextures) {
+  for (const auto &pair : shader->GetState().userBoundTextures) {
     const auto location = pair.first;
     const auto &texture = pair.second.first;
     const auto *samplerInfo = pair.second.second;
@@ -1577,8 +1577,8 @@ auto BindDescriptorSets(const GraphicsContext &context,
       return bindBuffersResult;
     }
 
-    auto bindTexturesResult = BindTextureDescriptors(context, stageFlags, key,
-                                                     shader, state, setIndex);
+    auto bindTexturesResult =
+        BindTextureDescriptors(context, stageFlags, key, shader, setIndex);
     if (Error::IsError(bindTexturesResult)) {
       return bindTexturesResult;
     }

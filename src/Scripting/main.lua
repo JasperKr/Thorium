@@ -252,7 +252,7 @@ function snap.draw()
     table.insert(commandBuffers, snap.graphics.submitGraphics())
   end
 
-  local buffer = commandsChannel:demand(5)
+  local buffer = commandsChannel:demand(15)
   while buffer do
     if thread:getError() then
       -- error("Render thread error: " .. thread:getError())

@@ -269,7 +269,7 @@ struct BufferInfo {
 };
 
 struct ResourceInfo {
-  ResourceInfo() { PrintWarning("constructing ResourceInfo"); }
+  ResourceInfo() = default;
   explicit ResourceInfo(const char *name) : name(name) {}
   ResourceInfo(const char *name,
                std::variant<SamplerInfo, ScalarInfo, VectorInfo, MatrixInfo,

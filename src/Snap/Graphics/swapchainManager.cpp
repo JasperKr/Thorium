@@ -1,6 +1,7 @@
 #include "swapchainManager.hpp"
 
 #include "Graphics/allocations.hpp"
+#include "Graphics/dynamicRendering.hpp"
 #include "Graphics/graphicsContext.hpp"
 #include "Graphics/graphicsState.hpp"
 #include "Graphics/texture.hpp"
@@ -319,6 +320,32 @@ auto SwapchainManager::RecreateSwapchain(GraphicsContext &context,
   isDirty = false;
 
   context.frameIndex = 0;
+
+  // TODO: Keep track of pipelines that use the old swapchain textures
+  // And destroy them once we are sure they are no longer in use, which is tricky because i would
+  // need to track another fucking resource but whatever
+  // {
+  //   std::scoped_lock<std::mutex, std::mutex> lock(
+  //       Graphics::GraphicsContext::mutexes.device,
+  //       DynamicRendering::PipelinesMutex);
+  //   for (const auto &pipeline : DynamicRendering::Pipelines) {
+  //     if (pipeline != VK_NULL_HANDLE) {
+  //       vkDestroyPipeline(context.device, pipeline, GetAllocationCallbacks());
+  //     }
+  //   }
+  //   for (const auto &layout : DynamicRendering::PipelineLayouts) {
+  //     vkDestroyPipelineLayout(context.device, layout.layout,
+  //                             GetAllocationCallbacks());
+  //   }
+  //   for (auto &layouts : DynamicRendering::DescriptorSetLayoutCache) {
+  //     vkDestroyDescriptorSetLayout(context.device, layouts.second,
+  //                                  GetAllocationCallbacks());
+  //   }
+
+  //   DynamicRendering::Pipelines.clear();
+  //   DynamicRendering::PipelineLayouts.clear();
+  //   DynamicRendering::DescriptorSetLayoutCache.clear();
+  // }
 
   return Error::Success();
 }
