@@ -50,7 +50,7 @@ struct Matrix4x4 {
     return result;
   }
 
-  auto Transpose() -> Matrix4x4;
+  [[nodiscard]] auto Transpose() const -> Matrix4x4;
 
   auto operator*(const Matrix4x4 &other) const -> Matrix4x4;
   auto operator*(const Vec4 &vec) const -> Vec4;
@@ -128,7 +128,7 @@ struct Matrix3x3 {
 
   static auto Identity() -> Matrix3x3 { return {}; }
 
-  auto Transpose() -> Matrix3x3;
+  [[nodiscard]] auto Transpose() const -> Matrix3x3;
   auto operator*(const Matrix3x3 &other) const -> Matrix3x3;
   auto operator*(const Vec3 &vec) const -> Vec3;
   auto operator==(const Matrix3x3 &other) const -> bool;

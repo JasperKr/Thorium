@@ -1,5 +1,3 @@
-engine.helpers = engine.helpers or {}
-
 ---@param left number
 ---@param right number
 ---@param top number
@@ -13,7 +11,7 @@ function engine.graphics.newOrthographicProjectionMatrix(left, right, top, botto
 
   out:setFromNumbers(
     2 / (right - left), 0, 0, -(right + left) / (right - left),
-    0, -2 / (top - bottom), 0, -(top + bottom) / (top - bottom),
+    0, 2 / (top - bottom), 0, -(top + bottom) / (top - bottom),
     0, 0, -2 / (far - near), -(far + near) / (far - near),
     0, 0, 0, 1
   )
@@ -24,24 +22,26 @@ end
 function engine.graphics.newPerspectiveProjectionMatrix(left, right, top, bottom, near, far)
   return matrix4x4(
     (near * 2) / (right - left), 0, (right + left) / (right - left), 0,
-    0, -(near * 2) / (top - bottom), (top + bottom) / (top - bottom), 0,
+    0, (near * 2) / (top - bottom), (top + bottom) / (top - bottom), 0,
     0, 0, -((far + near) / (far - near)), -(2 * far * near) / (far - near),
     0, 0, -1, 0
   )
 end
 
 function engine.graphics.newPerspectiveProjectionMatrixSimple(aspectRatio, fov, near, far, out)
-  local tanHalfFov                           = math.tan(math.rad(fov / 2))
-  out                                        = out or matrix4x4()
+  local tanHalfFov = math.tan(math.rad(fov / 2))
+  out              = out or matrix4x4()
 
-  local height                               = 1 / tanHalfFov
-  local width                                = height / aspectRatio
-  local range                                = far / (far - near)
+  local height     = 1 / tanHalfFov
+  local width      = height / aspectRatio
+  local range      = far / (far - near)
 
-  out[1][1], out[1][2], out[1][3], out[1][4] = width, 0, 0, 0
-  out[2][1], out[2][2], out[2][3], out[2][4] = 0, height, 0, 0
-  out[3][1], out[3][2], out[3][3], out[3][4] = 0, 0, range, 1
-  out[4][1], out[4][2], out[4][3], out[4][4] = 0, 0, -range * near, 0
+  out:setFromNumbers(
+    width, 0, 0, 0,
+    0, -height, 0, 0,
+    0, 0, range, 1,
+    0, 0, -range * near, 0
+  )
 
   return out
 end
@@ -92,14 +92,14 @@ local function printAnyCompactInternal(any, tabs)
   end
 end
 
-function snap.helpers.print(...)
+function engine.helpers.print(...)
   for i = 1, select("#", ...) do
     local any = select(i, ...)
     print(printAnyInternal(any, 0))
   end
 end
 
-function snap.helpers.printCompact(...)
+function engine.helpers.printCompact(...)
   for i = 1, select("#", ...) do
     local any = select(i, ...)
     print(printAnyCompactInternal(any, 0))

@@ -138,7 +138,6 @@ auto UniformWriter::Send(const Ref<ShaderModule> &shader,
   for (int row = 0; row < Math::Matrix3x3::Rows; row++) {
 #pragma unroll
     for (int col = 0; col < Math::Matrix3x3::Cols; col++) {
-      // NOLINTNEXTLINE, clangd thinks row, col are swapped, but that's intentional
       matrix3x3Data.at((row * 4) + col) = value.At(row, col);
     }
   }

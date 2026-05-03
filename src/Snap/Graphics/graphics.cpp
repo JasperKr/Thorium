@@ -499,9 +499,9 @@ auto Initialize(GraphicsContext &context, Window::WindowContext &wcontext,
 
   VkApplicationInfo appInfo = {};
   appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-  appInfo.pApplicationName = "Thallium Engine";
+  appInfo.pApplicationName = "Snap Engine";
   appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
-  appInfo.pEngineName = "Thallium";
+  appInfo.pEngineName = "Snap";
   appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
   appInfo.apiVersion = VK_API_VERSION_1_4;
 

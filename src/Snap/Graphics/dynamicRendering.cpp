@@ -9,6 +9,7 @@
 #include "Graphics/shader.hpp"
 #include "Graphics/snapshot.hpp"
 #include "Graphics/texture.hpp"
+#include "Graphics/uniformWriter.hpp"
 #include "Modules/Helpers/utils.hpp"
 #include "Modules/Math/matrix.hpp"
 #include "Modules/color.hpp"
@@ -970,11 +971,13 @@ auto FlushGraphics(const GraphicsContext &context) -> Result<bool> {
   Math::Matrix4x4 projectionMatrix = Math::Matrix4x4::Orthographic(
       viewport.width, viewport.height, 0.0F, 1.0F);
 
-  auto viewProjectionMatrix = projectionMatrix * translationMatrix;
+  auto viewProjectionMatrix = translationMatrix * projectionMatrix;
 
   static auto projectionMatrixKey = ResourceKey{"DefaultProjectionMatrix"};
-  auto sendErr = TopOfStack->shader->Send(context, projectionMatrixKey,
-                                          viewProjectionMatrix.AsByteSpan());
+
+  auto sendErr = Shader::UniformWriter::Send(
+      TopOfStack->shader, context, projectionMatrixKey, viewProjectionMatrix);
+
   if (Error::IsError(sendErr)) {
     PrintError("Failed to send projection matrix to shader: {}",
                sendErr.message);

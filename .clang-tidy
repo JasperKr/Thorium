@@ -12,7 +12,7 @@ Checks: >
   -cppcoreguidelines-pro-type-vararg,
   -hicpp-vararg,
   -bugprone-reserved-identifier,
-  -bugprone-suspicious-stringview-data-usage
+  -bugprone-suspicious-stringview-data-usage,
   -bugprone-easily-swappable-parameters
 
 # -cppcoreguidelines-pro-type-reinterpret-cast

@@ -6,7 +6,7 @@
 namespace Math {
 
 auto Matrix4x4::FromRows(std::initializer_list<Scalar> init) -> Matrix4x4 {
-  return Matrix4x4(init).Transpose();
+  return {init};
 }
 
 auto Matrix4x4::At(size_t row, size_t col) -> Scalar & {
@@ -121,7 +121,7 @@ auto Matrix4x4::Determinant() const -> std::pair<Scalar, Matrix4x4> {
   return {det, inv};
 }
 
-auto Matrix4x4::Transpose() -> Matrix4x4 {
+auto Matrix4x4::Transpose() const -> Matrix4x4 {
   Matrix4x4 result{};
   for (size_t row = 0; row < Rows; ++row) {
     for (size_t col = 0; col < Cols; ++col) {
@@ -275,18 +275,18 @@ auto Matrix4x4::Orthographic(Scalar width, Scalar height, Scalar nearPlane,
 
 auto Matrix4x4::TranslationMatrix(Vec3 translation) -> Matrix4x4 {
   Matrix4x4 result;
-  result.At(0, 3) = translation.x;
-  result.At(1, 3) = translation.y;
-  result.At(2, 3) = translation.z;
+  result.At(3, 0) = translation.x;
+  result.At(3, 1) = translation.y;
+  result.At(3, 2) = translation.z;
   return result;
 }
 
 auto Matrix4x4::TranslationMatrix(Scalar x_pos, Scalar y_pos, Scalar z_pos)
     -> Matrix4x4 {
   Matrix4x4 result;
-  result.At(0, 3) = x_pos;
-  result.At(1, 3) = y_pos;
-  result.At(2, 3) = z_pos;
+  result.At(3, 0) = x_pos;
+  result.At(3, 1) = y_pos;
+  result.At(3, 2) = z_pos;
   return result;
 }
 
@@ -377,7 +377,7 @@ Matrix3x3::Matrix3x3() {
   At(2, 2) = 1.0F;
 }
 
-auto Matrix3x3::Transpose() -> Matrix3x3 {
+auto Matrix3x3::Transpose() const -> Matrix3x3 {
   Matrix3x3 result{};
 #pragma unroll
   for (size_t row = 0; row < Rows; ++row) {
@@ -445,7 +445,7 @@ auto Matrix3x3::Determinant() const -> std::pair<Scalar, Matrix3x3> {
   cofactorMatrix.At(8) = (At(0) * At(4)) - (At(1) * At(3));
   // NOLINTEND(cppcoreguidelines-avoid-magic-numbers, readability-magic-numbers)
 
-  return {det, cofactorMatrix};
+  return {det, cofactorMatrix.Transpose()};
 }
 
 auto Matrix3x3::Inverse() const -> Matrix3x3 {

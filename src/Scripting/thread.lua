@@ -1,3 +1,9 @@
+engine = {
+  helpers = {},
+  graphics = {},
+  math = {},
+}
+
 Imgui = require("Editor.cimgui.init")
 require("Modules.vec")
 require("Modules.quaternions")
@@ -6,7 +12,6 @@ require("Modules.math")
 require("Modules.helpers")
 require("Graphics.camera")
 local ffi = require("ffi")
-engine = engine or {}
 
 local lastDrawTime = 0
 local lastImDrawTime = 0
@@ -124,7 +129,7 @@ function snap.mousemoved(x, y, dx, dy)
     return
   end
 
-  local quat = snap.math.eulerToQuaternion(-dy * 0.001, dx * 0.001, 0)
+  local quat = quaternion(snap.math.eulerToQuaternion(dx * 0.001, dy * 0.001, 0))
   local currentQuat = quaternion(camera:getRotation())
   local newQuat = quat * currentQuat
   camera:SetRotation(newQuat.x, newQuat.y, newQuat.z, newQuat.w)

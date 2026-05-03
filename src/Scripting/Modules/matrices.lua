@@ -36,9 +36,9 @@ ffi.metatype("Rmatrix3x3", mat3Mt)
 function matrix4x4(...)
   local matrix = ffi.new("Rmatrix4x4")
   if select("#", ...) == 16 then
-    for column = 0, 3 do
-      for row = 0, 3 do
-        local idx = (column * 4 + row)
+    for row = 0, 3 do
+      for column = 0, 3 do
+        local idx = row * 4 + column
         matrix.m[idx] = select(idx + 1, ...)
       end
     end
@@ -66,9 +66,9 @@ end
 function matrix3x3(...)
   local matrix = ffi.new("Rmatrix3x3")
   if select("#", ...) == 9 then
-    for column = 0, 2 do
-      for row = 0, 2 do
-        local idx = (column * 3 + row)
+    for row = 0, 2 do
+      for column = 0, 2 do
+        local idx = row * 3 + column
         matrix.m[idx] = select(idx + 1, ...)
       end
     end
@@ -182,12 +182,6 @@ mat4Mt.__index = mat4F
 mat3Mt.__index = mat3F
 
 function mat4Mt.__mul(x, y)
-  -- local m = matrix4x4()
-  -- for i = 1, 4 do
-  --   for j = 1, 4 do
-  --     m[i][j] = x[i][1] * y[1][j] + x[i][2] * y[2][j] + x[i][3] * y[3][j] + x[i][4] * y[4][j]
-  --   end
-  -- end
   local m = ffi.new("Rmatrix4x4")
   for i = 0, 3 do
     for j = 0, 3 do
@@ -201,12 +195,6 @@ function mat4Mt.__mul(x, y)
 end
 
 function mat3Mt.__mul(x, y)
-  -- local m = matrix3x3()
-  -- for i = 1, 3 do
-  --   for j = 1, 3 do
-  --     m[i][j] = x[i][1] * y[1][j] + x[i][2] * y[2][j] + x[i][3] * y[3][j]
-  --   end
-  -- end
   local m = ffi.new("Rmatrix3x3")
   for i = 0, 2 do
     for j = 0, 2 do
@@ -227,16 +215,11 @@ function mat4F:mul(y, out)
     return self:set(temp4x4)
   end
 
-  -- for i = 1, 4 do
-  --   for j = 1, 4 do
-  --     out[i][j] = self[i][1] * y[1][j] + self[i][2] * y[2][j] + self[i][3] * y[3][j] + self[i][4] * y[4][j]
-  --   end
-  -- end
-  for i = 0, 3 do
-    for j = 0, 3 do
-      local idx = i * 4 + j
-      out.m[idx] = self.m[i * 4 + 0] * y.m[0 * 4 + j] + self.m[i * 4 + 1] * y.m[1 * 4 + j] +
-          self.m[i * 4 + 2] * y.m[2 * 4 + j] + self.m[i * 4 + 3] * y.m[3 * 4 + j]
+  for row = 0, 3 do
+    for column = 0, 3 do
+      local idx = row * 4 + column
+      out.m[idx] = self.m[row * 4 + 0] * y.m[0 * 4 + column] + self.m[row * 4 + 1] * y.m[1 * 4 + column] +
+          self.m[row * 4 + 2] * y.m[2 * 4 + column] + self.m[row * 4 + 3] * y.m[3 * 4 + column]
     end
   end
 
@@ -251,11 +234,6 @@ function mat3F:mul(y, out)
     return self:set(temp3x3)
   end
 
-  -- for i = 1, 3 do
-  --   for j = 1, 3 do
-  --     out[i][j] = self[i][1] * y[1][j] + self[i][2] * y[2][j] + self[i][3] * y[3][j]
-  --   end
-  -- end
   for i = 0, 2 do
     for j = 0, 2 do
       local idx = i * 3 + j
@@ -275,10 +253,6 @@ function mat4F:transpose(out)
     v = tempMat4_2
   end
 
-  -- v[1][1], v[1][2], v[1][3], v[1][4] = self[1][1], self[2][1], self[3][1], self[4][1]
-  -- v[2][1], v[2][2], v[2][3], v[2][4] = self[1][2], self[2][2], self[3][2], self[4][2]
-  -- v[3][1], v[3][2], v[3][3], v[3][4] = self[1][3], self[2][3], self[3][3], self[4][3]
-  -- v[4][1], v[4][2], v[4][3], v[4][4] = self[1][4], self[2][4], self[3][4], self[4][4]
   local m = self.m
   -- v.m[0] = m[0]
   v.m[1] = m[4]
@@ -369,11 +343,11 @@ function mat3F:transposeSelf()
 end
 
 function mat4F:copy()
-  return ffi.new("Rmatrix4x4", self.m)
+  return ffi.new("Rmatrix4x4", self:get())
 end
 
 function mat3F:copy()
-  return ffi.new("Rmatrix3x3", self.m)
+  return ffi.new("Rmatrix3x3", self:get())
 end
 
 function mat4F:table()
@@ -398,230 +372,207 @@ function mat3F:table()
 end
 
 function mat4F:writeToTable(t, index)
-  local i = 0
-
-  t[index + i] = self.m[i]; i = i + 1
-  t[index + i] = self.m[i]; i = i + 1
-  t[index + i] = self.m[i]; i = i + 1
-  t[index + i] = self.m[i]; i = i + 1
-  t[index + i] = self.m[i]; i = i + 1
-  t[index + i] = self.m[i]; i = i + 1
-  t[index + i] = self.m[i]; i = i + 1
-  t[index + i] = self.m[i]; i = i + 1
-  t[index + i] = self.m[i]; i = i + 1
-  t[index + i] = self.m[i]; i = i + 1
-  t[index + i] = self.m[i]; i = i + 1
-  t[index + i] = self.m[i]; i = i + 1
-  t[index + i] = self.m[i]; i = i + 1
-  t[index + i] = self.m[i]; i = i + 1
-  t[index + i] = self.m[i]; i = i + 1
-  t[index + i] = self.m[i]
+  for i = 0, 15 do
+    t[index + i] = self.m[i]
+  end
 end
 
 function mat3F:writeToTable(t, index)
-  local i = 0
-
-  t[index + i] = self.m[i]; i = i + 1
-  t[index + i] = self.m[i]; i = i + 1
-  t[index + i] = self.m[i]; i = i + 1
-  t[index + i] = self.m[i]; i = i + 1
-  t[index + i] = self.m[i]; i = i + 1
-  t[index + i] = self.m[i]; i = i + 1
-  t[index + i] = self.m[i]; i = i + 1
-  t[index + i] = self.m[i]; i = i + 1
-  t[index + i] = self.m[i]
+  for i = 0, 8 do
+    t[index + i] = self.m[i]
+  end
 end
 
 function mat4F:getTransposed()
-  -- return self[1][1], self[1][2], self[1][3], self[1][4],
-  --     self[2][1], self[2][2], self[2][3], self[2][4],
-  --     self[3][1], self[3][2], self[3][3], self[3][4],
-  --     self[4][1], self[4][2], self[4][3], self[4][4]
   local m = self.m
   return m[0], m[4], m[8], m[12],
       m[1], m[5], m[9], m[13],
-      m[
+      m[2], m[6], m[10], m[14],
+      m[3], m[7], m[11], m[15]
 end
 
 function mat3F:getTransposed()
-  -- return self[1][1], self[1][2], self[1][3],
-  --     self[2][1], self[2][2], self[2][3],
-  --     self[3][1], self[3][2], self[3][3]
   local m = self.m
-  return 
+  return m[0], m[3], m[6],
+      m[1], m[4], m[7],
+      m[2], m[5], m[8]
 end
 
 function mat4F:get()
-  return self[1][1], self[2][1], self[3][1], self[4][1],
-      self[1][2], self[2][2], self[3][2], self[4][2],
-      self[1][3], self[2][3], self[3][3], self[4][3],
-      self[1][4], self[2][4], self[3][4], self[4][4]
+  local m = self.m
+  return m[0], m[1], m[2], m[3],
+      m[4], m[5], m[6], m[7],
+      m[8], m[9], m[10], m[11],
+      m[12], m[13], m[14], m[15]
 end
 
 function mat3F:get()
-  return self[1][1], self[2][1], self[3][1],
-      self[1][2], self[2][2], self[3][2],
-      self[1][3], self[2][3], self[3][3]
+  local m = self.m
+  return m[0], m[1], m[2],
+      m[3], m[4], m[5],
+      m[6], m[7], m[8]
 end
 
-local inv = matrix4x4()
+local invMatrix = matrix4x4()
 
 -- translated from love12's github: https://github.com/love2d/love/blob/12.0-development/src/common/Matrix.cpp matrix4:invert
 --- Inverts the matrix.
 ---@param out matrix4x4?
 ---@return matrix4x4
 function mat4F:invertTranspose(out)
-  local e = self
-  inv[1][1] = e[2][2] * e[3][3] * e[4][4] -
-      e[2][2] * e[3][4] * e[4][3] -
-      e[3][2] * e[2][3] * e[4][4] +
-      e[3][2] * e[2][4] * e[4][3] +
-      e[4][2] * e[2][3] * e[3][4] -
-      e[4][2] * e[2][4] * e[3][3]
+  local inv = invMatrix.m
+  local m = self.m
 
-  inv[2][1] = -e[2][1] * e[3][3] * e[4][4] +
-      e[2][1] * e[3][4] * e[4][3] +
-      e[3][1] * e[2][3] * e[4][4] -
-      e[3][1] * e[2][4] * e[4][3] -
-      e[4][1] * e[2][3] * e[3][4] +
-      e[4][1] * e[2][4] * e[3][3]
+  inv[0] = m[5] * m[10] * m[15] -
+      m[5] * m[11] * m[14] -
+      m[9] * m[6] * m[15] +
+      m[9] * m[7] * m[14] +
+      m[13] * m[6] * m[11] -
+      m[13] * m[7] * m[10];
 
-  inv[3][1] = e[2][1] * e[3][2] * e[4][4] -
-      e[2][1] * e[3][4] * e[4][2] -
-      e[3][1] * e[2][2] * e[4][4] +
-      e[3][1] * e[2][4] * e[4][2] +
-      e[4][1] * e[2][2] * e[3][4] -
-      e[4][1] * e[2][4] * e[3][2]
+  inv[4] = -m[4] * m[10] * m[15] +
+      m[4] * m[11] * m[14] +
+      m[8] * m[6] * m[15] -
+      m[8] * m[7] * m[14] -
+      m[12] * m[6] * m[11] +
+      m[12] * m[7] * m[10];
 
-  inv[4][1] = -e[2][1] * e[3][2] * e[4][3] +
-      e[2][1] * e[3][3] * e[4][2] +
-      e[3][1] * e[2][2] * e[4][3] -
-      e[3][1] * e[2][3] * e[4][2] -
-      e[4][1] * e[2][2] * e[3][3] +
-      e[4][1] * e[2][3] * e[3][2]
+  inv[8] = m[4] * m[9] * m[15] -
+      m[4] * m[11] * m[13] -
+      m[8] * m[5] * m[15] +
+      m[8] * m[7] * m[13] +
+      m[12] * m[5] * m[11] -
+      m[12] * m[7] * m[9];
 
-  inv[1][2] = -e[1][2] * e[3][3] * e[4][4] +
-      e[1][2] * e[3][4] * e[4][3] +
-      e[3][2] * e[1][3] * e[4][4] -
-      e[3][2] * e[1][4] * e[4][3] -
-      e[4][2] * e[1][3] * e[3][4] +
-      e[4][2] * e[1][4] * e[3][3]
+  inv[12] = -m[4] * m[9] * m[14] +
+      m[4] * m[10] * m[13] +
+      m[8] * m[5] * m[14] -
+      m[8] * m[6] * m[13] -
+      m[12] * m[5] * m[10] +
+      m[12] * m[6] * m[9];
 
-  inv[2][2] = e[1][1] * e[3][3] * e[4][4] -
-      e[1][1] * e[3][4] * e[4][3] -
-      e[3][1] * e[1][3] * e[4][4] +
-      e[3][1] * e[1][4] * e[4][3] +
-      e[4][1] * e[1][3] * e[3][4] -
-      e[4][1] * e[1][4] * e[3][3]
+  inv[1] = -m[1] * m[10] * m[15] +
+      m[1] * m[11] * m[14] +
+      m[9] * m[2] * m[15] -
+      m[9] * m[3] * m[14] -
+      m[13] * m[2] * m[11] +
+      m[13] * m[3] * m[10];
 
-  inv[3][2] = -e[1][1] * e[3][2] * e[4][4] +
-      e[1][1] * e[3][4] * e[4][2] +
-      e[3][1] * e[1][2] * e[4][4] -
-      e[3][1] * e[1][4] * e[4][2] -
-      e[4][1] * e[1][2] * e[3][4] +
-      e[4][1] * e[1][4] * e[3][2]
+  inv[5] = m[0] * m[10] * m[15] -
+      m[0] * m[11] * m[14] -
+      m[8] * m[2] * m[15] +
+      m[8] * m[3] * m[14] +
+      m[12] * m[2] * m[11] -
+      m[12] * m[3] * m[10];
 
-  inv[4][2] = e[1][1] * e[3][2] * e[4][3] -
-      e[1][1] * e[3][3] * e[4][2] -
-      e[3][1] * e[1][2] * e[4][3] +
-      e[3][1] * e[1][3] * e[4][2] +
-      e[4][1] * e[1][2] * e[3][3] -
-      e[4][1] * e[1][3] * e[3][2]
+  inv[9] = -m[0] * m[9] * m[15] +
+      m[0] * m[11] * m[13] +
+      m[8] * m[1] * m[15] -
+      m[8] * m[3] * m[13] -
+      m[12] * m[1] * m[11] +
+      m[12] * m[3] * m[9];
 
-  inv[1][3] = e[1][2] * e[2][3] * e[4][4] -
-      e[1][2] * e[2][4] * e[4][3] -
-      e[2][2] * e[1][3] * e[4][4] +
-      e[2][2] * e[1][4] * e[4][3] +
-      e[4][2] * e[1][3] * e[2][4] -
-      e[4][2] * e[1][4] * e[2][3]
+  inv[13] = m[0] * m[9] * m[14] -
+      m[0] * m[10] * m[13] -
+      m[8] * m[1] * m[14] +
+      m[8] * m[2] * m[13] +
+      m[12] * m[1] * m[10] -
+      m[12] * m[2] * m[9];
 
-  inv[2][3] = -e[1][1] * e[2][3] * e[4][4] +
-      e[1][1] * e[2][4] * e[4][3] +
-      e[2][1] * e[1][3] * e[4][4] -
-      e[2][1] * e[1][4] * e[4][3] -
-      e[4][1] * e[1][3] * e[2][4] +
-      e[4][1] * e[1][4] * e[2][3]
+  inv[2] = m[1] * m[6] * m[15] -
+      m[1] * m[7] * m[14] -
+      m[5] * m[2] * m[15] +
+      m[5] * m[3] * m[14] +
+      m[13] * m[2] * m[7] -
+      m[13] * m[3] * m[6];
 
-  inv[3][3] = e[1][1] * e[2][2] * e[4][4] -
-      e[1][1] * e[2][4] * e[4][2] -
-      e[2][1] * e[1][2] * e[4][4] +
-      e[2][1] * e[1][4] * e[4][2] +
-      e[4][1] * e[1][2] * e[2][4] -
-      e[4][1] * e[1][4] * e[2][2]
+  inv[6] = -m[0] * m[6] * m[15] +
+      m[0] * m[7] * m[14] +
+      m[4] * m[2] * m[15] -
+      m[4] * m[3] * m[14] -
+      m[12] * m[2] * m[7] +
+      m[12] * m[3] * m[6];
 
-  inv[4][3] = -e[1][1] * e[2][2] * e[4][3] +
-      e[1][1] * e[2][3] * e[4][2] +
-      e[2][1] * e[1][2] * e[4][3] -
-      e[2][1] * e[1][3] * e[4][2] -
-      e[4][1] * e[1][2] * e[2][3] +
-      e[4][1] * e[1][3] * e[2][2]
+  inv[10] = m[0] * m[5] * m[15] -
+      m[0] * m[7] * m[13] -
+      m[4] * m[1] * m[15] +
+      m[4] * m[3] * m[13] +
+      m[12] * m[1] * m[7] -
+      m[12] * m[3] * m[5];
 
-  inv[1][4] = -e[1][2] * e[2][3] * e[3][4] +
-      e[1][2] * e[2][4] * e[3][3] +
-      e[2][2] * e[1][3] * e[3][4] -
-      e[2][2] * e[1][4] * e[3][3] -
-      e[3][2] * e[1][3] * e[2][4] +
-      e[3][2] * e[1][4] * e[2][3]
+  inv[14] = -m[0] * m[5] * m[14] +
+      m[0] * m[6] * m[13] +
+      m[4] * m[1] * m[14] -
+      m[4] * m[2] * m[13] -
+      m[12] * m[1] * m[6] +
+      m[12] * m[2] * m[5];
 
-  inv[2][4] = e[1][1] * e[2][3] * e[3][4] -
-      e[1][1] * e[2][4] * e[3][3] -
-      e[2][1] * e[1][3] * e[3][4] +
-      e[2][1] * e[1][4] * e[3][3] +
-      e[3][1] * e[1][3] * e[2][4] -
-      e[3][1] * e[1][4] * e[2][3]
+  inv[3] = -m[1] * m[6] * m[11] +
+      m[1] * m[7] * m[10] +
+      m[5] * m[2] * m[11] -
+      m[5] * m[3] * m[10] -
+      m[9] * m[2] * m[7] +
+      m[9] * m[3] * m[6];
 
-  inv[3][4] = -e[1][1] * e[2][2] * e[3][4] +
-      e[1][1] * e[2][4] * e[3][2] +
-      e[2][1] * e[1][2] * e[3][4] -
-      e[2][1] * e[1][4] * e[3][2] -
-      e[3][1] * e[1][2] * e[2][4] +
-      e[3][1] * e[1][4] * e[2][2]
+  inv[7] = m[0] * m[6] * m[11] -
+      m[0] * m[7] * m[10] -
+      m[4] * m[2] * m[11] +
+      m[4] * m[3] * m[10] +
+      m[8] * m[2] * m[7] -
+      m[8] * m[3] * m[6];
 
-  inv[4][4] = e[1][1] * e[2][2] * e[3][3] -
-      e[1][1] * e[2][3] * e[3][2] -
-      e[2][1] * e[1][2] * e[3][3] +
-      e[2][1] * e[1][3] * e[3][2] +
-      e[3][1] * e[1][2] * e[2][3] -
-      e[3][1] * e[1][3] * e[2][2]
+  inv[11] = -m[0] * m[5] * m[11] +
+      m[0] * m[7] * m[9] +
+      m[4] * m[1] * m[11] -
+      m[4] * m[3] * m[9] -
+      m[8] * m[1] * m[7] +
+      m[8] * m[3] * m[5];
 
-  local det = e[1][1] * inv[1][1] + e[1][2] * inv[2][1] + e[1][3] * inv[3][1] + e[1][4] * inv[4][1];
+  inv[15] = m[0] * m[5] * m[10] -
+      m[0] * m[6] * m[9] -
+      m[4] * m[1] * m[10] +
+      m[4] * m[2] * m[9] +
+      m[8] * m[1] * m[6] -
+      m[8] * m[2] * m[5];
 
+  local det = m[0] * inv[0] + m[1] * inv[4] + m[2] * inv[8] + m[3] * inv[12];
   local invdet = 1.0 / det
 
-  for y = 1, 4 do
-    for x = 1, 4 do
-      inv[y][x] = inv[y][x] * invdet
-    end
+  for i = 0, 15 do
+    inv[i] = inv[i] * invdet
   end
 
-  return (out or matrix4x4()):set(inv)
+  return (out or matrix4x4()):set(invMatrix)
 end
+
+local invMatrix3 = matrix3x3()
 
 -- translated from love12's github: https://github.com/love2d/love/blob/12.0-development/src/common/Matrix.cpp
 function mat3F:invertTranspose(out)
-  local e = self:table()
+  -- local e = self:table()
   -- e0 e3 e6
   -- e1 e4 e7
   -- e2 e5 e8
+  local m = self.m
 
-  local det = e[1] * (e[5] * e[9] - e[8] * e[6]) - e[2] * (e[4] * e[9] - e[6] * e[7]) +
-      e[3] * (e[4] * e[8] - e[5] * e[7])
+  local det = m[0] * (m[4] * m[8] - m[7] * m[5])
+      - m[1] * (m[3] * m[8] - m[5] * m[6])
+      + m[2] * (m[3] * m[7] - m[4] * m[6]);
 
-  local invdet = 1 / det
+  local invdet = 1.0 / det;
+  local m2 = invMatrix3.m
 
-  local m = {}
+  m2[0] = invdet * (m[4] * m[8] - m[7] * m[5]);
+  m2[3] = -invdet * (m[1] * m[8] - m[2] * m[7]);
+  m2[6] = invdet * (m[1] * m[5] - m[2] * m[4]);
+  m2[1] = -invdet * (m[3] * m[8] - m[5] * m[6]);
+  m2[4] = invdet * (m[0] * m[8] - m[2] * m[6]);
+  m2[7] = -invdet * (m[0] * m[5] - m[3] * m[2]);
+  m2[2] = invdet * (m[3] * m[7] - m[6] * m[4]);
+  m2[5] = -invdet * (m[0] * m[7] - m[6] * m[1]);
+  m2[8] = invdet * (m[0] * m[4] - m[3] * m[1]);
 
-  m[1] = invdet * (e[5] * e[9] - e[8] * e[6])
-  m[4] = -invdet * (e[2] * e[9] - e[3] * e[8])
-  m[7] = invdet * (e[2] * e[6] - e[3] * e[5])
-  m[2] = -invdet * (e[4] * e[9] - e[6] * e[7])
-  m[5] = invdet * (e[1] * e[9] - e[3] * e[7])
-  m[8] = -invdet * (e[1] * e[6] - e[4] * e[3])
-  m[3] = invdet * (e[4] * e[8] - e[7] * e[5])
-  m[6] = -invdet * (e[1] * e[8] - e[7] * e[2])
-  m[9] = invdet * (e[1] * e[5] - e[4] * e[2])
-
-  return (out or matrix3x3):setFromNumbers(m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8], m[9])
+  return (out or matrix3x3()):set(invMatrix3)
 end
 
 local tempMat4 = matrix4x4()
@@ -635,69 +586,72 @@ function mat3F:invert(out)
 end
 
 function mat4F:set(mat)
-  self[1][1], self[1][2], self[1][3], self[1][4] = mat[1][1], mat[1][2], mat[1][3], mat[1][4]
-  self[2][1], self[2][2], self[2][3], self[2][4] = mat[2][1], mat[2][2], mat[2][3], mat[2][4]
-  self[3][1], self[3][2], self[3][3], self[3][4] = mat[3][1], mat[3][2], mat[3][3], mat[3][4]
-  self[4][1], self[4][2], self[4][3], self[4][4] = mat[4][1], mat[4][2], mat[4][3], mat[4][4]
+  for i = 0, 15 do
+    self.m[i] = mat.m[i]
+  end
 
   return self
 end
 
 function mat3F:set(mat)
-  self[1][1], self[1][2], self[1][3] = mat[1][1], mat[1][2], mat[1][3]
-  self[2][1], self[2][2], self[2][3] = mat[2][1], mat[2][2], mat[2][3]
-  self[3][1], self[3][2], self[3][3] = mat[3][1], mat[3][2], mat[3][3]
+  for i = 0, 8 do
+    self.m[i] = mat.m[i]
+  end
 
   return self
 end
 
-function mat4F:setFromNumbers(n00, n01, n02, n03, n10, n11, n12, n13, n20, n21, n22, n23, n30, n31, n32, n33)
-  self[1][1], self[1][2], self[1][3], self[1][4] = n00, n10, n20, n30
-  self[2][1], self[2][2], self[2][3], self[2][4] = n01, n11, n21, n31
-  self[3][1], self[3][2], self[3][3], self[3][4] = n02, n12, n22, n32
-  self[4][1], self[4][2], self[4][3], self[4][4] = n03, n13, n23, n33
+function mat4F:setFromNumbers(...)
+  for i = 0, 15 do
+    self.m[i] = select(i + 1, ...)
+  end
 
   return self
 end
 
-function mat3F:setFromNumbers(n00, n01, n02, n10, n11, n12, n20, n21, n22)
-  self[1][1], self[1][2], self[1][3] = n00, n01, n02
-  self[2][1], self[2][2], self[2][3] = n10, n11, n12
-  self[3][1], self[3][2], self[3][3] = n20, n21, n22
+function mat3F:setFromNumbers(...)
+  for i = 0, 8 do
+    self.m[i] = select(i + 1, ...)
+  end
 
   return self
 end
 
 function mat4F:clear()
-  self[1][1], self[1][2], self[1][3], self[1][4] = 0, 0, 0, 0
-  self[2][1], self[2][2], self[2][3], self[2][4] = 0, 0, 0, 0
-  self[3][1], self[3][2], self[3][3], self[3][4] = 0, 0, 0, 0
-  self[4][1], self[4][2], self[4][3], self[4][4] = 0, 0, 0, 0
+  for i = 0, 15 do
+    self.m[i] = 0
+  end
 
   return self
 end
 
 function mat3F:clear()
-  self[1][1], self[1][2], self[1][3] = 0, 0, 0
-  self[2][1], self[2][2], self[2][3] = 0, 0, 0
-  self[3][1], self[3][2], self[3][3] = 0, 0, 0
+  for i = 0, 8 do
+    self.m[i] = 0
+  end
 
   return self
 end
 
 function mat4F:identity()
-  self[1][1], self[1][2], self[1][3], self[1][4] = 1, 0, 0, 0
-  self[2][1], self[2][2], self[2][3], self[2][4] = 0, 1, 0, 0
-  self[3][1], self[3][2], self[3][3], self[3][4] = 0, 0, 1, 0
-  self[4][1], self[4][2], self[4][3], self[4][4] = 0, 0, 0, 1
+  for i = 0, 15 do
+    self.m[i] = 0
+  end
+  self.m[0] = 1
+  self.m[5] = 1
+  self.m[10] = 1
+  self.m[15] = 1
 
   return self
 end
 
 function mat3F:identity()
-  self[1][1], self[1][2], self[1][3] = 1, 0, 0
-  self[2][1], self[2][2], self[2][3] = 0, 1, 0
-  self[3][1], self[3][2], self[3][3] = 0, 0, 1
+  for i = 0, 8 do
+    self.m[i] = 0
+  end
+  self.m[0] = 1
+  self.m[4] = 1
+  self.m[8] = 1
 
   return self
 end

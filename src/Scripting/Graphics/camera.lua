@@ -78,8 +78,8 @@ function snap.graphics.newCamera(name, position, rotation, resolution, fov, near
     self.far)
 
   projectionMatrix:invertTranspose(inverseProjectionMatrix)
-  local translationMatrix = snap.math.newTranslationMatrix(-position)
-  local rotationMatrix = mat4snap.math.quaternionToMatrix(rotation:get())
+  local translationMatrix = matrix4x4(snap.math.newTranslationMatrix((-position):get()))
+  local rotationMatrix = matrix4x4(snap.math.quaternionToMatrix(rotation:get()))
   rotationMatrix:invertTranspose(inverseRotationMatrix)
   rotationMatrix:mul(projectionMatrix, rotationProjectionMatrix)
   rotationProjectionMatrix:invertTranspose(inverseRotationProjectionMatrix)
@@ -162,13 +162,12 @@ local tempVec3 = vec3()
 function Camera:UpdateMatrices()
   local aspectRatio = self.resolution.x / self.resolution.y
 
-  snap.graphics.newPerspectiveProjectionMatrixSimple(aspectRatio, self.fov, self.near,
+  engine.graphics.newPerspectiveProjectionMatrixSimple(aspectRatio, self.fov, self.near,
     self.far, self.projectionMatrix)
 
   self.projectionMatrix:invertTranspose(self.inverseProjectionMatrix)
-  snap.math.newTranslationMatrix(mathv.unm3(self.position, tempVec3),
-    self.translationMatrix)
-  snap.math.quaternionToMatrix(self.rotation, self.rotationMatrix)
+  self.translationMatrix:setFromNumbers(snap.math.newTranslationMatrix(mathv.unm3(self.position, tempVec3):get()))
+  self.rotationMatrix:setFromNumbers(snap.math.quaternionToMatrix(self.rotation:get()))
   self.rotationMatrix:invertTranspose(self.inverseRotationMatrix)
   self.rotationMatrix:mul(self.projectionMatrix, self.rotationProjectionMatrix)
   self.rotationProjectionMatrix:invertTranspose(self.inverseRotationProjectionMatrix)
@@ -206,29 +205,28 @@ function Camera:UpdateState()
 end
 
 function Camera:Update()
-  if self.nextPosition == self.position and self.nextRotation == self.rotation then
-    return
-  end
-
   self.position = self.nextPosition
   self.rotation = self.nextRotation
 end
 
 ---@return vec3 forward
 function Camera:GetForward()
-  tempVec3:set(self.inverseRotationMatrix[3][1], self.inverseRotationMatrix[3][2], self.inverseRotationMatrix[3][3])
+  local m = self.inverseRotationMatrix.m
+  tempVec3:set(m[8], m[9], m[10])
   return tempVec3
 end
 
 ---@return vec3 right
 function Camera:GetRight()
-  tempVec3:set(self.inverseRotationMatrix[1][1], self.inverseRotationMatrix[1][2], self.inverseRotationMatrix[1][3])
+  local m = self.inverseRotationMatrix.m
+  tempVec3:set(m[0], m[1], m[2])
   return tempVec3
 end
 
 ---@return vec3 up
 function Camera:GetUp()
-  tempVec3:set(self.inverseRotationMatrix[2][1], self.inverseRotationMatrix[2][2], self.inverseRotationMatrix[2][3])
+  local m = self.inverseRotationMatrix.m
+  tempVec3:set(m[4], m[5], m[6])
   return tempVec3
 end
 

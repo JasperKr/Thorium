@@ -35,8 +35,8 @@ VertexStageOutput vertexMain(VertexInput input)
 {
     VertexStageOutput out;
 
-    float4 worldPos = mul(ModelMatrix, float4(input.Position, 1.0));
-    out.sv_position = mul(camera.ViewProjectionMatrix, worldPos);
+    float4 worldPos = mul(float4(input.Position, 1.0), ModelMatrix);
+    out.sv_position = mul(worldPos, camera.ViewProjectionMatrix);
 
     out.tex_coord = input.TexCoords;
     float3 normal = normalize(UnpackNormal(input.Normal).xyz);

@@ -1,43 +1,40 @@
 table.new = require("table.new")
 table.clear = require("table.clear")
 
-local mathModule = engine.math or {}
-engine.math = mathModule
-
-mathModule.PI2 = math.pi * 2
-mathModule.PI05 = math.pi * 0.5
+engine.math.PI2 = math.pi * 2
+engine.math.PI05 = math.pi * 0.5
 
 local ffi = require("ffi")
 
-function mathModule.clamp(v, min, max)
+function engine.math.clamp(v, min, max)
   return math.min(math.max(v, min), max)
 end
 
-function mathModule.round(x)
+function engine.math.round(x)
   return math.floor(x + 0.5)
 end
 
-function mathModule.saturate(x)
+function engine.math.saturate(x)
   return math.min(math.max(x, 0.0), 1.0)
 end
 
-function mathModule.saturateSigned(x)
+function engine.math.saturateSigned(x)
   return math.min(math.max(x, -1.0), 1.0)
 end
 
-function mathModule.aabb(aMinX, aMinY, aMinZ, aMaxX, aMaxY, aMaxZ, bMinX, bMinY, bMinZ, bMaxX, bMaxY, bMaxZ)
+function engine.math.aabb(aMinX, aMinY, aMinZ, aMaxX, aMaxY, aMaxZ, bMinX, bMinY, bMinZ, bMaxX, bMaxY, bMaxZ)
   local x_condition = (aMinX - bMaxX) * (bMinX - aMaxX)
   local y_condition = (aMaxY - bMinY) * (bMaxY - aMinY)
   local z_condition = (aMaxZ - bMinZ) * (bMaxZ - aMinZ)
   return math.min(x_condition, y_condition, z_condition) > 0
 end
 
-function mathModule.copyTable(t)
+function engine.math.copyTable(t)
   if type(t) == "table" then
     local t2 = {}
     for i, v in pairs(t) do
       if type(v) == "table" then
-        t2[i] = mathModule.copyTable(v)
+        t2[i] = engine.math.copyTable(v)
       else
         t2[i] = v
       end
@@ -48,7 +45,7 @@ function mathModule.copyTable(t)
   end
 end
 
-function mathModule.shallowCopyTable(t, t2)
+function engine.math.shallowCopyTable(t, t2)
   if type(t) == "table" then
     t2 = t2 or {}
     for i, v in pairs(t) do
@@ -60,7 +57,7 @@ function mathModule.shallowCopyTable(t, t2)
   end
 end
 
-function mathModule.shallowCopyList(t, t2, from, to)
+function engine.math.shallowCopyList(t, t2, from, to)
   t2 = t2 or {}
   from = from or 1
   to = to or #t
@@ -72,7 +69,7 @@ function mathModule.shallowCopyList(t, t2, from, to)
   return t2
 end
 
-function mathModule.sign(number)
+function engine.math.sign(number)
   return (number > 0 and 1 or (number == 0 and 0 or -1))
 end
 
@@ -101,29 +98,29 @@ end
 ---@return number
 ---@return number
 ---@return number
-function mathModule.capsuleNormal(x, y, z, aX, aY, aZ, bX, bY, bZ)
+function engine.math.capsuleNormal(x, y, z, aX, aY, aZ, bX, bY, bZ)
   local baX, baY, baZ = bX - aX, bY - aY, bZ - aZ
   local paX, paY, paZ = x - aX, y - aY, z - aZ
-  local h = mathModule.clamp(
-    mathModule.dot(baX, baY, baZ, paX, paY, paZ) / mathModule.dot(baX, baY, baZ, baX, baY, baZ), 0.0,
+  local h = engine.math.clamp(
+    engine.math.dot(baX, baY, baZ, paX, paY, paZ) / engine.math.dot(baX, baY, baZ, baX, baY, baZ), 0.0,
     1.0)
-  return mathModule.normalize3(paX - h * baX, paY - h * baY, paZ - h * baZ)
+  return engine.math.normalize3(paX - h * baX, paY - h * baY, paZ - h * baZ)
 end
 
-function mathModule.calculateSphereTangent(nx, ny, nz)
+function engine.math.calculateSphereTangent(nx, ny, nz)
   -- Check if the normal is parallel to the up vector
-  local tx, ty, tz = mathModule.cross(nx, ny, nz, 0, 1, 0)
+  local tx, ty, tz = engine.math.cross(nx, ny, nz, 0, 1, 0)
   if tx * tx + ty * ty + tz * tz < 1e-5 then
     return 1, 0, 0
   else
-    return mathModule.normalize3(tx, ty, tz)
+    return engine.math.normalize3(tx, ty, tz)
   end
 end
 
-function mathModule.newID(i)
+function engine.math.newID(i)
   i = i or "Global"
-  local j = mathModule.idCounters[i] or 0
-  mathModule.idCounters[i] = j + 1
+  local j = engine.math.idCounters[i] or 0
+  engine.math.idCounters[i] = j + 1
   return j
 end
 
@@ -149,7 +146,7 @@ do
 
   local tempIDTable = table.new(32, 0)
 
-  function mathModule.newRandID()
+  function engine.math.newRandID()
     table.clear(tempIDTable)
 
     for i = 1, 32 do
@@ -165,31 +162,31 @@ end
 ---@param w number
 ---@param i number
 ---@return number
-function mathModule.mix(v, w, i)
+function engine.math.mix(v, w, i)
   return i * w + (1 - i) * v
 end
 
-function mathModule.cross(x1, y1, z1, x2, y2, z2)
+function engine.math.cross(x1, y1, z1, x2, y2, z2)
   return y1 * z2 - z1 * y2, z1 * x2 - x1 * z2, x1 * y2 - y1 * x2
 end
 
-function mathModule.dot(x1, y1, z1, x2, y2, z2)
+function engine.math.dot(x1, y1, z1, x2, y2, z2)
   return x1 * x2 + y1 * y2 + z1 * z2
 end
 
-function mathModule.dot2(x1, y1, x2, y2)
+function engine.math.dot2(x1, y1, x2, y2)
   return x1 * x2 + y1 * y2
 end
 
-function mathModule.dot3(x1, y1, z1, x2, y2, z2)
+function engine.math.dot3(x1, y1, z1, x2, y2, z2)
   return x1 * x2 + y1 * y2 + z1 * z2
 end
 
-function mathModule.dot4(x1, y1, z1, w1, x2, y2, z2, w2)
+function engine.math.dot4(x1, y1, z1, w1, x2, y2, z2, w2)
   return x1 * x2 + y1 * y2 + z1 * z2 + w1 * w2
 end
 
-function mathModule.lerp(angle, target, turnrate, dt)
+function engine.math.lerp(angle, target, turnrate, dt)
   local dist = target - angle
   dist = (dist + math.pi) % (math.pi * 2) - math.pi
   local step = math.exp(turnrate * dt)
@@ -204,14 +201,14 @@ function mathModule.lerp(angle, target, turnrate, dt)
   return angle
 end
 
-function mathModule.smoothLerp(angle, target, turnrate, dt)
+function engine.math.smoothLerp(angle, target, turnrate, dt)
   local dist = target - angle
   dist = (dist + math.pi) % (math.pi * 2) - math.pi
   local step = turnrate * dt
   return angle + step * dist
 end
 
-function mathModule.pointAABBDistance(min, max, position)
+function engine.math.pointAABBDistance(min, max, position)
   local q = vec3(math.max(0, math.max(min.x - position.x, position.x - max.x)),
     math.max(0, math.max(min.y - position.y, position.y - max.y)),
     math.max(0, math.max(min.z - position.z, position.z - max.z)))
@@ -228,7 +225,7 @@ function mathModule.pointAABBDistance(min, max, position)
   end
 end
 
-function mathModule.pointAABBDistanceSeparate(minX, minY, minZ, maxX, maxY, maxZ, x, y, z)
+function engine.math.pointAABBDistanceSeparate(minX, minY, minZ, maxX, maxY, maxZ, x, y, z)
   local qx = math.max(0, math.max(minX - x, x - maxX))
   local qy = math.max(0, math.max(minY - y, y - maxY))
   local qz = math.max(0, math.max(minZ - z, z - maxZ))
@@ -244,7 +241,7 @@ function mathModule.pointAABBDistanceSeparate(minX, minY, minZ, maxX, maxY, maxZ
   end
 end
 
-function mathModule.signedPointAABBDistance(min, max, position)
+function engine.math.signedPointAABBDistance(min, max, position)
   local q = vec3(math.max(0, math.max(min.x - position.x, position.x - max.x)),
     math.max(0, math.max(min.y - position.y, position.y - max.y)),
     math.max(0, math.max(min.z - position.z, position.z - max.z)))
@@ -265,7 +262,7 @@ function mathModule.signedPointAABBDistance(min, max, position)
   end
 end
 
-function mathModule.pointAABBDistanceSqr(min, max, position)
+function engine.math.pointAABBDistanceSqr(min, max, position)
   local q = vec3(math.max(0, math.max(min.x - position.x, position.x - max.x)),
     math.max(0, math.max(min.y - position.y, position.y - max.y)),
     math.max(0, math.max(min.z - position.z, position.z - max.z)))
@@ -282,7 +279,7 @@ function mathModule.pointAABBDistanceSqr(min, max, position)
   end
 end
 
-function mathModule.signedPointAABBDistanceSqr(min, max, position)
+function engine.math.signedPointAABBDistanceSqr(min, max, position)
   local q = vec3(math.max(0, math.max(min.x - position.x, position.x - max.x)),
     math.max(0, math.max(min.y - position.y, position.y - max.y)),
     math.max(0, math.max(min.z - position.z, position.z - max.z)))
@@ -341,7 +338,7 @@ local function computeSphereBounds(c, r, znear, P00, P11, viewMatrix)
   return aabb
 end
 
-function mathModule.pointAABBDistanceSqrSeparate(minX, minY, minZ, maxX, maxY, maxZ, x, y, z)
+function engine.math.pointAABBDistanceSqrSeparate(minX, minY, minZ, maxX, maxY, maxZ, x, y, z)
   local qx = math.max(0, math.max(minX - x, x - maxX))
   local qy = math.max(0, math.max(minY - y, y - maxY))
   local qz = math.max(0, math.max(minZ - z, z - maxZ))
@@ -368,7 +365,7 @@ function mathModule.pointAABBDistanceSqrSeparate(minX, minY, minZ, maxX, maxY, m
   end
 end
 
-function mathModule.pointAABBDistanceSqrCentered(boxCenter, scale, position)
+function engine.math.pointAABBDistanceSqrCentered(boxCenter, scale, position)
   local d = 0
   if position.x < boxCenter.x - scale.x then
     d = d + (position.x - (boxCenter.x - scale.x)) ^ 2
@@ -391,207 +388,14 @@ end
 --- switch between functions, select with i
 ---@param i number
 ---@param ... function
-function mathModule.switch(i, ...)
+function engine.math.switch(i, ...)
   local t = { ... }
   t[i]()
 end
 
-function mathModule.point_line_distance(p, v1, v2)
+function engine.math.point_line_distance(p, v1, v2)
   local AB = v2 - v1
   return (AB:cross(p - v1)):length() / AB:length()
-end
-
-do -- define rotation conversions
-  -- Other to matrix:
-
-  ---@param pitch number
-  ---@param yaw number
-  ---@param roll number
-  ---@param out matrix4x4?
-  ---@return matrix4x4 m
-  function mathModule.eulerToMatrix(pitch, yaw, roll, out)
-    -- this function assumes pitch is about the z-axis rather than the x-axis (??)
-    -- so i swapped pitch and roll
-    local ch = math.cos(yaw)
-    local sh = math.sin(yaw)
-    local ca = math.cos(roll)
-    local sa = math.sin(roll)
-    local cb = math.cos(pitch)
-    local sb = math.sin(pitch)
-
-    local m = out or matrix4x4()
-    m[1][1] = ch * ca
-    m[1][2] = sh * sb - ch * sa * cb
-    m[1][3] = ch * sa * sb + sh * cb
-    m[2][1] = sa
-    m[2][2] = ca * cb
-    m[2][3] = -ca * sb
-    m[3][1] = -sh * ca
-    m[3][2] = sh * sa * cb + ch * sb
-    m[3][3] = -sh * sa * sb + ch * cb
-
-    return m
-  end
-
-  ---@return matrix4x4 m
-  function mathModule.quaternionToMatrix(q, out)
-    local m = out or matrix4x4()
-
-    m[1][1] = (q.x * q.x - q.y * q.y - q.z * q.z + q.w * q.w)
-    m[2][2] = (-q.x * q.x + q.y * q.y - q.z * q.z + q.w * q.w)
-    m[3][3] = (-q.x * q.x - q.y * q.y + q.z * q.z + q.w * q.w)
-
-    m[2][1] = 2.0 * (q.x * q.y + q.z * q.w)
-    m[1][2] = 2.0 * (q.x * q.y - q.z * q.w)
-
-    m[3][1] = 2.0 * (q.x * q.z - q.y * q.w)
-    m[1][3] = 2.0 * (q.x * q.z + q.y * q.w)
-    m[3][2] = 2.0 * (q.y * q.z + q.x * q.w)
-    m[2][3] = 2.0 * (q.y * q.z - q.x * q.w)
-
-    return m
-  end
-
-  -- Other to Quaternion:
-
-  ---@param pitch number
-  ---@param yaw number
-  ---@param roll number
-  ---@param quat quaternion?
-  ---@return quaternion quat
-  function mathModule.eulerToQuaternion(pitch, yaw, roll, quat)
-    if type(pitch) == "table" or not pitch or not yaw or not roll then
-      error("mathModule.eulerToQuaternion: invalid input")
-    end
-
-    local out = quat or quaternion()
-
-    pitch = pitch * 0.5
-    yaw = yaw * 0.5
-    roll = roll * 0.5
-
-    local c1 = math.cos(yaw)
-    local s1 = math.sin(yaw)
-
-    local c2 = math.cos(roll)
-    local s2 = math.sin(roll)
-
-    local c3 = math.cos(pitch)
-    local s3 = math.sin(pitch)
-
-    local c1c2 = c1 * c2
-    local s1s2 = s1 * s2
-    local w = c1c2 * c3 - s1s2 * s3
-    local x = c1c2 * s3 + s1s2 * c3
-    local y = s1 * c2 * c3 + c1 * s2 * s3
-    local z = c1 * s2 * c3 - s1 * c2 * s3
-
-    return out:set(x, y, z, w)
-  end
-
-  ---@return quaternion quat
-  function mathModule.matrixToQuaternion(m)
-    local a = m:transpose()
-    local trace = a[1][1] + a[2][2] + a[3][3]
-    local q = quaternion()
-
-    if trace > 0 then
-      local s = 0.5 / math.sqrt(trace + 1.0)
-      q.w = 0.25 / s
-      q.x = (a[3][2] - a[2][3]) * s
-      q.y = (a[1][3] - a[3][1]) * s
-      q.z = (a[2][1] - a[1][2]) * s
-    elseif a[1][1] > a[2][2] and a[1][1] > a[3][3] then
-      local s = 2.0 * math.sqrt(1.0 + a[1][1] - a[2][2] - a[3][3])
-      q.w = (a[3][2] - a[2][3]) / s
-      q.x = 0.25 * s
-      q.y = (a[1][2] + a[2][1]) / s
-      q.z = (a[1][3] + a[3][1]) / s
-    elseif a[2][2] > a[3][3] then
-      local s = 2.0 * math.sqrt(1.0 + a[2][2] - a[1][1] - a[3][3])
-      q.w = (a[1][3] - a[3][1]) / s
-      q.x = (a[1][2] + a[2][1]) / s
-      q.y = 0.25 * s
-      q.z = (a[2][3] + a[3][2]) / s
-    else
-      local s = 2.0 * math.sqrt(1.0 + a[3][3] - a[1][1] - a[2][2])
-      q.w = (a[2][1] - a[1][2]) / s
-      q.x = (a[1][3] + a[3][1]) / s
-      q.y = (a[2][3] + a[3][2]) / s
-      q.z = 0.25 * s
-    end
-
-    return q
-  end
-
-  -- Other to euler:
-
-  ---@return number pitch
-  ---@return number yaw
-  ---@return number roll
-  function mathModule.quaternionToEuler(q)
-    local sqw = q.w * q.w
-    local sqx = q.x * q.x
-    local sqy = q.y * q.y
-    local sqz = q.z * q.z
-    local unit = sqx + sqy + sqz + sqw -- if normalised is one, otherwise is correction factor
-    local test = q.x * q.y + q.z * q.w
-
-    local heading, attitude, bank
-    if (test > 0.4999 * unit) then -- singularity at north pole
-      heading = 2 * math.atan2(q.x, q.w)
-      attitude = math.pi / 2
-      bank = 0
-      return bank, heading, attitude
-    end
-    if (test < -0.4999 * unit) then -- singularity at south pole
-      heading = -2 * math.atan2(q.x, q.w)
-      attitude = -math.pi / 2
-      bank = 0
-      return bank, heading, attitude
-    end
-    heading = math.atan2(2 * q.y * q.w - 2 * q.x * q.z, sqx - sqy - sqz + sqw)
-    attitude = math.asin(2 * test / unit)
-    bank = math.atan2(2 * q.x * q.w - 2 * q.y * q.z, -sqx + sqy - sqz + sqw)
-
-    -- this function assumes pitch is about the z-axis rather than the x-axis (??)
-    return bank, heading, attitude
-  end
-
-  ---@return number pitch
-  ---@return number yaw
-  ---@return number roll
-  function mathModule.matrixToEuler(m)
-    -- Assuming the angles are in radians.
-    local heading, attitude, bank
-    if m[2][1] > 0.998 then -- singularity at north pole
-      heading = math.atan2(m[1][3], m[3][3])
-      attitude = math.pi / 2
-      bank = 0
-    elseif m[2][1] < -0.998 then -- singularity at south pole
-      heading = math.atan2(m[1][3], m[3][3])
-      attitude = -math.pi / 2
-      bank = 0
-    else
-      heading = math.atan2(-m[3][1], m[1][1])
-      bank = math.atan2(-m[2][3], m[2][2])
-      attitude = math.asin(m[2][1])
-    end
-
-    -- this function assumes pitch is about the z-axis rather than the x-axis (??)
-    return bank, heading, attitude
-  end
-end
-
---- creates a new translation matrix
----@param position vec3
----@return matrix4x4
-function mathModule.newTranslationMatrix(position, out)
-  local m = out or matrix4x4()
-  m[4][1] = position.x
-  m[4][2] = position.y
-  m[4][3] = position.z
-  return m
 end
 
 do
@@ -610,7 +414,7 @@ do
   ---@param inverseViewProjectionMatrix matrix4x4
   ---@param points table?
   ---@return table
-  function mathModule.frustumCornerPoints(inverseViewProjectionMatrix, points)
+  function engine.math.frustumCornerPoints(inverseViewProjectionMatrix, points)
     points = points or table.new(8, 0)
 
     for i, v in ipairs(vertices) do
@@ -631,7 +435,7 @@ local tempMatrix = matrix4x4()
 ---@param frustum table?
 ---@param inverseViewProjectionMatrix matrix4x4?
 ---@return table
-function mathModule.frustumFromMatrix(matrix, frustum, inverseViewProjectionMatrix)
+function engine.math.frustumFromMatrix(matrix, frustum, inverseViewProjectionMatrix)
   frustum = frustum or table.new(6, 1)
 
   if not frustum[1] then
@@ -639,15 +443,15 @@ function mathModule.frustumFromMatrix(matrix, frustum, inverseViewProjectionMatr
       frustum[i] = vec4()
     end
 
-    frustum.points = mathModule.frustumCornerPoints(inverseViewProjectionMatrix or
+    frustum.points = engine.math.frustumCornerPoints(inverseViewProjectionMatrix or
       matrix:invertTranspose(tempMatrix))
   else
-    mathModule.frustumCornerPoints(inverseViewProjectionMatrix or
+    engine.math.frustumCornerPoints(inverseViewProjectionMatrix or
       matrix:invertTranspose(tempMatrix), frustum.points)
   end
 
   frustum[1]:set( -- left
-    mathModule.normalizePlane(
+    engine.math.normalizePlane(
       matrix[1][4] + matrix[1][1],
       matrix[2][4] + matrix[2][1],
       matrix[3][4] + matrix[3][1],
@@ -656,7 +460,7 @@ function mathModule.frustumFromMatrix(matrix, frustum, inverseViewProjectionMatr
   )
 
   frustum[2]:set( -- right
-    mathModule.normalizePlane(
+    engine.math.normalizePlane(
       matrix[1][4] - matrix[1][1],
       matrix[2][4] - matrix[2][1],
       matrix[3][4] - matrix[3][1],
@@ -665,7 +469,7 @@ function mathModule.frustumFromMatrix(matrix, frustum, inverseViewProjectionMatr
   )
 
   frustum[3]:set( -- bottom
-    mathModule.normalizePlane(
+    engine.math.normalizePlane(
       matrix[1][4] - matrix[1][2],
       matrix[2][4] - matrix[2][2],
       matrix[3][4] - matrix[3][2],
@@ -674,7 +478,7 @@ function mathModule.frustumFromMatrix(matrix, frustum, inverseViewProjectionMatr
   )
 
   frustum[4]:set( -- top
-    mathModule.normalizePlane(
+    engine.math.normalizePlane(
       matrix[1][4] + matrix[1][2],
       matrix[2][4] + matrix[2][2],
       matrix[3][4] + matrix[3][2],
@@ -683,7 +487,7 @@ function mathModule.frustumFromMatrix(matrix, frustum, inverseViewProjectionMatr
   )
 
   frustum[5]:set( -- near
-    mathModule.normalizePlane(
+    engine.math.normalizePlane(
       matrix[1][4] + matrix[1][3],
       matrix[2][4] + matrix[2][3],
       matrix[3][4] + matrix[3][3],
@@ -692,7 +496,7 @@ function mathModule.frustumFromMatrix(matrix, frustum, inverseViewProjectionMatr
   )
 
   frustum[6]:set( -- far
-    mathModule.normalizePlane(
+    engine.math.normalizePlane(
       matrix[1][4] - matrix[1][3],
       matrix[2][4] - matrix[2][3],
       matrix[3][4] - matrix[3][3],
@@ -703,8 +507,8 @@ function mathModule.frustumFromMatrix(matrix, frustum, inverseViewProjectionMatr
   return frustum
 end
 
-function mathModule.frustumAABB(fru, x, y, z, x1, y1, z1)
-  local dot = mathModule.dot
+function engine.math.frustumAABB(fru, x, y, z, x1, y1, z1)
+  local dot = engine.math.dot
   for i = 1, 6 do
     local fx, fy, fz, fw = fru[i]:get()
     if dot(fx, fy, fz, x, y, z) + fw < 0.0
@@ -730,16 +534,16 @@ function mathModule.frustumAABB(fru, x, y, z, x1, y1, z1)
   return true
 end
 
-function mathModule.frustumSphere(fru, x, y, z, r)
+function engine.math.frustumSphere(fru, x, y, z, r)
   for i = 1, 6 do
-    if mathModule.dot(fru[i].x, fru[i].y, fru[i].z, x, y, z) + fru[i].w < -r then return false end
+    if engine.math.dot(fru[i].x, fru[i].y, fru[i].z, x, y, z) + fru[i].w < -r then return false end
   end
 
   local rsqr = r * r
   local out = true
   for i, point in ipairs(fru.points) do
     out = out and
-        mathModule.dot3(point.x - x, point.y - y, point.z - z, point.x - x, point.y - y, point.z - z) < rsqr
+        engine.math.dot3(point.x - x, point.y - y, point.z - z, point.x - x, point.y - y, point.z - z) < rsqr
   end
 
   if out then
@@ -760,7 +564,7 @@ end
 ---@param direction vec3
 ---@param length number
 ---@return engine.ray
-function mathModule.newRay(position, direction, length)
+function engine.math.newRay(position, direction, length)
   engine.assertType(position, "vec3")
   engine.assertType(direction, "vec3")
   engine.assertType(length, "number")
@@ -777,7 +581,7 @@ end
 ---@param y number [0 - 1]
 ---@param camera engine.camera
 ---@return engine.ray ray length undefined
-function mathModule.screenPositionToRay(x, y, camera, outRay)
+function engine.math.screenPositionToRay(x, y, camera, outRay)
   local vx, vy, vz, vw = camera.inverseProjectionMatrix:vMulSepW1(
     (x - 0.5) * 2.0,
     (y - 0.5) * 2.0,
@@ -788,12 +592,12 @@ function mathModule.screenPositionToRay(x, y, camera, outRay)
   local wx, wy, wz = camera.inverseViewMatrix:vMulSepW0(vx, vy, vz)
 
   outRay.position:set(camera.position:get())
-  outRay.direction:set(mathModule.normalize3(wx, wy, wz))
+  outRay.direction:set(engine.math.normalize3(wx, wy, wz))
 
   return outRay
 end
 
-function mathModule.length(...)
+function engine.math.length(...)
   local val = { ... }
   if type(val[1]) == "table" then
     if val[1][1] == nil then
@@ -811,35 +615,35 @@ function mathModule.length(...)
   end
 end
 
-function mathModule.length2(x, y)
+function engine.math.length2(x, y)
   return math.sqrt(x * x + y * y)
 end
 
-function mathModule.length3(x, y, z)
+function engine.math.length3(x, y, z)
   return math.sqrt(x * x + y * y + z * z)
 end
 
-function mathModule.length4(x, y, z, w)
+function engine.math.length4(x, y, z, w)
   return math.sqrt(x * x + y * y + z * z + w * w)
 end
 
-function mathModule.lengthSqr2(x, y)
+function engine.math.lengthSqr2(x, y)
   return x * x + y * y
 end
 
-function mathModule.lengthSqr3(x, y, z)
+function engine.math.lengthSqr3(x, y, z)
   return x * x + y * y + z * z
 end
 
-function mathModule.lengthSqr4(x, y, z, w)
+function engine.math.lengthSqr4(x, y, z, w)
   return x * x + y * y + z * z + w * w
 end
 
-function mathModule.crossVector(v1, v2)
+function engine.math.crossVector(v1, v2)
   return vec3(v1.y * v2.z - v1.z * v2.y, v1.z * v2.x - v1.x * v2.z, v1.x * v2.y - v1.y * v2.x)
 end
 
-function mathModule.dotVector3(v1, v2)
+function engine.math.dotVector3(v1, v2)
   return v1.x * v2.x + v1.y * v2.y + v1.z * v2.z
 end
 
@@ -847,7 +651,7 @@ end
 ---@param position vec3
 ---@param quat quaternion
 ---@return vec3
-function mathModule.rotatePosition(position, quat)
+function engine.math.rotatePosition(position, quat)
   local cx = quat.y * position.z - quat.z * position.y + position.x * quat.w
   local cy = quat.z * position.x - quat.x * position.z + position.y * quat.w
   local cz = quat.x * position.y - quat.y * position.x + position.z * quat.w
@@ -861,7 +665,7 @@ end
 ---@param position vec3
 ---@param quat quaternion
 ---@return vec3
-function mathModule.rotatePositionOut(position, quat, out)
+function engine.math.rotatePositionOut(position, quat, out)
   local cx = quat.y * position.z - quat.z * position.y + position.x * quat.w
   local cy = quat.z * position.x - quat.x * position.z + position.y * quat.w
   local cz = quat.x * position.y - quat.y * position.x + position.z * quat.w
@@ -882,7 +686,7 @@ end
 ---@param qz number -- quaternion z
 ---@param qw number -- quaternion w
 ---@return number, number, number
-function mathModule.rotatePositionSeparate(x, y, z, qx, qy, qz, qw)
+function engine.math.rotatePositionSeparate(x, y, z, qx, qy, qz, qw)
   local cx = qy * z - qz * y + x * qw
   local cy = qz * x - qx * z + y * qw
   local cz = qx * y - qy * x + z * qw
@@ -895,9 +699,9 @@ end
 --- converts vertices and indices to a triangle list
 ---@param vertices table
 ---@param indices table<integer>
-function mathModule.verticesToTriangles(vertices, indices, triangles)
+function engine.math.verticesToTriangles(vertices, indices, triangles)
   if #indices % 3 ~= 0 then
-    error("mathModule.verticesToTriangles: invalid indices")
+    error("engine.math.verticesToTriangles: invalid indices")
   end
   triangles = triangles or {}
   for i = 1, #indices do
@@ -906,18 +710,18 @@ function mathModule.verticesToTriangles(vertices, indices, triangles)
   return triangles
 end
 
-function mathModule.rotatePositions(...)
+function engine.math.rotatePositions(...)
   local t = { ... }
   local q = t[#t]
   local vertices = {}
   for i = 1, #t - 1 do
-    table.insert(vertices, mathModule.rotatePosition(t[i], q))
+    table.insert(vertices, engine.math.rotatePosition(t[i], q))
   end
   return vertices
 end
 
---- Rotate positions using normal variables instead of vectors or quaternions (12x faster than mathModule.rotatePosition)
-function mathModule.rotatePositionsSeparate(...)
+--- Rotate positions using normal variables instead of vectors or quaternions (12x faster than engine.math.rotatePosition)
+function engine.math.rotatePositionsSeparate(...)
   local t = { ... }
   local qx, qy, qz, qw = t[#t][1], t[#t][2], t[#t][3], t[#t][4]
   local vertices = {}
@@ -936,8 +740,8 @@ function mathModule.rotatePositionsSeparate(...)
   return vertices
 end
 
---- Rotate positions using normal variables instead of vectors or quaternions (12x faster than mathModule.rotatePosition)
-function mathModule.rotateTablePositionsSeparate(vertices, qx, qy, qz, qw)
+--- Rotate positions using normal variables instead of vectors or quaternions (12x faster than engine.math.rotatePosition)
+function engine.math.rotateTablePositionsSeparate(vertices, qx, qy, qz, qw)
   local newPoints = {}
   for i = 1, #vertices do
     local x, y, z = vertices[i][1], vertices[i][2], vertices[i][3]
@@ -962,13 +766,13 @@ end
 ---@return number x
 ---@return number y
 ---@return number z
-function mathModule.triangleNormal(p1, p2, p3, inverted)
+function engine.math.triangleNormal(p1, p2, p3, inverted)
   local ux, uy, uz = p2[1] - p1[1], p2[2] - p1[2], p2[3] - p1[3]
   local vx, vy, vz = p3[1] - p1[1], p3[2] - p1[2], p3[3] - p1[3]
   local x = (uy * vz - uz * vy) * (inverted and -1 or 1)
   local y = (uz * vx - ux * vz) * (inverted and -1 or 1)
   local z = (ux * vy - uy * vx) * (inverted and -1 or 1)
-  return mathModule.normalize3(x, y, z)
+  return engine.math.normalize3(x, y, z)
 end
 
 --- calculates the triangle normal of a triangle
@@ -985,16 +789,16 @@ end
 ---@return number x
 ---@return number y
 ---@return number z
-function mathModule.triangleNormalSeparate(x0, y0, z0, x1, y1, z1, x2, y2, z2)
+function engine.math.triangleNormalSeparate(x0, y0, z0, x1, y1, z1, x2, y2, z2)
   local ux, uy, uz = x1 - x0, y1 - y0, z1 - z0
   local vx, vy, vz = x2 - x0, y2 - y0, z2 - z0
   local x = uy * vz - uz * vy
   local y = uz * vx - ux * vz
   local z = ux * vy - uy * vx
-  return mathModule.normalize3(x, y, z)
+  return engine.math.normalize3(x, y, z)
 end
 
-function mathModule.normalize(...)
+function engine.math.normalize(...)
   local t = { ... }
   if type(t[1]) == "table" then
     t = t[1]
@@ -1030,7 +834,7 @@ function mathModule.normalize(...)
   end
 end
 
-function mathModule.normalize2(x, y)
+function engine.math.normalize2(x, y)
   local d = x * x + y * y
   if d == 0 then
     return 0.0, 0.0
@@ -1039,7 +843,7 @@ function mathModule.normalize2(x, y)
   return x * d1, y * d1
 end
 
-function mathModule.normalize3(x, y, z)
+function engine.math.normalize3(x, y, z)
   local d = x * x + y * y + z * z
   if d == 0 then
     return 0.0, 0.0, 0.0
@@ -1048,7 +852,7 @@ function mathModule.normalize3(x, y, z)
   return x * d, y * d, z * d, d
 end
 
-function mathModule.normalize4(x, y, z, w)
+function engine.math.normalize4(x, y, z, w)
   local d = x * x + y * y + z * z + w * w
   if d == 0 then
     return 0, 0, 0, 0
@@ -1057,7 +861,7 @@ function mathModule.normalize4(x, y, z, w)
   return x * d1, y * d1, z * d1, w * d1
 end
 
-function mathModule.normalizePlane(x, y, z, w)
+function engine.math.normalizePlane(x, y, z, w)
   local d = math.sqrt(x * x + y * y + z * z)
   if d == 0 then
     return 0, 0, 0, 0
@@ -1066,7 +870,7 @@ function mathModule.normalizePlane(x, y, z, w)
   return x * d1, y * d1, z * d1, w * d1
 end
 
-function mathModule.closestPointOnTriangle(a, b, c, point)
+function engine.math.closestPointOnTriangle(a, b, c, point)
   local px, py, pz = point[1], point[2], point[3]
 
   local abX = b[1] - a[1]
@@ -1081,8 +885,8 @@ function mathModule.closestPointOnTriangle(a, b, c, point)
   local apY = py - a[2]
   local apZ = pz - a[3]
 
-  local d1 = mathModule.dot(abX, abY, abZ, apX, apY, apZ)
-  local d2 = mathModule.dot(acX, acY, acZ, apX, apY, apZ)
+  local d1 = engine.math.dot(abX, abY, abZ, apX, apY, apZ)
+  local d2 = engine.math.dot(acX, acY, acZ, apX, apY, apZ)
   if d1 <= 0 and d2 <= 0 then
     return vec3(a)
   end
@@ -1091,8 +895,8 @@ function mathModule.closestPointOnTriangle(a, b, c, point)
   local bpY = py - b[2]
   local bpZ = pz - b[3]
 
-  local d3 = mathModule.dot(abX, abY, abZ, bpX, bpY, bpZ)
-  local d4 = mathModule.dot(acX, acY, acZ, bpX, bpY, bpZ)
+  local d3 = engine.math.dot(abX, abY, abZ, bpX, bpY, bpZ)
+  local d4 = engine.math.dot(acX, acY, acZ, bpX, bpY, bpZ)
   if d3 >= 0 and d4 <= d3 then
     return vec3(b)
   end
@@ -1100,8 +904,8 @@ function mathModule.closestPointOnTriangle(a, b, c, point)
   local vc = d1 * d4 - d3 * d2
   if vc <= 0 and d1 >= 0 and d3 <= 0 then
     local v = d1 / (d1 - d3)
-    local temp = mathModule.tempVec3(abX, abY, abZ) * v
-    local point = mathModule.tempVec3(a) + temp
+    local temp = engine.math.tempVec3(abX, abY, abZ) * v
+    local point = engine.math.tempVec3(a) + temp
     return point
   end
 
@@ -1109,8 +913,8 @@ function mathModule.closestPointOnTriangle(a, b, c, point)
   local cpY = py - c[2]
   local cpZ = pz - c[3]
 
-  local d5 = mathModule.dot(abX, abY, abZ, cpX, cpY, cpZ)
-  local d6 = mathModule.dot(acX, acY, acZ, cpX, cpY, cpZ)
+  local d5 = engine.math.dot(abX, abY, abZ, cpX, cpY, cpZ)
+  local d6 = engine.math.dot(acX, acY, acZ, cpX, cpY, cpZ)
   if d6 >= 0 and d5 <= d6 then
     return vec3(c)
   end
@@ -1118,16 +922,16 @@ function mathModule.closestPointOnTriangle(a, b, c, point)
   local vb = d5 * d2 - d1 * d6
   if vb <= 0 and d2 >= 0 and d6 <= 0 then
     local w = d2 / (d2 - d6)
-    local temp = mathModule.tempVec3(acX, acY, acZ) * w
-    local point = mathModule.tempVec3(a) + temp
+    local temp = engine.math.tempVec3(acX, acY, acZ) * w
+    local point = engine.math.tempVec3(a) + temp
     return point
   end
 
   local va = d3 * d6 - d5 * d4
   if va <= 0 and (d4 - d3) >= 0 and (d5 - d6) >= 0 then
     local w = (d4 - d3) / ((d4 - d3) + (d5 - d6))
-    local vec3C = mathModule.tempVec3(c)
-    local vec3B = mathModule.tempVec3(b)
+    local vec3C = engine.math.tempVec3(c)
+    local vec3B = engine.math.tempVec3(b)
     local temp = vec3C - vec3B
     local point = vec3B + temp * w
     return point
@@ -1136,9 +940,9 @@ function mathModule.closestPointOnTriangle(a, b, c, point)
   local denom = 1 / (va + vb + vc)
   local v = vb * denom
   local w = vc * denom
-  local vec3A = mathModule.tempVec3(a)
-  local vec3AB = mathModule.tempVec3(abX, abY, abZ)
-  local vec3AC = mathModule.tempVec3(acX, acY, acZ)
+  local vec3A = engine.math.tempVec3(a)
+  local vec3AB = engine.math.tempVec3(abX, abY, abZ)
+  local vec3AC = engine.math.tempVec3(acX, acY, acZ)
   local point = vec3A + vec3AB * v + vec3AC * w
   return point
 end
@@ -1151,30 +955,30 @@ end
 ---@param e table<number, number, number>
 ---@param f table<number, number, number>
 ---@return vec3
-function mathModule.closestPointToTriangles(a, b, c, d, e, f)
+function engine.math.closestPointToTriangles(a, b, c, d, e, f)
   local closestPointFromTriA
   local closestDistanceToTriB = math.huge
   for index, vert in ipairs({ a, b, c }) do
-    local point = mathModule.closestPointOnTriangle(d, e, f, vert)
+    local point = engine.math.closestPointOnTriangle(d, e, f, vert)
     local dist = (point - vert):lengthSqr()
     if dist < closestDistanceToTriB then
       closestDistanceToTriB = dist
       closestPointFromTriA = point -- or point
     end
   end
-  local closestPointOnTriA = mathModule.closestPointOnTriangle(a, b, c, closestPointFromTriA)
+  local closestPointOnTriA = engine.math.closestPointOnTriangle(a, b, c, closestPointFromTriA)
 
   local closestPointFromTriB
   local closestDistanceToTriA = math.huge
   for index, vert in ipairs({ d, e, f }) do
-    local point = mathModule.closestPointOnTriangle(a, b, c, vert)
+    local point = engine.math.closestPointOnTriangle(a, b, c, vert)
     local dist = (point - vert):lengthSqr()
     if dist < closestDistanceToTriA then
       closestDistanceToTriA = dist
       closestPointFromTriB = point -- or point
     end
   end
-  local closestPointOnTriB = mathModule.closestPointOnTriangle(d, e, f, closestPointFromTriB)
+  local closestPointOnTriB = engine.math.closestPointOnTriangle(d, e, f, closestPointFromTriB)
 
   -- find the triangle that is closest to the avarage contact position
   local averageContactPosition = (closestPointOnTriA + closestPointOnTriB) * 0.5
@@ -1196,7 +1000,7 @@ function mathModule.closestPointToTriangles(a, b, c, d, e, f)
   return closestTriangleIndex == 1 and closestPointOnTriA or closestPointOnTriB
 end
 
-function mathModule.eulerToAxisAngle(pitch, yaw, roll)
+function engine.math.eulerToAxisAngle(pitch, yaw, roll)
   local c1 = math.cos(yaw / 2)
   local s1 = math.sin(yaw / 2)
   local c2 = math.cos(pitch / 2)
@@ -1223,7 +1027,7 @@ function mathModule.eulerToAxisAngle(pitch, yaw, roll)
   return vec4(x, y, z, angle)
 end
 
-function mathModule.axisAngleToEuler(axisAngle)
+function engine.math.axisAngleToEuler(axisAngle)
   local x, y, z, angle = axisAngle:get()
   local s = math.sin(angle)
   local c = math.cos(angle)
@@ -1232,13 +1036,13 @@ function mathModule.axisAngleToEuler(axisAngle)
   local yaw, pitch, roll
   if (x * y * t + z * s) > 0.998 then
     yaw = 2 * math.atan2(x * math.sin(angle / 2), math.cos(angle / 2))
-    pitch = mathModule.PI05
+    pitch = engine.math.PI05
     roll = 0
     return pitch, yaw, roll
   end
   if (x * y * t + z * s) < -0.998 then
     yaw = -2 * math.atan2(x * math.sin(angle / 2), math.cos(angle / 2))
-    pitch = -mathModule.PI05
+    pitch = -engine.math.PI05
     roll = 0
     return pitch, yaw, roll
   end
@@ -1248,7 +1052,7 @@ function mathModule.axisAngleToEuler(axisAngle)
   return pitch, yaw, roll
 end
 
-function mathModule.axisAngleToQuat(axisAngle)
+function engine.math.axisAngleToQuat(axisAngle)
   local angle = axisAngle.w * 0.5
   local sinAngle = math.sin(angle)
   return quaternion(
@@ -1259,7 +1063,7 @@ function mathModule.axisAngleToQuat(axisAngle)
   ):normalize()
 end
 
-function mathModule.quatToAxisAngle(quat, out)
+function engine.math.quatToAxisAngle(quat, out)
   local angle = math.acos(quat.w) * 2
   local mul = 1 / math.sqrt(1 - quat.w * quat.w)
 
@@ -1286,7 +1090,7 @@ end
 
 --- combines strings and numbers into a string
 ---@param ... any strings and numbers, last argument can be a table with settings {separator = " "}
-function mathModule.combine(...)
+function engine.math.combine(...)
   local input = { ... }
   local settings = input[#input]
   if type(settings) == "table" then
@@ -1313,19 +1117,19 @@ end
 ---@param position vec3 position
 ---@param quat quaternion rotation
 ---@return number|nil
-function mathModule.rayTorus(r, tor, position, quat)
+function engine.math.rayTorus(r, tor, position, quat)
   local ray = {}
   do -- reposition the ray to account for the fact that i can't rotate the torus
-    ray.position = mathModule.rotatePosition(r.position - position, quat:invert())
-    ray.direction = mathModule.rotatePosition(r.direction, quat:invert())
+    ray.position = engine.math.rotatePosition(r.position - position, quat:invert())
+    ray.direction = engine.math.rotatePosition(r.direction, quat:invert())
   end
   local po = 1.0
 
   local Ra2 = tor.x * tor.x
   local ra2 = tor.y * tor.y
 
-  local m = mathModule.dotVector3(ray.position, ray.position)
-  local n = mathModule.dotVector3(ray.position, ray.direction)
+  local m = engine.math.dotVector3(ray.position, ray.position)
+  local n = engine.math.dotVector3(ray.position, ray.direction)
 
   local k = (m - ra2 - Ra2) / 2.0
   local k3 = n
@@ -1360,9 +1164,9 @@ function mathModule.rayTorus(r, tor, position, quat)
 
   if h >= 0.0 then
     h = math.sqrt(h)
-    local v = mathModule.sign(R + h) * (math.abs(R + h) ^ (1.0 / 3.0))
-    local u = mathModule.sign(R - h) * (math.abs(R - h) ^ (1.0 / 3.0))
-    local s = mathModule.tempVec3((v + u) + 4.0 * c2, (v - u) * math.sqrt(3.0))
+    local v = engine.math.sign(R + h) * (math.abs(R + h) ^ (1.0 / 3.0))
+    local u = engine.math.sign(R - h) * (math.abs(R - h) ^ (1.0 / 3.0))
+    local s = engine.math.tempVec3((v + u) + 4.0 * c2, (v - u) * math.sqrt(3.0))
     local y = math.sqrt(0.5 * (s:length() + s.x))
     local x = 0.5 * s.y / y
     local r = 2.0 * c1 / (x * x + y * y)
@@ -1399,8 +1203,8 @@ function mathModule.rayTorus(r, tor, position, quat)
   return t > 0 and t or nil
 end
 
-function mathModule.rayCapsule(ray, topX, topY, topZ, baseX, baseY, baseZ, radius)
-  local dot = mathModule.dot
+function engine.math.rayCapsule(ray, topX, topY, topZ, baseX, baseY, baseZ, radius)
+  local dot = engine.math.dot
   local baX, baY, baZ = baseX - topX, baseY - topY, baseZ - topZ
   local oaX, oaY, oaZ = ray.position.x - topX, ray.position.y - topY, ray.position.z - topZ
   local baba = dot(baX, baY, baZ, baX, baY, baZ)
@@ -1419,7 +1223,7 @@ function mathModule.rayCapsule(ray, topX, topY, topZ, baseX, baseY, baseZ, radiu
       return t
     end
     local oc = y <= 0.0 and vec3(oaX, oaY, oaZ) or
-        mathModule.tempVec3(ray.position.x - baseX, ray.position.y - baseY, ray.position.z - baseZ)
+        engine.math.tempVec3(ray.position.x - baseX, ray.position.y - baseY, ray.position.z - baseZ)
     b = dot(ray.direction.x, ray.direction.y, ray.direction.z, oc.x, oc.y, oc.z)
     c = dot(oc.x, oc.y, oc.z, oc.x, oc.y, oc.z) - radius * radius
     h = b * b - c
@@ -1429,8 +1233,8 @@ function mathModule.rayCapsule(ray, topX, topY, topZ, baseX, baseY, baseZ, radiu
   end
 end
 
-function mathModule.rayCylinder(ray, topX, topY, topZ, baseX, baseY, baseZ, radius)
-  local dot = mathModule.dot
+function engine.math.rayCylinder(ray, topX, topY, topZ, baseX, baseY, baseZ, radius)
+  local dot = engine.math.dot
   local baX, baY, baZ = baseX - topX, baseY - topY, baseZ - topZ
   local ocX, ocY, ocZ = ray.position.x - topX, ray.position.y - topY, ray.position.z - topZ
   local baba = dot(baX, baY, baZ, baX, baY, baZ)
@@ -1453,11 +1257,11 @@ function mathModule.rayCylinder(ray, topX, topY, topZ, baseX, baseY, baseZ, radi
 
   t = (((y < 0) and 0 or baba) - baoc) / bard
   if math.abs(k1 + k2 * t) < h then
-    return t, vec3(baX, baY, baZ) * mathModule.sign(y) / math.sqrt(baba)
+    return t, vec3(baX, baY, baZ) * engine.math.sign(y) / math.sqrt(baba)
   end
 end
 
-function mathModule.raySphere(ray, x, y, z, radius)
+function engine.math.raySphere(ray, x, y, z, radius)
   local ocx, ocy, ocz = ray.position.x - x, ray.position.y - y, ray.position.z - z
   local dx, dy, dz = ray.direction.x, ray.direction.y, ray.direction.z
 
@@ -1528,7 +1332,7 @@ end
 ---@param maxY number
 ---@param maxZ number
 ---@return boolean, number, number #hit, distance, depth
-function mathModule.rayAABB(rayX, rayY, rayZ, rayDirX, rayDirY, rayDirZ, minX, minY, minZ, maxX, maxY, maxZ)
+function engine.math.rayAABB(rayX, rayY, rayZ, rayDirX, rayDirY, rayDirZ, minX, minY, minZ, maxX, maxY, maxZ)
   local t0X, t0Y, t0Z = (minX - rayX) / rayDirX, (minY - rayY) / rayDirY, (minZ - rayZ) / rayDirZ
   local t1X, t1Y, t1Z = (maxX - rayX) / rayDirX, (maxY - rayY) / rayDirY, (maxZ - rayZ) / rayDirZ
   local tminX, tminY, tminZ = math.min(t0X, t1X), math.min(t0Y, t1Y), math.min(t0Z, t1Z)
@@ -1540,7 +1344,7 @@ function mathModule.rayAABB(rayX, rayY, rayZ, rayDirX, rayDirY, rayDirZ, minX, m
   return tFar - tNear > 0, tNear, tFar - tNear
 end
 
---- same as mathModule.rayAABB but with 1 / rayDir instead of rayDir
+--- same as engine.math.rayAABB but with 1 / rayDir instead of rayDir
 ---@param rayX number
 ---@param rayY number
 ---@param rayZ number
@@ -1554,7 +1358,7 @@ end
 ---@param maxY number
 ---@param maxZ number
 ---@return boolean, number, number #hit, distance, depth
-function mathModule.rayAABBInverse(rayX, rayY, rayZ, rayIDirX, rayIDirY, rayIDirZ, minX, minY, minZ, maxX, maxY, maxZ)
+function engine.math.rayAABBInverse(rayX, rayY, rayZ, rayIDirX, rayIDirY, rayIDirZ, minX, minY, minZ, maxX, maxY, maxZ)
   local t0X, t0Y, t0Z = (minX - rayX) * rayIDirX, (minY - rayY) * rayIDirY, (minZ - rayZ) * rayIDirZ
   local t1X, t1Y, t1Z = (maxX - rayX) * rayIDirX, (maxY - rayY) * rayIDirY, (maxZ - rayZ) * rayIDirZ
   local tminX, tminY, tminZ = math.min(t0X, t1X), math.min(t0Y, t1Y), math.min(t0Z, t1Z)
@@ -1566,7 +1370,7 @@ function mathModule.rayAABBInverse(rayX, rayY, rayZ, rayIDirX, rayIDirY, rayIDir
   return tFar - tNear > 0, tNear, tFar - tNear
 end
 
-function mathModule.triangleTangent(p1, p2, p3)
+function engine.math.triangleTangent(p1, p2, p3)
   local edge1X, edge1Y, edge1Z = p2[1] - p1[1], p2[2] - p1[2], p2[3] - p1[3]
   local edge2X, edge2Y, edge2Z = p3[1] - p1[1], p3[2] - p1[2], p3[3] - p1[3]
 
@@ -1584,21 +1388,13 @@ function mathModule.triangleTangent(p1, p2, p3)
   return tangentX * i, tangentY * i, tangentZ * i
 end
 
-function mathModule.newScaleMatrix(scale)
-  local mat = matrix4x4()
-  mat[1][1] = scale.x
-  mat[2][2] = scale.y
-  mat[3][3] = scale.z
-  return mat
+function engine.math.scaleFromMatrix(matrix)
+  return engine.math.length3(matrix[1][1], matrix[1][2], matrix[1][3]),
+      engine.math.length3(matrix[2][1], matrix[2][2], matrix[2][3]),
+      engine.math.length3(matrix[3][1], matrix[3][2], matrix[3][3])
 end
 
-function mathModule.scaleFromMatrix(matrix)
-  return mathModule.length3(matrix[1][1], matrix[1][2], matrix[1][3]),
-      mathModule.length3(matrix[2][1], matrix[2][2], matrix[2][3]),
-      mathModule.length3(matrix[3][1], matrix[3][2], matrix[3][3])
-end
-
-function mathModule.slerp(qa, qb, t, out)
+function engine.math.slerp(qa, qb, t, out)
   local qm = out or quaternion()
   local cosHalfTheta = qa.w * qb.w + qa.x * qb.x + qa.y * qb.y + qa.z * qb.z
 
@@ -1631,31 +1427,9 @@ function mathModule.slerp(qa, qb, t, out)
   return qm
 end
 
-local scaleMatrix = matrix4x4()
-local rotationMatrix = matrix4x4()
-
-function mathModule.newTransform(translation, rotation, scale, out)
-  scaleMatrix:setFromNumbers(
-    scale.x, 0, 0, 0,
-    0, scale.y, 0, 0,
-    0, 0, scale.z, 0,
-    0, 0, 0, 1
-  )
-
-  mathModule.quaternionToMatrix(rotation, rotationMatrix)
-
-  local rotationScaleMatrix = rotationMatrix:mul(scaleMatrix, out or matrix4x4())
-
-  rotationScaleMatrix[4][1] = translation.x
-  rotationScaleMatrix[4][2] = translation.y
-  rotationScaleMatrix[4][3] = translation.z
-
-  return rotationScaleMatrix
-end
-
 local function rayTriangle(rayX, rayY, rayZ, rayDirX, rayDirY, rayDirZ, aX, aY, aZ, bX, bY, bZ, cX, cY, cZ)
-  local dot = mathModule.dot
-  local cross = mathModule.cross
+  local dot = engine.math.dot
+  local cross = engine.math.cross
 
   local ABx = bX - aX
   local ABy = bY - aY
@@ -1692,7 +1466,7 @@ local function rayTriangle(rayX, rayY, rayZ, rayDirX, rayDirY, rayDirZ, aX, aY, 
   end
 end
 
-function mathModule.rayMesh(mesh, meshPosition, meshQuaternion, meshScale, position, direction)
+function engine.math.rayMesh(mesh, meshPosition, meshQuaternion, meshScale, position, direction)
   local hitDistance = -1
   local rayPosition = position - meshPosition
 
@@ -1726,14 +1500,14 @@ function mathModule.rayMesh(mesh, meshPosition, meshQuaternion, meshScale, posit
     local cY = c.VertexPosition.y * sy
     local cZ = c.VertexPosition.z * sz
 
-    aX, aY, aZ = mathModule.rotatePositionSeparate(aX, aY, aZ, qx, qy, qz, qw)
-    bX, bY, bZ = mathModule.rotatePositionSeparate(bX, bY, bZ, qx, qy, qz, qw)
-    cX, cY, cZ = mathModule.rotatePositionSeparate(cX, cY, cZ, qx, qy, qz, qw)
+    aX, aY, aZ = engine.math.rotatePositionSeparate(aX, aY, aZ, qx, qy, qz, qw)
+    bX, bY, bZ = engine.math.rotatePositionSeparate(bX, bY, bZ, qx, qy, qz, qw)
+    cX, cY, cZ = engine.math.rotatePositionSeparate(cX, cY, cZ, qx, qy, qz, qw)
 
     local minX, minY, minZ = math.min(aX, bX, cX), math.min(aY, bY, cY), math.min(aZ, bZ, cZ)
     local maxX, maxY, maxZ = math.max(aX, bX, cX), math.max(aY, bY, cY), math.max(aZ, bZ, cZ)
 
-    if mathModule.rayAABB(minX, minY, minZ, maxX, maxY, maxZ, rayX, rayY, rayZ, direction.x, direction.y, direction.z) then
+    if engine.math.rayAABB(minX, minY, minZ, maxX, maxY, maxZ, rayX, rayY, rayZ, direction.x, direction.y, direction.z) then
       local dist, x, y, z, u, v, w = rayTriangle(
         rayX, rayY, rayZ, direction.x, direction.y, direction.z, aX, aY, aZ, bX, bY, bZ, cX, cY, cZ)
       if dist ~= nil and (dist < hitDistance or hitDistance < 0) then
@@ -1748,7 +1522,7 @@ function mathModule.rayMesh(mesh, meshPosition, meshQuaternion, meshScale, posit
         local normalY = a.VertexNormal.y * w + b.VertexNormal.y * u + c.VertexNormal.y * v
         local normalZ = a.VertexNormal.z * w + b.VertexNormal.z * u + c.VertexNormal.z * v
 
-        hitNormalX, hitNormalY, hitNormalZ = mathModule.rotatePositionSeparate(
+        hitNormalX, hitNormalY, hitNormalZ = engine.math.rotatePositionSeparate(
           normalX, normalY, normalZ, qx, qy, qz, qw)
       end
     end
@@ -1759,7 +1533,7 @@ function mathModule.rayMesh(mesh, meshPosition, meshQuaternion, meshScale, posit
   end
 end
 
-function mathModule.rayPolygon(vertices, meshPosition, meshQuaternion, meshScale, position, direction)
+function engine.math.rayPolygon(vertices, meshPosition, meshQuaternion, meshScale, position, direction)
   local hitDistance = math.huge
   local rayPosition = position - meshPosition
 
@@ -1792,9 +1566,9 @@ function mathModule.rayPolygon(vertices, meshPosition, meshQuaternion, meshScale
     local cY = c[2] * sy
     local cZ = c[3] * sz
 
-    aX, aY, aZ = mathModule.rotatePositionSeparate(aX, aY, aZ, qx, qy, qz, qw)
-    bX, bY, bZ = mathModule.rotatePositionSeparate(bX, bY, bZ, qx, qy, qz, qw)
-    cX, cY, cZ = mathModule.rotatePositionSeparate(cX, cY, cZ, qx, qy, qz, qw)
+    aX, aY, aZ = engine.math.rotatePositionSeparate(aX, aY, aZ, qx, qy, qz, qw)
+    bX, bY, bZ = engine.math.rotatePositionSeparate(bX, bY, bZ, qx, qy, qz, qw)
+    cX, cY, cZ = engine.math.rotatePositionSeparate(cX, cY, cZ, qx, qy, qz, qw)
 
     local minX, minY, minZ = math.min(aX, bX, cX), math.min(aY, bY, cY), math.min(aZ, bZ, cZ)
     local maxX, maxY, maxZ = math.max(aX, bX, cX), math.max(aY, bY, cY), math.max(aZ, bZ, cZ)
@@ -1814,7 +1588,7 @@ function mathModule.rayPolygon(vertices, meshPosition, meshQuaternion, meshScale
         local normalY = a[7] * w + b[7] * u + c[7] * v
         local normalZ = a[8] * w + b[8] * u + c[8] * v
 
-        hitNormalX, hitNormalY, hitNormalZ = mathModule.rotatePositionSeparate(
+        hitNormalX, hitNormalY, hitNormalZ = engine.math.rotatePositionSeparate(
           normalX, normalY, normalZ, qx, qy, qz, qw)
       end
     end
@@ -1828,7 +1602,7 @@ end
 do
   local curGain, curOctaves, curLacunarity, curFrequency
   local curAmplitude = 1.0
-  function mathModule.setFBMNoiseSettings(gain, octaves, lacunarity, frequency)
+  function engine.math.setFBMNoiseSettings(gain, octaves, lacunarity, frequency)
     curGain = gain
     curOctaves = octaves
     curLacunarity = lacunarity
@@ -1836,7 +1610,7 @@ do
     curAmplitude = 1.0 - gain ^ octaves / (1.0 - gain)
   end
 
-  function mathModule.fbmNoise1(x)
+  function engine.math.fbmNoise1(x)
     local value = 0.0
     local amplitude = curAmplitude
     local frequency = curFrequency
@@ -1851,7 +1625,7 @@ do
     return value
   end
 
-  function mathModule.fbmNoise2(x, y)
+  function engine.math.fbmNoise2(x, y)
     local value = 0.0
     local amplitude = curAmplitude
     local frequency = curFrequency
@@ -1866,7 +1640,7 @@ do
     return value
   end
 
-  function mathModule.fbmNoise3(x, y, z)
+  function engine.math.fbmNoise3(x, y, z)
     local value = 0.0
     local amplitude = curAmplitude
     local frequency = curFrequency
@@ -1881,7 +1655,7 @@ do
     return value
   end
 
-  function mathModule.fbmNoise4(x, y, z, w)
+  function engine.math.fbmNoise4(x, y, z, w)
     local value = 0.0
     local amplitude = curAmplitude
     local frequency = curFrequency
@@ -1898,7 +1672,7 @@ do
   end
 end
 
-function mathModule.sphereIntersection(Ax, Ay, Az, Aradius, Bx, By, Bz, Bradius)
+function engine.math.sphereIntersection(Ax, Ay, Az, Aradius, Bx, By, Bz, Bradius)
   local dx = Bx - Ax
   local dy = By - Ay
   local dz = Bz - Az
@@ -1912,7 +1686,7 @@ end
 
 local tempKeys = {}
 local tempConcat = {}
-function mathModule.generateTableHash(data)
+function engine.math.generateTableHash(data)
   table.clear(tempKeys)
 
   for key, value in pairs(data) do
@@ -1953,7 +1727,7 @@ end
 --- Check for frustum-frustum intersection defined by 6 planes each (vec3 normal, float distance)
 ---@param frustumA {[1]:vec4, [2]:vec4, [3]:vec4, [4]:vec4, [5]:vec4, [6]:vec4, points:table<vec3>}
 ---@param frustumB {[1]:vec4, [2]:vec4, [3]:vec4, [4]:vec4, [5]:vec4, [6]:vec4, points:table<vec3>}
-function mathModule.frustumFrustumIntersection(frustumA, frustumB)
+function engine.math.frustumFrustumIntersection(frustumA, frustumB)
   for _, plane in ipairs(frustumA) do
     local min1, max1 = project(frustumA.points, plane)
     local min2, max2 = project(frustumB.points, plane)
@@ -1976,7 +1750,7 @@ end
 
 --- Pack booleans into a uint32
 ---@param ... boolean
-function mathModule.packUint32(...)
+function engine.math.packUint32(...)
   local count = select("#", ...)
   local packed = 0
 
@@ -1998,7 +1772,7 @@ local unpacked = {}
 --- @param packed integer
 --- @
 --- @return ...:boolean
-function mathModule.unpackUint32(packed)
+function engine.math.unpackUint32(packed)
   table.clear(unpacked)
 
   for i = 0, 31 do
@@ -2012,7 +1786,7 @@ local colorCache = {}
 
 --- Converts a string to a color value
 --- @param str string
-function mathModule.stringToColor(str)
+function engine.math.stringToColor(str)
   if colorCache[str] then return unpack(colorCache[str], 1, 3) end
 
   local h = snap.math.random()
@@ -2057,7 +1831,7 @@ end
 --- Can be used for weighted random selection on the gpu.
 ---@param weights number[]
 ---@return number[], number[], number[] #prob, alias, normalised weights
-function mathModule.aliasWeights(weights)
+function engine.math.aliasWeights(weights)
   local n = #weights
   local prob = {}
   local alias = {}

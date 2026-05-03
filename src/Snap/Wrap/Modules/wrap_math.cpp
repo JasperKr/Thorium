@@ -17,25 +17,39 @@ inline auto checkscalar(lua_State *state, int index) -> Scalar {
 }
 
 inline auto MatrixToLua(lua_State *state, const Matrix &mat) -> int {
-  // Row-major order
-  for (int column = 0; column < Matrix::Cols; ++column) {
-    for (int row = 0; row < Matrix::Rows; ++row) {
-      lua_pushnumber(state, mat.At(row, column));
-    }
+  for (int i = 0; i < Matrix::Size; ++i) {
+    lua_pushnumber(state, mat.At(i));
   }
 
-  return Matrix::Cols * Matrix::Rows;
+  return Matrix::Size;
 }
 
 inline auto MatrixToLua(lua_State *state, const ::Math::Matrix3x3 &mat) -> int {
-  // Row-major order
-  for (int column = 0; column < ::Math::Matrix3x3::Cols; ++column) {
-    for (int row = 0; row < ::Math::Matrix3x3::Rows; ++row) {
-      lua_pushnumber(state, mat.At(row, column));
-    }
+  for (int i = 0; i < ::Math::Matrix3x3::Size; ++i) {
+    lua_pushnumber(state, mat.At(i));
   }
 
-  return ::Math::Matrix3x3::Cols * ::Math::Matrix3x3::Rows;
+  return ::Math::Matrix3x3::Size;
+}
+
+inline auto LuaToMatrix4x4(lua_State *state, int index) -> Matrix {
+  Matrix mat;
+  for (int i = 0; i < Matrix::Size; ++i) {
+    lua_rawgeti(state, index, i + 1);
+    mat.At(i) = checkscalar(state, -1);
+  }
+  lua_pop(state, Matrix::Size);
+  return mat;
+}
+
+inline auto LuaToMatrix3x3(lua_State *state, int index) -> ::Math::Matrix3x3 {
+  ::Math::Matrix3x3 mat;
+  for (int i = 0; i < ::Math::Matrix3x3::Size; ++i) {
+    lua_rawgeti(state, index, i + 1);
+    mat.At(i) = checkscalar(state, -1);
+  }
+  lua_pop(state, ::Math::Matrix3x3::Size);
+  return mat;
 }
 
 inline auto QuaternionToLua(lua_State *state, const Quaternion &quat) -> int {
@@ -107,18 +121,7 @@ auto wrap_MatrixToEuler(lua_State *state) -> int {
     return luaL_error(state, "Expected a table with 16 numbers for matrix");
   }
 
-  Matrix mat;
-  for (int column = 0; column < 4; ++column) {
-    for (int row = 0; row < 4; ++row) {
-      lua_rawgeti(state, 1,
-                  (column * 4) + row + 1); // Get the value at the correct index
-      mat.At(row, column) = checkscalar(
-          state, -1); // Check that it's a number and assign it to the matrix
-    }
-  }
-  lua_pop(state, 16); // Pop the values from the stack
-
-  auto euler = ToEuler(mat);
+  auto euler = ToEuler(LuaToMatrix4x4(state, 1));
 
   return EulerToLua(state, euler);
 }
@@ -127,18 +130,7 @@ auto wrap_MatrixToQuaternion(lua_State *state) -> int {
     return luaL_error(state, "Expected a table with 16 numbers for matrix");
   }
 
-  Matrix mat;
-  for (int column = 0; column < 4; ++column) {
-    for (int row = 0; row < 4; ++row) {
-      lua_rawgeti(state, 1,
-                  (column * 4) + row + 1); // Get the value at the correct index
-      mat.At(row, column) = checkscalar(
-          state, -1); // Check that it's a number and assign it to the matrix
-    }
-  }
-  lua_pop(state, 16); // Pop the values from the stack
-
-  auto quat = ToQuaternion(mat);
+  auto quat = ToQuaternion(LuaToMatrix4x4(state, 1));
 
   return QuaternionToLua(state, quat);
 }

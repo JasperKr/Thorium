@@ -1,6 +1,10 @@
 local i = 0
 snap.threaderror = error
-engine = engine or {}
+engine = {
+  helpers = {},
+  graphics = {},
+  math = {},
+}
 
 print("Starting thread 1")
 require("Modules.vec")
@@ -248,7 +252,7 @@ function snap.draw()
     table.insert(commandBuffers, snap.graphics.submitGraphics())
   end
 
-  local buffer = commandsChannel:demand(30)
+  local buffer = commandsChannel:demand(5)
   while buffer do
     if thread:getError() then
       -- error("Render thread error: " .. thread:getError())
