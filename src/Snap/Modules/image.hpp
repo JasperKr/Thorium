@@ -1,10 +1,13 @@
 #pragma once
+#include "Graphics/format.hpp"
 #include "Graphics/graphicsState.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
+#include <cstring>
 #include <public/tracy/Tracy.hpp>
 #include <span>
-#include <variant>
 
+#include "dds.hpp"
 #include "stb/stb_image.h"
 #include "vulkan/vulkan_core.h"
 #include <algorithm>
@@ -109,17 +112,93 @@ static inline auto IsCompressedTexture(VkFormat format) -> bool {
   }
 }
 
-using ImageLoadResultVariant = std::variant<float *, stbi_uc *>;
+constexpr auto DDS_MAGIC = MakeFourCC('D', 'D', 'S', ' ');
+
+inline auto IsDDS(const std::span<const uint8_t> &data) -> bool {
+
+  if (data.size() < 4) {
+    return false;
+  }
+
+  return (std::memcmp(data.data(), &DDS_MAGIC, 4) == 0);
+}
+
+inline auto ParseDDS(const std::span<const uint8_t> &data, int &outWidth,
+                     int &outHeight, VkFormat &outFormat)
+    -> Result<const std::span<const uint8_t>> {
+  DDS_HEADER header{};
+  memcpy(&header, data.data() + 4, sizeof(DDS_HEADER)); // NOLINT
+
+  if (header.size != sizeof(DDS_HEADER)) {
+    return Error::Unexpected("Invalid DDS header size.");
+  }
+
+  outWidth = static_cast<int>(header.width);
+  outHeight = static_cast<int>(header.height);
+  outFormat = DDSFourCCToVkFormat(header.ddspf.fourCC);
+
+  const auto fourCCStr = std::string_view(
+      reinterpret_cast<const char *>(&header.ddspf.fourCC), 4); // NOLINT
+  PrintAlways("dds pixelformat fourCC: {}", fourCCStr);
+
+  if (outFormat != VK_FORMAT_UNDEFINED) {
+    size_t headerSize = 4 + sizeof(DDS_HEADER);
+    if (data.size() < headerSize) {
+      return Error::Unexpected("DDS data is too small for headers.");
+    }
+
+    size_t pixelDataSize = data.size() - headerSize;
+    // NOLINTNEXTLINE, safe because we check size above
+    return std::span<const uint8_t>(data.data() + headerSize, pixelDataSize);
+  }
+
+  if (header.ddspf.fourCC != MakeFourCC('D', 'X', '1', '0')) {
+    return Error::Unexpected("Unsupported DDS format (missing DX10 header).");
+  }
+
+  DDS_HEADER_DXT10 header10{};
+  memcpy(&header10, data.data() + 4 + sizeof(DDS_HEADER), // NOLINT
+         sizeof(DDS_HEADER_DXT10));
+
+  auto formatResult = DXgiDDSFormatToVkFormat(header10.dxgiFormat);
+
+  if (formatResult == VK_FORMAT_UNDEFINED) {
+    return Error::Unexpected(
+        "Unsupported DDS format (unsupported DXGI format).");
+  }
+
+  outFormat = formatResult;
+
+  size_t headerSize = 4 + sizeof(DDS_HEADER) + sizeof(DDS_HEADER_DXT10);
+  if (data.size() < headerSize) {
+    return Error::Unexpected("DDS data is too small for headers.");
+  }
+
+  size_t pixelDataSize = data.size() - headerSize;
+
+  PrintAlways("DDS with DX10 header, format: {}, width: {}, height: {}",
+              ::Graphics::Format::ImageFormatToString(outFormat), outWidth,
+              outHeight);
+
+  // NOLINTNEXTLINE, safe because we check size above
+  return std::span<const uint8_t>(data.data() + headerSize, pixelDataSize);
+}
 
 // NOLINTNEXTLINE
 inline auto FromMemory(const std::span<const uint8_t> &data, int &outWidth,
-                       int &outHeight, VkFormat &outFormat)
-    -> Result<ImageLoadResultVariant> {
+                       int &outHeight, VkFormat &outFormat, bool &requiresFree)
+    -> Result<std::span<const uint8_t>> {
   ZoneScoped;
 
-  int texWidth = 0;
-  int texHeight = 0;
   int texChannels = 0;
+
+  requiresFree = false;
+
+  if (IsDDS(data)) {
+    return ParseDDS(data, outWidth, outHeight, outFormat);
+  }
+
+  requiresFree = true;
 
   // check for LDR formats, supported by default stbi_load
   if (stbi_is_hdr_from_memory(data.data(), static_cast<int>(data.size())) ==
@@ -127,18 +206,18 @@ inline auto FromMemory(const std::span<const uint8_t> &data, int &outWidth,
     ZoneScopedN("stbi_load_from_memory");
 
     stbi_uc *pixels = stbi_load_from_memory(
-        data.data(), static_cast<int>(data.size()), &texWidth, &texHeight,
+        data.data(), static_cast<int>(data.size()), &outWidth, &outHeight,
         &texChannels, STBI_rgb_alpha);
 
     if (pixels == nullptr) {
       return Error::Unexpected("Failed to load image.");
     }
 
-    outWidth = texWidth;
-    outHeight = texHeight;
     outFormat = Graphics::DefaultPixelFormat;
 
-    return pixels;
+    return std::span<uint8_t>(pixels, static_cast<size_t>(outWidth) *
+                                          static_cast<size_t>(outHeight) *
+                                          Graphics::Format::GetSize(outFormat));
   }
 
   if (stbi_is_hdr_from_memory(data.data(), static_cast<int>(data.size())) !=
@@ -146,18 +225,20 @@ inline auto FromMemory(const std::span<const uint8_t> &data, int &outWidth,
     ZoneScopedN("stbi_loadf_from_memory");
 
     float *pixels = stbi_loadf_from_memory(
-        data.data(), static_cast<int>(data.size()), &texWidth, &texHeight,
+        data.data(), static_cast<int>(data.size()), &outWidth, &outHeight,
         &texChannels, STBI_rgb_alpha); // force 4 channels
 
     if (pixels == nullptr) {
       return Error::Unexpected("Failed to load image.");
     }
 
-    outWidth = texWidth;
-    outHeight = texHeight;
     outFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
 
-    return pixels;
+    // NOLINTNEXTLINE, reinterpret cast is safe here
+    return std::span<uint8_t>(reinterpret_cast<uint8_t *>(pixels),
+                              static_cast<size_t>(outWidth) *
+                                  static_cast<size_t>(outHeight) *
+                                  Graphics::Format::GetSize(outFormat));
   }
 
   return Error::Unexpected("Unsupported image format.");

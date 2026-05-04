@@ -499,16 +499,6 @@ inline auto Join(std::string_view str) -> std::string {
   return Sanitize(std::string(str));
 }
 
-template <typename... Strings>
-auto Join(std::string_view first, const Strings &...rest) -> std::string {
-  if constexpr (sizeof...(rest) == 0) {
-    return Sanitize(std::string(first));
-  } else {
-    auto combined = Join(rest...);
-    return Join(std::string(first), combined);
-  }
-}
-
 auto Join(const std::string &base, const std::string &append) -> std::string {
   if (base.empty()) {
     return append;

@@ -548,11 +548,16 @@ auto LoadFromMemory(GraphicsContext &context,
   auto width = 0;
   auto height = 0;
   auto format = VK_FORMAT_UNDEFINED;
+  bool requiresFree = false;
 
-  auto loadResult = Image::FromMemory(data, width, height, format);
+  auto loadResult =
+      Image::FromMemory(data, width, height, format, requiresFree);
   if (Error::IsError(loadResult)) {
     return loadResult.error().AsUnexpected();
   }
+
+  PrintAlways("Loaded image from memory, width: {}, height: {}, format: {}",
+              width, height, ::Graphics::Format::ImageFormatToString(format));
 
   auto texture = Create2D(
       context, TextureCreationInfo{
@@ -569,27 +574,7 @@ auto LoadFromMemory(GraphicsContext &context,
     return texture.error().AsUnexpected();
   }
 
-  std::span<uint8_t> dataSpan;
-
-  auto variant = loadResult.value();
-  if (std::holds_alternative<stbi_uc *>(variant)) {
-    auto *pixels = std::get<stbi_uc *>(variant);
-    dataSpan = std::span<uint8_t>(pixels, static_cast<size_t>(width) *
-                                              static_cast<size_t>(height) *
-                                              Format::GetSize(format));
-
-  } else if (std::holds_alternative<float *>(variant)) {
-    auto *pixels = std::get<float *>(variant);
-
-    // NOLINTNEXTLINE, reinterpret cast is safe here
-    dataSpan = std::span<uint8_t>(reinterpret_cast<uint8_t *>(pixels),
-                                  static_cast<size_t>(width) *
-                                      static_cast<size_t>(height) *
-                                      Format::GetSize(format));
-
-  } else {
-    return Error::Unexpected("Unsupported image data format.");
-  }
+  std::span<const uint8_t> dataSpan = loadResult.value();
 
   auto source = VkRect2D{
       .offset = VkOffset2D{0, 0},
@@ -599,15 +584,16 @@ auto LoadFromMemory(GraphicsContext &context,
 
   auto dst = VkOffset2D{0, 0};
 
+  PrintAlways(
+      "Setting texture pixels from memory, width: {}, height: {}, format: {}",
+      width, height, ::Graphics::Format::ImageFormatToString(format));
+
   auto result = texture.value()->SetPixels(context, dataSpan, width, height, 0,
                                            0, source, dst);
 
-  if (std::holds_alternative<stbi_uc *>(variant)) {
-    auto *pixels = std::get<stbi_uc *>(variant);
-    stbi_image_free(pixels);
-  } else if (std::holds_alternative<float *>(variant)) {
-    auto *pixels = std::get<float *>(variant);
-    stbi_image_free(pixels);
+  if (requiresFree) {
+    PrintAlways("Freeing image data loaded from memory.");
+    stbi_image_free((void *)dataSpan.data());
   }
 
   if (Error::IsError(result)) {
@@ -997,17 +983,25 @@ auto Texture::SetPixels(const GraphicsContext &context,
                                      .access = VK_ACCESS_2_HOST_WRITE_BIT,
                                  });
 
-  for (size_t row = 0; row < rowCount; ++row) {
-    size_t sourceOffset =
-        ((row + source.offset.y) * imageData.GetWidth() + source.offset.x) *
-        Format::GetSize(format);
+  if (source.extent.width == size.width) {
+    // Fast path for full-width updates
+    auto dataSpan = // NOLINTNEXTLINE pointer arithmetic
+        std::span<uint8_t>(imageData.GetDataPtr() + (source.offset.y * rowSize),
+                           rowSize * rowCount);
+    auto error = buffer->SetData(context, dataSpan, 0);
+  } else {
+    for (size_t row = 0; row < rowCount; ++row) {
+      size_t sourceOffset =
+          ((row + source.offset.y) * imageData.GetWidth() + source.offset.x) *
+          Format::GetSize(format);
 
-    auto rowSpan = // NOLINTNEXTLINE pointer arithmetic
-        std::span<uint8_t>(imageData.GetDataPtr() + sourceOffset, rowSize);
-    auto error = buffer->SetData(context, rowSpan, row * rowSize);
+      auto rowSpan = // NOLINTNEXTLINE pointer arithmetic
+          std::span<uint8_t>(imageData.GetDataPtr() + sourceOffset, rowSize);
+      auto error = buffer->SetData(context, rowSpan, row * rowSize);
 
-    if (Error::IsError(error)) {
-      return error;
+      if (Error::IsError(error)) {
+        return error;
+      }
     }
   }
 
@@ -1062,6 +1056,187 @@ auto Texture::SetPixels(const GraphicsContext &context,
   return SetPixels(context, imageData, mipLevel, arrayLayer, source, target);
 }
 
+inline auto WritePixelData(const Ref<Texture> &texture,
+                           const GraphicsContext &context,
+                           const std::span<const uint8_t> &data,
+                           size_t dataWidth, size_t dataHeight,
+                           uint32_t mipLevel, // NOLINT
+                           uint32_t arrayLayer, VkRect2D source,
+                           VkOffset2D target) {
+  // Create staging buffer
+  BufferCreationInfo bufferCreationInfo = {};
+  bufferCreationInfo.size = data.size();
+  bufferCreationInfo.usage =
+      VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+  bufferCreationInfo.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                                  VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+  bufferCreationInfo.stagingBuffer = true;
+
+  if (dataWidth > texture->size.width || dataHeight > texture->size.height) {
+    return Error::Create(
+        "provided source dimensions exceed texture dimensions in SetPixels.");
+  }
+  bufferCreationInfo.debugName = "Texture Staging Buffer for SetPixels";
+
+  auto bufferResult = Buffer::Create(context, bufferCreationInfo);
+
+  if (Error::IsError(bufferResult)) {
+    return bufferResult.error();
+  }
+
+  auto rowSize = static_cast<size_t>(source.extent.width) *
+                 Format::GetSize(texture->format);
+  auto rowCount = static_cast<size_t>(source.extent.height);
+
+  Graphics::Barrier::UpdateUsage(context, *texture,
+                                 Graphics::Barrier::ResourceState{
+                                     .stages = VK_PIPELINE_STAGE_2_HOST_BIT,
+                                     .access = VK_ACCESS_2_HOST_WRITE_BIT,
+                                 });
+
+  auto buffer = bufferResult.value();
+
+  if (source.extent.width == texture->size.width) {
+    // Fast path for full-width updates
+    auto dataSpan = // NOLINTNEXTLINE pointer arithmetic
+        std::span<const uint8_t>(data.data() + (source.offset.y * rowSize),
+                                 rowSize * rowCount);
+    auto error = buffer->SetData(context, dataSpan, 0);
+
+    if (Error::IsError(error)) {
+      return error;
+    }
+  } else {
+    for (size_t row = 0; row < rowCount; ++row) {
+      size_t sourceOffset =
+          ((row + source.offset.y) * dataWidth + source.offset.x) *
+          Format::GetSize(texture->format);
+
+      auto rowSpan = // NOLINTNEXTLINE pointer arithmetic
+          std::span<const uint8_t>(data.data() + sourceOffset, rowSize);
+      auto error = buffer->SetData(context, rowSpan, row * rowSize);
+
+      if (Error::IsError(error)) {
+        return error;
+      }
+    }
+  }
+
+  VkBufferImageCopy region = {};
+  region.bufferOffset = 0;
+  region.bufferRowLength = source.extent.width;
+  region.bufferImageHeight = source.extent.height;
+  region.imageSubresource.aspectMask = GetAspectFlagsForFormat(texture->format);
+  region.imageSubresource.mipLevel = mipLevel;
+  region.imageSubresource.baseArrayLayer = arrayLayer;
+  region.imageSubresource.layerCount = 1;
+  region.imageOffset = {.x = target.x, .y = target.y, .z = 0};
+  region.imageExtent = {
+      .width = source.extent.width, .height = source.extent.height, .depth = 1};
+
+  auto error = texture->UseAsTransferDst(context);
+
+  if (Error::IsError(error)) {
+    return error;
+  }
+
+  auto *commandBuffer = GetCommandBuffer();
+
+  if (commandBuffer == nullptr) {
+    return Error::Create("Failed to get command buffer for SetPixels.");
+  }
+
+  vkCmdCopyBufferToImage(commandBuffer, buffer->handle, texture->image,
+                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+
+  error = texture->UseAsSampler(context, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT);
+
+  if (Error::IsError(error)) {
+    return error;
+  }
+
+  buffer->MarkUse();
+  texture->MarkUse();
+
+  return Error::Success();
+}
+
+inline auto WriteSimplifiedPixelData(const Ref<Texture> &texture,
+                                     const GraphicsContext &context,
+                                     const std::span<const uint8_t> &data,
+                                     size_t dataWidth, size_t dataHeight,
+                                     uint32_t mipLevel, // NOLINT
+                                     uint32_t arrayLayer) {
+  // Create staging buffer
+  BufferCreationInfo bufferCreationInfo = {};
+  bufferCreationInfo.size = data.size();
+  bufferCreationInfo.usage =
+      VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+  bufferCreationInfo.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                                  VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+  bufferCreationInfo.stagingBuffer = true;
+
+  if (dataWidth > texture->size.width || dataHeight > texture->size.height) {
+    return Error::Create(
+        "provided source dimensions exceed texture dimensions in SetPixels.");
+  }
+  bufferCreationInfo.debugName =
+      "Texture Staging Buffer for SetPixels (Compressed Format)";
+
+  auto bufferResult = Buffer::Create(context, bufferCreationInfo);
+
+  if (Error::IsError(bufferResult)) {
+    return bufferResult.error();
+  }
+
+  auto buffer = bufferResult.value();
+
+  auto error = buffer->SetData(context, data, 0);
+
+  if (Error::IsError(error)) {
+    return error;
+  }
+
+  VkBufferImageCopy region = {};
+  region.bufferOffset = 0;
+  region.bufferRowLength = dataWidth;
+  region.bufferImageHeight = dataHeight;
+  region.imageSubresource.aspectMask = GetAspectFlagsForFormat(texture->format);
+  region.imageSubresource.mipLevel = mipLevel;
+  region.imageSubresource.baseArrayLayer = arrayLayer;
+  region.imageSubresource.layerCount = 1;
+  region.imageOffset = {.x = 0, .y = 0, .z = 0};
+  region.imageExtent = {.width = static_cast<uint32_t>(dataWidth),
+                        .height = static_cast<uint32_t>(dataHeight),
+                        .depth = 1};
+
+  error = texture->UseAsTransferDst(context);
+
+  if (Error::IsError(error)) {
+    return error;
+  }
+
+  auto *commandBuffer = GetCommandBuffer();
+
+  if (commandBuffer == nullptr) {
+    return Error::Create("Failed to get command buffer for SetPixels.");
+  }
+
+  vkCmdCopyBufferToImage(commandBuffer, buffer->handle, texture->image,
+                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+
+  error = texture->UseAsSampler(context, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT);
+
+  if (Error::IsError(error)) {
+    return error;
+  }
+
+  buffer->MarkUse();
+  texture->MarkUse();
+
+  return Error::Success();
+}
+
 auto Texture::SetPixels(const GraphicsContext &context,
                         const std::span<const uint8_t> &data, size_t dataWidth,
                         size_t dataHeight, uint32_t mipLevel, // NOLINT
@@ -1090,94 +1265,26 @@ auto Texture::SetPixels(const GraphicsContext &context,
     return Error::Create(
         "Negative source offsets are not supported in SetPixels.");
   }
-  if (data.size() < dataWidth * dataHeight * Format::GetSize(format)) {
+  if (data.size() <
+      Format::GetSize(format, source.extent.width, source.extent.height)) {
     return Error::Create("Data size is insufficient for specified dimensions.");
   }
 
-  // Create staging buffer
-  BufferCreationInfo bufferCreationInfo = {};
-  bufferCreationInfo.size = data.size();
-  bufferCreationInfo.usage =
-      VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-  bufferCreationInfo.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-                                  VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-  bufferCreationInfo.stagingBuffer = true;
-
-  if (dataWidth > size.width || dataHeight > size.height) {
-    return Error::Create(
-        "provided source dimensions exceed texture dimensions in SetPixels.");
-  }
-  bufferCreationInfo.debugName = "Texture Staging Buffer for SetPixels";
-
-  auto bufferResult = Buffer::Create(context, bufferCreationInfo);
-
-  if (Error::IsError(bufferResult)) {
-    return bufferResult.error();
-  }
-
-  auto rowSize =
-      static_cast<size_t>(source.extent.width) * Format::GetSize(format);
-  auto rowCount = static_cast<size_t>(source.extent.height);
-
-  Graphics::Barrier::UpdateUsage(context, *this,
-                                 Graphics::Barrier::ResourceState{
-                                     .stages = VK_PIPELINE_STAGE_2_HOST_BIT,
-                                     .access = VK_ACCESS_2_HOST_WRITE_BIT,
-                                 });
-
-  auto buffer = bufferResult.value();
-
-  for (size_t row = 0; row < rowCount; ++row) {
-    size_t sourceOffset =
-        ((row + source.offset.y) * dataWidth + source.offset.x) *
-        Format::GetSize(format);
-
-    auto rowSpan = // NOLINTNEXTLINE pointer arithmetic
-        std::span<const uint8_t>(data.data() + sourceOffset, rowSize);
-    auto error = buffer->SetData(context, rowSpan, row * rowSize);
-
-    if (Error::IsError(error)) {
-      return error;
+  if (Format::IsCompressedFormat(format)) {
+    if (source.extent.width != size.width ||
+        source.extent.height != size.height || source.offset.x != 0 ||
+        source.offset.y != 0 || target.x != 0 || target.y != 0) {
+      return Error::Create("Partial updates are not supported for compressed "
+                           "formats in SetPixels.");
     }
+
+    return WriteSimplifiedPixelData(Ref<Texture>(this), context, data,
+                                    dataWidth, dataHeight, mipLevel,
+                                    arrayLayer);
   }
 
-  VkBufferImageCopy region = {};
-  region.bufferOffset = 0;
-  region.bufferRowLength = source.extent.width;
-  region.bufferImageHeight = source.extent.height;
-  region.imageSubresource.aspectMask = GetAspectFlagsForFormat(format);
-  region.imageSubresource.mipLevel = mipLevel;
-  region.imageSubresource.baseArrayLayer = arrayLayer;
-  region.imageSubresource.layerCount = 1;
-  region.imageOffset = {.x = target.x, .y = target.y, .z = 0};
-  region.imageExtent = {
-      .width = source.extent.width, .height = source.extent.height, .depth = 1};
-
-  auto error = UseAsTransferDst(context);
-
-  if (Error::IsError(error)) {
-    return error;
-  }
-
-  auto *commandBuffer = GetCommandBuffer();
-
-  if (commandBuffer == nullptr) {
-    return Error::Create("Failed to get command buffer for SetPixels.");
-  }
-
-  vkCmdCopyBufferToImage(commandBuffer, buffer->handle, image,
-                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-
-  error = UseAsSampler(context, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT);
-
-  if (Error::IsError(error)) {
-    return error;
-  }
-
-  buffer->MarkUse();
-  MarkUse();
-
-  return Error::Success();
+  return WritePixelData(Ref<Texture>(this), context, data, dataWidth,
+                        dataHeight, mipLevel, arrayLayer, source, target);
 }
 
 auto Texture::ScheduleDestroy() -> void {
@@ -1327,9 +1434,9 @@ constexpr auto GetRequiredTextureLayout(TextureUsage usage, VkFormat format)
     -> VkImageLayout {
 
 #ifndef NDEBUG
-  assert(
-      usage != TextureUsage::Unknown &&
-      "GetRequiredTextureLayout: TextureUsage::Unknown is not a valid usage.");
+  assert(usage != TextureUsage::Unknown &&
+         "GetRequiredTextureLayout: TextureUsage::Unknown is not a valid "
+         "usage.");
 #endif
 
   switch (usage) {
@@ -1541,9 +1648,9 @@ auto Texture::CopyTo(const GraphicsContext &context, Buffer &dstBuffer,
   }
 
   if ((dstBuffer.usage & VK_BUFFER_USAGE_TRANSFER_DST_BIT) == 0) {
-    return Error::Create(
-        "CopyTo: Destination buffer must have VK_BUFFER_USAGE_TRANSFER_DST_BIT "
-        "usage flag.");
+    return Error::Create("CopyTo: Destination buffer must have "
+                         "VK_BUFFER_USAGE_TRANSFER_DST_BIT "
+                         "usage flag.");
   }
 
   // TODO: Check if we need an update usage here after UseAsTransferSrc

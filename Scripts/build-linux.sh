@@ -12,7 +12,7 @@ if [ "$CONFIG" = "Debug" ]; then
   FLAGS="$FLAGS -g -O1 -ftime-trace -fno-omit-frame-pointer"
   CONFIG="Debug"
 elif [ "$CONFIG" = "Profile" ]; then
-  FLAGS="$FLAGS -DTRACY_ENABLE=1 -DTRACY_WAIT_FOR_CLIENT=1 -O3 -g -ftime-trace -fno-omit-frame-pointer"
+  FLAGS="$FLAGS -DTRACY_ENABLE=1 -DTRACY_WAIT_FOR_CLIENT=1 -O3"
   CONFIG="RelWithDebInfo"
 elif [ "$CONFIG" == "Release" ]; then
   FLAGS="$FLAGS -O3"

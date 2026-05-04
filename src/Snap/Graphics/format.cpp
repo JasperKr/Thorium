@@ -170,6 +170,42 @@ auto GetSize(VkFormat format) -> uint32_t {
   return 0;
 }
 
+auto IsCompressedFormat(VkFormat format) -> bool {
+  switch (format) {
+  case VK_FORMAT_BC1_RGB_UNORM_BLOCK:
+  case VK_FORMAT_BC1_RGB_SRGB_BLOCK:
+  case VK_FORMAT_BC1_RGBA_UNORM_BLOCK:
+  case VK_FORMAT_BC1_RGBA_SRGB_BLOCK:
+  case VK_FORMAT_BC2_UNORM_BLOCK:
+  case VK_FORMAT_BC2_SRGB_BLOCK:
+  case VK_FORMAT_BC3_UNORM_BLOCK:
+  case VK_FORMAT_BC3_SRGB_BLOCK:
+  case VK_FORMAT_BC4_UNORM_BLOCK:
+  case VK_FORMAT_BC4_SNORM_BLOCK:
+  case VK_FORMAT_BC5_UNORM_BLOCK:
+  case VK_FORMAT_BC5_SNORM_BLOCK:
+  case VK_FORMAT_BC6H_UFLOAT_BLOCK:
+  case VK_FORMAT_BC6H_SFLOAT_BLOCK:
+  case VK_FORMAT_BC7_UNORM_BLOCK:
+  case VK_FORMAT_BC7_SRGB_BLOCK:
+    return true;
+  default:
+    return false;
+  }
+}
+
+auto GetSize(VkFormat format, uint32_t width, uint32_t height) -> uint64_t {
+  if (IsCompressedFormat(format)) {
+    auto blockSize = GetSize(format);
+    auto blockWidth = (width + 3) / 4;
+    auto blockHeight = (height + 3) / 4;
+    return static_cast<uint64_t>(blockWidth) * blockHeight * blockSize;
+  }
+
+  auto pixelSize = GetSize(format);
+  return static_cast<uint64_t>(width) * height * pixelSize;
+}
+
 // NOLINTNEXTLINE
 auto StringToImageFormat(const std::string &format) -> VkFormat {
   static const std::unordered_map<std::string, VkFormat> StringToFormat = {

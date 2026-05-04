@@ -33,6 +33,7 @@
 
 #include "vulkan/vulkan_core.h"
 
+#include <string_view>
 #include <unordered_map>
 #include <variant>
 #include <vector>
@@ -73,6 +74,7 @@ static fastgltf::Parser Parser =
     fastgltf::Parser(fastgltf::Extensions::KHR_lights_punctual);
 
 inline auto LoadDataSource(const fastgltf::Asset &asset,
+                           const std::string_view &basePath,
                            const fastgltf::DataSource &dataSource)
     -> Result<std::span<const uint8_t>>;
 
@@ -108,10 +110,12 @@ inline auto LoadBufferView(const fastgltf::Asset &asset,
                                   byteLength);
 }
 
-inline auto LoadURI(const fastgltf::sources::URI &uriSource)
-    -> Result<std::vector<uint8_t>> {
+inline auto LoadURI(const std::string_view &basePath,
+                    const fastgltf::sources::URI &uriSource)
+    -> Result<std::span<uint8_t>> {
+
   const auto &uri = uriSource.uri;
-  const auto &path = std::string(uri.path()); // (TODO: is this correct?)
+  const auto &path = Path::Join(basePath, uri.path());
 
   auto iter = URICache.find(path);
   if (iter != URICache.end()) {
@@ -125,11 +129,11 @@ inline auto LoadURI(const fastgltf::sources::URI &uriSource)
   }
 
   URICache[path] = fileResult.value();
-
-  return fileResult.value();
+  return URICache[path];
 }
 
 inline auto LoadDataSource(const fastgltf::Asset &asset,
+                           const std::string_view &basePath,
                            const fastgltf::DataSource &dataSource)
     -> Result<std::span<const uint8_t>> {
   ZoneScoped;
@@ -146,8 +150,7 @@ inline auto LoadDataSource(const fastgltf::Asset &asset,
 
   if (std::holds_alternative<fastgltf::sources::URI>(dataSource)) {
     const auto &uriSource = std::get<fastgltf::sources::URI>(dataSource);
-    auto ret = LoadURI(uriSource);
-    return ret;
+    return LoadURI(basePath, uriSource);
   }
 
   if (std::holds_alternative<fastgltf::sources::Array>(dataSource)) {
@@ -199,6 +202,7 @@ inline auto LoadDataSource(const fastgltf::Asset &asset,
 
 inline auto LoadTexture(Graphics::GraphicsContext &context,
                         const fastgltf::Asset &asset,
+                        const std::string_view &basePath,
                         const fastgltf::TextureInfo &gltfTexture)
     -> Result<Ref<Graphics::Texture>> {
   ZoneScoped;
@@ -214,7 +218,7 @@ inline auto LoadTexture(Graphics::GraphicsContext &context,
 
   const auto &image = asset.images[texture.imageIndex.value()];
 
-  auto loadResult = LoadDataSource(asset, image.data);
+  auto loadResult = LoadDataSource(asset, basePath, image.data);
   if (Error::IsError(loadResult)) {
     return loadResult.error().AsUnexpected();
   }
@@ -236,6 +240,7 @@ inline auto LoadTexture(Graphics::GraphicsContext &context,
 
 inline auto LoadMaterial(Graphics::GraphicsContext &context,
                          const fastgltf::Asset &asset,
+                         const std::string_view &basePath,
                          const fastgltf::Material &gltfMaterial,
                          Ref<Engine::Renderer::LuaMaterial> &luaMaterial)
     -> Error {
@@ -283,8 +288,9 @@ inline auto LoadMaterial(Graphics::GraphicsContext &context,
                  gltfMaterial.emissiveFactor[2]);
 
   if (gltfMaterial.pbrData.baseColorTexture.has_value()) {
-    auto albedoTextureLoadResult = LoadTexture(
-        context, asset, gltfMaterial.pbrData.baseColorTexture.value());
+    auto albedoTextureLoadResult =
+        LoadTexture(context, asset, basePath,
+                    gltfMaterial.pbrData.baseColorTexture.value());
 
     if (Error::IsError(albedoTextureLoadResult)) {
       return albedoTextureLoadResult.error();
@@ -827,7 +833,8 @@ LoadVertexData(Graphics::VertexFormat &format, const fastgltf::Asset &asset,
     }
 
     if (attribute == nullptr || attribute->format == VK_FORMAT_UNDEFINED) {
-      return Error::Unexpectedf("Couldn't match Format for: {}", semantic);
+      // return Error::Unexpectedf("Couldn't match Format for: {}", semantic);
+      continue; // Skip attributes that aren't in the vertex format.
     }
 
     if (accessor.count != vertexCount) {
@@ -992,6 +999,7 @@ inline auto LoadIndexData(const fastgltf::Asset &asset,
 // NOLINTNEXTLINE
 inline auto LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
                      const fastgltf::Asset &asset,
+                     const std::string_view &basePath,
                      const fastgltf::Node &gltfNode)
     -> Result<std::vector<flecs::entity>> {
   bool isMesh = gltfNode.meshIndex.has_value();
@@ -1029,7 +1037,8 @@ inline auto LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
 
     for (const auto &childIndex : gltfNode.children) {
       const auto &childGltfNode = asset.nodes[childIndex];
-      auto childNodeResult = LoadNode(world, context, asset, childGltfNode);
+      auto childNodeResult =
+          LoadNode(world, context, asset, basePath, childGltfNode);
       if (Error::IsError(childNodeResult)) {
         return childNodeResult.error().AsUnexpected();
       }
@@ -1177,7 +1186,7 @@ inline auto LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
         rendererMaterial->entity = materialEntity;
 
         auto materialResult =
-            LoadMaterial(context, asset, material, rendererMaterial);
+            LoadMaterial(context, asset, basePath, material, rendererMaterial);
         if (Error::IsError(materialResult)) {
           return materialResult.AsUnexpected();
         }
@@ -1243,10 +1252,14 @@ auto LoadGltfModel(Graphics::GraphicsContext &context, const std::string &path,
   }
 
   Buffers.reserve(asset->buffers.size());
+  const auto &basePath = Path::Directory(path);
+  const auto view = std::string_view(basePath);
+
+  PrintAlways("Base path: {}, original path: {}", basePath, path);
 
   for (size_t i = 0; i < asset->buffers.size(); ++i) {
     const auto &buffer = asset->buffers[i];
-    auto bufferDataResult = LoadDataSource(asset.get(), buffer.data);
+    auto bufferDataResult = LoadDataSource(asset.get(), view, buffer.data);
     if (Error::IsError(bufferDataResult)) {
       return bufferDataResult.error();
     }
@@ -1261,7 +1274,7 @@ auto LoadGltfModel(Graphics::GraphicsContext &context, const std::string &path,
     for (const auto &nodeIndex : glTFScene.nodeIndices) {
       const auto &gltfNode = asset->nodes[nodeIndex];
       PrintInfo("Loading glTF node: {}", gltfNode.name);
-      auto nodeResult = LoadNode(world, context, asset.get(), gltfNode);
+      auto nodeResult = LoadNode(world, context, asset.get(), view, gltfNode);
       if (Error::IsError(nodeResult)) {
         return nodeResult.error();
       }

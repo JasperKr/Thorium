@@ -6,6 +6,8 @@
 namespace Graphics::Format {
 auto GetChannelCount(VkFormat format) -> uint32_t;
 auto GetSize(VkFormat format) -> uint32_t;
+auto GetSize(VkFormat format, uint32_t width, uint32_t height) -> uint64_t;
+auto IsCompressedFormat(VkFormat format) -> bool;
 auto StringToImageFormat(const std::string &format) -> VkFormat;
 auto ImageFormatToString(VkFormat format) -> std::string_view;
 auto ToString(VkFormat format, size_t arraySize = 1) -> std::string_view;

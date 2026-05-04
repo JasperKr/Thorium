@@ -68,11 +68,19 @@ auto Extension(const std::string &path) -> std::string;
 auto Directory(const std::string &path) -> std::string;
 
 auto Join(const std::string &base, const std::string &append) -> std::string;
+auto Sanitize(const std::string &path) -> std::string;
+
 template <typename... Strings>
-auto Join(std::string_view first, const Strings &...rest) -> std::string;
+auto Join(std::string_view first, const Strings &...rest) -> std::string {
+  if constexpr (sizeof...(rest) == 0) {
+    return Sanitize(std::string(first));
+  } else {
+    auto combined = Join(rest...);
+    return Join(std::string(first), combined);
+  }
+}
+
 auto Join(const std::vector<std::string> &paths) -> std::string;
 auto Join(const char *base, const char *append) -> std::string;
-
-auto Sanitize(const std::string &path) -> std::string;
 
 } // namespace Path
