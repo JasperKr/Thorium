@@ -49,7 +49,7 @@ float4 fragmentMain(FragmentInput input)
 {
   float4 color = MainTexture.Sample(input.tex_coord);
   color *= input.color;
-  color.rgb *= color.a;
+  // color.rgb *= color.a;
 
 #ifdef __COLORSPACE_GAMMA_CORRECT
   color.rgb = GammaToLinear(color.rgb);

@@ -41,6 +41,11 @@ struct Color {
     uint8_t green = (packedRGBA >> GreenShift) & BitMask;
     uint8_t blue = (packedRGBA >> BlueShift) & BitMask;
     uint8_t alpha = packedRGBA & BitMask;
+
+    r = static_cast<float>(red) / uint8_max_as_float;
+    g = static_cast<float>(green) / uint8_max_as_float;
+    b = static_cast<float>(blue) / uint8_max_as_float;
+    a = static_cast<float>(alpha) / uint8_max_as_float;
   };
 
   [[nodiscard]] auto Pack() const -> uint32_t {
@@ -86,4 +91,78 @@ struct Color {
     return {LinearizeChannel(color.r), LinearizeChannel(color.g),
             LinearizeChannel(color.b), color.a};
   };
+
+  auto operator==(const Color &other) const -> bool {
+    return r == other.r && g == other.g && b == other.b && a == other.a;
+  }
+
+  auto operator!=(const Color &other) const -> bool {
+    return !(*this == other);
+  }
+
+  auto operator*(float scalar) const -> Color {
+    return {r * scalar, g * scalar, b * scalar, a * scalar};
+  }
+
+  auto operator*(const Color &other) const -> Color {
+    return {r * other.r, g * other.g, b * other.b, a * other.a};
+  }
+
+  auto operator+(const Color &other) const -> Color {
+    return {r + other.r, g + other.g, b + other.b, a + other.a};
+  }
+
+  auto operator-(const Color &other) const -> Color {
+    return {r - other.r, g - other.g, b - other.b, a - other.a};
+  }
+
+  [[nodiscard]] auto Luminance() const -> float {
+    // Perceived brightness calculation using the Rec. 709 formula NOLINTNEXTLINE
+    return (r * 0.2126F) + (g * 0.7152F) + (b * 0.0722F);
+  }
+
+  auto operator<(const Color &other) const -> bool {
+    return Luminance() < other.Luminance();
+  }
+  auto operator>(const Color &other) const -> bool {
+    return Luminance() > other.Luminance();
+  }
+  auto operator<=(const Color &other) const -> bool {
+    return Luminance() <= other.Luminance();
+  }
+  auto operator>=(const Color &other) const -> bool {
+    return Luminance() >= other.Luminance();
+  }
+
+  auto operator*(float scalar) -> Color & {
+    r *= scalar;
+    g *= scalar;
+    b *= scalar;
+    a *= scalar;
+    return *this;
+  }
+
+  auto operator*=(const Color &other) -> Color & {
+    r *= other.r;
+    g *= other.g;
+    b *= other.b;
+    a *= other.a;
+    return *this;
+  }
+
+  auto operator+=(const Color &other) -> Color & {
+    r += other.r;
+    g += other.g;
+    b += other.b;
+    a += other.a;
+    return *this;
+  }
+
+  auto operator-=(const Color &other) -> Color & {
+    r -= other.r;
+    g -= other.g;
+    b -= other.b;
+    a -= other.a;
+    return *this;
+  }
 };

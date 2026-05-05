@@ -1,11 +1,11 @@
 #include "gui.hpp"
-#include "Modules/console.hpp"
 #include "Modules/filesystem.hpp"
 #include "Modules/object.hpp"
 #include "SDL3/SDL_clipboard.h"
 #include "SDL3/SDL_mouse.h"
 #include "imgui.h"
 #include "imstb_truetype.h"
+#include "style.hpp"
 #include <array>
 #include <cassert>
 #include <unordered_map>
@@ -63,14 +63,20 @@ auto LoadGUIState(lua_State *state) -> Result<GuiState> {
   assert(scale > 0.0F && "Display content scale must be greater than 0");
 
   ImGuiStyle &style = ImGui::GetStyle();
+  auto error =
+      Engine::Style::ApplyDefaultStyle(Engine::Style::UIStyles::Greenish);
+  if (Error::IsError(error)) {
+    return error.AsUnexpected();
+  }
+
   style.FontScaleDpi = scale;
   style.ScaleAllSizes(scale);
 
   const float baseFontSize = 18.0F;
 
   ImFontConfig config;
-  config.OversampleH = 5;
-  config.OversampleV = 5;
+  config.OversampleH = 5; // NOLINT
+  config.OversampleV = 5; // NOLINT
   config.PixelSnapH = true;
   config.SizePixels = baseFontSize * scale;
   config.FontDataOwnedByAtlas = false;
@@ -93,8 +99,6 @@ auto LoadGUIState(lua_State *state) -> Result<GuiState> {
 
   // Set the font as the default font
   inout.FontDefault = font;
-
-  ImGuiIO &io = ImGui::GetIO();
 
   flags = static_cast<uint32_t>(inout.BackendFlags);
   flags |= static_cast<uint32_t>(ImGuiBackendFlags_RendererHasTextures);

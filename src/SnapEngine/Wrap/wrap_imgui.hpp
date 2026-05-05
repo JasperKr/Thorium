@@ -38,6 +38,8 @@ auto GetImguiFontAtlasPtr(lua_State *state) -> int;
 // Should only be called once, not per-thread.
 auto Shutdown(lua_State *state) -> int;
 
+auto wrap_ApplyDefaultStyle(lua_State *state) -> int;
+
 // NOLINTNEXTLINE
 static const std::vector<luaL_Reg> ImGuiLib = {
     {"newFrame", NewFrame},
@@ -53,6 +55,7 @@ static const std::vector<luaL_Reg> ImGuiLib = {
     {"getContextPtr", GetImguiContextPtr},
     {"getFontAtlasPtr", GetImguiFontAtlasPtr},
     {"shutdown", Shutdown},
+    {"applyDefaultStyle", wrap_ApplyDefaultStyle},
 };
 
 const static std::vector<lua_CFunction> childrenInitFunctions = {};

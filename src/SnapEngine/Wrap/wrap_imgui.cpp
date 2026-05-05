@@ -15,10 +15,12 @@
 #include "Modules/object.hpp"
 #include "imgui.h"
 
+#include "style.hpp"
 #include "vulkan/vulkan_core.h"
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <lauxlib.h>
 #include <mutex>
 #include <span>
 #include <unordered_map>
@@ -553,12 +555,44 @@ auto GetImguiContextPtr(lua_State *state) -> int {
   lua_pushnumber(state, static_cast<lua_Number>(contextValue));
   return 1;
 }
+
 auto GetImguiFontAtlasPtr(lua_State *state) -> int {
   // bitcast the ImGui font atlas pointer to a double (since Lua doesn't have a native pointer type) and return it
   auto *fontAtlas = ImGui::GetIO().Fonts;
   auto fontAtlasValue = reinterpret_cast<uintptr_t>(fontAtlas); // NOLINT
   lua_pushnumber(state, static_cast<lua_Number>(fontAtlasValue));
   return 1;
+}
+
+inline auto stringToUIStyle(const char *styleStr)
+    -> Result<Engine::Style::UIStyles> {
+  if (strcmp(styleStr, "blueish") == 0) {
+    return Engine::Style::UIStyles::Blueish;
+  }
+  if (strcmp(styleStr, "greenish") == 0) {
+    return Engine::Style::UIStyles::Greenish;
+  }
+  return Error::Unexpectedf("Unknown UI style: " + std::string(styleStr));
+}
+
+// auto ApplyDefaultStyle(UIStyles uiStyle) -> Error;
+// auto wrap_ApplyDefaultStyle(lua_State *state) -> int;
+
+auto wrap_ApplyDefaultStyle(lua_State *state) -> int {
+  const char *styleStr = luaL_optstring(state, 1, "blueish");
+  auto styleResult = stringToUIStyle(styleStr);
+  if (Error::IsError(styleResult)) {
+    return luaL_error(state, "Failed to apply default style: %s",
+                      styleResult.error().message.c_str());
+  }
+
+  auto applyResult = ApplyDefaultStyle(styleResult.value());
+  if (Error::IsError(applyResult)) {
+    return luaL_error(state, "Failed to apply default style: %s",
+                      applyResult.message.c_str());
+  }
+
+  return 0;
 }
 
 } // namespace Wrap::Imgui

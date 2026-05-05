@@ -214,34 +214,50 @@ auto Matrix4x4::operator[](size_t index) const -> Scalar {
 }
 
 auto Matrix4x4::Perspective(Scalar left, Scalar right, Scalar bottom,
-                            Scalar top, Scalar nearPlane, Scalar farPlane)
-    -> Matrix4x4 {
+                            Scalar top, Scalar near, Scalar far) -> Matrix4x4 {
+
+  auto rml = right - left;
+  auto tmb = top - bottom;
+  auto fmn = far - near;
+  auto rpl = right + left;
+  auto tpb = top + bottom;
+  auto fpn = far + near;
 
   // NOLINTBEGIN
+  // clang-format off
   Matrix4x4 result = Matrix4x4::FromRows(
-      {(2.0F * nearPlane) / (right - left), 0.0F,
-       (right + left) / (right - left), 0.0F, 0.0F,
-       (2.0F * nearPlane) / (top - bottom), (top + bottom) / (top - bottom),
-       0.0F, 0.0F, 0.0F, -(farPlane + nearPlane) / (farPlane - nearPlane),
-       -(2.0F * farPlane * nearPlane) / (farPlane - nearPlane), 0.0F, 0.0F,
-       -1.0F, 0.0F});
+    {
+      (2.0F * near) / rml, 0.0F, rpl / rml, 0.0F,
+      0.0F, (2.0F * near) / tmb, tpb / tmb, 0.0F,
+      0.0F, 0.0F, far / (near - far), (near * far) / (near - far),
+      0.0F, 0.0F, -1.0F, 0.0F
+    });
   // NOLINTEND
+  // clang-format on
 
   return result;
 }
 
 // NOLINTNEXTLINE
-auto Matrix4x4::Perspective(Scalar fovRadians, Scalar aspectRatio,
-                            Scalar nearPlane, Scalar farPlane) -> Matrix4x4 {
-  Scalar invTanHalfFov = 1.0F / std::tan(fovRadians / 2.0F); // NOLINT
-  Scalar rangeInv = 1.0F / (nearPlane - farPlane);
+auto Matrix4x4::Perspective(Scalar fov, Scalar aspect, Scalar near, Scalar far)
+    -> Matrix4x4 {
+  Scalar ithf = 1.0F / std::tan(fov / 2.0F); // NOLINT
+  Scalar invr = 1.0F / (near - far);
+  auto npf = near + far;
+  auto nmf = near * far;
+  auto fmn = far - near;
 
-  //NOLINTBEGIN
+  // NOLINTBEGIN
+  // clang-format off
   Matrix4x4 result = Matrix4x4::FromRows(
-      {invTanHalfFov / aspectRatio, 0.0F, 0.0F, 0.0F, 0.0F, invTanHalfFov, 0.0F,
-       0.0F, 0.0F, 0.0F, (nearPlane + farPlane) * rangeInv,
-       (2.0F * nearPlane * farPlane) * rangeInv, 0.0F, 0.0F, -1.0F, 0.0F});
-  //NOLINTEND
+    {
+      ithf / aspect, 0.0F, 0.0F, 0.0F,
+      0.0F, ithf,    0.0F, 0.0F,
+      0.0F, 0.0F, far / (near - far), (near * far) / (near - far),
+      0.0F, 0.0F, -1.0F, 0.0F
+    });
+  // NOLINTEND
+  // clang-format on
 
   return result;
 }
@@ -249,14 +265,25 @@ auto Matrix4x4::Perspective(Scalar fovRadians, Scalar aspectRatio,
 auto Matrix4x4::Orthographic(Scalar left, Scalar right, Scalar bottom,
                              Scalar top, Scalar nearPlane, Scalar farPlane)
     -> Matrix4x4 {
+
+  auto rml = right - left;
+  auto tmb = top - bottom;
+  auto fmn = farPlane - nearPlane;
+  auto tpb = top + bottom;
+  auto rpl = right + left;
+  auto fpn = farPlane + nearPlane;
+
   // NOLINTBEGIN
+  // clang-format off
   Matrix4x4 result = Matrix4x4::FromRows(
-      {2.0F / (right - left), 0.0F, 0.0F, -(right + left) / (right - left),
-       0.0F, 2.0F / (top - bottom), 0.0F, -(top + bottom) / (top - bottom),
-       0.0F, 0.0F, -2.0F / (farPlane - nearPlane),
-       -(farPlane + nearPlane) / (farPlane - nearPlane), 0.0F, 0.0F, 0.0F,
-       1.0F});
+      {
+        2.0F / rml, 0.0F,       0.0F,       -rpl / rml,
+        0.0F,       2.0F / tmb, 0.0F,       -tpb / tmb,
+        0.0F,       0.0F,       1.0F / fmn, -farPlane / fmn,
+        0.0F,       0.0F,       0.0F,       1.0F
+      });
   // NOLINTEND
+  // clang-format on
 
   return result;
 }

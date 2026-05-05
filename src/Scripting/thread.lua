@@ -89,7 +89,18 @@ local function draw()
 
   snap.gui.endFrame()
   local imStartTime = snap.timer.getTime()
-  snap.graphics.setRenderTarget({ loadas = "clear", blendmode = { blendmode = "alpha", alphamode = "premultiplied" } })
+
+  ---@type snap.DetailedBlendMode
+  local imguiBlendState = {
+    alphaop = "add",
+    colorop = "add",
+    srcalpha = "srcalpha",
+    srccolor = "srcalpha",
+    dstalpha = "oneminussrcalpha",
+    dstcolor = "oneminussrcalpha",
+  }
+
+  snap.graphics.setRenderTarget({ loadas = "clear", blendmode = imguiBlendState })
   snap.gui.draw()
   snap.graphics.setScissor();
   lastImDrawTime = lastImDrawTime + snap.timer.getTime() - imStartTime
