@@ -25,6 +25,7 @@ extern std::vector<Ref<struct Channel>> Channels;
 
 auto AddReferences(const LuaWrap::Data::LuaType &data) -> void;
 auto RemoveReferences(const LuaWrap::Data::LuaType &data) -> void;
+auto UnloadChannelModule() -> void;
 
 struct Channel : Object {
 public:

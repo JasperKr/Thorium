@@ -2,8 +2,11 @@
 
 #include "Graphics/shader.hpp"
 #include "Graphics/texture.hpp"
+#include "Modules/Helpers/hasher.hpp"
 #include "Modules/object.hpp"
 #include <array>
+#include <cstdint>
+#include <functional>
 #include <string>
 #include <utility>
 
@@ -80,6 +83,37 @@ struct Material {
 
   static auto wrap_setTextureUVIndex(lua_State *state) -> int;
   static auto wrap_getTextureUVIndex(lua_State *state) -> int;
+
+  [[nodiscard]] auto GetMainSortKey() const -> uint64_t {
+    Hash::Hasher hasher;
+
+    hasher.Add(shader ? shader->hash() : 0);
+    hasher.Add(albedoTexture ? (void *)albedoTexture->image : nullptr);
+    hasher.Add(metallicRoughnessTexture
+                   ? (void *)metallicRoughnessTexture->image
+                   : nullptr);
+    hasher.Add(ambientOcclusionTexture ? (void *)ambientOcclusionTexture->image
+                                       : nullptr);
+    hasher.Add(reflectanceTexture ? (void *)reflectanceTexture->image
+                                  : nullptr);
+    hasher.Add(emissiveTexture ? (void *)emissiveTexture->image : nullptr);
+
+    return hasher.Get();
+  }
+
+  [[nodiscard]] auto GetSecondarySortKey() const -> uint64_t {
+    Hash::Hasher hasher;
+
+    hasher.Add(cullMode);
+    hasher.Add((uint32_t)alphaMode);
+    hasher.Add(albedoFactor.Hash());
+    hasher.Add(std::hash<float>()(roughnessFactor));
+    hasher.Add(std::hash<float>()(metallicFactor));
+    hasher.Add(std::hash<float>()(reflectanceFactor));
+    hasher.Add(emissiveFactor.Hash());
+
+    return hasher.Get();
+  }
 };
 
 struct LuaMaterial : Object {

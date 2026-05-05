@@ -39,8 +39,8 @@ VertexStageOutput vertexMain(VertexInput input)
     out.sv_position = mul(worldPos, camera.ViewProjectionMatrix);
 
     out.tex_coord = input.TexCoords;
-    float3 normal = normalize(UnpackNormal(input.Normal).xyz);
-    out.normal = mul(NormalMatrix, normal).xyz;
+    float3 normal = UnpackNormal(input.Normal).xyz;
+    out.normal = normalize(mul(NormalMatrix, normal).xyz);
 
     float4 tangent = UnpackTangent(input.Tangent);
     out.tangent.xyz = mul(NormalMatrix, tangent.xyz);
@@ -63,6 +63,7 @@ Sampler2D MainTexture;
 [shader("fragment")]
 float4 fragmentMain(FragmentInput input)
 {
+  input.normal = normalize(input.normal);
   float3 Incoming = normalize(float3(0.0, 1.0, 1.0));
   float NoL = dot(input.normal, Incoming) * 0.5 + 0.5;
   float4 texColor = MainTexture.Sample(input.tex_coord);

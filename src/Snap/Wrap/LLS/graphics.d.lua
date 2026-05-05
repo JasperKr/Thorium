@@ -327,3 +327,29 @@ function snap.graphics.clear(r, g, b, a, depth, stencil) end
 --- @param indices snap.Bytedata? The index data of the mesh.
 --- @return snap.Mesh mesh The created mesh.
 function snap.graphics.newMesh(vertexFormat, vertices, topology, indices) end
+
+--- ### Warning: This is local per thread. And is not copied from the parent thread when creating one.
+--- Sets the default texture filter.
+--- @param minFilter snap.Filter
+--- @param magFilter snap.Filter
+--- @param anisotropy number
+function snap.graphics.setDefaultFilter(minFilter, magFilter, anisotropy) end
+
+--- Gets the default texture filter.
+--- @return snap.Filter minFilter
+--- @return snap.Filter magFilter
+--- @return number anisotropy
+function snap.graphics.getDefaultFilter() end
+
+--- ### Warning: This is local per thread. And is not copied from the parent thread when creating one.
+--- Sets the default texture wrap mode.
+--- @param wrapModeU snap.WrapMode
+--- @param wrapModeV snap.WrapMode
+--- @param wrapModeW snap.WrapMode
+function snap.graphics.setDefaultWrapMode(wrapModeU, wrapModeV, wrapModeW) end
+
+--- Gets the default texture wrap mode.
+--- @return snap.WrapMode wrapModeU
+--- @return snap.WrapMode wrapModeV
+--- @return snap.WrapMode wrapModeW
+function snap.graphics.getDefaultWrapMode() end

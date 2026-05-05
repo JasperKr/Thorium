@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Graphics/format.hpp"
+#include "Graphics/graphics.hpp"
 #include "Graphics/graphicsContext.hpp"
 #include "Modules/Helpers/hasher.hpp"
 #include <algorithm>
@@ -87,6 +88,12 @@ public:
   }
 
   auto BindDynamicInputState(VkCommandBuffer commandBuffer) -> void {
+    auto currentHash = GetHash();
+    if (GetThreadContext().currentVertexFormatHash == currentHash) {
+      return; // Already bound this format, skip
+    }
+    GetThreadContext().currentVertexFormatHash = currentHash;
+
     thread_local VkVertexInputBindingDescription2EXT vertexInputInfo = {};
     const auto &bindings = GetBindings();
     auto &attributes = GetVkAttributes2();

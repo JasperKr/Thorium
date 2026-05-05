@@ -92,4 +92,15 @@ auto Initialize(Graphics::GraphicsContext &context) -> Error;
 // Deinitialize the render threading module
 auto Deinitialize(Graphics::GraphicsContext &context) -> Error;
 
+struct GraphicsConfiguration {
+  VkFilter minFilter = VK_FILTER_LINEAR;
+  VkFilter magFilter = VK_FILTER_LINEAR;
+  VkSamplerAddressMode addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+  VkSamplerAddressMode addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+  VkSamplerAddressMode addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+  float maxAnisotropy = 1.0F;
+};
+
+auto GetGraphicsConfiguration() -> GraphicsConfiguration &;
+
 } // namespace Graphics::Threading

@@ -277,7 +277,12 @@ auto SubmitCommands(Graphics::GraphicsContext &context)
 
   auto timelineValue = GetSemaphoreValue();
 
-  GetThreadContext().commandBuffer = VK_NULL_HANDLE;
+  auto &threadContext = GetThreadContext();
+
+  threadContext.commandBuffer = VK_NULL_HANDLE;
+  threadContext.currentVertexFormatHash = 0;
+  threadContext.currentVertexBuffer = nullptr;
+  threadContext.currentIndexBuffer = nullptr;
 
   auto threadInfo = CurrentRenderThreadInfo;
 
@@ -376,6 +381,11 @@ auto Deinitialize(Graphics::GraphicsContext &context) -> Error {
   }
 
   return Error::Success();
+}
+
+auto GetGraphicsConfiguration() -> GraphicsConfiguration & {
+  thread_local GraphicsConfiguration config;
+  return config;
 }
 
 } // namespace Graphics::Threading

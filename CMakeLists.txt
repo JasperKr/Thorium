@@ -6,6 +6,7 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 
 option(ENABLE_RTTI "Enable RTTI" OFF)
 option(ENABLE_EXCEPTIONS "Enable exceptions" OFF)
+option(BUNDLE_ENGINE "Bundle the engine into the framework, this will skip compiling the engine" ON)
 
 # Just globally enable / disable..
 if (NOT ENABLE_RTTI)
@@ -55,6 +56,7 @@ add_executable(snap
     $<TARGET_OBJECTS:snap_core>
 )
 
+if (BUNDLE_ENGINE)
 target_include_directories(snap
     PUBLIC
         ${PROJECT_SOURCE_DIR}/src/SnapEngine
@@ -68,6 +70,13 @@ target_link_libraries(snap
         snap_core
         SnapEngine
 )
+else()
+target_link_libraries(snap
+    PRIVATE
+        snap_core
+)
+endif()
+
 
 target_link_options(snap PRIVATE
     $<$<CONFIG:Debug>:-rdynamic>
@@ -95,22 +104,49 @@ elseif (MSVC)
     )
 endif()
 
-add_executable(lua_stub_gen
-    src/Snap/generateBindings.cpp
-    $<TARGET_OBJECTS:snap_core>
-    $<TARGET_OBJECTS:SnapEngine>
-)
+if (BUNDLE_ENGINE)
+  target_compile_definitions(snap
+      PRIVATE
+          BUNDLE_ENGINE
+  )
 
-target_compile_definitions(lua_stub_gen
-  PRIVATE
-    LUA_STUB_GEN
-)
+  add_executable(lua_stub_gen
+      src/Snap/generateBindings.cpp
+      $<TARGET_OBJECTS:snap_core>
+      $<TARGET_OBJECTS:SnapEngine>
+  )
 
-target_link_libraries(lua_stub_gen
+  target_compile_definitions(lua_stub_gen
     PRIVATE
-        snap_core
-        SnapEngine
-)
+      LUA_STUB_GEN
+  )
+
+  target_link_libraries(lua_stub_gen
+      PRIVATE
+          snap_core
+          SnapEngine
+  )
+else()
+  target_compile_definitions(snap
+      PRIVATE
+          NO_ENGINE
+  )
+
+  add_executable(lua_stub_gen
+      src/Snap/generateBindings.cpp
+      $<TARGET_OBJECTS:snap_core>
+  )
+
+  target_compile_definitions(lua_stub_gen
+    PRIVATE
+      LUA_STUB_GEN
+  )
+
+  target_link_libraries(lua_stub_gen
+      PRIVATE
+          snap_core
+  )
+endif()
 
 add_custom_target(generate_bindings
     COMMAND lua_stub_gen

@@ -4,7 +4,6 @@
 #include "Graphics/uniformWriter.hpp"
 #include "Modules/Math/matrix.hpp"
 #include "Modules/bindings.hpp"
-#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Modules/reflectBindings.hpp"
@@ -20,6 +19,8 @@
 #include "flecs/addons/cpp/c_types.hpp"
 #include "flecs/addons/cpp/mixins/id/decl.hpp"
 #include "material.hpp"
+#include "renderer.hpp"
+#include <algorithm>
 #include <imgui.h>
 #include <lauxlib.h>
 #include <lua.hpp>
@@ -90,6 +91,7 @@ auto DrawEntityHierarchy(const flecs::entity &entity) -> void {
   });
 }
 
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 auto Scene::DrawUiElement(lua_State *state) -> int {
   auto *scene = LuaWrap::ObjectFromLua<Scene>(state, 1);
 
@@ -101,7 +103,7 @@ auto Scene::DrawUiElement(lua_State *state) -> int {
   // This is just a placeholder for now
 
   ImGui::Begin(scene->name.c_str());
-  if (ImGui::BeginChild("Entity Hierarchy", ImVec2(300, 0),
+  if (ImGui::BeginChild("Entity Hierarchy", ImVec2(300, 0), // NOLINT
                         ImGuiChildFlags_Borders)) {
     scene->world.entity(0).children(
         [&](flecs::entity entity) -> void { DrawEntityHierarchy(entity); });
@@ -185,6 +187,19 @@ auto Scene::DrawUiElement(lua_State *state) -> int {
   return 0;
 }
 
+struct DrawItem {
+  flecs::entity geom_entity;
+  const Geometry *geometry{};
+  const Renderer::Material *material{};
+
+  uint64_t primaryKey;
+  uint64_t secondaryKey;
+  uint64_t tertiaryKey;
+};
+
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+std::vector<DrawItem> DrawItems;
+
 auto Scene::DrawModels(lua_State *state) -> int {
   auto *scene = LuaWrap::ObjectFromLua<Scene>(state, 1);
 
@@ -193,13 +208,45 @@ auto Scene::DrawModels(lua_State *state) -> int {
   }
 
   auto *ctx = Graphics::GetCurrentGraphicsContext();
-  Error drawResult = Error::Success();
 
   const auto &shader = Graphics::DynamicRendering::GetShader();
+  DrawItems.clear();
 
-  scene->world.each<Geometry>([&](flecs::entity entity,
-                                  const Geometry &geometry) -> void {
-    const auto &worldMatrix = entity.get<Transform>().GetWorldMatrix();
+  scene->world.each<Geometry>(
+      [&](flecs::entity entity, const Geometry &geometry) -> void {
+        entity.children([&](flecs::entity child) -> void {
+          const Renderer::Material *material = nullptr;
+
+          if (child.has<Engine::Renderer::Material>()) {
+            material = child.try_get<Engine::Renderer::Material>();
+          } else {
+            material = &Renderer::RendererInstance.DefaultMaterial;
+          }
+
+          DrawItems.emplace_back(
+              DrawItem{.geom_entity = entity,
+                       .geometry = &geometry,
+                       .material = material,
+                       .primaryKey = material->GetMainSortKey(),
+                       .secondaryKey = geometry.mesh->GetHash(),
+                       .tertiaryKey = material->GetSecondarySortKey()});
+        });
+      });
+
+  std::ranges::sort(DrawItems,
+                    [](const DrawItem &first, const DrawItem &second) -> auto {
+                      if (first.primaryKey != second.primaryKey) {
+                        return first.primaryKey < second.primaryKey;
+                      }
+                      if (first.secondaryKey != second.secondaryKey) {
+                        return first.secondaryKey < second.secondaryKey;
+                      }
+                      return first.tertiaryKey < second.tertiaryKey;
+                    });
+
+  for (const auto &item : DrawItems) {
+    const auto &worldMatrix =
+        item.geom_entity.get<Transform>().GetWorldMatrix();
     const auto &normalMatrix = Math::Matrix3x3(worldMatrix).InverseTranspose();
 
     static auto modelMatrixKey = Graphics::ResourceKey{"ModelMatrix"};
@@ -209,42 +256,30 @@ auto Scene::DrawModels(lua_State *state) -> int {
         shader, *ctx, modelMatrixKey, worldMatrix);
 
     if (Error::IsError(sendErr)) {
-      drawResult = sendErr;
-      return;
+      return luaL_error(state, "%s", sendErr.ToString().c_str());
     }
 
     sendErr = Graphics::Shader::UniformWriter::Send(
         shader, *ctx, normalMatrixKey, normalMatrix);
 
     if (Error::IsError(sendErr)) {
-      drawResult = sendErr;
-      return;
+      return luaL_error(state, "%s", sendErr.ToString().c_str());
     }
 
-    entity.children([&](flecs::entity child) -> void {
-      if (child.has<Engine::Renderer::Material>()) {
-        const auto &material = child.get<Engine::Renderer::Material>();
-        if (!material.albedoTexture.isValid()) {
-          return;
-        }
+    if (!item.material->albedoTexture.isValid()) {
+      return luaL_error(state, "Invalid albedo texture for material");
+    }
 
-        static auto materialKey = Graphics::ResourceKey{"MainTexture"};
-        auto err = shader->Send(*ctx, materialKey, material.albedoTexture);
-        if (Error::IsError(err)) {
-          drawResult = err;
-          return;
-        }
-      }
-    });
+    static auto materialKey = Graphics::ResourceKey{"MainTexture"};
+    auto err = shader->Send(*ctx, materialKey, item.material->albedoTexture);
+    if (Error::IsError(err)) {
+      return luaL_error(state, "%s", err.ToString().c_str());
+    }
 
-    auto result = Graphics::Draw(*ctx, *geometry.mesh);
+    auto result = Graphics::Draw(*ctx, *item.geometry->mesh);
     if (Error::IsError(result)) {
-      drawResult = result;
+      return luaL_error(state, "%s", result.ToString().c_str());
     }
-  });
-
-  if (Error::IsError(drawResult)) {
-    return luaL_error(state, "%s", drawResult.ToString().c_str());
   }
 
   return 0;

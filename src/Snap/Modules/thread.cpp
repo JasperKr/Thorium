@@ -7,6 +7,7 @@
 #include "Wrap/lua_data.hpp"
 #include "Wrap/wrap.hpp"
 #include "event.hpp"
+#include <csignal>
 #include <cstdint>
 #include <mutex>
 #include <public/common/TracySystem.hpp>
@@ -19,6 +20,9 @@
 #include "channel.hpp"
 
 namespace Threading {
+
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+std::atomic<bool> IsShuttingDown;
 
 inline auto GetThreadStatusChannel() -> Ref<Channel> & {
   static auto threadStatusChannel = Ref<Channel>::Make();
@@ -176,5 +180,14 @@ auto Thread::GetErrorMessage() const -> std::string {
   std::lock_guard<std::mutex> lock(statusMutex);
   return errorMessage;
 }
+
+auto UnloadModule() -> void { UnloadChannelModule(); }
+
+inline auto OnSIGINT(int signal) -> void {
+  IsShuttingDown.store(true);
+  UnloadChannelModule();
+}
+
+auto LoadModule() -> void { std::signal(SIGINT, OnSIGINT); }
 
 } // namespace Threading

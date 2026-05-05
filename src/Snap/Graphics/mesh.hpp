@@ -82,6 +82,17 @@ struct Mesh : Object {
     return Mesh::GetType();
   }
 
+  auto GetHash() const -> size_t {
+    Hash::Hasher hasher;
+    hasher.Add(VertexCount);
+    hasher.Add(IndexCount);
+    hasher.Add(IndicesFormat);
+    hasher.Add(Topology);
+    hasher.Add(VertexBuffer ? VertexBuffer->handle : nullptr);
+    hasher.Add(IndexBuffer ? IndexBuffer->handle : nullptr);
+    return hasher.Get();
+  }
+
 private:
   auto UploadVertices(GraphicsContext &context,
                       const std::span<const uint8_t> &vertices, uint64_t offset)

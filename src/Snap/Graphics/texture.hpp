@@ -48,6 +48,12 @@ enum class TextureUsage : uint8_t {
   Unknown,
 };
 
+enum class TextureMipmapOption : uint8_t {
+  None,   // Do not create mipmaps.
+  Init,   // Calculate a mip chain.
+  Manual, // Allocate a mip chain.
+};
+
 extern std::unordered_map<std::pair<VkFormat, TextureType>, Ref<struct Texture>,
                           struct VkFormatTextureTypeHash>
     DefaultTextureCache; // NOLINT
@@ -300,22 +306,25 @@ auto CopyImageToBuffer(GraphicsContext &context, Texture *texture,
                        VkBuffer buffer) -> Error;
 auto GenerateMipmaps(GraphicsContext &context, Texture *texture) -> Error;
 auto LoadFromFile(GraphicsContext &context, const char *path,
-                  VkImageUsageFlags usage = 0) -> Result<Ref<Texture>>;
+                  VkImageUsageFlags usage = 0, TextureMipmapOption mipmaps = {})
+    -> Result<Ref<Texture>>;
 
 // texture 2D From byte array
 auto LoadFromMemory(GraphicsContext &context,
                     const std::span<const uint8_t> &data,
-                    VkImageUsageFlags usage = 0) -> Result<Ref<Texture>>;
+                    VkImageUsageFlags usage = 0,
+                    TextureMipmapOption mipmaps = {}) -> Result<Ref<Texture>>;
 
 // texture 2D From ImageData
 auto LoadFromMemory(GraphicsContext &context, Image::ImageData &imageData,
-                    VkImageUsageFlags usage = 0) -> Result<Ref<Texture>>;
+                    VkImageUsageFlags usage = 0,
+                    TextureMipmapOption mipmaps = {}) -> Result<Ref<Texture>>;
 
 // texture 3D/Array/Cubemap From array of ImageData slices
 auto LoadFromMemory(GraphicsContext &context,
                     const std::vector<Image::ImageData *> &slices,
-                    TextureType type, VkImageUsageFlags usage = 0)
-    -> Result<Ref<Texture>>;
+                    TextureType type, VkImageUsageFlags usage = 0,
+                    TextureMipmapOption mipmaps = {}) -> Result<Ref<Texture>>;
 
 auto GetDefaultTexture(const GraphicsContext &context, VkFormat format,
                        Graphics::TextureType textureType)

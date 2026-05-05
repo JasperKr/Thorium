@@ -51,8 +51,6 @@ auto wrap_GetDimensions(lua_State *state) -> int;
 
 auto wrap_AquireCommandBuffer(lua_State *state) -> int;
 auto wrap_SubmitCommandBuffer(lua_State *state) -> int;
-auto wrap_UseCommands(lua_State *state) -> int;
-auto wrap_GetGeneratedCommands(lua_State *state) -> int;
 
 auto wrap_CopyBuffer(lua_State *state) -> int;
 auto wrap_CopyTexture(lua_State *state) -> int;
@@ -60,6 +58,11 @@ auto wrap_CopyBufferToTexture(lua_State *state) -> int;
 auto wrap_CopyTextureToBuffer(lua_State *state) -> int;
 
 auto wrap_Clear(lua_State *state) -> int;
+
+auto wrap_SetDefaultFilter(lua_State *state) -> int;
+auto wrap_GetDefaultFilter(lua_State *state) -> int;
+auto wrap_SetDefaultWrapMode(lua_State *state) -> int;
+auto wrap_GetDefaultWrapMode(lua_State *state) -> int;
 
 auto ShutdownWrapGraphics() -> void;
 
@@ -105,6 +108,10 @@ static const std::vector<luaL_Reg> GraphicsLib = {
     {"copyBufferToTexture", wrap_CopyBufferToTexture},
     {"copyTextureToBuffer", wrap_CopyTextureToBuffer},
     {"clear", wrap_Clear},
+    {"setDefaultFilter", wrap_SetDefaultFilter},
+    {"getDefaultFilter", wrap_GetDefaultFilter},
+    {"setDefaultWrapMode", wrap_SetDefaultWrapMode},
+    {"getDefaultWrapMode", wrap_GetDefaultWrapMode},
 };
 
 const static std::vector<lua_CFunction> childrenInitFunctions = {

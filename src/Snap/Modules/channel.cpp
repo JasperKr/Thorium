@@ -37,7 +37,7 @@ auto RemoveReferences(const LuaWrap::Data::LuaType &data) -> void {
   }
 }
 
-auto UnloadModule() -> void {
+auto UnloadChannelModule() -> void {
   for (auto &channel : Channels) {
     channel->DestroyImmediately();
   }

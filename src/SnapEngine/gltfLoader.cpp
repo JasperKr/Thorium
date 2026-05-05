@@ -227,7 +227,8 @@ inline auto LoadTexture(Graphics::GraphicsContext &context,
 
   auto textureResult = Graphics::LoadFromMemory(
       context, span,
-      VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
+      VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+      Graphics::TextureMipmapOption::Manual);
 
   if (Error::IsError(textureResult)) {
     return textureResult.error().AsUnexpected();
@@ -1012,28 +1013,28 @@ inline auto LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
   // Note: checking if children aren't empty might cull some nodes, should check if this is an issue.
   bool isNode = !isMesh && !isSkin && !isCamera && !isLight;
 
+  Engine::Transform transform{};
+
+  if (std::holds_alternative<fastgltf::TRS>(gltfNode.transform)) {
+    const auto &trs = std::get<fastgltf::TRS>(gltfNode.transform);
+
+    transform.SetPosition(trs.translation[0], trs.translation[1],
+                          trs.translation[2]);
+    transform.SetRotation(trs.rotation[0], trs.rotation[1], trs.rotation[2],
+                          trs.rotation[3]);
+    transform.SetScale(trs.scale[0], trs.scale[1], trs.scale[2]);
+  } else {
+    // Shouldn't be hit. Since we specified DecomposeNodeMatrices, all matrices should
+    // have been decomposed.
+    return Error::Unexpected("Attempted to load a node with matrix transform.");
+  }
+
   if (isNode) {
     auto node = world->entity(gltfNode.name.c_str());
     node.add<Engine::Node>();
     node.add<Engine::Transform>();
     node.add<Engine::Userdata>();
-
-    if (std::holds_alternative<fastgltf::TRS>(gltfNode.transform)) {
-      const auto &trs = std::get<fastgltf::TRS>(gltfNode.transform);
-
-      auto &transform = node.get_mut<Engine::Transform>();
-
-      transform.SetPosition(trs.translation[0], trs.translation[1],
-                            trs.translation[2]);
-      transform.SetRotation(trs.rotation[0], trs.rotation[1], trs.rotation[2],
-                            trs.rotation[3]);
-      transform.SetScale(trs.scale[0], trs.scale[1], trs.scale[2]);
-    } else {
-      // Shouldn't be hit. Since we specified DecomposeNodeMatrices, all matrices should
-      // have been decomposed.
-      return Error::Unexpected(
-          "Attempted to load a node with matrix transform.");
-    }
+    node.set<Engine::Transform>(transform);
 
     for (const auto &childIndex : gltfNode.children) {
       const auto &childGltfNode = asset.nodes[childIndex];
@@ -1064,7 +1065,9 @@ inline auto LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
       shapeEntity.add<Engine::Shape>();
       shapeEntity.add<Engine::WorldBounds>();
       shapeEntity.add<Engine::LocalBounds>();
-      shapeEntity.add<Engine::Transform>();
+      shapeEntity.set<Engine::Transform>(transform);
+
+      // TODO: Check the normal matrix construction and if after multiplying it needs to be normalized or not.
 
       shapes.emplace_back(shapeEntity);
 
@@ -1094,17 +1097,6 @@ inline auto LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
       }
 
       using Comp = Graphics::VertexComponent;
-
-      /*
-      struct VertexInput
-{
-    float3 Position : POSITION;
-    float2 TexCoords : TEXCOORD;
-    uint Normal : NORMAL;
-    uint Tangent : TANGENT;
-    uint Color  : COLOR;
-};
-      */
 
       static std::vector<Comp> DefaultVertexComponents = {
           Comp{.name = "POSITION",

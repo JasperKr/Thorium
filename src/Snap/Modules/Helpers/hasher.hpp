@@ -10,6 +10,7 @@ struct Hasher {
   auto Add(void *ptr) -> void;
 
   [[nodiscard]] auto Get() const -> size_t;
+  auto Reset() -> void;
 
 private:
   size_t hashedValue = 0;

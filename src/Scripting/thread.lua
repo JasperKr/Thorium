@@ -190,9 +190,10 @@ while true do
   snap.graphics.aquireGraphics(nil, nil, createSnapshot)
   createSnapshot = false
   if not texture then
-    texture = snap.graphics.newTexture(testImgdata, { storage = true, sampler = true })
+    snap.graphics.setDefaultFilter("linear", "linear", 4)
+    texture = snap.graphics.newTexture(testImgdata, { storage = true, sampler = true, mipmaps = "init" })
 
-    snap.scene.loadModel(scene, "Assets/Terrain/Bistro/bistro.gltf")
+    snap.scene.loadModel(scene, "Assets/Terrain/Sponza/Sponza.gltf")
 
     rendertarget = snap.graphics.newTexture(snap.graphics.getWidth(), snap.graphics.getHeight(),
       { sampler = true, rendertarget = true })

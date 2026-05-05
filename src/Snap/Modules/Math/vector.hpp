@@ -73,6 +73,7 @@ struct Vec2 {
   explicit Vec2(const Uvec4 &vec4);
 
   [[nodiscard]] auto ToString() const -> std::string;
+  [[nodiscard]] auto Hash() const -> uint64_t;
 };
 
 struct Vec3 {
@@ -134,6 +135,7 @@ struct Vec3 {
   explicit Vec3(const Vec4 &&vec4);
 
   [[nodiscard]] auto ToString() const -> std::string;
+  [[nodiscard]] auto Hash() const -> uint64_t;
 };
 
 struct Vec4 {
@@ -194,6 +196,7 @@ struct Vec4 {
   explicit Vec4(const Uvec4 &vec4);
 
   [[nodiscard]] auto ToString() const -> std::string;
+  [[nodiscard]] auto Hash() const -> uint64_t;
 };
 
 struct Uvec2 {
@@ -236,6 +239,7 @@ struct Uvec2 {
   explicit Uvec2(const Ivec4 &vec4);
 
   [[nodiscard]] auto ToString() const -> std::string;
+  [[nodiscard]] auto Hash() const -> uint64_t;
 };
 
 struct Uvec3 {
@@ -280,6 +284,7 @@ struct Uvec3 {
   explicit Uvec3(const Ivec4 &vec4);
 
   [[nodiscard]] auto ToString() const -> std::string;
+  [[nodiscard]] auto Hash() const -> uint64_t;
 };
 
 struct Uvec4 {
@@ -325,6 +330,7 @@ struct Uvec4 {
   explicit Uvec4(const Ivec4 &vec4);
 
   [[nodiscard]] auto ToString() const -> std::string;
+  [[nodiscard]] auto Hash() const -> uint64_t;
 };
 
 struct Ivec2 {
@@ -367,6 +373,7 @@ struct Ivec2 {
   explicit Ivec2(const Uvec4 &vec4);
 
   [[nodiscard]] auto ToString() const -> std::string;
+  [[nodiscard]] auto Hash() const -> uint64_t;
 };
 
 struct Ivec3 {
@@ -411,6 +418,7 @@ struct Ivec3 {
   explicit Ivec3(const Uvec4 &vec4);
 
   [[nodiscard]] auto ToString() const -> std::string;
+  [[nodiscard]] auto Hash() const -> uint64_t;
 };
 
 struct Ivec4 {
@@ -456,6 +464,7 @@ struct Ivec4 {
   explicit Ivec4(const Uvec4 &vec4);
 
   [[nodiscard]] auto ToString() const -> std::string;
+  [[nodiscard]] auto Hash() const -> uint64_t;
 };
 
 auto Min(const Vec2 &vec_a, const Vec2 &vec_b) -> Vec2;

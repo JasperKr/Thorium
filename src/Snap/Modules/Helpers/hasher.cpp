@@ -15,5 +15,6 @@ auto Hasher::Add(size_t value) -> void {
 auto Hasher::Add(void *ptr) -> void { Add(std::hash<void *>()(ptr)); }
 
 auto Hasher::Get() const -> size_t { return hashedValue; }
+auto Hasher::Reset() -> void { hashedValue = 0; }
 
 } // namespace Hash

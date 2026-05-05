@@ -46,6 +46,36 @@ static inline auto GetTexelCount(const VkExtent3D &extent,
   return totalTexels;
 }
 
+static inline auto GetMipmapCount(VkExtent2D extent) -> uint32_t {
+  uint32_t mipLevels = 1;
+  while (extent.width > 1U || extent.height > 1U) {
+    mipLevels++;
+    extent.width = std::max(1U, extent.width >> 1U);
+    extent.height = std::max(1U, extent.height >> 1U);
+  }
+  return mipLevels;
+}
+
+static inline auto GetMipmapCount(VkExtent3D extent) -> uint32_t {
+  uint32_t mipLevels = 1;
+  while (extent.width > 1U || extent.height > 1U || extent.depth > 1U) {
+    mipLevels++;
+    extent.width = std::max(1U, extent.width >> 1U);
+    extent.height = std::max(1U, extent.height >> 1U);
+    extent.depth = std::max(1U, extent.depth >> 1U);
+  }
+  return mipLevels;
+}
+
+static inline auto GetMipmapCount(uint32_t width, uint32_t height) -> uint32_t {
+  return GetMipmapCount(VkExtent2D{width, height});
+}
+
+static inline auto GetMipmapCount(uint32_t width, uint32_t height,
+                                  uint32_t depth) -> uint32_t {
+  return GetMipmapCount(VkExtent3D{width, height, depth});
+}
+
 static inline auto IsDepthTexture(VkFormat format) -> bool {
   switch (format) {
   case VK_FORMAT_D16_UNORM:

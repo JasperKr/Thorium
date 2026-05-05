@@ -1001,4 +1001,110 @@ auto wrap_CopyTextureToBuffer(lua_State *state) -> int {
   return 0;
 }
 
+auto wrap_SetDefaultFilter(lua_State *state) -> int {
+  VkFilter minFilter = VK_FILTER_MAX_ENUM;
+  VkFilter magFilter = VK_FILTER_MAX_ENUM;
+
+  const char *minFilterStr = luaL_checkstring(state, 1);
+  const char *magFilterStr = luaL_optstring(state, 2, minFilterStr);
+
+  if (strcmp(minFilterStr, "nearest") == 0) {
+    minFilter = VK_FILTER_NEAREST;
+  } else if (strcmp(minFilterStr, "linear") == 0) {
+    minFilter = VK_FILTER_LINEAR;
+  } else {
+    return luaL_error(state, "Invalid min filter: %s", minFilterStr);
+  }
+
+  if (strcmp(magFilterStr, "nearest") == 0) {
+    magFilter = VK_FILTER_NEAREST;
+  } else if (strcmp(magFilterStr, "linear") == 0) {
+    magFilter = VK_FILTER_LINEAR;
+  } else {
+    return luaL_error(state, "Invalid mag filter: %s", magFilterStr);
+  }
+
+  auto &config = ::Graphics::Threading::GetGraphicsConfiguration();
+  config.minFilter = minFilter;
+  config.magFilter = magFilter;
+  config.maxAnisotropy =
+      static_cast<float>(luaL_optnumber(state, 3, config.maxAnisotropy));
+
+  return 0;
+}
+
+auto wrap_GetDefaultFilter(lua_State *state) -> int {
+  auto &config = ::Graphics::Threading::GetGraphicsConfiguration();
+
+  switch (config.minFilter) {
+  case VK_FILTER_NEAREST:
+    lua_pushstring(state, "nearest");
+    break;
+  default:
+    lua_pushstring(state, "linear");
+    break;
+  }
+
+  switch (config.magFilter) {
+  case VK_FILTER_NEAREST:
+    lua_pushstring(state, "nearest");
+    break;
+  default:
+    lua_pushstring(state, "linear");
+    break;
+    break;
+  }
+
+  lua_pushnumber(state, static_cast<lua_Number>(config.maxAnisotropy));
+  return 3;
+}
+
+auto inline StringToAddressMode(const char *addressModeStr)
+    -> VkSamplerAddressMode {
+  if (strcmp(addressModeStr, "repeat") == 0) {
+    return VK_SAMPLER_ADDRESS_MODE_REPEAT;
+  }
+  if (strcmp(addressModeStr, "mirrored_repeat") == 0) {
+    return VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
+  }
+  if (strcmp(addressModeStr, "clamp_to_edge") == 0) {
+    return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+  }
+  return VK_SAMPLER_ADDRESS_MODE_REPEAT; // Default
+}
+
+auto wrap_SetDefaultWrapMode(lua_State *state) -> int {
+  auto &config = ::Graphics::Threading::GetGraphicsConfiguration();
+
+  config.addressModeU = StringToAddressMode(luaL_checkstring(state, 1));
+  config.addressModeV = StringToAddressMode(luaL_checkstring(state, 2));
+  config.addressModeW = StringToAddressMode(luaL_checkstring(state, 3));
+
+  return 0;
+}
+
+auto inline AddressModeToString(VkSamplerAddressMode addressMode) -> const
+    char * {
+  switch (addressMode) {
+  case VK_SAMPLER_ADDRESS_MODE_REPEAT:
+    return "repeat";
+  case VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT:
+    return "mirrored_repeat";
+  case VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE:
+    return "clamp_to_edge";
+  default:
+    return "unknown";
+  }
+}
+
+auto wrap_GetDefaultWrapMode(lua_State *state) -> int {
+  auto &config = ::Graphics::Threading::GetGraphicsConfiguration();
+
+  lua_pushstring(state, AddressModeToString(config.addressModeU));
+  lua_pushstring(state, AddressModeToString(config.addressModeV));
+  lua_pushstring(state, AddressModeToString(config.addressModeW));
+
+  return 3;
+}
+
 } // namespace Wrap::Graphics

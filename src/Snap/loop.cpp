@@ -32,6 +32,10 @@
 #include "Wrap/reference.hpp"
 #include "Wrap/wrap.hpp"
 
+#ifdef BUNDLE_ENGINE
+#include "renderer.hpp"
+#endif
+
 constexpr auto defaultRunFunction = R"lua(
 function snap.run()
 
@@ -331,12 +335,12 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
     return luaLoadErr;
   }
 
-  // Engine::Scene scene;
-
-  // auto gltfresult = glTF::LoadGltfModel(context, "assets/testscene.glb", scene);
-  // if (Error::IsError(gltfresult)) {
-  //   return gltfresult;
-  // }
+#ifdef BUNDLE_ENGINE
+  error = Engine::Renderer::RendererInstance.Initialize(context);
+  if (Error::IsError(error)) {
+    return error;
+  }
+#endif
 
   PrintDebug("Entering main loop...");
 
@@ -390,6 +394,10 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
 
   // Force all deferred destructions to happen now
   Graphics::GetDeferredDestructionAllowed() = false;
+
+#ifdef BUNDLE_ENGINE
+  Engine::Renderer::RendererInstance.Deinitialize();
+#endif
 
   Wrap::Graphics::ShutdownWrapGraphics();
 

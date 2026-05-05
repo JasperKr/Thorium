@@ -3,6 +3,7 @@
 #include "Modules/object.hpp"
 #include "Modules/type.hpp"
 #include "Wrap/lua_data.hpp"
+#include <atomic>
 #include <condition_variable>
 #include <cstdint>
 #include <mutex>
@@ -29,7 +30,12 @@ thread_local extern ThreadID CurrentThreadID;
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 static std::atomic<ThreadID> ThreadIDCounter = 0;
 
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+extern std::atomic<bool> IsShuttingDown;
+
 auto UnloadModule() -> void;
+
+auto LoadModule() -> void;
 
 enum class ThreadStatus : uint8_t { Running, Stopped, Error };
 

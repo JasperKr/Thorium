@@ -1315,6 +1315,8 @@ auto InsertResourceBarriers(const GraphicsContext &context) -> Error {
 inline auto BindBufferDesciptors(DescriptorKey &key, auto &shader,
                                  const Shader::BoundState &state, int setIndex)
     -> Error {
+  ZoneScoped;
+
   for (const auto &pair : state.userBoundBuffers) {
     const auto location = pair.first;
     const auto &buffer = pair.second;
@@ -1365,6 +1367,7 @@ inline auto BindTextureDescriptors(const GraphicsContext &context,
                                    DescriptorKey &key,
                                    Ref<Shader::ShaderModule> &shader,
                                    int setIndex) -> Error {
+  ZoneScoped;
 
   for (const auto &pair : shader->GetState().userBoundTextures) {
     const auto location = pair.first;
@@ -1432,6 +1435,8 @@ inline auto BindGlobalsDescriptor(const GraphicsContext &context,
                                   int setIndex,
                                   std::vector<uint32_t> &dynamicOffsets)
     -> Error {
+  ZoneScoped;
+
   if (shader->reflection.hasGlobals) {
     const auto set = shader->reflection.globals.set;
     const auto binding = shader->reflection.globals.binding;
@@ -1476,6 +1481,8 @@ inline auto AllocateDescriptorSets(const GraphicsContext &context,
                                    DescriptorKey &key,
                                    const VkDescriptorSetLayout &layout)
     -> Result<VkDescriptorSet> {
+  ZoneScoped;
+
   VkDescriptorSetAllocateInfo allocInfo = {};
   allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
   allocInfo.descriptorPool = GetThreadContext().descriptorPool;
@@ -1592,11 +1599,14 @@ auto BindDescriptorSets(const GraphicsContext &context,
     auto iter = DescriptorSetCache.find(key);
 
     if (iter != DescriptorSetCache.end()) {
+      ZoneScopedN("vkCmdBindDescriptorSets cached");
+
       vkCmdBindDescriptorSets(
           Graphics::GetCommandBuffer(), TopOfStack->bindPoint,
           CurrentPipelineLayout.layout, setIndex, 1, &iter->second,
           dynamicOffsets.size(), dynamicOffsets.data());
     } else {
+      ZoneScopedN("Allocate and bind descriptor set");
       auto descriptorSetResult = AllocateDescriptorSets(context, key, layout);
       if (Error::IsError(descriptorSetResult)) {
         return descriptorSetResult.error();

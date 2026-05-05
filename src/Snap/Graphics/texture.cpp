@@ -5,6 +5,7 @@
 #include "Graphics/dynamicRendering.hpp"
 #include "Graphics/format.hpp"
 #include "Graphics/graphics.hpp"
+#include "Graphics/renderThread.hpp"
 #include "Graphics/resource.hpp"
 #include "Modules/Math/vector.hpp"
 #include "Modules/color.hpp"
@@ -110,6 +111,15 @@ auto Create2D(const GraphicsContext &context, const TextureCreationInfo &info)
   texture->usage = info.usage;
   texture->arrayLayers = 1;
   texture->samplerDirty = true;
+
+  const auto &config = Threading::GetGraphicsConfiguration();
+
+  texture->samplerDescription.minFilter = config.minFilter;
+  texture->samplerDescription.magFilter = config.magFilter;
+  texture->samplerDescription.addressModeU = config.addressModeU;
+  texture->samplerDescription.addressModeV = config.addressModeV;
+  texture->samplerDescription.addressModeW = config.addressModeW;
+  texture->samplerDescription.maxAnisotropy = config.maxAnisotropy;
 
   VkImageCreateInfo imageInfo = {};
   imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -496,7 +506,8 @@ auto CreateArray(const GraphicsContext &context,
 }
 
 auto LoadFromFile(GraphicsContext &context, const char *path,
-                  VkImageUsageFlags usage) -> Result<Ref<Texture>> {
+                  VkImageUsageFlags usage, TextureMipmapOption mipmaps)
+    -> Result<Ref<Texture>> {
   auto fileLoadResult = Filesystem::ReadFile(path);
 
   if (Error::IsError(fileLoadResult)) {
@@ -515,6 +526,13 @@ auto LoadFromFile(GraphicsContext &context, const char *path,
 
   auto imageData = imageDataResult.value();
 
+  int mipmapCount = 1;
+
+  if (mipmaps != TextureMipmapOption::None) {
+    mipmapCount = static_cast<int>(
+        Image::GetMipmapCount(imageData->GetWidth(), imageData->GetHeight()));
+  }
+
   auto texture = Create2D(
       context, TextureCreationInfo{
                    .width = imageData->GetWidth(),
@@ -522,7 +540,7 @@ auto LoadFromFile(GraphicsContext &context, const char *path,
                    .format = imageData->GetFormat(),
                    .usage = usage | static_cast<uint32_t>(
                                         VK_IMAGE_USAGE_TRANSFER_DST_BIT),
-                   .mipmapCount = 1,
+                   .mipmapCount = mipmapCount,
                    .debugName = "Image_" + std::string(path),
                });
 
@@ -536,13 +554,21 @@ auto LoadFromFile(GraphicsContext &context, const char *path,
     return result.AsUnexpected();
   }
 
+  if (mipmaps == TextureMipmapOption::Init) {
+    auto err = GenerateMipmaps(context, texture.value().get());
+    if (Error::IsError(err)) {
+      return err.AsUnexpected();
+    }
+  }
+
   return texture;
 }
 
 // texture 2D From byte array
 auto LoadFromMemory(GraphicsContext &context,
                     const std::span<const uint8_t> &data,
-                    VkImageUsageFlags usage) -> Result<Ref<Texture>> {
+                    VkImageUsageFlags usage, TextureMipmapOption mipmaps)
+    -> Result<Ref<Texture>> {
   ZoneScoped;
 
   auto width = 0;
@@ -556,8 +582,11 @@ auto LoadFromMemory(GraphicsContext &context,
     return loadResult.error().AsUnexpected();
   }
 
-  PrintAlways("Loaded image from memory, width: {}, height: {}, format: {}",
-              width, height, ::Graphics::Format::ImageFormatToString(format));
+  int mipmapCount = 1;
+
+  if (mipmaps != TextureMipmapOption::None) {
+    mipmapCount = static_cast<int>(Image::GetMipmapCount(width, height));
+  }
 
   auto texture = Create2D(
       context, TextureCreationInfo{
@@ -566,7 +595,7 @@ auto LoadFromMemory(GraphicsContext &context,
                    .format = format,
                    .usage = usage | static_cast<uint32_t>(
                                         VK_IMAGE_USAGE_TRANSFER_DST_BIT),
-                   .mipmapCount = 1,
+                   .mipmapCount = mipmapCount,
                    .debugName = "Image_FromMemory",
                });
 
@@ -600,12 +629,27 @@ auto LoadFromMemory(GraphicsContext &context,
     return result.AsUnexpected();
   }
 
+  if (mipmaps == TextureMipmapOption::Init) {
+    auto err = GenerateMipmaps(context, texture.value().get());
+    if (Error::IsError(err)) {
+      return err.AsUnexpected();
+    }
+  }
+
   return texture;
 }
 
 // texture 2D From ImageData
 auto LoadFromMemory(GraphicsContext &context, Image::ImageData &imageData,
-                    VkImageUsageFlags usage) -> Result<Ref<Texture>> {
+                    VkImageUsageFlags usage, TextureMipmapOption mipmaps)
+    -> Result<Ref<Texture>> {
+
+  int mipmapCount = 1;
+  if (mipmaps != TextureMipmapOption::None) {
+    mipmapCount = static_cast<int>(
+        Image::GetMipmapCount(imageData.GetWidth(), imageData.GetHeight()));
+  }
+
   auto texture = Create2D(
       context, TextureCreationInfo{
                    .width = imageData.GetWidth(),
@@ -613,7 +657,7 @@ auto LoadFromMemory(GraphicsContext &context, Image::ImageData &imageData,
                    .format = imageData.GetFormat(),
                    .usage = usage | static_cast<uint32_t>(
                                         VK_IMAGE_USAGE_TRANSFER_DST_BIT),
-                   .mipmapCount = 1,
+                   .mipmapCount = mipmapCount,
                    .debugName = "Image_ImageData",
                });
 
@@ -632,8 +676,8 @@ auto LoadFromMemory(GraphicsContext &context, Image::ImageData &imageData,
 // texture 3D/Array/Cubemap From array of ImageData slices
 auto LoadFromMemory(GraphicsContext &context,
                     const std::vector<Image::ImageData *> &slices,
-                    TextureType type, VkImageUsageFlags usage)
-    -> Result<Ref<Texture>> {
+                    TextureType type, VkImageUsageFlags usage,
+                    TextureMipmapOption mipmaps) -> Result<Ref<Texture>> {
   if (slices.empty()) {
     return Error::Unexpected("No image slices provided.");
   }
@@ -643,10 +687,16 @@ auto LoadFromMemory(GraphicsContext &context,
 
   Ref<Texture> texture;
 
+  int mipmapCount = 1;
+
   switch (type) {
   case TextureType::CUBEMAP: {
     if (slices.size() != 6) { // NOLINT
       return Error::Unexpected("Cubemap textures require 6 image slices.");
+    }
+
+    if (mipmaps != TextureMipmapOption::None) {
+      mipmapCount = static_cast<int>(Image::GetMipmapCount(width, height));
     }
 
     auto cubeMapTexture = CreateCubeMap(
@@ -656,7 +706,7 @@ auto LoadFromMemory(GraphicsContext &context,
                      .format = slices[0]->GetFormat(),
                      .usage = usage | static_cast<uint32_t>(
                                           VK_IMAGE_USAGE_TRANSFER_DST_BIT),
-                     .mipmapCount = 1,
+                     .mipmapCount = mipmapCount,
                  });
 
     if (Error::IsError(cubeMapTexture)) {
@@ -667,6 +717,10 @@ auto LoadFromMemory(GraphicsContext &context,
     break;
   }
   case TextureType::ARRAY: {
+    if (mipmaps != TextureMipmapOption::None) {
+      mipmapCount = static_cast<int>(Image::GetMipmapCount(width, height));
+    }
+
     auto arrayTexture = CreateArray(
         context, TextureCreationInfo{
                      .width = width,
@@ -675,7 +729,7 @@ auto LoadFromMemory(GraphicsContext &context,
                      .format = slices[0]->GetFormat(),
                      .usage = usage | static_cast<uint32_t>(
                                           VK_IMAGE_USAGE_TRANSFER_DST_BIT),
-                     .mipmapCount = 1,
+                     .mipmapCount = mipmapCount,
                  });
 
     if (Error::IsError(arrayTexture)) {
@@ -686,6 +740,11 @@ auto LoadFromMemory(GraphicsContext &context,
     break;
   }
   case TextureType::VOLUME: {
+    if (mipmaps != TextureMipmapOption::None) {
+      mipmapCount =
+          static_cast<int>(Image::GetMipmapCount(width, height, slices.size()));
+    }
+
     auto volumeTexture = CreateVolume(
         context, TextureCreationInfo{
                      .width = width,
@@ -694,7 +753,7 @@ auto LoadFromMemory(GraphicsContext &context,
                      .format = slices[0]->GetFormat(),
                      .usage = usage | static_cast<uint32_t>(
                                           VK_IMAGE_USAGE_TRANSFER_DST_BIT),
-                     .mipmapCount = 1,
+                     .mipmapCount = mipmapCount,
                  });
 
     if (Error::IsError(volumeTexture)) {
@@ -1665,6 +1724,77 @@ auto Texture::CopyTo(const GraphicsContext &context, Buffer &dstBuffer,
   dstBuffer.MarkUse();
   MarkUse();
   return Error::Success();
+}
+
+auto GenerateMipmaps(GraphicsContext &context, Texture *texture) -> Error {
+  if (texture->mipmapcount <= 1) {
+    return Error::Create("Texture does not have multiple mip levels for "
+                         "mipmap generation.");
+  }
+
+  auto *commandBuffer = GetCommandBufferPtr();
+  if (commandBuffer == nullptr) {
+    return Error::Create("Failed to get command buffer for mipmap generation.");
+  }
+
+  if (Image::IsCompressedTexture(texture->format)) {
+    return Error::Create("Automatic mipmap generation is not supported for "
+                         "compressed texture formats.");
+  }
+
+  auto mipWidth = static_cast<int32_t>(texture->size.width);
+  auto mipHeight = static_cast<int32_t>(texture->size.height);
+
+  for (uint32_t i = 1; i < texture->mipmapcount; ++i) {
+    auto barrierError = texture->TransitionLayout(
+        context, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+        VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_ACCESS_2_TRANSFER_READ_BIT);
+
+    if (Error::IsError(barrierError)) {
+      return barrierError;
+    }
+
+    VkImageBlit blit = {};
+    blit.srcSubresource.aspectMask = GetAspectFlagsForFormat(texture->format);
+    blit.srcSubresource.mipLevel = i - 1;
+    blit.srcSubresource.baseArrayLayer = 0;
+    blit.srcSubresource.layerCount = texture->arrayLayers;
+    blit.srcOffsets[0] = {.x = 0, .y = 0, .z = 0};
+    blit.srcOffsets[1] = {.x = mipWidth, .y = mipHeight, .z = 1};
+    blit.dstSubresource.aspectMask = GetAspectFlagsForFormat(texture->format);
+    blit.dstSubresource.mipLevel = i;
+    blit.dstSubresource.baseArrayLayer = 0;
+    blit.dstSubresource.layerCount = texture->arrayLayers;
+    blit.dstOffsets[0] = {.x = 0, .y = 0, .z = 0};
+    blit.dstOffsets[1] = {.x = std::max(1, mipWidth / 2),
+                          .y = std::max(1, mipHeight / 2),
+                          .z = 1};
+
+    vkCmdBlitImage(commandBuffer, texture->image,
+                   VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, texture->image,
+                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit,
+                   VK_FILTER_LINEAR);
+
+    auto layoutError = texture->TransitionLayout(
+        context, GetRequiredTextureLayout(texture->lastUsage, texture->format),
+        VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+        VK_ACCESS_2_TRANSFER_READ_BIT,
+        GetAccessFlagsForUsage(texture->lastUsage, texture->format));
+
+    if (Error::IsError(layoutError)) {
+      return layoutError;
+    }
+  }
+
+  // Transition the entire mip chain to the final layout
+  auto finalLayoutError = texture->TransitionLayout(
+      context, GetRequiredTextureLayout(texture->lastUsage, texture->format),
+      VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+      VK_ACCESS_2_TRANSFER_READ_BIT,
+      GetAccessFlagsForUsage(texture->lastUsage, texture->format));
+
+  return finalLayoutError;
 }
 
 } // namespace Graphics

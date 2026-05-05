@@ -1,4 +1,5 @@
 #include "vector.hpp"
+#include "Modules/Helpers/hasher.hpp"
 #include <algorithm>
 #include <cassert>
 #include <cmath>
@@ -8,10 +9,85 @@
 namespace Math {
 // Index operator overloads for all vector types
 
+// NOLINTNEXTLINE
+thread_local inline Hash::Hasher Hasher;
+
 [[nodiscard]] auto Vec2::ToString() const -> std::string {
   std::ostringstream oss;
   oss << "Vec2(" << x << ", " << y << ")";
   return oss.str();
+}
+
+[[nodiscard]] auto Vec2::Hash() const -> uint64_t {
+  Hasher.Reset();
+  Hasher.Add(std::hash<Scalar>()(x));
+  Hasher.Add(std::hash<Scalar>()(y));
+  return Hasher.Get();
+}
+
+[[nodiscard]] auto Vec3::Hash() const -> uint64_t {
+  Hasher.Reset();
+  Hasher.Add(std::hash<Scalar>()(x));
+  Hasher.Add(std::hash<Scalar>()(y));
+  Hasher.Add(std::hash<Scalar>()(z));
+  return Hasher.Get();
+}
+
+[[nodiscard]] auto Vec4::Hash() const -> uint64_t {
+  Hasher.Reset();
+  Hasher.Add(std::hash<Scalar>()(x));
+  Hasher.Add(std::hash<Scalar>()(y));
+  Hasher.Add(std::hash<Scalar>()(z));
+  Hasher.Add(std::hash<Scalar>()(w));
+  return Hasher.Get();
+}
+
+[[nodiscard]] auto Uvec2::Hash() const -> uint64_t {
+  Hasher.Reset();
+  Hasher.Add(std::hash<uint32_t>()(x));
+  Hasher.Add(std::hash<uint32_t>()(y));
+  return Hasher.Get();
+}
+
+[[nodiscard]] auto Uvec3::Hash() const -> uint64_t {
+  Hasher.Reset();
+  Hasher.Add(std::hash<uint32_t>()(x));
+  Hasher.Add(std::hash<uint32_t>()(y));
+  Hasher.Add(std::hash<uint32_t>()(z));
+  return Hasher.Get();
+}
+
+[[nodiscard]] auto Uvec4::Hash() const -> uint64_t {
+  Hasher.Reset();
+  Hasher.Add(std::hash<uint32_t>()(x));
+  Hasher.Add(std::hash<uint32_t>()(y));
+  Hasher.Add(std::hash<uint32_t>()(z));
+  Hasher.Add(std::hash<uint32_t>()(w));
+  return Hasher.Get();
+}
+
+[[nodiscard]] auto Ivec2::Hash() const -> uint64_t {
+  Hasher.Reset();
+  Hasher.Add(std::hash<int32_t>()(x));
+  Hasher.Add(std::hash<int32_t>()(y));
+  return Hasher.Get();
+}
+
+[[nodiscard]] auto Ivec3::Hash() const -> uint64_t {
+  Hasher.Reset();
+  Hasher.Add(std::hash<int32_t>()(x));
+  Hasher.Add(std::hash<int32_t>()(y));
+  Hasher.Add(std::hash<int32_t>()(z));
+  return Hasher.Get();
+}
+
+[[nodiscard]] auto Ivec4::Hash() const -> uint64_t {
+  Hasher.Reset();
+  Hasher.Add(std::hash<int32_t>()(x));
+  Hasher.Add(std::hash<int32_t>()(y));
+  Hasher.Add(std::hash<int32_t>()(z));
+  Hasher.Add(std::hash<int32_t>()(w));
+  return Hasher.Get();
 }
 
 [[nodiscard]] auto Vec3::ToString() const -> std::string {

@@ -53,22 +53,14 @@ auto BindMesh(GraphicsContext &context, VkCommandBuffer cmdBuffer,
     break;
   }
 #endif
+  auto &threadContext = GetThreadContext();
 
-  {
-    auto vertexBuffer = mesh.GetVertexBuffer();
-    Barrier::UpdateUsage(context, *vertexBuffer,
-                         Barrier::ResourceState{
-                             .stages = VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT,
-                             .access = VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT,
-                         });
-
-    std::lock_guard<std::mutex> lock(vertexBuffer->mutex);
-    auto *vbo = vertexBuffer->handle;
-    VkDeviceSize offset = 0;
-
-    vkCmdBindVertexBuffers(cmdBuffer, 0, 1, &vbo, &offset);
-  }
-
+  auto vertexBuffer = mesh.GetVertexBuffer();
+  Barrier::UpdateUsage(context, *vertexBuffer,
+                       Barrier::ResourceState{
+                           .stages = VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT,
+                           .access = VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT,
+                       });
   if (mesh.GetIndexCount() > 0) {
     auto indexBuffer = mesh.GetIndexBuffer();
     Barrier::UpdateUsage(context, *indexBuffer,
@@ -77,10 +69,21 @@ auto BindMesh(GraphicsContext &context, VkCommandBuffer cmdBuffer,
                              .access = VK_ACCESS_2_INDEX_READ_BIT,
                          });
 
-    std::lock_guard<std::mutex> lock(indexBuffer->mutex);
-    auto *ibo = indexBuffer->handle;
+    if (threadContext.currentIndexBuffer != indexBuffer->handle) {
+      std::lock_guard<std::mutex> lock(indexBuffer->mutex);
 
-    vkCmdBindIndexBuffer(cmdBuffer, ibo, 0, mesh.GetIndexFormat());
+      vkCmdBindIndexBuffer(cmdBuffer, indexBuffer->handle, 0,
+                           mesh.GetIndexFormat());
+      threadContext.currentIndexBuffer = indexBuffer->handle;
+    }
+  }
+
+  if (threadContext.currentVertexBuffer != vertexBuffer->handle) {
+    std::lock_guard<std::mutex> lock(vertexBuffer->mutex);
+    VkDeviceSize offset = 0;
+
+    vkCmdBindVertexBuffers(cmdBuffer, 0, 1, &vertexBuffer->handle, &offset);
+    threadContext.currentVertexBuffer = vertexBuffer->handle;
   }
 
   return Error::Success();

@@ -12,19 +12,19 @@ struct Color {
   float b;
   float a;
 
-  Color() : r(0), g(0), b(0), a(1) {}
+  constexpr Color() : r(0), g(0), b(0), a(1) {}
 
   // NOLINTNEXTLINE
-  Color(float red, float green, float blue, float alpha = 1.0F)
+  constexpr Color(float red, float green, float blue, float alpha = 1.0F)
       : r(red), g(green), b(blue), a(alpha) {}
 
   // NOLINTNEXTLINE
-  Color(double red, double green, double blue, double alpha = 1.0)
+  constexpr Color(double red, double green, double blue, double alpha = 1.0)
       : r(static_cast<float>(red)), g(static_cast<float>(green)),
         b(static_cast<float>(blue)), a(static_cast<float>(alpha)) {}
 
   // NOLINTNEXTLINE
-  Color(int red, int green, int blue, int alpha = 255)
+  constexpr Color(int red, int green, int blue, int alpha = 255)
       : r(static_cast<float>(red) / uint8_max_as_float),
         g(static_cast<float>(green) / uint8_max_as_float),
         b(static_cast<float>(blue) / uint8_max_as_float),
@@ -36,7 +36,7 @@ struct Color {
   static constexpr uint32_t BitMask = 0xFFU;
 
   // NOLINTNEXTLINE
-  Color(uint32_t packedRGBA) {
+  constexpr Color(uint32_t packedRGBA) {
     uint8_t red = (packedRGBA >> RedShift) & BitMask;
     uint8_t green = (packedRGBA >> GreenShift) & BitMask;
     uint8_t blue = (packedRGBA >> BlueShift) & BitMask;

@@ -6,7 +6,7 @@ error("Do not require this file")
 ---| "nearest" # Nearest-neighbor filtering
 ---| "linear" # Linear filtering
 
----@alias snap.Wrapmode
+---@alias snap.WrapMode
 ---| "clamp" # Clamps texture coordinates to the edge
 ---| "repeat" # Repeats the texture
 ---| "mirror" # Mirrors the texture when the coordinates are outside the range [0, 1]
@@ -42,6 +42,11 @@ error("Do not require this file")
 ---| "bc6hs"
 ---| "bc7" Useful for High quality compressed textures
 
+---@alias snap.TextureMipmapOptions
+---| "none"   # Do not create mipmaps.
+---| "init"   # Calculate a mip chain.
+---| "manual" # Allocate a mip chain.
+
 ---@class snap.Texture : snap.Data
 local Texture = {}
 
@@ -64,13 +69,13 @@ function Texture:setAnisotropy(level) end
 function Texture:getAnisotropy() end
 
 --- Sets the wrap mode for the texture.
----@param wraps snap.Wrapmode The wrap mode for the S (U) coordinate.
----@param wrapt snap.Wrapmode The wrap mode for the T (V) coordinate.
+---@param wraps snap.WrapMode The wrap mode for the S (U) coordinate.
+---@param wrapt snap.WrapMode The wrap mode for the T (V) coordinate.
 function Texture:setWrap(wraps, wrapt) end
 
 --- Gets the wrap mode for the texture.
----@return snap.Wrapmode wraps The wrap mode for the S (U) coordinate.
----@return snap.Wrapmode wrapt The wrap mode for the T (V) coordinate.
+---@return snap.WrapMode wraps The wrap mode for the S (U) coordinate.
+---@return snap.WrapMode wrapt The wrap mode for the T (V) coordinate.
 function Texture:getWrap() end
 
 --- Sets the LOD bias for the texture.

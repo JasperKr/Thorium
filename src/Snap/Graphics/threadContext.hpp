@@ -15,6 +15,9 @@ struct ThreadContext {
   struct GraphicsContext *graphicsContext = nullptr; // Global graphics context
   VkCommandPool commandPool = VK_NULL_HANDLE;        // Per-thread command pool
   VkCommandBuffer commandBuffer = VK_NULL_HANDLE;    // Current command buffer
+  size_t currentVertexFormatHash = 0;
+  void *currentVertexBuffer = nullptr;
+  void *currentIndexBuffer = nullptr;
 
   std::vector<DescriptorPoolInfo> descriptorPools;  // Descriptor pool info
   VkDescriptorPool descriptorPool = VK_NULL_HANDLE; // Current descriptor pool
