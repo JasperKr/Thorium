@@ -1,4 +1,5 @@
 #pragma once
+#include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Modules/type.hpp"
 #include "Wrap/wrap.hpp"
@@ -13,6 +14,7 @@ static const Type SceneType = Type("Scene");
 struct Scene : Object {
   flecs::world world;
   std::string name;
+  Error lastUpdateResult = Error::Success();
 
   explicit Scene();
   explicit Scene(std::string name);

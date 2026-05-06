@@ -1,6 +1,7 @@
 #include "scene.hpp"
 #include "Graphics/draw.hpp"
 #include "Graphics/dynamicRendering.hpp"
+#include "Graphics/graphics.hpp"
 #include "Graphics/shader.hpp"
 #include "Graphics/uniformWriter.hpp"
 #include "Modules/Math/matrix.hpp"
@@ -180,6 +181,12 @@ auto Scene::DrawUiElement(lua_State *state) -> int {
         auto worldBounds = SelectedEntity.get_ref<WorldBounds>();
         worldBounds->DrawGUI();
       }
+
+      if (SelectedEntity.has<Renderer::Material>() &&
+          SelectedEntity.get_ref<Renderer::Material>().get() != nullptr) {
+        auto material = SelectedEntity.get_ref<Renderer::Material>();
+        material->DrawGUI();
+      }
     }
   }
   ImGui::EndChild();
@@ -349,6 +356,11 @@ Scene::Scene(std::string name) : name(std::move(name)) {
             transform.UpdateWorldMatrix(parentTransform);
           });
 
+  auto preBoundsCascadeSystem = world.system<Engine::WorldBounds>().each(
+      [](Engine::WorldBounds &bbox) -> auto { bbox.Bounds.Reset(); });
+
+  preBoundsCascadeSystem.depends_on(transformSystem);
+
   auto boundingBoxSystem =
       world
           .system<Engine::Transform, Engine::LocalBounds, Engine::WorldBounds>()
@@ -357,13 +369,37 @@ Scene::Scene(std::string name) : name(std::move(name)) {
                    Engine::WorldBounds &wbbox) -> auto {
             wbbox.Bounds.Construct(transform, bbox.Bounds);
           });
-  boundingBoxSystem.depends_on(transformSystem);
+  boundingBoxSystem.depends_on(preBoundsCascadeSystem);
+
+  auto postBoundingboxSystem =
+      world.system<Engine::WorldBounds, Engine::WorldBounds *>()
+          .term_at(1)
+          .parent()
+          .cascade()
+          .each([](Engine::WorldBounds &bbox,
+                   Engine::WorldBounds *parentBbox) -> auto {
+            if (parentBbox != nullptr) {
+              parentBbox->Bounds.UnionInPlace(bbox.Bounds);
+            }
+          });
+
+  postBoundingboxSystem.depends_on(boundingBoxSystem);
+
+  auto preDrawSystem = world.system<Renderer::Material>().each(
+      [this](Renderer::Material &material) -> auto {
+        if (lastUpdateResult.IsError()) {
+          return;
+        }
+
+        lastUpdateResult =
+            material.Update(*Graphics::GetCurrentGraphicsContext());
+      });
 }
 
 auto Scene::Update(double deltaTime) const -> Error {
   world.progress(static_cast<float>(deltaTime));
 
-  return Error::Success();
+  return lastUpdateResult;
 }
 
 auto Scene::Update(lua_State *state) -> int {

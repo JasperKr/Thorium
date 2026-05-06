@@ -18,5 +18,5 @@ function snap.config(config)
   config.filesystem.identity = "ConfiguredIdentity"
 
   -- "debug" > "info" > "warning" > "error" > "fatal"
-  config.loglevel = "debug"
+  config.loglevel = "warning"
 end

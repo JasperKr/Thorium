@@ -2,6 +2,7 @@
 
 #include "mathTypes.hpp"
 #include <cstdint>
+#include <span>
 #include <string>
 
 namespace Math {
@@ -60,6 +61,7 @@ struct Vec2 {
   [[nodiscard]] auto Min(Scalar scalar) const -> Vec2;
 
   Vec2(Scalar x_val, Scalar y_val) : x(x_val), y(y_val) {}
+  explicit Vec2(Scalar val) : x(val), y(val) {}
   Vec2() = default;
   explicit Vec2(const Vec3 &vec3);
   explicit Vec2(const Vec4 &vec4);
@@ -74,6 +76,10 @@ struct Vec2 {
 
   [[nodiscard]] auto ToString() const -> std::string;
   [[nodiscard]] auto Hash() const -> uint64_t;
+  [[nodiscard]] auto Span() -> std::span<Scalar> { return {&x, 2}; }
+  [[nodiscard]] auto Span() const -> std::span<const Scalar> { return {&x, 2}; }
+  [[nodiscard]] auto Ptr() -> Scalar * { return &x; }
+  [[nodiscard]] auto Ptr() const -> const Scalar * { return &x; }
 };
 
 struct Vec3 {
@@ -120,6 +126,7 @@ struct Vec3 {
 
   Vec3(Scalar x_val, Scalar y_val, Scalar z_val)
       : x(x_val), y(y_val), z(z_val) {}
+  explicit Vec3(Scalar val) : x(val), y(val), z(val) {}
   Vec3() = default;
   explicit Vec3(const Vec2 &vec2, Scalar z_val = 0.0F);
   explicit Vec3(const Vec4 &vec4);
@@ -136,6 +143,10 @@ struct Vec3 {
 
   [[nodiscard]] auto ToString() const -> std::string;
   [[nodiscard]] auto Hash() const -> uint64_t;
+  [[nodiscard]] auto Span() -> std::span<Scalar> { return {&x, 3}; }
+  [[nodiscard]] auto Span() const -> std::span<const Scalar> { return {&x, 3}; }
+  [[nodiscard]] auto Ptr() -> Scalar * { return &x; }
+  [[nodiscard]] auto Ptr() const -> const Scalar * { return &x; }
 };
 
 struct Vec4 {
@@ -183,6 +194,7 @@ struct Vec4 {
 
   Vec4(Scalar x_val, Scalar y_val, Scalar z_val, Scalar w_val)
       : x(x_val), y(y_val), z(z_val), w(w_val) {}
+  explicit Vec4(Scalar val) : x(val), y(val), z(val), w(val) {}
   Vec4() = default;
   explicit Vec4(const Vec2 &vec2, Scalar z_val = 0.0F, Scalar w_val = 0.0F);
   explicit Vec4(const Vec3 &vec3, Scalar w_val = 0.0F);
@@ -197,6 +209,10 @@ struct Vec4 {
 
   [[nodiscard]] auto ToString() const -> std::string;
   [[nodiscard]] auto Hash() const -> uint64_t;
+  [[nodiscard]] auto Span() -> std::span<Scalar> { return {&x, 4}; }
+  [[nodiscard]] auto Span() const -> std::span<const Scalar> { return {&x, 4}; }
+  [[nodiscard]] auto Ptr() -> Scalar * { return &x; }
+  [[nodiscard]] auto Ptr() const -> const Scalar * { return &x; }
 };
 
 struct Uvec2 {
@@ -230,6 +246,7 @@ struct Uvec2 {
   auto operator[](uint32_t index) -> uint32_t &;
 
   Uvec2(uint32_t x_val, uint32_t y_val) : x(x_val), y(y_val) {}
+  explicit Uvec2(uint32_t val) : x(val), y(val) {}
   Uvec2() = default;
   explicit Uvec2(const Uvec3 &vec3);
   explicit Uvec2(const Uvec4 &vec4);
@@ -240,6 +257,12 @@ struct Uvec2 {
 
   [[nodiscard]] auto ToString() const -> std::string;
   [[nodiscard]] auto Hash() const -> uint64_t;
+  [[nodiscard]] auto Span() -> std::span<uint32_t> { return {&x, 2}; }
+  [[nodiscard]] auto Span() const -> std::span<const uint32_t> {
+    return {&x, 2};
+  }
+  [[nodiscard]] auto Ptr() -> uint32_t * { return &x; }
+  [[nodiscard]] auto Ptr() const -> const uint32_t * { return &x; }
 };
 
 struct Uvec3 {
@@ -275,6 +298,7 @@ struct Uvec3 {
 
   Uvec3(uint32_t x_val, uint32_t y_val, uint32_t z_val)
       : x(x_val), y(y_val), z(z_val) {}
+  explicit Uvec3(uint32_t val) : x(val), y(val), z(val) {}
   Uvec3() = default;
   explicit Uvec3(const Uvec2 &vec2, uint32_t z_val = 0);
   explicit Uvec3(const Uvec4 &vec4);
@@ -285,6 +309,12 @@ struct Uvec3 {
 
   [[nodiscard]] auto ToString() const -> std::string;
   [[nodiscard]] auto Hash() const -> uint64_t;
+  [[nodiscard]] auto Span() -> std::span<uint32_t> { return {&x, 3}; }
+  [[nodiscard]] auto Span() const -> std::span<const uint32_t> {
+    return {&x, 3};
+  }
+  [[nodiscard]] auto Ptr() -> uint32_t * { return &x; }
+  [[nodiscard]] auto Ptr() const -> const uint32_t * { return &x; }
 };
 
 struct Uvec4 {
@@ -321,6 +351,7 @@ struct Uvec4 {
 
   Uvec4(uint32_t x_val, uint32_t y_val, uint32_t z_val, uint32_t w_val)
       : x(x_val), y(y_val), z(z_val), w(w_val) {}
+  explicit Uvec4(uint32_t val) : x(val), y(val), z(val), w(val) {}
   Uvec4() = default;
   explicit Uvec4(const Uvec2 &vec2, uint32_t z_val = 0, uint32_t w_val = 0);
   explicit Uvec4(const Uvec3 &vec3, uint32_t w_val = 0);
@@ -331,6 +362,12 @@ struct Uvec4 {
 
   [[nodiscard]] auto ToString() const -> std::string;
   [[nodiscard]] auto Hash() const -> uint64_t;
+  [[nodiscard]] auto Span() -> std::span<uint32_t> { return {&x, 4}; }
+  [[nodiscard]] auto Span() const -> std::span<const uint32_t> {
+    return {&x, 4};
+  }
+  [[nodiscard]] auto Ptr() -> uint32_t * { return &x; }
+  [[nodiscard]] auto Ptr() const -> const uint32_t * { return &x; }
 };
 
 struct Ivec2 {
@@ -364,6 +401,7 @@ struct Ivec2 {
   auto operator[](uint32_t index) -> int32_t &;
 
   Ivec2(int32_t x_val, int32_t y_val) : x(x_val), y(y_val) {}
+  explicit Ivec2(int32_t val) : x(val), y(val) {}
   Ivec2() = default;
   explicit Ivec2(const Ivec3 &vec3);
   explicit Ivec2(const Ivec4 &vec4);
@@ -374,6 +412,12 @@ struct Ivec2 {
 
   [[nodiscard]] auto ToString() const -> std::string;
   [[nodiscard]] auto Hash() const -> uint64_t;
+  [[nodiscard]] auto Span() -> std::span<int32_t> { return {&x, 2}; }
+  [[nodiscard]] auto Span() const -> std::span<const int32_t> {
+    return {&x, 2};
+  }
+  [[nodiscard]] auto Ptr() -> int32_t * { return &x; }
+  [[nodiscard]] auto Ptr() const -> const int32_t * { return &x; }
 };
 
 struct Ivec3 {
@@ -409,6 +453,7 @@ struct Ivec3 {
 
   Ivec3(int32_t x_val, int32_t y_val, int32_t z_val)
       : x(x_val), y(y_val), z(z_val) {}
+  explicit Ivec3(int32_t val) : x(val), y(val), z(val) {}
   Ivec3() = default;
   explicit Ivec3(const Ivec2 &vec2, int32_t z_val = 0);
   explicit Ivec3(const Ivec4 &vec4);
@@ -419,6 +464,12 @@ struct Ivec3 {
 
   [[nodiscard]] auto ToString() const -> std::string;
   [[nodiscard]] auto Hash() const -> uint64_t;
+  [[nodiscard]] auto Span() -> std::span<int32_t> { return {&x, 3}; }
+  [[nodiscard]] auto Span() const -> std::span<const int32_t> {
+    return {&x, 3};
+  }
+  [[nodiscard]] auto Ptr() -> int32_t * { return &x; }
+  [[nodiscard]] auto Ptr() const -> const int32_t * { return &x; }
 };
 
 struct Ivec4 {
@@ -455,6 +506,7 @@ struct Ivec4 {
 
   Ivec4(int32_t x_val, int32_t y_val, int32_t z_val, int32_t w_val)
       : x(x_val), y(y_val), z(z_val), w(w_val) {}
+  explicit Ivec4(int32_t val) : x(val), y(val), z(val), w(val) {}
   Ivec4() = default;
   explicit Ivec4(const Ivec2 &vec2, int32_t z_val = 0, int32_t w_val = 0);
   explicit Ivec4(const Ivec3 &vec3, int32_t w_val = 0);
@@ -465,6 +517,12 @@ struct Ivec4 {
 
   [[nodiscard]] auto ToString() const -> std::string;
   [[nodiscard]] auto Hash() const -> uint64_t;
+  [[nodiscard]] auto Span() -> std::span<int32_t> { return {&x, 4}; }
+  [[nodiscard]] auto Span() const -> std::span<const int32_t> {
+    return {&x, 4};
+  }
+  [[nodiscard]] auto Ptr() -> int32_t * { return &x; }
+  [[nodiscard]] auto Ptr() const -> const int32_t * { return &x; }
 };
 
 auto Min(const Vec2 &vec_a, const Vec2 &vec_b) -> Vec2;

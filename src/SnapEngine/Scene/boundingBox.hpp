@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Modules/Math/mathTypes.hpp"
 #include "Modules/Math/vector.hpp"
 #include "Modules/object.hpp"
 #include "Modules/type.hpp"
@@ -9,8 +10,8 @@
 #include <lua.h>
 namespace Engine {
 struct BoundingBox {
-  Math::Vec3 Min;
-  Math::Vec3 Max;
+  Math::Vec3 Min{};
+  Math::Vec3 Max{};
 
   [[nodiscard]] auto GetCenter() const -> Math::Vec3;
   [[nodiscard]] auto GetSize() const -> Math::Vec3;
@@ -21,6 +22,11 @@ struct BoundingBox {
   auto Intersect(const BoundingBox &other, BoundingBox &result) const -> void;
   auto IntersectInPlace(const BoundingBox &other) -> void;
   [[nodiscard]] auto IsValid() const -> bool;
+  auto Grow(const Math::Vec3 &point) -> void;
+  auto Reset() -> void {
+    Min = Math::Vec3(std::numeric_limits<Math::Scalar>::max());
+    Max = Math::Vec3(std::numeric_limits<Math::Scalar>::lowest());
+  }
 
   auto Construct(const Transform &transform, const BoundingBox &localBounds)
       -> void;

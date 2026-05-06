@@ -300,49 +300,50 @@ inline auto LoadMaterial(Graphics::GraphicsContext &context,
     material->albedoTexture = albedoTextureLoadResult.value();
   }
 
-  // if (gltfMaterial.pbrData.metallicRoughnessTexture.has_value()) {
-  //   auto metallicRoughnessLoadResult = LoadTexture(
-  //       context, asset, gltfMaterial.pbrData.metallicRoughnessTexture.value());
+  if (gltfMaterial.pbrData.metallicRoughnessTexture.has_value()) {
+    auto metallicRoughnessLoadResult =
+        LoadTexture(context, asset, basePath,
+                    gltfMaterial.pbrData.metallicRoughnessTexture.value());
 
-  //   if (Error::IsError(metallicRoughnessLoadResult)) {
-  //     return metallicRoughnessLoadResult.error();
-  //   }
+    if (Error::IsError(metallicRoughnessLoadResult)) {
+      return metallicRoughnessLoadResult.error();
+    }
 
-  //   material->metallicRoughnessTexture = metallicRoughnessLoadResult.value();
-  // }
+    material->metallicRoughnessTexture = metallicRoughnessLoadResult.value();
+  }
 
-  // if (gltfMaterial.occlusionTexture.has_value()) {
-  //   auto aoTextureLoadResult =
-  //       LoadTexture(context, asset, gltfMaterial.occlusionTexture.value());
+  if (gltfMaterial.occlusionTexture.has_value()) {
+    auto aoTextureLoadResult = LoadTexture(
+        context, asset, basePath, gltfMaterial.occlusionTexture.value());
 
-  //   if (Error::IsError(aoTextureLoadResult)) {
-  //     return aoTextureLoadResult.error();
-  //   }
+    if (Error::IsError(aoTextureLoadResult)) {
+      return aoTextureLoadResult.error();
+    }
 
-  //   material->ambientOcclusionTexture = aoTextureLoadResult.value();
-  // }
+    material->ambientOcclusionTexture = aoTextureLoadResult.value();
+  }
 
-  // if (gltfMaterial.normalTexture.has_value()) {
-  //   auto normalTextureLoadResult =
-  //       LoadTexture(context, asset, gltfMaterial.normalTexture.value());
+  if (gltfMaterial.normalTexture.has_value()) {
+    auto normalTextureLoadResult = LoadTexture(
+        context, asset, basePath, gltfMaterial.normalTexture.value());
 
-  //   if (Error::IsError(normalTextureLoadResult)) {
-  //     return normalTextureLoadResult.error();
-  //   }
+    if (Error::IsError(normalTextureLoadResult)) {
+      return normalTextureLoadResult.error();
+    }
 
-  //   material->normalTexture = normalTextureLoadResult.value();
-  // }
+    material->normalTexture = normalTextureLoadResult.value();
+  }
 
-  // if (gltfMaterial.emissiveTexture.has_value()) {
-  //   auto emissiveTextureLoadResult =
-  //       LoadTexture(context, asset, gltfMaterial.emissiveTexture.value());
+  if (gltfMaterial.emissiveTexture.has_value()) {
+    auto emissiveTextureLoadResult = LoadTexture(
+        context, asset, basePath, gltfMaterial.emissiveTexture.value());
 
-  //   if (Error::IsError(emissiveTextureLoadResult)) {
-  //     return emissiveTextureLoadResult.error();
-  //   }
+    if (Error::IsError(emissiveTextureLoadResult)) {
+      return emissiveTextureLoadResult.error();
+    }
 
-  //   material->emissiveTexture = emissiveTextureLoadResult.value();
-  // }
+    material->emissiveTexture = emissiveTextureLoadResult.value();
+  }
 
   return Error::Success();
 }
@@ -1035,6 +1036,7 @@ inline auto LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
     node.add<Engine::Transform>();
     node.add<Engine::Userdata>();
     node.set<Engine::Transform>(transform);
+    node.add<Engine::WorldBounds>();
 
     for (const auto &childIndex : gltfNode.children) {
       const auto &childGltfNode = asset.nodes[childIndex];
@@ -1064,7 +1066,7 @@ inline auto LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
           world->entity(GetUniqueName(gltfMesh.name.c_str()).c_str());
       shapeEntity.add<Engine::Shape>();
       shapeEntity.add<Engine::WorldBounds>();
-      shapeEntity.add<Engine::LocalBounds>();
+      // shapeEntity.add<Engine::LocalBounds>(); No local bounds, only based on child geometry bounds.
       shapeEntity.set<Engine::Transform>(transform);
 
       // TODO: Check the normal matrix construction and if after multiplying it needs to be normalized or not.
@@ -1120,6 +1122,14 @@ inline auto LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
                .binding = 0,
                .format = VK_FORMAT_R8G8B8A8_UNORM}};
 
+      struct VertexData {
+        float position[3]; // NOLINT
+        float texcoord[2]; // NOLINT
+        uint32_t normal;
+        uint32_t tangent;
+        uint32_t color;
+      };
+
       Graphics::VertexFormat DefaultVertexFormat(DefaultVertexComponents);
 
       auto vertexFormat = DefaultVertexFormat;
@@ -1160,8 +1170,21 @@ inline auto LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
 
       auto lod = world->entity(
           GetUniqueName(std::string(gltfMesh.name) + " LOD").c_str());
+
+      Engine::LocalBounds localBounds{};
+
+      std::span<const VertexData> vertexDataSpan(
+          reinterpret_cast<const VertexData *>(vertexData.data()), // NOLINT
+          vertexData.size() / sizeof(VertexData));
+
+      for (const auto &vertex : vertexDataSpan) {
+        Math::Vec3 pos(vertex.position[0], vertex.position[1],
+                       vertex.position[2]);
+        localBounds.Bounds.Grow(pos);
+      }
+
       lod.add<Engine::LevelOfDetail>();
-      lod.add<Engine::LocalBounds>();
+      lod.set<Engine::LocalBounds>(localBounds);
       lod.add<Engine::WorldBounds>();
       lod.add<Engine::Transform>();
 

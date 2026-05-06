@@ -603,7 +603,7 @@ auto Buffer::CopyTo(const GraphicsContext &context, Texture &dstTexture,
                          "TRANSFER_DST usage flag for copy.");
   }
 
-  auto *commandBuffer = GetCommandBufferPtr();
+  auto *commandBuffer = GetCommandBuffer();
   if (commandBuffer == nullptr) {
     return Error::Create(
         "Failed to get command buffer for buffer to image copy.");
@@ -645,7 +645,7 @@ auto Buffer::MarkUse() -> void {
 // NOLINTNEXTLINE
 auto Buffer::Clear(const GraphicsContext &context, uint32_t value,
                    VkDeviceSize offset, VkDeviceSize size) -> Error {
-  auto *commandBuffer = GetCommandBufferPtr();
+  auto *commandBuffer = GetCommandBuffer();
 
   if (commandBuffer == nullptr) {
     return Error::Create("Failed to get command buffer for buffer clear.");

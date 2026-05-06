@@ -125,6 +125,22 @@ public:
     }
     return EnumToLua(state, value, ReverseEnumMap);
   }
+
+  auto ToString(T value) const -> std::string {
+    auto iter = ReverseEnumMap.find(value);
+    if (iter == ReverseEnumMap.end()) {
+      return "Invalid";
+    }
+    return iter->second;
+  }
+
+  auto FromString(const std::string &str, T defaultValue) const -> T {
+    auto iter = EnumMap.find(str);
+    if (iter == EnumMap.end()) {
+      return defaultValue;
+    }
+    return iter->second;
+  }
 };
 
 } // namespace LuaWrap

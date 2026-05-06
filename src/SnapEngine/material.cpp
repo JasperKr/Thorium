@@ -1,8 +1,12 @@
 #include "material.hpp"
+#include "Graphics/Buffers/structured.hpp"
+#include "Modules/Math/vector.hpp"
+#include "Modules/error.hpp"
 #include "Wrap/Helpers/lua_enum.hpp"
 #include "Wrap/wrap.hpp"
 #include "entity.hpp"
 #include "lua.hpp"
+#include "renderer.hpp"
 #include <cstdint>
 #include <imgui.h>
 
@@ -146,6 +150,141 @@ auto Material::wrap_getAlphaMode(lua_State *state) -> int {
   }
 
   return 1;
+}
+
+auto Material::DrawGUI() -> void {
+  ImGui::Text("Cull Mode: %s", LuaCullModeEnum.ToString(cullMode).c_str());
+  ImGui::Text("Alpha Mode: %s", LuaAlphaModeEnum.ToString(alphaMode).c_str());
+  ImGui::ColorEdit4("Albedo Factor", albedoFactor.Ptr());
+  ImGui::SliderFloat("Roughness Factor", &roughnessFactor, 0.0F, 1.0F);
+  ImGui::SliderFloat("Metallic Factor", &metallicFactor, 0.0F, 1.0F);
+  ImGui::SliderFloat("Reflectance Factor", &reflectanceFactor, 0.0F, 1.0F);
+  ImGui::ColorEdit3("Emissive Factor", &emissiveFactor.x);
+
+  if (ImGui::CollapsingHeader("Texture UV Indices")) {
+    constexpr int MaxUVSets = 4;
+
+    // NOLINTBEGIN (magic numbers)
+    ImGui::SliderInt("Albedo", &textureUVIndices.at(0), 0, MaxUVSets);
+    ImGui::SliderInt("Normal", &textureUVIndices.at(1), 0, MaxUVSets);
+    ImGui::SliderInt("Roughness", &textureUVIndices.at(2), 0, MaxUVSets);
+    ImGui::SliderInt("Metallic", &textureUVIndices.at(3), 0, MaxUVSets);
+    ImGui::SliderInt("AO", &textureUVIndices.at(4), 0, MaxUVSets);
+    ImGui::SliderInt("Reflectance", &textureUVIndices.at(5), 0, MaxUVSets);
+    ImGui::SliderInt("Emissive", &textureUVIndices.at(6), 0, MaxUVSets);
+    // NOLINTEND (magic numbers)
+  }
+
+  constexpr ImVec2 PreviewSize = ImVec2(200, 200);
+
+  ImGui::BeginDisabled(!albedoTexture.isValid());
+  if (ImGui::CollapsingHeader("Albedo Texture")) {
+    if (albedoTexture.isValid()) {
+      // NOLINTNEXTLINE
+      ImGui::Image(reinterpret_cast<ImTextureID>(albedoTexture.get()),
+                   PreviewSize);
+    }
+  }
+  ImGui::EndDisabled();
+
+  ImGui::BeginDisabled(!metallicRoughnessTexture.isValid());
+  if (ImGui::CollapsingHeader("Metallic Roughness Texture")) {
+    if (metallicRoughnessTexture.isValid()) {
+      ImGui::Image( // NOLINTNEXTLINE
+          reinterpret_cast<ImTextureID>(metallicRoughnessTexture.get()),
+          PreviewSize);
+    }
+  }
+  ImGui::EndDisabled();
+
+  ImGui::BeginDisabled(!ambientOcclusionTexture.isValid());
+  if (ImGui::CollapsingHeader("Ambient Occlusion Texture")) {
+    if (ambientOcclusionTexture.isValid()) {
+      ImGui::Image( // NOLINTNEXTLINE
+          reinterpret_cast<ImTextureID>(ambientOcclusionTexture.get()),
+          PreviewSize);
+    }
+  }
+  ImGui::EndDisabled();
+
+  ImGui::BeginDisabled(!reflectanceTexture.isValid());
+  if (ImGui::CollapsingHeader("Normal Texture")) {
+    if (normalTexture.isValid()) {
+      ImGui::Image( // NOLINTNEXTLINE
+          reinterpret_cast<ImTextureID>(normalTexture.get()), PreviewSize);
+    }
+  }
+  ImGui::EndDisabled();
+
+  ImGui::BeginDisabled(!reflectanceTexture.isValid());
+  if (ImGui::CollapsingHeader("Emissive Texture")) {
+    if (emissiveTexture.isValid()) {
+      ImGui::Image( // NOLINTNEXTLINE
+          reinterpret_cast<ImTextureID>(emissiveTexture.get()), PreviewSize);
+    }
+  }
+  ImGui::EndDisabled();
+
+  ImGui::BeginDisabled(!preview.isValid());
+  if (ImGui::CollapsingHeader("Reflectance Texture")) {
+    if (reflectanceTexture.isValid()) {
+      ImGui::Image( // NOLINTNEXTLINE
+          reinterpret_cast<ImTextureID>(reflectanceTexture.get()), PreviewSize);
+    }
+  }
+  ImGui::EndDisabled();
+}
+
+auto Material::Update(Graphics::GraphicsContext &context) -> Error {
+  if (!dirty && obtainedSSBOIndex) {
+    return {};
+  }
+
+  // if (!obtainedSSBOIndex) {
+  //   auto indexResult = RendererInstance.GetNewMaterialIndex();
+  //   if (Error::IsError(indexResult)) {
+  //     return indexResult.error();
+  //   }
+  //   materialSSBOIndex = indexResult.value();
+  //   obtainedSSBOIndex = true;
+  // }
+
+  // return WriteToBuffer(context, RendererInstance.MaterialsBuffer);
+  return {};
+}
+
+auto Material::WriteToBuffer(Graphics::GraphicsContext &context,
+                             const Ref<Graphics::StructuredBuffer> &buffer)
+    -> Error {
+  struct MaterialData {
+    alignas(4) Math::Vec4 albedoFactor;
+    alignas(4) float roughnessFactor;
+    alignas(4) float metallicFactor;
+    alignas(4) float reflectanceFactor;
+    alignas(4) Math::Vec3 emissiveFactor;
+    alignas(4) uint32_t cullMode;
+    alignas(4) uint32_t alphaMode;
+    alignas(4) Math::Uvec2 textureUVIndices;
+  } materialData{};
+
+  materialData.albedoFactor = albedoFactor;
+  materialData.roughnessFactor = roughnessFactor;
+  materialData.metallicFactor = metallicFactor;
+  materialData.reflectanceFactor = reflectanceFactor;
+  materialData.emissiveFactor = emissiveFactor;
+  materialData.cullMode = cullMode;
+  materialData.alphaMode = static_cast<uint32_t>(alphaMode);
+
+  uint64_t packedIndices = 0;
+  for (size_t i = 0; i < textureUVIndices.size(); ++i) {
+    packedIndices |=
+        (static_cast<uint64_t>(textureUVIndices.at(i)) << (i * UINT8_WIDTH));
+  }
+  materialData.textureUVIndices =
+      Math::Uvec2(packedIndices & ~0U, (packedIndices >> UINT32_WIDTH) & ~0U);
+
+  return buffer->GetBuffer()->SetData(context, materialData,
+                                      materialSSBOIndex * buffer->GetStride());
 }
 
 } // namespace Engine::Renderer

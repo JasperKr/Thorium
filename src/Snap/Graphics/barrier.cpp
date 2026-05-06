@@ -3,6 +3,7 @@
 #include "Graphics/graphics.hpp"
 
 #include "Graphics/snapshot.hpp"
+#include "Modules/error.hpp"
 #include "vulkan/vulkan_core.h"
 #include <array>
 #include <cassert>
@@ -215,6 +216,10 @@ auto UpdateUsage(const GraphicsContext &context, BarrierSynced &resource,
     depInfo.pMemoryBarriers = &barrier;
 
     DynamicRendering::EndRendering(context);
+
+    assert(Graphics::GetCommandBuffer() != VK_NULL_HANDLE &&
+           "Command buffer is null when trying to insert barrier!");
+
     vkCmdPipelineBarrier2(Graphics::GetCommandBuffer(), &depInfo);
 
     auto sync = ResourceSync{

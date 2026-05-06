@@ -1,10 +1,14 @@
 #pragma once
 
+#include "Graphics/Buffers/structured.hpp"
+#include "Graphics/graphicsContext.hpp"
 #include "Graphics/shader.hpp"
 #include "Graphics/texture.hpp"
 #include "Modules/Helpers/hasher.hpp"
+#include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <string>
@@ -57,6 +61,10 @@ struct Material {
   TexRef ambientOcclusionTexture;  // Linear R
   TexRef reflectanceTexture;       // Linear R
   TexRef emissiveTexture;          // Linear RGB
+  size_t materialSSBOIndex = 0;
+
+  bool obtainedSSBOIndex = false;
+  bool dirty = true;
 
   Math::Vec4 albedoFactor = Math::Vec4(1.0F, 1.0F, 1.0F, 1.0F);
   float roughnessFactor = 1.0F;
@@ -73,7 +81,7 @@ struct Material {
   // 5: reflectance
   // 6: emissive
   // NOLINTNEXTLINE (magic numbers)
-  std::array<uint8_t, 7> textureUVIndices = {0};
+  std::array<int, 7> textureUVIndices = {0};
 
   static auto wrap_setCullMode(lua_State *state) -> int;
   static auto wrap_getCullMode(lua_State *state) -> int;
@@ -114,6 +122,13 @@ struct Material {
 
     return hasher.Get();
   }
+
+  auto DrawGUI() -> void;
+  auto Update(Graphics::GraphicsContext &context) -> Error;
+
+private:
+  auto WriteToBuffer(Graphics::GraphicsContext &context,
+                     const Ref<Graphics::StructuredBuffer> &buffer) -> Error;
 };
 
 struct LuaMaterial : Object {

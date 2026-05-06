@@ -337,7 +337,6 @@ auto GetPipelineLayout(const GraphicsContext &context,
   {
     std::lock_guard<std::mutex> lock(PipelineLayoutsMutex);
     PipelineLayouts.emplace_back(pipelineLayout);
-    PrintAlways("Pipeline layout count: {}", PipelineLayouts.size());
   }
 
   return PipelineLayout{
@@ -1598,13 +1597,19 @@ auto BindDescriptorSets(const GraphicsContext &context,
 
     auto iter = DescriptorSetCache.find(key);
 
+    auto *commandBuffer = Graphics::GetCommandBuffer();
+
+    if (commandBuffer == VK_NULL_HANDLE) {
+      return Error::Create("Command buffer is null in BindDescriptorSets.");
+    }
+
     if (iter != DescriptorSetCache.end()) {
       ZoneScopedN("vkCmdBindDescriptorSets cached");
 
-      vkCmdBindDescriptorSets(
-          Graphics::GetCommandBuffer(), TopOfStack->bindPoint,
-          CurrentPipelineLayout.layout, setIndex, 1, &iter->second,
-          dynamicOffsets.size(), dynamicOffsets.data());
+      vkCmdBindDescriptorSets(commandBuffer, TopOfStack->bindPoint,
+                              CurrentPipelineLayout.layout, setIndex, 1,
+                              &iter->second, dynamicOffsets.size(),
+                              dynamicOffsets.data());
     } else {
       ZoneScopedN("Allocate and bind descriptor set");
       auto descriptorSetResult = AllocateDescriptorSets(context, key, layout);
@@ -1613,10 +1618,10 @@ auto BindDescriptorSets(const GraphicsContext &context,
       }
       auto *descriptorSet = descriptorSetResult.value();
 
-      vkCmdBindDescriptorSets(
-          Graphics::GetCommandBuffer(), TopOfStack->bindPoint,
-          CurrentPipelineLayout.layout, setIndex, 1, &descriptorSet,
-          dynamicOffsets.size(), dynamicOffsets.data());
+      vkCmdBindDescriptorSets(commandBuffer, TopOfStack->bindPoint,
+                              CurrentPipelineLayout.layout, setIndex, 1,
+                              &descriptorSet, dynamicOffsets.size(),
+                              dynamicOffsets.data());
 
       DescriptorSetCache[key] = descriptorSet;
     }
@@ -1680,6 +1685,7 @@ auto PrepareRendering(const GraphicsContext &context) -> Error {
 
   {
     assert(CurrentPipelineLayout.layout != nullptr);
+    assert(GetCommandBuffer() != VK_NULL_HANDLE);
     ZoneScopedN("Flush push buffer data");
     for (auto &pushBuffer : TopOfStack->shader->pushBuffers) {
       FlushInfo info{

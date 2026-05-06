@@ -1628,7 +1628,7 @@ auto Texture::CopyTo(const GraphicsContext &context, Texture &dstTexture,
         "dimensions.");
   }
 
-  auto *commandBuffer = GetCommandBufferPtr();
+  auto *commandBuffer = GetCommandBuffer();
   if (commandBuffer == nullptr) {
     return Error::Create("CopyTo: Failed to get command buffer for copying.");
   }
@@ -1691,7 +1691,7 @@ auto Texture::CopyTo(const GraphicsContext &context, Buffer &dstBuffer,
   copyRegion.imageOffset = region.srcOffset;
   copyRegion.imageExtent = region.extent;
 
-  auto *commandBuffer = GetCommandBufferPtr();
+  auto *commandBuffer = GetCommandBuffer();
   if (commandBuffer == nullptr) {
     return Error::Create("CopyTo: Failed to get command buffer for copying.");
   }
@@ -1727,7 +1727,7 @@ auto GenerateMipmaps(GraphicsContext &context, Texture *texture) -> Error {
                          "mipmap generation.");
   }
 
-  auto *commandBuffer = GetCommandBufferPtr();
+  auto *commandBuffer = GetCommandBuffer();
   if (commandBuffer == nullptr) {
     return Error::Create("Failed to get command buffer for mipmap generation.");
   }

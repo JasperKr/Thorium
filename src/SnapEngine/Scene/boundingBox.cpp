@@ -77,6 +77,11 @@ auto BoundingBox::DrawGUI() const -> void {
   ImGui::Text("Max: (%.2f, %.2f, %.2f)", Max.x, Max.y, Max.z);
 }
 
+auto BoundingBox::Grow(const Math::Vec3 &point) -> void {
+  Min = Math::Min(Min, point);
+  Max = Math::Max(Max, point);
+}
+
 auto LuaBoundingBox::GetMin(lua_State *state) -> int {
   auto *luaBoundingBox = LuaWrap::ObjectFromLua<LuaBoundingBox>(state, 1);
 
