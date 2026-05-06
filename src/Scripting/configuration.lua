@@ -12,11 +12,11 @@ function snap.config(config)
   ---@type snap.VsyncMode
   config.window.vsync = "immediate"
 
-  config.graphics.hardwareRaytracing = "optional"
-  config.graphics.inlineRaytracing = "optional"
+  config.graphics.hardwareRaytracing = "disabled"
+  config.graphics.inlineRaytracing = "disabled"
 
   config.filesystem.identity = "ConfiguredIdentity"
 
   -- "debug" > "info" > "warning" > "error" > "fatal"
-  config.loglevel = "warning"
+  config.loglevel = "debug"
 end

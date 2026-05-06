@@ -613,15 +613,10 @@ auto LoadFromMemory(GraphicsContext &context,
 
   auto dst = VkOffset2D{0, 0};
 
-  PrintAlways(
-      "Setting texture pixels from memory, width: {}, height: {}, format: {}",
-      width, height, ::Graphics::Format::ImageFormatToString(format));
-
   auto result = texture.value()->SetPixels(context, dataSpan, width, height, 0,
                                            0, source, dst);
 
   if (requiresFree) {
-    PrintAlways("Freeing image data loaded from memory.");
     stbi_image_free((void *)dataSpan.data());
   }
 

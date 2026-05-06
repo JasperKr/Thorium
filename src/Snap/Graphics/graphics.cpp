@@ -14,6 +14,7 @@
 #include <cstdint>
 #include <mutex>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace Graphics {
@@ -158,15 +159,16 @@ auto GetAvailableDeviceExtensions(const GraphicsContext &context)
 }
 
 auto ExtensionListSupported(
-    const std::vector<const char *> &requiredExtensions,
+    const std::vector<std::pair<const char *, ExtensionRequirement>>
+        &extensions,
     const std::vector<VkExtensionProperties> &availableExtensions)
     -> std::vector<bool> {
-  std::vector<bool> supported(requiredExtensions.size(), false);
+  std::vector<bool> supported(extensions.size(), false);
 
-  for (size_t i = 0; i < requiredExtensions.size(); i++) {
+  for (size_t i = 0; i < extensions.size(); i++) {
     for (const auto &available : availableExtensions) {
       // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-array-to-pointer-decay, hicpp-no-array-decay)
-      if (strcmp(requiredExtensions.at(i), available.extensionName) == 0) {
+      if (strcmp(extensions.at(i).first, available.extensionName) == 0) {
         supported.at(i) = true;
         break;
       }
@@ -252,71 +254,50 @@ static auto CreateDevice(GraphicsContext &context,
   constexpr auto extOptional = ExtensionRequirement::Optional;
   constexpr auto extRequired = ExtensionRequirement::Required;
 
-  if (settings.hardwareRaytracing != extDisabled) {
-    const auto &result = GetAvailableDeviceExtensions(context);
-    if (Error::IsError(result)) {
-      return result.error();
-    }
-    const auto &availableExtensions = result.value();
+  const auto &result = GetAvailableDeviceExtensions(context);
+  if (Error::IsError(result)) {
+    return result.error();
+  }
+  const auto &availableExtensions = result.value();
 
-    const std::vector<const char *> requiredExtensions = {
-        VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
-        VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
-        VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
-        VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME,
-        VK_KHR_SPIRV_1_4_EXTENSION_NAME,
-        VK_KHR_SHADER_FLOAT_CONTROLS_EXTENSION_NAME,
-        VK_EXT_VERTEX_INPUT_DYNAMIC_STATE_EXTENSION_NAME,
-        VK_EXT_DEBUG_UTILS_EXTENSION_NAME};
+  auto extensions = std::vector<std::pair<const char *, ExtensionRequirement>>{
+      {VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME, extOptional},
+      {VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME, extRequired},
+      {VK_KHR_SPIRV_1_4_EXTENSION_NAME, extRequired},
+      {VK_KHR_SHADER_FLOAT_CONTROLS_EXTENSION_NAME, extRequired},
+      {VK_EXT_VERTEX_INPUT_DYNAMIC_STATE_EXTENSION_NAME, extRequired},
+      {VK_EXT_DEBUG_UTILS_EXTENSION_NAME, extOptional},
+      {VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
+       settings.hardwareRaytracing},
+      {VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME, settings.hardwareRaytracing},
+      {VK_KHR_RAY_QUERY_EXTENSION_NAME, settings.inlineRaytracing},
+  };
 
-    const auto &supported =
-        ExtensionListSupported(requiredExtensions, availableExtensions);
-    bool allRequiredSupported = true;
-    std::string errmsg;
-    auto index = 0;
+  const auto &supported =
+      ExtensionListSupported(extensions, availableExtensions);
+  bool allRequiredSupported = true;
+  auto index = 0;
 
-    for (const auto &extensionSupported : supported) {
-      if (!extensionSupported) {
-        allRequiredSupported = false;
-        errmsg += std::string(requiredExtensions.at(index)) + "\n";
-      } else {
-        deviceExtensions.emplace_back(requiredExtensions.at(index));
-      }
-      index++;
-    }
+  PrintAlways("Looping over supported extensions");
 
-    if (!allRequiredSupported) {
-      if (settings.hardwareRaytracing == extRequired) {
-        return Error::Create(
-            "Some Hardware raytracing extensions are not supported:\n" +
-            errmsg);
-      }
-      PrintInfo(
-          "Some Hardware raytracing extensions are not supported, skipping "
-          "hardware raytracing:\n{}",
-          errmsg);
+  for (const auto &[extensionName, requirement] : extensions) {
+    if (supported.at(index) && requirement != extDisabled) {
+      deviceExtensions.emplace_back(extensionName);
     } else {
-      PrintInfo("Enabled hardware raytracing support.");
+      if (requirement == extRequired) {
+        return Error::Create(std::format(
+            "Required device extension not supported: {}", extensionName));
+      }
 
-      if (settings.inlineRaytracing != extDisabled) {
-        bool supported =
-            ExtensionListSupported({VK_KHR_RAY_QUERY_EXTENSION_NAME},
-                                   availableExtensions)
-                .at(0);
-        if (!supported) {
-          if (settings.inlineRaytracing == extRequired) {
-            return Error::Create(
-                "Inline raytracing requires " VK_KHR_RAY_QUERY_EXTENSION_NAME
-                " which is not supported on this system.");
-          }
-          PrintInfo("Inline raytracing not supported by hardware, skipping.");
-        } else {
-          PrintInfo("Enabling " VK_KHR_RAY_QUERY_EXTENSION_NAME
-                    " for inline raytracing.");
-          deviceExtensions.emplace_back(VK_KHR_RAY_QUERY_EXTENSION_NAME);
-        }
+      if (requirement == extOptional) {
+        PrintWarning("Optional device extension not supported: {}",
+                     extensionName);
+      } else {
+        PrintInfo("Device extension not supported (disabled): {}",
+                  extensionName);
       }
     }
+    index++;
   }
 
   createInfo.enabledExtensionCount =

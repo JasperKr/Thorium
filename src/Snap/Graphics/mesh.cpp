@@ -127,7 +127,6 @@ auto Mesh::Create(GraphicsContext &context, VertexFormat vertexFormat,
   auto mesh = Ref<Mesh>::Make();
 
   mesh->VertexCount = vertexCount;
-
   mesh->Format = vertexFormat;
 
   VkMemoryPropertyFlags properties =

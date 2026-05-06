@@ -46,32 +46,20 @@ public:
 
   [[nodiscard]] auto GetVkAttributes()
       -> std::vector<VkVertexInputAttributeDescription> & {
-    if (!constructedBindings) {
-      ConstructBindings();
-    }
     return VkAttributes;
   }
 
   [[nodiscard]] auto GetVkAttributes2()
       -> std::vector<VkVertexInputAttributeDescription2EXT> & {
-    if (!constructedBindings) {
-      ConstructBindings();
-    }
     return VkAttributes2;
   }
 
   [[nodiscard]] auto GetBindings()
       -> const std::vector<VkVertexInputBindingDescription> & {
-    if (!constructedBindings) {
-      ConstructBindings();
-    }
     return Bindings;
   }
 
   [[nodiscard]] auto GetStride(uint32_t binding) -> uint32_t {
-    if (!constructedBindings) {
-      ConstructBindings();
-    }
     assert(binding < Bindings.size());
     return Bindings[binding].stride;
   }
@@ -89,10 +77,11 @@ public:
 
   auto BindDynamicInputState(VkCommandBuffer commandBuffer) -> void {
     auto currentHash = GetHash();
-    if (GetThreadContext().currentVertexFormatHash == currentHash) {
+    auto &threadContext = GetThreadContext();
+    if (threadContext.currentVertexFormatHash == currentHash) {
       return; // Already bound this format, skip
     }
-    GetThreadContext().currentVertexFormatHash = currentHash;
+    threadContext.currentVertexFormatHash = currentHash;
 
     thread_local VkVertexInputBindingDescription2EXT vertexInputInfo = {};
     const auto &bindings = GetBindings();

@@ -1,6 +1,7 @@
 #include "scene.hpp"
 #include "Graphics/draw.hpp"
 #include "Graphics/dynamicRendering.hpp"
+#include "Graphics/shader.hpp"
 #include "Graphics/uniformWriter.hpp"
 #include "Modules/Math/matrix.hpp"
 #include "Modules/bindings.hpp"
@@ -189,7 +190,7 @@ auto Scene::DrawUiElement(lua_State *state) -> int {
 
 struct DrawItem {
   flecs::entity geom_entity;
-  const Geometry *geometry{};
+  Geometry geometry;
   const Renderer::Material *material{};
 
   uint64_t primaryKey;
@@ -200,6 +201,65 @@ struct DrawItem {
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 std::vector<DrawItem> DrawItems;
 
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+std::vector<DrawItem> TransparentDrawItems;
+
+inline auto CompareDrawItems(const DrawItem &first, const DrawItem &second)
+    -> bool {
+  if (first.primaryKey != second.primaryKey) {
+    return first.primaryKey < second.primaryKey;
+  }
+  if (first.secondaryKey != second.secondaryKey) {
+    return first.secondaryKey < second.secondaryKey;
+  }
+  return first.tertiaryKey < second.tertiaryKey;
+}
+
+inline auto RenderDrawItem(const DrawItem &item,
+                           const Ref<Graphics::Shader::ShaderModule> &shader,
+                           Graphics::GraphicsContext &ctx) -> Error {
+  const auto &worldMatrix = item.geom_entity.get<Transform>().GetWorldMatrix();
+  const auto &normalMatrix = Math::Matrix3x3(worldMatrix).InverseTranspose();
+
+  static auto modelMatrixKey = Graphics::ResourceKey{"ModelMatrix"};
+  static auto normalMatrixKey = Graphics::ResourceKey{"NormalMatrix"};
+
+  auto sendErr = Graphics::Shader::UniformWriter::Send(
+      shader, ctx, modelMatrixKey, worldMatrix);
+
+  if (Error::IsError(sendErr)) {
+    return sendErr;
+  }
+
+  sendErr = Graphics::Shader::UniformWriter::Send(shader, ctx, normalMatrixKey,
+                                                  normalMatrix);
+
+  if (Error::IsError(sendErr)) {
+    return sendErr;
+  }
+
+  if (!item.material->albedoTexture.isValid()) {
+    return Error::Create("Invalid material texture");
+  }
+
+  static auto materialKey = Graphics::ResourceKey{"MainTexture"};
+  sendErr = shader->Send(ctx, materialKey, item.material->albedoTexture);
+  if (Error::IsError(sendErr)) {
+    return sendErr;
+  }
+
+  if (item.geometry.mesh.get() == nullptr) {
+    return Error::Create("Invalid geometry mesh");
+  }
+
+  auto result = Graphics::Draw(ctx, *item.geometry.mesh);
+  if (Error::IsError(result)) {
+    return result;
+  }
+
+  return {};
+}
+
 auto Scene::DrawModels(lua_State *state) -> int {
   auto *scene = LuaWrap::ObjectFromLua<Scene>(state, 1);
 
@@ -207,10 +267,11 @@ auto Scene::DrawModels(lua_State *state) -> int {
     return luaL_error(state, "Expected a Scene object");
   }
 
-  auto *ctx = Graphics::GetCurrentGraphicsContext();
+  auto &ctx = *Graphics::GetCurrentGraphicsContext();
 
   const auto &shader = Graphics::DynamicRendering::GetShader();
   DrawItems.clear();
+  TransparentDrawItems.clear();
 
   scene->world.each<Geometry>(
       [&](flecs::entity entity, const Geometry &geometry) -> void {
@@ -219,66 +280,48 @@ auto Scene::DrawModels(lua_State *state) -> int {
 
           if (child.has<Engine::Renderer::Material>()) {
             material = child.try_get<Engine::Renderer::Material>();
-          } else {
+          }
+
+          if (material == nullptr || !material->albedoTexture.isValid()) {
             material = &Renderer::RendererInstance.DefaultMaterial;
           }
 
-          DrawItems.emplace_back(
-              DrawItem{.geom_entity = entity,
-                       .geometry = &geometry,
-                       .material = material,
-                       .primaryKey = material->GetMainSortKey(),
-                       .secondaryKey = geometry.mesh->GetHash(),
-                       .tertiaryKey = material->GetSecondarySortKey()});
+          if (material->alphaMode != Renderer::AlphaMode::Blend) {
+            DrawItems.emplace_back(
+                DrawItem{.geom_entity = entity,
+                         .geometry = geometry,
+                         .material = material,
+                         .primaryKey = material->GetMainSortKey(),
+                         .secondaryKey = geometry.mesh->GetHash(),
+                         .tertiaryKey = material->GetSecondarySortKey()});
+          } else {
+            TransparentDrawItems.emplace_back(
+                DrawItem{.geom_entity = entity,
+                         .geometry = geometry,
+                         .material = material,
+                         .primaryKey = material->GetMainSortKey(),
+                         .secondaryKey = geometry.mesh->GetHash(),
+                         .tertiaryKey = material->GetSecondarySortKey()});
+          }
         });
       });
 
-  std::ranges::sort(DrawItems,
-                    [](const DrawItem &first, const DrawItem &second) -> auto {
-                      if (first.primaryKey != second.primaryKey) {
-                        return first.primaryKey < second.primaryKey;
-                      }
-                      if (first.secondaryKey != second.secondaryKey) {
-                        return first.secondaryKey < second.secondaryKey;
-                      }
-                      return first.tertiaryKey < second.tertiaryKey;
-                    });
+  std::ranges::sort(DrawItems, CompareDrawItems);
+  std::ranges::sort(TransparentDrawItems, CompareDrawItems);
 
   for (const auto &item : DrawItems) {
-    const auto &worldMatrix =
-        item.geom_entity.get<Transform>().GetWorldMatrix();
-    const auto &normalMatrix = Math::Matrix3x3(worldMatrix).InverseTranspose();
-
-    static auto modelMatrixKey = Graphics::ResourceKey{"ModelMatrix"};
-    static auto normalMatrixKey = Graphics::ResourceKey{"NormalMatrix"};
-
-    auto sendErr = Graphics::Shader::UniformWriter::Send(
-        shader, *ctx, modelMatrixKey, worldMatrix);
-
-    if (Error::IsError(sendErr)) {
-      return luaL_error(state, "%s", sendErr.ToString().c_str());
-    }
-
-    sendErr = Graphics::Shader::UniformWriter::Send(
-        shader, *ctx, normalMatrixKey, normalMatrix);
-
-    if (Error::IsError(sendErr)) {
-      return luaL_error(state, "%s", sendErr.ToString().c_str());
-    }
-
-    if (!item.material->albedoTexture.isValid()) {
-      return luaL_error(state, "Invalid albedo texture for material");
-    }
-
-    static auto materialKey = Graphics::ResourceKey{"MainTexture"};
-    auto err = shader->Send(*ctx, materialKey, item.material->albedoTexture);
+    auto err = RenderDrawItem(item, shader, ctx);
     if (Error::IsError(err)) {
-      return luaL_error(state, "%s", err.ToString().c_str());
+      return luaL_error(state, "Failed to render draw item: %s",
+                        err.message.c_str());
     }
+  }
 
-    auto result = Graphics::Draw(*ctx, *item.geometry->mesh);
-    if (Error::IsError(result)) {
-      return luaL_error(state, "%s", result.ToString().c_str());
+  for (const auto &item : TransparentDrawItems) {
+    auto err = RenderDrawItem(item, shader, ctx);
+    if (Error::IsError(err)) {
+      return luaL_error(state, "Failed to render transparent draw item: %s",
+                        err.message.c_str());
     }
   }
 

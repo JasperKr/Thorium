@@ -2,6 +2,7 @@
 
 #include "Modules/object.hpp"
 #include "SDL3/SDL_video.h"
+#include <mutex>
 #include <vector>
 
 #include "volk/volk.h"

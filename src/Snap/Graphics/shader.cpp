@@ -68,16 +68,9 @@ static slang::TargetDesc SpvTargetDesc = {
     .compilerOptionEntryCount = static_cast<uint32_t>(CompilerOptions.size()),
 };
 
-const std::string SpirvDirectory = "shaders/spirv/";
 Ref<ShaderModule> DefaultShaderModule = {}; // NOLINT
 
 auto LoadModule() -> Error {
-  auto err = Filesystem::CreateDirectory(SpirvDirectory);
-
-  if (Error::IsError(err)) {
-    return err;
-  }
-
   auto result = slang::createGlobalSession(&GlobalSlangSession);
   if (Error::IsError(result)) {
     return Error::Create(result);

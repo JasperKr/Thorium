@@ -158,23 +158,23 @@ for i = 1, #indices, 3 do
 end
 
 
-local mesh = snap.graphics.newMesh(vertexformat, unpackedVertices, "triangles")
+-- local mesh = snap.graphics.newMesh(vertexformat, unpackedVertices, "triangles")
 
-local lod = scene:createLOD("Test LOD")
-local lod2 = scene:createLOD("Test LOD 2")
-local lod3 = scene:createLOD("Test LOD 3", 0.25)
+-- local lod = scene:createLOD("Test LOD")
+-- local lod2 = scene:createLOD("Test LOD 2")
+-- local lod3 = scene:createLOD("Test LOD 3", 0.25)
 
-lod:addGeometry(scene:createGeometry("Test geometry " .. i, mesh))
-lod2:addGeometry(scene:createGeometry("Test geometry " .. i, mesh))
-lod3:addGeometry(scene:createGeometry("Test geometry " .. i, mesh))
+-- lod:addGeometry(scene:createGeometry("Test geometry " .. i, mesh))
+-- lod2:addGeometry(scene:createGeometry("Test geometry " .. i, mesh))
+-- lod3:addGeometry(scene:createGeometry("Test geometry " .. i, mesh))
 
-local shape = scene:createShape("Test shape", { lod })
-local shape2 = scene:createShape("Test shape 2", { lod2 })
-local shape3 = scene:createShape("Test shape 3", { lod3 })
+-- local shape = scene:createShape("Test shape", { lod })
+-- local shape2 = scene:createShape("Test shape 2", { lod2 })
+-- local shape3 = scene:createShape("Test shape 3", { lod3 })
 
-local model = scene:createModel("Test model", { 0, 0, 0 }, { 0, 0, 0, 1 }, { 1, 1, 1 }, { shape })
-local model2 = scene:createModel("Test model 2", { 0, 5, 0 }, { 0, 0, 0, 1 }, { 1, 1, 1 }, { shape2 })
-local model3 = scene:createModel("Test model 3", { 0, 10, 0 }, { 0, 0, 0, 1 }, { 1, 1, 1 }, { shape3 })
+-- local model = scene:createModel("Test model", { 0, 0, 0 }, { 0, 0, 0, 1 }, { 1, 1, 1 }, { shape })
+-- local model2 = scene:createModel("Test model 2", { 0, 5, 0 }, { 0, 0, 0, 1 }, { 1, 1, 1 }, { shape2 })
+-- local model3 = scene:createModel("Test model 3", { 0, 10, 0 }, { 0, 0, 0, 1 }, { 1, 1, 1 }, { shape3 })
 
 thread:start(commandsChannel, startThreadChannel, scene, events)
 

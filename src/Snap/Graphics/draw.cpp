@@ -56,6 +56,10 @@ auto BindMesh(GraphicsContext &context, VkCommandBuffer cmdBuffer,
   auto &threadContext = GetThreadContext();
 
   auto vertexBuffer = mesh.GetVertexBuffer();
+  if (!vertexBuffer.isValid()) {
+    return Error::Create("Mesh has no vertex buffer.");
+  }
+
   Barrier::UpdateUsage(context, *vertexBuffer,
                        Barrier::ResourceState{
                            .stages = VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT,
@@ -63,6 +67,10 @@ auto BindMesh(GraphicsContext &context, VkCommandBuffer cmdBuffer,
                        });
   if (mesh.GetIndexCount() > 0) {
     auto indexBuffer = mesh.GetIndexBuffer();
+    if (!indexBuffer.isValid()) {
+      return Error::Create("Mesh has index count but no index buffer.");
+    }
+
     Barrier::UpdateUsage(context, *indexBuffer,
                          Barrier::ResourceState{
                              .stages = VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT,
@@ -105,7 +113,6 @@ auto Draw(GraphicsContext &context, Mesh &mesh, uint32_t instanceCount)
   }
 
   DynamicRendering::SetBindPoint(VK_PIPELINE_BIND_POINT_GRAPHICS);
-  // DynamicRendering::SetVertexFormat(mesh.GetVertexFormat());
   DynamicRendering::SetTopology(mesh.GetTopology());
 
   auto &vertexFormat = mesh.GetVertexFormat();
