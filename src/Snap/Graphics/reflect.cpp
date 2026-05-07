@@ -227,8 +227,18 @@ auto SetupVariant(slang::VariableLayoutReflection *layout)
     return matrixInfo;
   }
   default: {
+    auto kindInt = static_cast<int>(baseType->getKind());
+    PrintError("Unsupported type kind in SetupVariant: {}", kindInt);
+    PrintError("Field name: {}", baseType->getName() == nullptr
+                                     ? "Unnamed"
+                                     : baseType->getName());
+    PrintError("Type name: {}", baseType->getType()->getName() == nullptr
+                                    ? "Unnamed"
+                                    : baseType->getType()->getName());
+    PrintError("layout name: {}",
+               layout->getName() == nullptr ? "Unnamed" : layout->getName());
     return Error::Unexpectedf(
-        "Unsupported buffer element type in Buffer reflection.");
+        "Unsupported buffer element type in Buffer reflection: {}", kindInt);
   }
   }
 
@@ -405,13 +415,51 @@ auto SetupResource(slang::VariableLayoutReflection *variableLayout,
     bufferInfo.bufferType = BufferType::Storage;
 
     auto *bufferLayout = variableLayout->getTypeLayout();
+    auto *elementVarLayout = bufferLayout->getElementVarLayout();
 
-    auto result = SetupVariant(bufferLayout->getElementVarLayout());
-    if (Error::IsError(result)) {
-      return result.error().AsUnexpected();
+    if (elementVarLayout != nullptr) {
+      auto result = SetupVariant(elementVarLayout);
+      if (Error::IsError(result)) {
+        return result.error().AsUnexpected();
+      }
+
+      bufferInfo.info = result.value();
+    } else {
+      StructInfo structInfo{};
+      structInfo.size = static_cast<uint32_t>(bufferLayout->getSize());
+      structInfo.alignment =
+          static_cast<uint32_t>(bufferLayout->getAlignment());
+      structInfo.name = "Unnamed Structured Buffer Struct";
+
+      for (int i = 0; i < bufferLayout->getFieldCount(); ++i) {
+        auto *fieldVariable = bufferLayout->getFieldByIndex(i);
+        auto result = SetupVariant(fieldVariable);
+        if (Error::IsError(result)) {
+          return result.error().AsUnexpected();
+        }
+
+        ResourceInfo fieldInfo(fieldVariable->getName());
+
+        if (std::holds_alternative<StructInfo>(result.value())) {
+          fieldInfo.info = std::get<StructInfo>(result.value());
+        } else if (std::holds_alternative<ScalarInfo>(result.value())) {
+          fieldInfo.info = std::get<ScalarInfo>(result.value());
+        } else if (std::holds_alternative<VectorInfo>(result.value())) {
+          fieldInfo.info = std::get<VectorInfo>(result.value());
+        } else if (std::holds_alternative<MatrixInfo>(result.value())) {
+          fieldInfo.info = std::get<MatrixInfo>(result.value());
+        } else {
+          return Error::Create("Unsupported struct field type in unnamed "
+                               "structured buffer "
+                               "reflection.")
+              .AsUnexpected();
+        }
+
+        structInfo.fields.emplace_back(fieldInfo);
+      }
+
+      bufferInfo.info = structInfo;
     }
-
-    bufferInfo.info = result.value();
 
     resourceInfo.name = variableLayout->getName();
     resourceInfo.stages = SlangStageToVkStage(variableLayout->getStage());
@@ -466,6 +514,11 @@ auto SetupFromType(slang::VariableLayoutReflection *variableLayout,
   case slang::TypeReflection::Kind::ConstantBuffer: {
     auto category = variableLayout->getCategory();
     auto *bufferLayout = typeLayout->getElementVarLayout();
+
+    if (bufferLayout == nullptr) {
+      return Error::Unexpected(
+          "Constant buffer has no element variable layout.");
+    }
 
     auto access = typeLayout->getResourceAccess();
 

@@ -61,7 +61,7 @@ struct Material {
   TexRef ambientOcclusionTexture;  // Linear R
   TexRef reflectanceTexture;       // Linear R
   TexRef emissiveTexture;          // Linear RGB
-  size_t materialSSBOIndex = 0;
+  uint32_t materialSSBOIndex = 0;
 
   bool obtainedSSBOIndex = false;
   bool dirty = true;

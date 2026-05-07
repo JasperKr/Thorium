@@ -255,6 +255,14 @@ inline auto RenderDrawItem(const DrawItem &item,
     return sendErr;
   }
 
+  static auto materialBufferIndexKey =
+      Graphics::ResourceKey{"MaterialBufferIndex"};
+  sendErr = Graphics::Shader::UniformWriter::Send(
+      shader, ctx, materialBufferIndexKey, item.material->materialSSBOIndex);
+  if (Error::IsError(sendErr)) {
+    return sendErr;
+  }
+
   if (item.geometry.mesh.get() == nullptr) {
     return Error::Create("Invalid geometry mesh");
   }
@@ -274,9 +282,21 @@ auto Scene::DrawModels(lua_State *state) -> int {
     return luaL_error(state, "Expected a Scene object");
   }
 
+  scene->preRender.run();
+
   auto &ctx = *Graphics::GetCurrentGraphicsContext();
 
   const auto &shader = Graphics::DynamicRendering::GetShader();
+
+  static auto materialBufferKey = Graphics::ResourceKey{"MaterialBuffer"};
+  auto materialSendError =
+      shader->Send(ctx, materialBufferKey,
+                   Renderer::RendererInstance.MaterialsBuffer->GetBuffer());
+  if (Error::IsError(materialSendError)) {
+    return luaL_error(state, "Failed to send material buffer: %s",
+                      materialSendError.message.c_str());
+  }
+
   DrawItems.clear();
   TransparentDrawItems.clear();
 
@@ -385,7 +405,7 @@ Scene::Scene(std::string name) : name(std::move(name)) {
 
   postBoundingboxSystem.depends_on(boundingBoxSystem);
 
-  auto preDrawSystem = world.system<Renderer::Material>().each(
+  preRender = world.system<Renderer::Material>().kind(0).each(
       [this](Renderer::Material &material) -> auto {
         if (lastUpdateResult.IsError()) {
           return;

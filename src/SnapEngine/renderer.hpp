@@ -34,6 +34,10 @@ const std::vector<Graphics::BufferComponent> MaterialBufferComponents = {
         .format = VK_FORMAT_R32G32B32_SFLOAT,
     },
     Graphics::BufferComponent{
+        .name = "AlphaMode",
+        .format = VK_FORMAT_R32_UINT,
+    },
+    Graphics::BufferComponent{
         .name = "AlphaCutoff",
         .format = VK_FORMAT_R32_SFLOAT,
     },
@@ -41,15 +45,13 @@ const std::vector<Graphics::BufferComponent> MaterialBufferComponents = {
         .name = "TextureUVIndices",
         .format = VK_FORMAT_R32G32_UINT,
     },
-    Graphics::BufferComponent{
-        .name = "AlphaMode",
-        .format = VK_FORMAT_R32_SINT,
-    }};
+};
 
 struct Renderer {
   Material DefaultMaterial;
   Ref<Graphics::StructuredBuffer> MaterialsBuffer;
   std::unordered_set<size_t> UsedMaterialIndices;
+  bool initialized = false;
 
   auto Initialize(Graphics::GraphicsContext &context) -> Error {
     constexpr uint32_t CheckerboardTextureSize = 8;
@@ -99,19 +101,24 @@ struct Renderer {
 
     auto format = Graphics::BufferFormat(MaterialBufferComponents);
 
-    // auto materialBufferResult = Graphics::StructuredBuffer::Create(
-    //     context, format, InitialMaterialBufferSize, materialBufferCreateInfo);
+    auto materialBufferResult = Graphics::StructuredBuffer::Create(
+        context, format, InitialMaterialBufferSize, materialBufferCreateInfo);
 
-    // if (Error::IsError(materialBufferResult)) {
-    //   return materialBufferResult.error();
-    // }
+    if (Error::IsError(materialBufferResult)) {
+      return materialBufferResult.error();
+    }
 
-    // MaterialsBuffer = materialBufferResult.value();
+    MaterialsBuffer = materialBufferResult.value();
 
+    initialized = true;
     return {};
   }
 
   void Deinitialize() {
+    if (!initialized) {
+      return;
+    }
+
     DefaultMaterial = Material();
     MaterialsBuffer.reset();
   }

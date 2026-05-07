@@ -335,13 +335,6 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
     return luaLoadErr;
   }
 
-#ifdef BUNDLE_ENGINE
-  error = Engine::Renderer::RendererInstance.Initialize(context);
-  if (Error::IsError(error)) {
-    return error;
-  }
-#endif
-
   PrintDebug("Entering main loop...");
 
   lua_getglobal(state, "debug");

@@ -352,6 +352,7 @@ auto Draw(lua_State *state) -> int {
 
   auto inout = ImGui::GetIO();
   Graphics::DynamicRendering::SetCullMode(VK_CULL_MODE_NONE);
+  Graphics::DynamicRendering::SetDepthMode(false, false, VK_COMPARE_OP_ALWAYS);
 
   auto changeResult = ChangeMouseState(inout);
   if (Error::IsError(changeResult)) {

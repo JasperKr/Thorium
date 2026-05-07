@@ -13,6 +13,7 @@ static const Type SceneType = Type("Scene");
 
 struct Scene : Object {
   flecs::world world;
+  flecs::system preRender;
   std::string name;
   Error lastUpdateResult = Error::Success();
 

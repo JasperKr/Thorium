@@ -23,6 +23,9 @@ print(scene:getName())
 
 snap.graphics.aquireGraphics("load")
 
+snap.renderer.initialize()
+
+
 --[[
     float4 sv_position : SV_Position;
     float4x2 TexCoords : Texture_Coordinates;

@@ -240,39 +240,52 @@ auto Material::Update(Graphics::GraphicsContext &context) -> Error {
     return {};
   }
 
-  // if (!obtainedSSBOIndex) {
-  //   auto indexResult = RendererInstance.GetNewMaterialIndex();
-  //   if (Error::IsError(indexResult)) {
-  //     return indexResult.error();
-  //   }
-  //   materialSSBOIndex = indexResult.value();
-  //   obtainedSSBOIndex = true;
-  // }
+  if (!obtainedSSBOIndex) {
+    auto indexResult = RendererInstance.GetNewMaterialIndex();
+    if (Error::IsError(indexResult)) {
+      return indexResult.error();
+    }
+    materialSSBOIndex = indexResult.value();
+    obtainedSSBOIndex = true;
+  }
 
-  // return WriteToBuffer(context, RendererInstance.MaterialsBuffer);
+  return WriteToBuffer(context, RendererInstance.MaterialsBuffer);
   return {};
 }
 
 auto Material::WriteToBuffer(Graphics::GraphicsContext &context,
                              const Ref<Graphics::StructuredBuffer> &buffer)
     -> Error {
+
+  // NOLINTBEGIN (hicppp-avoid-c-arrays)
   struct MaterialData {
-    alignas(4) Math::Vec4 albedoFactor;
+    alignas(4) float albedoFactor[4];
     alignas(4) float roughnessFactor;
     alignas(4) float metallicFactor;
     alignas(4) float reflectanceFactor;
-    alignas(4) Math::Vec3 emissiveFactor;
-    alignas(4) uint32_t cullMode;
+    alignas(4) uint32_t padding;
+    alignas(4) float emissiveFactor[3];
     alignas(4) uint32_t alphaMode;
-    alignas(4) Math::Uvec2 textureUVIndices;
+    alignas(4) float alphaCutoff;
+    alignas(4) uint32_t textureUVIndices[2];
+    alignas(4) uint32_t padding2;
   } materialData{};
+  // NOLINTEND (hicppp-avoid-c-arrays)
 
-  materialData.albedoFactor = albedoFactor;
+  materialData.albedoFactor[0] = albedoFactor.x;
+  materialData.albedoFactor[1] = albedoFactor.y;
+  materialData.albedoFactor[2] = albedoFactor.z;
+  materialData.albedoFactor[3] = albedoFactor.w;
+
   materialData.roughnessFactor = roughnessFactor;
   materialData.metallicFactor = metallicFactor;
   materialData.reflectanceFactor = reflectanceFactor;
-  materialData.emissiveFactor = emissiveFactor;
-  materialData.cullMode = cullMode;
+
+  materialData.emissiveFactor[0] = emissiveFactor.x;
+  materialData.emissiveFactor[1] = emissiveFactor.y;
+  materialData.emissiveFactor[2] = emissiveFactor.z;
+
+  materialData.alphaCutoff = alphaCutoff;
   materialData.alphaMode = static_cast<uint32_t>(alphaMode);
 
   uint64_t packedIndices = 0;
@@ -280,8 +293,8 @@ auto Material::WriteToBuffer(Graphics::GraphicsContext &context,
     packedIndices |=
         (static_cast<uint64_t>(textureUVIndices.at(i)) << (i * UINT8_WIDTH));
   }
-  materialData.textureUVIndices =
-      Math::Uvec2(packedIndices & ~0U, (packedIndices >> UINT32_WIDTH) & ~0U);
+  materialData.textureUVIndices[0] = packedIndices & ~0U;
+  materialData.textureUVIndices[1] = (packedIndices >> UINT32_WIDTH) & ~0U;
 
   return buffer->GetBuffer()->SetData(context, materialData,
                                       materialSSBOIndex * buffer->GetStride());
