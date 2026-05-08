@@ -1,11 +1,10 @@
 #include "shape.hpp"
-#include "Scene/boundingBox.hpp"
-#include "Scene/levelOfDetail.hpp"
+#include "Scene/Geometry/boundingBox.hpp"
+#include "Scene/Geometry/levelOfDetail.hpp"
 #include "Scene/scene.hpp"
 #include "Scene/transform.hpp"
 #include "Wrap/wrap.hpp"
 #include <lua.h>
-#include <vector>
 
 namespace Engine {
 

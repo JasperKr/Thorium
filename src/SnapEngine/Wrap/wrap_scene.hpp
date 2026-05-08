@@ -1,11 +1,11 @@
 #pragma once
 
-#include "Scene/boundingBox.hpp"
-#include "Scene/geometry.hpp"
-#include "Scene/levelOfDetail.hpp"
-#include "Scene/model.hpp"
+#include "Scene/Geometry/boundingBox.hpp"
+#include "Scene/Geometry/geometry.hpp"
+#include "Scene/Geometry/levelOfDetail.hpp"
+#include "Scene/Geometry/model.hpp"
+#include "Scene/Geometry/shape.hpp"
 #include "Scene/scene.hpp"
-#include "Scene/shape.hpp"
 #include "Wrap/wrap.hpp"
 #include "lua.hpp"
 

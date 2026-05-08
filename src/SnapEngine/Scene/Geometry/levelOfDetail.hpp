@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Modules/Math/mathTypes.hpp"
-#include "Scene/boundingBox.hpp"
+#include "Scene/Geometry/boundingBox.hpp"
 #include <flecs.h>
 #include <string>
 namespace Engine {

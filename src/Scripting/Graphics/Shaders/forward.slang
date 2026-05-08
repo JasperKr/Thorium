@@ -24,10 +24,6 @@ uniform float4x4 ModelMatrix;
 uniform float3x3 NormalMatrix;
 uniform float4x4 DefaultProjectionMatrix;
 
-float3 Rotate(float3 v, float4 q) {
-  return v + 2.0 * cross(q.xyz, cross(q.xyz, v) + q.w * v);
-}
-
 [shader("vertex")]
 VertexStageOutput vertexMain(VertexInput input) {
   VertexStageOutput out;

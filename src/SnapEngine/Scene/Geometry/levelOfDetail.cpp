@@ -1,7 +1,7 @@
 #include "levelOfDetail.hpp"
 #include "Graphics/mesh.hpp"
 #include "Modules/object.hpp"
-#include "Scene/geometry.hpp"
+#include "Scene/Geometry/geometry.hpp"
 #include "Scene/scene.hpp"
 #include "Wrap/wrap.hpp"
 #include <imgui.h>

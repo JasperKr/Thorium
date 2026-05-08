@@ -1,7 +1,6 @@
 module Utils;
 
-public func UnpackNormal(uint packedNormal) -> half4
-{
+public func UnpackNormal(uint packedNormal)->half4 {
   uint x = (packedNormal >> 0) & 0x3FF;
   uint y = (packedNormal >> 10) & 0x3FF;
   uint z = (packedNormal >> 20) & 0x3FF;
@@ -14,8 +13,7 @@ public func UnpackNormal(uint packedNormal) -> half4
   return half4(normal, (half)1.0);
 }
 
-public func UnpackTangent(uint packedTangent) -> half4
-{
+public func UnpackTangent(uint packedTangent)->half4 {
   uint x = (packedTangent >> 0) & 0x3FF;
   uint y = (packedTangent >> 10) & 0x3FF;
   uint z = (packedTangent >> 20) & 0x3FF;
@@ -27,4 +25,8 @@ public func UnpackTangent(uint packedTangent) -> half4
   tangent.w = half(packedTangent >> 30 & 1);
 
   return tangent;
+}
+
+public float3 Rotate(float3 v, float4 q) {
+  return v + 2.0 * cross(q.xyz, cross(q.xyz, v) + q.w * v);
 }

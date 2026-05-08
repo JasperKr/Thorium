@@ -3,7 +3,6 @@ add_library(SnapEngine
   gltfLoader.cpp
   renderer.cpp
   style.cpp
-  frustum.cpp
 
   Editor/gui.cpp
 
@@ -11,6 +10,7 @@ add_library(SnapEngine
   Scene/project.cpp
   Scene/transform.cpp
   Scene/userdata.cpp
+  Scene/frustum.cpp
 
   Scene/Geometry/shape.cpp
   Scene/Geometry/levelOfDetail.cpp

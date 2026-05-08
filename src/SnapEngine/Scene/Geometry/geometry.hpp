@@ -5,7 +5,6 @@
 #include "Wrap/wrap.hpp"
 #include "flecs.h"
 #include <lua.hpp>
-#include <utility>
 namespace Engine {
 
 static const Type geometryType = Type("Geometry");
