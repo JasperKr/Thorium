@@ -89,6 +89,8 @@ struct Renderer {
 
     DefaultMaterial.name = "Default Material";
     DefaultMaterial.albedoTexture = defaultTextureResult.value();
+    DefaultMaterial.albedoTexture->SetFilter(
+        VK_FILTER_LINEAR, VK_FILTER_NEAREST, VK_SAMPLER_MIPMAP_MODE_NEAREST);
     DefaultMaterial.cullMode = VK_CULL_MODE_NONE;
     DefaultMaterial.alphaMode = AlphaMode::Opaque;
 

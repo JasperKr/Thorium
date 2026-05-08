@@ -52,6 +52,7 @@ struct FragmentInput {
   float4 tangent : TANGENT;
   float2 tex_coord : TEXCOORDS;
   float4 color : COLOR;
+  bool isFrontFace : SV_IsFrontFace;
 };
 
 Sampler2D MainTexture;
@@ -60,24 +61,29 @@ StructuredBuffer<MaterialData> MaterialBuffer;
 [shader("fragment")]
 float4 fragmentMain(FragmentInput input) {
   input.normal = normalize(input.normal);
+  if (!input.isFrontFace) {
+    input.normal = -input.normal;
+    input.tangent.xyz = -input.tangent.xyz;
+  }
+
   float3 Incoming = normalize(float3(0.0, 1.0, 1.0));
-  float NoL = dot(input.normal, Incoming) * 0.5 + 0.5;
+  float NoL = dot(input.normal, Incoming) * 0.5 + 1.0;
   float4 texColor = MainTexture.Sample(input.tex_coord);
   MaterialData matData = MaterialBuffer[MaterialBufferIndex];
 
-  float alpha = texColor.a * input.color.a * matData.albedoFactor.a;
+  float alpha = texColor.a * matData.albedoFactor.a;
 
   if (matData.alphaMode == AlphaMode::Mask) {
-    if (alpha < matData.alphaCutoff) {
+    if (alpha <= matData.alphaCutoff) {
       discard;
     }
   }
 
-  if (matData.alphaMode == AlphaMode::Opaque) {
+  if (matData.alphaMode != AlphaMode::Blend) {
     alpha = 1.0;
   }
 
-  float3 albedo = texColor.rgb * matData.albedoFactor.rgb * input.color.rgb;
+  float3 albedo = texColor.rgb * matData.albedoFactor.rgb;
 
   return float4(albedo * NoL, alpha);
 }
