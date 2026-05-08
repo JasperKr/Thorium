@@ -300,50 +300,50 @@ inline auto LoadMaterial(Graphics::GraphicsContext &context,
     material->albedoTexture = albedoTextureLoadResult.value();
   }
 
-  if (gltfMaterial.pbrData.metallicRoughnessTexture.has_value()) {
-    auto metallicRoughnessLoadResult =
-        LoadTexture(context, asset, basePath,
-                    gltfMaterial.pbrData.metallicRoughnessTexture.value());
+  // if (gltfMaterial.pbrData.metallicRoughnessTexture.has_value()) {
+  //   auto metallicRoughnessLoadResult =
+  //       LoadTexture(context, asset, basePath,
+  //                   gltfMaterial.pbrData.metallicRoughnessTexture.value());
 
-    if (Error::IsError(metallicRoughnessLoadResult)) {
-      return metallicRoughnessLoadResult.error();
-    }
+  //   if (Error::IsError(metallicRoughnessLoadResult)) {
+  //     return metallicRoughnessLoadResult.error();
+  //   }
 
-    material->metallicRoughnessTexture = metallicRoughnessLoadResult.value();
-  }
+  //   material->metallicRoughnessTexture = metallicRoughnessLoadResult.value();
+  // }
 
-  if (gltfMaterial.occlusionTexture.has_value()) {
-    auto aoTextureLoadResult = LoadTexture(
-        context, asset, basePath, gltfMaterial.occlusionTexture.value());
+  // if (gltfMaterial.occlusionTexture.has_value()) {
+  //   auto aoTextureLoadResult = LoadTexture(
+  //       context, asset, basePath, gltfMaterial.occlusionTexture.value());
 
-    if (Error::IsError(aoTextureLoadResult)) {
-      return aoTextureLoadResult.error();
-    }
+  //   if (Error::IsError(aoTextureLoadResult)) {
+  //     return aoTextureLoadResult.error();
+  //   }
 
-    material->ambientOcclusionTexture = aoTextureLoadResult.value();
-  }
+  //   material->ambientOcclusionTexture = aoTextureLoadResult.value();
+  // }
 
-  if (gltfMaterial.normalTexture.has_value()) {
-    auto normalTextureLoadResult = LoadTexture(
-        context, asset, basePath, gltfMaterial.normalTexture.value());
+  // if (gltfMaterial.normalTexture.has_value()) {
+  //   auto normalTextureLoadResult = LoadTexture(
+  //       context, asset, basePath, gltfMaterial.normalTexture.value());
 
-    if (Error::IsError(normalTextureLoadResult)) {
-      return normalTextureLoadResult.error();
-    }
+  //   if (Error::IsError(normalTextureLoadResult)) {
+  //     return normalTextureLoadResult.error();
+  //   }
 
-    material->normalTexture = normalTextureLoadResult.value();
-  }
+  //   material->normalTexture = normalTextureLoadResult.value();
+  // }
 
-  if (gltfMaterial.emissiveTexture.has_value()) {
-    auto emissiveTextureLoadResult = LoadTexture(
-        context, asset, basePath, gltfMaterial.emissiveTexture.value());
+  // if (gltfMaterial.emissiveTexture.has_value()) {
+  //   auto emissiveTextureLoadResult = LoadTexture(
+  //       context, asset, basePath, gltfMaterial.emissiveTexture.value());
 
-    if (Error::IsError(emissiveTextureLoadResult)) {
-      return emissiveTextureLoadResult.error();
-    }
+  //   if (Error::IsError(emissiveTextureLoadResult)) {
+  //     return emissiveTextureLoadResult.error();
+  //   }
 
-    material->emissiveTexture = emissiveTextureLoadResult.value();
-  }
+  //   material->emissiveTexture = emissiveTextureLoadResult.value();
+  // }
 
   return Error::Success();
 }

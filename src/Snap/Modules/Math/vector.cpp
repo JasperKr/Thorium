@@ -773,6 +773,9 @@ auto Vec4::Normalize() const -> Vec4 {
 auto Vec4::Dot(const Vec4 &other) const -> Scalar {
   return (x * other.x) + (y * other.y) + (z * other.z) + (w * other.w);
 }
+auto Vec4::Dot(const Vec3 &other) const -> Scalar {
+  return (x * other.x) + (y * other.y) + (z * other.z);
+}
 auto Vec4::Max(const Vec4 &other) const -> Vec4 {
   return {std::fmax(x, other.x), std::fmax(y, other.y), std::fmax(z, other.z),
           std::fmax(w, other.w)};
@@ -1482,6 +1485,59 @@ auto Max(const Ivec3 &vec_a, const Ivec3 &vec_b) -> Ivec3 {
 auto Max(const Ivec4 &vec_a, const Ivec4 &vec_b) -> Ivec4 {
   return {std::max(vec_a.x, vec_b.x), std::max(vec_a.y, vec_b.y),
           std::max(vec_a.z, vec_b.z), std::max(vec_a.w, vec_b.w)};
+}
+
+/*
+struct Plane : public Vec4 {
+  [[nodiscard]] auto Normal() const -> Vec3;
+  [[nodiscard]] auto Distance() const -> Scalar;
+  [[nodiscard]] auto Normalize() const -> Plane;
+  [[nodiscard]] auto Point() const -> Vec3;
+  [[nodiscard]] auto DistanceToPoint(const Vec3 &point) const -> Scalar;
+  [[nodiscard]] auto IntersectRay(const Vec3 &origin, const Vec3 &direction) const
+      -> std::optional<Vec3>;
+};
+*/
+
+auto Plane::Normal() const -> Vec3 { return {x, y, z}; }
+
+auto Plane::Distance() const -> Scalar { return w; }
+
+auto Plane::Normalize() const -> Plane {
+  Vec3 normal = Normal();
+  Scalar length = normal.Length();
+  if (length <= Epsilon) {
+    return {0.0F, 0.0F, 0.0F, 0.0F};
+  }
+  Scalar inv_length = 1.0F / length;
+  return {x * inv_length, y * inv_length, z * inv_length, w * inv_length};
+}
+
+auto Plane::Point() const -> Vec3 {
+  Vec3 normal = Normal();
+  Scalar distance = Distance();
+  return normal * distance;
+}
+
+auto Plane::DistanceToPoint(const Vec3 &point) const -> Scalar {
+  Vec3 normal = Normal();
+  Scalar distance = Distance();
+  return normal.Dot(point) - distance;
+}
+
+auto Plane::IntersectRay(const Vec3 &origin, const Vec3 &direction) const
+    -> std::optional<Vec3> {
+  Vec3 normal = Normal();
+  Scalar distance = Distance();
+  Scalar denom = normal.Dot(direction);
+  if (std::abs(denom) < Epsilon) {
+    return std::nullopt; // Ray is parallel to the plane
+  }
+  Scalar time = (distance - normal.Dot(origin)) / denom;
+  if (time < 0) {
+    return std::nullopt; // Intersection is behind the ray origin
+  }
+  return origin + direction * time;
 }
 
 } // namespace Math

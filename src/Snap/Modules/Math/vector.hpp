@@ -2,6 +2,7 @@
 
 #include "mathTypes.hpp"
 #include <cstdint>
+#include <optional>
 #include <span>
 #include <string>
 
@@ -60,9 +61,9 @@ struct Vec2 {
   [[nodiscard]] auto Min(const Vec2 &other) const -> Vec2;
   [[nodiscard]] auto Min(Scalar scalar) const -> Vec2;
 
-  Vec2(Scalar x_val, Scalar y_val) : x(x_val), y(y_val) {}
-  explicit Vec2(Scalar val) : x(val), y(val) {}
-  Vec2() = default;
+  constexpr Vec2(Scalar x_val, Scalar y_val) : x(x_val), y(y_val) {}
+  constexpr explicit Vec2(Scalar val) : x(val), y(val) {}
+  constexpr Vec2() = default;
   explicit Vec2(const Vec3 &vec3);
   explicit Vec2(const Vec4 &vec4);
 
@@ -124,10 +125,10 @@ struct Vec3 {
   [[nodiscard]] auto Min(const Vec3 &other) const -> Vec3;
   [[nodiscard]] auto Min(Scalar scalar) const -> Vec3;
 
-  Vec3(Scalar x_val, Scalar y_val, Scalar z_val)
+  constexpr Vec3(Scalar x_val, Scalar y_val, Scalar z_val)
       : x(x_val), y(y_val), z(z_val) {}
-  explicit Vec3(Scalar val) : x(val), y(val), z(val) {}
-  Vec3() = default;
+  constexpr explicit Vec3(Scalar val) : x(val), y(val), z(val) {}
+  constexpr Vec3() = default;
   explicit Vec3(const Vec2 &vec2, Scalar z_val = 0.0F);
   explicit Vec3(const Vec4 &vec4);
 
@@ -185,6 +186,7 @@ struct Vec4 {
   [[nodiscard]] auto Inverse() const -> Vec4;
   [[nodiscard]] auto Normalize() const -> Vec4;
   [[nodiscard]] auto Dot(const Vec4 &other) const -> Scalar;
+  [[nodiscard]] auto Dot(const Vec3 &other) const -> Scalar;
   [[nodiscard]] auto Cross(const Vec4 &other) const -> Scalar;
 
   [[nodiscard]] auto Max(const Vec4 &other) const -> Vec4;
@@ -192,10 +194,10 @@ struct Vec4 {
   [[nodiscard]] auto Min(const Vec4 &other) const -> Vec4;
   [[nodiscard]] auto Min(Scalar scalar) const -> Vec4;
 
-  Vec4(Scalar x_val, Scalar y_val, Scalar z_val, Scalar w_val)
+  constexpr Vec4(Scalar x_val, Scalar y_val, Scalar z_val, Scalar w_val)
       : x(x_val), y(y_val), z(z_val), w(w_val) {}
-  explicit Vec4(Scalar val) : x(val), y(val), z(val), w(val) {}
-  Vec4() = default;
+  constexpr explicit Vec4(Scalar val) : x(val), y(val), z(val), w(val) {}
+  constexpr Vec4() = default;
   explicit Vec4(const Vec2 &vec2, Scalar z_val = 0.0F, Scalar w_val = 0.0F);
   explicit Vec4(const Vec3 &vec3, Scalar w_val = 0.0F);
 
@@ -245,9 +247,9 @@ struct Uvec2 {
   auto operator[](uint32_t index) const -> uint32_t;
   auto operator[](uint32_t index) -> uint32_t &;
 
-  Uvec2(uint32_t x_val, uint32_t y_val) : x(x_val), y(y_val) {}
-  explicit Uvec2(uint32_t val) : x(val), y(val) {}
-  Uvec2() = default;
+  constexpr Uvec2(uint32_t x_val, uint32_t y_val) : x(x_val), y(y_val) {}
+  constexpr explicit Uvec2(uint32_t val) : x(val), y(val) {}
+  constexpr Uvec2() = default;
   explicit Uvec2(const Uvec3 &vec3);
   explicit Uvec2(const Uvec4 &vec4);
 
@@ -296,10 +298,10 @@ struct Uvec3 {
   auto operator[](uint32_t index) const -> uint32_t;
   auto operator[](uint32_t index) -> uint32_t &;
 
-  Uvec3(uint32_t x_val, uint32_t y_val, uint32_t z_val)
+  constexpr Uvec3(uint32_t x_val, uint32_t y_val, uint32_t z_val)
       : x(x_val), y(y_val), z(z_val) {}
-  explicit Uvec3(uint32_t val) : x(val), y(val), z(val) {}
-  Uvec3() = default;
+  constexpr explicit Uvec3(uint32_t val) : x(val), y(val), z(val) {}
+  constexpr Uvec3() = default;
   explicit Uvec3(const Uvec2 &vec2, uint32_t z_val = 0);
   explicit Uvec3(const Uvec4 &vec4);
 
@@ -349,10 +351,11 @@ struct Uvec4 {
   auto operator[](uint32_t index) const -> uint32_t;
   auto operator[](uint32_t index) -> uint32_t &;
 
-  Uvec4(uint32_t x_val, uint32_t y_val, uint32_t z_val, uint32_t w_val)
+  constexpr Uvec4(uint32_t x_val, uint32_t y_val, uint32_t z_val,
+                  uint32_t w_val)
       : x(x_val), y(y_val), z(z_val), w(w_val) {}
-  explicit Uvec4(uint32_t val) : x(val), y(val), z(val), w(val) {}
-  Uvec4() = default;
+  constexpr explicit Uvec4(uint32_t val) : x(val), y(val), z(val), w(val) {}
+  constexpr Uvec4() = default;
   explicit Uvec4(const Uvec2 &vec2, uint32_t z_val = 0, uint32_t w_val = 0);
   explicit Uvec4(const Uvec3 &vec3, uint32_t w_val = 0);
 
@@ -400,9 +403,9 @@ struct Ivec2 {
   auto operator[](uint32_t index) const -> int32_t;
   auto operator[](uint32_t index) -> int32_t &;
 
-  Ivec2(int32_t x_val, int32_t y_val) : x(x_val), y(y_val) {}
-  explicit Ivec2(int32_t val) : x(val), y(val) {}
-  Ivec2() = default;
+  constexpr Ivec2(int32_t x_val, int32_t y_val) : x(x_val), y(y_val) {}
+  constexpr explicit Ivec2(int32_t val) : x(val), y(val) {}
+  constexpr Ivec2() = default;
   explicit Ivec2(const Ivec3 &vec3);
   explicit Ivec2(const Ivec4 &vec4);
 
@@ -451,10 +454,10 @@ struct Ivec3 {
   auto operator[](uint32_t index) const -> int32_t;
   auto operator[](uint32_t index) -> int32_t &;
 
-  Ivec3(int32_t x_val, int32_t y_val, int32_t z_val)
+  constexpr Ivec3(int32_t x_val, int32_t y_val, int32_t z_val)
       : x(x_val), y(y_val), z(z_val) {}
-  explicit Ivec3(int32_t val) : x(val), y(val), z(val) {}
-  Ivec3() = default;
+  constexpr explicit Ivec3(int32_t val) : x(val), y(val), z(val) {}
+  constexpr Ivec3() = default;
   explicit Ivec3(const Ivec2 &vec2, int32_t z_val = 0);
   explicit Ivec3(const Ivec4 &vec4);
 
@@ -504,10 +507,10 @@ struct Ivec4 {
   auto operator[](uint32_t index) const -> int32_t;
   auto operator[](uint32_t index) -> int32_t &;
 
-  Ivec4(int32_t x_val, int32_t y_val, int32_t z_val, int32_t w_val)
+  constexpr Ivec4(int32_t x_val, int32_t y_val, int32_t z_val, int32_t w_val)
       : x(x_val), y(y_val), z(z_val), w(w_val) {}
-  explicit Ivec4(int32_t val) : x(val), y(val), z(val), w(val) {}
-  Ivec4() = default;
+  constexpr explicit Ivec4(int32_t val) : x(val), y(val), z(val), w(val) {}
+  constexpr Ivec4() = default;
   explicit Ivec4(const Ivec2 &vec2, int32_t z_val = 0, int32_t w_val = 0);
   explicit Ivec4(const Ivec3 &vec3, int32_t w_val = 0);
 
@@ -548,5 +551,23 @@ auto Min(const Ivec4 &vec_a, const Ivec4 &vec_b) -> Ivec4;
 auto Max(const Ivec2 &vec_a, const Ivec2 &vec_b) -> Ivec2;
 auto Max(const Ivec3 &vec_a, const Ivec3 &vec_b) -> Ivec3;
 auto Max(const Ivec4 &vec_a, const Ivec4 &vec_b) -> Ivec4;
+
+struct Plane : public Vec4 {
+  Plane() = default;
+  constexpr Plane(Scalar x_val, Scalar y_val, Scalar z_val, Scalar w_val)
+      : Vec4(x_val, y_val, z_val, w_val) {}
+  constexpr explicit Plane(const Vec4 &vec4) : Vec4(vec4) {}
+  constexpr explicit Plane(const Vec3 &normal, Scalar distance)
+      : Vec4(normal.x, normal.y, normal.z, distance) {}
+
+  [[nodiscard]] auto Normal() const -> Vec3;
+  [[nodiscard]] auto Distance() const -> Scalar;
+  [[nodiscard]] auto Normalize() const -> Plane;
+  [[nodiscard]] auto Point() const -> Vec3;
+  [[nodiscard]] auto DistanceToPoint(const Vec3 &point) const -> Scalar;
+  [[nodiscard]] auto IntersectRay(const Vec3 &origin,
+                                  const Vec3 &direction) const
+      -> std::optional<Vec3>;
+};
 
 } // namespace Math
