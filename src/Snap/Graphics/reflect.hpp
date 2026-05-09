@@ -482,16 +482,13 @@ struct ShaderReflection {
     globalUBOInfo.info = globalUBOStruct;
 
     if (resources.size() == 0) {
+      PrintAlways("Shader has no resources, skipping global uniform buffer "
+                  "construction.");
       return {};
-    }
-
-    for (const auto &resource : resources) {
-      globalUBOStruct.size += resource.GetSize();
     }
 
     globals = {
         .name = "Globals",
-        .size = globalUBOStruct.size,
         .set = set,
         .binding = binding,
         .access = SlangResourceAccess::SLANG_RESOURCE_ACCESS_READ,
@@ -514,6 +511,7 @@ struct ShaderReflection {
     }
 
     hasGlobals = true;
+    globals.size = globalBufferFormat.GetStride();
 
     return {};
   }

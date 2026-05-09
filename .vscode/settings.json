@@ -13,8 +13,8 @@
     // Not optimal, but i hate the whole explorer being cluttered with
     // third party libraries when you just want to quickly open a file.
     "files.exclude": {
-        "**/include": true,
-        "**/external": true,
-        "**/third_party": true
+        "include/": true,
+        "external/": true,
+        "third_party/": true
     }
 }

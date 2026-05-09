@@ -104,7 +104,7 @@ public float SpecularOcclusion(float NoV, float AO, float roughness) {
   return saturate(pow(NoV + AO, exp2(-16.0 * roughness - 1.0)) - 1.0 + AO);
 }
 
-public float LambdaV(float roughness, float NoV) {
+public float ComputeLambdaV(float roughness, float NoV) {
   float rSqr = roughness * roughness;
   return NoV * sqrt((NoV - rSqr * NoV) * NoV + rSqr);
 }

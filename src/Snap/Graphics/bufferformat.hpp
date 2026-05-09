@@ -34,10 +34,18 @@ struct BufferFormat {
   ~BufferFormat() = default;
 
 private:
-  auto FlattenComponentTree() -> void;
+  auto FlattenComponentTree() const -> void;
 
-  auto CalculateStride(Standard std) -> size_t;
-  auto Offset(size_t offset) -> void;
+  auto CalculateStride(Standard std) const -> size_t;
+  auto Offset(size_t offset) const -> void;
+  auto IsInitialized() const -> bool {
+    if (Components.empty()) {
+      return true;
+    }
+
+    bool invalid = stride == 0 || alignment == 0;
+    return !invalid;
+  }
 
   [[nodiscard]] auto
   FindComponent(Graphics::ResourceKey::const_iterator iterator,
@@ -45,7 +53,7 @@ private:
       -> BufferComponent const *;
 
 public:
-  [[nodiscard]] auto GetVkComponents() -> const std::vector<VkFormat> & {
+  [[nodiscard]] auto GetVkComponents() const -> const std::vector<VkFormat> & {
     if (FlatComponents.empty()) {
       FlattenComponentTree();
     }
@@ -59,7 +67,13 @@ public:
   }
 
   // Get the calculated stride of the format
-  [[nodiscard]] auto GetStride() const -> size_t { return stride; }
+  [[nodiscard]] auto GetStride() const -> size_t {
+    if (!IsInitialized()) {
+      CalculateStride(std);
+    }
+
+    return stride;
+  }
 
   // Get the offset of a component by name
   [[nodiscard]] auto GetComponentOffset(const ResourceKey &name) const
@@ -98,21 +112,20 @@ public:
 private:
   // Definition tree
   std::vector<BufferComponent> Components;
+  Standard std{};
 
   // The list of components in the format, inorder flattended structure tree
-  std::vector<VkFormat> FlatComponents;
+  mutable std::vector<VkFormat> FlatComponents;
 
   // The stride of the element, including any padding between components
-  size_t stride = 0;
-  uint32_t alignment{};
-
-  // Stride and alignment initialized flag
-  bool initialized = false;
+  mutable size_t stride = 0;
+  mutable uint32_t alignment{};
 };
 
 struct BufferComponent {
   std::string name;
-  uint32_t offset;
+  mutable uint32_t
+      offset; // Offset is mutable because it is calculated after the fact
   BufferTreeComponent format;
   size_t arraySize = 1;
   bool isMatrix;

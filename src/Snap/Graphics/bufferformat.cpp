@@ -9,9 +9,9 @@
 #include <cstddef>
 #include <format>
 #include <iterator>
-#include <optional>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -20,12 +20,7 @@
 namespace Graphics {
 BufferFormat::BufferFormat(std::vector<BufferComponent> components,
                            Standard std)
-    : Components(std::move(components)) {
-
-  PrintAlways("Creating buffer format with {} components", Components.size());
-
-  CalculateStride(std);
-}
+    : Components(std::move(components)), std(std) {}
 
 auto BufferFormat::GetComponentOffset(size_t componentIndex) const -> size_t {
   if (componentIndex >= Components.size()) {
@@ -185,28 +180,27 @@ inline auto AlignUp(size_t offset, size_t alignment) -> size_t {
   return (offset + alignment - 1) & ~(alignment - 1);
 }
 
-auto BufferFormat::Offset(size_t offset) -> void {
-  for (auto &component : Components) {
+auto BufferFormat::Offset(size_t offset) const -> void {
+  for (const auto &component : Components) {
     component.offset += offset;
 
     if (std::holds_alternative<BufferFormat>(component.format)) {
-      auto &format = std::get<BufferFormat>(component.format);
+      const auto &format = std::get<BufferFormat>(component.format);
       format.Offset(offset);
     }
   }
 }
 
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
-auto BufferFormat::CalculateStride(Standard std) -> size_t {
+auto BufferFormat::CalculateStride(Standard std) const -> size_t {
   if (Components.empty()) {
     PrintWarning("Buffer format has no components, stride will be 0");
-    return 0;
   }
 
   size_t offset = 0;
 
   size_t maxAlignment = 0;
-  for (auto &format : Components) {
+  for (const auto &format : Components) {
     size_t baseAlign = 0;
 
     // Get base alignment of component
@@ -259,7 +253,7 @@ auto BufferFormat::CalculateStride(Standard std) -> size_t {
     format.offset = offset;
 
     if (std::holds_alternative<BufferFormat>(format.format)) {
-      auto &bufferFormat = std::get<BufferFormat>(format.format);
+      const auto &bufferFormat = std::get<BufferFormat>(format.format);
       bufferFormat.Offset(offset);
     }
 
@@ -293,21 +287,19 @@ auto BufferFormat::CalculateStride(Standard std) -> size_t {
   }
   }
 
-  initialized = true;
-
   return stride;
 }
 
-auto BufferFormat::FlattenComponentTree() -> void {
-  for (auto &component : Components) {
+auto BufferFormat::FlattenComponentTree() const -> void {
+  for (const auto &component : Components) {
     if (std::holds_alternative<VkFormat>(component.format)) {
-      auto &bufferComp = std::get<VkFormat>(component.format);
+      const auto &bufferComp = std::get<VkFormat>(component.format);
       // Copy this component for each array element
       for (int i = 0; i < component.arraySize; i++) {
         FlatComponents.emplace_back(bufferComp);
       }
     } else if (std::holds_alternative<BufferFormat>(component.format)) {
-      auto &format = std::get<BufferFormat>(component.format);
+      const auto &format = std::get<BufferFormat>(component.format);
 
       if (format.FlatComponents.empty()) {
         format.FlattenComponentTree();

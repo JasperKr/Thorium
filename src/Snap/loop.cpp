@@ -235,20 +235,8 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
   auto sourceDirectory =
       Path::Sanitize(currentPath.string() + "/" + arguments[0]);
   sourceDirectory = Path::Directory(sourceDirectory);
-  PrintAlways("Source directory: " + sourceDirectory);
 
-  auto configResult = Config::Configure(state, sourceDirectory);
-
-  if (Error::IsError(configResult)) {
-    return configResult.error();
-  }
-
-  auto config = configResult.value();
-
-  Filesystem::GetConfig().identity = config.Identity;
   Error fsInitErr = Filesystem::Init(".");
-  PrintAlways("Source base directory: {}",
-              Filesystem::GetSourceBaseDirectory());
 
   if (Error::IsError(fsInitErr)) {
     return fsInitErr;
@@ -269,6 +257,16 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
   if (Error::IsError(fsMntErr)) {
     return fsMntErr;
   }
+
+  auto configResult = Config::Configure(state, sourceDirectory);
+
+  if (Error::IsError(configResult)) {
+    return configResult.error();
+  }
+
+  auto config = configResult.value();
+
+  Filesystem::GetConfig().identity = config.Identity;
 
   Graphics::GraphicsContext context = {};
 

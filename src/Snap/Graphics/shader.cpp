@@ -1,5 +1,6 @@
 #include "shader.hpp"
 #include "Graphics/Buffers/push.hpp"
+#include "Graphics/Buffers/structured.hpp"
 #include "Graphics/allocations.hpp"
 #include "Graphics/graphicsContext.hpp"
 #include "Graphics/reflect.hpp"
@@ -40,6 +41,7 @@ namespace Graphics::Shader {
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
 thread_local std::unordered_map<VkShaderModule, BoundState> BoundStates;
 static slang::IGlobalSession *GlobalSlangSession = nullptr;
+std::vector<const char *> ShaderSearchPaths;
 
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
@@ -273,8 +275,12 @@ static inline auto LoadSlang(GraphicsContext &context,
   const auto &sourceBack = Path::Join(sourceDir, std::string(".."));
 
   std::vector<const char *> searchPaths = {
-      sourceDir.c_str(), sourceBack.c_str(), saveDir.c_str(),
-      sourceBaseDir.c_str(), shaderDirectory.c_str()};
+      sourceDir.c_str(),     sourceBack.c_str(),      saveDir.c_str(),
+      sourceBaseDir.c_str(), shaderDirectory.c_str(),
+  };
+
+  searchPaths.insert(searchPaths.end(), ShaderSearchPaths.begin(),
+                     ShaderSearchPaths.end());
 
   std::string directories = "To be searched:\n";
   for (const auto &path : searchPaths) {
@@ -544,6 +550,19 @@ auto ShaderModule::Create(
     }
   }
 
+  PrintAlways("----- Global reflection info -----");
+  PrintAlways("Global resources:");
+  for (const auto &global : shader->reflection.resources) {
+    PrintAlways(" - {} (type: {})", global.name, global.GetTypename());
+  }
+  PrintAlways("Global buffer format:");
+  PrintAlways(" - Stride: {} bytes",
+              shader->reflection.globalBufferFormat.GetStride());
+  PrintAlways(" - Component count: {}",
+              shader->reflection.globalBufferFormat.GetComponents().size());
+  PrintAlways(shader->reflection.globalBufferFormat.ToString());
+  PrintAlways("----- ----- -----");
+
 #if Enable_Snapshots
   Snapshot::CaptureEvent(
       Snapshot::ShaderModuleCreateEvent(shader->module, shader->moduleName));
@@ -683,6 +702,13 @@ auto ShaderModule::Send(const GraphicsContext &context, const ResourceKey &key,
   }
 
   return Error::Create("Buffer not found in shader reflection: " + name);
+}
+
+auto ShaderModule::Send(const GraphicsContext &context, const ResourceKey &key,
+                        const Ref<::Graphics::StructuredBuffer> &buffer)
+    -> Error {
+  ZoneScopedN("ShaderModule::Send structured buffer");
+  return Send(context, key, buffer->GetBuffer());
 }
 
 auto ShaderModule::Send(const GraphicsContext &context, const ResourceKey &key,

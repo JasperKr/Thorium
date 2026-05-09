@@ -297,6 +297,13 @@ auto Scene::DrawModels(lua_State *state) -> int {
                       materialSendError.message.c_str());
   }
 
+  auto lightBufferSendError =
+      Renderer::RendererInstance.BindLightBuffers(ctx, shader);
+  if (Error::IsError(lightBufferSendError)) {
+    return luaL_error(state, "Failed to bind light buffers: %s",
+                      lightBufferSendError.message.c_str());
+  }
+
   DrawItems.clear();
   TransparentDrawItems.clear();
 

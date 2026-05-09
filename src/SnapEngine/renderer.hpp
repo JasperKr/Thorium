@@ -3,6 +3,7 @@
 #include "Graphics/Buffers/structured.hpp"
 #include "Graphics/bufferformat.hpp"
 #include "Graphics/graphicsContext.hpp"
+#include "Graphics/shader.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "material.hpp"
@@ -93,6 +94,10 @@ struct Renderer {
       -> Error;
 
   auto GetNewMaterialIndex() -> Result<size_t>;
+
+  auto BindLightBuffers(const Graphics::GraphicsContext &context,
+                        const Ref<Graphics::Shader::ShaderModule> &shader) const
+      -> Error;
 
 private:
   auto InitializeMaterialBuffer(Graphics::GraphicsContext &context,

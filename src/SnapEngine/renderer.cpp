@@ -1,5 +1,6 @@
 #include "renderer.hpp"
 #include "Graphics/graphicsContext.hpp"
+#include "Graphics/graphicsState.hpp"
 #include "Graphics/texture.hpp"
 #include "Modules/color.hpp"
 #include "Modules/error.hpp"
@@ -152,7 +153,7 @@ auto Renderer::InitializeLightBuffers(Graphics::GraphicsContext &context)
   };
 
   auto bufferResult = Graphics::StructuredBuffer::Create(
-      context, Scene::DirectionalLight::BufferFormat,
+      context, Scene::DirectionalLight::GetBufferFormat(),
       Scene::MaxDirectionalLights, bufferCreateInfo);
 
   if (Error::IsError(bufferResult)) {
@@ -162,7 +163,7 @@ auto Renderer::InitializeLightBuffers(Graphics::GraphicsContext &context)
 
   bufferCreateInfo.debugName = "Point Light Buffer";
   bufferResult = Graphics::StructuredBuffer::Create(
-      context, Scene::PointLight::BufferFormat, Scene::MaxPointLights,
+      context, Scene::PointLight::GetBufferFormat(), Scene::MaxPointLights,
       bufferCreateInfo);
 
   if (Error::IsError(bufferResult)) {
@@ -172,7 +173,7 @@ auto Renderer::InitializeLightBuffers(Graphics::GraphicsContext &context)
 
   bufferCreateInfo.debugName = "Spot Light Buffer";
   bufferResult = Graphics::StructuredBuffer::Create(
-      context, Scene::SpotLight::BufferFormat, Scene::MaxSpotLights,
+      context, Scene::SpotLight::GetBufferFormat(), Scene::MaxSpotLights,
       bufferCreateInfo);
   if (Error::IsError(bufferResult)) {
     return bufferResult.error();
@@ -181,8 +182,8 @@ auto Renderer::InitializeLightBuffers(Graphics::GraphicsContext &context)
 
   bufferCreateInfo.debugName = "Rectangle Light Buffer";
   bufferResult = Graphics::StructuredBuffer::Create(
-      context, Scene::RectangleLight::BufferFormat, Scene::MaxRectangleLights,
-      bufferCreateInfo);
+      context, Scene::RectangleLight::GetBufferFormat(),
+      Scene::MaxRectangleLights, bufferCreateInfo);
   if (Error::IsError(bufferResult)) {
     return bufferResult.error();
   }
@@ -190,12 +191,51 @@ auto Renderer::InitializeLightBuffers(Graphics::GraphicsContext &context)
 
   bufferCreateInfo.debugName = "Sphere Light Buffer";
   bufferResult = Graphics::StructuredBuffer::Create(
-      context, Scene::SphereLight::BufferFormat, Scene::MaxSphereLights,
+      context, Scene::SphereLight::GetBufferFormat(), Scene::MaxSphereLights,
       bufferCreateInfo);
   if (Error::IsError(bufferResult)) {
     return bufferResult.error();
   }
   SceneLightBuffers.SphereLightsBuffer = bufferResult.value();
+
+  return {};
+}
+
+auto Renderer::BindLightBuffers(
+    const Graphics::GraphicsContext &context,
+    const Ref<Graphics::Shader::ShaderModule> &shader) const -> Error {
+  using Key = Graphics::ResourceKey;
+
+  static auto key = Key{"PointLights"};
+  // auto error = shader->Send(context, key, SceneLightBuffers.PointLightsBuffer);
+  // if (Error::IsError(error)) {
+  //   return error;
+  // }
+
+  // key = Key{"SpotLights"};
+  // error = shader->Send(context, key, SceneLightBuffers.SpotLightsBuffer);
+  // if (Error::IsError(error)) {
+  //   return error;
+  // }
+
+  // key = Key{"RectangleLights"};
+  // error = shader->Send(context, key, SceneLightBuffers.RectangleLightsBuffer);
+  // if (Error::IsError(error)) {
+  //   return error;
+  // }
+
+  // key = Key{"SphereLights"};
+  // error = shader->Send(context, key, SceneLightBuffers.SphereLightsBuffer);
+  // if (Error::IsError(error)) {
+  //   return error;
+  // }
+
+  key = Key{"DirectionalLights"};
+  auto error =
+      shader->Send(context, key, SceneLightBuffers.DirectionalLightsBuffer);
+  if (Error::IsError(error)) {
+    return error;
+  }
 
   return {};
 }

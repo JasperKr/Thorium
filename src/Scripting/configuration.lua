@@ -15,6 +15,14 @@ function snap.config(config)
   config.graphics.hardwareRaytracing = "disabled"
   config.graphics.inlineRaytracing = "disabled"
 
+  local sourceDir = snap.filesystem.getSourceDirectory()
+  print("SOURCE DIRECTORY: " .. sourceDir)
+  config.graphics.shaderIncludePaths = {
+    sourceDir .. "Graphics/Shaders/",
+    sourceDir .. "Graphics/Shaders/Lighting/",
+    sourceDir .. "Graphics/Shaders/Lighting/Lights/",
+  }
+
   config.filesystem.identity = "ConfiguredIdentity"
 
   -- "debug" > "info" > "warning" > "error" > "fatal"

@@ -14,8 +14,8 @@
 #include <string>
 #include <utility>
 
-#include "flecs.h"
 #include "lua.hpp"
+#include <flecs.h>
 
 #include <vulkan/vulkan_core.h>
 namespace Engine::Renderer {

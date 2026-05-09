@@ -1,10 +1,12 @@
 #include "config.hpp"
 #include "Graphics/deviceSettings.hpp"
+#include "Graphics/shader.hpp"
 #include "Modules/console.hpp"
 #include "Wrap/Modules/wrap_window.hpp"
 #include "Wrap/wrap.hpp"
 
 #include "lua.hpp"
+#include <lua.h>
 #include <string>
 
 namespace Config {
@@ -128,6 +130,19 @@ inline auto LuaSetLogLevel(lua_State *state) -> int {
   return 0;
 }
 
+inline auto SetShaderIncludePaths(lua_State *state) -> int {
+
+  auto count = lua_objlen(state, 1);
+  for (int i = 1; i <= count; ++i) {
+    lua_rawgeti(state, 1, i);
+    const auto *str = luaL_checkstring(state, -1);
+    Graphics::Shader::ShaderSearchPaths.emplace_back(strdup(str));
+    lua_pop(state, 1);
+  }
+
+  return 0;
+}
+
 inline auto SetFunctions(lua_State *state) -> void {
   lua_pushcfunction(state, SetIdentity);
   lua_setfield(state, -2, "_setIdentity");
@@ -140,31 +155,21 @@ inline auto SetFunctions(lua_State *state) -> void {
 
   lua_pushcfunction(state, SetGraphicsSettings);
   lua_setfield(state, -2, "_setGraphicsSettings");
+
+  lua_pushcfunction(state, SetShaderIncludePaths);
+  lua_setfield(state, -2, "_setShaderIncludePaths");
 }
 
 inline auto RemoveFunctions(lua_State *state) -> void {
   LuaWrap::SetStackToTable(state, "snap"); // [snap]
 
-  std::vector<std::string> keysToRemove;
-
-  lua_pushnil(state);                // first key for lua_next
-  while (lua_next(state, -2) != 0) { // [snap, key, value]
-    if (lua_type(state, -2) == LUA_TSTRING) {
-      const char *key = lua_tostring(state, -2);
-      // NOLINTNEXTLINE
-      if (key[0] == '_') {
-        keysToRemove.emplace_back(key);
-      }
-    }
-    lua_pop(state, 1); // pop value, keep key
-  }
-
-  // Remove collected keys
-  for (auto &key : keysToRemove) {
-    lua_pushstring(state, key.c_str()); // [snap, key]
-    lua_pushnil(state);                 // [snap, key, nil]
-    lua_rawset(state, -3);              // snap[key] = nil
-  }
+  // clang-format off
+  lua_pushstring(state, "_setIdentity"); lua_pushnil(state); lua_rawset(state, -3);
+  lua_pushstring(state, "_setLogLevel"); lua_pushnil(state); lua_rawset(state, -3);
+  lua_pushstring(state, "_setSettings"); lua_pushnil(state); lua_rawset(state, -3);
+  lua_pushstring(state, "_setGraphicsSettings"); lua_pushnil(state); lua_rawset(state, -3);
+  lua_pushstring(state, "_setShaderIncludePaths"); lua_pushnil(state); lua_rawset(state, -3);
+  // clang-format on
 
   lua_pop(state, 1); // pop snap table
 }
@@ -211,6 +216,7 @@ auto Configure(lua_State *state, const std::string &sourceDirectory)
     snap._setIdentity(config.filesystem.identity)
     snap._setSettings(config.window)
     snap._setGraphicsSettings(config.graphics or {})
+    snap._setShaderIncludePaths(config.graphics and config.graphics.shaderIncludePaths or {})
     if config.loglevel ~= "" then snap._setLogLevel(config.loglevel) end
   )lua";
 

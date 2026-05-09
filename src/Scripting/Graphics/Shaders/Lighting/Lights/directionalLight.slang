@@ -7,7 +7,6 @@ import physicallyBased;
 
 public struct DirectionalLight : ILight {
   public Light Base;
-  public float2 Size;
 
   public Light GetLight() { return Base; }
 
@@ -29,6 +28,18 @@ public struct DirectionalLight : ILight {
                    pixel.Roughness, pixel.Fresnel0, Diffuse, NdotL, LambdaV);
 
     return Color * brdf;
+  }
+
+  public static override float3 SampleAll(const float3 WorldPosition,
+                                          const Pixel pixel,
+                                          const float3 ViewDirection,
+                                          const float NoV,
+                                          const float LambdaV) {
+    float3 result = float3(0.0f);
+    for (uint i = 0; i < DirectionalLightCount; i++) {
+      result += Sample(WorldPosition, i, pixel, ViewDirection, NoV, LambdaV);
+    }
+    return result;
   }
 }
 

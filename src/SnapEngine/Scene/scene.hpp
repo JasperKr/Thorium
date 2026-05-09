@@ -3,7 +3,7 @@
 #include "Modules/object.hpp"
 #include "Modules/type.hpp"
 #include "Wrap/wrap.hpp"
-#include "flecs.h"
+#include <flecs.h>
 #include <lua.hpp>
 #include <string>
 

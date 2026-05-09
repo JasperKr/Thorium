@@ -3,9 +3,15 @@ module Forward;
 import camera;
 import material;
 import utils;
+import Lighting.pixel;
+import Lighting.physicallyBased;
+import constants;
+
+import Lighting.Lights.directionalLight;
 
 struct VertexStageOutput {
   float4 sv_position : SV_Position;
+  float3 WorldPosition : WORLDPOSITION;
   float3 normal : NORMAL;
   float4 tangent : TANGENT;
   float2 tex_coord : TEXCOORDS;
@@ -40,10 +46,12 @@ VertexStageOutput vertexMain(VertexInput input) {
   out.tangent.w = tangent.w;
 
   out.color = input.Color;
+  out.WorldPosition = worldPos.xyz;
   return out;
 }
 
 struct FragmentInput {
+  float3 WorldPosition : WORLDPOSITION;
   float3 normal : NORMAL;
   float4 tangent : TANGENT;
   float2 tex_coord : TEXCOORDS;
@@ -62,8 +70,6 @@ float4 fragmentMain(FragmentInput input) {
     input.tangent.xyz = -input.tangent.xyz;
   }
 
-  float3 Incoming = normalize(float3(0.0, 1.0, 1.0));
-  float NoL = dot(input.normal, Incoming) * 0.5 + 1.0;
   float4 texColor = MainTexture.Sample(input.tex_coord);
   MaterialData matData = MaterialBuffer[MaterialBufferIndex];
 
@@ -81,5 +87,30 @@ float4 fragmentMain(FragmentInput input) {
 
   float3 albedo = texColor.rgb * matData.albedoFactor.rgb;
 
-  return float4(albedo * NoL, alpha);
+  Pixel pixel;
+  pixel.Normal = input.normal;
+  pixel.Albedo = albedo;
+  pixel.Metallic = matData.metallicFactor;
+  pixel.Roughness = matData.roughnessFactor * matData.roughnessFactor;
+  pixel.PerceptualRoughness = matData.roughnessFactor;
+  pixel.Fresnel0 = ComputeFresnel0(albedo, matData.metallicFactor,
+                                   matData.reflectanceFactor);
+
+  float3 viewDir = camera.Position - input.WorldPosition;
+  viewDir = normalize(viewDir);
+  float NoV = saturate(dot(input.normal, viewDir));
+  float lambdaV = ComputeLambdaV(pixel.Roughness, NoV);
+
+  float3 radiance = DirectionalLight::SampleAll(input.WorldPosition, pixel,
+                                                viewDir, NoV, lambdaV);
+  float3 irradiance = float3(0.5, 0.5, 0.5); // Some ambient lighting
+  float3 E = prefilteredDFG(pixel.PerceptualRoughness, pixel.Fresnel0, NoV);
+  float3 diffuse = ComputeDiffuseColor(pixel.Albedo, pixel.Metallic);
+
+  irradiance *= INV_PI;
+  irradiance *= (1.0f.xxx - E) * diffuse;
+
+  float3 color = radiance + irradiance;
+
+  return float4(albedo + color, alpha);
 }

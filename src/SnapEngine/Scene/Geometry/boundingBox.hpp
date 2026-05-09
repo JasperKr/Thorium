@@ -6,7 +6,7 @@
 #include "Modules/type.hpp"
 #include "Scene/transform.hpp"
 #include "Wrap/wrap.hpp"
-#include "flecs.h"
+#include <flecs.h>
 #include <lua.h>
 namespace Engine {
 struct BoundingBox {

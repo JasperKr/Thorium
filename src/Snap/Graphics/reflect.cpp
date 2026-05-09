@@ -560,8 +560,10 @@ auto SetupFromType(slang::VariableLayoutReflection *variableLayout,
 
     break;
   }
-  case slang::TypeReflection::Kind::Array:
-    break; // Not right now
+  case slang::TypeReflection::Kind::Array: {
+    return Error::Unexpected(
+        "Top-level arrays are not supported in reflection.");
+  }
   case slang::TypeReflection::Kind::Matrix: {
     auto matrixInfo = MatrixInfo{};
     matrixInfo.size = static_cast<uint32_t>(typeLayout->getSize());
@@ -749,6 +751,9 @@ auto ResourceInfoToBufferFormat(const ResourceInfo &info, Standard std)
                        std::get<MatrixInfo>(bufferInfo.info)),
           std);
     }
+
+    return Error::Unexpected(
+        "Unsupported buffer info type for buffer format conversion.");
   }
 
   if (std::holds_alternative<StructInfo>(info.info)) {
@@ -758,7 +763,12 @@ auto ResourceInfoToBufferFormat(const ResourceInfo &info, Standard std)
 
     for (const auto &field : structInfo.fields) {
       auto fieldFormatResult = ResourceInfoToBufferFormat(field, std);
+
       if (Error::IsError(fieldFormatResult)) {
+        PrintAlways("Skipping field {} in struct {} for buffer format "
+                    "conversion since it "
+                    "is not a supported type.",
+                    field.name, structInfo.name);
         continue; // Sampler or Buffer or whatever, skip it since it cannot be part of the buffer format
       }
 
@@ -768,16 +778,14 @@ auto ResourceInfoToBufferFormat(const ResourceInfo &info, Standard std)
               fieldFormatOrComponent)) {
         components.emplace_back(
             std::get<Graphics::BufferComponent>(fieldFormatOrComponent));
-        continue;
+      } else {
+        auto bufferField = Graphics::BufferComponent{};
+        bufferField.name = field.name;
+        bufferField.format =
+            std::get<Graphics::BufferFormat>(fieldFormatOrComponent);
+
+        components.emplace_back(bufferField);
       }
-
-      auto bufferField = Graphics::BufferComponent{};
-      bufferField.name = field.name;
-      bufferField.offset = field.GetOffset();
-      bufferField.format =
-          std::get<Graphics::BufferFormat>(fieldFormatOrComponent);
-
-      components.emplace_back(bufferField);
     }
 
     return Graphics::BufferFormat(components, std);
@@ -787,7 +795,6 @@ auto ResourceInfoToBufferFormat(const ResourceInfo &info, Standard std)
     const auto &scalarInfo = std::get<ScalarInfo>(info.info);
     auto component = Graphics::BufferComponent{};
     component.name = info.name;
-    component.offset = scalarInfo.offset;
     component.format = ScalarTypeToVkFormat(scalarInfo.type, 1);
     return component;
   }
@@ -796,7 +803,6 @@ auto ResourceInfoToBufferFormat(const ResourceInfo &info, Standard std)
     const auto &vectorInfo = std::get<VectorInfo>(info.info);
     auto component = Graphics::BufferComponent{};
     component.name = info.name;
-    component.offset = vectorInfo.offset;
     component.format = ScalarTypeToVkFormat(
         vectorInfo.scalarType, VectorChannelCount(vectorInfo.vectorType));
     return component;
@@ -806,10 +812,8 @@ auto ResourceInfoToBufferFormat(const ResourceInfo &info, Standard std)
     const auto &matrixInfo = std::get<MatrixInfo>(info.info);
     auto component = Graphics::BufferComponent{};
     component.name = info.name;
-    component.offset = matrixInfo.offset;
 
     auto [colums, rows] = MatrixDimensions(matrixInfo.matrixType);
-
     component.format = ScalarTypeToVkFormat(ScalarType::Float, colums);
     component.arraySize = rows;
 

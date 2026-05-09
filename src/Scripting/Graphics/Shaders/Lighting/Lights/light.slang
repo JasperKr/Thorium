@@ -18,4 +18,10 @@ public interface ILight {
                        const float NoV, const float LambdaV) {
     return float3(0.0f);
   }
+
+  static float3 SampleAll(const float3 WorldPosition, const Pixel pixel,
+                          const float3 ViewDirection, const float NoV,
+                          const float LambdaV) {
+    return float3(0.0f);
+  }
 };

@@ -18,6 +18,7 @@ add_library(SnapEngine
   Scene/Geometry/geometry.cpp
   Scene/Geometry/model.cpp
 
+  Scene/Lights/light.cpp
   Scene/Lights/directionalLight.cpp
   Scene/Lights/pointLight.cpp
   Scene/Lights/spotLight.cpp
@@ -35,7 +36,6 @@ target_include_directories(SnapEngine
   PUBLIC
     ${PROJECT_SOURCE_DIR}/src/Snap
     ${PROJECT_SOURCE_DIR}/src/SnapEngine
-    ${PROJECT_SOURCE_DIR}/include/flecs
 )
 
 message(STATUS "SnapEngine include: ${PROJECT_SOURCE_DIR}/src/Snap")

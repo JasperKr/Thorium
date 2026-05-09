@@ -2,8 +2,8 @@
 
 #include "Graphics/graphicsContext.hpp"
 #include "Modules/error.hpp"
-#include "flecs.h"
 #include <cstdint>
+#include <flecs.h>
 #include <string>
 #include <unordered_map>
 namespace glTF {

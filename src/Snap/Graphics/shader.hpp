@@ -21,6 +21,10 @@
 
 #include "vulkan/vulkan_core.h"
 
+namespace Graphics {
+struct StructuredBuffer;
+}
+
 namespace Graphics::Shader {
 
 struct ShaderExtern {
@@ -149,6 +153,8 @@ struct ShaderModule : Object {
 
   auto Send(const GraphicsContext &context, const ResourceKey &key,
             const Ref<Graphics::Texture> &texture) -> Error;
+  auto Send(const GraphicsContext &context, const ResourceKey &key,
+            const Ref<::Graphics::StructuredBuffer> &buffer) -> Error;
 
   auto GetUniform(const ResourceKey &key) const
       -> const Reflect::ResourceInfo *;
@@ -188,7 +194,8 @@ struct ShaderModule : Object {
   }
 };
 
-extern Ref<ShaderModule> DefaultShaderModule; // NOLINT
+extern Ref<ShaderModule> DefaultShaderModule;       // NOLINT
+extern std::vector<const char *> ShaderSearchPaths; // NOLINT
 
 auto LoadModule() -> Error;
 void UnloadModule(GraphicsContext &context);

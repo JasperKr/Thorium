@@ -41,7 +41,7 @@ set(FLECS_STATIC ON)
 set(FLECS_SHARED OFF)
 set(FLECS_PIC ON)
 set(FLECS_TESTS OFF)
-add_subdirectory(external/flecs)
+add_subdirectory(external/flecs EXCLUDE_FROM_ALL)
 
 cmake_policy(POP)
 
