@@ -10,7 +10,7 @@
 #include "Wrap/wrap.hpp"
 #include "tl/expected.hpp"
 #include <lauxlib.h>
-#include <lua.h>
+#include <lua.hpp>
 #include <string>
 
 #include "lua.hpp"

@@ -53,11 +53,36 @@ auto Renderer::InitializeDefaultMaterial(Graphics::GraphicsContext &context)
 
   auto material = Material();
 
-  material.name = "Default Material";
+  material.name = "No Material";
   material.albedoTexture = defaultTextureResult.value();
   material.albedoTexture->SetFilter(VK_FILTER_LINEAR, VK_FILTER_NEAREST,
                                     VK_SAMPLER_MIPMAP_MODE_NEAREST);
+  material.metallicRoughnessTexture = material.albedoTexture;
+  material.emissiveTexture = material.albedoTexture;
+  material.normalTexture = material.albedoTexture;
+  material.reflectanceTexture = material.albedoTexture;
+
   material.cullMode = VK_CULL_MODE_NONE;
+  material.alphaMode = AlphaMode::Opaque;
+
+  NoMaterial = material;
+
+  auto defaultWhiteTextureResult = Graphics::GetDefaultTexture(
+      context, VK_FORMAT_R8G8B8A8_UNORM, Graphics::TextureType::DEFAULT);
+  if (Error::IsError(defaultWhiteTextureResult)) {
+    return defaultWhiteTextureResult.error();
+  }
+  auto defaultWhiteTexture = defaultWhiteTextureResult.value();
+
+  material = Material();
+  material.name = "Default Material";
+  material.albedoTexture = defaultWhiteTexture;
+  material.metallicRoughnessTexture = defaultWhiteTexture;
+  material.emissiveTexture = defaultWhiteTexture;
+  material.normalTexture = defaultWhiteTexture;
+  material.reflectanceTexture = defaultWhiteTexture;
+
+  material.cullMode = VK_CULL_MODE_BACK_BIT;
   material.alphaMode = AlphaMode::Opaque;
 
   DefaultMaterial = material;
@@ -153,8 +178,8 @@ auto Renderer::InitializeLightBuffers(Graphics::GraphicsContext &context)
   };
 
   auto bufferResult = Graphics::StructuredBuffer::Create(
-      context, Scene::DirectionalLight::GetBufferFormat(),
-      Scene::MaxDirectionalLights, bufferCreateInfo);
+      context, DirectionalLight::GetBufferFormat(), MaxDirectionalLights,
+      bufferCreateInfo);
 
   if (Error::IsError(bufferResult)) {
     return bufferResult.error();
@@ -163,8 +188,7 @@ auto Renderer::InitializeLightBuffers(Graphics::GraphicsContext &context)
 
   bufferCreateInfo.debugName = "Point Light Buffer";
   bufferResult = Graphics::StructuredBuffer::Create(
-      context, Scene::PointLight::GetBufferFormat(), Scene::MaxPointLights,
-      bufferCreateInfo);
+      context, PointLight::GetBufferFormat(), MaxPointLights, bufferCreateInfo);
 
   if (Error::IsError(bufferResult)) {
     return bufferResult.error();
@@ -173,8 +197,7 @@ auto Renderer::InitializeLightBuffers(Graphics::GraphicsContext &context)
 
   bufferCreateInfo.debugName = "Spot Light Buffer";
   bufferResult = Graphics::StructuredBuffer::Create(
-      context, Scene::SpotLight::GetBufferFormat(), Scene::MaxSpotLights,
-      bufferCreateInfo);
+      context, SpotLight::GetBufferFormat(), MaxSpotLights, bufferCreateInfo);
   if (Error::IsError(bufferResult)) {
     return bufferResult.error();
   }
@@ -182,8 +205,8 @@ auto Renderer::InitializeLightBuffers(Graphics::GraphicsContext &context)
 
   bufferCreateInfo.debugName = "Rectangle Light Buffer";
   bufferResult = Graphics::StructuredBuffer::Create(
-      context, Scene::RectangleLight::GetBufferFormat(),
-      Scene::MaxRectangleLights, bufferCreateInfo);
+      context, RectangleLight::GetBufferFormat(), MaxRectangleLights,
+      bufferCreateInfo);
   if (Error::IsError(bufferResult)) {
     return bufferResult.error();
   }
@@ -191,12 +214,25 @@ auto Renderer::InitializeLightBuffers(Graphics::GraphicsContext &context)
 
   bufferCreateInfo.debugName = "Sphere Light Buffer";
   bufferResult = Graphics::StructuredBuffer::Create(
-      context, Scene::SphereLight::GetBufferFormat(), Scene::MaxSphereLights,
+      context, SphereLight::GetBufferFormat(), MaxSphereLights,
       bufferCreateInfo);
   if (Error::IsError(bufferResult)) {
     return bufferResult.error();
   }
   SceneLightBuffers.SphereLightsBuffer = bufferResult.value();
+
+  SceneLightBuffers.DirectionalLightData.resize(
+      MaxDirectionalLights *
+      SceneLightBuffers.DirectionalLightsBuffer->GetStride());
+  SceneLightBuffers.PointLightData.resize(
+      MaxPointLights * SceneLightBuffers.PointLightsBuffer->GetStride());
+  SceneLightBuffers.SpotLightData.resize(
+      MaxSpotLights * SceneLightBuffers.SpotLightsBuffer->GetStride());
+  SceneLightBuffers.RectangleLightData.resize(
+      MaxRectangleLights *
+      SceneLightBuffers.RectangleLightsBuffer->GetStride());
+  SceneLightBuffers.SphereLightData.resize(
+      MaxSphereLights * SceneLightBuffers.SphereLightsBuffer->GetStride());
 
   return {};
 }

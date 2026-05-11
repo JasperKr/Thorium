@@ -1,4 +1,6 @@
 #include "transform.hpp"
+#include "Modules/Math/eulerAngle.hpp"
+#include "Modules/Math/math.hpp"
 #include "Modules/Math/mathTypes.hpp"
 #include "Modules/Math/matrix.hpp"
 #include "Modules/console.hpp"
@@ -223,12 +225,26 @@ auto Transform::UpdateWorldMatrix(const Transform *parent) -> void {
   // WorldDirty = false;
 }
 
-auto Transform::DrawGUI() const -> void {
-  ImGui::Text("Position: (%.2f, %.2f, %.2f)", Position.x, Position.y,
-              Position.z);
-  ImGui::Text("Rotation: (%.2f, %.2f, %.2f, %.2f)", Rotation.x, Rotation.y,
-              Rotation.z, Rotation.w);
-  ImGui::Text("Scale: (%.2f, %.2f, %.2f)", Scale.x, Scale.y, Scale.z);
+auto Transform::DrawGUI() -> void {
+  ImGuiDataType dataType = sizeof(Math::Scalar) == sizeof(double)
+                               ? ImGuiDataType_Double
+                               : ImGuiDataType_Float;
+  if (ImGui::DragScalarN("Position", dataType, (void *)Position.Ptr(), 3,
+                         0.1F)) {
+    LocalDirty = true;
+  }
+
+  auto eulerRotation = Math::Conversions::ToEuler(Rotation);
+  if (ImGui::DragScalarN("Rotation (x, y, z)", dataType,
+                         (void *)eulerRotation.Ptr(), 3, 0.01F)) {
+    Rotation = Math::Conversions::ToQuaternion(eulerRotation);
+    LocalDirty = true;
+  }
+
+  if (ImGui::DragScalarN("Scale", dataType, (void *)Scale.Ptr(), 3, 0.1F)) {
+    LocalDirty = true;
+  }
+
   ImGui::Text("%s",
               std::format("Local Matrix:\n{}", LocalMatrix.ToString()).c_str());
   ImGui::Text("%s",

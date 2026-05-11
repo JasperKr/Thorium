@@ -1,7 +1,7 @@
 #include "cameraMatrices.hpp"
 #include "frustum.hpp"
 
-namespace Engine::Scene {
+namespace Engine {
 
 auto CameraMatrices::GetFrustum() const -> Frustum {
   return Frustum::FromMatrices(ViewProjectionMatrix,
@@ -15,4 +15,4 @@ auto CameraMatrices::Update() -> void {
   InverseRotationProjectionMatrix = RotationProjectionMatrix.Inverse();
 }
 
-} // namespace Engine::Scene
+} // namespace Engine

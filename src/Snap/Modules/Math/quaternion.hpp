@@ -23,6 +23,11 @@ struct Quaternion {
   [[nodiscard]] auto RotateVector(const Vec3 &vec) const -> Vec3;
 
   [[nodiscard]] auto ToString() const -> std::string;
+  [[nodiscard]] auto Span() const -> std::span<const Scalar, 4> {
+    return std::span<const Scalar, 4>(&x, 4);
+  }
+  [[nodiscard]] auto Ptr() const -> const Scalar * { return &x; }
+  [[nodiscard]] auto Ptr() -> Scalar * { return &x; }
 };
 
 } // namespace Math

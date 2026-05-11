@@ -3,7 +3,7 @@
 #include "Graphics/bufferformat.hpp"
 #include "Modules/color.hpp"
 #include <cstdint>
-namespace Engine::Scene {
+namespace Engine {
 
 enum class IntensityUnit : uint8_t {
   // Candela; (lm/sr) aka (luminous flux per steradian)
@@ -13,13 +13,30 @@ enum class IntensityUnit : uint8_t {
   Illuminance,
 };
 
+enum class LightType : uint8_t {
+  None,
+  Directional,
+  Point,
+  Spot,
+  Rectangle,
+  Sphere,
+};
+
 struct Light {
+  Light() = default;
+  Light(const Light &) = default;
+  auto operator=(const Light &) -> Light & = default;
+  Light(Light &&) = default;
+  auto operator=(Light &&) -> Light & = default;
+  ~Light();
+
   Color Color;
   float Intensity{};
 
   /// CPU only data ///
   IntensityUnit IntensityUnit = IntensityUnit::LuminousIntensity;
-  uint32_t BufferIndex{};
+  int32_t BufferIndex = -1;
+  LightType Type = LightType::None;
 
   static auto GetBufferFormat() -> Graphics::BufferFormat &;
 
@@ -37,6 +54,19 @@ struct Light {
 
     return 4UL * sizeof(float);
   }
+
+  auto SetColor(const struct Color &color) -> void { Color = color; }
+  auto SetColor(float red, float green, float blue) -> void {
+    Color.r = red;
+    Color.g = green;
+    Color.b = blue;
+  }
+  auto SetIntensity(float intensity) -> void { Intensity = intensity; }
+  [[nodiscard]] auto GetColor() const -> struct Color {
+    return Color;
+  } [[nodiscard]] auto GetIntensity() const -> float {
+    return Intensity;
+  }
 };
 
-} // namespace Engine::Scene
+} // namespace Engine

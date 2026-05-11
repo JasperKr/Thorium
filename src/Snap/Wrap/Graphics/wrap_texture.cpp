@@ -8,7 +8,7 @@
 #include "Wrap/wrap.hpp"
 #include <imgui.h>
 #include <lauxlib.h>
-#include <lua.h>
+#include <lua.hpp>
 #include <string>
 #include <unordered_set>
 

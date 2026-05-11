@@ -5,6 +5,11 @@
 #include "Scene/Geometry/levelOfDetail.hpp"
 #include "Scene/Geometry/model.hpp"
 #include "Scene/Geometry/shape.hpp"
+#include "Scene/Lights/directionalLight.hpp"
+#include "Scene/Lights/pointLight.hpp"
+#include "Scene/Lights/rectangleLight.hpp"
+#include "Scene/Lights/sphereLight.hpp"
+#include "Scene/Lights/spotLight.hpp"
 #include "Scene/scene.hpp"
 #include "Wrap/wrap.hpp"
 #include "lua.hpp"
@@ -39,6 +44,12 @@ extern "C" inline auto luaopen_scene(lua_State *state) -> int {
   LuaWrap::RegisterLuaType(state, ::Engine::LevelOfDetailClass);
   LuaWrap::RegisterLuaType(state, ::Engine::BoundingBoxClass);
   LuaWrap::RegisterLuaType(state, ::Engine::GeometryClass);
+
+  LuaWrap::RegisterLuaType(state, ::Engine::DirectionalLightClass);
+  LuaWrap::RegisterLuaType(state, ::Engine::PointLightClass);
+  LuaWrap::RegisterLuaType(state, ::Engine::RectangleLightClass);
+  LuaWrap::RegisterLuaType(state, ::Engine::SphereLightClass);
+  LuaWrap::RegisterLuaType(state, ::Engine::SpotLightClass);
 
   return 1;
 }

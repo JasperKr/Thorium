@@ -8,7 +8,7 @@
 #include "Wrap/wrap.hpp"
 #include <cstdint>
 #include <lauxlib.h>
-#include <lua.h>
+#include <lua.hpp>
 #include <map>
 #include <string>
 #include <vector>

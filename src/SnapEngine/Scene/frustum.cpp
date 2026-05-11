@@ -1,7 +1,7 @@
 #include "frustum.hpp"
 #include "Modules/Math/vector.hpp"
 
-namespace Engine::Scene {
+namespace Engine {
 
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 auto Frustum::IntersectsAABB(const Math::Vec3 &min, const Math::Vec3 &max,
@@ -87,4 +87,4 @@ auto Frustum::FromMatrices(const Math::Matrix4x4 &viewProjectionMatrix,
   return frustum;
 }
 
-} // namespace Engine::Scene
+} // namespace Engine

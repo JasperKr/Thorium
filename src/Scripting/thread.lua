@@ -204,10 +204,10 @@ while true do
     snap.graphics.setDefaultFilter("linear", "linear", 4)
     texture = snap.graphics.newTexture(testImgdata, { storage = true, sampler = true, mipmaps = "init" })
 
-    snap.scene.loadModel(scene, "Assets/Terrain/Sponza/Sponza.gltf")
+    snap.scene.loadModel(scene, "Assets/Terrain/Town2/town.gltf")
 
     rendertarget = snap.graphics.newTexture(snap.graphics.getWidth(), snap.graphics.getHeight(),
-      { sampler = true, rendertarget = true })
+      { sampler = true, rendertarget = true, format = "rg11b10f" })
     depthbuffer = snap.graphics.newTexture(snap.graphics.getWidth(), snap.graphics.getHeight(),
       { rendertarget = true, format = "depth32f" })
   end

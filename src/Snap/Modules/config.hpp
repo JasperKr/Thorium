@@ -4,7 +4,7 @@
 #include <string>
 
 extern "C" {
-#include <lua.h>
+#include <lua.hpp>
 }
 
 #include "Modules/error.hpp"

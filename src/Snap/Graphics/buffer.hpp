@@ -108,15 +108,6 @@ struct Buffer : Object, Barrier::BarrierSynced {
                VkDeviceSize size = VK_WHOLE_SIZE) -> Error;
 
   template <typename T>
-  auto SetData(const GraphicsContext &context, const T &data,
-               VkDeviceSize offset = 0) -> Error {
-    return SetData(context,
-                   std::span<const uint8_t>( // NOLINTNEXTLINE
-                       reinterpret_cast<const uint8_t *>(&data), sizeof(T)),
-                   offset, sizeof(T));
-  }
-
-  template <typename T>
   auto SetData(const GraphicsContext &context, const std::span<T> &data,
                VkDeviceSize offset = 0) -> Error {
     return SetData(

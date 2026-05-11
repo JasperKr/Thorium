@@ -1,9 +1,16 @@
 #include "sphereLight.hpp"
+#include "Scene/scene.hpp"
+#include "Scene/transform.hpp"
+#include "Scene/userdata.hpp"
+#include "Wrap/wrap.hpp"
 #include "light.hpp"
 #include <flecs.h>
 #include <span>
 
-namespace Engine::Scene {
+namespace Engine {
+
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+std::array<bool, MaxSphereLights> UsedSphereLightIndices{};
 
 auto SphereLight::GetBufferFormat() -> Graphics::BufferFormat & {
   static auto format = Graphics::BufferFormat({
@@ -24,10 +31,9 @@ auto SphereLight::GetBufferFormat() -> Graphics::BufferFormat & {
   return format;
 }
 
-auto SphereLight::Write(std::span<uint8_t> buffer, flecs::entity lightEntity)
-    -> Error {
+auto SphereLight::Write(std::span<uint8_t> buffer,
+                        flecs::entity lightEntity) const -> Error {
   const auto &light = lightEntity.get<Light>();
-  const auto &self = lightEntity.get<SphereLight>();
 
   auto &format = GetBufferFormat();
   auto offset = light.BufferIndex * format.GetStride();
@@ -39,11 +45,37 @@ auto SphereLight::Write(std::span<uint8_t> buffer, flecs::entity lightEntity)
 
   // NOLINTBEGIN
   auto *floatData = reinterpret_cast<float *>(buffer.data() + newOffset);
-  floatData[0] = self.Range;
-  floatData[1] = self.Radius;
+  floatData[0] = Range;
+  floatData[1] = Radius;
   // NOLINTEND
 
   return {};
 }
 
-} // namespace Engine::Scene
+auto LuaSphereLight::Create(lua_State *state) -> int {
+  auto *scene = LuaWrap::ObjectFromLua<Scene>(state, 1);
+  const char *name = luaL_checkstring(state, 2);
+
+  if (scene == nullptr) {
+    return luaL_error(state, "Expected a Scene object");
+  }
+
+  auto entity = scene->world.entity(name);
+  entity.add<SphereLight>();
+  entity.add<Light>();
+  entity.add<Transform>();
+  entity.add<Userdata>();
+
+  auto luaSphereLight = LuaSphereLight::FromEntity(entity);
+  LuaWrap::PushObject(state, LuaSphereLight::GetType(), luaSphereLight.get());
+
+  return 1;
+}
+
+const LuaWrap::LuaClass SphereLightClass = {
+    .Name = "SphereLight",
+    .Type = LuaSphereLight::GetType(),
+    .Methods = {},
+};
+
+} // namespace Engine

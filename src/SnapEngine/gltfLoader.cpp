@@ -16,14 +16,13 @@
 #include "Scene/node.hpp"
 #include "Scene/transform.hpp"
 #include "Scene/userdata.hpp"
-#include "flecs/addons/cpp/entity.hpp"
-#include "flecs/addons/cpp/world.hpp"
 #include "material.hpp"
 #include <algorithm>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <flecs.h>
 #include <public/tracy/Tracy.hpp>
 #include <span>
 #include <string>
@@ -300,17 +299,17 @@ inline auto LoadMaterial(Graphics::GraphicsContext &context,
     material->albedoTexture = albedoTextureLoadResult.value();
   }
 
-  // if (gltfMaterial.pbrData.metallicRoughnessTexture.has_value()) {
-  //   auto metallicRoughnessLoadResult =
-  //       LoadTexture(context, asset, basePath,
-  //                   gltfMaterial.pbrData.metallicRoughnessTexture.value());
+  if (gltfMaterial.pbrData.metallicRoughnessTexture.has_value()) {
+    auto metallicRoughnessLoadResult =
+        LoadTexture(context, asset, basePath,
+                    gltfMaterial.pbrData.metallicRoughnessTexture.value());
 
-  //   if (Error::IsError(metallicRoughnessLoadResult)) {
-  //     return metallicRoughnessLoadResult.error();
-  //   }
+    if (Error::IsError(metallicRoughnessLoadResult)) {
+      return metallicRoughnessLoadResult.error();
+    }
 
-  //   material->metallicRoughnessTexture = metallicRoughnessLoadResult.value();
-  // }
+    material->metallicRoughnessTexture = metallicRoughnessLoadResult.value();
+  }
 
   // if (gltfMaterial.occlusionTexture.has_value()) {
   //   auto aoTextureLoadResult = LoadTexture(
@@ -1254,7 +1253,7 @@ auto LoadGltfModel(Graphics::GraphicsContext &context, const std::string &path,
                                fastgltf::Options::DecomposeNodeMatrices);
   if (auto error = asset.error(); error != fastgltf::Error::None) {
     // Some error occurred while reading the buffer, parsing the JSON, or validating the data.
-    return Error::Create("Invalid glTF asset.");
+    return Error::Create(fastgltf::getErrorName(error));
   }
 
   /// Validate the loaded asset.

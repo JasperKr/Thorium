@@ -1,6 +1,14 @@
 #include "rectangleLight.hpp"
+#include "Scene/Lights/light.hpp"
+#include "Scene/scene.hpp"
+#include "Scene/transform.hpp"
+#include "Scene/userdata.hpp"
+#include "Wrap/wrap.hpp"
 
-namespace Engine::Scene {
+namespace Engine {
+
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+std::array<bool, MaxRectangleLights> UsedRectangleLightIndices{};
 
 auto RectangleLight::GetBufferFormat() -> Graphics::BufferFormat & {
   static auto format = Graphics::BufferFormat({
@@ -21,10 +29,9 @@ auto RectangleLight::GetBufferFormat() -> Graphics::BufferFormat & {
   return format;
 }
 
-auto RectangleLight::Write(std::span<uint8_t> buffer, flecs::entity lightEntity)
-    -> Error {
+auto RectangleLight::Write(std::span<uint8_t> buffer,
+                           flecs::entity lightEntity) const -> Error {
   const auto &light = lightEntity.get<Light>();
-  const auto &self = lightEntity.get<RectangleLight>();
 
   auto &format = GetBufferFormat();
   auto offset = light.BufferIndex * format.GetStride();
@@ -36,12 +43,39 @@ auto RectangleLight::Write(std::span<uint8_t> buffer, flecs::entity lightEntity)
 
   // NOLINTBEGIN
   auto *floatData = reinterpret_cast<float *>(buffer.data() + newOffset);
-  floatData[0] = self.Size.x;
-  floatData[1] = self.Size.y;
-  floatData[2] = self.Range;
+  floatData[0] = Size.x;
+  floatData[1] = Size.y;
+  floatData[2] = Range;
   // NOLINTEND
 
   return {};
 }
 
-} // namespace Engine::Scene
+auto LuaRectangleLight::Create(lua_State *state) -> int {
+  auto *scene = LuaWrap::ObjectFromLua<Scene>(state, 1);
+  const char *name = luaL_checkstring(state, 2);
+
+  if (scene == nullptr) {
+    return luaL_error(state, "Expected a Scene object");
+  }
+
+  auto entity = scene->world.entity(name);
+  entity.add<RectangleLight>();
+  entity.add<Light>();
+  entity.add<Transform>();
+  entity.add<Userdata>();
+
+  auto luaRectangleLight = LuaRectangleLight::FromEntity(entity);
+  LuaWrap::PushObject(state, LuaRectangleLight::GetType(),
+                      luaRectangleLight.get());
+
+  return 1;
+}
+
+const LuaWrap::LuaClass RectangleLightClass = {
+    .Name = "RectangleLight",
+    .Type = LuaRectangleLight::GetType(),
+    .Methods = {},
+};
+
+} // namespace Engine

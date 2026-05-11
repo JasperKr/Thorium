@@ -6,7 +6,7 @@
 #include "Wrap/wrap.hpp"
 
 #include "lua.hpp"
-#include <lua.h>
+#include <lua.hpp>
 #include <string>
 
 namespace Config {

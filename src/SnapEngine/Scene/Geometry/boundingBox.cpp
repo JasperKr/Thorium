@@ -4,7 +4,7 @@
 #include "Modules/Math/vector.hpp"
 #include "Wrap/wrap.hpp"
 #include <imgui.h>
-#include <lua.h>
+#include <lua.hpp>
 
 namespace Engine {
 auto BoundingBox::GetCenter() const -> Math::Vec3 {

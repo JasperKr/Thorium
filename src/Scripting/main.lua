@@ -179,6 +179,9 @@ end
 -- local model2 = scene:createModel("Test model 2", { 0, 5, 0 }, { 0, 0, 0, 1 }, { 1, 1, 1 }, { shape2 })
 -- local model3 = scene:createModel("Test model 3", { 0, 10, 0 }, { 0, 0, 0, 1 }, { 1, 1, 1 }, { shape3 })
 
+local qx, qy, qz, qw = snap.math.eulerToQuaternion(0.3, -math.pi / 1.5, 0);
+scene:createDirectionalLight("Test directional light", qx, qy, qz, qw, 1, 1, 1, 5)
+
 thread:start(commandsChannel, startThreadChannel, scene, events)
 
 function snap.any(...)

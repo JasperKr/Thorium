@@ -1,6 +1,6 @@
 #pragma once
 
-namespace Engine::Scene {
+namespace Engine {
 
 struct Camera {
   float VerticalFOV{};
@@ -9,4 +9,4 @@ struct Camera {
   float FarPlane{};
 };
 
-} // namespace Engine::Scene
+} // namespace Engine

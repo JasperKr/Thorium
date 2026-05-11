@@ -7,7 +7,9 @@
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "material.hpp"
+#include <array>
 #include <cstddef>
+#include <cstdint>
 #include <unordered_set>
 #include <vector>
 #include <vulkan/vulkan_core.h>
@@ -51,8 +53,21 @@ struct Renderer {
     Ref<Graphics::StructuredBuffer> RectangleLightsBuffer;
     Ref<Graphics::StructuredBuffer> SphereLightsBuffer;
     Ref<Graphics::StructuredBuffer> DirectionalLightsBuffer;
+
+    std::vector<uint8_t> PointLightData;
+    std::vector<uint8_t> SpotLightData;
+    std::vector<uint8_t> RectangleLightData;
+    std::vector<uint8_t> SphereLightData;
+    std::vector<uint8_t> DirectionalLightData;
+
+    int PointLightCount = 0;
+    int SpotLightCount = 0;
+    int RectangleLightCount = 0;
+    int SphereLightCount = 0;
+    int DirectionalLightCount = 0;
   };
 
+  Material NoMaterial;
   Material DefaultMaterial;
   Ref<Graphics::StructuredBuffer> MaterialsBuffer;
   Lights SceneLightBuffers;
@@ -86,7 +101,7 @@ struct Renderer {
       return;
     }
 
-    DefaultMaterial = Material();
+    NoMaterial = Material();
     MaterialsBuffer.reset();
   }
 

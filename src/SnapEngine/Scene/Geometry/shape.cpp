@@ -4,7 +4,7 @@
 #include "Scene/scene.hpp"
 #include "Scene/transform.hpp"
 #include "Wrap/wrap.hpp"
-#include <lua.h>
+#include <lua.hpp>
 
 namespace Engine {
 

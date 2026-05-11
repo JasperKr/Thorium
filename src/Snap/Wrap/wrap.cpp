@@ -493,3 +493,17 @@ auto RegisterModules(lua_State *state) -> void {
 }
 
 } // namespace LuaWrap
+
+// No namespace.
+
+auto luaL_checkscalar(lua_State *state, int index) -> Math::Scalar {
+  return static_cast<Math::Scalar>(luaL_checknumber(state, index));
+}
+
+auto luaL_optscalar(lua_State *state, int index, Math::Scalar defaultValue)
+    -> Math::Scalar {
+  if (lua_isnoneornil(state, index)) {
+    return defaultValue;
+  }
+  return static_cast<Math::Scalar>(luaL_checknumber(state, index));
+}

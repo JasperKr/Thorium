@@ -6,6 +6,7 @@
 #include "Graphics/uniformWriter.hpp"
 #include "Modules/Math/matrix.hpp"
 #include "Modules/bindings.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Modules/reflectBindings.hpp"
@@ -14,19 +15,25 @@
 #include "Scene/Geometry/levelOfDetail.hpp"
 #include "Scene/Geometry/model.hpp"
 #include "Scene/Geometry/shape.hpp"
+#include "Scene/Lights/directionalLight.hpp"
+#include "Scene/Lights/pointLight.hpp"
+#include "Scene/Lights/rectangleLight.hpp"
+#include "Scene/Lights/sphereLight.hpp"
+#include "Scene/Lights/spotLight.hpp"
 #include "Scene/node.hpp"
 #include "Scene/transform.hpp"
 #include "Scene/userdata.hpp"
 #include "Wrap/wrap.hpp"
-#include "flecs/addons/cpp/c_types.hpp"
-#include "flecs/addons/cpp/mixins/id/decl.hpp"
 #include "material.hpp"
 #include "renderer.hpp"
 #include <algorithm>
+#include <array>
+#include <flecs.h>
 #include <imgui.h>
 #include <lauxlib.h>
 #include <lua.hpp>
 #include <string>
+#include <string_view>
 
 namespace Engine {
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
@@ -83,12 +90,66 @@ auto DrawEntity(const flecs::entity &entity) -> void {
   });
 }
 
-auto DrawEntityHierarchy(const flecs::entity &entity) -> void {
+inline auto fuzzyMatch(const std::string_view &pattern,
+                       const std::string_view &str) -> bool {
+  size_t index = 0;
+  for (char character : str) {
+    if (index < pattern.size() &&
+        tolower(character) == tolower(pattern[index])) {
+      ++index;
+    }
+  }
+  return index == pattern.size();
+}
+
+enum class MatchType : uint8_t {
+  This,
+  Child,
+  None,
+};
+
+inline auto matchesRecursive(const flecs::entity &entity,
+                             const std::string_view &filter) -> MatchType {
+  if (filter.empty()) {
+    return MatchType::This; // If filter is empty, match all entities
+  }
+
+  if (fuzzyMatch(filter, std::string_view(entity.name()))) {
+    return MatchType::This;
+  }
+
+  auto matches = MatchType::None;
+  entity.children([&](flecs::entity child) -> void {
+    if (matches != MatchType::None) {
+      return; // If a match has already been found, skip further checks
+    }
+
+    if (matchesRecursive(child, filter) != MatchType::None) {
+      matches = MatchType::Child;
+    }
+  });
+
+  return matches;
+}
+
+auto DrawEntityHierarchy(const flecs::entity &entity, std::string_view filter)
+    -> void {
+
+  auto match = matchesRecursive(entity, filter);
+  if (match == MatchType::None) {
+    return; // Skip entities that don't match the filter
+  }
+
   DrawEntity(entity);
+
+  if (match == MatchType::This) {
+    filter =
+        ""; // If this entity matches, all children should be shown regardless of their names
+  }
 
   entity.children([&](flecs::entity child) -> void {
     ImGui::Indent();
-    DrawEntityHierarchy(child);
+    DrawEntityHierarchy(child, filter);
     ImGui::Unindent();
   });
 }
@@ -105,10 +166,18 @@ auto Scene::DrawUiElement(lua_State *state) -> int {
   // This is just a placeholder for now
 
   ImGui::Begin(scene->name.c_str());
-  if (ImGui::BeginChild("Entity Hierarchy", ImVec2(300, 0), // NOLINT
+  auto availableWidth = ImGui::GetContentRegionAvail().x;
+  if (ImGui::BeginChild("Entity Hierarchy",
+                        ImVec2(availableWidth * 0.5F, 0), // NOLINT
                         ImGuiChildFlags_Borders)) {
-    scene->world.entity(0).children(
-        [&](flecs::entity entity) -> void { DrawEntityHierarchy(entity); });
+
+    static char buf[256] = {};                    // NOLINT
+    ImGui::InputText("Search", buf, sizeof(buf)); // NOLINT
+
+    scene->world.entity(0).children([&](flecs::entity entity) -> void {
+      DrawEntityHierarchy(
+          entity, std::string_view(buf, strnlen(buf, sizeof(buf)))); // NOLINT
+    });
   }
   ImGui::EndChild();
   ImGui::SameLine();
@@ -245,12 +314,25 @@ inline auto RenderDrawItem(const DrawItem &item,
     return sendErr;
   }
 
-  if (!item.material->albedoTexture.isValid()) {
-    return Error::Create("Invalid material texture");
+  auto albedoTexture = item.material->albedoTexture;
+  if (!albedoTexture.isValid()) {
+    albedoTexture = Renderer::RendererInstance.DefaultMaterial.albedoTexture;
   }
 
-  static auto materialKey = Graphics::ResourceKey{"MainTexture"};
-  sendErr = shader->Send(ctx, materialKey, item.material->albedoTexture);
+  auto metallicRoughnessTexture = item.material->metallicRoughnessTexture;
+  if (!metallicRoughnessTexture.isValid()) {
+    metallicRoughnessTexture =
+        Renderer::RendererInstance.DefaultMaterial.metallicRoughnessTexture;
+  }
+
+  static auto albedoKey = Graphics::ResourceKey{"AlbedoTexture"};
+  sendErr = shader->Send(ctx, albedoKey, albedoTexture);
+  if (Error::IsError(sendErr)) {
+    return sendErr;
+  }
+  static auto metallicRoughnessKey =
+      Graphics::ResourceKey{"MetallicRoughnessTexture"};
+  sendErr = shader->Send(ctx, metallicRoughnessKey, metallicRoughnessTexture);
   if (Error::IsError(sendErr)) {
     return sendErr;
   }
@@ -282,7 +364,10 @@ auto Scene::DrawModels(lua_State *state) -> int {
     return luaL_error(state, "Expected a Scene object");
   }
 
-  scene->preRender.run();
+  for (const auto &system : scene->preRender) {
+    system.run();
+  }
+  scene->finalizePreRenderUploads.run();
 
   auto &ctx = *Graphics::GetCurrentGraphicsContext();
 
@@ -295,6 +380,15 @@ auto Scene::DrawModels(lua_State *state) -> int {
   if (Error::IsError(materialSendError)) {
     return luaL_error(state, "Failed to send material buffer: %s",
                       materialSendError.message.c_str());
+  }
+
+  auto countKey = Graphics::ResourceKey{"DirectionalLightCount"};
+  auto dirLightCountError = Graphics::Shader::UniformWriter::Send(
+      shader, ctx, countKey,
+      Renderer::RendererInstance.SceneLightBuffers.DirectionalLightCount);
+  if (Error::IsError(dirLightCountError)) {
+    return luaL_error(state, "Failed to send directional light count: %s",
+                      dirLightCountError.message.c_str());
   }
 
   auto lightBufferSendError =
@@ -316,8 +410,8 @@ auto Scene::DrawModels(lua_State *state) -> int {
             material = child.try_get<Engine::Renderer::Material>();
           }
 
-          if (material == nullptr || !material->albedoTexture.isValid()) {
-            material = &Renderer::RendererInstance.DefaultMaterial;
+          if (material == nullptr) {
+            material = &Renderer::RendererInstance.NoMaterial;
           }
 
           if (material->alphaMode != Renderer::AlphaMode::Blend) {
@@ -412,7 +506,10 @@ Scene::Scene(std::string name) : name(std::move(name)) {
 
   postBoundingboxSystem.depends_on(boundingBoxSystem);
 
-  preRender = world.system<Renderer::Material>().kind(0).each(
+  auto &instance = Renderer::RendererInstance;
+  auto &buffers = instance.SceneLightBuffers;
+
+  preRender.emplace_back(world.system<Renderer::Material>().kind(0).each(
       [this](Renderer::Material &material) -> auto {
         if (lastUpdateResult.IsError()) {
           return;
@@ -420,7 +517,75 @@ Scene::Scene(std::string name) : name(std::move(name)) {
 
         lastUpdateResult =
             material.Update(*Graphics::GetCurrentGraphicsContext());
-      });
+      }));
+
+  preRender.emplace_back(world.system<DirectionalLight>().kind(0).each(
+      [](flecs::entity entity, const DirectionalLight &light) -> auto {
+        auto error = light.Write(buffers.DirectionalLightData, entity);
+      }));
+
+  preRender.emplace_back(world.system<PointLight>().kind(0).each(
+      [](flecs::entity entity, const PointLight &light) -> auto {
+        auto error = light.Write(buffers.PointLightData, entity);
+      }));
+
+  preRender.emplace_back(world.system<SpotLight>().kind(0).each(
+      [](flecs::entity entity, const SpotLight &light) -> auto {
+        auto error = light.Write(buffers.SpotLightData, entity);
+      }));
+
+  preRender.emplace_back(world.system<RectangleLight>().kind(0).each(
+      [](flecs::entity entity, const RectangleLight &light) -> auto {
+        auto error = light.Write(buffers.RectangleLightData, entity);
+      }));
+
+  preRender.emplace_back(world.system<SphereLight>().kind(0).each(
+      [](flecs::entity entity, const SphereLight &light) -> auto {
+        auto error = light.Write(buffers.SphereLightData, entity);
+      }));
+
+  finalizePreRenderUploads = world.system().kind(0).each([this]() -> auto {
+    if (lastUpdateResult.IsError()) {
+      return;
+    }
+
+    auto &ctx = *Graphics::GetCurrentGraphicsContext();
+
+    auto error = buffers.DirectionalLightsBuffer->GetBuffer()->SetData(
+        ctx, buffers.DirectionalLightData);
+    if (Error::IsError(error)) {
+      lastUpdateResult = error;
+      return;
+    }
+
+    error = buffers.PointLightsBuffer->GetBuffer()->SetData(
+        ctx, buffers.PointLightData);
+    if (Error::IsError(error)) {
+      lastUpdateResult = error;
+      return;
+    }
+
+    error = buffers.SpotLightsBuffer->GetBuffer()->SetData(
+        ctx, buffers.SpotLightData);
+    if (Error::IsError(error)) {
+      lastUpdateResult = error;
+      return;
+    }
+
+    error = buffers.RectangleLightsBuffer->GetBuffer()->SetData(
+        ctx, buffers.RectangleLightData);
+    if (Error::IsError(error)) {
+      lastUpdateResult = error;
+      return;
+    }
+
+    error = buffers.SphereLightsBuffer->GetBuffer()->SetData(
+        ctx, buffers.SphereLightData);
+    if (Error::IsError(error)) {
+      lastUpdateResult = error;
+      return;
+    }
+  });
 }
 
 auto Scene::Update(double deltaTime) const -> Error {
@@ -457,6 +622,11 @@ const LuaWrap::LuaClass SceneLuaClass{
             {"createShape", LuaShape::Create},
             {"createLOD", LuaLevelOfDetail::Create},
             {"createGeometry", LuaGeometry::Create},
+            {"createDirectionalLight", LuaDirectionalLight::Create},
+            {"createPointLight", LuaPointLight::Create},
+            {"createSpotLight", LuaSpotLight::Create},
+            {"createRectangleLight", LuaRectangleLight::Create},
+            {"createSphereLight", LuaSphereLight::Create},
         },
     .Children = {},
 };

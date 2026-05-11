@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Modules/Math/mathTypes.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/type.hpp"
@@ -207,3 +208,8 @@ inline auto PushVarargs(lua_State *state,
 }
 
 } // namespace LuaWrap
+
+// No namespace.
+auto luaL_checkscalar(lua_State *state, int index) -> Math::Scalar;
+auto luaL_optscalar(lua_State *state, int index, Math::Scalar defaultValue)
+    -> Math::Scalar;

@@ -1,6 +1,14 @@
 #include "pointLight.hpp"
+#include "Scene/Lights/light.hpp"
+#include "Scene/scene.hpp"
+#include "Scene/transform.hpp"
+#include "Scene/userdata.hpp"
+#include "Wrap/wrap.hpp"
 
-namespace Engine::Scene {
+namespace Engine {
+
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+std::array<bool, MaxPointLights> UsedPointLightIndices{};
 
 auto PointLight::GetBufferFormat() -> Graphics::BufferFormat & {
   static auto format = Graphics::BufferFormat({
@@ -17,10 +25,9 @@ auto PointLight::GetBufferFormat() -> Graphics::BufferFormat & {
   return format;
 }
 
-auto PointLight::Write(std::span<uint8_t> buffer, flecs::entity lightEntity)
-    -> Error {
+auto PointLight::Write(std::span<uint8_t> buffer,
+                       flecs::entity lightEntity) const -> Error {
   const auto &light = lightEntity.get<Light>();
-  const auto &self = lightEntity.get<PointLight>();
 
   auto &format = GetBufferFormat();
   auto offset = light.BufferIndex * format.GetStride();
@@ -33,10 +40,36 @@ auto PointLight::Write(std::span<uint8_t> buffer, flecs::entity lightEntity)
 
   // NOLINTBEGIN
   auto *floatData = reinterpret_cast<float *>(buffer.data() + newOffset);
-  floatData[0] = self.Range;
+  floatData[0] = Range;
   // NOLINTEND
 
   return {};
 }
 
-} // namespace Engine::Scene
+auto LuaPointLight::Create(lua_State *state) -> int {
+  auto *scene = LuaWrap::ObjectFromLua<Scene>(state, 1);
+  const char *name = luaL_checkstring(state, 2);
+
+  if (scene == nullptr) {
+    return luaL_error(state, "Expected a Scene object");
+  }
+
+  auto entity = scene->world.entity(name);
+  entity.add<PointLight>();
+  entity.add<Light>();
+  entity.add<Transform>();
+  entity.add<Userdata>();
+
+  auto luaPointLight = LuaPointLight::FromEntity(entity);
+  LuaWrap::PushObject(state, LuaPointLight::GetType(), luaPointLight.get());
+
+  return 1;
+}
+
+const LuaWrap::LuaClass PointLightClass = {
+    .Name = "PointLight",
+    .Type = LuaPointLight::GetType(),
+    .Methods = {},
+};
+
+} // namespace Engine

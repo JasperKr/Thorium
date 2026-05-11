@@ -33,8 +33,6 @@ auto StructuredBuffer::Create(GraphicsContext &context, BufferFormat &format,
     return result.error().AsUnexpected();
   }
 
-  PrintAlways("creating structured buffer.");
-
   auto buffer = Ref<StructuredBuffer>::Make();
 
   buffer->format = format;
@@ -43,10 +41,6 @@ auto StructuredBuffer::Create(GraphicsContext &context, BufferFormat &format,
   buffer->buffer = result.value();
 
   return buffer;
-}
-
-auto StructuredBuffer::GetElementStride() const -> size_t {
-  return elementStride;
 }
 
 auto StructuredBuffer::GetFormat() -> BufferFormat & { return format; }

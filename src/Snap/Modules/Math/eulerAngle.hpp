@@ -1,6 +1,8 @@
 #pragma once
 
 #include "mathTypes.hpp"
+#include <span>
+#include <string>
 
 namespace Math {
 
@@ -19,6 +21,18 @@ struct EulerAngle {
       : yaw(yaw_val), pitch(pitch_val), roll(roll_val) {}
 
   EulerAngle() = default;
+
+  [[nodiscard]] auto ToString() const -> std::string {
+    return "(Yaw: " + std::to_string(yaw) +
+           ", Pitch: " + std::to_string(pitch) +
+           ", Roll: " + std::to_string(roll) + ")";
+  }
+
+  [[nodiscard]] auto Span() const -> std::span<const Scalar, 3> {
+    return std::span<const Scalar, 3>(&yaw, 3);
+  }
+  [[nodiscard]] auto Ptr() const -> const Scalar * { return &yaw; }
+  [[nodiscard]] auto Ptr() -> Scalar * { return &yaw; }
 };
 
 }; // namespace Math

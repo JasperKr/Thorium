@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Modules/Math/matrix.hpp"
-namespace Engine::Scene {
+namespace Engine {
 
 struct CameraMatrices {
   Math::Matrix4x4 RotationMatrix;
@@ -19,4 +19,4 @@ struct CameraMatrices {
   auto Update() -> void;
 };
 
-} // namespace Engine::Scene
+} // namespace Engine

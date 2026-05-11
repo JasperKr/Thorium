@@ -59,18 +59,21 @@ struct FragmentInput {
   bool isFrontFace : SV_IsFrontFace;
 };
 
-Sampler2D MainTexture;
+Sampler2D AlbedoTexture;
+Sampler2D MetallicRoughnessTexture;
 StructuredBuffer<MaterialData> MaterialBuffer;
 
 [shader("fragment")]
 float4 fragmentMain(FragmentInput input) {
   input.normal = normalize(input.normal);
-  if (!input.isFrontFace) {
+
+  // For some reason normals are flipped so we remove the ! here ig.
+  if (input.isFrontFace) {
     input.normal = -input.normal;
     input.tangent.xyz = -input.tangent.xyz;
   }
 
-  float4 texColor = MainTexture.Sample(input.tex_coord);
+  float4 texColor = AlbedoTexture.Sample(input.tex_coord);
   MaterialData matData = MaterialBuffer[MaterialBufferIndex];
 
   float alpha = texColor.a * matData.albedoFactor.a;
@@ -87,30 +90,35 @@ float4 fragmentMain(FragmentInput input) {
 
   float3 albedo = texColor.rgb * matData.albedoFactor.rgb;
 
+  float2 metallicRoughness =
+      MetallicRoughnessTexture.Sample(input.tex_coord).bg;
+  float metallic = metallicRoughness.x * matData.metallicFactor;
+  float roughness = metallicRoughness.y * matData.roughnessFactor;
+
   Pixel pixel;
   pixel.Normal = input.normal;
   pixel.Albedo = albedo;
-  pixel.Metallic = matData.metallicFactor;
-  pixel.Roughness = matData.roughnessFactor * matData.roughnessFactor;
-  pixel.PerceptualRoughness = matData.roughnessFactor;
-  pixel.Fresnel0 = ComputeFresnel0(albedo, matData.metallicFactor,
-                                   matData.reflectanceFactor);
+  pixel.Metallic = metallic;
+  pixel.Roughness = roughness * roughness;
+  pixel.PerceptualRoughness = roughness;
+  pixel.Fresnel0 = ComputeFresnel0(albedo, metallic, matData.reflectanceFactor);
 
-  float3 viewDir = camera.Position - input.WorldPosition;
-  viewDir = normalize(viewDir);
-  float NoV = saturate(dot(input.normal, viewDir));
+  float3 viewDir = normalize(camera.Position - input.WorldPosition);
+  float NoV = ClampNoV(dot(input.normal, viewDir));
   float lambdaV = ComputeLambdaV(pixel.Roughness, NoV);
 
-  float3 radiance = DirectionalLight::SampleAll(input.WorldPosition, pixel,
-                                                viewDir, NoV, lambdaV);
-  float3 irradiance = float3(0.5, 0.5, 0.5); // Some ambient lighting
+  float3 direct = DirectionalLight::SampleAll(input.WorldPosition, pixel,
+                                              viewDir, NoV, lambdaV);
   float3 E = prefilteredDFG(pixel.PerceptualRoughness, pixel.Fresnel0, NoV);
   float3 diffuse = ComputeDiffuseColor(pixel.Albedo, pixel.Metallic);
 
+  float3 irradiance = float3(1, 1, 1); // Some ambient lighting
+  float3 radiance = irradiance;        // Specular IBL contribution
   irradiance *= INV_PI;
   irradiance *= (1.0f.xxx - E) * diffuse;
+  radiance *= E;
 
-  float3 color = radiance + irradiance;
+  float3 color = direct + irradiance + radiance;
 
-  return float4(albedo + color, alpha);
+  return float4(color, alpha);
 }

@@ -2,7 +2,7 @@
 #include "Wrap/wrap.hpp"
 #include "entity.hpp"
 #include <imgui.h>
-#include <lua.h>
+#include <lua.hpp>
 
 namespace Engine {
 

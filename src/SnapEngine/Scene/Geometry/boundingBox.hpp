@@ -7,7 +7,7 @@
 #include "Scene/transform.hpp"
 #include "Wrap/wrap.hpp"
 #include <flecs.h>
-#include <lua.h>
+#include <lua.hpp>
 namespace Engine {
 struct BoundingBox {
   Math::Vec3 Min{};

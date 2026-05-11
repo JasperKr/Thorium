@@ -6,6 +6,7 @@
 #include <flecs.h>
 #include <lua.hpp>
 #include <string>
+#include <vector>
 
 namespace Engine {
 
@@ -13,7 +14,8 @@ static const Type SceneType = Type("Scene");
 
 struct Scene : Object {
   flecs::world world;
-  flecs::system preRender;
+  std::vector<flecs::system> preRender;
+  flecs::system finalizePreRenderUploads;
   std::string name;
   Error lastUpdateResult = Error::Success();
 

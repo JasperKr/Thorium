@@ -2,7 +2,7 @@
 #include "Modules/error.hpp"
 #include "Modules/thread.hpp"
 #include "Wrap/wrap.hpp"
-#include <lua.h>
+#include <lua.hpp>
 #include <string>
 
 namespace Wrap::Threading {

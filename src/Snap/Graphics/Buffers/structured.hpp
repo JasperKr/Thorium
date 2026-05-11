@@ -25,7 +25,6 @@ struct StructuredBufferCreationInfo {
 struct StructuredBuffer : Object {
   [[nodiscard]] auto GetBuffer() const -> Ref<Buffer> { return buffer; }
   [[nodiscard]] auto GetElementCount() const -> size_t { return elementCount; }
-  [[nodiscard]] auto GetElementStride() const -> size_t;
   [[nodiscard]] auto GetFormat() -> BufferFormat &;
 
   // NOLINTNEXTLINE

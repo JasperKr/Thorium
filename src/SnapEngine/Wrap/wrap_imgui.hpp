@@ -4,7 +4,7 @@
 #include "Wrap/wrap.hpp"
 #include "lua.hpp"
 #include <imgui.h>
-#include <lua.h>
+#include <lua.hpp>
 
 namespace Wrap::Imgui {
 

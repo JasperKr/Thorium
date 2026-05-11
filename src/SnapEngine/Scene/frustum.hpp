@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cassert>
-namespace Engine::Scene {
+namespace Engine {
 
 struct Frustum {
   constexpr static size_t CornerCount = 8;
@@ -112,4 +112,4 @@ struct Frustum {
       -> Frustum;
 };
 
-} // namespace Engine::Scene
+} // namespace Engine

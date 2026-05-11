@@ -3,7 +3,7 @@
 #include "Modules/console.hpp"
 #include "Wrap/lua_data.hpp"
 #include "Wrap/wrap.hpp"
-#include <lua.h>
+#include <lua.hpp>
 
 namespace Wrap::Threading {
 

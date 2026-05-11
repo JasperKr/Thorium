@@ -233,12 +233,16 @@ auto Material::DrawGUI() -> void {
     }
   }
   ImGui::EndDisabled();
+
+  dirty = true;
 }
 
 auto Material::Update(Graphics::GraphicsContext &context) -> Error {
   if (!dirty && obtainedSSBOIndex) {
     return {};
   }
+
+  dirty = false;
 
   if (!obtainedSSBOIndex) {
     auto indexResult = RendererInstance.GetNewMaterialIndex();
@@ -250,7 +254,6 @@ auto Material::Update(Graphics::GraphicsContext &context) -> Error {
   }
 
   return WriteToBuffer(context, RendererInstance.MaterialsBuffer);
-  return {};
 }
 
 auto Material::WriteToBuffer(Graphics::GraphicsContext &context,
@@ -296,7 +299,9 @@ auto Material::WriteToBuffer(Graphics::GraphicsContext &context,
   materialData.textureUVIndices[0] = packedIndices & ~0U;
   materialData.textureUVIndices[1] = (packedIndices >> UINT32_WIDTH) & ~0U;
 
-  return buffer->GetBuffer()->SetData(context, materialData,
+  auto span = std::span<MaterialData>(&materialData, 1);
+
+  return buffer->GetBuffer()->SetData(context, span,
                                       materialSSBOIndex * buffer->GetStride());
 }
 

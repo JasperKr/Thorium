@@ -8,7 +8,7 @@
 #include "Scene/userdata.hpp"
 #include "Wrap/wrap.hpp"
 #include "material.hpp"
-#include <lua.h>
+#include <lua.hpp>
 
 namespace Engine {
 // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)

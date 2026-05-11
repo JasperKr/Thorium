@@ -21,6 +21,7 @@ public float3 Fresnel_Schlick(const float3 Fresnel0, float Fresnel90,
   return Fresnel0 + (Fresnel90 - Fresnel0) * power5(1.0 - VoH);
 }
 
+// https://github.com/turanszkij/WickedEngine/blob/master/WickedEngine/shaders/brdf.hlsli
 public float Visibility_SmithGGXCorrelated(float roughness, float NoV,
                                            float NoL, float lambdaV) {
   float rSqr = roughness * roughness;
@@ -30,11 +31,11 @@ public float Visibility_SmithGGXCorrelated(float roughness, float NoV,
 }
 
 public float3 IsotropicLobe(float roughness, float3 F0, float NoV, float NoL,
-                            float NoH, float VoH, float lambdaV) {
+                            float NoH, float LoH, float lambdaV) {
   float D = Distribution_GGX(NoH, roughness);
-  float3 F = Fresnel_Schlick(F0, 1.0, VoH);
   float V = Visibility_SmithGGXCorrelated(roughness, NoV, NoL, lambdaV);
-  return (D * F) * V;
+  float3 F = Fresnel_Schlick(F0, 1.0, LoH);
+  return (D * V) * F;
 }
 
 public float3 DiffuseLobe(float3 diffuse) { return diffuse * INV_PI; }
@@ -82,10 +83,10 @@ public float3 BiDirectionalDistributionFunction(float NoV, float NoH, float LoH,
                                                 float roughness,
                                                 float3 Fresnel0, float3 Diffuse,
                                                 float NoL, float lambdaV) {
-  float3 Specular =
+  float3 IncomingSpecular =
       IsotropicLobe(roughness, Fresnel0, NoV, NoL, NoH, LoH, lambdaV);
-  float3 Diffuse = DiffuseLobe(ComputeDiffuseColor(Diffuse, roughness));
-  float3 BRDF = Specular + Diffuse;
+  float3 IncomingDiffuse = DiffuseLobe(Diffuse);
+  float3 BRDF = IncomingSpecular + IncomingDiffuse;
   return BRDF * NoL;
 }
 
@@ -107,4 +108,9 @@ public float SpecularOcclusion(float NoV, float AO, float roughness) {
 public float ComputeLambdaV(float roughness, float NoV) {
   float rSqr = roughness * roughness;
   return NoV * sqrt((NoV - rSqr * NoV) * NoV + rSqr);
+}
+
+public float ClampNoV(float NoV) {
+  // Neubelt and Pettineo 2013, "Crafting a Next-gen Material Pipeline for The Order: 1886"
+  return max(NoV, 1e-4);
 }

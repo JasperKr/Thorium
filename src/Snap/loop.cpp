@@ -18,7 +18,7 @@
 #include "Wrap/Graphics/wrap_graphics.hpp"
 #include "Wrap/wrap_engine.hpp"
 #include <filesystem>
-#include <lua.h>
+#include <lua.hpp>
 #include <mutex>
 #include <public/tracy/Tracy.hpp>
 #include <string>

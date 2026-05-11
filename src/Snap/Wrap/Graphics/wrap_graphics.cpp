@@ -23,7 +23,7 @@
 #include <cstdint>
 #include <cstring>
 #include <lauxlib.h>
-#include <lua.h>
+#include <lua.hpp>
 #include <utility>
 #include <vector>
 

@@ -62,7 +62,7 @@ auto wrap_GetElementStride(lua_State *state) -> int {
     return luaL_error(state, "Expected Buffer as first argument");
   }
 
-  lua_pushinteger(state, static_cast<lua_Integer>(buffer->GetElementStride()));
+  lua_pushinteger(state, static_cast<lua_Integer>(buffer->GetStride()));
   return 1;
 }
 

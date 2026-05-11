@@ -20,11 +20,11 @@ public struct DirectionalLight : ILight {
     const float3 LocalForward = float3(0.0f, 0.0f, 1.0f);
     const float3 WorldForward = Rotate(LocalForward, light.Base.Rotation);
 
-    float NdotL = saturate(dot(pixel.Normal, -WorldForward));
+    float NdotL = saturate(dot(pixel.Normal, WorldForward));
     float3 Diffuse = ComputeDiffuseColor(pixel.Albedo, pixel.Metallic);
 
     float3 brdf =
-        SampleBRDF(ViewDirection, -WorldForward, NoV, pixel.Normal,
+        SampleBRDF(ViewDirection, WorldForward, NoV, pixel.Normal,
                    pixel.Roughness, pixel.Fresnel0, Diffuse, NdotL, LambdaV);
 
     return Color * brdf;
