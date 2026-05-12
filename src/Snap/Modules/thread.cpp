@@ -15,7 +15,7 @@
 #include <vector>
 
 #include "loop.hpp"
-#include "lua.hpp"
+#include <lua.hpp>
 
 #include "channel.hpp"
 

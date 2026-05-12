@@ -1,40 +1,40 @@
 table.new = require("table.new")
 table.clear = require("table.clear")
 
-engine.math.PI2 = math.pi * 2
-engine.math.PI05 = math.pi * 0.5
+SnapEngine.math.PI2 = math.pi * 2
+SnapEngine.math.PI05 = math.pi * 0.5
 
 local ffi = require("ffi")
 
-function engine.math.clamp(v, min, max)
+function SnapEngine.math.clamp(v, min, max)
   return math.min(math.max(v, min), max)
 end
 
-function engine.math.round(x)
+function SnapEngine.math.round(x)
   return math.floor(x + 0.5)
 end
 
-function engine.math.saturate(x)
+function SnapEngine.math.saturate(x)
   return math.min(math.max(x, 0.0), 1.0)
 end
 
-function engine.math.saturateSigned(x)
+function SnapEngine.math.saturateSigned(x)
   return math.min(math.max(x, -1.0), 1.0)
 end
 
-function engine.math.aabb(aMinX, aMinY, aMinZ, aMaxX, aMaxY, aMaxZ, bMinX, bMinY, bMinZ, bMaxX, bMaxY, bMaxZ)
+function SnapEngine.math.aabb(aMinX, aMinY, aMinZ, aMaxX, aMaxY, aMaxZ, bMinX, bMinY, bMinZ, bMaxX, bMaxY, bMaxZ)
   local x_condition = (aMinX - bMaxX) * (bMinX - aMaxX)
   local y_condition = (aMaxY - bMinY) * (bMaxY - aMinY)
   local z_condition = (aMaxZ - bMinZ) * (bMaxZ - aMinZ)
   return math.min(x_condition, y_condition, z_condition) > 0
 end
 
-function engine.math.copyTable(t)
+function SnapEngine.math.copyTable(t)
   if type(t) == "table" then
     local t2 = {}
     for i, v in pairs(t) do
       if type(v) == "table" then
-        t2[i] = engine.math.copyTable(v)
+        t2[i] = SnapEngine.math.copyTable(v)
       else
         t2[i] = v
       end
@@ -45,7 +45,7 @@ function engine.math.copyTable(t)
   end
 end
 
-function engine.math.shallowCopyTable(t, t2)
+function SnapEngine.math.shallowCopyTable(t, t2)
   if type(t) == "table" then
     t2 = t2 or {}
     for i, v in pairs(t) do
@@ -57,7 +57,7 @@ function engine.math.shallowCopyTable(t, t2)
   end
 end
 
-function engine.math.shallowCopyList(t, t2, from, to)
+function SnapEngine.math.shallowCopyList(t, t2, from, to)
   t2 = t2 or {}
   from = from or 1
   to = to or #t
@@ -69,7 +69,7 @@ function engine.math.shallowCopyList(t, t2, from, to)
   return t2
 end
 
-function engine.math.sign(number)
+function SnapEngine.math.sign(number)
   return (number > 0 and 1 or (number == 0 and 0 or -1))
 end
 
@@ -98,29 +98,29 @@ end
 ---@return number
 ---@return number
 ---@return number
-function engine.math.capsuleNormal(x, y, z, aX, aY, aZ, bX, bY, bZ)
+function SnapEngine.math.capsuleNormal(x, y, z, aX, aY, aZ, bX, bY, bZ)
   local baX, baY, baZ = bX - aX, bY - aY, bZ - aZ
   local paX, paY, paZ = x - aX, y - aY, z - aZ
-  local h = engine.math.clamp(
-    engine.math.dot(baX, baY, baZ, paX, paY, paZ) / engine.math.dot(baX, baY, baZ, baX, baY, baZ), 0.0,
+  local h = SnapEngine.math.clamp(
+    SnapEngine.math.dot(baX, baY, baZ, paX, paY, paZ) / SnapEngine.math.dot(baX, baY, baZ, baX, baY, baZ), 0.0,
     1.0)
-  return engine.math.normalize3(paX - h * baX, paY - h * baY, paZ - h * baZ)
+  return SnapEngine.math.normalize3(paX - h * baX, paY - h * baY, paZ - h * baZ)
 end
 
-function engine.math.calculateSphereTangent(nx, ny, nz)
+function SnapEngine.math.calculateSphereTangent(nx, ny, nz)
   -- Check if the normal is parallel to the up vector
-  local tx, ty, tz = engine.math.cross(nx, ny, nz, 0, 1, 0)
+  local tx, ty, tz = SnapEngine.math.cross(nx, ny, nz, 0, 1, 0)
   if tx * tx + ty * ty + tz * tz < 1e-5 then
     return 1, 0, 0
   else
-    return engine.math.normalize3(tx, ty, tz)
+    return SnapEngine.math.normalize3(tx, ty, tz)
   end
 end
 
-function engine.math.newID(i)
+function SnapEngine.math.newID(i)
   i = i or "Global"
-  local j = engine.math.idCounters[i] or 0
-  engine.math.idCounters[i] = j + 1
+  local j = SnapEngine.math.idCounters[i] or 0
+  SnapEngine.math.idCounters[i] = j + 1
   return j
 end
 
@@ -146,7 +146,7 @@ do
 
   local tempIDTable = table.new(32, 0)
 
-  function engine.math.newRandID()
+  function SnapEngine.math.newRandID()
     table.clear(tempIDTable)
 
     for i = 1, 32 do
@@ -162,31 +162,31 @@ end
 ---@param w number
 ---@param i number
 ---@return number
-function engine.math.mix(v, w, i)
+function SnapEngine.math.mix(v, w, i)
   return i * w + (1 - i) * v
 end
 
-function engine.math.cross(x1, y1, z1, x2, y2, z2)
+function SnapEngine.math.cross(x1, y1, z1, x2, y2, z2)
   return y1 * z2 - z1 * y2, z1 * x2 - x1 * z2, x1 * y2 - y1 * x2
 end
 
-function engine.math.dot(x1, y1, z1, x2, y2, z2)
+function SnapEngine.math.dot(x1, y1, z1, x2, y2, z2)
   return x1 * x2 + y1 * y2 + z1 * z2
 end
 
-function engine.math.dot2(x1, y1, x2, y2)
+function SnapEngine.math.dot2(x1, y1, x2, y2)
   return x1 * x2 + y1 * y2
 end
 
-function engine.math.dot3(x1, y1, z1, x2, y2, z2)
+function SnapEngine.math.dot3(x1, y1, z1, x2, y2, z2)
   return x1 * x2 + y1 * y2 + z1 * z2
 end
 
-function engine.math.dot4(x1, y1, z1, w1, x2, y2, z2, w2)
+function SnapEngine.math.dot4(x1, y1, z1, w1, x2, y2, z2, w2)
   return x1 * x2 + y1 * y2 + z1 * z2 + w1 * w2
 end
 
-function engine.math.lerp(angle, target, turnrate, dt)
+function SnapEngine.math.lerp(angle, target, turnrate, dt)
   local dist = target - angle
   dist = (dist + math.pi) % (math.pi * 2) - math.pi
   local step = math.exp(turnrate * dt)
@@ -201,14 +201,14 @@ function engine.math.lerp(angle, target, turnrate, dt)
   return angle
 end
 
-function engine.math.smoothLerp(angle, target, turnrate, dt)
+function SnapEngine.math.smoothLerp(angle, target, turnrate, dt)
   local dist = target - angle
   dist = (dist + math.pi) % (math.pi * 2) - math.pi
   local step = turnrate * dt
   return angle + step * dist
 end
 
-function engine.math.pointAABBDistance(min, max, position)
+function SnapEngine.math.pointAABBDistance(min, max, position)
   local q = vec3(math.max(0, math.max(min.x - position.x, position.x - max.x)),
     math.max(0, math.max(min.y - position.y, position.y - max.y)),
     math.max(0, math.max(min.z - position.z, position.z - max.z)))
@@ -225,7 +225,7 @@ function engine.math.pointAABBDistance(min, max, position)
   end
 end
 
-function engine.math.pointAABBDistanceSeparate(minX, minY, minZ, maxX, maxY, maxZ, x, y, z)
+function SnapEngine.math.pointAABBDistanceSeparate(minX, minY, minZ, maxX, maxY, maxZ, x, y, z)
   local qx = math.max(0, math.max(minX - x, x - maxX))
   local qy = math.max(0, math.max(minY - y, y - maxY))
   local qz = math.max(0, math.max(minZ - z, z - maxZ))
@@ -241,7 +241,7 @@ function engine.math.pointAABBDistanceSeparate(minX, minY, minZ, maxX, maxY, max
   end
 end
 
-function engine.math.signedPointAABBDistance(min, max, position)
+function SnapEngine.math.signedPointAABBDistance(min, max, position)
   local q = vec3(math.max(0, math.max(min.x - position.x, position.x - max.x)),
     math.max(0, math.max(min.y - position.y, position.y - max.y)),
     math.max(0, math.max(min.z - position.z, position.z - max.z)))
@@ -262,7 +262,7 @@ function engine.math.signedPointAABBDistance(min, max, position)
   end
 end
 
-function engine.math.pointAABBDistanceSqr(min, max, position)
+function SnapEngine.math.pointAABBDistanceSqr(min, max, position)
   local q = vec3(math.max(0, math.max(min.x - position.x, position.x - max.x)),
     math.max(0, math.max(min.y - position.y, position.y - max.y)),
     math.max(0, math.max(min.z - position.z, position.z - max.z)))
@@ -279,7 +279,7 @@ function engine.math.pointAABBDistanceSqr(min, max, position)
   end
 end
 
-function engine.math.signedPointAABBDistanceSqr(min, max, position)
+function SnapEngine.math.signedPointAABBDistanceSqr(min, max, position)
   local q = vec3(math.max(0, math.max(min.x - position.x, position.x - max.x)),
     math.max(0, math.max(min.y - position.y, position.y - max.y)),
     math.max(0, math.max(min.z - position.z, position.z - max.z)))
@@ -338,7 +338,7 @@ local function computeSphereBounds(c, r, znear, P00, P11, viewMatrix)
   return aabb
 end
 
-function engine.math.pointAABBDistanceSqrSeparate(minX, minY, minZ, maxX, maxY, maxZ, x, y, z)
+function SnapEngine.math.pointAABBDistanceSqrSeparate(minX, minY, minZ, maxX, maxY, maxZ, x, y, z)
   local qx = math.max(0, math.max(minX - x, x - maxX))
   local qy = math.max(0, math.max(minY - y, y - maxY))
   local qz = math.max(0, math.max(minZ - z, z - maxZ))
@@ -365,7 +365,7 @@ function engine.math.pointAABBDistanceSqrSeparate(minX, minY, minZ, maxX, maxY, 
   end
 end
 
-function engine.math.pointAABBDistanceSqrCentered(boxCenter, scale, position)
+function SnapEngine.math.pointAABBDistanceSqrCentered(boxCenter, scale, position)
   local d = 0
   if position.x < boxCenter.x - scale.x then
     d = d + (position.x - (boxCenter.x - scale.x)) ^ 2
@@ -388,12 +388,12 @@ end
 --- switch between functions, select with i
 ---@param i number
 ---@param ... function
-function engine.math.switch(i, ...)
+function SnapEngine.math.switch(i, ...)
   local t = { ... }
   t[i]()
 end
 
-function engine.math.point_line_distance(p, v1, v2)
+function SnapEngine.math.point_line_distance(p, v1, v2)
   local AB = v2 - v1
   return (AB:cross(p - v1)):length() / AB:length()
 end
@@ -414,7 +414,7 @@ do
   ---@param inverseViewProjectionMatrix matrix4x4
   ---@param points table?
   ---@return table
-  function engine.math.frustumCornerPoints(inverseViewProjectionMatrix, points)
+  function SnapEngine.math.frustumCornerPoints(inverseViewProjectionMatrix, points)
     points = points or table.new(8, 0)
 
     for i, v in ipairs(vertices) do
@@ -435,7 +435,7 @@ local tempMatrix = matrix4x4()
 ---@param frustum table?
 ---@param inverseViewProjectionMatrix matrix4x4?
 ---@return table
-function engine.math.frustumFromMatrix(matrix, frustum, inverseViewProjectionMatrix)
+function SnapEngine.math.frustumFromMatrix(matrix, frustum, inverseViewProjectionMatrix)
   frustum = frustum or table.new(6, 1)
 
   if not frustum[1] then
@@ -443,15 +443,15 @@ function engine.math.frustumFromMatrix(matrix, frustum, inverseViewProjectionMat
       frustum[i] = vec4()
     end
 
-    frustum.points = engine.math.frustumCornerPoints(inverseViewProjectionMatrix or
+    frustum.points = SnapEngine.math.frustumCornerPoints(inverseViewProjectionMatrix or
       matrix:invertTranspose(tempMatrix))
   else
-    engine.math.frustumCornerPoints(inverseViewProjectionMatrix or
+    SnapEngine.math.frustumCornerPoints(inverseViewProjectionMatrix or
       matrix:invertTranspose(tempMatrix), frustum.points)
   end
 
   frustum[1]:set( -- left
-    engine.math.normalizePlane(
+    SnapEngine.math.normalizePlane(
       matrix[1][4] + matrix[1][1],
       matrix[2][4] + matrix[2][1],
       matrix[3][4] + matrix[3][1],
@@ -460,7 +460,7 @@ function engine.math.frustumFromMatrix(matrix, frustum, inverseViewProjectionMat
   )
 
   frustum[2]:set( -- right
-    engine.math.normalizePlane(
+    SnapEngine.math.normalizePlane(
       matrix[1][4] - matrix[1][1],
       matrix[2][4] - matrix[2][1],
       matrix[3][4] - matrix[3][1],
@@ -469,7 +469,7 @@ function engine.math.frustumFromMatrix(matrix, frustum, inverseViewProjectionMat
   )
 
   frustum[3]:set( -- bottom
-    engine.math.normalizePlane(
+    SnapEngine.math.normalizePlane(
       matrix[1][4] - matrix[1][2],
       matrix[2][4] - matrix[2][2],
       matrix[3][4] - matrix[3][2],
@@ -478,7 +478,7 @@ function engine.math.frustumFromMatrix(matrix, frustum, inverseViewProjectionMat
   )
 
   frustum[4]:set( -- top
-    engine.math.normalizePlane(
+    SnapEngine.math.normalizePlane(
       matrix[1][4] + matrix[1][2],
       matrix[2][4] + matrix[2][2],
       matrix[3][4] + matrix[3][2],
@@ -487,7 +487,7 @@ function engine.math.frustumFromMatrix(matrix, frustum, inverseViewProjectionMat
   )
 
   frustum[5]:set( -- near
-    engine.math.normalizePlane(
+    SnapEngine.math.normalizePlane(
       matrix[1][4] + matrix[1][3],
       matrix[2][4] + matrix[2][3],
       matrix[3][4] + matrix[3][3],
@@ -496,7 +496,7 @@ function engine.math.frustumFromMatrix(matrix, frustum, inverseViewProjectionMat
   )
 
   frustum[6]:set( -- far
-    engine.math.normalizePlane(
+    SnapEngine.math.normalizePlane(
       matrix[1][4] - matrix[1][3],
       matrix[2][4] - matrix[2][3],
       matrix[3][4] - matrix[3][3],
@@ -507,8 +507,8 @@ function engine.math.frustumFromMatrix(matrix, frustum, inverseViewProjectionMat
   return frustum
 end
 
-function engine.math.frustumAABB(fru, x, y, z, x1, y1, z1)
-  local dot = engine.math.dot
+function SnapEngine.math.frustumAABB(fru, x, y, z, x1, y1, z1)
+  local dot = SnapEngine.math.dot
   for i = 1, 6 do
     local fx, fy, fz, fw = fru[i]:get()
     if dot(fx, fy, fz, x, y, z) + fw < 0.0
@@ -534,16 +534,16 @@ function engine.math.frustumAABB(fru, x, y, z, x1, y1, z1)
   return true
 end
 
-function engine.math.frustumSphere(fru, x, y, z, r)
+function SnapEngine.math.frustumSphere(fru, x, y, z, r)
   for i = 1, 6 do
-    if engine.math.dot(fru[i].x, fru[i].y, fru[i].z, x, y, z) + fru[i].w < -r then return false end
+    if SnapEngine.math.dot(fru[i].x, fru[i].y, fru[i].z, x, y, z) + fru[i].w < -r then return false end
   end
 
   local rsqr = r * r
   local out = true
   for i, point in ipairs(fru.points) do
     out = out and
-        engine.math.dot3(point.x - x, point.y - y, point.z - z, point.x - x, point.y - y, point.z - z) < rsqr
+        SnapEngine.math.dot3(point.x - x, point.y - y, point.z - z, point.x - x, point.y - y, point.z - z) < rsqr
   end
 
   if out then
@@ -564,10 +564,10 @@ end
 ---@param direction vec3
 ---@param length number
 ---@return engine.ray
-function engine.math.newRay(position, direction, length)
-  engine.assertType(position, "vec3")
-  engine.assertType(direction, "vec3")
-  engine.assertType(length, "number")
+function SnapEngine.math.newRay(position, direction, length)
+  SnapEngine.assertType(position, "vec3")
+  SnapEngine.assertType(direction, "vec3")
+  SnapEngine.assertType(length, "number")
 
   return {
     position = position,
@@ -581,7 +581,7 @@ end
 ---@param y number [0 - 1]
 ---@param camera engine.camera
 ---@return engine.ray ray length undefined
-function engine.math.screenPositionToRay(x, y, camera, outRay)
+function SnapEngine.math.screenPositionToRay(x, y, camera, outRay)
   local vx, vy, vz, vw = camera.inverseProjectionMatrix:vMulSepW1(
     (x - 0.5) * 2.0,
     (y - 0.5) * 2.0,
@@ -592,12 +592,12 @@ function engine.math.screenPositionToRay(x, y, camera, outRay)
   local wx, wy, wz = camera.inverseViewMatrix:vMulSepW0(vx, vy, vz)
 
   outRay.position:set(camera.position:get())
-  outRay.direction:set(engine.math.normalize3(wx, wy, wz))
+  outRay.direction:set(SnapEngine.math.normalize3(wx, wy, wz))
 
   return outRay
 end
 
-function engine.math.length(...)
+function SnapEngine.math.length(...)
   local val = { ... }
   if type(val[1]) == "table" then
     if val[1][1] == nil then
@@ -615,35 +615,35 @@ function engine.math.length(...)
   end
 end
 
-function engine.math.length2(x, y)
+function SnapEngine.math.length2(x, y)
   return math.sqrt(x * x + y * y)
 end
 
-function engine.math.length3(x, y, z)
+function SnapEngine.math.length3(x, y, z)
   return math.sqrt(x * x + y * y + z * z)
 end
 
-function engine.math.length4(x, y, z, w)
+function SnapEngine.math.length4(x, y, z, w)
   return math.sqrt(x * x + y * y + z * z + w * w)
 end
 
-function engine.math.lengthSqr2(x, y)
+function SnapEngine.math.lengthSqr2(x, y)
   return x * x + y * y
 end
 
-function engine.math.lengthSqr3(x, y, z)
+function SnapEngine.math.lengthSqr3(x, y, z)
   return x * x + y * y + z * z
 end
 
-function engine.math.lengthSqr4(x, y, z, w)
+function SnapEngine.math.lengthSqr4(x, y, z, w)
   return x * x + y * y + z * z + w * w
 end
 
-function engine.math.crossVector(v1, v2)
+function SnapEngine.math.crossVector(v1, v2)
   return vec3(v1.y * v2.z - v1.z * v2.y, v1.z * v2.x - v1.x * v2.z, v1.x * v2.y - v1.y * v2.x)
 end
 
-function engine.math.dotVector3(v1, v2)
+function SnapEngine.math.dotVector3(v1, v2)
   return v1.x * v2.x + v1.y * v2.y + v1.z * v2.z
 end
 
@@ -651,7 +651,7 @@ end
 ---@param position vec3
 ---@param quat quaternion
 ---@return vec3
-function engine.math.rotatePosition(position, quat)
+function SnapEngine.math.rotatePosition(position, quat)
   local cx = quat.y * position.z - quat.z * position.y + position.x * quat.w
   local cy = quat.z * position.x - quat.x * position.z + position.y * quat.w
   local cz = quat.x * position.y - quat.y * position.x + position.z * quat.w
@@ -665,7 +665,7 @@ end
 ---@param position vec3
 ---@param quat quaternion
 ---@return vec3
-function engine.math.rotatePositionOut(position, quat, out)
+function SnapEngine.math.rotatePositionOut(position, quat, out)
   local cx = quat.y * position.z - quat.z * position.y + position.x * quat.w
   local cy = quat.z * position.x - quat.x * position.z + position.y * quat.w
   local cz = quat.x * position.y - quat.y * position.x + position.z * quat.w
@@ -686,7 +686,7 @@ end
 ---@param qz number -- quaternion z
 ---@param qw number -- quaternion w
 ---@return number, number, number
-function engine.math.rotatePositionSeparate(x, y, z, qx, qy, qz, qw)
+function SnapEngine.math.rotatePositionSeparate(x, y, z, qx, qy, qz, qw)
   local cx = qy * z - qz * y + x * qw
   local cy = qz * x - qx * z + y * qw
   local cz = qx * y - qy * x + z * qw
@@ -699,7 +699,7 @@ end
 --- converts vertices and indices to a triangle list
 ---@param vertices table
 ---@param indices table<integer>
-function engine.math.verticesToTriangles(vertices, indices, triangles)
+function SnapEngine.math.verticesToTriangles(vertices, indices, triangles)
   if #indices % 3 ~= 0 then
     error("engine.math.verticesToTriangles: invalid indices")
   end
@@ -710,18 +710,18 @@ function engine.math.verticesToTriangles(vertices, indices, triangles)
   return triangles
 end
 
-function engine.math.rotatePositions(...)
+function SnapEngine.math.rotatePositions(...)
   local t = { ... }
   local q = t[#t]
   local vertices = {}
   for i = 1, #t - 1 do
-    table.insert(vertices, engine.math.rotatePosition(t[i], q))
+    table.insert(vertices, SnapEngine.math.rotatePosition(t[i], q))
   end
   return vertices
 end
 
 --- Rotate positions using normal variables instead of vectors or quaternions (12x faster than engine.math.rotatePosition)
-function engine.math.rotatePositionsSeparate(...)
+function SnapEngine.math.rotatePositionsSeparate(...)
   local t = { ... }
   local qx, qy, qz, qw = t[#t][1], t[#t][2], t[#t][3], t[#t][4]
   local vertices = {}
@@ -741,7 +741,7 @@ function engine.math.rotatePositionsSeparate(...)
 end
 
 --- Rotate positions using normal variables instead of vectors or quaternions (12x faster than engine.math.rotatePosition)
-function engine.math.rotateTablePositionsSeparate(vertices, qx, qy, qz, qw)
+function SnapEngine.math.rotateTablePositionsSeparate(vertices, qx, qy, qz, qw)
   local newPoints = {}
   for i = 1, #vertices do
     local x, y, z = vertices[i][1], vertices[i][2], vertices[i][3]
@@ -766,13 +766,13 @@ end
 ---@return number x
 ---@return number y
 ---@return number z
-function engine.math.triangleNormal(p1, p2, p3, inverted)
+function SnapEngine.math.triangleNormal(p1, p2, p3, inverted)
   local ux, uy, uz = p2[1] - p1[1], p2[2] - p1[2], p2[3] - p1[3]
   local vx, vy, vz = p3[1] - p1[1], p3[2] - p1[2], p3[3] - p1[3]
   local x = (uy * vz - uz * vy) * (inverted and -1 or 1)
   local y = (uz * vx - ux * vz) * (inverted and -1 or 1)
   local z = (ux * vy - uy * vx) * (inverted and -1 or 1)
-  return engine.math.normalize3(x, y, z)
+  return SnapEngine.math.normalize3(x, y, z)
 end
 
 --- calculates the triangle normal of a triangle
@@ -789,16 +789,16 @@ end
 ---@return number x
 ---@return number y
 ---@return number z
-function engine.math.triangleNormalSeparate(x0, y0, z0, x1, y1, z1, x2, y2, z2)
+function SnapEngine.math.triangleNormalSeparate(x0, y0, z0, x1, y1, z1, x2, y2, z2)
   local ux, uy, uz = x1 - x0, y1 - y0, z1 - z0
   local vx, vy, vz = x2 - x0, y2 - y0, z2 - z0
   local x = uy * vz - uz * vy
   local y = uz * vx - ux * vz
   local z = ux * vy - uy * vx
-  return engine.math.normalize3(x, y, z)
+  return SnapEngine.math.normalize3(x, y, z)
 end
 
-function engine.math.normalize(...)
+function SnapEngine.math.normalize(...)
   local t = { ... }
   if type(t[1]) == "table" then
     t = t[1]
@@ -834,7 +834,7 @@ function engine.math.normalize(...)
   end
 end
 
-function engine.math.normalize2(x, y)
+function SnapEngine.math.normalize2(x, y)
   local d = x * x + y * y
   if d == 0 then
     return 0.0, 0.0
@@ -843,7 +843,7 @@ function engine.math.normalize2(x, y)
   return x * d1, y * d1
 end
 
-function engine.math.normalize3(x, y, z)
+function SnapEngine.math.normalize3(x, y, z)
   local d = x * x + y * y + z * z
   if d == 0 then
     return 0.0, 0.0, 0.0
@@ -852,7 +852,7 @@ function engine.math.normalize3(x, y, z)
   return x * d, y * d, z * d, d
 end
 
-function engine.math.normalize4(x, y, z, w)
+function SnapEngine.math.normalize4(x, y, z, w)
   local d = x * x + y * y + z * z + w * w
   if d == 0 then
     return 0, 0, 0, 0
@@ -861,7 +861,7 @@ function engine.math.normalize4(x, y, z, w)
   return x * d1, y * d1, z * d1, w * d1
 end
 
-function engine.math.normalizePlane(x, y, z, w)
+function SnapEngine.math.normalizePlane(x, y, z, w)
   local d = math.sqrt(x * x + y * y + z * z)
   if d == 0 then
     return 0, 0, 0, 0
@@ -870,7 +870,7 @@ function engine.math.normalizePlane(x, y, z, w)
   return x * d1, y * d1, z * d1, w * d1
 end
 
-function engine.math.closestPointOnTriangle(a, b, c, point)
+function SnapEngine.math.closestPointOnTriangle(a, b, c, point)
   local px, py, pz = point[1], point[2], point[3]
 
   local abX = b[1] - a[1]
@@ -885,8 +885,8 @@ function engine.math.closestPointOnTriangle(a, b, c, point)
   local apY = py - a[2]
   local apZ = pz - a[3]
 
-  local d1 = engine.math.dot(abX, abY, abZ, apX, apY, apZ)
-  local d2 = engine.math.dot(acX, acY, acZ, apX, apY, apZ)
+  local d1 = SnapEngine.math.dot(abX, abY, abZ, apX, apY, apZ)
+  local d2 = SnapEngine.math.dot(acX, acY, acZ, apX, apY, apZ)
   if d1 <= 0 and d2 <= 0 then
     return vec3(a)
   end
@@ -895,8 +895,8 @@ function engine.math.closestPointOnTriangle(a, b, c, point)
   local bpY = py - b[2]
   local bpZ = pz - b[3]
 
-  local d3 = engine.math.dot(abX, abY, abZ, bpX, bpY, bpZ)
-  local d4 = engine.math.dot(acX, acY, acZ, bpX, bpY, bpZ)
+  local d3 = SnapEngine.math.dot(abX, abY, abZ, bpX, bpY, bpZ)
+  local d4 = SnapEngine.math.dot(acX, acY, acZ, bpX, bpY, bpZ)
   if d3 >= 0 and d4 <= d3 then
     return vec3(b)
   end
@@ -904,8 +904,8 @@ function engine.math.closestPointOnTriangle(a, b, c, point)
   local vc = d1 * d4 - d3 * d2
   if vc <= 0 and d1 >= 0 and d3 <= 0 then
     local v = d1 / (d1 - d3)
-    local temp = engine.math.tempVec3(abX, abY, abZ) * v
-    local point = engine.math.tempVec3(a) + temp
+    local temp = SnapEngine.math.tempVec3(abX, abY, abZ) * v
+    local point = SnapEngine.math.tempVec3(a) + temp
     return point
   end
 
@@ -913,8 +913,8 @@ function engine.math.closestPointOnTriangle(a, b, c, point)
   local cpY = py - c[2]
   local cpZ = pz - c[3]
 
-  local d5 = engine.math.dot(abX, abY, abZ, cpX, cpY, cpZ)
-  local d6 = engine.math.dot(acX, acY, acZ, cpX, cpY, cpZ)
+  local d5 = SnapEngine.math.dot(abX, abY, abZ, cpX, cpY, cpZ)
+  local d6 = SnapEngine.math.dot(acX, acY, acZ, cpX, cpY, cpZ)
   if d6 >= 0 and d5 <= d6 then
     return vec3(c)
   end
@@ -922,16 +922,16 @@ function engine.math.closestPointOnTriangle(a, b, c, point)
   local vb = d5 * d2 - d1 * d6
   if vb <= 0 and d2 >= 0 and d6 <= 0 then
     local w = d2 / (d2 - d6)
-    local temp = engine.math.tempVec3(acX, acY, acZ) * w
-    local point = engine.math.tempVec3(a) + temp
+    local temp = SnapEngine.math.tempVec3(acX, acY, acZ) * w
+    local point = SnapEngine.math.tempVec3(a) + temp
     return point
   end
 
   local va = d3 * d6 - d5 * d4
   if va <= 0 and (d4 - d3) >= 0 and (d5 - d6) >= 0 then
     local w = (d4 - d3) / ((d4 - d3) + (d5 - d6))
-    local vec3C = engine.math.tempVec3(c)
-    local vec3B = engine.math.tempVec3(b)
+    local vec3C = SnapEngine.math.tempVec3(c)
+    local vec3B = SnapEngine.math.tempVec3(b)
     local temp = vec3C - vec3B
     local point = vec3B + temp * w
     return point
@@ -940,9 +940,9 @@ function engine.math.closestPointOnTriangle(a, b, c, point)
   local denom = 1 / (va + vb + vc)
   local v = vb * denom
   local w = vc * denom
-  local vec3A = engine.math.tempVec3(a)
-  local vec3AB = engine.math.tempVec3(abX, abY, abZ)
-  local vec3AC = engine.math.tempVec3(acX, acY, acZ)
+  local vec3A = SnapEngine.math.tempVec3(a)
+  local vec3AB = SnapEngine.math.tempVec3(abX, abY, abZ)
+  local vec3AC = SnapEngine.math.tempVec3(acX, acY, acZ)
   local point = vec3A + vec3AB * v + vec3AC * w
   return point
 end
@@ -955,30 +955,30 @@ end
 ---@param e table<number, number, number>
 ---@param f table<number, number, number>
 ---@return vec3
-function engine.math.closestPointToTriangles(a, b, c, d, e, f)
+function SnapEngine.math.closestPointToTriangles(a, b, c, d, e, f)
   local closestPointFromTriA
   local closestDistanceToTriB = math.huge
   for index, vert in ipairs({ a, b, c }) do
-    local point = engine.math.closestPointOnTriangle(d, e, f, vert)
+    local point = SnapEngine.math.closestPointOnTriangle(d, e, f, vert)
     local dist = (point - vert):lengthSqr()
     if dist < closestDistanceToTriB then
       closestDistanceToTriB = dist
       closestPointFromTriA = point -- or point
     end
   end
-  local closestPointOnTriA = engine.math.closestPointOnTriangle(a, b, c, closestPointFromTriA)
+  local closestPointOnTriA = SnapEngine.math.closestPointOnTriangle(a, b, c, closestPointFromTriA)
 
   local closestPointFromTriB
   local closestDistanceToTriA = math.huge
   for index, vert in ipairs({ d, e, f }) do
-    local point = engine.math.closestPointOnTriangle(a, b, c, vert)
+    local point = SnapEngine.math.closestPointOnTriangle(a, b, c, vert)
     local dist = (point - vert):lengthSqr()
     if dist < closestDistanceToTriA then
       closestDistanceToTriA = dist
       closestPointFromTriB = point -- or point
     end
   end
-  local closestPointOnTriB = engine.math.closestPointOnTriangle(d, e, f, closestPointFromTriB)
+  local closestPointOnTriB = SnapEngine.math.closestPointOnTriangle(d, e, f, closestPointFromTriB)
 
   -- find the triangle that is closest to the avarage contact position
   local averageContactPosition = (closestPointOnTriA + closestPointOnTriB) * 0.5
@@ -1000,7 +1000,7 @@ function engine.math.closestPointToTriangles(a, b, c, d, e, f)
   return closestTriangleIndex == 1 and closestPointOnTriA or closestPointOnTriB
 end
 
-function engine.math.eulerToAxisAngle(pitch, yaw, roll)
+function SnapEngine.math.eulerToAxisAngle(pitch, yaw, roll)
   local c1 = math.cos(yaw / 2)
   local s1 = math.sin(yaw / 2)
   local c2 = math.cos(pitch / 2)
@@ -1027,7 +1027,7 @@ function engine.math.eulerToAxisAngle(pitch, yaw, roll)
   return vec4(x, y, z, angle)
 end
 
-function engine.math.axisAngleToEuler(axisAngle)
+function SnapEngine.math.axisAngleToEuler(axisAngle)
   local x, y, z, angle = axisAngle:get()
   local s = math.sin(angle)
   local c = math.cos(angle)
@@ -1036,13 +1036,13 @@ function engine.math.axisAngleToEuler(axisAngle)
   local yaw, pitch, roll
   if (x * y * t + z * s) > 0.998 then
     yaw = 2 * math.atan2(x * math.sin(angle / 2), math.cos(angle / 2))
-    pitch = engine.math.PI05
+    pitch = SnapEngine.math.PI05
     roll = 0
     return pitch, yaw, roll
   end
   if (x * y * t + z * s) < -0.998 then
     yaw = -2 * math.atan2(x * math.sin(angle / 2), math.cos(angle / 2))
-    pitch = -engine.math.PI05
+    pitch = -SnapEngine.math.PI05
     roll = 0
     return pitch, yaw, roll
   end
@@ -1052,7 +1052,7 @@ function engine.math.axisAngleToEuler(axisAngle)
   return pitch, yaw, roll
 end
 
-function engine.math.axisAngleToQuat(axisAngle)
+function SnapEngine.math.axisAngleToQuat(axisAngle)
   local angle = axisAngle.w * 0.5
   local sinAngle = math.sin(angle)
   return quaternion(
@@ -1063,7 +1063,7 @@ function engine.math.axisAngleToQuat(axisAngle)
   ):normalize()
 end
 
-function engine.math.quatToAxisAngle(quat, out)
+function SnapEngine.math.quatToAxisAngle(quat, out)
   local angle = math.acos(quat.w) * 2
   local mul = 1 / math.sqrt(1 - quat.w * quat.w)
 
@@ -1090,7 +1090,7 @@ end
 
 --- combines strings and numbers into a string
 ---@param ... any strings and numbers, last argument can be a table with settings {separator = " "}
-function engine.math.combine(...)
+function SnapEngine.math.combine(...)
   local input = { ... }
   local settings = input[#input]
   if type(settings) == "table" then
@@ -1117,19 +1117,19 @@ end
 ---@param position vec3 position
 ---@param quat quaternion rotation
 ---@return number|nil
-function engine.math.rayTorus(r, tor, position, quat)
+function SnapEngine.math.rayTorus(r, tor, position, quat)
   local ray = {}
   do -- reposition the ray to account for the fact that i can't rotate the torus
-    ray.position = engine.math.rotatePosition(r.position - position, quat:invert())
-    ray.direction = engine.math.rotatePosition(r.direction, quat:invert())
+    ray.position = SnapEngine.math.rotatePosition(r.position - position, quat:invert())
+    ray.direction = SnapEngine.math.rotatePosition(r.direction, quat:invert())
   end
   local po = 1.0
 
   local Ra2 = tor.x * tor.x
   local ra2 = tor.y * tor.y
 
-  local m = engine.math.dotVector3(ray.position, ray.position)
-  local n = engine.math.dotVector3(ray.position, ray.direction)
+  local m = SnapEngine.math.dotVector3(ray.position, ray.position)
+  local n = SnapEngine.math.dotVector3(ray.position, ray.direction)
 
   local k = (m - ra2 - Ra2) / 2.0
   local k3 = n
@@ -1164,9 +1164,9 @@ function engine.math.rayTorus(r, tor, position, quat)
 
   if h >= 0.0 then
     h = math.sqrt(h)
-    local v = engine.math.sign(R + h) * (math.abs(R + h) ^ (1.0 / 3.0))
-    local u = engine.math.sign(R - h) * (math.abs(R - h) ^ (1.0 / 3.0))
-    local s = engine.math.tempVec3((v + u) + 4.0 * c2, (v - u) * math.sqrt(3.0))
+    local v = SnapEngine.math.sign(R + h) * (math.abs(R + h) ^ (1.0 / 3.0))
+    local u = SnapEngine.math.sign(R - h) * (math.abs(R - h) ^ (1.0 / 3.0))
+    local s = SnapEngine.math.tempVec3((v + u) + 4.0 * c2, (v - u) * math.sqrt(3.0))
     local y = math.sqrt(0.5 * (s:length() + s.x))
     local x = 0.5 * s.y / y
     local r = 2.0 * c1 / (x * x + y * y)
@@ -1203,8 +1203,8 @@ function engine.math.rayTorus(r, tor, position, quat)
   return t > 0 and t or nil
 end
 
-function engine.math.rayCapsule(ray, topX, topY, topZ, baseX, baseY, baseZ, radius)
-  local dot = engine.math.dot
+function SnapEngine.math.rayCapsule(ray, topX, topY, topZ, baseX, baseY, baseZ, radius)
+  local dot = SnapEngine.math.dot
   local baX, baY, baZ = baseX - topX, baseY - topY, baseZ - topZ
   local oaX, oaY, oaZ = ray.position.x - topX, ray.position.y - topY, ray.position.z - topZ
   local baba = dot(baX, baY, baZ, baX, baY, baZ)
@@ -1223,7 +1223,7 @@ function engine.math.rayCapsule(ray, topX, topY, topZ, baseX, baseY, baseZ, radi
       return t
     end
     local oc = y <= 0.0 and vec3(oaX, oaY, oaZ) or
-        engine.math.tempVec3(ray.position.x - baseX, ray.position.y - baseY, ray.position.z - baseZ)
+        SnapEngine.math.tempVec3(ray.position.x - baseX, ray.position.y - baseY, ray.position.z - baseZ)
     b = dot(ray.direction.x, ray.direction.y, ray.direction.z, oc.x, oc.y, oc.z)
     c = dot(oc.x, oc.y, oc.z, oc.x, oc.y, oc.z) - radius * radius
     h = b * b - c
@@ -1233,8 +1233,8 @@ function engine.math.rayCapsule(ray, topX, topY, topZ, baseX, baseY, baseZ, radi
   end
 end
 
-function engine.math.rayCylinder(ray, topX, topY, topZ, baseX, baseY, baseZ, radius)
-  local dot = engine.math.dot
+function SnapEngine.math.rayCylinder(ray, topX, topY, topZ, baseX, baseY, baseZ, radius)
+  local dot = SnapEngine.math.dot
   local baX, baY, baZ = baseX - topX, baseY - topY, baseZ - topZ
   local ocX, ocY, ocZ = ray.position.x - topX, ray.position.y - topY, ray.position.z - topZ
   local baba = dot(baX, baY, baZ, baX, baY, baZ)
@@ -1257,11 +1257,11 @@ function engine.math.rayCylinder(ray, topX, topY, topZ, baseX, baseY, baseZ, rad
 
   t = (((y < 0) and 0 or baba) - baoc) / bard
   if math.abs(k1 + k2 * t) < h then
-    return t, vec3(baX, baY, baZ) * engine.math.sign(y) / math.sqrt(baba)
+    return t, vec3(baX, baY, baZ) * SnapEngine.math.sign(y) / math.sqrt(baba)
   end
 end
 
-function engine.math.raySphere(ray, x, y, z, radius)
+function SnapEngine.math.raySphere(ray, x, y, z, radius)
   local ocx, ocy, ocz = ray.position.x - x, ray.position.y - y, ray.position.z - z
   local dx, dy, dz = ray.direction.x, ray.direction.y, ray.direction.z
 
@@ -1332,7 +1332,7 @@ end
 ---@param maxY number
 ---@param maxZ number
 ---@return boolean, number, number #hit, distance, depth
-function engine.math.rayAABB(rayX, rayY, rayZ, rayDirX, rayDirY, rayDirZ, minX, minY, minZ, maxX, maxY, maxZ)
+function SnapEngine.math.rayAABB(rayX, rayY, rayZ, rayDirX, rayDirY, rayDirZ, minX, minY, minZ, maxX, maxY, maxZ)
   local t0X, t0Y, t0Z = (minX - rayX) / rayDirX, (minY - rayY) / rayDirY, (minZ - rayZ) / rayDirZ
   local t1X, t1Y, t1Z = (maxX - rayX) / rayDirX, (maxY - rayY) / rayDirY, (maxZ - rayZ) / rayDirZ
   local tminX, tminY, tminZ = math.min(t0X, t1X), math.min(t0Y, t1Y), math.min(t0Z, t1Z)
@@ -1358,7 +1358,8 @@ end
 ---@param maxY number
 ---@param maxZ number
 ---@return boolean, number, number #hit, distance, depth
-function engine.math.rayAABBInverse(rayX, rayY, rayZ, rayIDirX, rayIDirY, rayIDirZ, minX, minY, minZ, maxX, maxY, maxZ)
+function SnapEngine.math.rayAABBInverse(rayX, rayY, rayZ, rayIDirX, rayIDirY, rayIDirZ, minX, minY, minZ, maxX, maxY,
+                                        maxZ)
   local t0X, t0Y, t0Z = (minX - rayX) * rayIDirX, (minY - rayY) * rayIDirY, (minZ - rayZ) * rayIDirZ
   local t1X, t1Y, t1Z = (maxX - rayX) * rayIDirX, (maxY - rayY) * rayIDirY, (maxZ - rayZ) * rayIDirZ
   local tminX, tminY, tminZ = math.min(t0X, t1X), math.min(t0Y, t1Y), math.min(t0Z, t1Z)
@@ -1370,7 +1371,7 @@ function engine.math.rayAABBInverse(rayX, rayY, rayZ, rayIDirX, rayIDirY, rayIDi
   return tFar - tNear > 0, tNear, tFar - tNear
 end
 
-function engine.math.triangleTangent(p1, p2, p3)
+function SnapEngine.math.triangleTangent(p1, p2, p3)
   local edge1X, edge1Y, edge1Z = p2[1] - p1[1], p2[2] - p1[2], p2[3] - p1[3]
   local edge2X, edge2Y, edge2Z = p3[1] - p1[1], p3[2] - p1[2], p3[3] - p1[3]
 
@@ -1388,13 +1389,13 @@ function engine.math.triangleTangent(p1, p2, p3)
   return tangentX * i, tangentY * i, tangentZ * i
 end
 
-function engine.math.scaleFromMatrix(matrix)
-  return engine.math.length3(matrix[1][1], matrix[1][2], matrix[1][3]),
-      engine.math.length3(matrix[2][1], matrix[2][2], matrix[2][3]),
-      engine.math.length3(matrix[3][1], matrix[3][2], matrix[3][3])
+function SnapEngine.math.scaleFromMatrix(matrix)
+  return SnapEngine.math.length3(matrix[1][1], matrix[1][2], matrix[1][3]),
+      SnapEngine.math.length3(matrix[2][1], matrix[2][2], matrix[2][3]),
+      SnapEngine.math.length3(matrix[3][1], matrix[3][2], matrix[3][3])
 end
 
-function engine.math.slerp(qa, qb, t, out)
+function SnapEngine.math.slerp(qa, qb, t, out)
   local qm = out or quaternion()
   local cosHalfTheta = qa.w * qb.w + qa.x * qb.x + qa.y * qb.y + qa.z * qb.z
 
@@ -1428,8 +1429,8 @@ function engine.math.slerp(qa, qb, t, out)
 end
 
 local function rayTriangle(rayX, rayY, rayZ, rayDirX, rayDirY, rayDirZ, aX, aY, aZ, bX, bY, bZ, cX, cY, cZ)
-  local dot = engine.math.dot
-  local cross = engine.math.cross
+  local dot = SnapEngine.math.dot
+  local cross = SnapEngine.math.cross
 
   local ABx = bX - aX
   local ABy = bY - aY
@@ -1466,7 +1467,7 @@ local function rayTriangle(rayX, rayY, rayZ, rayDirX, rayDirY, rayDirZ, aX, aY, 
   end
 end
 
-function engine.math.rayMesh(mesh, meshPosition, meshQuaternion, meshScale, position, direction)
+function SnapEngine.math.rayMesh(mesh, meshPosition, meshQuaternion, meshScale, position, direction)
   local hitDistance = -1
   local rayPosition = position - meshPosition
 
@@ -1500,14 +1501,14 @@ function engine.math.rayMesh(mesh, meshPosition, meshQuaternion, meshScale, posi
     local cY = c.VertexPosition.y * sy
     local cZ = c.VertexPosition.z * sz
 
-    aX, aY, aZ = engine.math.rotatePositionSeparate(aX, aY, aZ, qx, qy, qz, qw)
-    bX, bY, bZ = engine.math.rotatePositionSeparate(bX, bY, bZ, qx, qy, qz, qw)
-    cX, cY, cZ = engine.math.rotatePositionSeparate(cX, cY, cZ, qx, qy, qz, qw)
+    aX, aY, aZ = SnapEngine.math.rotatePositionSeparate(aX, aY, aZ, qx, qy, qz, qw)
+    bX, bY, bZ = SnapEngine.math.rotatePositionSeparate(bX, bY, bZ, qx, qy, qz, qw)
+    cX, cY, cZ = SnapEngine.math.rotatePositionSeparate(cX, cY, cZ, qx, qy, qz, qw)
 
     local minX, minY, minZ = math.min(aX, bX, cX), math.min(aY, bY, cY), math.min(aZ, bZ, cZ)
     local maxX, maxY, maxZ = math.max(aX, bX, cX), math.max(aY, bY, cY), math.max(aZ, bZ, cZ)
 
-    if engine.math.rayAABB(minX, minY, minZ, maxX, maxY, maxZ, rayX, rayY, rayZ, direction.x, direction.y, direction.z) then
+    if SnapEngine.math.rayAABB(minX, minY, minZ, maxX, maxY, maxZ, rayX, rayY, rayZ, direction.x, direction.y, direction.z) then
       local dist, x, y, z, u, v, w = rayTriangle(
         rayX, rayY, rayZ, direction.x, direction.y, direction.z, aX, aY, aZ, bX, bY, bZ, cX, cY, cZ)
       if dist ~= nil and (dist < hitDistance or hitDistance < 0) then
@@ -1522,7 +1523,7 @@ function engine.math.rayMesh(mesh, meshPosition, meshQuaternion, meshScale, posi
         local normalY = a.VertexNormal.y * w + b.VertexNormal.y * u + c.VertexNormal.y * v
         local normalZ = a.VertexNormal.z * w + b.VertexNormal.z * u + c.VertexNormal.z * v
 
-        hitNormalX, hitNormalY, hitNormalZ = engine.math.rotatePositionSeparate(
+        hitNormalX, hitNormalY, hitNormalZ = SnapEngine.math.rotatePositionSeparate(
           normalX, normalY, normalZ, qx, qy, qz, qw)
       end
     end
@@ -1533,7 +1534,7 @@ function engine.math.rayMesh(mesh, meshPosition, meshQuaternion, meshScale, posi
   end
 end
 
-function engine.math.rayPolygon(vertices, meshPosition, meshQuaternion, meshScale, position, direction)
+function SnapEngine.math.rayPolygon(vertices, meshPosition, meshQuaternion, meshScale, position, direction)
   local hitDistance = math.huge
   local rayPosition = position - meshPosition
 
@@ -1566,9 +1567,9 @@ function engine.math.rayPolygon(vertices, meshPosition, meshQuaternion, meshScal
     local cY = c[2] * sy
     local cZ = c[3] * sz
 
-    aX, aY, aZ = engine.math.rotatePositionSeparate(aX, aY, aZ, qx, qy, qz, qw)
-    bX, bY, bZ = engine.math.rotatePositionSeparate(bX, bY, bZ, qx, qy, qz, qw)
-    cX, cY, cZ = engine.math.rotatePositionSeparate(cX, cY, cZ, qx, qy, qz, qw)
+    aX, aY, aZ = SnapEngine.math.rotatePositionSeparate(aX, aY, aZ, qx, qy, qz, qw)
+    bX, bY, bZ = SnapEngine.math.rotatePositionSeparate(bX, bY, bZ, qx, qy, qz, qw)
+    cX, cY, cZ = SnapEngine.math.rotatePositionSeparate(cX, cY, cZ, qx, qy, qz, qw)
 
     local minX, minY, minZ = math.min(aX, bX, cX), math.min(aY, bY, cY), math.min(aZ, bZ, cZ)
     local maxX, maxY, maxZ = math.max(aX, bX, cX), math.max(aY, bY, cY), math.max(aZ, bZ, cZ)
@@ -1588,7 +1589,7 @@ function engine.math.rayPolygon(vertices, meshPosition, meshQuaternion, meshScal
         local normalY = a[7] * w + b[7] * u + c[7] * v
         local normalZ = a[8] * w + b[8] * u + c[8] * v
 
-        hitNormalX, hitNormalY, hitNormalZ = engine.math.rotatePositionSeparate(
+        hitNormalX, hitNormalY, hitNormalZ = SnapEngine.math.rotatePositionSeparate(
           normalX, normalY, normalZ, qx, qy, qz, qw)
       end
     end
@@ -1602,7 +1603,7 @@ end
 do
   local curGain, curOctaves, curLacunarity, curFrequency
   local curAmplitude = 1.0
-  function engine.math.setFBMNoiseSettings(gain, octaves, lacunarity, frequency)
+  function SnapEngine.math.setFBMNoiseSettings(gain, octaves, lacunarity, frequency)
     curGain = gain
     curOctaves = octaves
     curLacunarity = lacunarity
@@ -1610,7 +1611,7 @@ do
     curAmplitude = 1.0 - gain ^ octaves / (1.0 - gain)
   end
 
-  function engine.math.fbmNoise1(x)
+  function SnapEngine.math.fbmNoise1(x)
     local value = 0.0
     local amplitude = curAmplitude
     local frequency = curFrequency
@@ -1625,7 +1626,7 @@ do
     return value
   end
 
-  function engine.math.fbmNoise2(x, y)
+  function SnapEngine.math.fbmNoise2(x, y)
     local value = 0.0
     local amplitude = curAmplitude
     local frequency = curFrequency
@@ -1640,7 +1641,7 @@ do
     return value
   end
 
-  function engine.math.fbmNoise3(x, y, z)
+  function SnapEngine.math.fbmNoise3(x, y, z)
     local value = 0.0
     local amplitude = curAmplitude
     local frequency = curFrequency
@@ -1655,7 +1656,7 @@ do
     return value
   end
 
-  function engine.math.fbmNoise4(x, y, z, w)
+  function SnapEngine.math.fbmNoise4(x, y, z, w)
     local value = 0.0
     local amplitude = curAmplitude
     local frequency = curFrequency
@@ -1672,7 +1673,7 @@ do
   end
 end
 
-function engine.math.sphereIntersection(Ax, Ay, Az, Aradius, Bx, By, Bz, Bradius)
+function SnapEngine.math.sphereIntersection(Ax, Ay, Az, Aradius, Bx, By, Bz, Bradius)
   local dx = Bx - Ax
   local dy = By - Ay
   local dz = Bz - Az
@@ -1686,7 +1687,7 @@ end
 
 local tempKeys = {}
 local tempConcat = {}
-function engine.math.generateTableHash(data)
+function SnapEngine.math.generateTableHash(data)
   table.clear(tempKeys)
 
   for key, value in pairs(data) do
@@ -1727,7 +1728,7 @@ end
 --- Check for frustum-frustum intersection defined by 6 planes each (vec3 normal, float distance)
 ---@param frustumA {[1]:vec4, [2]:vec4, [3]:vec4, [4]:vec4, [5]:vec4, [6]:vec4, points:table<vec3>}
 ---@param frustumB {[1]:vec4, [2]:vec4, [3]:vec4, [4]:vec4, [5]:vec4, [6]:vec4, points:table<vec3>}
-function engine.math.frustumFrustumIntersection(frustumA, frustumB)
+function SnapEngine.math.frustumFrustumIntersection(frustumA, frustumB)
   for _, plane in ipairs(frustumA) do
     local min1, max1 = project(frustumA.points, plane)
     local min2, max2 = project(frustumB.points, plane)
@@ -1750,7 +1751,7 @@ end
 
 --- Pack booleans into a uint32
 ---@param ... boolean
-function engine.math.packUint32(...)
+function SnapEngine.math.packUint32(...)
   local count = select("#", ...)
   local packed = 0
 
@@ -1772,7 +1773,7 @@ local unpacked = {}
 --- @param packed integer
 --- @
 --- @return ...:boolean
-function engine.math.unpackUint32(packed)
+function SnapEngine.math.unpackUint32(packed)
   table.clear(unpacked)
 
   for i = 0, 31 do
@@ -1786,7 +1787,7 @@ local colorCache = {}
 
 --- Converts a string to a color value
 --- @param str string
-function engine.math.stringToColor(str)
+function SnapEngine.math.stringToColor(str)
   if colorCache[str] then return unpack(colorCache[str], 1, 3) end
 
   local h = snap.math.random()
@@ -1831,7 +1832,7 @@ end
 --- Can be used for weighted random selection on the gpu.
 ---@param weights number[]
 ---@return number[], number[], number[] #prob, alias, normalised weights
-function engine.math.aliasWeights(weights)
+function SnapEngine.math.aliasWeights(weights)
   local n = #weights
   local prob = {}
   local alias = {}

@@ -5,10 +5,10 @@
 #include "Wrap/Helpers/lua_enum.hpp"
 #include "Wrap/wrap.hpp"
 #include "entity.hpp"
-#include "lua.hpp"
 #include "renderer.hpp"
 #include <cstdint>
 #include <imgui.h>
+#include <lua.hpp>
 
 namespace Engine::Renderer {
 

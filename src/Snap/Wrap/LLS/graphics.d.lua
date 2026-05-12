@@ -223,6 +223,7 @@ function snap.graphics.dispatch(threadgroupsX, threadgroupsY, threadgroupsZ) end
 function snap.graphics.dispatchIndirect(indirectBuffer, offset) end
 
 --- Clears the screen or the currently set rendertargets.
+--- @overload fun() Clears the screen with 0, 0, 0, 1, no depth or stencil clear.
 --- @overload fun(r: number, g: number, b: number, a: number)
 --- @overload fun(color: boolean, depth: boolean, stencil: boolean)
 --- @overload fun(targets: {[1]: {[1]: number, [2]: number, [3]: number, [4]: number}}, depth: number, stencil: number)

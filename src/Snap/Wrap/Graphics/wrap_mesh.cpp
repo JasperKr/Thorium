@@ -8,10 +8,10 @@
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Wrap/wrap.hpp"
-#include "lua.hpp"
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <lua.hpp>
 #include <unordered_map>
 #include <vector>
 

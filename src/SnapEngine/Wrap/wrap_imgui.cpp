@@ -20,13 +20,12 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <lauxlib.h>
 #include <mutex>
 #include <span>
 #include <unordered_map>
 #include <vector>
 
-#include "lua.hpp"
+#include <lua.hpp>
 
 namespace Wrap::Imgui {
 

@@ -97,9 +97,6 @@ inline auto CreateDescriptorPool(ThreadContext &tcontext)
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
 
-    PrintAlways("Creating new descriptor pool with max sets: {}",
-                poolInfo.maxSets);
-
     Error error = Error::Create(
         vkCreateDescriptorPool(tcontext.graphicsContext->device, &poolInfo,
                                GetAllocationCallbacks(), &descriptorPool));
@@ -127,7 +124,6 @@ inline auto GetDescriptorPool(ThreadContext &tcontext) -> Error {
   }
 
   if (pool == VK_NULL_HANDLE) {
-    PrintAlways("Creating new descriptor pool");
     auto createResult = CreateDescriptorPool(tcontext);
 
     if (Error::IsError(createResult)) {
@@ -186,7 +182,6 @@ auto AquireCommandBuffer(Graphics::GraphicsContext &context,
   auto cachedCmdBuffer = GetCachedCommandBuffer(context);
 
   if (!cachedCmdBuffer.has_value()) {
-    PrintAlways("Allocating new command buffer for '{}'", info.name);
     VkCommandBufferAllocateInfo allocInfo = {};
     allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
     allocInfo.commandPool = tcontext.commandPool;

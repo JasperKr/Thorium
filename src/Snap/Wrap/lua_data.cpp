@@ -7,7 +7,7 @@
 #include <variant>
 #include <vector>
 
-#include "lua.hpp"
+#include <lua.hpp>
 
 namespace LuaWrap::Data {
 

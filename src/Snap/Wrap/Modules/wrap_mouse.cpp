@@ -7,7 +7,6 @@
 #include "SDL3/SDL_surface.h"
 #include "Wrap/wrap.hpp"
 #include <cstdint>
-#include <lauxlib.h>
 #include <lua.hpp>
 #include <map>
 #include <string>

@@ -167,18 +167,14 @@ struct ShaderModule : Object {
 
   auto operator==(const ShaderModule &other) const -> bool {
     if (module != other.module) {
-      PrintAlways("Shader modules not equal: {} vs {}", (void *)module,
-                  (void *)other.module);
       return false;
     }
 
     if (stages != other.stages) {
-      PrintAlways("Shader stages not equal");
       return false;
     }
 
     if (externs != other.externs) {
-      PrintAlways("Shader externs not equal");
       return false;
     }
 

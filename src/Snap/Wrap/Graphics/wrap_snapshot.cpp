@@ -1,7 +1,7 @@
 #include "wrap_snapshot.hpp"
 #include "Graphics/snapshot.hpp"
 #include "Wrap/wrap.hpp"
-#include "lua.hpp"
+#include <lua.hpp>
 
 namespace Wrap::Graphics::Snapshot {
 

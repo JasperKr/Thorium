@@ -278,8 +278,6 @@ static auto CreateDevice(GraphicsContext &context,
   bool allRequiredSupported = true;
   auto index = 0;
 
-  PrintAlways("Looping over supported extensions");
-
   for (const auto &[extensionName, requirement] : extensions) {
     if (supported.at(index) && requirement != extDisabled) {
       deviceExtensions.emplace_back(extensionName);
@@ -542,7 +540,7 @@ auto Initialize(GraphicsContext &context, Window::WindowContext &wcontext,
 }
 
 void Deinitialize(GraphicsContext &context) {
-  PrintAlways("Deinitializing graphics context...");
+  PrintInfo("Deinitializing graphics context...");
 
   std::scoped_lock<std::mutex, std::mutex> lock(
       Graphics::GraphicsContext::mutexes.device,

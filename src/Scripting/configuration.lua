@@ -1,6 +1,6 @@
 function snap.config(config)
-  config.window.width = 1200
-  config.window.height = 1000
+  config.window.width = 1800
+  config.window.height = 1200
 
   config.window.title = "Configured Title"
   config.window.resizable = true
@@ -16,7 +16,6 @@ function snap.config(config)
   config.graphics.inlineRaytracing = "disabled"
 
   local sourceDir = snap.filesystem.getSourceDirectory()
-  print("SOURCE DIRECTORY: " .. sourceDir)
   config.graphics.shaderIncludePaths = {
     sourceDir .. "Graphics/Shaders/",
     sourceDir .. "Graphics/Shaders/Lighting/",

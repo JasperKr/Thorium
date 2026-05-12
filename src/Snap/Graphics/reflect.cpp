@@ -108,9 +108,6 @@ auto SetupVariant(slang::VariableLayoutReflection *layout)
       structInfo.name = layout->getName();
     }
 
-    PrintAlways("Setting up struct: {} with size {} and alignment {}",
-                structInfo.name, structInfo.size, structInfo.alignment);
-
     auto fieldCount = baseType->getFieldCount();
 
     for (int i = 0; i < fieldCount; ++i) {
@@ -765,10 +762,6 @@ auto ResourceInfoToBufferFormat(const ResourceInfo &info, Standard std)
       auto fieldFormatResult = ResourceInfoToBufferFormat(field, std);
 
       if (Error::IsError(fieldFormatResult)) {
-        PrintAlways("Skipping field {} in struct {} for buffer format "
-                    "conversion since it "
-                    "is not a supported type.",
-                    field.name, structInfo.name);
         continue; // Sampler or Buffer or whatever, skip it since it cannot be part of the buffer format
       }
 

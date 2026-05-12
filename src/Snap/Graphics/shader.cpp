@@ -550,19 +550,6 @@ auto ShaderModule::Create(
     }
   }
 
-  PrintAlways("----- Global reflection info -----");
-  PrintAlways("Global resources:");
-  for (const auto &global : shader->reflection.resources) {
-    PrintAlways(" - {} (type: {})", global.name, global.GetTypename());
-  }
-  PrintAlways("Global buffer format:");
-  PrintAlways(" - Stride: {} bytes",
-              shader->reflection.globalBufferFormat.GetStride());
-  PrintAlways(" - Component count: {}",
-              shader->reflection.globalBufferFormat.GetComponents().size());
-  PrintAlways(shader->reflection.globalBufferFormat.ToString());
-  PrintAlways("----- ----- -----");
-
 #if Enable_Snapshots
   Snapshot::CaptureEvent(
       Snapshot::ShaderModuleCreateEvent(shader->module, shader->moduleName));

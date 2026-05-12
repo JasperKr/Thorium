@@ -1363,7 +1363,6 @@ auto inline AllocateResourceMemory(GraphicsContext &context, RenderGraph &graph,
       VkResult result =
           vmaCreateBuffer(context.vmaAllocator, &bufferInfo, &allocInfo,
                           &buffer->handle, &buffer->memory, nullptr);
-      PrintAlways("New vma buffer");
     }
   }
 

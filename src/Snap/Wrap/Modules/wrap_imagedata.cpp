@@ -5,7 +5,7 @@
 #include "Modules/color.hpp"
 #include "Modules/imagedata.hpp"
 #include "Wrap/wrap.hpp"
-#include "lua.hpp"
+#include <lua.hpp>
 
 #include <vulkan/vulkan_core.h>
 

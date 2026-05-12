@@ -1,16 +1,4 @@
-engine = {
-  helpers = {},
-  graphics = {},
-  math = {},
-}
-
-Imgui = require("Editor.cimgui.init")
-require("Modules.vec")
-require("Modules.quaternions")
-require("Modules.matrices")
-require("Modules.math")
-require("Modules.helpers")
-require("Graphics.camera")
+require("init")
 local ffi = require("ffi")
 
 local lastDrawTime = 0
@@ -27,19 +15,9 @@ local cameraHeight = snap.graphics.getHeight() * 3 / 4
 local camera = snap.graphics.newCamera("main camera", vec3(), quaternion(),
   vec2(cameraWidth, cameraHeight), 60, 0.1, 1000)
 
-local t = snap.timer.getTime()
-local testImgdata = snap.data.newImagedata(16, 16, "rgba8")
-for y = 0, 15 do
-  for x = 0, 15 do
-    local value = snap.math.random()
-    testImgdata:setPixel(x, y, 1, 1, 1, value)
-  end
-end
-
 local shader = snap.graphics.newShader("Scripting/Graphics/Shaders/forward.slang")
 
 local texture
-print("Generated noise texture in " .. tostring(snap.timer.getTime() - t) .. " seconds")
 
 local rendertarget
 local depthbuffer
@@ -151,6 +129,7 @@ end
 
 local t = snap.timer.getTime()
 local deltaTimestamp = snap.timer.getTime()
+local firstFrame = true
 
 while true do
   if not (canStartChannel:demand(1)) then
@@ -200,16 +179,16 @@ while true do
 
   snap.graphics.aquireGraphics(nil, nil, createSnapshot)
   createSnapshot = false
-  if not texture then
+  if firstFrame then
     snap.graphics.setDefaultFilter("linear", "linear", 4)
-    texture = snap.graphics.newTexture(testImgdata, { storage = true, sampler = true, mipmaps = "init" })
-
     snap.scene.loadModel(scene, "Assets/Terrain/Town2/town.gltf")
 
     rendertarget = snap.graphics.newTexture(snap.graphics.getWidth(), snap.graphics.getHeight(),
       { sampler = true, rendertarget = true, format = "rg11b10f" })
     depthbuffer = snap.graphics.newTexture(snap.graphics.getWidth(), snap.graphics.getHeight(),
       { rendertarget = true, format = "depth32f" })
+
+    firstFrame = false
   end
 
   local dt = snap.timer.getTime() - t

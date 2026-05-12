@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-#include "lua.hpp"
+#include <lua.hpp>
 
 namespace Wrap::Graphics {
 auto ComponentFromLua(lua_State *state, int index)

@@ -9,11 +9,9 @@
 #include "Wrap/Graphics/wrap_color.hpp"
 #include "Wrap/wrap.hpp"
 #include "tl/expected.hpp"
-#include <lauxlib.h>
 #include <lua.hpp>
 #include <string>
 
-#include "lua.hpp"
 #include "vulkan/vulkan_core.h"
 #include <cstring>
 #include <vector>

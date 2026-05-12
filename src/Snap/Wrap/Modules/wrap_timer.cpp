@@ -1,5 +1,5 @@
 #include "Modules/timer.hpp"
-#include "lua.hpp"
+#include <lua.hpp>
 
 namespace Wrap::Timer {
 auto wrap_GetTime(lua_State *state) -> int {

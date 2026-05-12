@@ -2,7 +2,7 @@
 #include "Modules/Math/eulerAngle.hpp"
 #include "Modules/Math/math.hpp"
 #include "Modules/Math/matrix.hpp"
-#include "lua.hpp"
+#include <lua.hpp>
 
 namespace Wrap::Math {
 using namespace ::Math::Conversions;

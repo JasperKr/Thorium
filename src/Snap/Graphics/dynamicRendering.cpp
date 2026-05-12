@@ -113,8 +113,6 @@ auto GetDescriptorSetLayout(const DescriptorSetLayoutKey &layoutKey,
     }
 
     DescriptorSetLayoutCache[layoutKey] = descriptorSetLayout;
-    PrintAlways("Descriptor set layout cache size: {}",
-                DescriptorSetLayoutCache.size());
   }
 
   return descriptorSetLayout;

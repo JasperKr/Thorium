@@ -6,7 +6,6 @@
 #include <vector>
 
 #include "Modules/Helpers/utils.hpp"
-#include "Modules/console.hpp"
 #include "vulkan/vulkan_core.h"
 
 namespace Graphics {
@@ -43,9 +42,6 @@ auto GetGlobalUniformBuffer(uint32_t frameIndex) -> FrameUniformBufferObject & {
 
 auto FrameUniformBufferObject::Create(GraphicsContext &context)
     -> Result<FrameUniformBufferObject> {
-
-  PrintAlways("Creating frame uniform buffer of size {} bytes",
-              InitialUniformBufferSize);
 
   FrameUniformBufferObject obj{};
   BufferCreationInfo info{};

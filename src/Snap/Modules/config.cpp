@@ -5,7 +5,6 @@
 #include "Wrap/Modules/wrap_window.hpp"
 #include "Wrap/wrap.hpp"
 
-#include "lua.hpp"
 #include <lua.hpp>
 #include <string>
 

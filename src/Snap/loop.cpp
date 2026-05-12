@@ -26,8 +26,6 @@
 
 #include <vulkan/vulkan.h>
 
-#include "lua.hpp"
-
 #include "Modules/event.hpp"
 #include "Wrap/reference.hpp"
 #include "Wrap/wrap.hpp"
@@ -230,7 +228,6 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
   }
 
   const auto &currentPath = std::filesystem::current_path();
-  PrintAlways("Current working directory: " + currentPath.string());
 
   auto sourceDirectory =
       Path::Sanitize(currentPath.string() + "/" + arguments[0]);
@@ -278,7 +275,7 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
   }
 
   PrintDebug("Graphics initialized successfully.");
-  PrintAlways(Graphics::Info::GetGpuInfoString(context.physicalDevice));
+  PrintDebug(Graphics::Info::GetGpuInfoString(context.physicalDevice));
 
   Graphics::SetCurrentGraphicsContext(&context);
 

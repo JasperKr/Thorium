@@ -688,9 +688,6 @@ inline auto FillVertexDataDefaults(Graphics::VertexFormat &format,
       continue;
     }
 
-    // PrintAlways("Attribute {} is missing in primitive; filling with defaults.",
-    //             component.name);
-
     if (component.name == "TANGENT") {
       continue;
 
@@ -816,8 +813,6 @@ LoadVertexData(Graphics::VertexFormat &format, const fastgltf::Asset &asset,
   // Compute output stride from the vertex format.
   const size_t outputStride = format.GetStride(0);
 
-  // PrintAlways(format.ToString());
-
   std::vector<uint8_t> result(vertexCount * outputStride, 0);
 
   for (const auto &[semantic, accessorIndex] : primitive.attributes) {
@@ -885,12 +880,6 @@ LoadVertexData(Graphics::VertexFormat &format, const fastgltf::Asset &asset,
                                accessor.byteOffset
                          : 0);
 
-    // PrintAlways("Loading attribute {}: vertexCount={}, srcElementSize={}, "
-    //             "srcStride={}, "
-    //             "requiredSize={}",
-    //             semanticView, vertexCount, srcElementSize, srcStride,
-    //             requiredSize);
-
     auto spansize = span.size();
 
     // Check if the accessor's data fits within the buffer view span.
@@ -932,16 +921,6 @@ LoadVertexData(Graphics::VertexFormat &format, const fastgltf::Asset &asset,
     if (converterIter != Converters.end()) {
       converter = converterIter->second;
     }
-
-    // PrintAlways("Processing attribute {}: needsNormalize={}, converter={}",
-    //             semanticView, needsNormalize,
-    //             converter != nullptr ? "yes" : "no");
-    // PrintAlways(
-    //     "srcElementSize={}, dstElementSize={}, outputStride={}, dstOffset={}, "
-    //     "accessor.componentType={}, componentCount={}, accessor offset={}",
-    //     srcElementSize, dstElementSize, outputStride, dstOffset,
-    //     ComponentTypeToString(accessor.componentType), componentCount,
-    //     accessor.byteOffset);
 
     for (size_t value = 0; value < vertexCount; ++value) {
       const uint8_t *srcPtr =
@@ -1268,8 +1247,6 @@ auto LoadGltfModel(Graphics::GraphicsContext &context, const std::string &path,
   Buffers.reserve(asset->buffers.size());
   const auto &basePath = Path::Directory(path);
   const auto view = std::string_view(basePath);
-
-  PrintAlways("Base path: {}, original path: {}", basePath, path);
 
   for (size_t i = 0; i < asset->buffers.size(); ++i) {
     const auto &buffer = asset->buffers[i];

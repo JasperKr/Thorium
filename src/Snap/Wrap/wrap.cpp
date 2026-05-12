@@ -7,9 +7,9 @@
 #include "Wrap/Modules/wrap_window.hpp"
 #include "Wrap/proxy.hpp"
 
-#include "lua.hpp"
 #include <cstdint>
 #include <iostream>
+#include <lua.hpp>
 #include <string>
 #include <unordered_set>
 #include <vector>
@@ -89,7 +89,6 @@ static auto wrap_typeof(lua_State *state) -> int {
 }
 
 static auto wrap_eq(lua_State *state) -> int {
-  PrintAlways("Checking equality of objects");
   Proxy *proxyA = ProxyFromLua(state, 1);
   Proxy *proxyB = ProxyFromLua(state, 2);
 
@@ -168,16 +167,6 @@ auto LoadOrCreateStorageTable(lua_State *state, const char *key) -> void {
     lua_pushvalue(state, -1); // [storage, storage]
     lua_setfield(state, LUA_REGISTRYINDEX,
                  key); // registry[key] = storage [storage]
-  }
-}
-
-auto LogStack(lua_State *state) -> void {
-  int top = lua_gettop(state);
-  PrintAlways("Lua Stack (top={}):", top);
-  for (int i = 1; i <= top; ++i) {
-    int type = lua_type(state, i);
-    const char *typeName = lua_typename(state, type);
-    PrintAlways("  [{}] Type: {}", i, typeName);
   }
 }
 

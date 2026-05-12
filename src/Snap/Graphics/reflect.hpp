@@ -4,7 +4,6 @@
 #include "Graphics/graphicsContext.hpp"
 #include "Graphics/graphicsState.hpp"
 #include "Modules/Helpers/utils.hpp"
-#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "slang/slang.h"
 #include <cstdint>
@@ -482,8 +481,6 @@ struct ShaderReflection {
     globalUBOInfo.info = globalUBOStruct;
 
     if (resources.size() == 0) {
-      PrintAlways("Shader has no resources, skipping global uniform buffer "
-                  "construction.");
       return {};
     }
 

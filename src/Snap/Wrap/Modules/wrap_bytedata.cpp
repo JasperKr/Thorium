@@ -2,8 +2,8 @@
 #include "Modules/bytedata.hpp"
 #include "Modules/color.hpp"
 #include "Wrap/wrap.hpp"
-#include "lua.hpp"
 #include <cstdint>
+#include <lua.hpp>
 
 namespace Wrap::Data {
 

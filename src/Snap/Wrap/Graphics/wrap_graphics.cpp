@@ -18,11 +18,9 @@
 #include "tl/expected.hpp"
 #include <cassert>
 
-#include "lua.hpp"
 #include "vulkan/vulkan_core.h"
 #include <cstdint>
 #include <cstring>
-#include <lauxlib.h>
 #include <lua.hpp>
 #include <utility>
 #include <vector>
@@ -648,6 +646,7 @@ auto wrap_DrawIndirect(lua_State *state) -> int {
 // Either: bool (0,0,0,1), bool (depth), bool (stencil)
 // Or: Color (attachment 1, vararg), value (depth), value (stencil)
 // Or: {[1..]: Color (attachment), depth=value, stencil=value}
+// Or: nothing; 0, 0, 0, 1, no depth clear, no stencil clear
 auto wrap_Clear(lua_State *state) -> int {
   ZoneScoped;
   auto *ctx = ::Graphics::GetCurrentGraphicsContext();
@@ -699,6 +698,15 @@ auto wrap_Clear(lua_State *state) -> int {
         }
       }
       lua_pop(state, 1); // pop value, keep key for next iteration
+    }
+  } else {
+    // Only color clear to 0,0,0,1
+    clearInfo.clearDepth = false;
+    clearInfo.clearStencil = false;
+    auto rtCount = ::Graphics::DynamicRendering::GetRenderTargets().size();
+
+    for (size_t i = 0; i < rtCount; i++) {
+      clearInfo.colors.emplace_back(0.0F, 0.0F, 0.0F, 1.0F);
     }
   }
 

@@ -65,7 +65,7 @@ local vec2Mt = {
 
 local vecType = doublePrecision and "double" or "float"
 
--- define Rhodium's vec4, vec3, vec2 types, with R so they don't conflict with other libraries
+-- define SnapEngine's vec4, vec3, vec2 types, with R so they don't conflict with other libraries
 ffi.cdef([[
     typedef struct {
         ]] .. vecType .. [[ x, y, z, w;
@@ -78,7 +78,7 @@ ffi.cdef([[
     } Rvec2;
     typedef struct {
         ]] .. vecType .. [[ x, y, z, w;
-    } RDvec4; // vector type without metatype (Rhodium default vector type)
+    } RDvec4; // vector type without metatype (SnapEngine default vector type)
     typedef struct {
         ]] .. vecType .. [[ x, y, z;
     } RDvec3;
@@ -1548,7 +1548,7 @@ end
 ---@return number
 local function lerp(angle, target, turnrate, dt)
   local dist = target - angle
-  dist = (dist + math.pi) % engine.math.PI2 - math.pi
+  dist = (dist + math.pi) % SnapEngine.math.PI2 - math.pi
   local step = turnrate * dt
   if dist <= step then
     angle = target

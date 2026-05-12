@@ -6,7 +6,6 @@
 #include "Graphics/uniformWriter.hpp"
 #include "Modules/Math/matrix.hpp"
 #include "Modules/bindings.hpp"
-#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Modules/reflectBindings.hpp"
@@ -27,10 +26,8 @@
 #include "material.hpp"
 #include "renderer.hpp"
 #include <algorithm>
-#include <array>
 #include <flecs.h>
 #include <imgui.h>
-#include <lauxlib.h>
 #include <lua.hpp>
 #include <string>
 #include <string_view>

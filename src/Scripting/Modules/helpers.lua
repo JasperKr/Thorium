@@ -6,7 +6,7 @@
 ---@param far number
 ---@param out matrix4x4?
 ---@return matrix4x4
-function engine.graphics.newOrthographicProjectionMatrix(left, right, top, bottom, near, far, out)
+function SnapEngine.graphics.newOrthographicProjectionMatrix(left, right, top, bottom, near, far, out)
   out = out or matrix4x4()
 
   out:setFromNumbers(
@@ -19,7 +19,7 @@ function engine.graphics.newOrthographicProjectionMatrix(left, right, top, botto
   return out
 end
 
-function engine.graphics.newPerspectiveProjectionMatrix(left, right, top, bottom, near, far)
+function SnapEngine.graphics.newPerspectiveProjectionMatrix(left, right, top, bottom, near, far)
   return matrix4x4(
     (near * 2) / (right - left), 0, (right + left) / (right - left), 0,
     0, (near * 2) / (top - bottom), (top + bottom) / (top - bottom), 0,
@@ -28,7 +28,7 @@ function engine.graphics.newPerspectiveProjectionMatrix(left, right, top, bottom
   )
 end
 
-function engine.graphics.newPerspectiveProjectionMatrixSimple(aspectRatio, fov, near, far, out)
+function SnapEngine.graphics.newPerspectiveProjectionMatrixSimple(aspectRatio, fov, near, far, out)
   local tanHalfFov = math.tan(math.rad(fov / 2))
   out              = out or matrix4x4()
 
@@ -92,14 +92,14 @@ local function printAnyCompactInternal(any, tabs)
   end
 end
 
-function engine.helpers.print(...)
+function SnapEngine.helpers.print(...)
   for i = 1, select("#", ...) do
     local any = select(i, ...)
     print(printAnyInternal(any, 0))
   end
 end
 
-function engine.helpers.printCompact(...)
+function SnapEngine.helpers.printCompact(...)
   for i = 1, select("#", ...) do
     local any = select(i, ...)
     print(printAnyCompactInternal(any, 0))

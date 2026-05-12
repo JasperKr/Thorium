@@ -74,7 +74,7 @@ function snap.graphics.newCamera(name, position, rotation, resolution, fov, near
   local rotationProjectionMatrix = matrix4x4()
   local inverseRotationProjectionMatrix = matrix4x4()
 
-  local projectionMatrix = engine.graphics.newPerspectiveProjectionMatrixSimple(aspectRatio, self.fov, self.near,
+  local projectionMatrix = SnapEngine.graphics.newPerspectiveProjectionMatrixSimple(aspectRatio, self.fov, self.near,
     self.far)
 
   projectionMatrix:invertTranspose(inverseProjectionMatrix)
@@ -162,7 +162,7 @@ local tempVec3 = vec3()
 function Camera:UpdateMatrices()
   local aspectRatio = self.resolution.x / self.resolution.y
 
-  engine.graphics.newPerspectiveProjectionMatrixSimple(aspectRatio, self.fov, self.near,
+  SnapEngine.graphics.newPerspectiveProjectionMatrixSimple(aspectRatio, self.fov, self.near,
     self.far, self.projectionMatrix)
 
   self.projectionMatrix:invertTranspose(self.inverseProjectionMatrix)

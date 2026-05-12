@@ -1,7 +1,6 @@
 #pragma once
 #include "Graphics/format.hpp"
 #include "Graphics/graphicsState.hpp"
-#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include <cstring>
 #include <public/tracy/Tracy.hpp>
@@ -169,8 +168,6 @@ inline auto ParseDDS(const std::span<const uint8_t> &data, int &outWidth,
 
   const auto fourCCStr = std::string_view(
       reinterpret_cast<const char *>(&header.ddspf.fourCC), 4); // NOLINT
-  PrintAlways("dds pixelformat fourCC: {}", fourCCStr);
-
   if (outFormat != VK_FORMAT_UNDEFINED) {
     size_t headerSize = 4 + sizeof(DDS_HEADER);
     if (data.size() < headerSize) {
@@ -205,10 +202,6 @@ inline auto ParseDDS(const std::span<const uint8_t> &data, int &outWidth,
   }
 
   size_t pixelDataSize = data.size() - headerSize;
-
-  PrintAlways("DDS with DX10 header, format: {}, width: {}, height: {}",
-              ::Graphics::Format::ImageFormatToString(outFormat), outWidth,
-              outHeight);
 
   // NOLINTNEXTLINE, safe because we check size above
   return std::span<const uint8_t>(data.data() + headerSize, pixelDataSize);

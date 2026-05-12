@@ -1,4 +1,4 @@
-#include "lua.hpp"
+#include <lua.hpp>
 #include <vector>
 
 namespace WrapTemplate {

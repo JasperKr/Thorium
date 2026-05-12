@@ -5,7 +5,6 @@
 #include "Scene/scene.hpp"
 #include "Wrap/wrap.hpp"
 #include <imgui.h>
-#include <lauxlib.h>
 #include <lua.hpp>
 
 namespace Engine {

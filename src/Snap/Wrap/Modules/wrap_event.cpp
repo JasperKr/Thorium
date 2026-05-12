@@ -3,14 +3,14 @@
 #include "Modules/console.hpp"
 #include "Modules/event.hpp"
 
-#include "lua.hpp"
+#include <lua.hpp>
 #include <string>
 
 namespace Wrap::Event {
 auto wrap_Quit(lua_State *state) -> int {
   ::Event::MainLoopRunning = false;
 
-  PrintAlways("Quit event received, stopping main loop.");
+  PrintInfo("Quit event received, stopping main loop.");
 
   return 0; // Number of return values
 }

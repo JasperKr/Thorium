@@ -11,7 +11,7 @@
 #include <public/tracy/Tracy.hpp>
 #include <variant>
 
-#include "lua.hpp"
+#include <lua.hpp>
 #include <vector>
 #include <vulkan/vulkan_core.h>
 

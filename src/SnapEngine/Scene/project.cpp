@@ -2,6 +2,6 @@
 
 #include <imgui.h>
 
-#include "lua.hpp"
+#include <lua.hpp>
 
 namespace Engine {} // namespace Engine

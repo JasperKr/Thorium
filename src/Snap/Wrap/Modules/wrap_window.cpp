@@ -2,7 +2,7 @@
 #include "Modules/error.hpp"
 #include "Modules/window.hpp"
 
-#include "lua.hpp"
+#include <lua.hpp>
 namespace Wrap::Window {
 
 auto wrap_Hide(lua_State *state) -> int {

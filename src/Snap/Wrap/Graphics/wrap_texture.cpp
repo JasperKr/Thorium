@@ -7,13 +7,11 @@
 #include "Wrap/Helpers/lua_enum.hpp"
 #include "Wrap/wrap.hpp"
 #include <imgui.h>
-#include <lauxlib.h>
-#include <lua.hpp>
 #include <string>
 #include <unordered_set>
 
-#include "lua.hpp"
 #include "vulkan/vulkan_core.h"
+#include <lua.hpp>
 namespace Wrap::Graphics::Texture {
 auto inline StringToVkFilter(const char *filterStr) -> VkFilter {
   if (strcmp(filterStr, "nearest") == 0) {
@@ -587,14 +585,8 @@ struct LuaOptions {
     } else {
       options.format = ::Graphics::DefaultPixelFormat;
 
-      PrintAlways("Creating texture from options with no format specified");
-
       if ((static_cast<uint8_t>(options.usage) &
            static_cast<uint8_t>(LuaTextureUsage::Storage)) != 0) {
-        // If storage usage is specified but no format is given, default to a format that supports storage usage
-        PrintAlways(
-            "Storage usage specified but no format given, defaulting to "
-            "VK_FORMAT_R8G8B8A8_UNORM");
         options.format = VK_FORMAT_R8G8B8A8_UNORM;
       }
     }
@@ -642,10 +634,6 @@ static inline auto TextureFromImagedataAndOptions(lua_State *state)
   LuaOptions options = optionsResult.value();
 
   auto usage = TextureUsageToVkImageUsage(options.format, options.usage);
-
-  PrintAlways("Creating texture from imagedata with format: {} and usage: {}",
-              ::Graphics::Format::ImageFormatToString(imageData->GetFormat()),
-              static_cast<uint32_t>(options.usage));
 
   auto result = ::Graphics::LoadFromMemory(*ctx, *imageData, usage);
   if (Error::IsError(result)) {
@@ -928,8 +916,6 @@ auto wrap_GetID(lua_State *state) -> int {
   if (texture == nullptr) {
     return luaL_error(state, "Expected Texture as first argument");
   }
-
-  PrintAlways("Getting texture ID: {}", (void *)texture);
 
   LuaWrap::PushPointer(state, texture);
   return 1;
