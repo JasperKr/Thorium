@@ -2,16 +2,14 @@
 
 #include "Graphics/buffer.hpp"
 #include "Graphics/bufferformat.hpp"
-#include "Graphics/graphics.hpp"
-#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "tl/expected.hpp"
 
 namespace Graphics {
 
-auto StructuredBuffer::Create(GraphicsContext &context, BufferFormat &format,
-                              size_t elementCount,
+auto StructuredBuffer::Create(const GraphicsContext &context,
+                              const BufferFormat &format, size_t elementCount,
                               StructuredBufferCreationInfo const &info)
     -> Result<Ref<StructuredBuffer>> {
 

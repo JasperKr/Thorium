@@ -114,4 +114,9 @@ auto Userdata::DrawGUI(lua_State *state) const -> void {
   }
 }
 
+const LuaWrap::LuaComponent UserdataComponent{{
+    {"setUserdata", Userdata::SetUserdata},
+    {"getUserdata", Userdata::GetUserdata},
+}};
+
 } // namespace Engine

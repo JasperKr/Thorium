@@ -12,12 +12,10 @@ local commandBufferChannel, canStartChannel, scene, events = ...
 local cameraWidth = snap.graphics.getWidth() * 3 / 4
 local cameraHeight = snap.graphics.getHeight() * 3 / 4
 
-local camera = snap.graphics.newCamera("main camera", vec3(), quaternion(),
+local camera = scene:newCamera("main camera", vec3(), quaternion(),
   vec2(cameraWidth, cameraHeight), 60, 0.1, 1000)
 
 local shader = snap.graphics.newShader("Scripting/Graphics/Shaders/forward.slang")
-
-local texture
 
 local rendertarget
 local depthbuffer
@@ -25,12 +23,10 @@ local snapshot
 
 local function draw()
   snap.graphics.setRenderTarget(
-    { { texture = rendertarget, loadas = "clear", blendmode = { blendmode = "alpha", alphamode = "premultiplied" } },
+    { { texture = rendertarget, loadas = "clear", blendmode = { blendmode = "alpha", alphamode = "alphamultiply" } },
       { texture = depthbuffer,  loadas = 1 } })
   snap.graphics.setShader(shader)
   snap.graphics.setCullMode("none")
-  camera:Update()
-  camera:UpdateState()
   shader:send("CameraData", camera.buffer)
   snap.graphics.setCullMode("none")
   snap.graphics.setWindingOrder("ccw")
@@ -38,26 +34,10 @@ local function draw()
   scene:drawModels()
   snap.graphics.setShader()
 
+  Editor.drawGUI()
+
   local startTime = snap.timer.getTime()
-  Imgui.Begin("Test window")
 
-  Imgui.Separator()
-  Imgui.Text("FPS: " .. tostring(snap.timer.getFPS()))
-  Imgui.Text("DT: " .. tostring(snap.timer.getDelta()))
-  Imgui.Text("Last Draw Time (ms): " .. tostring(lastShownTime * 1000))
-  Imgui.Text("Last ImGui Draw Time (ms): " .. tostring(lastShownImDrawTime * 1000))
-  local toMb = 1 / 1024
-  local memUsage = collectgarbage("count") * toMb
-  Imgui.Text(string.format("Lua Memory Usage: %.1f MB", memUsage))
-
-  Imgui.Separator()
-  scene:drawUIElement()
-
-  Imgui.End()
-
-  Imgui.Begin("Test window 2")
-  Imgui.Image(rendertarget, ffi.new("ImVec2", cameraWidth, cameraHeight))
-  Imgui.End()
 
   Imgui.ShowDemoWindow()
 

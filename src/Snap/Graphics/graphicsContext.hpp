@@ -29,7 +29,7 @@ struct SwapchainInfo {
   VkFormat format;
   VkExtent2D extent;
   uint32_t imageCount;
-  std::vector<Ref<Texture>> textures;
+  std::vector<Ref<struct Texture>> textures;
   std::vector<VkImage> images;
   std::vector<VkImageView> imageViews;
 };

@@ -4,6 +4,7 @@
 #include "Modules/Math/matrix.hpp"
 #include "Modules/Math/quaternion.hpp"
 #include "Modules/Math/vector.hpp"
+#include "Wrap/wrap.hpp"
 #include "lua.hpp"
 
 namespace Engine {
@@ -29,6 +30,8 @@ public:
   static auto GetScale(lua_State *state) -> int;
   static auto SetTransform(lua_State *state) -> int;
   static auto GetTransform(lua_State *state) -> int;
+  static auto GetLocalMatrix(lua_State *state) -> int;
+  static auto GetWorldMatrix(lua_State *state) -> int;
 
   [[nodiscard]] auto GetLocalMatrix() const -> const Math::Matrix4x4 & {
     return LocalMatrix;
@@ -79,5 +82,7 @@ public:
 
   auto DrawGUI() -> void;
 };
+
+extern const LuaWrap::LuaComponent TransformComponent;
 
 } // namespace Engine

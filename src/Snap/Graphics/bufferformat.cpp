@@ -22,6 +22,47 @@ BufferFormat::BufferFormat(std::vector<BufferComponent> components,
                            Standard std)
     : Components(std::move(components)), std(std) {}
 
+BufferFormat::BufferFormat(
+    const std::vector<
+        std::pair<std::string, std::variant<const char *, BufferFormat>>>
+        &components,
+    Standard std)
+    : std(std) {
+
+  std::vector<BufferComponent> bufferComponents;
+  for (const auto &[name, format] : components) {
+    if (std::holds_alternative<const char *>(format)) {
+      const auto *formatStr = std::get<const char *>(format);
+      auto vulkanFormat = Format::FromString(formatStr);
+      auto arraySize = Format::StringToArraySize(formatStr);
+      assert(vulkanFormat != VK_FORMAT_UNDEFINED);
+
+      bufferComponents.emplace_back(BufferComponent{
+          .name = name,
+          .format = vulkanFormat,
+          .arraySize = arraySize,
+          .isMatrix = arraySize > 1,
+      });
+    } else if (std::holds_alternative<BufferFormat>(format)) {
+      const auto &nestedFormat = std::get<BufferFormat>(format);
+      bufferComponents.emplace_back(BufferComponent{
+          .name = name,
+          .format = nestedFormat,
+          .arraySize = 1,
+          .isMatrix = false,
+      });
+    } else {
+      PrintWarning("Invalid format for component {}: {}", name,
+                   std::holds_alternative<const char *>(format)
+                       ? std::get<const char *>(format)
+                       : "nested BufferFormat");
+    }
+  }
+
+  Components = std::move(bufferComponents);
+  FlattenComponentTree();
+}
+
 auto BufferFormat::GetComponentOffset(size_t componentIndex) const -> size_t {
   if (componentIndex >= Components.size()) {
     return 0;

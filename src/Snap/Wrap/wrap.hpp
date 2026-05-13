@@ -7,6 +7,7 @@
 #include "Wrap/lua_data.hpp"
 #include "lua.hpp"
 #include <Modules/object.hpp>
+#include <flecs.h>
 #include <variant>
 #include <vector>
 
@@ -20,11 +21,17 @@ struct LuaModule {
   std::vector<lua_CFunction> ChildrenInitFunctions;
 };
 
+struct LuaComponent {
+  std::vector<luaL_Reg> Functions;
+};
+
 struct LuaClass {
   std::string Name;
   Type const *Type;
 
   std::vector<luaL_Reg> Methods;
+  std::vector<LuaComponent> Components; // For composition
+
   std::vector<LuaClass> Children;
 };
 

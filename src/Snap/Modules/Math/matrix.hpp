@@ -3,6 +3,7 @@
 #include "quaternion.hpp"
 #include "vector.hpp"
 #include <array>
+#include <lua.hpp>
 #include <span>
 #include <string>
 
@@ -63,6 +64,9 @@ struct Matrix4x4 {
   [[nodiscard]] auto Determinant() const -> std::pair<Scalar, Matrix4x4>;
   [[nodiscard]] auto Inverse() const -> Matrix4x4;
   [[nodiscard]] auto InverseTranspose() const -> Matrix4x4;
+  [[nodiscard]] auto AsMatrix3x3() const -> Matrix4x4;
+  [[nodiscard]] auto ToLua(lua_State *state) const -> int;
+  static auto FromLua(lua_State *state, int index) -> Matrix4x4;
 
   static auto Perspective(Scalar left, Scalar right, Scalar bottom, Scalar top,
                           Scalar nearPlane, Scalar farPlane) -> Matrix4x4;
@@ -142,6 +146,8 @@ struct Matrix3x3 {
   [[nodiscard]] auto InverseTranspose() const -> Matrix3x3;
 
   [[nodiscard]] auto ToString() const -> std::string;
+  [[nodiscard]] auto ToLua(lua_State *state) const -> int;
+  static auto FromLua(lua_State *state, int index) -> Matrix3x3;
 
   [[nodiscard]] auto data() const -> const Scalar * { return elements.data(); }
   static auto size() -> size_t { return Size; }

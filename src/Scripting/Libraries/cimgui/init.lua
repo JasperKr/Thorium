@@ -32,7 +32,9 @@ M.SetCurrentContext(ptr[0])
 ptrAsNumber = snap.gui.getFontAtlasPtr()
 ptr[0] = ffi.cast("void *", ptrAsNumber)
 
-M.GetIO().Fonts = ffi.cast("ImFontAtlas *", ptr[0])
+local io = M.GetIO()
+io.Fonts = ffi.cast("ImFontAtlas *", ptr[0])
+io.ConfigFlags = bit.bor(io.ConfigFlags, M.ImGuiConfigFlags_DockingEnable)
 
 -- remove access to M._common
 M._common = nil

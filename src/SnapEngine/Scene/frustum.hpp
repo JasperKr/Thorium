@@ -1,8 +1,10 @@
 #include "Modules/Math/matrix.hpp"
 #include "Modules/Math/vector.hpp"
+#include "Wrap/wrap.hpp"
 #include <algorithm>
 #include <array>
 #include <cassert>
+#include <lua.hpp>
 namespace Engine {
 
 struct Frustum {
@@ -110,6 +112,17 @@ struct Frustum {
   static auto FromMatrices(const Math::Matrix4x4 &viewProjectionMatrix,
                            const Math::Matrix4x4 &inverseViewProjectionMatrix)
       -> Frustum;
+
+  static auto GetNearPlane(lua_State *state) -> int;
+  static auto GetFarPlane(lua_State *state) -> int;
+  static auto GetLeftPlane(lua_State *state) -> int;
+  static auto GetRightPlane(lua_State *state) -> int;
+  static auto GetTopPlane(lua_State *state) -> int;
+  static auto GetBottomPlane(lua_State *state) -> int;
+
+  static auto GetCorner(lua_State *state) -> int;
 };
+
+extern const LuaWrap::LuaComponent FrustumComponent;
 
 } // namespace Engine

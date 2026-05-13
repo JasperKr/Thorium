@@ -199,6 +199,36 @@ auto Transform::GetTransform(lua_State *state) -> int {
   return 10;
 }
 
+auto Transform::GetLocalMatrix(lua_State *state) -> int {
+  auto *entity = LuaWrap::ObjectFromLua<Entity>(state, 1);
+  if (entity == nullptr) {
+    return luaL_error(state, "Invalid Entity object");
+  }
+
+  const auto *transform = entity->try_get<Transform>();
+  if (transform == nullptr) {
+    lua_pushnil(state);
+    return 1;
+  }
+
+  return transform->GetLocalMatrix().ToLua(state);
+}
+
+auto Transform::GetWorldMatrix(lua_State *state) -> int {
+  auto *entity = LuaWrap::ObjectFromLua<Entity>(state, 1);
+  if (entity == nullptr) {
+    return luaL_error(state, "Invalid Entity object");
+  }
+
+  const auto *transform = entity->try_get<Transform>();
+  if (transform == nullptr) {
+    lua_pushnil(state);
+    return 1;
+  }
+
+  return transform->GetWorldMatrix().ToLua(state);
+}
+
 auto Transform::UpdateLocalMatrix() -> void {
   if (!LocalDirty) {
     return;
@@ -249,6 +279,19 @@ auto Transform::DrawGUI() -> void {
   ImGui::Text("%s",
               std::format("World Matrix:\n{}", WorldMatrix.ToString()).c_str());
 }
+
+extern const LuaWrap::LuaComponent TransformComponent{{
+    {"setPosition", Transform::SetPosition},
+    {"getPosition", Transform::GetPosition},
+    {"setRotation", Transform::SetRotation},
+    {"getRotation", Transform::GetRotation},
+    {"setScale", Transform::SetScale},
+    {"getScale", Transform::GetScale},
+    {"setTransform", Transform::SetTransform},
+    {"getTransform", Transform::GetTransform},
+    {"getLocalMatrix", Transform::GetLocalMatrix},
+    {"getWorldMatrix", Transform::GetWorldMatrix},
+}};
 
 // NOLINTEND(cppcoreguidelines-avoid-magic-numbers, readability-magic-numbers)
 } // namespace Engine

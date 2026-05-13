@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Modules/console.hpp"
+#include "Wrap/wrap.hpp"
 #include "lua.hpp"
 #include <cstdint>
 #include <vector>
@@ -39,5 +39,7 @@ struct Userdata {
 
   auto DrawGUI(lua_State *state) const -> void;
 };
+
+extern const LuaWrap::LuaComponent UserdataComponent;
 
 } // namespace Engine

@@ -1,4 +1,8 @@
-local Editor = {}
+local ffi = require("ffi")
+
+Editor = {
+  focussedCamera = nil,
+}
 
 local function drawDockingWidget()
   if Imgui.Begin("DockSpace", nil, Imgui.ImGuiWindowFlags_AlwaysUseWindowPadding) then
@@ -8,6 +12,12 @@ local function drawDockingWidget()
     Imgui.DockSpace(1, SnapEngine.math.tempImVec2(snap.graphics.getDimensions()),
       bit.bor(Imgui.ImGuiDockNodeFlags_NoDockingOverCentralNode, Imgui.ImGuiDockNodeFlags_AutoHideTabBar))
   end
+  Imgui.End()
+end
+
+local function drawSceneWindow(camera)
+  Imgui.Begin("Scene")
+  Imgui.Image(rendertarget, ffi.new("ImVec2", cameraWidth, cameraHeight))
   Imgui.End()
 end
 

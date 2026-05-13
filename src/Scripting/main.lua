@@ -169,7 +169,7 @@ end
 -- local model3 = scene:createModel("Test model 3", { 0, 10, 0 }, { 0, 0, 0, 1 }, { 1, 1, 1 }, { shape3 })
 
 local qx, qy, qz, qw = snap.math.eulerToQuaternion(0.3, -math.pi / 1.5, 0);
-scene:createDirectionalLight("Test directional light", qx, qy, qz, qw, 1, 1, 1, 5)
+scene:newDirectionalLight("Test directional light", qx, qy, qz, qw, 1, 1, 1, 5)
 
 thread:start(commandsChannel, startThreadChannel, scene, events)
 
@@ -247,8 +247,9 @@ function snap.draw()
     table.insert(commandBuffers, snap.graphics.submitGraphics())
   end
 
-  local buffer = commandsChannel:demand(30)
-  while buffer do
+  local gotBuffer = false
+
+  while not gotBuffer do
     if thread:getError() then
       -- error("Render thread error: " .. thread:getError())
       snap.event.quit()
@@ -257,8 +258,13 @@ function snap.draw()
       collectgarbage("collect")
       return
     end
-    table.insert(commandBuffers, buffer)
-    buffer = commandsChannel:pop()
+
+    local buffer = commandsChannel:demand(0.01)
+    while buffer do
+      table.insert(commandBuffers, buffer)
+      buffer = commandsChannel:pop()
+      gotBuffer = true
+    end
   end
 
   -- snap.graphics.aquireGraphics()

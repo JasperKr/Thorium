@@ -323,11 +323,22 @@ auto RegisterLuaType(lua_State *state, const LuaClass &luaClass) -> void {
 #endif
   }
 
-  lua_pop(state, 1); // []
+  for (const auto &component : luaClass.Components) {
+    for (const auto &registration : component.Functions) {
+      if (ReservedNames.contains(registration.name)) {
+        PrintError("Cannot register Lua type {}: component name '{}' is "
+                   "reserved.",
+                   luaClass.Type->GetName(), registration.name);
+        continue;
+      }
 
-  for (const auto &child : luaClass.Children) {
-    RegisterLuaType(state, child);
+      lua_pushstring(state, registration.name);
+      lua_pushcfunction(state, registration.func);
+      lua_settable(state, -3); // mt[componentName] = wrap_type [mt]
+    }
   }
+
+  lua_pop(state, 1); // []
 }
 
 auto SetupLuaType(lua_State *state, const Type *type, Object *object) -> void {

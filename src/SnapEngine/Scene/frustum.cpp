@@ -1,5 +1,7 @@
 #include "frustum.hpp"
 #include "Modules/Math/vector.hpp"
+#include "Wrap/wrap.hpp"
+#include "entity.hpp"
 
 namespace Engine {
 
@@ -86,5 +88,153 @@ auto Frustum::FromMatrices(const Math::Matrix4x4 &viewProjectionMatrix,
 
   return frustum;
 }
+
+auto Frustum::GetNearPlane(lua_State *state) -> int {
+  auto *entity = LuaWrap::ObjectFromLua<Entity>(state, 1);
+  if (entity == nullptr) {
+    return luaL_error(state, "Invalid Entity");
+  }
+
+  const auto *frustum = entity->try_get<Frustum>();
+  if (frustum == nullptr) {
+    return luaL_error(state, "Entity does not have a Frustum component");
+  }
+
+  lua_pushnumber(state, frustum->Near.x);
+  lua_pushnumber(state, frustum->Near.y);
+  lua_pushnumber(state, frustum->Near.z);
+  lua_pushnumber(state, frustum->Near.w);
+
+  return 4;
+};
+
+auto Frustum::GetFarPlane(lua_State *state) -> int {
+  auto *entity = LuaWrap::ObjectFromLua<Entity>(state, 1);
+  if (entity == nullptr) {
+    return luaL_error(state, "Invalid Entity");
+  }
+
+  const auto *frustum = entity->try_get<Frustum>();
+  if (frustum == nullptr) {
+    return luaL_error(state, "Entity does not have a Frustum component");
+  }
+
+  lua_pushnumber(state, frustum->Far.x);
+  lua_pushnumber(state, frustum->Far.y);
+  lua_pushnumber(state, frustum->Far.z);
+  lua_pushnumber(state, frustum->Far.w);
+
+  return 4;
+};
+
+auto Frustum::GetLeftPlane(lua_State *state) -> int {
+  auto *entity = LuaWrap::ObjectFromLua<Entity>(state, 1);
+  if (entity == nullptr) {
+    return luaL_error(state, "Invalid Entity");
+  }
+
+  const auto *frustum = entity->try_get<Frustum>();
+  if (frustum == nullptr) {
+    return luaL_error(state, "Entity does not have a Frustum component");
+  }
+
+  lua_pushnumber(state, frustum->Left.x);
+  lua_pushnumber(state, frustum->Left.y);
+  lua_pushnumber(state, frustum->Left.z);
+  lua_pushnumber(state, frustum->Left.w);
+
+  return 4;
+};
+
+auto Frustum::GetRightPlane(lua_State *state) -> int {
+  auto *entity = LuaWrap::ObjectFromLua<Entity>(state, 1);
+  if (entity == nullptr) {
+    return luaL_error(state, "Invalid Entity");
+  }
+
+  const auto *frustum = entity->try_get<Frustum>();
+  if (frustum == nullptr) {
+    return luaL_error(state, "Entity does not have a Frustum component");
+  }
+
+  lua_pushnumber(state, frustum->Right.x);
+  lua_pushnumber(state, frustum->Right.y);
+  lua_pushnumber(state, frustum->Right.z);
+  lua_pushnumber(state, frustum->Right.w);
+
+  return 4;
+};
+
+auto Frustum::GetTopPlane(lua_State *state) -> int {
+  auto *entity = LuaWrap::ObjectFromLua<Entity>(state, 1);
+  if (entity == nullptr) {
+    return luaL_error(state, "Invalid Entity");
+  }
+
+  const auto *frustum = entity->try_get<Frustum>();
+  if (frustum == nullptr) {
+    return luaL_error(state, "Entity does not have a Frustum component");
+  }
+
+  lua_pushnumber(state, frustum->Top.x);
+  lua_pushnumber(state, frustum->Top.y);
+  lua_pushnumber(state, frustum->Top.z);
+  lua_pushnumber(state, frustum->Top.w);
+
+  return 4;
+};
+
+auto Frustum::GetBottomPlane(lua_State *state) -> int {
+  auto *entity = LuaWrap::ObjectFromLua<Entity>(state, 1);
+  if (entity == nullptr) {
+    return luaL_error(state, "Invalid Entity");
+  }
+
+  const auto *frustum = entity->try_get<Frustum>();
+  if (frustum == nullptr) {
+    return luaL_error(state, "Entity does not have a Frustum component");
+  }
+
+  lua_pushnumber(state, frustum->Bottom.x);
+  lua_pushnumber(state, frustum->Bottom.y);
+  lua_pushnumber(state, frustum->Bottom.z);
+  lua_pushnumber(state, frustum->Bottom.w);
+
+  return 4;
+};
+
+auto Frustum::GetCorner(lua_State *state) -> int {
+  auto *entity = LuaWrap::ObjectFromLua<Entity>(state, 1);
+  if (entity == nullptr) {
+    return luaL_error(state, "Invalid Entity");
+  }
+
+  const auto *frustum = entity->try_get<Frustum>();
+  if (frustum == nullptr) {
+    return luaL_error(state, "Entity does not have a Frustum component");
+  }
+
+  int index = static_cast<int>(luaL_checkinteger(state, 2));
+  if (index < 0 || index >= CornerCount) {
+    return luaL_error(state, "Corner index out of range");
+  }
+
+  const auto &corner = frustum->Corners.at(static_cast<size_t>(index));
+  lua_pushnumber(state, corner.x);
+  lua_pushnumber(state, corner.y);
+  lua_pushnumber(state, corner.z);
+
+  return 3;
+};
+
+const LuaWrap::LuaComponent FrustumComponent{{
+    {"getNearPlane", Frustum::GetNearPlane},
+    {"getFarPlane", Frustum::GetFarPlane},
+    {"getLeftPlane", Frustum::GetLeftPlane},
+    {"getRightPlane", Frustum::GetRightPlane},
+    {"getTopPlane", Frustum::GetTopPlane},
+    {"getBottomPlane", Frustum::GetBottomPlane},
+    {"getCorner", Frustum::GetCorner},
+}};
 
 } // namespace Engine

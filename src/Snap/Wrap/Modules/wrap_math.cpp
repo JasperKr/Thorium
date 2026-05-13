@@ -16,42 +16,6 @@ inline auto checkscalar(lua_State *state, int index) -> Scalar {
   return static_cast<Scalar>(luaL_checknumber(state, index));
 }
 
-inline auto MatrixToLua(lua_State *state, const Matrix &mat) -> int {
-  for (int i = 0; i < Matrix::Size; ++i) {
-    lua_pushnumber(state, mat.At(i));
-  }
-
-  return Matrix::Size;
-}
-
-inline auto MatrixToLua(lua_State *state, const ::Math::Matrix3x3 &mat) -> int {
-  for (int i = 0; i < ::Math::Matrix3x3::Size; ++i) {
-    lua_pushnumber(state, mat.At(i));
-  }
-
-  return ::Math::Matrix3x3::Size;
-}
-
-inline auto LuaToMatrix4x4(lua_State *state, int index) -> Matrix {
-  Matrix mat;
-  for (int i = 0; i < Matrix::Size; ++i) {
-    lua_rawgeti(state, index, i + 1);
-    mat.At(i) = checkscalar(state, -1);
-  }
-  lua_pop(state, Matrix::Size);
-  return mat;
-}
-
-inline auto LuaToMatrix3x3(lua_State *state, int index) -> ::Math::Matrix3x3 {
-  ::Math::Matrix3x3 mat;
-  for (int i = 0; i < ::Math::Matrix3x3::Size; ++i) {
-    lua_rawgeti(state, index, i + 1);
-    mat.At(i) = checkscalar(state, -1);
-  }
-  lua_pop(state, ::Math::Matrix3x3::Size);
-  return mat;
-}
-
 inline auto QuaternionToLua(lua_State *state, const Quaternion &quat) -> int {
   lua_pushnumber(state, quat.x);
   lua_pushnumber(state, quat.y);
@@ -91,7 +55,7 @@ auto wrap_EulerToMatrix(lua_State *state) -> int {
 
   auto mat = ToMatrix(EulerAngle{yaw, pitch, roll});
 
-  return MatrixToLua(state, mat);
+  return mat.ToLua(state);
 }
 
 auto wrap_QuaternionToEuler(lua_State *state) -> int {
@@ -112,7 +76,7 @@ auto wrap_QuaternionToMatrix(lua_State *state) -> int {
 
   auto mat = ToMatrix(Quaternion{quat_x, quat_y, quat_z, quat_w});
 
-  return MatrixToLua(state, mat);
+  return mat.ToLua(state);
 }
 
 auto wrap_MatrixToEuler(lua_State *state) -> int {
@@ -121,7 +85,7 @@ auto wrap_MatrixToEuler(lua_State *state) -> int {
     return luaL_error(state, "Expected a table with 16 numbers for matrix");
   }
 
-  auto euler = ToEuler(LuaToMatrix4x4(state, 1));
+  auto euler = ToEuler(::Math::Matrix4x4::FromLua(state, 1));
 
   return EulerToLua(state, euler);
 }
@@ -130,7 +94,7 @@ auto wrap_MatrixToQuaternion(lua_State *state) -> int {
     return luaL_error(state, "Expected a table with 16 numbers for matrix");
   }
 
-  auto quat = ToQuaternion(LuaToMatrix4x4(state, 1));
+  auto quat = ToQuaternion(::Math::Matrix4x4::FromLua(state, 1));
 
   return QuaternionToLua(state, quat);
 }
@@ -139,14 +103,14 @@ auto wrap_TranslationMatrix(lua_State *state) -> int {
   auto mat = Matrix::TranslationMatrix(
       checkscalar(state, 1), checkscalar(state, 2), checkscalar(state, 3));
 
-  return MatrixToLua(state, mat);
+  return mat.ToLua(state);
 }
 
 auto wrap_ScaleMatrix(lua_State *state) -> int {
   auto mat = Matrix::ScaleMatrix(checkscalar(state, 1), checkscalar(state, 2),
                                  checkscalar(state, 3));
 
-  return MatrixToLua(state, mat);
+  return mat.ToLua(state);
 }
 
 auto wrap_TransformMatrix(lua_State *state) -> int {
@@ -158,7 +122,7 @@ auto wrap_TransformMatrix(lua_State *state) -> int {
       checkscalar(state, 10));
   // NOLINTEND(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
 
-  return MatrixToLua(state, mat);
+  return mat.ToLua(state);
 }
 
 auto wrap_Random(lua_State *state) -> int {

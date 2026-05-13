@@ -2,6 +2,7 @@
 #include "Modules/Math/math.hpp"
 #include <cassert>
 #include <cmath>
+#include <lua.hpp>
 
 namespace Math {
 
@@ -129,6 +130,28 @@ auto Matrix4x4::Transpose() const -> Matrix4x4 {
       result.At(col, row) = At(row, col);
     }
   }
+  return result;
+}
+
+auto Matrix4x4::AsMatrix3x3() const -> Matrix4x4 {
+  Matrix4x4 result = *this;
+  result.At(0, 3) = 0.0F;
+  result.At(1, 3) = 0.0F;
+  result.At(2, 3) = 0.0F;
+  result.At(3, 0) = 0.0F;
+  result.At(3, 1) = 0.0F;
+  result.At(3, 2) = 0.0F;
+  result.At(3, 3) = 1.0F;
+
+  /*
+
+  [ m00 m01 m02 m03 ]   [ m00 m01 m02 0 ]
+  [ m10 m11 m12 m13 ] = [ m10 m11 m12 0 ]
+  [ m20 m21 m22 m23 ]   [ m20 m21 m22 0 ]
+  [ m30 m31 m32 m33 ]   [ 0   0   0   1 ]
+
+  */
+
   return result;
 }
 
@@ -512,6 +535,44 @@ auto Matrix3x3::ToString() const -> std::string {
     }
   }
   return result;
+}
+
+auto Matrix4x4::ToLua(lua_State *state) const -> int {
+#pragma unroll
+  for (int i = 0; i < Size; ++i) {
+    lua_pushnumber(state, At(i));
+  }
+
+  return Size;
+}
+
+auto Matrix3x3::ToLua(lua_State *state) const -> int {
+#pragma unroll
+  for (int i = 0; i < Size; ++i) {
+    lua_pushnumber(state, At(i));
+  }
+
+  return Size;
+}
+
+auto Matrix4x4::FromLua(lua_State *state, int index) -> Matrix4x4 {
+  Matrix4x4 mat;
+  for (int i = 0; i < Size; ++i) {
+    lua_rawgeti(state, index, i + 1);
+    mat.At(i) = static_cast<Scalar>(lua_tonumber(state, -1));
+  }
+  lua_pop(state, Size);
+  return mat;
+}
+
+auto Matrix3x3::FromLua(lua_State *state, int index) -> Matrix3x3 {
+  Matrix3x3 mat;
+  for (int i = 0; i < Size; ++i) {
+    lua_rawgeti(state, index, i + 1);
+    mat.At(i) = static_cast<Scalar>(lua_tonumber(state, -1));
+  }
+  lua_pop(state, Size);
+  return mat;
 }
 
 } // namespace Math

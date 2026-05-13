@@ -10,6 +10,7 @@
 #include "Scene/Lights/rectangleLight.hpp"
 #include "Scene/Lights/sphereLight.hpp"
 #include "Scene/Lights/spotLight.hpp"
+#include "Scene/camera.hpp"
 #include "Scene/scene.hpp"
 #include "Wrap/wrap.hpp"
 #include "lua.hpp"
@@ -50,6 +51,8 @@ extern "C" inline auto luaopen_scene(lua_State *state) -> int {
   LuaWrap::RegisterLuaType(state, ::Engine::RectangleLightClass);
   LuaWrap::RegisterLuaType(state, ::Engine::SphereLightClass);
   LuaWrap::RegisterLuaType(state, ::Engine::SpotLightClass);
+
+  LuaWrap::RegisterLuaType(state, ::Engine::GetLuaCameraClass());
 
   return 1;
 }

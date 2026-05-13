@@ -50,7 +50,7 @@ struct StructuredBuffer : Object {
 
   [[nodiscard]] auto GetBuffer() -> Ref<Buffer> { return buffer; }
 
-  static auto Create(GraphicsContext &context, BufferFormat &format,
+  static auto Create(const GraphicsContext &context, const BufferFormat &format,
                      size_t elementCount,
                      StructuredBufferCreationInfo const &info)
       -> Result<Ref<StructuredBuffer>>;

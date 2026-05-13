@@ -19,6 +19,7 @@
 #include "Scene/Lights/rectangleLight.hpp"
 #include "Scene/Lights/sphereLight.hpp"
 #include "Scene/Lights/spotLight.hpp"
+#include "Scene/camera.hpp"
 #include "Scene/node.hpp"
 #include "Scene/transform.hpp"
 #include "Scene/userdata.hpp"
@@ -503,6 +504,8 @@ Scene::Scene(std::string name) : name(std::move(name)) {
 
   postBoundingboxSystem.depends_on(boundingBoxSystem);
 
+  Camera::RegisterCameraSystems(*this);
+
   auto &instance = Renderer::RendererInstance;
   auto &buffers = instance.SceneLightBuffers;
 
@@ -539,6 +542,11 @@ Scene::Scene(std::string name) : name(std::move(name)) {
   preRender.emplace_back(world.system<SphereLight>().kind(0).each(
       [](flecs::entity entity, const SphereLight &light) -> auto {
         auto error = light.Write(buffers.SphereLightData, entity);
+      }));
+
+  preRender.emplace_back(world.system<Camera>().kind(0).each(
+      [](flecs::entity entity, const Camera &camera) -> auto {
+        auto error = camera.WriteToBuffer(entity);
       }));
 
   finalizePreRenderUploads = world.system().kind(0).each([this]() -> auto {
@@ -615,15 +623,16 @@ const LuaWrap::LuaClass SceneLuaClass{
             {"drawUIElement", Scene::DrawUiElement},
             {"drawModels", Scene::DrawModels},
             {"update", Scene::Update},
-            {"createModel", LuaModel::Create},
-            {"createShape", LuaShape::Create},
-            {"createLOD", LuaLevelOfDetail::Create},
-            {"createGeometry", LuaGeometry::Create},
-            {"createDirectionalLight", LuaDirectionalLight::Create},
-            {"createPointLight", LuaPointLight::Create},
-            {"createSpotLight", LuaSpotLight::Create},
-            {"createRectangleLight", LuaRectangleLight::Create},
-            {"createSphereLight", LuaSphereLight::Create},
+            {"newModel", LuaModel::Create},
+            {"newShape", LuaShape::Create},
+            {"newLOD", LuaLevelOfDetail::Create},
+            {"newGeometry", LuaGeometry::Create},
+            {"newDirectionalLight", LuaDirectionalLight::Create},
+            {"newPointLight", LuaPointLight::Create},
+            {"newSpotLight", LuaSpotLight::Create},
+            {"newRectangleLight", LuaRectangleLight::Create},
+            {"newSphereLight", LuaSphereLight::Create},
+            {"newCamera", LuaCamera::Create},
         },
     .Children = {},
 };

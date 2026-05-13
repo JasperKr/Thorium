@@ -1,11 +1,9 @@
 #pragma once
 
 #include "Graphics/barrier.hpp"
-#include "Graphics/graphics.hpp"
 #include "Modules/bytedata.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
-#include "graphics.hpp"
 #include <condition_variable>
 #include <cstdint>
 #include <mutex>
@@ -96,9 +94,7 @@ struct Buffer : Object, Barrier::BarrierSynced {
 
   // Release the resources for safe automatic destruction later
   auto ScheduleDestroy() -> void override;
-  auto UseDeferredDestruction() const -> bool override {
-    return GetDeferredDestructionAllowed() && !isDestroyed;
-  }
+  auto UseDeferredDestruction() const -> bool override;
 
   ~Buffer() override;
 

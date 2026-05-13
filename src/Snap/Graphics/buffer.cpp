@@ -787,6 +787,10 @@ auto Buffer::Readback(const GraphicsContext &context,
   return bufferReadback;
 }
 
+auto Buffer::UseDeferredDestruction() const -> bool {
+  return GetDeferredDestructionAllowed() && !isDestroyed;
+}
+
 Buffer::~Buffer() {
   auto *context = GetCurrentGraphicsContext();
 

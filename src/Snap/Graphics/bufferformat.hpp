@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -25,6 +26,11 @@ enum class Standard : uint8_t {
 struct BufferFormat {
   explicit BufferFormat(std::vector<BufferComponent> components,
                         Standard std = Standard::Std430);
+  explicit BufferFormat(
+      const std::vector<
+          std::pair<std::string, std::variant<const char *, BufferFormat>>>
+          &components,
+      Standard std = Standard::Std430);
 
   BufferFormat() = default;
   BufferFormat(const BufferFormat &other) = default;
