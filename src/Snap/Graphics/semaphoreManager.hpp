@@ -1,6 +1,5 @@
 #pragma once
 
-#include "Graphics/graphicsContext.hpp"
 #include "Modules/error.hpp"
 #include <atomic>
 #include <condition_variable>
@@ -46,8 +45,11 @@ auto GetPendingTimelineValues()
 // When command buffers are reordered before submission
 auto SetPendingTimelineValues(const std::vector<uint64_t> &values) -> void;
 
-auto UpdateSemaphoreValues(const GraphicsContext &context) -> Result<uint64_t>;
-auto InitializeGlobalTimelineSemaphore(GraphicsContext &context) -> Error;
-auto DeInitializeGlobalTimelineSemaphore(GraphicsContext &context) -> void;
+auto UpdateSemaphoreValues(const struct GraphicsContext &context)
+    -> Result<uint64_t>;
+auto InitializeGlobalTimelineSemaphore(struct GraphicsContext &context)
+    -> Error;
+auto DeInitializeGlobalTimelineSemaphore(struct GraphicsContext &context)
+    -> void;
 
 } // namespace Graphics

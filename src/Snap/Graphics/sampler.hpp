@@ -1,6 +1,5 @@
 #pragma once
 
-#include "Graphics/graphicsContext.hpp"
 #include "vulkan/vulkan_core.h"
 #include <unordered_map>
 
@@ -61,9 +60,9 @@ struct SamplerDescHash {
 extern std::unordered_map<SamplerDescription, VkSampler, SamplerDescHash>
     SamplerCache; // NOLINT
 
-auto GetOrCreateSampler(const GraphicsContext &context,
+auto GetOrCreateSampler(const struct GraphicsContext &context,
                         const SamplerDescription &description) -> VkSampler;
 
-auto DestroySamplers(const GraphicsContext &context) -> void;
+auto DestroySamplers(const struct GraphicsContext &context) -> void;
 
 }; // namespace Graphics

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Libraries/vma.hpp"
 #include "Modules/object.hpp"
 #include "SDL3/SDL_video.h"
 #include <mutex>
@@ -7,12 +8,9 @@
 
 #include "volk/volk.h"
 
+#include "texture.hpp"
 #include "vulkan/vulkan_core.h"
 #include <vulkan/vulkan.h>
-
-#define VMA_IMPORT_FUNCTIONS_FROM_VOLK 1
-#define VMA_DYNAMIC_VULKAN_FUNCTIONS 0
-#include <vma/vk_mem_alloc.h>
 
 namespace Graphics {
 
@@ -22,14 +20,12 @@ struct SurfaceInfo {
   VkSurfaceCapabilitiesKHR capabilities;
 };
 
-struct Texture;
-
 struct SwapchainInfo {
   VkSwapchainKHR swapchain;
   VkFormat format;
   VkExtent2D extent;
   uint32_t imageCount;
-  std::vector<Ref<struct Texture>> textures;
+  std::vector<Ref<Texture>> textures;
   std::vector<VkImage> images;
   std::vector<VkImageView> imageViews;
 };

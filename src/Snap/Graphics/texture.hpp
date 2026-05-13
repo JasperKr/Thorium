@@ -1,14 +1,13 @@
 #pragma once
 
-#include "Graphics/allocations.hpp"
 #include "Graphics/barrier.hpp"
 #include "Graphics/sampler.hpp"
 #include "Graphics/semaphoreManager.hpp"
+#include "Libraries/vma.hpp"
 #include "Modules/image.hpp"
 #include "Modules/imagedata.hpp"
 #include "Modules/object.hpp"
 #include "Modules/type.hpp"
-#include "graphics.hpp"
 #include <mutex>
 #include <span>
 
@@ -140,9 +139,7 @@ struct Texture : Object, Barrier::BarrierSynced {
   }
 
   auto ScheduleDestroy() -> void override;
-  auto UseDeferredDestruction() const -> bool override {
-    return GetDeferredDestructionAllowed() && !isDestroyed;
-  }
+  auto UseDeferredDestruction() const -> bool override;
 
   auto CopyTo(const GraphicsContext &context, Texture &dstTexture,
               CopyRegion region) -> Error;
@@ -157,33 +154,11 @@ struct Texture : Object, Barrier::BarrierSynced {
   auto operator=(Texture &&) noexcept -> Texture & = delete;
 
   [[nodiscard]] auto IsTexture() const -> bool override { return true; }
-  [[nodiscard]] auto AsTexture() const -> Texture const * override {
+  [[nodiscard]] auto AsTexture() const -> struct Texture const * override {
     return this;
   }
 
-  ~Texture() override {
-    if (isSwapchainView) { // Not owned, don't destroy
-      return;
-    }
-
-    std::scoped_lock<std::mutex, std::mutex> lock(
-        Graphics::GraphicsContext::mutexes.device,
-        Graphics::GraphicsContext::mutexes.vmaAllocator);
-
-    auto *context = GetCurrentGraphicsContext();
-
-    if (context == nullptr || context->device == VK_NULL_HANDLE ||
-        context->vmaAllocator == VK_NULL_HANDLE) {
-      return;
-    }
-
-    vkDestroyImageView(context->device, view, GetAllocationCallbacks());
-    vmaDestroyImage(context->vmaAllocator, image, memory);
-
-    image = VK_NULL_HANDLE;
-    view = VK_NULL_HANDLE;
-    memory = VK_NULL_HANDLE;
-  }
+  ~Texture() override;
 
   enum TextureType textureType = TextureType::DEFAULT;
 

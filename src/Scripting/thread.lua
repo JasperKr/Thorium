@@ -12,8 +12,8 @@ local commandBufferChannel, canStartChannel, scene, events = ...
 local cameraWidth = snap.graphics.getWidth() * 3 / 4
 local cameraHeight = snap.graphics.getHeight() * 3 / 4
 
-local camera = scene:newCamera("main camera", vec3(), quaternion(),
-  vec2(cameraWidth, cameraHeight), 60, 0.1, 1000)
+-- scene:newCamera(name, verticalFOV, width, height, near, far)
+local camera = scene:newCamera("main camera", 90, cameraWidth, cameraHeight, 0.01, 1000)
 
 local shader = snap.graphics.newShader("Scripting/Graphics/Shaders/forward.slang")
 
@@ -27,7 +27,7 @@ local function draw()
       { texture = depthbuffer,  loadas = 1 } })
   snap.graphics.setShader(shader)
   snap.graphics.setCullMode("none")
-  shader:send("CameraData", camera.buffer)
+  shader:send("CameraData", camera:getBuffer())
   snap.graphics.setCullMode("none")
   snap.graphics.setWindingOrder("ccw")
   snap.graphics.setDepthMode("less", true)
@@ -161,7 +161,7 @@ while true do
   createSnapshot = false
   if firstFrame then
     snap.graphics.setDefaultFilter("linear", "linear", 4)
-    snap.scene.loadModel(scene, "Assets/Terrain/Town2/town.gltf")
+    snap.scene.loadModel(scene, "Assets/Terrain/sponza.glb")
 
     rendertarget = snap.graphics.newTexture(snap.graphics.getWidth(), snap.graphics.getHeight(),
       { sampler = true, rendertarget = true, format = "rg11b10f" })

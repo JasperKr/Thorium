@@ -1,4 +1,5 @@
 #include "uniform.hpp"
+#include "Graphics/graphicsContext.hpp"
 #include "Graphics/graphicsState.hpp"
 #include <cassert>
 #include <cstddef>

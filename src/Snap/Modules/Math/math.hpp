@@ -68,4 +68,26 @@ auto Ceil(Ivec2 vec) -> Ivec2;
 auto Ceil(Ivec3 vec) -> Ivec3;
 auto Ceil(Ivec4 vec) -> Ivec4;
 
+// NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
+constexpr auto RadToDeg(Scalar radians) -> Scalar {
+  return radians * (180.0F / std::numbers::pi_v<Scalar>);
+}
+
+constexpr auto DegToRad(Scalar degrees) -> Scalar {
+  return degrees * (std::numbers::pi_v<Scalar> / 180.0F);
+}
+
+constexpr auto RadToTurns(Scalar radians) -> Scalar {
+  return radians / (2.0F * std::numbers::pi_v<Scalar>);
+}
+
+constexpr auto DegToTurns(Scalar degrees) -> Scalar { return degrees / 360.0F; }
+
+constexpr auto TurnsToRad(Scalar turns) -> Scalar {
+  return turns * (2.0F * std::numbers::pi_v<Scalar>);
+}
+
+constexpr auto TurnsToDeg(Scalar turns) -> Scalar { return turns * 360.0F; }
+// NOLINTEND(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
+
 }; // namespace Math

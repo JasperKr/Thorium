@@ -1,6 +1,5 @@
 #pragma once
 
-#include "Graphics/graphicsContext.hpp"
 #include <optional>
 
 #include "vulkan/vulkan_core.h"
@@ -8,7 +7,10 @@
 #include <utility>
 #include <vector>
 
+namespace Graphics {
 struct Texture;
+struct GraphicsContext;
+} // namespace Graphics
 
 namespace Graphics::Barrier {
 
@@ -115,7 +117,7 @@ struct BarrierSynced {
   bool firstAsyncUsage = false;
 
   [[nodiscard]] virtual auto IsTexture() const -> bool { return false; }
-  [[nodiscard]] virtual auto AsTexture() const -> Texture const * {
+  [[nodiscard]] virtual auto AsTexture() const -> struct Texture const * {
     return nullptr;
   }
 };

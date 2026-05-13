@@ -1,6 +1,5 @@
 #pragma once
 
-#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include <cstddef>

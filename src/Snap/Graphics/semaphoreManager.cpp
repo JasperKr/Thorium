@@ -1,5 +1,6 @@
 #include "Graphics/semaphoreManager.hpp"
 #include "Graphics/allocations.hpp"
+#include "Graphics/graphicsContext.hpp"
 #include "Modules/console.hpp"
 
 #include "vulkan/vulkan_core.h"

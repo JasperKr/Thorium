@@ -5,6 +5,7 @@
 #include "Graphics/dynamicRendering.hpp"
 #include "Graphics/format.hpp"
 #include "Graphics/graphics.hpp"
+#include "Graphics/graphicsContext.hpp"
 #include "Graphics/renderThread.hpp"
 #include "Graphics/resource.hpp"
 #include "Modules/Math/vector.hpp"
@@ -31,7 +32,6 @@
 #define VMA_VULKAN_VERSION 1004000
 
 #include "vulkan/vulkan_core.h"
-// #include <vma/vk_mem_alloc.h>
 
 namespace Graphics {
 
@@ -1719,6 +1719,34 @@ auto Texture::CopyTo(const GraphicsContext &context, Buffer &dstBuffer,
   dstBuffer.MarkUse();
   MarkUse();
   return Error::Success();
+}
+
+auto Texture::UseDeferredDestruction() const -> bool {
+  return GetDeferredDestructionAllowed() && !isDestroyed;
+}
+
+Texture::~Texture() {
+  if (isSwapchainView) { // Not owned, don't destroy
+    return;
+  }
+
+  std::scoped_lock<std::mutex, std::mutex> lock(
+      Graphics::GraphicsContext::mutexes.device,
+      Graphics::GraphicsContext::mutexes.vmaAllocator);
+
+  auto *context = GetCurrentGraphicsContext();
+
+  if (context == nullptr || context->device == VK_NULL_HANDLE ||
+      context->vmaAllocator == VK_NULL_HANDLE) {
+    return;
+  }
+
+  vkDestroyImageView(context->device, view, GetAllocationCallbacks());
+  vmaDestroyImage(context->vmaAllocator, image, memory);
+
+  image = VK_NULL_HANDLE;
+  view = VK_NULL_HANDLE;
+  memory = VK_NULL_HANDLE;
 }
 
 auto GenerateMipmaps(GraphicsContext &context, Texture *texture) -> Error {

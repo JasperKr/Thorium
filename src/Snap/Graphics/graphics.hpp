@@ -14,10 +14,6 @@
 #include "vulkan/vulkan_core.h"
 #include <vulkan/vulkan.h>
 
-#define VMA_IMPORT_FUNCTIONS_FROM_VOLK 1
-#define VMA_DYNAMIC_VULKAN_FUNCTIONS 0
-#include <vma/vk_mem_alloc.h>
-
 namespace Graphics {
 
 auto Initialize(GraphicsContext &context, Window::WindowContext &wcontext,

@@ -2,6 +2,7 @@
 
 #include "Graphics/Buffers/structured.hpp"
 #include "Graphics/bufferformat.hpp"
+#include "Modules/Math/math.hpp"
 #include "Modules/Math/mathTypes.hpp"
 #include "Modules/Math/vector.hpp"
 #include "Modules/error.hpp"
@@ -12,8 +13,9 @@
 namespace Engine {
 
 struct Camera {
-  void SetVerticalFOV(Math::Scalar fov) {
-    VerticalFOV = fov;
+  void SetVerticalFOV(Math::Scalar fovDeg) {
+    verticalFOVDeg = fovDeg;
+    VerticalFOVRad = Math::DegToRad(fovDeg);
     dirty = true;
   }
 
@@ -37,23 +39,28 @@ struct Camera {
   }
 
   [[nodiscard]] auto GetVerticalFOV() const -> Math::Scalar {
-    return VerticalFOV;
+    return verticalFOVDeg;
   }
 
   [[nodiscard]] auto GetNearPlane() const -> Math::Scalar { return NearPlane; }
 
   [[nodiscard]] auto GetFarPlane() const -> Math::Scalar { return FarPlane; }
 
+  [[nodiscard]] auto GetBuffer() const -> Ref<Graphics::StructuredBuffer> {
+    return CameraBuffer;
+  }
+
   static void RegisterCameraSystems(Scene &scene);
 
   static auto Create(const Graphics::GraphicsContext &context,
-                     Math::Scalar verticalFOV, Math::Ivec2 Dimensions,
+                     Math::Scalar verticalFOVDeg, Math::Ivec2 Dimensions,
                      Math::Scalar near, Math::Scalar far) -> Result<Camera>;
 
   auto WriteToBuffer(flecs::entity entity) const -> Error;
 
 private:
-  Math::Scalar VerticalFOV{};
+  Math::Scalar verticalFOVDeg{};
+  Math::Scalar VerticalFOVRad{};
   Math::Ivec2 Dimensions;
   Math::Scalar AspectRatio{};
   Math::Scalar NearPlane{};
@@ -94,6 +101,8 @@ struct LuaCamera : Object {
 
   static auto GetFarPlane(lua_State *state) -> int;
   static auto SetFarPlane(lua_State *state) -> int;
+
+  static auto GetBuffer(lua_State *state) -> int;
 };
 
 auto GetLuaCameraClass() -> LuaWrap::LuaClass;

@@ -3,6 +3,7 @@
 #include "Graphics/bufferformat.hpp"
 #include "Graphics/graphics.hpp"
 #include "Graphics/graphicsContext.hpp"
+#include "Modules/Math/math.hpp"
 #include "Modules/Math/mathTypes.hpp"
 #include "Modules/Math/vector.hpp"
 #include "Modules/error.hpp"
@@ -68,7 +69,7 @@ void Camera::RegisterCameraSystems(Scene &scene) {
                    CameraMatrices &matrices) -> void {
             if (camera.dirty) {
               matrices.ProjectionMatrix = Math::Matrix4x4::Perspective(
-                  camera.VerticalFOV, camera.AspectRatio, camera.NearPlane,
+                  camera.VerticalFOVRad, camera.AspectRatio, camera.NearPlane,
                   camera.FarPlane);
               matrices.InverseProjectionMatrix =
                   matrices.ProjectionMatrix.Inverse();
@@ -113,10 +114,11 @@ void Camera::RegisterCameraSystems(Scene &scene) {
 }
 
 auto Camera::Create(const Graphics::GraphicsContext &context,
-                    Math::Scalar verticalFOV, Math::Ivec2 Dimensions,
+                    Math::Scalar verticalFOVDeg, Math::Ivec2 Dimensions,
                     Math::Scalar near, Math::Scalar far) -> Result<Camera> {
   Camera camera;
-  camera.VerticalFOV = verticalFOV;
+  camera.verticalFOVDeg = verticalFOVDeg;
+  camera.VerticalFOVRad = Math::DegToRad(verticalFOVDeg);
   camera.Dimensions = Dimensions;
   camera.AspectRatio = static_cast<Math::Scalar>(Dimensions.x) /
                        static_cast<Math::Scalar>(Dimensions.y);
@@ -142,6 +144,7 @@ auto Camera::Create(const Graphics::GraphicsContext &context,
   return camera;
 }
 
+// scene:newCamera(name, verticalFOV, width, height, near, far)
 auto LuaCamera::Create(lua_State *state) -> int {
   auto *scene = LuaWrap::ObjectFromLua<Scene>(state, 1);
   if (scene == nullptr) {
@@ -383,6 +386,22 @@ auto Camera::WriteToBuffer(flecs::entity entity) const -> Error {
   return CameraBuffer->GetBuffer()->SetData(context, span);
 }
 
+auto LuaCamera::GetBuffer(lua_State *state) -> int {
+  auto *obj = LuaWrap::ObjectFromLua<LuaCamera>(state, 1);
+  if (obj == nullptr) {
+    return luaL_error(state, "Invalid Camera object");
+  }
+
+  const auto *camera = obj->entity.try_get<Camera>();
+  if (camera == nullptr) {
+    return luaL_error(state, "Camera component not found on entity");
+  }
+
+  LuaWrap::PushObject(state, Graphics::StructuredBuffer::GetType(),
+                      camera->GetBuffer().get());
+  return 1;
+}
+
 auto GetLuaCameraClass() -> LuaWrap::LuaClass {
   const LuaWrap::LuaClass LuaCameraClass = {
       .Name = "Camera",
@@ -399,6 +418,7 @@ auto GetLuaCameraClass() -> LuaWrap::LuaClass {
               {"setNearPlane", LuaCamera::SetNearPlane},
               {"getFarPlane", LuaCamera::GetFarPlane},
               {"setFarPlane", LuaCamera::SetFarPlane},
+              {"getBuffer", LuaCamera::GetBuffer},
           },
       .Components = {
           TransformComponent,

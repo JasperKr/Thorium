@@ -1,4 +1,5 @@
 #include "Graphics/format.hpp"
+#include "Graphics/graphics.hpp"
 #include "Graphics/graphicsState.hpp"
 #include "Graphics/texture.hpp"
 #include "Modules/console.hpp"

@@ -3,6 +3,7 @@
 #include "Graphics/deviceSettings.hpp"
 #include "Graphics/graphicsContext.hpp"
 #include "Graphics/graphicsState.hpp"
+#include "Libraries/vma.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/window.hpp"

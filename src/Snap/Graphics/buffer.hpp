@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Graphics/barrier.hpp"
+#include "Libraries/vma.hpp"
 #include "Modules/bytedata.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
