@@ -37,13 +37,15 @@ struct CustomFloat {
       // underflow -> zero
       newExp = 0;
       mant = 0;
-    } else if (newExp >= (1U << exp_bits) - 1U) {
-      // overflow -> max (inf)
-      newExp = (1U << exp_bits) - 1U;
-      mant = 0;
     } else {
-      // shrink mantissa
-      mant >>= (23U - mant_bits);
+      [[unlikely]] if (newExp >= (1U << exp_bits) - 1U) {
+        // overflow -> max (inf)
+        newExp = (1U << exp_bits) - 1U;
+        mant = 0;
+      } else {
+        // shrink mantissa
+        mant >>= (23U - mant_bits);
+      }
     }
 
     out |= mant;
@@ -68,14 +70,16 @@ struct CustomFloat {
     if (exp == 0U) {
       // zero / subnormal -> zero
       out = 0U;
-    } else if (exp == (1U << exp_bits) - 1) {
-      // inf
-      out = (sign << 31U) | (0xFFU << 23U);
     } else {
-      int32_t exponent = (int)exp - exp_bias + 127;
-      uint32_t mantissa = mant << (23U - mant_bits);
+      [[unlikely]] if (exp == (1U << exp_bits) - 1) {
+        // inf
+        out = (sign << 31U) | (0xFFU << 23U);
+      } else {
+        int32_t exponent = (int)exp - exp_bias + 127;
+        uint32_t mantissa = mant << (23U - mant_bits);
 
-      out = (sign << 31U) | ((uint32_t)exponent << 23U) | mantissa;
+        out = (sign << 31U) | ((uint32_t)exponent << 23U) | mantissa;
+      }
     }
 
     return std::bit_cast<float>(out);

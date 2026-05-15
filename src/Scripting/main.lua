@@ -253,7 +253,6 @@ function snap.draw()
     if thread:getError() then
       -- error("Render thread error: " .. thread:getError())
       snap.event.quit()
-      scene:release()
       collectgarbage("collect")
       collectgarbage("collect")
       return

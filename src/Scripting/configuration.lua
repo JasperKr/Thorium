@@ -12,8 +12,9 @@ function snap.config(config)
   ---@type snap.VsyncMode
   config.window.vsync = "immediate"
 
-  config.graphics.hardwareRaytracing = "disabled"
-  config.graphics.inlineRaytracing = "disabled"
+  -- "required", "optional", "disabled"
+  config.graphics.hardwareRaytracing = "optional"
+  config.graphics.inlineRaytracing = "optional"
 
   local sourceDir = snap.filesystem.getSourceDirectory()
   config.graphics.shaderIncludePaths = {

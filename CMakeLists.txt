@@ -7,6 +7,7 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 option(ENABLE_RTTI "Enable RTTI" OFF)
 option(ENABLE_EXCEPTIONS "Enable exceptions" OFF)
 option(BUNDLE_ENGINE "Bundle the engine into the framework, this will skip compiling the engine" ON)
+option(DOUBLE_PRECISION "Use double precision for math types" OFF)
 
 # Just globally enable / disable..
 if (NOT ENABLE_RTTI)
@@ -55,6 +56,13 @@ add_executable(snap
     src/Snap/loop.cpp
     $<TARGET_OBJECTS:snap_core>
 )
+
+if (DOUBLE_PRECISION)
+    target_compile_definitions(snap
+        PRIVATE
+            DOUBLE_PRECISION
+    )
+endif()
 
 if (BUNDLE_ENGINE)
 target_include_directories(snap

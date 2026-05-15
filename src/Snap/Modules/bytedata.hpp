@@ -59,21 +59,11 @@ public:
 
   [[nodiscard]] auto GetParent() const -> ByteData * { return parent; }
 
+  [[nodiscard]] auto View(size_t offset, size_t range) -> Result<Ref<ByteData>>;
+
   // private constructor for views
   ByteData(uint8_t *data, size_t size, ByteData *parent)
       : size(size), data(data), parent(parent) {}
-
-  // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
-  [[nodiscard]] auto View(size_t offset, size_t range)
-      -> Result<Ref<ByteData>> {
-    if (offset + range > size) {
-      return Error::Unexpected("ByteData view out of bounds.");
-    }
-    this->retain(); // Retained by the view
-
-    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
-    return Ref<ByteData>::Make(data + offset, range, this);
-  }
 
 private:
   size_t size = 0;

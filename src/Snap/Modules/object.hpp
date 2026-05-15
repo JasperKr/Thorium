@@ -3,6 +3,21 @@
 #include "Modules/type.hpp"
 #include <atomic>
 
+#define DEBUG_OBJECT_LIFETIMES
+
+#ifdef DEBUG_OBJECT_LIFETIMES
+#include <concepts>
+#include <mutex>
+#include <unordered_map>
+#include <utility>
+
+extern std::mutex RefCountsMutex; // NOLINT
+extern std::unordered_map<void const *,
+                          std::pair<std::atomic<int>, const char *>>
+    RefCounts; // NOLINT
+
+#endif
+
 class Object {
 protected:
   Object() = default;
@@ -96,7 +111,21 @@ public:
   }
 
   template <typename... Args> static auto Make(Args &&...args) -> Ref<T> {
+#ifdef DEBUG_OBJECT_LIFETIMES
+    static_assert(
+        std::derived_from<T, Object>,
+        "Ref<T>::Make can only be used with types derived from Object");
+    // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
+    auto *object = new T(std::forward<Args>(args)...);
+    {
+      std::lock_guard<std::mutex> lock(RefCountsMutex);
+      RefCounts.emplace(object,
+                        std::make_pair(0, T::GetType()->GetName().c_str()));
+    }
+    return Ref<T>(object);
+#else
     return Ref<T>(new T(std::forward<Args>(args)...));
+#endif
   }
 
   [[nodiscard]] static auto GetType() -> Type const * { return T::GetType(); }

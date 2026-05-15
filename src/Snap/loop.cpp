@@ -2,9 +2,9 @@
 #include "Editor/gui.hpp"
 #include "Graphics/Buffers/uniform.hpp"
 #include "Graphics/buffer.hpp"
+#include "Graphics/deviceInfo.hpp"
 #include "Graphics/dynamicRendering.hpp"
 #include "Graphics/graphics.hpp"
-#include "Graphics/info.hpp"
 #include "Graphics/render.hpp"
 #include "Graphics/resource.hpp"
 #include "Graphics/shader.hpp"
@@ -275,7 +275,7 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
   }
 
   PrintDebug("Graphics initialized successfully.");
-  PrintDebug(Graphics::Info::GetGpuInfoString(context.physicalDevice));
+  // PrintDebug(Graphics::Info::GetGpuInfoString(context.physicalDevice));
 
   Graphics::SetCurrentGraphicsContext(&context);
 
@@ -441,7 +441,22 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
 
   Graphics::Deinitialize(context);
 
+#ifdef DEBUG_OBJECT_LIFETIMES
+
+  if (!RefCounts.empty()) {
+    PrintWarning("There are still {} live objects at shutdown!",
+                 RefCounts.size());
+
+    for (const auto &[ptr, info] : RefCounts) {
+      PrintWarning(" - {} ({} references)", info.second, info.first.load());
+    }
+  } else {
+    PrintInfo("All objects were properly released at shutdown.");
+  }
+
+#else
   PrintInfo("App shutdown complete.");
+#endif
 
   return mainLoopResult;
 }

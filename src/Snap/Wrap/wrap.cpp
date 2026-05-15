@@ -28,8 +28,6 @@
 namespace LuaWrap {
 
 static auto wrap_gc(lua_State *state) -> int {
-  // Get lua traceback from debug library
-
   // NOLINTNEXTLINE
   auto *proxy = static_cast<Proxy *>(lua_touserdata(state, 1));
 

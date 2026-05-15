@@ -21,6 +21,7 @@
 #include "vulkan/vulkan_core.h"
 #include <cstdint>
 #include <cstring>
+#include <lua.h>
 #include <lua.hpp>
 #include <utility>
 #include <vector>
@@ -32,20 +33,22 @@ auto wrap_Present(lua_State *state) -> int {
   static std::vector<Ref<::Graphics::Threading::RenderThreadInfo>> commands;
   commands.clear();
 
-  luaL_checktype(state, 1, LUA_TTABLE);
+  if (!lua_isnoneornil(state, 1)) {
+    luaL_checktype(state, 1, LUA_TTABLE);
 
-  for (int index = 1; index <= lua_objlen(state, 1); index++) {
-    lua_rawgeti(state, 1, index);
-    auto *renderInfo =
-        LuaWrap::ObjectFromLua<::Graphics::Threading::RenderThreadInfo>(state,
-                                                                        -1);
-    if (renderInfo == nullptr) {
-      return luaL_error(state, "Invalid RenderThreadInfo at argument %d",
-                        index);
+    for (int index = 1; index <= lua_objlen(state, 1); index++) {
+      lua_rawgeti(state, 1, index);
+      auto *renderInfo =
+          LuaWrap::ObjectFromLua<::Graphics::Threading::RenderThreadInfo>(state,
+                                                                          -1);
+      if (renderInfo == nullptr) {
+        return luaL_error(state, "Invalid RenderThreadInfo at argument %d",
+                          index);
+      }
+
+      commands.emplace_back(renderInfo);
+      lua_pop(state, 1);
     }
-
-    commands.emplace_back(renderInfo);
-    lua_pop(state, 1);
   }
 
   auto result = Present(ctx, commands);
