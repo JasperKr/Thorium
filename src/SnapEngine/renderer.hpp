@@ -7,13 +7,34 @@
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "material.hpp"
-#include <array>
 #include <cstddef>
 #include <cstdint>
+#include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 #include <vulkan/vulkan_core.h>
 namespace Engine::Renderer {
+
+enum class ShaderKey : uint8_t {
+  Forward,
+  PostProcessing,
+};
+
+struct ShaderConfiguration {
+  std::string path;
+  std::string name;
+  std::vector<Graphics::Shader::ShaderExtern> Externs;
+};
+
+const std::unordered_map<ShaderKey, ShaderConfiguration> ShaderConfigurations =
+    {
+        {ShaderKey::Forward,
+         {.path = "Scripting/Graphics/Shaders/Geometry/forward.slang"}},
+        {ShaderKey::PostProcessing,
+         {.path = "Scripting/Graphics/Shaders/PostProcessing/"
+                  "postProcessing.slang"}},
+};
 
 const std::vector<Graphics::BufferComponent> MaterialBufferComponents = {
     Graphics::BufferComponent{
@@ -67,13 +88,6 @@ struct Renderer {
     int DirectionalLightCount = 0;
   };
 
-  Material NoMaterial;
-  Material DefaultMaterial;
-  Ref<Graphics::StructuredBuffer> MaterialsBuffer;
-  Lights SceneLightBuffers;
-  std::unordered_set<size_t> UsedMaterialIndices;
-  bool initialized = false;
-
   auto Initialize(Graphics::GraphicsContext &context) -> Error {
     constexpr size_t InitialMaterialBufferSize = 1024UL;
 
@@ -114,7 +128,31 @@ struct Renderer {
                         const Ref<Graphics::Shader::ShaderModule> &shader) const
       -> Error;
 
+  auto GetShader(ShaderKey shaderKey)
+      -> Result<Ref<Graphics::Shader::ShaderModule>>;
+
+  auto GetDefaultMaterial() const -> const Material & {
+    return DefaultMaterial;
+  }
+  auto GetNoMaterial() const -> const Material & { return NoMaterial; }
+  auto GetMaterialsBuffer() const -> Ref<Graphics::StructuredBuffer> {
+    return MaterialsBuffer;
+  }
+  auto GetSceneLightBuffers() -> Lights & { return SceneLightBuffers; }
+  auto GetSceneLightBuffers() const -> const Lights & {
+    return SceneLightBuffers;
+  }
+
 private:
+  std::unordered_map<ShaderKey, Ref<Graphics::Shader::ShaderModule>>
+      LoadedShaders;
+  Material NoMaterial;
+  Material DefaultMaterial;
+  Ref<Graphics::StructuredBuffer> MaterialsBuffer;
+  Lights SceneLightBuffers;
+  std::unordered_set<size_t> UsedMaterialIndices;
+  bool initialized = false;
+
   auto InitializeMaterialBuffer(Graphics::GraphicsContext &context,
                                 size_t initialSize) -> Error;
 
@@ -122,6 +160,8 @@ private:
 
   auto InitializeLightBuffers(Graphics::GraphicsContext &context) -> Error;
 };
+
+auto DrawFullScreen(const Graphics::GraphicsContext &context) -> Error;
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 extern Renderer RendererInstance;

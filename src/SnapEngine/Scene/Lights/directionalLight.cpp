@@ -136,7 +136,7 @@ auto LuaDirectionalLight::Create(lua_State *state) -> int {
     return luaL_error(state, "Maximum number of directional lights reached.");
   }
 
-  Renderer::RendererInstance.SceneLightBuffers.DirectionalLightCount++;
+  Renderer::RendererInstance.GetSceneLightBuffers().DirectionalLightCount++;
 
   auto luaDirectionalLight = LuaDirectionalLight::FromEntity(entity);
   ::LuaWrap::PushObject(state, LuaDirectionalLight::GetType(),

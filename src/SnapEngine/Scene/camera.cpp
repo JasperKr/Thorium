@@ -4,6 +4,8 @@
 #include "Graphics/dynamicRendering.hpp"
 #include "Graphics/graphics.hpp"
 #include "Graphics/graphicsContext.hpp"
+#include "Graphics/graphicsState.hpp"
+#include "Graphics/uniformWriter.hpp"
 #include "Modules/Math/math.hpp"
 #include "Modules/Math/mathTypes.hpp"
 #include "Modules/Math/vector.hpp"
@@ -18,6 +20,7 @@
 #include "Scene/scene.hpp"
 #include "Scene/transform.hpp"
 #include "Wrap/wrap.hpp"
+#include "renderer.hpp"
 #include <flecs.h>
 #include <lauxlib.h>
 #include <span>
@@ -97,9 +100,6 @@ void Camera::RegisterCameraSystems(Scene &scene) {
             matrices.InverseRotationMatrix =
                 matrices.RotationMatrix.Transpose();
             matrices.Update();
-
-            PrintAlways("Updated camera matrices for entity {}",
-                        std::string_view(entity.name()));
           });
 
   auto cameraFrustum =
@@ -149,6 +149,95 @@ auto Camera::Create(const Graphics::GraphicsContext &context,
   return camera;
 }
 
+auto Camera::ApplyPostProcessing(const Graphics::GraphicsContext &context)
+    -> Error {
+  auto shaderResult =
+      Renderer::RendererInstance.GetShader(Renderer::ShaderKey::PostProcessing);
+  if (Error::IsError(shaderResult)) {
+    return shaderResult.error();
+  }
+
+  auto &shader = shaderResult.value();
+  Graphics::DynamicRendering::SetShader(shader);
+
+  auto postProcessedTarget =
+      Renderer::GlobalRenderTargetManager.GetRendertarget(
+          context, Rendertargets.PostProcessed);
+  if (Error::IsError(postProcessedTarget)) {
+    return postProcessedTarget.error();
+  }
+
+  OwnedTextures.PostProcessed = postProcessedTarget.value();
+
+  auto setError = Graphics::DynamicRendering::SetRenderTargets(
+      context, {{
+                   .texture = OwnedTextures.PostProcessed,
+                   .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+               }});
+  if (Error::IsError(setError)) {
+    return setError;
+  }
+
+  static auto incomingLightKey = Graphics::ResourceKey{"IncomingLight"};
+  auto sendError =
+      shader->Send(context, incomingLightKey, OwnedTextures.IncomingLight);
+  if (Error::IsError(sendError)) {
+    return sendError;
+  }
+
+  auto temperatureKey = Graphics::ResourceKey{"Temperature"};
+  auto tintKey = Graphics::ResourceKey{"Tint"};
+  auto applyAGXKey = Graphics::ResourceKey{"ApplyAGX"};
+  auto contrastKey = Graphics::ResourceKey{"Contrast"};
+  auto saturationKey = Graphics::ResourceKey{"Saturation"};
+  auto vignetteKey = Graphics::ResourceKey{"Vignette"};
+  auto exposureKey = Graphics::ResourceKey{"Exposure"};
+
+  auto postProcessingConfig = GetPostProcessingConfig();
+  sendError = Graphics::Shader::UniformWriter::Send(
+      shader, context, temperatureKey, postProcessingConfig.Temperature);
+  if (Error::IsError(sendError)) {
+    return sendError;
+  }
+  sendError = Graphics::Shader::UniformWriter::Send(shader, context, tintKey,
+                                                    postProcessingConfig.Tint);
+  if (Error::IsError(sendError)) {
+    return sendError;
+  }
+  sendError = Graphics::Shader::UniformWriter::Send(
+      shader, context, applyAGXKey, postProcessingConfig.ApplyAGX);
+  if (Error::IsError(sendError)) {
+    return sendError;
+  }
+  sendError = Graphics::Shader::UniformWriter::Send(
+      shader, context, contrastKey, postProcessingConfig.Contrast);
+  if (Error::IsError(sendError)) {
+    return sendError;
+  }
+  sendError = Graphics::Shader::UniformWriter::Send(
+      shader, context, saturationKey, postProcessingConfig.Saturation);
+  if (Error::IsError(sendError)) {
+    return sendError;
+  }
+  sendError = Graphics::Shader::UniformWriter::Send(
+      shader, context, vignetteKey, postProcessingConfig.Vignette);
+  if (Error::IsError(sendError)) {
+    return sendError;
+  }
+  sendError = Graphics::Shader::UniformWriter::Send(
+      shader, context, exposureKey, postProcessingConfig.Exposure);
+  if (Error::IsError(sendError)) {
+    return sendError;
+  }
+
+  auto result = Renderer::DrawFullScreen(context);
+  if (Error::IsError(result)) {
+    return result;
+  }
+
+  return {};
+}
+
 auto Camera::Render(const Graphics::GraphicsContext &context,
                     flecs::entity thisEntity, Scene *scene) -> Error {
 
@@ -186,7 +275,12 @@ auto Camera::Render(const Graphics::GraphicsContext &context,
     return setError;
   }
 
-  const auto &shader = Graphics::DynamicRendering::GetShader();
+  auto shaderResult =
+      Renderer::RendererInstance.GetShader(Renderer::ShaderKey::Forward);
+  if (Error::IsError(shaderResult)) {
+    return shaderResult.error();
+  }
+  auto &shader = shaderResult.value();
 
   static auto cameraBufferKey = Graphics::ResourceKey{"CameraData"};
   auto cameraBufferSendError =
@@ -195,7 +289,14 @@ auto Camera::Render(const Graphics::GraphicsContext &context,
     return cameraBufferSendError;
   }
 
+  Graphics::DynamicRendering::SetShader(shader);
+
   auto error = scene->DrawModels(context);
+  if (Error::IsError(error)) {
+    return error;
+  }
+
+  error = ApplyPostProcessing(context);
   if (Error::IsError(error)) {
     return error;
   }
@@ -218,6 +319,14 @@ auto Camera::ConfigureRendertargets() -> void {
   Rendertargets.IncomingLight = Renderer::RendertargetDescriptor{
       .size = Dimensions,
       .format = VK_FORMAT_B10G11R11_UFLOAT_PACK32,
+      .minFilter = VK_FILTER_LINEAR,
+      .magFilter = VK_FILTER_LINEAR,
+      .mipFilter = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+  };
+
+  Rendertargets.PostProcessed = Renderer::RendertargetDescriptor{
+      .size = Dimensions,
+      .format = Graphics::DefaultPixelFormat,
       .minFilter = VK_FILTER_LINEAR,
       .magFilter = VK_FILTER_LINEAR,
       .mipFilter = VK_SAMPLER_MIPMAP_MODE_LINEAR,
@@ -533,6 +642,7 @@ auto LuaCamera::GetRendertarget(lua_State *state) -> int {
       map = {
           {"IncomingLight", &Camera::AllocatedTextures::IncomingLight},
           {"Depth", &Camera::AllocatedTextures::Depth},
+          {"PostProcessed", &Camera::AllocatedTextures::PostProcessed},
       };
 
   auto iter = map.find(name);

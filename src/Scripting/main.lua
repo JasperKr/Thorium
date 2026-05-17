@@ -15,14 +15,6 @@ snap.graphics.aquireGraphics("load")
 snap.renderer.initialize()
 
 
---[[
-    float4 sv_position : SV_Position;
-    float4x2 TexCoords : Texture_Coordinates;
-    half4 normal : Normal;
-    half4 tangent : Tangent;
-    float4 color       : Color;
-]]
-
 local vertexformat = {
   { name = "position",      format = "floatvec3",  location = 0 },
   { name = "textureCoords", format = "floatvec2",  location = 1 },

@@ -1,6 +1,8 @@
 #include "renderer.hpp"
+#include "Graphics/draw.hpp"
 #include "Graphics/graphicsContext.hpp"
 #include "Graphics/graphicsState.hpp"
+#include "Graphics/shader.hpp"
 #include "Graphics/texture.hpp"
 #include "Modules/color.hpp"
 #include "Modules/error.hpp"
@@ -11,6 +13,7 @@
 #include "Scene/Lights/sphereLight.hpp"
 #include "Scene/Lights/spotLight.hpp"
 #include "material.hpp"
+#include <cassert>
 #include <cstdint>
 #include <vulkan/vulkan_core.h>
 
@@ -51,21 +54,35 @@ auto Renderer::InitializeDefaultMaterial(Graphics::GraphicsContext &context)
     return defaultTextureResult.error();
   }
 
-  auto material = Material();
+  Image::ImageData defaultNormalTextureData(1, 1, VK_FORMAT_R8G8B8A8_UNORM);
 
-  material.name = "No Material";
-  material.albedoTexture = defaultTextureResult.value();
-  material.albedoTexture->SetFilter(VK_FILTER_LINEAR, VK_FILTER_NEAREST,
-                                    VK_SAMPLER_MIPMAP_MODE_NEAREST);
-  material.metallicRoughnessTexture = material.albedoTexture;
-  material.emissiveTexture = material.albedoTexture;
-  material.normalTexture = material.albedoTexture;
-  material.reflectanceTexture = material.albedoTexture;
+  const Color pixelColor = {0.5F, 0.5F, 1.0F, 1.0F};
+  auto error = defaultNormalTextureData.SetColor({0, 0}, pixelColor);
+  if (Error::IsError(error)) {
+    return error;
+  }
 
-  material.cullMode = VK_CULL_MODE_NONE;
-  material.alphaMode = AlphaMode::Opaque;
+  auto defaultNormalTextureResult = Graphics::LoadFromMemory(
+      context, defaultNormalTextureData, VK_IMAGE_USAGE_SAMPLED_BIT);
 
-  NoMaterial = material;
+  if (Error::IsError(defaultNormalTextureResult)) {
+    return defaultNormalTextureResult.error();
+  }
+  auto defaultNormalTexture = defaultNormalTextureResult.value();
+
+  Image::ImageData defaultBlackTextureData(1, 1, VK_FORMAT_R8G8B8A8_UNORM);
+  const Color blackColor = {0.0F, 0.0F, 0.0F, 1.0F};
+  error = defaultBlackTextureData.SetColor({0, 0}, blackColor);
+  if (Error::IsError(error)) {
+    return error;
+  }
+
+  auto defaultBlackTextureResult = Graphics::LoadFromMemory(
+      context, defaultBlackTextureData, VK_IMAGE_USAGE_SAMPLED_BIT);
+  if (Error::IsError(defaultBlackTextureResult)) {
+    return defaultBlackTextureResult.error();
+  }
+  auto defaultBlackTexture = defaultBlackTextureResult.value();
 
   auto defaultWhiteTextureResult = Graphics::GetDefaultTexture(
       context, VK_FORMAT_R8G8B8A8_UNORM, Graphics::TextureType::DEFAULT);
@@ -74,12 +91,28 @@ auto Renderer::InitializeDefaultMaterial(Graphics::GraphicsContext &context)
   }
   auto defaultWhiteTexture = defaultWhiteTextureResult.value();
 
+  auto material = Material();
+
+  material.name = "No Material";
+  material.albedoTexture = defaultTextureResult.value();
+  material.albedoTexture->SetFilter(VK_FILTER_LINEAR, VK_FILTER_NEAREST,
+                                    VK_SAMPLER_MIPMAP_MODE_NEAREST);
+  material.metallicRoughnessTexture = material.albedoTexture;
+  material.emissiveTexture = defaultWhiteTexture;
+  material.normalTexture = defaultNormalTexture;
+  material.reflectanceTexture = defaultWhiteTexture;
+
+  material.cullMode = VK_CULL_MODE_NONE;
+  material.alphaMode = AlphaMode::Opaque;
+
+  NoMaterial = material;
+
   material = Material();
   material.name = "Default Material";
   material.albedoTexture = defaultWhiteTexture;
   material.metallicRoughnessTexture = defaultWhiteTexture;
   material.emissiveTexture = defaultWhiteTexture;
-  material.normalTexture = defaultWhiteTexture;
+  material.normalTexture = defaultNormalTexture;
   material.reflectanceTexture = defaultWhiteTexture;
 
   material.cullMode = VK_CULL_MODE_BACK_BIT;
@@ -274,6 +307,42 @@ auto Renderer::BindLightBuffers(
   }
 
   return {};
+}
+
+auto Renderer::GetShader(ShaderKey shaderKey)
+    -> Result<Ref<Graphics::Shader::ShaderModule>> {
+  auto iterator = LoadedShaders.find(shaderKey);
+  if (iterator != LoadedShaders.end()) {
+    return iterator->second;
+  }
+
+  auto configurationIter = ShaderConfigurations.find(shaderKey);
+  if (configurationIter == ShaderConfigurations.end()) {
+    auto intKey = static_cast<int>(shaderKey);
+    return Error::Unexpectedf("Shader not found for key: {}", intKey);
+  }
+
+  const auto &configuration = configurationIter->second;
+
+  auto context = *Graphics::GetCurrentGraphicsContext();
+
+  auto moduleResult = Graphics::Shader::ShaderModule::Create(
+      context, configuration.path, configuration.name);
+
+  if (Error::IsError(moduleResult)) {
+    return moduleResult.error().AsUnexpected();
+  }
+
+  auto shaderModule = moduleResult.value();
+  LoadedShaders[shaderKey] = shaderModule;
+
+  return shaderModule;
+}
+
+auto DrawFullScreen(const Graphics::GraphicsContext &context) -> Error {
+  return Graphics::Draw(context, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+                        6, // NOLINT
+                        1);
 }
 
 } // namespace Engine::Renderer

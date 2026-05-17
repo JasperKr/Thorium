@@ -252,7 +252,7 @@ auto Material::Update(Graphics::GraphicsContext &context) -> Error {
     obtainedSSBOIndex = true;
   }
 
-  return WriteToBuffer(context, RendererInstance.MaterialsBuffer);
+  return WriteToBuffer(context, RendererInstance.GetMaterialsBuffer());
 }
 
 auto Material::WriteToBuffer(Graphics::GraphicsContext &context,

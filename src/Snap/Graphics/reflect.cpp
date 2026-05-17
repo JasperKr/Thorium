@@ -22,7 +22,8 @@ auto StructInfo::ResolvePath(Graphics::ResourceKey::const_iterator iterator,
     return nullptr;
   }
 
-  thread_local const ResourceInfo *field = nullptr;
+  thread_local const ResourceInfo *field;
+  field = nullptr;
 
   for (const auto &currentField : fields) {
     if (currentField.name == *iterator) {

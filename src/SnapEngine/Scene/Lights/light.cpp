@@ -38,6 +38,8 @@ Light::~Light() {
     return;
   }
 
+  auto &buffers = Renderer::RendererInstance.GetSceneLightBuffers();
+
   switch (Type) {
   case LightType::None:
     PrintError("Destroying light with type None.");
@@ -45,27 +47,27 @@ Light::~Light() {
   case LightType::Directional:
     assert(BufferIndex < MaxDirectionalLights);
     UsedDirectionalLightIndices.at(BufferIndex) = false;
-    Renderer::RendererInstance.SceneLightBuffers.DirectionalLightCount--;
+    buffers.DirectionalLightCount--;
     break;
   case LightType::Point:
     assert(BufferIndex < MaxPointLights);
     UsedPointLightIndices.at(BufferIndex) = false;
-    Renderer::RendererInstance.SceneLightBuffers.PointLightCount--;
+    buffers.PointLightCount--;
     break;
   case LightType::Spot:
     assert(BufferIndex < MaxSpotLights);
     UsedSpotLightIndices.at(BufferIndex) = false;
-    Renderer::RendererInstance.SceneLightBuffers.SpotLightCount--;
+    buffers.SpotLightCount--;
     break;
   case LightType::Rectangle:
     assert(BufferIndex < MaxRectangleLights);
     UsedRectangleLightIndices.at(BufferIndex) = false;
-    Renderer::RendererInstance.SceneLightBuffers.RectangleLightCount--;
+    buffers.RectangleLightCount--;
     break;
   case LightType::Sphere:
     assert(BufferIndex < MaxSphereLights);
     UsedSphereLightIndices.at(BufferIndex) = false;
-    Renderer::RendererInstance.SceneLightBuffers.SphereLightCount--;
+    buffers.SphereLightCount--;
     break;
   }
 }

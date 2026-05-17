@@ -22,7 +22,8 @@ public func UnpackTangent(uint packedTangent)->half4 {
   tangent.x = half((float(x) * (1.0f / 1023.0f)) * 2.0 - 1.0);
   tangent.y = half((float(y) * (1.0f / 1023.0f)) * 2.0 - 1.0);
   tangent.z = half((float(z) * (1.0f / 1023.0f)) * 2.0 - 1.0);
-  tangent.w = half(packedTangent >> 30 & 1);
+  tangent.w =
+      half(packedTangent >> 30 & 1) * 2.0H - 1.0H; // Convert back to -1 or 1
 
   return tangent;
 }

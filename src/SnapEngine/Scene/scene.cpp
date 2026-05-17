@@ -4,10 +4,10 @@
 #include "Graphics/graphics.hpp"
 #include "Graphics/graphicsContext.hpp"
 #include "Graphics/shader.hpp"
+#include "Graphics/texture.hpp"
 #include "Graphics/uniformWriter.hpp"
 #include "Modules/Math/matrix.hpp"
 #include "Modules/bindings.hpp"
-#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Modules/reflectBindings.hpp"
@@ -285,6 +285,84 @@ inline auto CompareDrawItems(const DrawItem &first, const DrawItem &second)
   return first.tertiaryKey < second.tertiaryKey;
 }
 
+inline auto BindMaterial(const Ref<Graphics::Shader::ShaderModule> &shader,
+                         Graphics::GraphicsContext &ctx,
+                         const Renderer::Material *material) -> Error {
+  const auto &defaultMaterial = Renderer::RendererInstance.GetDefaultMaterial();
+
+  auto albedoTexture = material->albedoTexture;
+  if (!albedoTexture.isValid()) {
+    albedoTexture = defaultMaterial.albedoTexture;
+  }
+
+  auto metallicRoughnessTexture = material->metallicRoughnessTexture;
+  if (!metallicRoughnessTexture.isValid()) {
+    metallicRoughnessTexture = defaultMaterial.metallicRoughnessTexture;
+  }
+
+  auto ambientOcclusionTexture = material->ambientOcclusionTexture;
+  if (!ambientOcclusionTexture.isValid()) {
+    ambientOcclusionTexture = defaultMaterial.ambientOcclusionTexture;
+  }
+
+  auto normalTexture = material->normalTexture;
+  if (!normalTexture.isValid()) {
+    normalTexture = defaultMaterial.normalTexture;
+  }
+
+  auto emissiveTexture = material->emissiveTexture;
+  if (!emissiveTexture.isValid()) {
+    emissiveTexture = defaultMaterial.emissiveTexture;
+  }
+  auto reflectanceTexture = material->reflectanceTexture;
+  if (!reflectanceTexture.isValid()) {
+    reflectanceTexture = defaultMaterial.reflectanceTexture;
+  }
+
+  static auto albedoKey = Graphics::ResourceKey{"AlbedoTexture"};
+  auto sendErr = shader->Send(ctx, albedoKey, albedoTexture);
+  if (Error::IsError(sendErr)) {
+    return sendErr;
+  }
+
+  static auto metallicRoughnessKey =
+      Graphics::ResourceKey{"MetallicRoughnessTexture"};
+  sendErr = shader->Send(ctx, metallicRoughnessKey, metallicRoughnessTexture);
+  if (Error::IsError(sendErr)) {
+    return sendErr;
+  }
+
+  // static auto ambientOcclusionTextureKey =
+  //     Graphics::ResourceKey{"AmbientOcclusionTexture"};
+
+  // sendErr =
+  //     shader->Send(ctx, ambientOcclusionTextureKey, ambientOcclusionTexture);
+  // if (Error::IsError(sendErr)) {
+  //   return sendErr;
+  // }
+
+  static auto normalTextureKey = Graphics::ResourceKey{"NormalTexture"};
+  sendErr = shader->Send(ctx, normalTextureKey, normalTexture);
+  if (Error::IsError(sendErr)) {
+    return sendErr;
+  }
+
+  static auto emissiveTextureKey = Graphics::ResourceKey{"EmissiveTexture"};
+  sendErr = shader->Send(ctx, emissiveTextureKey, emissiveTexture);
+  if (Error::IsError(sendErr)) {
+    return sendErr;
+  }
+
+  static auto reflectanceTextureKey =
+      Graphics::ResourceKey{"ReflectanceTexture"};
+  sendErr = shader->Send(ctx, reflectanceTextureKey, reflectanceTexture);
+  if (Error::IsError(sendErr)) {
+    return sendErr;
+  }
+
+  return {};
+}
+
 inline auto RenderDrawItem(const DrawItem &item,
                            const Ref<Graphics::Shader::ShaderModule> &shader,
                            Graphics::GraphicsContext &ctx) -> Error {
@@ -308,27 +386,9 @@ inline auto RenderDrawItem(const DrawItem &item,
     return sendErr;
   }
 
-  auto albedoTexture = item.material->albedoTexture;
-  if (!albedoTexture.isValid()) {
-    albedoTexture = Renderer::RendererInstance.DefaultMaterial.albedoTexture;
-  }
-
-  auto metallicRoughnessTexture = item.material->metallicRoughnessTexture;
-  if (!metallicRoughnessTexture.isValid()) {
-    metallicRoughnessTexture =
-        Renderer::RendererInstance.DefaultMaterial.metallicRoughnessTexture;
-  }
-
-  static auto albedoKey = Graphics::ResourceKey{"AlbedoTexture"};
-  sendErr = shader->Send(ctx, albedoKey, albedoTexture);
-  if (Error::IsError(sendErr)) {
-    return sendErr;
-  }
-  static auto metallicRoughnessKey =
-      Graphics::ResourceKey{"MetallicRoughnessTexture"};
-  sendErr = shader->Send(ctx, metallicRoughnessKey, metallicRoughnessTexture);
-  if (Error::IsError(sendErr)) {
-    return sendErr;
+  auto materialBindError = BindMaterial(shader, ctx, item.material);
+  if (Error::IsError(materialBindError)) {
+    return materialBindError;
   }
 
   static auto materialBufferIndexKey =
@@ -362,9 +422,9 @@ auto Scene::DrawModels(const Graphics::GraphicsContext &context) -> Error {
   const auto &shader = Graphics::DynamicRendering::GetShader();
 
   static auto materialBufferKey = Graphics::ResourceKey{"MaterialBuffer"};
-  auto materialSendError =
-      shader->Send(ctx, materialBufferKey,
-                   Renderer::RendererInstance.MaterialsBuffer->GetBuffer());
+  auto materialSendError = shader->Send(
+      ctx, materialBufferKey,
+      Renderer::RendererInstance.GetMaterialsBuffer()->GetBuffer());
   if (Error::IsError(materialSendError)) {
     return materialSendError;
   }
@@ -372,7 +432,7 @@ auto Scene::DrawModels(const Graphics::GraphicsContext &context) -> Error {
   auto countKey = Graphics::ResourceKey{"DirectionalLightCount"};
   auto dirLightCountError = Graphics::Shader::UniformWriter::Send(
       shader, ctx, countKey,
-      Renderer::RendererInstance.SceneLightBuffers.DirectionalLightCount);
+      Renderer::RendererInstance.GetSceneLightBuffers().DirectionalLightCount);
   if (Error::IsError(dirLightCountError)) {
     return dirLightCountError;
   }
@@ -396,7 +456,7 @@ auto Scene::DrawModels(const Graphics::GraphicsContext &context) -> Error {
           }
 
           if (material == nullptr) {
-            material = &Renderer::RendererInstance.NoMaterial;
+            material = &Renderer::RendererInstance.GetNoMaterial();
           }
 
           if (material->alphaMode != Renderer::AlphaMode::Blend) {
@@ -492,7 +552,7 @@ Scene::Scene(std::string name) : name(std::move(name)) {
   Camera::RegisterCameraSystems(*this);
 
   auto &instance = Renderer::RendererInstance;
-  auto &buffers = instance.SceneLightBuffers;
+  auto &buffers = instance.GetSceneLightBuffers();
 
   preRender.emplace_back(world.system<Renderer::Material>().kind(0).each(
       [this](Renderer::Material &material) -> auto {
@@ -505,7 +565,8 @@ Scene::Scene(std::string name) : name(std::move(name)) {
       }));
 
   preRender.emplace_back(world.system<DirectionalLight>().kind(0).each(
-      [this](flecs::entity entity, const DirectionalLight &light) -> auto {
+      [this, &buffers](flecs::entity entity,
+                       const DirectionalLight &light) -> auto {
         if (lastUpdateResult.IsError()) {
           return;
         }
@@ -514,7 +575,7 @@ Scene::Scene(std::string name) : name(std::move(name)) {
       }));
 
   preRender.emplace_back(world.system<PointLight>().kind(0).each(
-      [this](flecs::entity entity, const PointLight &light) -> auto {
+      [this, &buffers](flecs::entity entity, const PointLight &light) -> auto {
         if (lastUpdateResult.IsError()) {
           return;
         }
@@ -523,7 +584,7 @@ Scene::Scene(std::string name) : name(std::move(name)) {
       }));
 
   preRender.emplace_back(world.system<SpotLight>().kind(0).each(
-      [this](flecs::entity entity, const SpotLight &light) -> auto {
+      [this, &buffers](flecs::entity entity, const SpotLight &light) -> auto {
         if (lastUpdateResult.IsError()) {
           return;
         }
@@ -532,7 +593,8 @@ Scene::Scene(std::string name) : name(std::move(name)) {
       }));
 
   preRender.emplace_back(world.system<RectangleLight>().kind(0).each(
-      [this](flecs::entity entity, const RectangleLight &light) -> auto {
+      [this, &buffers](flecs::entity entity,
+                       const RectangleLight &light) -> auto {
         if (lastUpdateResult.IsError()) {
           return;
         }
@@ -541,7 +603,7 @@ Scene::Scene(std::string name) : name(std::move(name)) {
       }));
 
   preRender.emplace_back(world.system<SphereLight>().kind(0).each(
-      [this](flecs::entity entity, const SphereLight &light) -> auto {
+      [this, &buffers](flecs::entity entity, const SphereLight &light) -> auto {
         if (lastUpdateResult.IsError()) {
           return;
         }
@@ -558,48 +620,49 @@ Scene::Scene(std::string name) : name(std::move(name)) {
         lastUpdateResult = camera.WriteToBuffer(entity);
       }));
 
-  finalizePreRenderUploads = world.system().kind(0).each([this]() -> auto {
-    if (lastUpdateResult.IsError()) {
-      return;
-    }
+  finalizePreRenderUploads =
+      world.system().kind(0).each([this, &buffers]() -> auto {
+        if (lastUpdateResult.IsError()) {
+          return;
+        }
 
-    auto &ctx = *Graphics::GetCurrentGraphicsContext();
+        auto &ctx = *Graphics::GetCurrentGraphicsContext();
 
-    auto error = buffers.DirectionalLightsBuffer->GetBuffer()->SetData(
-        ctx, buffers.DirectionalLightData);
-    if (Error::IsError(error)) {
-      lastUpdateResult = error;
-      return;
-    }
+        auto error = buffers.DirectionalLightsBuffer->GetBuffer()->SetData(
+            ctx, buffers.DirectionalLightData);
+        if (Error::IsError(error)) {
+          lastUpdateResult = error;
+          return;
+        }
 
-    error = buffers.PointLightsBuffer->GetBuffer()->SetData(
-        ctx, buffers.PointLightData);
-    if (Error::IsError(error)) {
-      lastUpdateResult = error;
-      return;
-    }
+        error = buffers.PointLightsBuffer->GetBuffer()->SetData(
+            ctx, buffers.PointLightData);
+        if (Error::IsError(error)) {
+          lastUpdateResult = error;
+          return;
+        }
 
-    error = buffers.SpotLightsBuffer->GetBuffer()->SetData(
-        ctx, buffers.SpotLightData);
-    if (Error::IsError(error)) {
-      lastUpdateResult = error;
-      return;
-    }
+        error = buffers.SpotLightsBuffer->GetBuffer()->SetData(
+            ctx, buffers.SpotLightData);
+        if (Error::IsError(error)) {
+          lastUpdateResult = error;
+          return;
+        }
 
-    error = buffers.RectangleLightsBuffer->GetBuffer()->SetData(
-        ctx, buffers.RectangleLightData);
-    if (Error::IsError(error)) {
-      lastUpdateResult = error;
-      return;
-    }
+        error = buffers.RectangleLightsBuffer->GetBuffer()->SetData(
+            ctx, buffers.RectangleLightData);
+        if (Error::IsError(error)) {
+          lastUpdateResult = error;
+          return;
+        }
 
-    error = buffers.SphereLightsBuffer->GetBuffer()->SetData(
-        ctx, buffers.SphereLightData);
-    if (Error::IsError(error)) {
-      lastUpdateResult = error;
-      return;
-    }
-  });
+        error = buffers.SphereLightsBuffer->GetBuffer()->SetData(
+            ctx, buffers.SphereLightData);
+        if (Error::IsError(error)) {
+          lastUpdateResult = error;
+          return;
+        }
+      });
 }
 
 auto Scene::Update(double deltaTime) const -> Error {

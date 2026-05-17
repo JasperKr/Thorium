@@ -91,6 +91,8 @@ public:
     return *this;
   }
 
+  explicit Ref(std::nullptr_t) : ptr(nullptr) {}
+
   ~Ref() {
     if (ptr != nullptr) {
       ptr->release();

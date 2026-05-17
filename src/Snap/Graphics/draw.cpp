@@ -17,7 +17,7 @@ namespace Graphics {
 
 using namespace Snapshot;
 
-auto BindMesh(GraphicsContext &context, VkCommandBuffer cmdBuffer,
+auto BindMesh(const GraphicsContext &context, VkCommandBuffer cmdBuffer,
               const Mesh &mesh) -> Error {
   ZoneScoped;
   auto count =
@@ -97,7 +97,7 @@ auto BindMesh(GraphicsContext &context, VkCommandBuffer cmdBuffer,
   return Error::Success();
 }
 
-auto Draw(GraphicsContext &context, Mesh &mesh, uint32_t instanceCount)
+auto Draw(const GraphicsContext &context, Mesh &mesh, uint32_t instanceCount)
     -> Error {
   ZoneScoped;
 
@@ -160,7 +160,7 @@ auto Draw(GraphicsContext &context, Mesh &mesh, uint32_t instanceCount)
   return Error::Success();
 }
 
-auto Dispatch(GraphicsContext &context, const Math::Uvec3 &threadgroups)
+auto Dispatch(const GraphicsContext &context, const Math::Uvec3 &threadgroups)
     -> Error {
   ZoneScoped;
   auto *commandBuffer = GetCommandBuffer();
@@ -186,7 +186,7 @@ auto Dispatch(GraphicsContext &context, const Math::Uvec3 &threadgroups)
   return Error::Success();
 }
 
-auto DispatchIndirect(GraphicsContext &context,
+auto DispatchIndirect(const GraphicsContext &context,
                       const Ref<Buffer> &indirectBuffer, VkDeviceSize offset)
     -> Error {
   ZoneScoped;
@@ -211,7 +211,7 @@ auto DispatchIndirect(GraphicsContext &context,
   return Error::Success();
 }
 
-auto DrawIndirect(GraphicsContext &context, Mesh &mesh,
+auto DrawIndirect(const GraphicsContext &context, Mesh &mesh,
                   const Ref<Buffer> &indirectBuffer,
                   VkDeviceSize offset, // NOLINT
                   uint32_t count) -> Error {
@@ -268,7 +268,7 @@ auto DrawIndirect(GraphicsContext &context, Mesh &mesh,
 
 // Vertex shader generated versions
 
-auto Draw(GraphicsContext &context, const VkPrimitiveTopology &topology,
+auto Draw(const GraphicsContext &context, const VkPrimitiveTopology &topology,
           uint32_t vertexCount, uint32_t instanceCount) -> Error { // NOLINT
   ZoneScoped;
   auto *commandBuffer = GetCommandBuffer();
@@ -295,7 +295,7 @@ auto Draw(GraphicsContext &context, const VkPrimitiveTopology &topology,
   return Error::Success();
 }
 
-auto Draw(GraphicsContext &context, const Ref<Buffer> &indexBuffer,
+auto Draw(const GraphicsContext &context, const Ref<Buffer> &indexBuffer,
           const VkPrimitiveTopology &topology, uint32_t indexCount, // NOLINT
           uint32_t instanceCount) -> Error {
   ZoneScoped;

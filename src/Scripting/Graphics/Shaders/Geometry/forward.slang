@@ -28,7 +28,6 @@ struct VertexInput {
 
 uniform float4x4 ModelMatrix;
 uniform float3x3 NormalMatrix;
-uniform float4x4 DefaultProjectionMatrix;
 
 [shader("vertex")]
 VertexStageOutput vertexMain(VertexInput input) {
@@ -42,7 +41,7 @@ VertexStageOutput vertexMain(VertexInput input) {
   out.normal = normalize(mul(NormalMatrix, normal).xyz);
 
   float4 tangent = UnpackTangent(input.Tangent);
-  out.tangent.xyz = mul(NormalMatrix, tangent.xyz);
+  out.tangent.xyz = normalize(mul(NormalMatrix, tangent.xyz));
   out.tangent.w = tangent.w;
 
   out.color = input.Color;
@@ -61,16 +60,20 @@ struct FragmentInput {
 
 Sampler2D AlbedoTexture;
 Sampler2D MetallicRoughnessTexture;
+Sampler2D NormalTexture;
+Sampler2D EmissiveTexture;
+Sampler2D ReflectanceTexture;
 StructuredBuffer<MaterialData> MaterialBuffer;
 
 [shader("fragment")]
 float4 fragmentMain(FragmentInput input) {
-  input.normal = normalize(input.normal);
+  float3 normal = normalize(input.normal);
+  float4 tangent = float4(normalize(input.tangent.xyz), input.tangent.w);
 
   // For some reason normals are flipped so we remove the ! here ig.
   if (!input.isFrontFace) {
-    input.normal = -input.normal;
-    input.tangent.xyz = -input.tangent.xyz;
+    normal = -normal;
+    tangent.xyz = -tangent.xyz;
   }
 
   float4 texColor = AlbedoTexture.Sample(input.tex_coord);
@@ -92,19 +95,32 @@ float4 fragmentMain(FragmentInput input) {
 
   float2 metallicRoughness =
       MetallicRoughnessTexture.Sample(input.tex_coord).bg;
+
+  float3 normalMap = NormalTexture.Sample(input.tex_coord).xyz * 2.0f - 1.0f;
+
+  float3 bitangent = cross(normal, tangent.xyz) * tangent.w;
+  float3x3 TBN = float3x3(tangent.xyz, bitangent, normal);
+  TBN = transpose(TBN);
+  normal = mul(TBN, normalMap);
+
+  float3 emissiveSample = EmissiveTexture.Sample(input.tex_coord).rgb;
+  float reflectanceSample = ReflectanceTexture.Sample(input.tex_coord).r;
+
   float metallic = metallicRoughness.x * matData.metallicFactor;
   float roughness = metallicRoughness.y * matData.roughnessFactor;
+  float reflectance = reflectanceSample * matData.reflectanceFactor;
+  float3 emissive = emissiveSample * matData.emissiveFactor;
 
   Pixel pixel;
-  pixel.Normal = input.normal;
+  pixel.Normal = normal;
   pixel.Albedo = albedo;
   pixel.Metallic = metallic;
   pixel.Roughness = roughness * roughness;
   pixel.PerceptualRoughness = roughness;
-  pixel.Fresnel0 = ComputeFresnel0(albedo, metallic, matData.reflectanceFactor);
+  pixel.Fresnel0 = ComputeFresnel0(albedo, metallic, reflectance);
 
   float3 viewDir = normalize(camera.Position - input.WorldPosition);
-  float NoV = ClampNoV(dot(input.normal, viewDir));
+  float NoV = ClampNoV(dot(normal, viewDir));
   float lambdaV = ComputeLambdaV(pixel.Roughness, NoV);
 
   float3 direct = DirectionalLight::SampleAll(input.WorldPosition, pixel,
@@ -118,7 +134,7 @@ float4 fragmentMain(FragmentInput input) {
   irradiance *= (1.0f.xxx - E) * diffuse;
   radiance *= E;
 
-  float3 color = direct + irradiance + radiance;
+  float3 color = direct + irradiance + radiance + emissive;
 
   return float4(color, 1.0);
 }

@@ -74,13 +74,33 @@ struct Camera {
   struct CameraRendertargets {
     Renderer::RendertargetDescriptor Depth;
     Renderer::RendertargetDescriptor IncomingLight;
+    Renderer::RendertargetDescriptor PostProcessed;
   };
 
   // References to the textures we currently own. Dynamic
   struct AllocatedTextures {
     Ref<Graphics::Texture> Depth;
     Ref<Graphics::Texture> IncomingLight;
+    Ref<Graphics::Texture> PostProcessed;
   };
+
+  struct PostProcessingConfig {
+    float Temperature = 0.0F;
+    float Tint = 0.0F;
+    bool ApplyAGX = true;
+    float Contrast = 1.0F;
+    float Saturation = 1.0F;
+    float Vignette = 0.0F;
+    float Exposure = 0.2F; // NOLINT
+  };
+
+  auto SetPostProcessingConfig(const PostProcessingConfig &config) -> void {
+    postProcessingConfig = config;
+  }
+
+  [[nodiscard]] auto GetPostProcessingConfig() const -> PostProcessingConfig {
+    return postProcessingConfig;
+  }
 
 private:
   Math::Scalar verticalFOVDeg{};
@@ -94,10 +114,13 @@ private:
 
   CameraRendertargets Rendertargets;
   AllocatedTextures OwnedTextures;
+  PostProcessingConfig postProcessingConfig;
 
   bool projectionDirty = true;
 
   auto ConfigureRendertargets() -> void;
+
+  auto ApplyPostProcessing(const Graphics::GraphicsContext &context) -> Error;
 };
 
 extern const Graphics::BufferFormat CameraBufferFormat;

@@ -16,12 +16,9 @@ do
   -- scene:newCamera(name, verticalFOV, width, height, near, far)
   local camera = scene:newCamera("main camera", 90, cameraWidth, cameraHeight, 0.01, 1000)
 
-  local shader = snap.graphics.newShader("Scripting/Graphics/Shaders/forward.slang")
-
   local snapshot
 
   local function draw()
-    snap.graphics.setShader(shader)
     snap.graphics.setCullMode("none")
     snap.graphics.setCullMode("none")
     snap.graphics.setWindingOrder("ccw")
@@ -29,7 +26,7 @@ do
     camera:render(scene)
     snap.graphics.setShader()
     if Imgui.Begin("Viewport") then
-      Imgui.Image(camera:getRendertarget("IncomingLight"), ffi.new("ImVec2", { cameraWidth, cameraHeight }))
+      Imgui.Image(camera:getRendertarget("PostProcessed"), ffi.new("ImVec2", { cameraWidth, cameraHeight }))
     end
     Imgui.End()
 

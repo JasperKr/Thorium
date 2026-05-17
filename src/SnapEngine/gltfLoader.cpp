@@ -314,38 +314,38 @@ inline auto LoadMaterial(Graphics::GraphicsContext &context,
     material->metallicRoughnessTexture = metallicRoughnessLoadResult.value();
   }
 
-  // if (gltfMaterial.occlusionTexture.has_value()) {
-  //   auto aoTextureLoadResult = LoadTexture(
-  //       context, asset, basePath, gltfMaterial.occlusionTexture.value());
+  if (gltfMaterial.occlusionTexture.has_value()) {
+    auto aoTextureLoadResult = LoadTexture(
+        context, asset, basePath, gltfMaterial.occlusionTexture.value());
 
-  //   if (Error::IsError(aoTextureLoadResult)) {
-  //     return aoTextureLoadResult.error();
-  //   }
+    if (Error::IsError(aoTextureLoadResult)) {
+      return aoTextureLoadResult.error();
+    }
 
-  //   material->ambientOcclusionTexture = aoTextureLoadResult.value();
-  // }
+    material->ambientOcclusionTexture = aoTextureLoadResult.value();
+  }
 
-  // if (gltfMaterial.normalTexture.has_value()) {
-  //   auto normalTextureLoadResult = LoadTexture(
-  //       context, asset, basePath, gltfMaterial.normalTexture.value());
+  if (gltfMaterial.normalTexture.has_value()) {
+    auto normalTextureLoadResult = LoadTexture(
+        context, asset, basePath, gltfMaterial.normalTexture.value());
 
-  //   if (Error::IsError(normalTextureLoadResult)) {
-  //     return normalTextureLoadResult.error();
-  //   }
+    if (Error::IsError(normalTextureLoadResult)) {
+      return normalTextureLoadResult.error();
+    }
 
-  //   material->normalTexture = normalTextureLoadResult.value();
-  // }
+    material->normalTexture = normalTextureLoadResult.value();
+  }
 
-  // if (gltfMaterial.emissiveTexture.has_value()) {
-  //   auto emissiveTextureLoadResult = LoadTexture(
-  //       context, asset, basePath, gltfMaterial.emissiveTexture.value());
+  if (gltfMaterial.emissiveTexture.has_value()) {
+    auto emissiveTextureLoadResult = LoadTexture(
+        context, asset, basePath, gltfMaterial.emissiveTexture.value());
 
-  //   if (Error::IsError(emissiveTextureLoadResult)) {
-  //     return emissiveTextureLoadResult.error();
-  //   }
+    if (Error::IsError(emissiveTextureLoadResult)) {
+      return emissiveTextureLoadResult.error();
+    }
 
-  //   material->emissiveTexture = emissiveTextureLoadResult.value();
-  // }
+    material->emissiveTexture = emissiveTextureLoadResult.value();
+  }
 
   return Error::Success();
 }
@@ -661,7 +661,7 @@ inline auto TriangleTangent(Math::Vec3 vert0, Math::Vec3 vert1,
   tangent.x = factor * (deltaUV2.y * edge1.x - deltaUV1.y * edge2.x); // NOLINT
   tangent.y = factor * (deltaUV2.y * edge1.y - deltaUV1.y * edge2.y); // NOLINT
   tangent.z = factor * (deltaUV2.y * edge1.z - deltaUV1.y * edge2.z); // NOLINT
-  tangent.w = 0.0F;
+  tangent.w = 1.0F;
 
   return tangent.Normalize();
 }
@@ -731,9 +731,9 @@ inline auto FillVertexDataDefaults(Graphics::VertexFormat &format,
 
           Math::Vec4 tangent = TriangleTangent(pos0, pos1, pos2, uv0, uv1, uv2);
 
-          memcpy(vert0 + writeOffset, &tangent, sizeof(Math::Vec4)); // NOLINT
-          memcpy(vert1 + writeOffset, &tangent, sizeof(Math::Vec4)); // NOLINT
-          memcpy(vert2 + writeOffset, &tangent, sizeof(Math::Vec4)); // NOLINT
+          ConvertTangentToPacked10Bit(
+              reinterpret_cast<const uint8_t *>(&tangent), // NOLINT
+              vert0 + writeOffset);                        // NOLINT
         }
       } else {
         size_t indexSize = indexType == VK_INDEX_TYPE_UINT16 ? 2 : 4;

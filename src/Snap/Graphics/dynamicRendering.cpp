@@ -972,12 +972,14 @@ auto FlushGraphics(const GraphicsContext &context) -> Result<bool> {
 
   static auto projectionMatrixKey = ResourceKey{"DefaultProjectionMatrix"};
 
-  auto sendErr = Shader::UniformWriter::Send(
-      TopOfStack->shader, context, projectionMatrixKey, viewProjectionMatrix);
+  if (TopOfStack->shader->GetUniform(projectionMatrixKey) != nullptr) {
+    auto sendErr = Shader::UniformWriter::Send(
+        TopOfStack->shader, context, projectionMatrixKey, viewProjectionMatrix);
 
-  if (Error::IsError(sendErr)) {
-    PrintError("Failed to send projection matrix to shader: {}",
-               sendErr.message);
+    if (Error::IsError(sendErr)) {
+      PrintError("Failed to send projection matrix to shader: {}",
+                 sendErr.message);
+    }
   }
 
   CurrentPipelineLayout = pipelineResult.value().second;
