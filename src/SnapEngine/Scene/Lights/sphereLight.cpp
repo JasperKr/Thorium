@@ -53,7 +53,7 @@ auto SphereLight::Write(std::span<uint8_t> buffer,
 }
 
 auto LuaSphereLight::Create(lua_State *state) -> int {
-  auto *scene = LuaWrap::ObjectFromLua<Scene>(state, 1);
+  auto *scene = ::LuaWrap::ObjectFromLua<Scene>(state, 1);
   const char *name = luaL_checkstring(state, 2);
 
   if (scene == nullptr) {
@@ -67,12 +67,12 @@ auto LuaSphereLight::Create(lua_State *state) -> int {
   entity.add<Userdata>();
 
   auto luaSphereLight = LuaSphereLight::FromEntity(entity);
-  LuaWrap::PushObject(state, LuaSphereLight::GetType(), luaSphereLight.get());
+  ::LuaWrap::PushObject(state, LuaSphereLight::GetType(), luaSphereLight.get());
 
   return 1;
 }
 
-const LuaWrap::LuaClass SphereLightClass = {
+const ::LuaWrap::LuaClass SphereLightClass = {
     .Name = "SphereLight",
     .Type = LuaSphereLight::GetType(),
     .Methods = {},

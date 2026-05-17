@@ -27,7 +27,7 @@ static const std::vector<luaL_Reg> SceneLib = {
 };
 
 const static std::vector<lua_CFunction> childrenInitFunctions = {
-    ::Engine::Scene::LoadBinding,
+    ::Engine::LuaScene::LoadBinding,
 };
 
 extern "C" inline auto luaopen_scene(lua_State *state) -> int {
@@ -40,8 +40,8 @@ extern "C" inline auto luaopen_scene(lua_State *state) -> int {
   RegisterLuaModule(state, module);
 
   LuaWrap::RegisterLuaType(state, ::Engine::SceneLuaClass);
-  LuaWrap::RegisterLuaType(state, ::Engine::ModelClass);
-  LuaWrap::RegisterLuaType(state, ::Engine::ShapeClass);
+  LuaWrap::RegisterLuaType(state, ::Engine::GetModelClass());
+  LuaWrap::RegisterLuaType(state, ::Engine::GetShapeClass());
   LuaWrap::RegisterLuaType(state, ::Engine::LevelOfDetailClass);
   LuaWrap::RegisterLuaType(state, ::Engine::BoundingBoxClass);
   LuaWrap::RegisterLuaType(state, ::Engine::GeometryClass);

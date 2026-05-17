@@ -102,7 +102,7 @@ auto UpdateSemaphoreValues(const GraphicsContext &context) -> Result<uint64_t> {
   }
 
   if (sortedUncompletedTimelineValues.empty()) {
-    PrintWarning("No uncompleted timeline values after update");
+    // No commands.
     return GetSemaphoreValue();
   }
 

@@ -52,7 +52,7 @@ auto RectangleLight::Write(std::span<uint8_t> buffer,
 }
 
 auto LuaRectangleLight::Create(lua_State *state) -> int {
-  auto *scene = LuaWrap::ObjectFromLua<Scene>(state, 1);
+  auto *scene = ::LuaWrap::ObjectFromLua<Scene>(state, 1);
   const char *name = luaL_checkstring(state, 2);
 
   if (scene == nullptr) {
@@ -66,13 +66,13 @@ auto LuaRectangleLight::Create(lua_State *state) -> int {
   entity.add<Userdata>();
 
   auto luaRectangleLight = LuaRectangleLight::FromEntity(entity);
-  LuaWrap::PushObject(state, LuaRectangleLight::GetType(),
-                      luaRectangleLight.get());
+  ::LuaWrap::PushObject(state, LuaRectangleLight::GetType(),
+                        luaRectangleLight.get());
 
   return 1;
 }
 
-const LuaWrap::LuaClass RectangleLightClass = {
+const ::LuaWrap::LuaClass RectangleLightClass = {
     .Name = "RectangleLight",
     .Type = LuaRectangleLight::GetType(),
     .Methods = {},

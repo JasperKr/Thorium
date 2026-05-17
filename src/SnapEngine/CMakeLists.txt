@@ -28,6 +28,9 @@ add_library(SnapEngine
   Scene/Lights/rectangleLight.cpp
   Scene/Lights/sphereLight.cpp
 
+  # Renderer
+  Renderer/rendertargetManager.cpp
+
   # Wrappers
   Wrap/wrap_scene.cpp
   Wrap/wrap_renderer.cpp
@@ -45,4 +48,5 @@ message(STATUS "SnapEngine include: ${PROJECT_SOURCE_DIR}/src/Snap")
 
 target_link_libraries(SnapEngine
   PUBLIC snap_core
+  PRIVATE TBB::tbb
 )

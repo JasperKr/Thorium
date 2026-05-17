@@ -276,8 +276,8 @@ auto Matrix4x4::Perspective(Scalar fov, Scalar aspect, Scalar near, Scalar far)
     {
       ithf / aspect, 0.0F, 0.0F, 0.0F,
       0.0F, ithf,    0.0F, 0.0F,
-      0.0F, 0.0F, far / (near - far), (near * far) / (near - far),
-      0.0F, 0.0F, -1.0F, 0.0F
+      0.0F, 0.0F, near / (far - near), (far * near) / (far - near),
+      0.0F, 0.0F, 1.0F, 0.0F
     });
   // NOLINTEND
   // clang-format on
@@ -363,7 +363,7 @@ auto Matrix4x4::TransformationMatrix(Vec3 translation, Vec3 scale,
   Matrix4x4 translationMatrix = Matrix4x4::TranslationMatrix(translation);
   Matrix4x4 scaleMatrix = Matrix4x4::ScaleMatrix(scale);
   Matrix4x4 rotationMatrix = Conversions::ToMatrix(rotation);
-  return translationMatrix * rotationMatrix * scaleMatrix;
+  return scaleMatrix * rotationMatrix * translationMatrix;
 }
 
 auto Matrix4x4::TransformationMatrix(Scalar x_pos, Scalar y_pos, Scalar z_pos,
@@ -375,7 +375,7 @@ auto Matrix4x4::TransformationMatrix(Scalar x_pos, Scalar y_pos, Scalar z_pos,
   Matrix4x4 scaleMatrix = Matrix4x4::ScaleMatrix(x_scale, y_scale, z_scale);
   Quaternion rotation{x_rot, y_rot, z_rot, w_rot};
   Matrix4x4 rotationMatrix = Conversions::ToMatrix(rotation);
-  return translationMatrix * rotationMatrix * scaleMatrix;
+  return scaleMatrix * rotationMatrix * translationMatrix;
 }
 
 auto Matrix4x4::ToString() const -> std::string {

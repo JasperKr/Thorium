@@ -1,0 +1,177 @@
+#include "rendertargetManager.hpp"
+#include "Graphics/graphicsContext.hpp"
+#include "Graphics/texture.hpp"
+#include "Modules/Helpers/hasher.hpp"
+#include "Modules/error.hpp"
+#include "Modules/object.hpp"
+#include <algorithm>
+#include <cstdint>
+
+namespace Engine::Renderer {
+
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
+RenderTargetManager GlobalRenderTargetManager;
+
+auto RendertargetDescriptor::Score(const RendertargetDescriptor &other) const
+    -> int {
+  uint32_t score = 0;
+  constexpr auto SizeMatchScore = 10;
+  constexpr auto SizeDiffPixelCount = 100;
+  constexpr auto MipmapMatchScore = 10;
+
+  if (size.x < other.size.x || size.y < other.size.y) {
+    // This rendertarget is too small for the requirements.
+    return -1;
+  }
+  if (size.x == other.size.x && size.y == other.size.y) {
+    score += SizeMatchScore;
+  } else {
+    // The rendertarget is larger than the requirements, deduct points based on difference.
+    auto diff = std::max(size.x - other.size.x, size.y - other.size.y);
+    score += std::max(1U, SizeMatchScore - (diff / SizeDiffPixelCount));
+  }
+
+  if (mipmapCount < other.mipmapCount) {
+    // This rendertarget doesn't have enough mip levels for the requirements.
+    return -1;
+  }
+  if (mipmapCount >= other.mipmapCount) {
+    auto distance = static_cast<int>(mipmapCount - other.mipmapCount);
+    score += std::max(1, MipmapMatchScore - distance);
+  }
+
+  if (format != other.format) {
+    return -1;
+  }
+
+  return static_cast<int>(score);
+};
+
+auto RendertargetDescriptor::operator==(
+    const RendertargetDescriptor &other) const -> bool {
+  return size == other.size && mipmapCount == other.mipmapCount &&
+         format == other.format && minFilter == other.minFilter &&
+         magFilter == other.magFilter && mipFilter == other.mipFilter &&
+         addressModeU == other.addressModeU &&
+         addressModeV == other.addressModeV &&
+         addressModeW == other.addressModeW && borderColor == other.borderColor;
+}
+
+auto RendertargetDescriptor::operator!=(
+    const RendertargetDescriptor &other) const -> bool {
+  return !(*this == other);
+}
+
+auto RendertargetDescriptorHash::operator()(
+    const RendertargetDescriptor &desc) const -> size_t {
+  Hash::Hasher hasher;
+  hasher.Add(desc.size.x);
+  hasher.Add(desc.size.y);
+  hasher.Add(desc.mipmapCount);
+  hasher.Add(desc.format);
+  hasher.Add(desc.minFilter);
+  hasher.Add(desc.magFilter);
+  hasher.Add(desc.mipFilter);
+  hasher.Add(desc.addressModeU);
+  hasher.Add(desc.addressModeV);
+  hasher.Add(desc.addressModeW);
+  hasher.Add(desc.borderColor);
+  return hasher.Get();
+}
+
+auto RenderTargetManager::GetRendertarget(
+    const struct ::Graphics::GraphicsContext &context,
+    const RendertargetDescriptor &descriptor)
+    -> Result<Ref<::Graphics::Texture>> {
+  // First try to find an exact match.
+  for (const auto &entry : Rendertargets) {
+    if (entry.descriptor == descriptor) {
+      return entry.texture;
+    }
+  }
+
+  // If no exact match, find the best candidate that meets the requirements.
+  int bestScore = -1;
+  int bestTextureIndex = -1;
+  Ref<::Graphics::Texture> bestTexture;
+  for (auto i = 0; i < Rendertargets.size(); i++) {
+    const auto &entry = Rendertargets[i];
+
+    int score = entry.descriptor.Score(descriptor);
+    if (score > bestScore && !entry.inUse) {
+      bestScore = score;
+      bestTexture = entry.texture;
+      bestTextureIndex = i;
+    }
+  }
+
+  if (bestTexture) {
+    ReconfigureTexture(descriptor, bestTexture);
+    auto &entry = Rendertargets[bestTextureIndex];
+    entry.descriptor = descriptor;
+    entry.inUse = true;
+
+    return bestTexture;
+  }
+
+  if (Rendertargets.size() >= MaxRendertargets) {
+    return Error::Unexpectedf("Exceeded maximum number of rendertargets ({}).",
+                              MaxRendertargets);
+  }
+
+  int usage = VK_IMAGE_USAGE_FLAG_BITS_MAX_ENUM;
+  if (Image::IsDepthTexture(descriptor.format) ||
+      Image::IsStencilTexture(descriptor.format)) {
+    usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
+            VK_IMAGE_USAGE_SAMPLED_BIT;
+  } else {
+    usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+  }
+
+  auto info = ::Graphics::TextureCreationInfo{
+      .width = descriptor.size.x,
+      .height = descriptor.size.y,
+      .depth = 1,
+      .format = descriptor.format,
+      .usage = static_cast<VkImageUsageFlags>(usage),
+      .mipmapCount = static_cast<int>(descriptor.mipmapCount),
+      .debugName = "Rendertarget",
+  };
+
+  auto textureResult = ::Graphics::Create2D(context, info);
+
+  if (Error::IsError(textureResult)) {
+    return textureResult.error().AsUnexpected();
+  }
+
+  auto texture = textureResult.value();
+  Rendertargets.push_back(
+      {.descriptor = descriptor, .inUse = true, .texture = texture});
+  return texture;
+}
+
+auto RenderTargetManager::ReleaseRendertarget(
+    const Ref<::Graphics::Texture> &texture) -> void {
+  if (texture == nullptr) {
+    return;
+  }
+
+  for (auto &entry : Rendertargets) {
+    if (entry.texture == texture) {
+      entry.inUse = false;
+      return;
+    }
+  }
+}
+
+auto RenderTargetManager::ReconfigureTexture(
+    const RendertargetDescriptor &descriptor,
+    const Ref<::Graphics::Texture> &texture) -> void {
+  texture->SetFilter(descriptor.minFilter, descriptor.magFilter,
+                     descriptor.mipFilter);
+  texture->SetWrapmode(descriptor.addressModeU, descriptor.addressModeV,
+                       descriptor.addressModeW);
+  texture->SetBorderColor(descriptor.borderColor);
+}
+
+} // namespace Engine::Renderer

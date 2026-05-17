@@ -1,12 +1,12 @@
 #include "displayName.hpp"
 #include "Wrap/wrap.hpp"
-#include "entity.hpp"
+#include "Wrap/wrap_engine.hpp"
 #include <lua.hpp>
 
 namespace Engine {
 
-auto DisplayName::GetName(lua_State *state) -> int {
-  auto *entity = LuaWrap::ObjectFromLua<Entity>(state, 1);
+auto LuaDisplayName::GetName(lua_State *state) -> int {
+  auto *entity = ::LuaWrap::EntityFromLua<LuaDisplayName>(state, 1);
 
   if (entity == nullptr) {
     return luaL_error(state, "Invalid Entity object");
@@ -22,8 +22,8 @@ auto DisplayName::GetName(lua_State *state) -> int {
   return 1;
 }
 
-auto DisplayName::SetName(lua_State *state) -> int {
-  auto *entity = LuaWrap::ObjectFromLua<Entity>(state, 1);
+auto LuaDisplayName::SetName(lua_State *state) -> int {
+  auto *entity = ::LuaWrap::EntityFromLua<LuaDisplayName>(state, 1);
 
   if (entity == nullptr) {
     return luaL_error(state, "Invalid Entity object");
@@ -39,9 +39,9 @@ auto DisplayName::SetName(lua_State *state) -> int {
   return 0;
 }
 
-const LuaWrap::LuaComponent DisplayNameComponent = {{
-    {"getName", DisplayName::GetName},
-    {"setName", DisplayName::SetName},
+const ::LuaWrap::LuaComponent DisplayNameComponent = {{
+    {"getName", LuaDisplayName::GetName},
+    {"setName", LuaDisplayName::SetName},
 }};
 
 } // namespace Engine

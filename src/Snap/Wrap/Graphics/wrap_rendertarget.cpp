@@ -4,7 +4,6 @@
 #include "Graphics/graphics.hpp"
 #include "Graphics/graphicsState.hpp"
 #include "Graphics/texture.hpp"
-#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Wrap/Graphics/wrap_color.hpp"
 #include "Wrap/wrap.hpp"
@@ -243,7 +242,7 @@ auto inline FromLuaState(lua_State *state)
 }
 
 auto RenderTargetsFromTexture(lua_State *state, int index)
-    -> Ref<Graphics::DynamicRendering::RenderTarget> {
+    -> Graphics::DynamicRendering::RenderTarget {
   luaL_checktype(state, index, LUA_TUSERDATA);
 
   auto *texture = LuaWrap::ObjectFromLua<Graphics::Texture>(state, index);
@@ -254,21 +253,21 @@ auto RenderTargetsFromTexture(lua_State *state, int index)
     texture = ctx->swapchainInfo.textures[ctx->swapchainImageIndex].get();
   }
 
-  auto rendertarget = Ref<Graphics::DynamicRendering::RenderTarget>::Make();
-  rendertarget->texture = Ref<Graphics::Texture>(texture);
-  rendertarget->blendMode = DefaultBlendMode;
-  rendertarget->clearValue = {0.0F, 0.0F, 0.0F, 1.0F};
-  rendertarget->loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+  Graphics::DynamicRendering::RenderTarget rendertarget{};
+  rendertarget.texture = Ref<Graphics::Texture>(texture);
+  rendertarget.blendMode = DefaultBlendMode;
+  rendertarget.clearValue = {0.0F, 0.0F, 0.0F, 1.0F};
+  rendertarget.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
 
   return rendertarget;
 }
 
 auto RenderTargetsFromOptions(lua_State *state, int index)
-    -> Result<Ref<Graphics::DynamicRendering::RenderTarget>> {
+    -> Result<Graphics::DynamicRendering::RenderTarget> {
 
   luaL_checktype(state, index, LUA_TTABLE);
 
-  auto rendertarget = Ref<Graphics::DynamicRendering::RenderTarget>::Make();
+  Graphics::DynamicRendering::RenderTarget rendertarget{};
 
   // check if element table[1] is a texture, if so, error,
   // as we expect it to be a named field
@@ -290,28 +289,28 @@ auto RenderTargetsFromOptions(lua_State *state, int index)
   if (lua_isnoneornil(state, -1) != 0) {
     auto *context = Graphics::GetCurrentGraphicsContext();
 
-    rendertarget->texture =
+    rendertarget.texture =
         context->swapchainInfo.textures[context->swapchainImageIndex];
   } else {
     auto *texture = LuaWrap::ObjectFromLua<Graphics::Texture>(state, -1);
     if (texture == nullptr) {
       return Error::Unexpected("Invalid texture in render target options");
     }
-    rendertarget->texture = Ref<Graphics::Texture>(texture);
+    rendertarget.texture = Ref<Graphics::Texture>(texture);
   }
   lua_pop(state, 1);
 
   // layer
   lua_getfield(state, index, "layer");
   if (lua_isnumber(state, -1) != 0) {
-    rendertarget->layer = static_cast<int>(lua_tointeger(state, -1));
+    rendertarget.layer = static_cast<int>(lua_tointeger(state, -1));
   }
   lua_pop(state, 1);
 
   // location
   lua_getfield(state, index, "location");
   if (lua_isnumber(state, -1) != 0) {
-    rendertarget->location = static_cast<int>(lua_tointeger(state, -1));
+    rendertarget.location = static_cast<int>(lua_tointeger(state, -1));
   }
   lua_pop(state, 1);
 
@@ -322,9 +321,9 @@ auto RenderTargetsFromOptions(lua_State *state, int index)
     if (Error::IsError(blendModeResult)) {
       return blendModeResult.error().AsUnexpected();
     }
-    rendertarget->blendMode = blendModeResult.value();
+    rendertarget.blendMode = blendModeResult.value();
   } else {
-    rendertarget->blendMode = DefaultBlendMode;
+    rendertarget.blendMode = DefaultBlendMode;
   }
   lua_pop(state, 1);
 
@@ -334,42 +333,42 @@ auto RenderTargetsFromOptions(lua_State *state, int index)
   if (lua_istable(state, -1) != 0) {
     auto color = ColorFromLuaState(state, ColorFormat::List, -1);
 
-    rendertarget->clearValue.color.float32[0] = color.r;
-    rendertarget->clearValue.color.float32[1] = color.g;
-    rendertarget->clearValue.color.float32[2] = color.b;
-    rendertarget->clearValue.color.float32[3] = color.a;
+    rendertarget.clearValue.color.float32[0] = color.r;
+    rendertarget.clearValue.color.float32[1] = color.g;
+    rendertarget.clearValue.color.float32[2] = color.b;
+    rendertarget.clearValue.color.float32[3] = color.a;
 
-    rendertarget->loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    rendertarget.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
   } else if (lua_type(state, -1) == LUA_TSTRING) {
     const char *loadasStr = luaL_checkstring(state, -1);
     if (strcmp(loadasStr, "clear") == 0) {
-      rendertarget->clearValue.color.float32[0] = 0.0F;
-      rendertarget->clearValue.color.float32[1] = 0.0F;
-      rendertarget->clearValue.color.float32[2] = 0.0F;
-      rendertarget->clearValue.color.float32[3] = 1.0F;
-      rendertarget->loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+      rendertarget.clearValue.color.float32[0] = 0.0F;
+      rendertarget.clearValue.color.float32[1] = 0.0F;
+      rendertarget.clearValue.color.float32[2] = 0.0F;
+      rendertarget.clearValue.color.float32[3] = 1.0F;
+      rendertarget.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     } else if (strcmp(loadasStr, "load") == 0) {
-      rendertarget->loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+      rendertarget.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
     } else if (strcmp(loadasStr, "none") == 0) {
-      rendertarget->loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+      rendertarget.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     } else {
       return Error::Unexpected(std::string("Invalid loadas mode: ") +
                                loadasStr);
     }
   } else if (lua_type(state, -1) == LUA_TNUMBER) {
     // If it's a number, expect it to be a depth / stencil clear value, and set loadOp to clear
-    if (rendertarget->texture->IsDepthTexture()) {
-      rendertarget->clearValue.depthStencil.depth =
+    if (rendertarget.texture->IsDepthTexture()) {
+      rendertarget.clearValue.depthStencil.depth =
           static_cast<float>(lua_tonumber(state, -1));
-    } else if (rendertarget->texture->IsStencilTexture()) {
-      rendertarget->clearValue.depthStencil.stencil =
+    } else if (rendertarget.texture->IsStencilTexture()) {
+      rendertarget.clearValue.depthStencil.stencil =
           static_cast<uint32_t>(lua_tointeger(state, -1));
     } else {
       return Error::Unexpected(
           "Numeric loadas value only valid for depth or stencil textures");
     }
 
-    rendertarget->loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    rendertarget.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
   }
 
   lua_pop(state, 1);
@@ -433,20 +432,20 @@ auto IsOptionsTable(lua_State *state, int index) -> bool {
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 auto wrap_SetRenderTargets(lua_State *state) -> int {
   auto *ctx = Graphics::GetCurrentGraphicsContext();
-  std::vector<Ref<Graphics::DynamicRendering::RenderTarget>> renderTargets;
+  std::vector<Graphics::DynamicRendering::RenderTarget> renderTargets;
 
   if (lua_gettop(state) == 0) {
     // No arguments, reset to default
 
-    auto rendertarget = Ref<Graphics::DynamicRendering::RenderTarget>::Make();
+    Graphics::DynamicRendering::RenderTarget rendertarget{};
 
-    rendertarget->blendMode = DefaultBlendMode;
-    rendertarget->clearValue = {0.0F, 0.0F, 0.0F, 1.0F};
-    rendertarget->texture =
+    rendertarget.blendMode = DefaultBlendMode;
+    rendertarget.clearValue = {0.0F, 0.0F, 0.0F, 1.0F};
+    rendertarget.texture =
         ctx->swapchainInfo.textures[ctx->swapchainImageIndex];
-    rendertarget->location = 0;
-    rendertarget->layer = 0;
-    rendertarget->loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+    rendertarget.location = 0;
+    rendertarget.layer = 0;
+    rendertarget.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
 
     auto setResult =
         Graphics::DynamicRendering::SetRenderTargets(*ctx, {rendertarget});

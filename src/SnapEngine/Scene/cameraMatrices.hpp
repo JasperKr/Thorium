@@ -2,6 +2,7 @@
 
 #include "Modules/Math/matrix.hpp"
 #include "Wrap/wrap.hpp"
+#include "Wrap/wrap_engine.hpp"
 namespace Engine {
 
 struct CameraMatrices {
@@ -18,6 +19,23 @@ struct CameraMatrices {
 
   [[nodiscard]] auto GetFrustum() const -> struct Frustum;
   auto Update() -> void;
+};
+
+const Type cameraMatricesType = Type("CameraMatrices");
+
+struct LuaCameraMatrices : LuaWrap::LuaECSObject {
+  explicit LuaCameraMatrices(const flecs::entity &entity)
+      : LuaECSObject(entity) {}
+
+  static auto GetType() -> const Type * { return &cameraMatricesType; }
+  auto GetInstanceType() const -> const Type * override {
+    return &cameraMatricesType;
+  }
+
+  static auto FromEntity(const flecs::entity &entity)
+      -> Ref<LuaCameraMatrices> {
+    return Ref<LuaCameraMatrices>::Make(entity);
+  }
 
   static auto GetRotationMatrix(lua_State *state) -> int;
   static auto GetInverseRotationMatrix(lua_State *state) -> int;
@@ -31,6 +49,6 @@ struct CameraMatrices {
   static auto GetInverseRotationProjectionMatrix(lua_State *state) -> int;
 };
 
-extern const LuaWrap::LuaComponent CameraMatricesComponent;
+extern const ::LuaWrap::LuaComponent CameraMatricesComponent;
 
 } // namespace Engine

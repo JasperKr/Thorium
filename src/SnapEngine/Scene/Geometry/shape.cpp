@@ -8,29 +8,8 @@
 
 namespace Engine {
 
-auto LuaShape::GetName(lua_State *state) -> int {
-  auto *shape = LuaWrap::ObjectFromLua<LuaShape>(state, 1);
-  if (shape == nullptr) {
-    return luaL_error(state, "Expected a Shape object");
-  }
-
-  lua_pushstring(state, shape->entity.name());
-  return 1;
-}
-
-auto LuaShape::SetName(lua_State *state) -> int {
-  auto *shape = LuaWrap::ObjectFromLua<LuaShape>(state, 1);
-  if (shape == nullptr) {
-    return luaL_error(state, "Expected a Shape object");
-  }
-
-  const char *newName = luaL_checkstring(state, 2);
-  shape->entity.set_name(newName);
-  return 0;
-}
-
 auto LuaShape::GetLODs(lua_State *state) -> int {
-  auto *shape = LuaWrap::ObjectFromLua<LuaShape>(state, 1);
+  auto *shape = ::LuaWrap::ObjectFromLua<LuaShape>(state, 1);
   if (shape == nullptr) {
     return luaL_error(state, "Expected a Shape object");
   }
@@ -45,7 +24,7 @@ auto LuaShape::GetLODs(lua_State *state) -> int {
   shape->entity.children([&](flecs::entity entity) -> void {
     lua_pushinteger(state, index++);
     auto lodObject = LuaLevelOfDetail::FromEntity(entity);
-    LuaWrap::PushObject(state, LuaLevelOfDetail::GetType(), lodObject.get());
+    ::LuaWrap::PushObject(state, LuaLevelOfDetail::GetType(), lodObject.get());
     lua_settable(state, -3);
   });
 
@@ -54,7 +33,7 @@ auto LuaShape::GetLODs(lua_State *state) -> int {
 
 // scene:createShape(name, lods)
 auto LuaShape::Create(lua_State *state) -> int {
-  auto *scene = LuaWrap::ObjectFromLua<Scene>(state, 1);
+  auto *scene = ::LuaWrap::ObjectFromLua<Scene>(state, 1);
   const char *name = luaL_checkstring(state, 2);
 
   if (scene == nullptr) {
@@ -70,7 +49,7 @@ auto LuaShape::Create(lua_State *state) -> int {
     lua_pushinteger(state, i);
     lua_gettable(state, 3);
 
-    auto *luaLOD = LuaWrap::ObjectFromLua<LuaLevelOfDetail>(state, -1);
+    auto *luaLOD = ::LuaWrap::ObjectFromLua<LuaLevelOfDetail>(state, -1);
     if (luaLOD == nullptr) {
       return luaL_error(state,
                         "Expected a LevelOfDetail object in the LODs table");
@@ -94,20 +73,9 @@ auto LuaShape::Create(lua_State *state) -> int {
   shapeEntity.add<Transform>();
 
   auto luaShape = LuaShape::FromEntity(shapeEntity);
-  LuaWrap::PushObject(state, LuaShape::GetType(), luaShape.get());
+  ::LuaWrap::PushObject(state, LuaShape::GetType(), luaShape.get());
 
   return 1;
 }
-
-const LuaWrap::LuaClass ShapeClass = {
-    .Name = "Shape",
-    .Type = LuaShape::GetType(),
-    .Methods =
-        {
-            {"getName", LuaShape::GetName},
-            {"setName", LuaShape::SetName},
-            {"getLODs", LuaShape::GetLODs},
-        },
-};
 
 } // namespace Engine

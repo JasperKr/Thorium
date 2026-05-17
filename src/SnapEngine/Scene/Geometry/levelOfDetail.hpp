@@ -2,6 +2,7 @@
 
 #include "Modules/Math/mathTypes.hpp"
 #include "Scene/Geometry/boundingBox.hpp"
+#include "Wrap/wrap_engine.hpp"
 #include <flecs.h>
 #include <string>
 namespace Engine {
@@ -31,10 +32,9 @@ struct LevelOfDetail {
 
 static const Type levelOfDetailType = Type("LevelOfDetail");
 
-struct LuaLevelOfDetail : Object {
-  flecs::entity entity;
-
-  explicit LuaLevelOfDetail(const flecs::entity &entity) : entity(entity) {}
+struct LuaLevelOfDetail : LuaWrap::LuaECSObject {
+  explicit LuaLevelOfDetail(const flecs::entity &entity)
+      : LuaECSObject(entity) {}
 
   static auto GetType() -> const Type * { return &levelOfDetailType; }
   auto GetInstanceType() const -> const Type * override {
@@ -57,6 +57,6 @@ struct LuaLevelOfDetail : Object {
   static auto GetBoundingBox(lua_State *state) -> int;
 };
 
-extern const LuaWrap::LuaClass LevelOfDetailClass;
+extern const ::LuaWrap::LuaClass LevelOfDetailClass;
 
 } // namespace Engine

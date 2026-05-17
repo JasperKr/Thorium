@@ -5,9 +5,9 @@
 #include "Graphics/texture.hpp"
 #include "Graphics/vertexformat.hpp"
 #include "Modules/Math/vector.hpp"
-#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/filesystem.hpp"
+#include "Modules/imagedata.hpp"
 #include "Modules/object.hpp"
 #include "Scene/Geometry/boundingBox.hpp"
 #include "Scene/Geometry/geometry.hpp"
@@ -22,7 +22,9 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <execution>
 #include <flecs.h>
+#include <numeric>
 #include <public/tracy/Tracy.hpp>
 #include <span>
 #include <string>
@@ -43,6 +45,7 @@ namespace glTF {
 std::vector<std::vector<std::uint8_t>> Buffers;
 std::unordered_map<std::string, std::vector<std::uint8_t>> URICache;
 std::unordered_map<std::string, uint16_t> NameDuplicateCount;
+std::vector<Ref<Image::ImageData>> ImageCache;
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
 inline auto GetUniqueName(const std::string &baseName) -> std::string {
@@ -225,7 +228,7 @@ inline auto LoadTexture(Graphics::GraphicsContext &context,
   auto span = loadResult.value();
 
   auto textureResult = Graphics::LoadFromMemory(
-      context, span,
+      context, *ImageCache[texture.imageIndex.value()].get(),
       VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
       Graphics::TextureMipmapOption::Manual);
 
@@ -1047,8 +1050,6 @@ inline auto LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
       // shapeEntity.add<Engine::LocalBounds>(); No local bounds, only based on child geometry bounds.
       shapeEntity.set<Engine::Transform>(transform);
 
-      // TODO: Check the normal matrix construction and if after multiplying it needs to be normalized or not.
-
       shapes.emplace_back(shapeEntity);
 
       auto indexDataResult = LoadIndexData(asset, primitive);
@@ -1172,11 +1173,11 @@ inline auto LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
       // Load material if present.
       if (primitive.materialIndex.has_value()) {
         const auto &material = asset.materials[primitive.materialIndex.value()];
-        auto rendererMaterial = Ref<Engine::Renderer::LuaMaterial>::Make();
         auto materialEntity = world->entity(
             GetUniqueName(std::string(material.name) + " Material").c_str());
         materialEntity.add<Engine::Renderer::Material>();
-        rendererMaterial->entity = materialEntity;
+        auto rendererMaterial =
+            Ref<Engine::Renderer::LuaMaterial>::Make(materialEntity);
 
         auto materialResult =
             LoadMaterial(context, asset, basePath, material, rendererMaterial);
@@ -1210,6 +1211,10 @@ auto LoadGltfModel(Graphics::GraphicsContext &context, const std::string &path,
                    flecs::world *world) -> Error {
   /// Load the file into a data buffer.
 
+  Buffers.clear();
+  URICache.clear();
+  ImageCache.clear();
+
   auto bytesResult = Filesystem::ReadFile(path);
   if (Error::IsError(bytesResult)) {
     return bytesResult.error();
@@ -1219,7 +1224,6 @@ auto LoadGltfModel(Graphics::GraphicsContext &context, const std::string &path,
   auto *bytedata = reinterpret_cast<std::byte *>(bytes.data());
 
   /// Create a glTF data buffer from the loaded file data.
-
   auto data = fastgltf::GltfDataBuffer::FromBytes(bytedata, bytes.size());
   if (data.error() != fastgltf::Error::None) {
     // The file couldn't be loaded, or the buffer could not be allocated.
@@ -1227,7 +1231,6 @@ auto LoadGltfModel(Graphics::GraphicsContext &context, const std::string &path,
   }
 
   /// Parse the glTF asset from the data buffer.
-
   auto asset = Parser.loadGltf(data.get(), Path::Directory(path),
                                fastgltf::Options::DecomposeNodeMatrices);
   if (auto error = asset.error(); error != fastgltf::Error::None) {
@@ -1236,7 +1239,6 @@ auto LoadGltfModel(Graphics::GraphicsContext &context, const std::string &path,
   }
 
   /// Validate the loaded asset.
-
   auto validationError = fastgltf::validate(asset.get());
 
   if (validationError != fastgltf::Error::None) {
@@ -1259,21 +1261,46 @@ auto LoadGltfModel(Graphics::GraphicsContext &context, const std::string &path,
     Buffers.emplace_back(bufferData.begin(), bufferData.end());
   }
 
+  std::vector<size_t> indices(asset->images.size());
+  std::ranges::iota(indices, 0);
+  ImageCache.resize(asset->images.size());
+  Error imageLoadError = Error::Success();
+
+  std::for_each(std::execution::par, indices.begin(), indices.end(),
+                [&](const auto &index) -> auto {
+                  const auto &image = asset->images[index];
+                  auto loadResult =
+                      LoadDataSource(asset.get(), basePath, image.data);
+                  if (Error::IsError(loadResult)) {
+                    imageLoadError = loadResult.error();
+                    return;
+                  }
+
+                  auto span = loadResult.value();
+
+                  auto imageDataResult = Image::ImageData::Create(span);
+                  if (Error::IsError(imageDataResult)) {
+                    imageLoadError = imageDataResult.error();
+                    return;
+                  }
+
+                  ImageCache.at(index) = imageDataResult.value();
+                });
+
+  if (Error::IsError(imageLoadError)) {
+    return imageLoadError;
+  }
+
   // loop through scenes
   for (const auto &glTFScene : asset->scenes) {
-    PrintInfo("Loading glTF scene: {}", glTFScene.name);
     for (const auto &nodeIndex : glTFScene.nodeIndices) {
       const auto &gltfNode = asset->nodes[nodeIndex];
-      PrintInfo("Loading glTF node: {}", gltfNode.name);
       auto nodeResult = LoadNode(world, context, asset.get(), view, gltfNode);
       if (Error::IsError(nodeResult)) {
         return nodeResult.error();
       }
     }
   }
-
-  // Buffers.clear();
-  // URICache.clear(); // TODO: consider keeping URI cache across loads
 
   return Error::Success();
 }

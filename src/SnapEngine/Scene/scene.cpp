@@ -2,10 +2,12 @@
 #include "Graphics/draw.hpp"
 #include "Graphics/dynamicRendering.hpp"
 #include "Graphics/graphics.hpp"
+#include "Graphics/graphicsContext.hpp"
 #include "Graphics/shader.hpp"
 #include "Graphics/uniformWriter.hpp"
 #include "Modules/Math/matrix.hpp"
 #include "Modules/bindings.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Modules/reflectBindings.hpp"
@@ -37,7 +39,7 @@ namespace Engine {
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 inline flecs::entity SelectedEntity;
 
-auto Scene::LoadBinding(lua_State *state) -> int {
+auto LuaScene::LoadBinding(lua_State *state) -> int {
   Bindings::LuaBoundStruct<Scene> bindings("Scene");
   bindings.RegisterMember<&Scene::name>("Name");
   bindings.DocumentCustomMethod(Bindings::MethodInfo{
@@ -153,17 +155,11 @@ auto DrawEntityHierarchy(const flecs::entity &entity, std::string_view filter)
 }
 
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
-auto Scene::DrawUiElement(lua_State *state) -> int {
-  auto *scene = LuaWrap::ObjectFromLua<Scene>(state, 1);
-
-  if (scene == nullptr) {
-    return luaL_error(state, "Expected a Scene object");
-  }
-
+auto Scene::DrawUiElement() const -> Error {
   // Draw an imgui hierarchy of the scene's entities and components
   // This is just a placeholder for now
 
-  ImGui::Begin(scene->name.c_str());
+  ImGui::Begin(name.c_str());
   auto availableWidth = ImGui::GetContentRegionAvail().x;
   if (ImGui::BeginChild("Entity Hierarchy",
                         ImVec2(availableWidth * 0.5F, 0), // NOLINT
@@ -172,7 +168,7 @@ auto Scene::DrawUiElement(lua_State *state) -> int {
     static char buf[256] = {};                    // NOLINT
     ImGui::InputText("Search", buf, sizeof(buf)); // NOLINT
 
-    scene->world.entity(0).children([&](flecs::entity entity) -> void {
+    world.entity(0).children([&](flecs::entity entity) -> void {
       DrawEntityHierarchy(
           entity, std::string_view(buf, strnlen(buf, sizeof(buf)))); // NOLINT
     });
@@ -228,7 +224,7 @@ auto Scene::DrawUiElement(lua_State *state) -> int {
       if (SelectedEntity.has<Userdata>() &&
           SelectedEntity.get_ref<Userdata>().get() != nullptr) {
         auto userdata = SelectedEntity.get_ref<Userdata>();
-        userdata->DrawGUI(state);
+        userdata->DrawGUI(nullptr);
       }
 
       if (SelectedEntity.has<BoundingBox>() &&
@@ -259,7 +255,7 @@ auto Scene::DrawUiElement(lua_State *state) -> int {
   ImGui::EndChild();
   ImGui::End();
 
-  return 0;
+  return {};
 }
 
 struct DrawItem {
@@ -355,17 +351,11 @@ inline auto RenderDrawItem(const DrawItem &item,
   return {};
 }
 
-auto Scene::DrawModels(lua_State *state) -> int {
-  auto *scene = LuaWrap::ObjectFromLua<Scene>(state, 1);
-
-  if (scene == nullptr) {
-    return luaL_error(state, "Expected a Scene object");
-  }
-
-  for (const auto &system : scene->preRender) {
+auto Scene::DrawModels(const Graphics::GraphicsContext &context) -> Error {
+  for (const auto &system : preRender) {
     system.run();
   }
-  scene->finalizePreRenderUploads.run();
+  finalizePreRenderUploads.run();
 
   auto &ctx = *Graphics::GetCurrentGraphicsContext();
 
@@ -376,8 +366,7 @@ auto Scene::DrawModels(lua_State *state) -> int {
       shader->Send(ctx, materialBufferKey,
                    Renderer::RendererInstance.MaterialsBuffer->GetBuffer());
   if (Error::IsError(materialSendError)) {
-    return luaL_error(state, "Failed to send material buffer: %s",
-                      materialSendError.message.c_str());
+    return materialSendError;
   }
 
   auto countKey = Graphics::ResourceKey{"DirectionalLightCount"};
@@ -385,21 +374,19 @@ auto Scene::DrawModels(lua_State *state) -> int {
       shader, ctx, countKey,
       Renderer::RendererInstance.SceneLightBuffers.DirectionalLightCount);
   if (Error::IsError(dirLightCountError)) {
-    return luaL_error(state, "Failed to send directional light count: %s",
-                      dirLightCountError.message.c_str());
+    return dirLightCountError;
   }
 
   auto lightBufferSendError =
       Renderer::RendererInstance.BindLightBuffers(ctx, shader);
   if (Error::IsError(lightBufferSendError)) {
-    return luaL_error(state, "Failed to bind light buffers: %s",
-                      lightBufferSendError.message.c_str());
+    return lightBufferSendError;
   }
 
   DrawItems.clear();
   TransparentDrawItems.clear();
 
-  scene->world.each<Geometry>(
+  world.each<Geometry>(
       [&](flecs::entity entity, const Geometry &geometry) -> void {
         entity.children([&](flecs::entity child) -> void {
           const Renderer::Material *material = nullptr;
@@ -438,20 +425,18 @@ auto Scene::DrawModels(lua_State *state) -> int {
   for (const auto &item : DrawItems) {
     auto err = RenderDrawItem(item, shader, ctx);
     if (Error::IsError(err)) {
-      return luaL_error(state, "Failed to render draw item: %s",
-                        err.message.c_str());
+      return err;
     }
   }
 
   for (const auto &item : TransparentDrawItems) {
     auto err = RenderDrawItem(item, shader, ctx);
     if (Error::IsError(err)) {
-      return luaL_error(state, "Failed to render transparent draw item: %s",
-                        err.message.c_str());
+      return err;
     }
   }
 
-  return 0;
+  return {};
 }
 
 Scene::Scene(std::string name) : name(std::move(name)) {
@@ -520,33 +505,57 @@ Scene::Scene(std::string name) : name(std::move(name)) {
       }));
 
   preRender.emplace_back(world.system<DirectionalLight>().kind(0).each(
-      [](flecs::entity entity, const DirectionalLight &light) -> auto {
-        auto error = light.Write(buffers.DirectionalLightData, entity);
+      [this](flecs::entity entity, const DirectionalLight &light) -> auto {
+        if (lastUpdateResult.IsError()) {
+          return;
+        }
+
+        lastUpdateResult = light.Write(buffers.DirectionalLightData, entity);
       }));
 
   preRender.emplace_back(world.system<PointLight>().kind(0).each(
-      [](flecs::entity entity, const PointLight &light) -> auto {
-        auto error = light.Write(buffers.PointLightData, entity);
+      [this](flecs::entity entity, const PointLight &light) -> auto {
+        if (lastUpdateResult.IsError()) {
+          return;
+        }
+
+        lastUpdateResult = light.Write(buffers.PointLightData, entity);
       }));
 
   preRender.emplace_back(world.system<SpotLight>().kind(0).each(
-      [](flecs::entity entity, const SpotLight &light) -> auto {
-        auto error = light.Write(buffers.SpotLightData, entity);
+      [this](flecs::entity entity, const SpotLight &light) -> auto {
+        if (lastUpdateResult.IsError()) {
+          return;
+        }
+
+        lastUpdateResult = light.Write(buffers.SpotLightData, entity);
       }));
 
   preRender.emplace_back(world.system<RectangleLight>().kind(0).each(
-      [](flecs::entity entity, const RectangleLight &light) -> auto {
-        auto error = light.Write(buffers.RectangleLightData, entity);
+      [this](flecs::entity entity, const RectangleLight &light) -> auto {
+        if (lastUpdateResult.IsError()) {
+          return;
+        }
+
+        lastUpdateResult = light.Write(buffers.RectangleLightData, entity);
       }));
 
   preRender.emplace_back(world.system<SphereLight>().kind(0).each(
-      [](flecs::entity entity, const SphereLight &light) -> auto {
-        auto error = light.Write(buffers.SphereLightData, entity);
+      [this](flecs::entity entity, const SphereLight &light) -> auto {
+        if (lastUpdateResult.IsError()) {
+          return;
+        }
+
+        lastUpdateResult = light.Write(buffers.SphereLightData, entity);
       }));
 
   preRender.emplace_back(world.system<Camera>().kind(0).each(
-      [](flecs::entity entity, const Camera &camera) -> auto {
-        auto error = camera.WriteToBuffer(entity);
+      [this](flecs::entity entity, const Camera &camera) -> auto {
+        if (lastUpdateResult.IsError()) {
+          return;
+        }
+
+        lastUpdateResult = camera.WriteToBuffer(entity);
       }));
 
   finalizePreRenderUploads = world.system().kind(0).each([this]() -> auto {
@@ -599,8 +608,8 @@ auto Scene::Update(double deltaTime) const -> Error {
   return lastUpdateResult;
 }
 
-auto Scene::Update(lua_State *state) -> int {
-  auto *scene = LuaWrap::ObjectFromLua<Scene>(state, 1);
+auto LuaScene::Update(lua_State *state) -> int {
+  auto *scene = ::LuaWrap::ObjectFromLua<Scene>(state, 1);
 
   if (scene == nullptr) {
     return luaL_error(state, "Expected a Scene object");
@@ -615,14 +624,28 @@ auto Scene::Update(lua_State *state) -> int {
   return 0;
 }
 
-const LuaWrap::LuaClass SceneLuaClass{
+auto LuaScene::DrawUiElement(lua_State *state) -> int {
+  auto *scene = ::LuaWrap::ObjectFromLua<Scene>(state, 1);
+
+  if (scene == nullptr) {
+    return luaL_error(state, "Expected a Scene object");
+  }
+
+  auto drawResult = scene->DrawUiElement();
+  if (Error::IsError(drawResult)) {
+    return luaL_error(state, "%s", drawResult.ToString().c_str());
+  }
+
+  return 0;
+}
+
+const ::LuaWrap::LuaClass SceneLuaClass{
     .Name = "Scene",
     .Type = Scene::GetType(),
     .Methods =
         {
-            {"drawUIElement", Scene::DrawUiElement},
-            {"drawModels", Scene::DrawModels},
-            {"update", Scene::Update},
+            {"drawUIElement", LuaScene::DrawUiElement},
+            {"update", LuaScene::Update},
             {"newModel", LuaModel::Create},
             {"newShape", LuaShape::Create},
             {"newLOD", LuaLevelOfDetail::Create},

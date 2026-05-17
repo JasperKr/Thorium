@@ -16,7 +16,7 @@
 #include "tl/expected.hpp"
 #include <vulkan/vulkan.h>
 
-using ErrorCode = int16_t;
+using ErrorCode = int32_t;
 using ErrorLevel = uint16_t;
 
 struct [[nodiscard]] Error {

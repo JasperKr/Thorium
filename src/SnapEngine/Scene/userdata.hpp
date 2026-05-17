@@ -40,6 +40,6 @@ struct Userdata {
   auto DrawGUI(lua_State *state) const -> void;
 };
 
-extern const LuaWrap::LuaComponent UserdataComponent;
+extern const ::LuaWrap::LuaComponent UserdataComponent;
 
 } // namespace Engine

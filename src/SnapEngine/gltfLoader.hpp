@@ -2,15 +2,19 @@
 
 #include "Graphics/graphicsContext.hpp"
 #include "Modules/error.hpp"
+#include "Modules/imagedata.hpp"
+#include "Modules/object.hpp"
 #include <cstdint>
 #include <flecs.h>
 #include <string>
 #include <unordered_map>
+#include <vector>
 namespace glTF {
 
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
 extern std::vector<std::vector<std::uint8_t>> Buffers;
 extern std::unordered_map<std::string, std::vector<std::uint8_t>> URICache;
+extern std::vector<Ref<Image::ImageData>> ImageCache;
 extern std::unordered_map<std::string, uint16_t> NameDuplicateCount;
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 

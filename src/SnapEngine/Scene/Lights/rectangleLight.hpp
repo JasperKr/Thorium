@@ -55,6 +55,6 @@ struct LuaRectangleLight : Object {
   }
 };
 
-extern const LuaWrap::LuaClass RectangleLightClass;
+extern const ::LuaWrap::LuaClass RectangleLightClass;
 
 } // namespace Engine

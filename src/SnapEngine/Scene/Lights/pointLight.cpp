@@ -47,7 +47,7 @@ auto PointLight::Write(std::span<uint8_t> buffer,
 }
 
 auto LuaPointLight::Create(lua_State *state) -> int {
-  auto *scene = LuaWrap::ObjectFromLua<Scene>(state, 1);
+  auto *scene = ::LuaWrap::ObjectFromLua<Scene>(state, 1);
   const char *name = luaL_checkstring(state, 2);
 
   if (scene == nullptr) {
@@ -61,12 +61,12 @@ auto LuaPointLight::Create(lua_State *state) -> int {
   entity.add<Userdata>();
 
   auto luaPointLight = LuaPointLight::FromEntity(entity);
-  LuaWrap::PushObject(state, LuaPointLight::GetType(), luaPointLight.get());
+  ::LuaWrap::PushObject(state, LuaPointLight::GetType(), luaPointLight.get());
 
   return 1;
 }
 
-const LuaWrap::LuaClass PointLightClass = {
+const ::LuaWrap::LuaClass PointLightClass = {
     .Name = "PointLight",
     .Type = LuaPointLight::GetType(),
     .Methods = {},

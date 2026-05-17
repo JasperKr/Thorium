@@ -5,6 +5,7 @@
 #include "Modules/Math/quaternion.hpp"
 #include "Modules/Math/vector.hpp"
 #include "Wrap/wrap.hpp"
+#include "Wrap/wrap_engine.hpp"
 #include "lua.hpp"
 
 namespace Engine {
@@ -22,17 +23,6 @@ private:
   Math::Matrix4x4 WorldMatrix;
 
 public:
-  static auto SetPosition(lua_State *state) -> int;
-  static auto GetPosition(lua_State *state) -> int;
-  static auto SetRotation(lua_State *state) -> int;
-  static auto GetRotation(lua_State *state) -> int;
-  static auto SetScale(lua_State *state) -> int;
-  static auto GetScale(lua_State *state) -> int;
-  static auto SetTransform(lua_State *state) -> int;
-  static auto GetTransform(lua_State *state) -> int;
-  static auto GetLocalMatrix(lua_State *state) -> int;
-  static auto GetWorldMatrix(lua_State *state) -> int;
-
   [[nodiscard]] auto GetLocalMatrix() const -> const Math::Matrix4x4 & {
     return LocalMatrix;
   }
@@ -83,6 +73,32 @@ public:
   auto DrawGUI() -> void;
 };
 
-extern const LuaWrap::LuaComponent TransformComponent;
+const static Type TransformType = Type("Transform");
+
+struct LuaTransform : LuaWrap::LuaECSObject {
+  static auto GetType() -> const Type * { return &TransformType; }
+  [[nodiscard]] auto GetInstanceType() const -> const Type * override {
+    return LuaTransform::GetType();
+  }
+
+  static auto SetPosition(lua_State *state) -> int;
+  static auto GetPosition(lua_State *state) -> int;
+  static auto SetRotation(lua_State *state) -> int;
+  static auto GetRotation(lua_State *state) -> int;
+  static auto SetScale(lua_State *state) -> int;
+  static auto GetScale(lua_State *state) -> int;
+  static auto SetTransform(lua_State *state) -> int;
+  static auto GetTransform(lua_State *state) -> int;
+  static auto GetLocalMatrix(lua_State *state) -> int;
+  static auto GetWorldMatrix(lua_State *state) -> int;
+  static auto GetUp(lua_State *state) -> int;
+  static auto GetRight(lua_State *state) -> int;
+  static auto GetForward(lua_State *state) -> int;
+  static auto GetInverseUp(lua_State *state) -> int;
+  static auto GetInverseRight(lua_State *state) -> int;
+  static auto GetInverseForward(lua_State *state) -> int;
+};
+
+extern const ::LuaWrap::LuaComponent TransformComponent;
 
 } // namespace Engine

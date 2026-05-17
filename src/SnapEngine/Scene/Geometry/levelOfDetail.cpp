@@ -14,13 +14,13 @@ auto LevelOfDetail::DrawGUI() const -> void {
 }
 
 auto LuaLevelOfDetail::GetTransitionThreshold(lua_State *state) -> int {
-  auto *luaLevelOfDetail = LuaWrap::ObjectFromLua<LuaLevelOfDetail>(state, 1);
+  auto *entity = ::LuaWrap::EntityFromLua<LuaLevelOfDetail>(state, 1);
 
-  if (luaLevelOfDetail == nullptr) {
+  if (entity == nullptr) {
     return luaL_error(state, "Expected a LevelOfDetail object");
   }
 
-  auto levelOfDetail = luaLevelOfDetail->entity.get_ref<LevelOfDetail>();
+  auto levelOfDetail = entity->get_ref<LevelOfDetail>();
   if (levelOfDetail.get() == nullptr) {
     return luaL_error(state, "LevelOfDetail component not found");
   }
@@ -29,13 +29,13 @@ auto LuaLevelOfDetail::GetTransitionThreshold(lua_State *state) -> int {
   return 1;
 }
 auto LuaLevelOfDetail::SetTransitionThreshold(lua_State *state) -> int {
-  auto *luaLevelOfDetail = LuaWrap::ObjectFromLua<LuaLevelOfDetail>(state, 1);
+  auto *entity = ::LuaWrap::EntityFromLua<LuaLevelOfDetail>(state, 1);
 
-  if (luaLevelOfDetail == nullptr) {
+  if (entity == nullptr) {
     return luaL_error(state, "Expected a LevelOfDetail object");
   }
 
-  auto levelOfDetail = luaLevelOfDetail->entity.get_ref<LevelOfDetail>();
+  auto levelOfDetail = entity->get_ref<LevelOfDetail>();
   if (levelOfDetail.get() == nullptr) {
     return luaL_error(state, "LevelOfDetail component not found");
   }
@@ -46,13 +46,13 @@ auto LuaLevelOfDetail::SetTransitionThreshold(lua_State *state) -> int {
 }
 
 auto LuaLevelOfDetail::GetMeshes(lua_State *state) -> int {
-  auto *luaLevelOfDetail = LuaWrap::ObjectFromLua<LuaLevelOfDetail>(state, 1);
+  auto *entity = ::LuaWrap::EntityFromLua<LuaLevelOfDetail>(state, 1);
 
-  if (luaLevelOfDetail == nullptr) {
+  if (entity == nullptr) {
     return luaL_error(state, "Expected a LevelOfDetail object");
   }
 
-  auto levelOfDetail = luaLevelOfDetail->entity.get_ref<LevelOfDetail>();
+  auto levelOfDetail = entity->get_ref<LevelOfDetail>();
   if (levelOfDetail.get() == nullptr) {
     return luaL_error(state, "LevelOfDetail component not found");
   }
@@ -68,7 +68,7 @@ auto LuaLevelOfDetail::GetMeshes(lua_State *state) -> int {
       [&](const flecs::entity &child) -> void {
         lua_pushinteger(state, index++);
         auto mesh = child.get_ref<Graphics::Mesh>();
-        LuaWrap::PushObject(state, Graphics::Mesh::GetType(), mesh.get());
+        ::LuaWrap::PushObject(state, Graphics::Mesh::GetType(), mesh.get());
         lua_settable(state, -3);
       });
 
@@ -76,18 +76,18 @@ auto LuaLevelOfDetail::GetMeshes(lua_State *state) -> int {
 }
 
 auto LuaLevelOfDetail::AddGeometry(lua_State *state) -> int {
-  auto *luaLevelOfDetail = LuaWrap::ObjectFromLua<LuaLevelOfDetail>(state, 1);
+  auto *entity = ::LuaWrap::EntityFromLua<LuaLevelOfDetail>(state, 1);
 
-  if (luaLevelOfDetail == nullptr) {
+  if (entity == nullptr) {
     return luaL_error(state, "Expected a LevelOfDetail object");
   }
 
-  auto levelOfDetail = luaLevelOfDetail->entity.get_ref<LevelOfDetail>();
+  auto levelOfDetail = entity->get_ref<LevelOfDetail>();
   if (levelOfDetail.get() == nullptr) {
     return luaL_error(state, "LevelOfDetail component not found");
   }
 
-  auto *geometry = LuaWrap::ObjectFromLua<LuaGeometry>(state, 2);
+  auto *geometry = ::LuaWrap::ObjectFromLua<LuaGeometry>(state, 2);
   if (geometry == nullptr) {
     return luaL_error(state, "Expected a Mesh object");
   }
@@ -98,7 +98,7 @@ auto LuaLevelOfDetail::AddGeometry(lua_State *state) -> int {
 }
 
 auto LuaLevelOfDetail::Create(lua_State *state) -> int {
-  auto *scene = LuaWrap::ObjectFromLua<Scene>(state, 1);
+  auto *scene = ::LuaWrap::ObjectFromLua<Scene>(state, 1);
   const char *name = luaL_checkstring(state, 2);
 
   if (scene == nullptr) {
@@ -110,25 +110,24 @@ auto LuaLevelOfDetail::Create(lua_State *state) -> int {
 
   auto lodEntity = LevelOfDetail::CreateLevelOfDetail(scene->world, name,
                                                       transitionThreshold);
-  auto luaLevelOfDetail = LuaLevelOfDetail::FromEntity(lodEntity);
-  LuaWrap::PushObject(state, LuaLevelOfDetail::GetType(),
-                      luaLevelOfDetail.get());
+  auto entity = LuaLevelOfDetail::FromEntity(lodEntity);
+  ::LuaWrap::PushObject(state, LuaLevelOfDetail::GetType(), entity.get());
   return 1;
 }
 
 auto LuaLevelOfDetail::RemoveGeometry(lua_State *state) -> int {
-  auto *luaLevelOfDetail = LuaWrap::ObjectFromLua<LuaLevelOfDetail>(state, 1);
+  auto *entity = ::LuaWrap::EntityFromLua<LuaLevelOfDetail>(state, 1);
 
-  if (luaLevelOfDetail == nullptr) {
+  if (entity == nullptr) {
     return luaL_error(state, "Expected a LevelOfDetail object");
   }
 
-  auto levelOfDetail = luaLevelOfDetail->entity.get_ref<LevelOfDetail>();
+  auto levelOfDetail = entity->get_ref<LevelOfDetail>();
   if (levelOfDetail.get() == nullptr) {
     return luaL_error(state, "LevelOfDetail component not found");
   }
 
-  auto *geometry = LuaWrap::ObjectFromLua<LuaGeometry>(state, 2);
+  auto *geometry = ::LuaWrap::ObjectFromLua<LuaGeometry>(state, 2);
   if (geometry == nullptr) {
     return luaL_error(state, "Expected a Mesh object");
   }
@@ -139,13 +138,13 @@ auto LuaLevelOfDetail::RemoveGeometry(lua_State *state) -> int {
 }
 
 auto LuaLevelOfDetail::GetBoundingBox(lua_State *state) -> int {
-  auto *luaLevelOfDetail = LuaWrap::ObjectFromLua<LuaLevelOfDetail>(state, 1);
+  auto *entity = ::LuaWrap::EntityFromLua<LuaLevelOfDetail>(state, 1);
 
-  if (luaLevelOfDetail == nullptr) {
+  if (entity == nullptr) {
     return luaL_error(state, "Expected a LevelOfDetail object");
   }
 
-  auto levelOfDetail = luaLevelOfDetail->entity.get_ref<LevelOfDetail>();
+  auto levelOfDetail = entity->get_ref<LevelOfDetail>();
   if (levelOfDetail.get() == nullptr) {
     return luaL_error(state, "LevelOfDetail component not found");
   }
@@ -168,7 +167,7 @@ auto LuaLevelOfDetail::GetBoundingBox(lua_State *state) -> int {
   return 0; // No bounding box found, return 0 values
 }
 
-const LuaWrap::LuaClass LevelOfDetailClass = {
+const ::LuaWrap::LuaClass LevelOfDetailClass = {
     .Name = "LevelOfDetail",
     .Type = LuaLevelOfDetail::GetType(),
     .Methods =

@@ -1,7 +1,11 @@
 #pragma once
 
 #include "Modules/object.hpp"
+#include "Scene/displayName.hpp"
+#include "Scene/transform.hpp"
+#include "Scene/userdata.hpp"
 #include "Wrap/wrap.hpp"
+#include "Wrap/wrap_engine.hpp"
 #include <flecs.h>
 #include <imgui.h>
 #include <lua.hpp>
@@ -11,10 +15,8 @@ struct Shape {};
 
 static const Type shapeType = Type("Shape");
 
-struct LuaShape : Object {
-  explicit LuaShape(const flecs::entity &entity) : entity(entity) {}
-
-  flecs::entity entity;
+struct LuaShape : LuaWrap::LuaECSObject {
+  explicit LuaShape(const flecs::entity &entity) : LuaECSObject(entity) {}
 
   static auto GetType() -> const Type * { return &shapeType; }
   auto GetInstanceType() const -> const Type * override { return &shapeType; }
@@ -38,6 +40,19 @@ struct LuaShape : Object {
   }
 };
 
-extern const LuaWrap::LuaClass ShapeClass;
+// extern const ::LuaWrap::LuaClass ShapeClass;
+inline auto GetShapeClass() -> ::LuaWrap::LuaClass {
+  return {.Name = "Shape",
+          .Type = LuaShape::GetType(),
+          .Methods =
+              {
+                  {"getLODs", LuaShape::GetLODs},
+              },
+          .Components = {
+              DisplayNameComponent,
+              UserdataComponent,
+              TransformComponent,
+          }};
+}
 
 }; // namespace Engine

@@ -390,9 +390,11 @@ auto wrap_GetRenderTargets(lua_State *state) -> int {
   lua_newtable(state);
   for (size_t i = 0; i < renderTargets.size(); ++i) {
     auto &renderTarget = renderTargets[i];
-    const auto *type = ::Graphics::DynamicRendering::RenderTarget::GetType();
+    const auto *type = ::Graphics::DynamicRendering::LuaRenderTarget::GetType();
+    auto luaRendertarget =
+        Ref<::Graphics::DynamicRendering::LuaRenderTarget>::Make(renderTarget);
 
-    LuaWrap::PushObject(state, type, renderTarget.get());
+    LuaWrap::PushObject(state, type, luaRendertarget.get());
     lua_rawseti(state, -2, static_cast<int>(i + 1));
   }
 
@@ -650,6 +652,7 @@ auto wrap_DrawIndirect(lua_State *state) -> int {
 // Or: Color (attachment 1, vararg), value (depth), value (stencil)
 // Or: {[1..]: Color (attachment), depth=value, stencil=value}
 // Or: nothing; 0, 0, 0, 1, no depth clear, no stencil clear
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 auto wrap_Clear(lua_State *state) -> int {
   ZoneScoped;
   auto *ctx = ::Graphics::GetCurrentGraphicsContext();

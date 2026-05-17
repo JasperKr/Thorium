@@ -54,7 +54,7 @@ struct Vec2 {
   [[nodiscard]] auto Inverse() const -> Vec2;
   [[nodiscard]] auto Normalize() const -> Vec2;
   [[nodiscard]] auto Dot(const Vec2 &other) const -> Scalar;
-  [[nodiscard]] auto Cross(const Vec2 &other) const -> Scalar;
+  [[nodiscard]] auto Cross(const Vec2 &other) const -> Vec2;
 
   [[nodiscard]] auto Max(const Vec2 &other) const -> Vec2;
   [[nodiscard]] auto Max(Scalar scalar) const -> Vec2;
@@ -118,7 +118,7 @@ struct Vec3 {
   [[nodiscard]] auto Inverse() const -> Vec3;
   [[nodiscard]] auto Normalize() const -> Vec3;
   [[nodiscard]] auto Dot(const Vec3 &other) const -> Scalar;
-  [[nodiscard]] auto Cross(const Vec3 &other) const -> Scalar;
+  [[nodiscard]] auto Cross(const Vec3 &other) const -> Vec3;
 
   [[nodiscard]] auto Max(const Vec3 &other) const -> Vec3;
   [[nodiscard]] auto Max(Scalar scalar) const -> Vec3;
@@ -187,7 +187,7 @@ struct Vec4 {
   [[nodiscard]] auto Normalize() const -> Vec4;
   [[nodiscard]] auto Dot(const Vec4 &other) const -> Scalar;
   [[nodiscard]] auto Dot(const Vec3 &other) const -> Scalar;
-  [[nodiscard]] auto Cross(const Vec4 &other) const -> Scalar;
+  [[nodiscard]] auto Cross(const Vec4 &other) const -> Vec3;
 
   [[nodiscard]] auto Max(const Vec4 &other) const -> Vec4;
   [[nodiscard]] auto Max(Scalar scalar) const -> Vec4;

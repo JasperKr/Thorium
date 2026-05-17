@@ -166,6 +166,8 @@ struct Texture : Object, Barrier::BarrierSynced {
                  VkSamplerMipmapMode mipFilter) -> void;
   [[nodiscard]] auto GetFilter() const
       -> std::tuple<VkFilter, VkFilter, VkSamplerMipmapMode>;
+  auto SetBorderColor(VkBorderColor borderColor) -> void;
+  [[nodiscard]] auto GetBorderColor() const -> VkBorderColor;
   auto SetAnisotropy(float anisotropy) -> void;
   [[nodiscard]] auto GetAnisotropy() const -> float;
   auto SetWrapmode(VkSamplerAddressMode addressModeU,

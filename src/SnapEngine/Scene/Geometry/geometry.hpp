@@ -3,6 +3,7 @@
 #include "Graphics/mesh.hpp"
 #include "Modules/object.hpp"
 #include "Wrap/wrap.hpp"
+#include "Wrap/wrap_engine.hpp"
 #include <flecs.h>
 #include <lua.hpp>
 namespace Engine {
@@ -15,10 +16,8 @@ struct Geometry {
   auto DrawGUI() const -> void;
 };
 
-struct LuaGeometry : Object {
-  flecs::entity entity;
-
-  explicit LuaGeometry(const flecs::entity &entity) : entity(entity) {}
+struct LuaGeometry : LuaWrap::LuaECSObject {
+  explicit LuaGeometry(const flecs::entity &entity) : LuaECSObject(entity) {}
 
   static auto FromEntity(const flecs::entity &entity) -> Ref<LuaGeometry> {
     return Ref<LuaGeometry>::Make(entity);
@@ -33,6 +32,6 @@ struct LuaGeometry : Object {
   static auto Create(lua_State *state) -> int;
 };
 
-extern const LuaWrap::LuaClass GeometryClass;
+extern const ::LuaWrap::LuaClass GeometryClass;
 
 } // namespace Engine

@@ -35,7 +35,7 @@ VertexStageOutput vertexMain(VertexInput input) {
   VertexStageOutput out;
 
   float4 worldPos = mul(float4(input.Position, 1.0), ModelMatrix);
-  out.sv_position = mul(worldPos, camera.ViewProjectionMatrix);
+  out.sv_position = mul(camera.ViewProjectionMatrix, worldPos);
 
   out.tex_coord = input.TexCoords;
   float3 normal = UnpackNormal(input.Normal).xyz;
@@ -68,7 +68,7 @@ float4 fragmentMain(FragmentInput input) {
   input.normal = normalize(input.normal);
 
   // For some reason normals are flipped so we remove the ! here ig.
-  if (input.isFrontFace) {
+  if (!input.isFrontFace) {
     input.normal = -input.normal;
     input.tangent.xyz = -input.tangent.xyz;
   }
@@ -120,5 +120,5 @@ float4 fragmentMain(FragmentInput input) {
 
   float3 color = direct + irradiance + radiance;
 
-  return float4(color, alpha);
+  return float4(color, 1.0);
 }

@@ -4,6 +4,7 @@
 #include "Scene/scene.hpp"
 #include "Scene/transform.hpp"
 #include "Wrap/wrap.hpp"
+#include "Wrap/wrap_engine.hpp"
 #include <imgui.h>
 
 namespace Engine {
@@ -17,26 +18,26 @@ auto Geometry::DrawGUI() const -> void {
 }
 
 auto LuaGeometry::GetMesh(lua_State *state) -> int {
-  auto *luaGeometry = LuaWrap::ObjectFromLua<LuaGeometry>(state, 1);
-  if (luaGeometry == nullptr) {
+  auto *entity = ::LuaWrap::EntityFromLua<LuaGeometry>(state, 1);
+  if (entity == nullptr) {
     return luaL_error(state, "Expected a Geometry object");
   }
 
-  auto geometry = luaGeometry->entity.get<Geometry>();
+  auto geometry = entity->get<Geometry>();
 
-  LuaWrap::PushObject(state, Graphics::Mesh::GetType(), geometry.mesh.get());
+  ::LuaWrap::PushObject(state, Graphics::Mesh::GetType(), geometry.mesh.get());
   return 1;
 }
 
 auto LuaGeometry::Create(lua_State *state) -> int {
-  auto *scene = LuaWrap::ObjectFromLua<Scene>(state, 1);
+  auto *scene = ::LuaWrap::ObjectFromLua<Scene>(state, 1);
   const char *name = luaL_checkstring(state, 2);
 
   if (scene == nullptr) {
     return luaL_error(state, "Expected a World object");
   }
 
-  auto *mesh = LuaWrap::ObjectFromLua<Graphics::Mesh>(state, 3);
+  auto *mesh = ::LuaWrap::ObjectFromLua<Graphics::Mesh>(state, 3);
   if (mesh == nullptr) {
     return luaL_error(state, "Expected a Mesh object");
   }
@@ -48,12 +49,12 @@ auto LuaGeometry::Create(lua_State *state) -> int {
   entity.add<Transform>();
 
   auto luaGeometry = LuaGeometry::FromEntity(entity);
-  LuaWrap::PushObject(state, LuaGeometry::GetType(), luaGeometry.get());
+  ::LuaWrap::PushObject(state, LuaGeometry::GetType(), luaGeometry.get());
 
   return 1;
 }
 
-const LuaWrap::LuaClass GeometryClass = {
+const ::LuaWrap::LuaClass GeometryClass = {
     .Name = "Geometry",
     .Type = LuaGeometry::GetType(),
     .Methods =

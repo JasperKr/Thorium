@@ -60,7 +60,7 @@ auto DirectionalLight::Write(std::span<uint8_t> buffer,
 // scene:createDirectionalLight(name, qx, qy, qz, qw, r, g, b, intensity)
 // or: scene:createDirectionalLight(name, {qx, qy, qz, qw}, {r, g, b}, intensity)
 auto LuaDirectionalLight::Create(lua_State *state) -> int {
-  auto *scene = LuaWrap::ObjectFromLua<Scene>(state, 1);
+  auto *scene = ::LuaWrap::ObjectFromLua<Scene>(state, 1);
   const char *name = luaL_checkstring(state, 2);
 
   if (scene == nullptr) {
@@ -139,13 +139,13 @@ auto LuaDirectionalLight::Create(lua_State *state) -> int {
   Renderer::RendererInstance.SceneLightBuffers.DirectionalLightCount++;
 
   auto luaDirectionalLight = LuaDirectionalLight::FromEntity(entity);
-  LuaWrap::PushObject(state, LuaDirectionalLight::GetType(),
-                      luaDirectionalLight.get());
+  ::LuaWrap::PushObject(state, LuaDirectionalLight::GetType(),
+                        luaDirectionalLight.get());
 
   return 1;
 }
 
-const LuaWrap::LuaClass DirectionalLightClass = {
+const ::LuaWrap::LuaClass DirectionalLightClass = {
     .Name = "DirectionalLight",
     .Type = LuaDirectionalLight::GetType(),
     .Methods = {},

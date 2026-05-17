@@ -1,4 +1,5 @@
 #pragma once
+#include "Graphics/graphicsContext.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Modules/type.hpp"
@@ -25,16 +26,32 @@ struct Scene : Object {
   static auto GetType() -> const Type * { return &SceneType; }
   auto GetInstanceType() const -> const Type * override { return &SceneType; }
 
-  static auto LoadBinding(lua_State *state) -> int;
-  static auto DrawUiElement(lua_State *state) -> int;
-  static auto DrawModels(lua_State *state) -> int;
-  static auto Update(lua_State *state) -> int;
-
+  auto DrawUiElement() const -> Error;
+  auto DrawModels(const struct Graphics::GraphicsContext &context) -> Error;
   auto Update(double deltaTime) const -> Error;
+
   auto UpdateTransforms() const -> void;
   auto UpdateBoundingBoxes() const -> void;
 };
 
-extern const LuaWrap::LuaClass SceneLuaClass;
+struct LuaScene : Object {
+  explicit LuaScene(Ref<Scene> &scene) : scene(scene) {}
+
+  Ref<Scene> scene;
+
+  static auto GetType() -> const Type * { return &SceneType; }
+  [[nodiscard]] auto GetInstanceType() const -> const Type * override {
+    return LuaScene::GetType();
+  }
+
+  static auto LoadBinding(lua_State *state) -> int;
+  static auto DrawUiElement(lua_State *state) -> int;
+  static auto Update(lua_State *state) -> int;
+
+  static auto GetName(lua_State *state) -> int;
+  static auto SetName(lua_State *state) -> int;
+};
+
+extern const ::LuaWrap::LuaClass SceneLuaClass;
 
 } // namespace Engine

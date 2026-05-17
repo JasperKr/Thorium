@@ -1,6 +1,7 @@
 #include "Modules/Math/matrix.hpp"
 #include "Modules/Math/vector.hpp"
 #include "Wrap/wrap.hpp"
+#include "Wrap/wrap_engine.hpp"
 #include <algorithm>
 #include <array>
 #include <cassert>
@@ -112,6 +113,15 @@ struct Frustum {
   static auto FromMatrices(const Math::Matrix4x4 &viewProjectionMatrix,
                            const Math::Matrix4x4 &inverseViewProjectionMatrix)
       -> Frustum;
+};
+
+static const Type FrustumType = Type("Frustum");
+
+struct LuaFrustum : LuaWrap::LuaECSObject {
+  static auto GetType() -> const Type * { return &FrustumType; }
+  [[nodiscard]] auto GetInstanceType() const -> const Type * override {
+    return LuaFrustum::GetType();
+  }
 
   static auto GetNearPlane(lua_State *state) -> int;
   static auto GetFarPlane(lua_State *state) -> int;
@@ -123,6 +133,6 @@ struct Frustum {
   static auto GetCorner(lua_State *state) -> int;
 };
 
-extern const LuaWrap::LuaComponent FrustumComponent;
+extern const ::LuaWrap::LuaComponent FrustumComponent;
 
 } // namespace Engine

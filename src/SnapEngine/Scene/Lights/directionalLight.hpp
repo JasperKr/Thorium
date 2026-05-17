@@ -54,6 +54,6 @@ struct LuaDirectionalLight : Object {
   }
 };
 
-extern const LuaWrap::LuaClass DirectionalLightClass;
+extern const ::LuaWrap::LuaClass DirectionalLightClass;
 
 } // namespace Engine

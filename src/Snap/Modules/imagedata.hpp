@@ -61,7 +61,8 @@ public:
                      VkFormat format) -> Result<Ref<ImageData>>;
   static auto Create(const std::string &filepath) -> Result<Ref<ImageData>>;
   static auto Create(const Data::ByteData &byteData) -> Result<Ref<ImageData>>;
-  static auto Create(const std::span<uint8_t> &data) -> Result<Ref<ImageData>>;
+  static auto Create(const std::span<const uint8_t> &data)
+      -> Result<Ref<ImageData>>;
 
   static auto GetType() -> Type const * { return &LuaImageDataType; }
 

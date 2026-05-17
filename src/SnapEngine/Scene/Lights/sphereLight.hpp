@@ -53,6 +53,6 @@ struct LuaSphereLight : Object {
   }
 };
 
-extern const LuaWrap::LuaClass SphereLightClass;
+extern const ::LuaWrap::LuaClass SphereLightClass;
 
 } // namespace Engine

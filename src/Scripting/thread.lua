@@ -18,24 +18,23 @@ do
 
   local shader = snap.graphics.newShader("Scripting/Graphics/Shaders/forward.slang")
 
-  local rendertarget
-  local depthbuffer
   local snapshot
 
   local function draw()
-    snap.graphics.setRenderTarget(
-      { { texture = rendertarget, loadas = "clear", blendmode = { blendmode = "alpha", alphamode = "alphamultiply" } },
-        { texture = depthbuffer,  loadas = 1 } })
     snap.graphics.setShader(shader)
     snap.graphics.setCullMode("none")
-    shader:send("CameraData", camera:getBuffer())
     snap.graphics.setCullMode("none")
     snap.graphics.setWindingOrder("ccw")
-    snap.graphics.setDepthMode("less", true)
-    scene:drawModels()
+    snap.graphics.setDepthMode("greater", true)
+    camera:render(scene)
     snap.graphics.setShader()
+    if Imgui.Begin("Viewport") then
+      Imgui.Image(camera:getRendertarget("IncomingLight"), ffi.new("ImVec2", { cameraWidth, cameraHeight }))
+    end
+    Imgui.End()
 
     Editor.drawGUI()
+    scene:drawUIElement();
 
     local startTime = snap.timer.getTime()
 
@@ -102,10 +101,10 @@ do
       return
     end
 
-    local quat = quaternion(snap.math.eulerToQuaternion(dx * 0.001, dy * 0.001, 0))
+    local quat = quaternion(snap.math.eulerToQuaternion(dx * 0.0015, -dy * 0.0015, 0))
     local currentQuat = quaternion(camera:getRotation())
-    local newQuat = quat * currentQuat
-    camera:SetRotation(newQuat.x, newQuat.y, newQuat.z, newQuat.w)
+    local newQuat = currentQuat * quat
+    camera:setRotation(newQuat.x, newQuat.y, newQuat.z, newQuat.w)
   end
 
   local t = snap.timer.getTime()
@@ -132,28 +131,31 @@ do
     local speed = delta * 10
 
     if (isDown["a"]) then
-      local left = -camera:GetRight()
+      local leftX, leftY, leftZ = camera:getInverseRight()
+      leftX, leftY, leftZ = -leftX, -leftY, -leftZ
       local x, y, z = camera:getPosition()
-      camera:SetPosition(x + left.x * speed, y + left.y * speed, z + left.z * speed)
+      camera:setPosition(x + leftX * speed, y + leftY * speed, z + leftZ * speed)
     end
 
     if (isDown["d"]) then
-      local right = camera:GetRight()
+      local rightX, rightY, rightZ = camera:getInverseRight()
       local x, y, z = camera:getPosition()
-      camera:SetPosition(x + right.x * speed, y + right.y * speed, z + right.z * speed)
+      camera:setPosition(x + rightX * speed, y + rightY * speed, z + rightZ * speed)
     end
 
     if (isDown["w"]) then
-      local forward = camera:GetForward()
+      local forwardX, forwardY, forwardZ = camera:getInverseForward()
       local x, y, z = camera:getPosition()
-      camera:SetPosition(x + forward.x * speed, y + forward.y * speed, z + forward.z * speed)
+      camera:setPosition(x + forwardX * speed, y + forwardY * speed, z + forwardZ * speed)
     end
 
     if (isDown["s"]) then
-      local back = -camera:GetForward()
+      local backX, backY, backZ = camera:getInverseForward()
+      backX, backY, backZ = -backX, -backY, -backZ
       local x, y, z = camera:getPosition()
-      camera:SetPosition(x + back.x * speed, y + back.y * speed, z + back.z * speed)
+      camera:setPosition(x + backX * speed, y + backY * speed, z + backZ * speed)
     end
+
     if createSnapshot then
       print("Requesting snapshot creation")
     end
@@ -163,11 +165,6 @@ do
     if firstFrame then
       snap.graphics.setDefaultFilter("linear", "linear", 4)
       snap.scene.loadModel(scene, "Assets/Terrain/sponza.glb")
-
-      rendertarget = snap.graphics.newTexture(snap.graphics.getWidth(), snap.graphics.getHeight(),
-        { sampler = true, rendertarget = true, format = "rg11b10f" })
-      depthbuffer = snap.graphics.newTexture(snap.graphics.getWidth(), snap.graphics.getHeight(),
-        { rendertarget = true, format = "depth32f" })
 
       firstFrame = false
     end

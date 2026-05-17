@@ -33,10 +33,19 @@ namespace Math {
   };
 }
 
+/*
+public float3 Rotate(float3 v, float4 q) {
+  return v + 2.0 * cross(q.xyz, cross(q.xyz, v) + q.w * v);
+}
+*/
+
 [[nodiscard]] auto Quaternion::RotateVector(const Vec3 &vec) const -> Vec3 {
-  Quaternion vecQuat{vec.x, vec.y, vec.z, 0.0F};
-  Quaternion resQuat = this->Multiply(vecQuat).Multiply(this->Inverse());
-  return {resQuat.x, resQuat.y, resQuat.z};
+  Vec3 qVec{x, y, z};
+  Vec3 quatCVec = qVec.Cross(vec);
+  Vec3 vecCCVec = qVec.Cross(quatCVec);
+  quatCVec *= (2.0F * w); // NOLINT
+  vecCCVec *= 2.0F;       // NOLINT
+  return vec + quatCVec + vecCCVec;
 }
 
 [[nodiscard]] auto Quaternion::ToString() const -> std::string {

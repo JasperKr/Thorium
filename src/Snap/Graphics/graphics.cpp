@@ -264,7 +264,6 @@ static auto CreateDevice(GraphicsContext &context,
   auto extensions = std::vector<std::pair<const char *, ExtensionRequirement>>{
       {VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME, extOptional},
       {VK_EXT_VERTEX_INPUT_DYNAMIC_STATE_EXTENSION_NAME, extRequired},
-      {VK_EXT_DEBUG_UTILS_EXTENSION_NAME, extOptional},
       {VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
        settings.hardwareRaytracing},
       {VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME, settings.hardwareRaytracing},

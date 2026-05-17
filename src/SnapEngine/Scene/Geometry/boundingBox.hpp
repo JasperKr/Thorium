@@ -6,6 +6,7 @@
 #include "Modules/type.hpp"
 #include "Scene/transform.hpp"
 #include "Wrap/wrap.hpp"
+#include "Wrap/wrap_engine.hpp"
 #include <flecs.h>
 #include <lua.hpp>
 namespace Engine {
@@ -36,10 +37,8 @@ struct BoundingBox {
 
 static const Type boundingBoxType = Type("BoundingBox");
 
-struct LuaBoundingBox : Object {
-  flecs::entity entity;
-
-  explicit LuaBoundingBox(const flecs::entity &entity) : entity(entity) {}
+struct LuaBoundingBox : LuaWrap::LuaECSObject {
+  explicit LuaBoundingBox(const flecs::entity &entity) : LuaECSObject(entity) {}
 
   static auto GetType() -> const Type * { return &boundingBoxType; }
   auto GetInstanceType() const -> const Type * override {
@@ -75,6 +74,6 @@ struct WorldBounds {
   auto DrawGUI() const -> void { Bounds.DrawGUI(); }
 };
 
-extern const LuaWrap::LuaClass BoundingBoxClass;
+extern const ::LuaWrap::LuaClass BoundingBoxClass;
 
 } // namespace Engine

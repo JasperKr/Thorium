@@ -407,7 +407,7 @@ auto ImageData::Create(const std::string &filepath) -> Result<Ref<ImageData>> {
   return Create(bytedata);
 }
 
-auto ImageData::Create(const std::span<uint8_t> &data)
+auto ImageData::Create(const std::span<const uint8_t> &data)
     -> Result<Ref<ImageData>> {
   // Allowed formats: jpeg, png, tga, bmp, psd, gif, hdr, pic, ppm
 

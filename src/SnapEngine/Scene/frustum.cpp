@@ -1,7 +1,7 @@
 #include "frustum.hpp"
 #include "Modules/Math/vector.hpp"
 #include "Wrap/wrap.hpp"
-#include "entity.hpp"
+#include "Wrap/wrap_engine.hpp"
 
 namespace Engine {
 
@@ -89,8 +89,8 @@ auto Frustum::FromMatrices(const Math::Matrix4x4 &viewProjectionMatrix,
   return frustum;
 }
 
-auto Frustum::GetNearPlane(lua_State *state) -> int {
-  auto *entity = LuaWrap::ObjectFromLua<Entity>(state, 1);
+auto LuaFrustum::GetNearPlane(lua_State *state) -> int {
+  auto *entity = ::LuaWrap::EntityFromLua<LuaFrustum>(state, 1);
   if (entity == nullptr) {
     return luaL_error(state, "Invalid Entity");
   }
@@ -108,8 +108,8 @@ auto Frustum::GetNearPlane(lua_State *state) -> int {
   return 4;
 };
 
-auto Frustum::GetFarPlane(lua_State *state) -> int {
-  auto *entity = LuaWrap::ObjectFromLua<Entity>(state, 1);
+auto LuaFrustum::GetFarPlane(lua_State *state) -> int {
+  auto *entity = ::LuaWrap::EntityFromLua<LuaFrustum>(state, 1);
   if (entity == nullptr) {
     return luaL_error(state, "Invalid Entity");
   }
@@ -127,8 +127,8 @@ auto Frustum::GetFarPlane(lua_State *state) -> int {
   return 4;
 };
 
-auto Frustum::GetLeftPlane(lua_State *state) -> int {
-  auto *entity = LuaWrap::ObjectFromLua<Entity>(state, 1);
+auto LuaFrustum::GetLeftPlane(lua_State *state) -> int {
+  auto *entity = ::LuaWrap::EntityFromLua<LuaFrustum>(state, 1);
   if (entity == nullptr) {
     return luaL_error(state, "Invalid Entity");
   }
@@ -146,8 +146,8 @@ auto Frustum::GetLeftPlane(lua_State *state) -> int {
   return 4;
 };
 
-auto Frustum::GetRightPlane(lua_State *state) -> int {
-  auto *entity = LuaWrap::ObjectFromLua<Entity>(state, 1);
+auto LuaFrustum::GetRightPlane(lua_State *state) -> int {
+  auto *entity = ::LuaWrap::EntityFromLua<LuaFrustum>(state, 1);
   if (entity == nullptr) {
     return luaL_error(state, "Invalid Entity");
   }
@@ -165,8 +165,8 @@ auto Frustum::GetRightPlane(lua_State *state) -> int {
   return 4;
 };
 
-auto Frustum::GetTopPlane(lua_State *state) -> int {
-  auto *entity = LuaWrap::ObjectFromLua<Entity>(state, 1);
+auto LuaFrustum::GetTopPlane(lua_State *state) -> int {
+  auto *entity = ::LuaWrap::EntityFromLua<LuaFrustum>(state, 1);
   if (entity == nullptr) {
     return luaL_error(state, "Invalid Entity");
   }
@@ -184,8 +184,8 @@ auto Frustum::GetTopPlane(lua_State *state) -> int {
   return 4;
 };
 
-auto Frustum::GetBottomPlane(lua_State *state) -> int {
-  auto *entity = LuaWrap::ObjectFromLua<Entity>(state, 1);
+auto LuaFrustum::GetBottomPlane(lua_State *state) -> int {
+  auto *entity = ::LuaWrap::EntityFromLua<LuaFrustum>(state, 1);
   if (entity == nullptr) {
     return luaL_error(state, "Invalid Entity");
   }
@@ -203,8 +203,8 @@ auto Frustum::GetBottomPlane(lua_State *state) -> int {
   return 4;
 };
 
-auto Frustum::GetCorner(lua_State *state) -> int {
-  auto *entity = LuaWrap::ObjectFromLua<Entity>(state, 1);
+auto LuaFrustum::GetCorner(lua_State *state) -> int {
+  auto *entity = ::LuaWrap::EntityFromLua<LuaFrustum>(state, 1);
   if (entity == nullptr) {
     return luaL_error(state, "Invalid Entity");
   }
@@ -215,7 +215,7 @@ auto Frustum::GetCorner(lua_State *state) -> int {
   }
 
   int index = static_cast<int>(luaL_checkinteger(state, 2));
-  if (index < 0 || index >= CornerCount) {
+  if (index < 0 || index >= Frustum::CornerCount) {
     return luaL_error(state, "Corner index out of range");
   }
 
@@ -227,14 +227,14 @@ auto Frustum::GetCorner(lua_State *state) -> int {
   return 3;
 };
 
-const LuaWrap::LuaComponent FrustumComponent{{
-    {"getNearPlane", Frustum::GetNearPlane},
-    {"getFarPlane", Frustum::GetFarPlane},
-    {"getLeftPlane", Frustum::GetLeftPlane},
-    {"getRightPlane", Frustum::GetRightPlane},
-    {"getTopPlane", Frustum::GetTopPlane},
-    {"getBottomPlane", Frustum::GetBottomPlane},
-    {"getCorner", Frustum::GetCorner},
+const ::LuaWrap::LuaComponent FrustumComponent{{
+    {"getNearPlane", LuaFrustum::GetNearPlane},
+    {"getFarPlane", LuaFrustum::GetFarPlane},
+    {"getLeftPlane", LuaFrustum::GetLeftPlane},
+    {"getRightPlane", LuaFrustum::GetRightPlane},
+    {"getTopPlane", LuaFrustum::GetTopPlane},
+    {"getBottomPlane", LuaFrustum::GetBottomPlane},
+    {"getCorner", LuaFrustum::GetCorner},
 }};
 
 } // namespace Engine

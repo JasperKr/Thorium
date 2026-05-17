@@ -142,6 +142,9 @@ public:
 
   explicit operator bool() const { return ptr != nullptr; }
 
+  auto operator==(std::nullptr_t) const -> bool { return ptr == nullptr; }
+  auto operator!=(std::nullptr_t) const -> bool { return ptr != nullptr; }
+
 private:
   T *ptr = nullptr;
 };

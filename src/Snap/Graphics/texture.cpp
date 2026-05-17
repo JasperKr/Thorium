@@ -897,6 +897,16 @@ auto Texture::GetFilter() const
           samplerDescription.mipmapMode};
 }
 
+auto Texture::SetBorderColor(VkBorderColor borderColor) -> void {
+  samplerDescription.borderColor = borderColor;
+
+  samplerDirty = true;
+}
+
+auto Texture::GetBorderColor() const -> VkBorderColor {
+  return samplerDescription.borderColor;
+}
+
 auto Texture::SetAnisotropy(float anisotropy) -> void {
   samplerDescription.anisotropyEnable = (anisotropy > 1.0F);
   samplerDescription.maxAnisotropy = anisotropy;

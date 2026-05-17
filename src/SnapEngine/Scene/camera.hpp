@@ -8,30 +8,34 @@
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Modules/type.hpp"
+#include "Renderer/rendertargetManager.hpp"
 #include "Scene/scene.hpp"
 #include "Wrap/wrap.hpp"
+#include "Wrap/wrap_engine.hpp"
 namespace Engine {
 
 struct Camera {
+  friend struct LuaCamera;
+
   void SetVerticalFOV(Math::Scalar fovDeg) {
     verticalFOVDeg = fovDeg;
     VerticalFOVRad = Math::DegToRad(fovDeg);
-    dirty = true;
+    projectionDirty = true;
   }
 
   void SetAspectRatio(Math::Scalar aspectRatio) {
     AspectRatio = aspectRatio;
-    dirty = true;
+    projectionDirty = true;
   }
 
   void SetNearPlane(Math::Scalar nearPlane) {
     NearPlane = nearPlane;
-    dirty = true;
+    projectionDirty = true;
   }
 
   void SetFarPlane(Math::Scalar farPlane) {
     FarPlane = farPlane;
-    dirty = true;
+    projectionDirty = true;
   }
 
   [[nodiscard]] auto GetAspectRatio() const -> Math::Scalar {
@@ -53,39 +57,64 @@ struct Camera {
   static void RegisterCameraSystems(Scene &scene);
 
   static auto Create(const Graphics::GraphicsContext &context,
-                     Math::Scalar verticalFOVDeg, Math::Ivec2 Dimensions,
+                     Math::Scalar verticalFOVDeg, Math::Uvec2 Dimensions,
                      Math::Scalar near, Math::Scalar far) -> Result<Camera>;
 
   auto WriteToBuffer(flecs::entity entity) const -> Error;
 
+  auto Resize(Math::Uvec2 newDimensions) -> void {
+    Dimensions = newDimensions;
+    projectionDirty = true;
+  }
+
+  auto Render(const Graphics::GraphicsContext &context,
+              flecs::entity thisEntity, Scene *scene) -> Error;
+
+  // Descriptors for the textures we'd like to own.
+  struct CameraRendertargets {
+    Renderer::RendertargetDescriptor Depth;
+    Renderer::RendertargetDescriptor IncomingLight;
+  };
+
+  // References to the textures we currently own. Dynamic
+  struct AllocatedTextures {
+    Ref<Graphics::Texture> Depth;
+    Ref<Graphics::Texture> IncomingLight;
+  };
+
 private:
   Math::Scalar verticalFOVDeg{};
   Math::Scalar VerticalFOVRad{};
-  Math::Ivec2 Dimensions;
+  Math::Uvec2 Dimensions;
   Math::Scalar AspectRatio{};
   Math::Scalar NearPlane{};
   Math::Scalar FarPlane{};
 
-  Ref<Graphics::StructuredBuffer> CameraBuffer;
+  Ref<struct Graphics::StructuredBuffer> CameraBuffer;
 
-  bool dirty = true;
+  CameraRendertargets Rendertargets;
+  AllocatedTextures OwnedTextures;
+
+  bool projectionDirty = true;
+
+  auto ConfigureRendertargets() -> void;
 };
 
 extern const Graphics::BufferFormat CameraBufferFormat;
 
 static const Type CameraType = Type("Camera");
 
-struct LuaCamera : Object {
-  explicit LuaCamera(flecs::entity entity) : entity(entity) {}
+struct LuaCamera : LuaWrap::LuaECSObject {
+  explicit LuaCamera(flecs::entity entity) : LuaECSObject(entity) {}
 
   static auto Create(lua_State *state) -> int;
-
-  flecs::entity entity;
 
   static auto GetType() -> const Type * { return &CameraType; }
   [[nodiscard]] auto GetInstanceType() const -> const Type * override {
     return LuaCamera::GetType();
   }
+
+  static auto Render(lua_State *state) -> int;
 
   static auto GetName(lua_State *state) -> int;
   static auto SetName(lua_State *state) -> int;
@@ -103,8 +132,9 @@ struct LuaCamera : Object {
   static auto SetFarPlane(lua_State *state) -> int;
 
   static auto GetBuffer(lua_State *state) -> int;
+  static auto GetRendertarget(lua_State *state) -> int;
 };
 
-auto GetLuaCameraClass() -> LuaWrap::LuaClass;
+auto GetLuaCameraClass() -> ::LuaWrap::LuaClass;
 
 } // namespace Engine

@@ -4,16 +4,17 @@
 #include "Modules/Math/mathTypes.hpp"
 #include "Modules/Math/matrix.hpp"
 #include "Wrap/wrap.hpp"
-#include "entity.hpp"
+#include "Wrap/wrap_engine.hpp"
 #include <format>
 #include <imgui.h>
+#include <lua.h>
 #include <lua.hpp>
 
 namespace Engine {
 // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers, readability-magic-numbers)
 
-auto Transform::SetPosition(lua_State *state) -> int {
-  auto *entity = LuaWrap::ObjectFromLua<Entity>(state, 1);
+auto LuaTransform::SetPosition(lua_State *state) -> int {
+  auto *entity = ::LuaWrap::EntityFromLua<LuaTransform>(state, 1);
   if (entity == nullptr) {
     return luaL_error(state, "Invalid Entity object");
   }
@@ -28,15 +29,14 @@ auto Transform::SetPosition(lua_State *state) -> int {
     transform = entity->try_get_mut<Transform>();
   }
 
-  transform->Position.x = static_cast<Math::Scalar>(luaL_checknumber(state, 2));
-  transform->Position.y = static_cast<Math::Scalar>(luaL_checknumber(state, 3));
-  transform->Position.z = static_cast<Math::Scalar>(luaL_checknumber(state, 4));
+  transform->SetPosition(luaL_checkscalar(state, 2), luaL_checkscalar(state, 3),
+                         luaL_checkscalar(state, 4));
 
   return 0;
 }
 
-auto Transform::GetPosition(lua_State *state) -> int {
-  auto *entity = LuaWrap::ObjectFromLua<Entity>(state, 1);
+auto LuaTransform::GetPosition(lua_State *state) -> int {
+  auto *entity = ::LuaWrap::EntityFromLua<LuaTransform>(state, 1);
   if (entity == nullptr) {
     return luaL_error(state, "Invalid Entity object");
   }
@@ -47,14 +47,15 @@ auto Transform::GetPosition(lua_State *state) -> int {
     return 1;
   }
 
-  lua_pushnumber(state, transform->Position.x);
-  lua_pushnumber(state, transform->Position.y);
-  lua_pushnumber(state, transform->Position.z);
+  auto position = transform->GetPosition();
+  lua_pushnumber(state, position.x);
+  lua_pushnumber(state, position.y);
+  lua_pushnumber(state, position.z);
   return 3;
 }
 
-auto Transform::SetRotation(lua_State *state) -> int {
-  auto *entity = LuaWrap::ObjectFromLua<Entity>(state, 1);
+auto LuaTransform::SetRotation(lua_State *state) -> int {
+  auto *entity = ::LuaWrap::EntityFromLua<LuaTransform>(state, 1);
   if (entity == nullptr) {
     return luaL_error(state, "Invalid Entity object");
   }
@@ -69,16 +70,17 @@ auto Transform::SetRotation(lua_State *state) -> int {
     transform = entity->try_get_mut<Transform>();
   }
 
-  transform->Rotation.x = static_cast<Math::Scalar>(luaL_checknumber(state, 2));
-  transform->Rotation.y = static_cast<Math::Scalar>(luaL_checknumber(state, 3));
-  transform->Rotation.z = static_cast<Math::Scalar>(luaL_checknumber(state, 4));
-  transform->Rotation.w = static_cast<Math::Scalar>(luaL_checknumber(state, 5));
+  transform->SetRotation(luaL_checkscalar(state, 2), luaL_checkscalar(state, 3),
+                         luaL_checkscalar(state, 4),
+                         luaL_checkscalar(state, 5));
 
   return 0;
 }
 
-auto Transform::GetRotation(lua_State *state) -> int {
-  auto *entity = LuaWrap::ObjectFromLua<Entity>(state, 1);
+auto LuaTransform::GetRotation(lua_State *state) -> int {
+  // Todo: Type is not Entity, but Lua<...>, LuaCamera for example, which contains an entity field.
+  // Need a way to abstract this, so we can get the entity regardless of the specific Lua wrapper type.
+  auto *entity = ::LuaWrap::EntityFromLua<LuaTransform>(state, 1);
   if (entity == nullptr) {
     return luaL_error(state, "Invalid Entity object");
   }
@@ -89,15 +91,17 @@ auto Transform::GetRotation(lua_State *state) -> int {
     return 1;
   }
 
-  lua_pushnumber(state, transform->Rotation.x);
-  lua_pushnumber(state, transform->Rotation.y);
-  lua_pushnumber(state, transform->Rotation.z);
-  lua_pushnumber(state, transform->Rotation.w);
+  auto rotation = transform->GetRotation();
+  lua_pushnumber(state, rotation.x);
+  lua_pushnumber(state, rotation.y);
+  lua_pushnumber(state, rotation.z);
+  lua_pushnumber(state, rotation.w);
+
   return 4;
 }
 
-auto Transform::SetScale(lua_State *state) -> int {
-  auto *entity = LuaWrap::ObjectFromLua<Entity>(state, 1);
+auto LuaTransform::SetScale(lua_State *state) -> int {
+  auto *entity = ::LuaWrap::EntityFromLua<LuaTransform>(state, 1);
   if (entity == nullptr) {
     return luaL_error(state, "Invalid Entity object");
   }
@@ -112,15 +116,14 @@ auto Transform::SetScale(lua_State *state) -> int {
     transform = entity->try_get_mut<Transform>();
   }
 
-  transform->Scale.x = static_cast<Math::Scalar>(luaL_checknumber(state, 2));
-  transform->Scale.y = static_cast<Math::Scalar>(luaL_checknumber(state, 3));
-  transform->Scale.z = static_cast<Math::Scalar>(luaL_checknumber(state, 4));
+  transform->SetScale(luaL_checkscalar(state, 2), luaL_checkscalar(state, 3),
+                      luaL_checkscalar(state, 4));
 
   return 0;
 }
 
-auto Transform::GetScale(lua_State *state) -> int {
-  auto *entity = LuaWrap::ObjectFromLua<Entity>(state, 1);
+auto LuaTransform::GetScale(lua_State *state) -> int {
+  auto *entity = ::LuaWrap::EntityFromLua<LuaTransform>(state, 1);
   if (entity == nullptr) {
     return luaL_error(state, "Invalid Entity object");
   }
@@ -131,15 +134,16 @@ auto Transform::GetScale(lua_State *state) -> int {
     return 1;
   }
 
-  lua_pushnumber(state, transform->Scale.x);
-  lua_pushnumber(state, transform->Scale.y);
-  lua_pushnumber(state, transform->Scale.z);
+  auto scale = transform->GetScale();
+  lua_pushnumber(state, scale.x);
+  lua_pushnumber(state, scale.y);
+  lua_pushnumber(state, scale.z);
 
   return 3;
 }
 
-auto Transform::SetTransform(lua_State *state) -> int {
-  auto *entity = LuaWrap::ObjectFromLua<Entity>(state, 1);
+auto LuaTransform::SetTransform(lua_State *state) -> int {
+  auto *entity = ::LuaWrap::EntityFromLua<LuaTransform>(state, 1);
   if (entity == nullptr) {
     return luaL_error(state, "Invalid Entity object");
   }
@@ -155,24 +159,21 @@ auto Transform::SetTransform(lua_State *state) -> int {
     transform = entity->try_get_mut<Transform>();
   }
 
-  transform->Position.x = static_cast<Math::Scalar>(luaL_checknumber(state, 2));
-  transform->Position.y = static_cast<Math::Scalar>(luaL_checknumber(state, 3));
-  transform->Position.z = static_cast<Math::Scalar>(luaL_checknumber(state, 4));
+  transform->SetPosition(luaL_checkscalar(state, 2), luaL_checkscalar(state, 3),
+                         luaL_checkscalar(state, 4));
 
-  transform->Rotation.x = static_cast<Math::Scalar>(luaL_checknumber(state, 5));
-  transform->Rotation.y = static_cast<Math::Scalar>(luaL_checknumber(state, 6));
-  transform->Rotation.z = static_cast<Math::Scalar>(luaL_checknumber(state, 7));
-  transform->Rotation.w = static_cast<Math::Scalar>(luaL_checknumber(state, 8));
+  transform->SetRotation(luaL_checkscalar(state, 5), luaL_checkscalar(state, 6),
+                         luaL_checkscalar(state, 7),
 
-  transform->Scale.x = static_cast<Math::Scalar>(luaL_checknumber(state, 9));
-  transform->Scale.y = static_cast<Math::Scalar>(luaL_checknumber(state, 10));
-  transform->Scale.z = static_cast<Math::Scalar>(luaL_checknumber(state, 11));
+                         luaL_checkscalar(state, 8));
+  transform->SetScale(luaL_checkscalar(state, 9), luaL_checkscalar(state, 10),
+                      luaL_checkscalar(state, 11));
 
   return 0;
 }
 
-auto Transform::GetTransform(lua_State *state) -> int {
-  auto *entity = LuaWrap::ObjectFromLua<Entity>(state, 1);
+auto LuaTransform::GetTransform(lua_State *state) -> int {
+  auto *entity = ::LuaWrap::EntityFromLua<LuaTransform>(state, 1);
   if (entity == nullptr) {
     return luaL_error(state, "Invalid Entity object");
   }
@@ -183,24 +184,28 @@ auto Transform::GetTransform(lua_State *state) -> int {
     return 1;
   }
 
-  lua_pushnumber(state, transform->Position.x);
-  lua_pushnumber(state, transform->Position.y);
-  lua_pushnumber(state, transform->Position.z);
+  auto position = transform->GetPosition();
+  auto rotation = transform->GetRotation();
+  auto scale = transform->GetScale();
 
-  lua_pushnumber(state, transform->Rotation.x);
-  lua_pushnumber(state, transform->Rotation.y);
-  lua_pushnumber(state, transform->Rotation.z);
-  lua_pushnumber(state, transform->Rotation.w);
+  lua_pushnumber(state, position.x);
+  lua_pushnumber(state, position.y);
+  lua_pushnumber(state, position.z);
 
-  lua_pushnumber(state, transform->Scale.x);
-  lua_pushnumber(state, transform->Scale.y);
-  lua_pushnumber(state, transform->Scale.z);
+  lua_pushnumber(state, rotation.x);
+  lua_pushnumber(state, rotation.y);
+  lua_pushnumber(state, rotation.z);
+  lua_pushnumber(state, rotation.w);
+
+  lua_pushnumber(state, scale.x);
+  lua_pushnumber(state, scale.y);
+  lua_pushnumber(state, scale.z);
 
   return 10;
 }
 
-auto Transform::GetLocalMatrix(lua_State *state) -> int {
-  auto *entity = LuaWrap::ObjectFromLua<Entity>(state, 1);
+auto LuaTransform::GetLocalMatrix(lua_State *state) -> int {
+  auto *entity = ::LuaWrap::EntityFromLua<LuaTransform>(state, 1);
   if (entity == nullptr) {
     return luaL_error(state, "Invalid Entity object");
   }
@@ -214,8 +219,8 @@ auto Transform::GetLocalMatrix(lua_State *state) -> int {
   return transform->GetLocalMatrix().ToLua(state);
 }
 
-auto Transform::GetWorldMatrix(lua_State *state) -> int {
-  auto *entity = LuaWrap::ObjectFromLua<Entity>(state, 1);
+auto LuaTransform::GetWorldMatrix(lua_State *state) -> int {
+  auto *entity = ::LuaWrap::EntityFromLua<LuaTransform>(state, 1);
   if (entity == nullptr) {
     return luaL_error(state, "Invalid Entity object");
   }
@@ -280,17 +285,146 @@ auto Transform::DrawGUI() -> void {
               std::format("World Matrix:\n{}", WorldMatrix.ToString()).c_str());
 }
 
-extern const LuaWrap::LuaComponent TransformComponent{{
-    {"setPosition", Transform::SetPosition},
-    {"getPosition", Transform::GetPosition},
-    {"setRotation", Transform::SetRotation},
-    {"getRotation", Transform::GetRotation},
-    {"setScale", Transform::SetScale},
-    {"getScale", Transform::GetScale},
-    {"setTransform", Transform::SetTransform},
-    {"getTransform", Transform::GetTransform},
-    {"getLocalMatrix", Transform::GetLocalMatrix},
-    {"getWorldMatrix", Transform::GetWorldMatrix},
+auto LuaTransform::GetUp(lua_State *state) -> int {
+  auto *entity = ::LuaWrap::EntityFromLua<LuaTransform>(state, 1);
+  if (entity == nullptr) {
+    return luaL_error(state, "Invalid Entity object");
+  }
+
+  const auto *transform = entity->try_get<Transform>();
+  if (transform == nullptr) {
+    lua_pushnil(state);
+    return 1;
+  }
+
+  auto vec = transform->GetRotation().RotateVector({0.0F, 1.0F, 0.0F});
+  lua_pushnumber(state, vec.x);
+  lua_pushnumber(state, vec.y);
+  lua_pushnumber(state, vec.z);
+
+  return 3;
+}
+
+auto LuaTransform::GetRight(lua_State *state) -> int {
+  auto *entity = ::LuaWrap::EntityFromLua<LuaTransform>(state, 1);
+  if (entity == nullptr) {
+    return luaL_error(state, "Invalid Entity object");
+  }
+
+  const auto *transform = entity->try_get<Transform>();
+  if (transform == nullptr) {
+    lua_pushnil(state);
+    return 1;
+  }
+
+  auto vec = transform->GetRotation().RotateVector({1.0F, 0.0F, 0.0F});
+  lua_pushnumber(state, vec.x);
+  lua_pushnumber(state, vec.y);
+  lua_pushnumber(state, vec.z);
+
+  return 3;
+}
+
+auto LuaTransform::GetForward(lua_State *state) -> int {
+  auto *entity = ::LuaWrap::EntityFromLua<LuaTransform>(state, 1);
+  if (entity == nullptr) {
+    return luaL_error(state, "Invalid Entity object");
+  }
+
+  const auto *transform = entity->try_get<Transform>();
+  if (transform == nullptr) {
+    lua_pushnil(state);
+    return 1;
+  }
+
+  auto vec = transform->GetRotation().RotateVector({0.0F, 0.0F, 1.0F});
+  lua_pushnumber(state, vec.x);
+  lua_pushnumber(state, vec.y);
+  lua_pushnumber(state, vec.z);
+
+  return 3;
+}
+
+auto LuaTransform::GetInverseUp(lua_State *state) -> int {
+  auto *entity = ::LuaWrap::EntityFromLua<LuaTransform>(state, 1);
+  if (entity == nullptr) {
+    return luaL_error(state, "Invalid Entity object");
+  }
+
+  const auto *transform = entity->try_get<Transform>();
+  if (transform == nullptr) {
+    lua_pushnil(state);
+    return 1;
+  }
+
+  auto vec =
+      transform->GetRotation().Inverse().RotateVector({0.0F, 1.0F, 0.0F});
+  lua_pushnumber(state, vec.x);
+  lua_pushnumber(state, vec.y);
+  lua_pushnumber(state, vec.z);
+
+  return 3;
+}
+
+auto LuaTransform::GetInverseRight(lua_State *state) -> int {
+  auto *entity = ::LuaWrap::EntityFromLua<LuaTransform>(state, 1);
+  if (entity == nullptr) {
+    return luaL_error(state, "Invalid Entity object");
+  }
+
+  const auto *transform = entity->try_get<Transform>();
+  if (transform == nullptr) {
+    lua_pushnil(state);
+    return 1;
+  }
+
+  auto vec =
+      transform->GetRotation().Inverse().RotateVector({1.0F, 0.0F, 0.0F});
+  lua_pushnumber(state, vec.x);
+  lua_pushnumber(state, vec.y);
+  lua_pushnumber(state, vec.z);
+
+  return 3;
+}
+
+auto LuaTransform::GetInverseForward(lua_State *state) -> int {
+  auto *entity = ::LuaWrap::EntityFromLua<LuaTransform>(state, 1);
+  if (entity == nullptr) {
+    return luaL_error(state, "Invalid Entity object");
+  }
+
+  const auto *transform = entity->try_get<Transform>();
+  if (transform == nullptr) {
+    lua_pushnil(state);
+    return 1;
+  }
+
+  auto vec =
+      transform->GetRotation().Inverse().RotateVector({0.0F, 0.0F, 1.0F});
+  lua_pushnumber(state, vec.x);
+  lua_pushnumber(state, vec.y);
+  lua_pushnumber(state, vec.z);
+
+  return 3;
+}
+
+extern const ::LuaWrap::LuaComponent TransformComponent{{
+    {"setPosition", LuaTransform::SetPosition},
+    {"getPosition", LuaTransform::GetPosition},
+    {"setRotation", LuaTransform::SetRotation},
+    {"getRotation", LuaTransform::GetRotation},
+    {"setScale", LuaTransform::SetScale},
+    {"getScale", LuaTransform::GetScale},
+    {"setTransform", LuaTransform::SetTransform},
+    {"getTransform", LuaTransform::GetTransform},
+    {"getLocalMatrix", LuaTransform::GetLocalMatrix},
+    {"getWorldMatrix", LuaTransform::GetWorldMatrix},
+    {"getUp", LuaTransform::GetUp},
+    {"getRight", LuaTransform::GetRight},
+    {"getForward", LuaTransform::GetForward},
+    {"getInverseUp", LuaTransform::GetInverseUp},
+    {"getInverseRight", LuaTransform::GetInverseRight},
+    {"getInverseForward", LuaTransform::GetInverseForward},
 }};
 
 // NOLINTEND(cppcoreguidelines-avoid-magic-numbers, readability-magic-numbers)

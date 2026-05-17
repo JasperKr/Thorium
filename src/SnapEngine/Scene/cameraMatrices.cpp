@@ -1,6 +1,6 @@
 #include "cameraMatrices.hpp"
 #include "Wrap/wrap.hpp"
-#include "entity.hpp"
+#include "Wrap/wrap_engine.hpp"
 #include "frustum.hpp"
 
 namespace Engine {
@@ -12,13 +12,13 @@ auto CameraMatrices::GetFrustum() const -> Frustum {
 
 auto CameraMatrices::Update() -> void {
   ViewProjectionMatrix = ProjectionMatrix * ViewMatrix;
-  InverseViewProjectionMatrix = ViewProjectionMatrix.Inverse();
+  InverseViewProjectionMatrix = ViewProjectionMatrix.InverseTranspose();
   RotationProjectionMatrix = ProjectionMatrix * RotationMatrix;
-  InverseRotationProjectionMatrix = RotationProjectionMatrix.Inverse();
+  InverseRotationProjectionMatrix = RotationProjectionMatrix.InverseTranspose();
 }
 
-auto CameraMatrices::GetRotationMatrix(lua_State *state) -> int {
-  auto *entity = LuaWrap::ObjectFromLua<Entity>(state, 1);
+auto LuaCameraMatrices::GetRotationMatrix(lua_State *state) -> int {
+  auto *entity = ::LuaWrap::EntityFromLua<LuaCameraMatrices>(state, 1);
   if (entity == nullptr) {
     return luaL_error(state, "Invalid Entity object");
   }
@@ -30,8 +30,8 @@ auto CameraMatrices::GetRotationMatrix(lua_State *state) -> int {
   return cameraMatrices->RotationMatrix.ToLua(state);
 }
 
-auto CameraMatrices::GetInverseRotationMatrix(lua_State *state) -> int {
-  auto *entity = LuaWrap::ObjectFromLua<Entity>(state, 1);
+auto LuaCameraMatrices::GetInverseRotationMatrix(lua_State *state) -> int {
+  auto *entity = ::LuaWrap::EntityFromLua<LuaCameraMatrices>(state, 1);
   if (entity == nullptr) {
     return luaL_error(state, "Invalid Entity object");
   }
@@ -43,8 +43,8 @@ auto CameraMatrices::GetInverseRotationMatrix(lua_State *state) -> int {
   return cameraMatrices->InverseRotationMatrix.ToLua(state);
 }
 
-auto CameraMatrices::GetViewMatrix(lua_State *state) -> int {
-  auto *entity = LuaWrap::ObjectFromLua<Entity>(state, 1);
+auto LuaCameraMatrices::GetViewMatrix(lua_State *state) -> int {
+  auto *entity = ::LuaWrap::EntityFromLua<LuaCameraMatrices>(state, 1);
   if (entity == nullptr) {
     return luaL_error(state, "Invalid Entity object");
   }
@@ -56,8 +56,8 @@ auto CameraMatrices::GetViewMatrix(lua_State *state) -> int {
   return cameraMatrices->ViewMatrix.ToLua(state);
 }
 
-auto CameraMatrices::GetInverseViewMatrix(lua_State *state) -> int {
-  auto *entity = LuaWrap::ObjectFromLua<Entity>(state, 1);
+auto LuaCameraMatrices::GetInverseViewMatrix(lua_State *state) -> int {
+  auto *entity = ::LuaWrap::EntityFromLua<LuaCameraMatrices>(state, 1);
   if (entity == nullptr) {
     return luaL_error(state, "Invalid Entity object");
   }
@@ -69,8 +69,8 @@ auto CameraMatrices::GetInverseViewMatrix(lua_State *state) -> int {
   return cameraMatrices->InverseViewMatrix.ToLua(state);
 }
 
-auto CameraMatrices::GetProjectionMatrix(lua_State *state) -> int {
-  auto *entity = LuaWrap::ObjectFromLua<Entity>(state, 1);
+auto LuaCameraMatrices::GetProjectionMatrix(lua_State *state) -> int {
+  auto *entity = ::LuaWrap::EntityFromLua<LuaCameraMatrices>(state, 1);
   if (entity == nullptr) {
     return luaL_error(state, "Invalid Entity object");
   }
@@ -82,8 +82,8 @@ auto CameraMatrices::GetProjectionMatrix(lua_State *state) -> int {
   return cameraMatrices->ProjectionMatrix.ToLua(state);
 }
 
-auto CameraMatrices::GetInverseProjectionMatrix(lua_State *state) -> int {
-  auto *entity = LuaWrap::ObjectFromLua<Entity>(state, 1);
+auto LuaCameraMatrices::GetInverseProjectionMatrix(lua_State *state) -> int {
+  auto *entity = ::LuaWrap::EntityFromLua<LuaCameraMatrices>(state, 1);
   if (entity == nullptr) {
     return luaL_error(state, "Invalid Entity object");
   }
@@ -95,8 +95,8 @@ auto CameraMatrices::GetInverseProjectionMatrix(lua_State *state) -> int {
   return cameraMatrices->InverseProjectionMatrix.ToLua(state);
 }
 
-auto CameraMatrices::GetViewProjectionMatrix(lua_State *state) -> int {
-  auto *entity = LuaWrap::ObjectFromLua<Entity>(state, 1);
+auto LuaCameraMatrices::GetViewProjectionMatrix(lua_State *state) -> int {
+  auto *entity = ::LuaWrap::EntityFromLua<LuaCameraMatrices>(state, 1);
   if (entity == nullptr) {
     return luaL_error(state, "Invalid Entity object");
   }
@@ -108,8 +108,9 @@ auto CameraMatrices::GetViewProjectionMatrix(lua_State *state) -> int {
   return cameraMatrices->ViewProjectionMatrix.ToLua(state);
 }
 
-auto CameraMatrices::GetInverseViewProjectionMatrix(lua_State *state) -> int {
-  auto *entity = LuaWrap::ObjectFromLua<Entity>(state, 1);
+auto LuaCameraMatrices::GetInverseViewProjectionMatrix(lua_State *state)
+    -> int {
+  auto *entity = ::LuaWrap::EntityFromLua<LuaCameraMatrices>(state, 1);
   if (entity == nullptr) {
     return luaL_error(state, "Invalid Entity object");
   }
@@ -121,8 +122,8 @@ auto CameraMatrices::GetInverseViewProjectionMatrix(lua_State *state) -> int {
   return cameraMatrices->InverseViewProjectionMatrix.ToLua(state);
 }
 
-auto CameraMatrices::GetRotationProjectionMatrix(lua_State *state) -> int {
-  auto *entity = LuaWrap::ObjectFromLua<Entity>(state, 1);
+auto LuaCameraMatrices::GetRotationProjectionMatrix(lua_State *state) -> int {
+  auto *entity = ::LuaWrap::EntityFromLua<LuaCameraMatrices>(state, 1);
   if (entity == nullptr) {
     return luaL_error(state, "Invalid Entity object");
   }
@@ -134,9 +135,9 @@ auto CameraMatrices::GetRotationProjectionMatrix(lua_State *state) -> int {
   return cameraMatrices->RotationProjectionMatrix.ToLua(state);
 }
 
-auto CameraMatrices::GetInverseRotationProjectionMatrix(lua_State *state)
+auto LuaCameraMatrices::GetInverseRotationProjectionMatrix(lua_State *state)
     -> int {
-  auto *entity = LuaWrap::ObjectFromLua<Entity>(state, 1);
+  auto *entity = ::LuaWrap::EntityFromLua<LuaCameraMatrices>(state, 1);
   if (entity == nullptr) {
     return luaL_error(state, "Invalid Entity object");
   }
@@ -148,20 +149,21 @@ auto CameraMatrices::GetInverseRotationProjectionMatrix(lua_State *state)
   return cameraMatrices->InverseRotationProjectionMatrix.ToLua(state);
 }
 
-const LuaWrap::LuaComponent CameraMatricesComponent{{
-    {"getRotationMatrix", CameraMatrices::GetRotationMatrix},
-    {"getInverseRotationMatrix", CameraMatrices::GetInverseRotationMatrix},
-    {"getViewMatrix", CameraMatrices::GetViewMatrix},
-    {"getInverseViewMatrix", CameraMatrices::GetInverseViewMatrix},
-    {"getProjectionMatrix", CameraMatrices::GetProjectionMatrix},
-    {"getInverseProjectionMatrix", CameraMatrices::GetInverseProjectionMatrix},
-    {"getViewProjectionMatrix", CameraMatrices::GetViewProjectionMatrix},
+const ::LuaWrap::LuaComponent CameraMatricesComponent{{
+    {"getRotationMatrix", LuaCameraMatrices::GetRotationMatrix},
+    {"getInverseRotationMatrix", LuaCameraMatrices::GetInverseRotationMatrix},
+    {"getViewMatrix", LuaCameraMatrices::GetViewMatrix},
+    {"getInverseViewMatrix", LuaCameraMatrices::GetInverseViewMatrix},
+    {"getProjectionMatrix", LuaCameraMatrices::GetProjectionMatrix},
+    {"getInverseProjectionMatrix",
+     LuaCameraMatrices::GetInverseProjectionMatrix},
+    {"getViewProjectionMatrix", LuaCameraMatrices::GetViewProjectionMatrix},
     {"getInverseViewProjectionMatrix",
-     CameraMatrices::GetInverseViewProjectionMatrix},
+     LuaCameraMatrices::GetInverseViewProjectionMatrix},
     {"getRotationProjectionMatrix",
-     CameraMatrices::GetRotationProjectionMatrix},
+     LuaCameraMatrices::GetRotationProjectionMatrix},
     {"getInverseRotationProjectionMatrix",
-     CameraMatrices::GetInverseRotationProjectionMatrix},
+     LuaCameraMatrices::GetInverseRotationProjectionMatrix},
 }};
 
 } // namespace Engine

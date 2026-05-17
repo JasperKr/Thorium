@@ -81,8 +81,8 @@ inline auto GetRenderExtent(const GraphicsContext &context, const State &state)
     -> VkExtent2D {
 
   return VkExtent2D{
-      .width = state.renderTargets.at(0).get()->texture->size.width,
-      .height = state.renderTargets.at(0).get()->texture->size.height,
+      .width = state.renderTargets.at(0).texture->size.width,
+      .height = state.renderTargets.at(0).texture->size.height,
   };
 }
 
@@ -242,7 +242,7 @@ auto State::ToString() const -> std::string {
   for (size_t i = 0; i < renderTargets.size(); ++i) {
     const auto &target = renderTargets[i];
     result = std::format("{}Render Target {}: {}\n", result, i,
-                         target ? target->texture->GetDebugName() : "null");
+                         target.texture->GetDebugName());
   }
 
   result = std::format("{}Depth Test Enable: {}\n", result,
@@ -494,19 +494,19 @@ auto inline GetColorBlendAttachmentState(const GraphicsContext &context,
       state.renderTargets.size() + 1);
 
   for (const auto &rendertarget : state.renderTargets) {
-    int location = rendertarget->location;
+    int location = rendertarget.location;
     if (location == -1) {
       location = idx;
     }
     idx++;
 
-    if (rendertarget->texture->IsDepthTexture() ||
-        rendertarget->texture->IsStencilTexture()) {
+    if (rendertarget.texture->IsDepthTexture() ||
+        rendertarget.texture->IsStencilTexture()) {
       continue;
     }
 
     blendAttachments.resize(location + 1);
-    blendAttachments[location] = rendertarget->blendMode;
+    blendAttachments[location] = rendertarget.blendMode;
   }
 
   for (uint32_t i = 0; i <= blendAttachments.size(); ++i) {
@@ -530,14 +530,14 @@ auto inline GetRenderFormatInfo(const GraphicsContext &context,
                                        VK_FORMAT_UNDEFINED);
 
   for (const auto &rendertarget : state.renderTargets) {
-    int location = rendertarget->location;
+    int location = rendertarget.location;
     if (location == -1) {
       location = idx;
     }
     idx++;
 
     formats.resize(location + 1);
-    formats[location] = rendertarget->texture->format;
+    formats[location] = rendertarget.texture->format;
   }
 
   return formats;
@@ -622,12 +622,12 @@ inline auto CreateGraphicsPipeline(const GraphicsContext &context, State &state)
 
   for (const auto &rendertarget : state.renderTargets) {
 
-    if (rendertarget->texture->IsDepthTexture()) {
-      depthFormat = rendertarget->texture->format;
-    } else if (rendertarget->texture->IsStencilTexture()) {
-      stencilFormat = rendertarget->texture->format;
+    if (rendertarget.texture->IsDepthTexture()) {
+      depthFormat = rendertarget.texture->format;
+    } else if (rendertarget.texture->IsStencilTexture()) {
+      stencilFormat = rendertarget.texture->format;
     } else {
-      int location = rendertarget->location;
+      int location = rendertarget.location;
       if (location == -1) {
         location = idx;
       }
@@ -635,7 +635,7 @@ inline auto CreateGraphicsPipeline(const GraphicsContext &context, State &state)
 
       formats.resize(location + 1);
 
-      formats[location] = rendertarget->texture->format;
+      formats[location] = rendertarget.texture->format;
     }
   }
 
@@ -809,13 +809,13 @@ inline auto SetupDefaultState(const GraphicsContext &context) -> Result<State> {
   auto const &texture =
       context.swapchainInfo.textures[context.swapchainImageIndex];
 
-  auto swapchainRendertarget = Ref<RenderTarget>::Make();
+  RenderTarget swapchainRendertarget{};
 
-  swapchainRendertarget->texture = texture;
-  swapchainRendertarget->location = 0;
-  swapchainRendertarget->blendMode = DefaultBlendMode;
-  swapchainRendertarget->clearValue = {0.0F, 0.0F, 0.0F, 1.0F};
-  swapchainRendertarget->loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+  swapchainRendertarget.texture = texture;
+  swapchainRendertarget.location = 0;
+  swapchainRendertarget.blendMode = DefaultBlendMode;
+  swapchainRendertarget.clearValue = {0.0F, 0.0F, 0.0F, 1.0F};
+  swapchainRendertarget.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
 
   PrintDebug("Setup default state with swapchain handle: {}",
              (void *)texture->view);
@@ -943,7 +943,7 @@ auto FlushGraphics(const GraphicsContext &context) -> Result<bool> {
   }
 
   for (const auto &rendertarget : TopOfStack->renderTargets) {
-    if (IsSwapchainTexture(context, *rendertarget->texture)) {
+    if (IsSwapchainTexture(context, *rendertarget.texture)) {
       DrawnToSwapchain = true;
       break;
     }
@@ -1073,20 +1073,20 @@ inline auto BeginRendering(const GraphicsContext &context) -> Error {
   bool hasStencil = false;
 
   for (const auto &rendertarget : TopOfStack->renderTargets) {
-    auto useResult = rendertarget->texture->UseAsAttachment(context);
+    auto useResult = rendertarget.texture->UseAsAttachment(context);
     if (Error::IsError(useResult)) {
       return useResult;
     }
 
     thread_local VkRenderingAttachmentInfo attachmentInfo = {};
     attachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
-    attachmentInfo.imageView = rendertarget->texture->view;
+    attachmentInfo.imageView = rendertarget.texture->view;
     attachmentInfo.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    attachmentInfo.loadOp = rendertarget->loadOp;
+    attachmentInfo.loadOp = rendertarget.loadOp;
     attachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    attachmentInfo.clearValue = rendertarget->clearValue;
+    attachmentInfo.clearValue = rendertarget.clearValue;
 
-    if (Image::IsDepthTexture(rendertarget->texture->format)) {
+    if (Image::IsDepthTexture(rendertarget.texture->format)) {
       if (hasDepth) {
         return Error::Create("Multiple depth attachments bound.");
       }
@@ -1096,12 +1096,12 @@ inline auto BeginRendering(const GraphicsContext &context) -> Error {
       hasDepth = true;
 
       Barrier::UpdateUsage(
-          context, *rendertarget->texture,
+          context, *rendertarget.texture,
           {.stages = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT |
                      VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
            .access = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT |
                      VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT});
-    } else if (Image::IsStencilTexture(rendertarget->texture->format)) {
+    } else if (Image::IsStencilTexture(rendertarget.texture->format)) {
       if (hasStencil) {
         return Error::Create("Multiple stencil attachments bound.");
       }
@@ -1111,7 +1111,7 @@ inline auto BeginRendering(const GraphicsContext &context) -> Error {
       hasStencil = true;
 
       Barrier::UpdateUsage(
-          context, *rendertarget->texture,
+          context, *rendertarget.texture,
           {.stages = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT |
                      VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
            .access = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT |
@@ -1120,7 +1120,7 @@ inline auto BeginRendering(const GraphicsContext &context) -> Error {
       colorAttachments.emplace_back(attachmentInfo);
 
       Barrier::UpdateUsage(
-          context, *rendertarget->texture,
+          context, *rendertarget.texture,
           {.stages = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
            .access = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT |
                      VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT});
@@ -1155,7 +1155,7 @@ inline auto BeginRendering(const GraphicsContext &context) -> Error {
 
   for (auto &rendertarget : TopOfStack->renderTargets) {
     // Make sure subsequent renders load from the existing content if we ever need to re-bind mid-pass
-    rendertarget->loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+    rendertarget.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
   }
 
   return Error::Success();
@@ -1770,7 +1770,7 @@ auto FinalizeFrame(const GraphicsContext &context) -> Error {
   }
   if (TopOfStack->renderTargets.size() != 0) {
     for (const auto &rendertarget : TopOfStack->renderTargets) {
-      if (!IsSwapchainTexture(context, *rendertarget->texture)) {
+      if (!IsSwapchainTexture(context, *rendertarget.texture)) {
         return Error::Create(
             "Non-swapchain render targets remain bound at end of frame.");
       }
@@ -1783,7 +1783,7 @@ auto FinalizeFrame(const GraphicsContext &context) -> Error {
 auto UsedInPass(const Texture &texture) -> bool {
   return std::ranges::any_of(TopOfStack->renderTargets,
                              [&](const auto &target) -> auto {
-                               return target->texture->image == texture.image;
+                               return target.texture->image == texture.image;
                              });
 }
 
@@ -1887,8 +1887,7 @@ auto SetShader(const Ref<Shader::ShaderModule> &shader) -> void {
 }
 
 auto SetRenderTargets(const GraphicsContext &context,
-                      const std::vector<Ref<RenderTarget>> &renderTargets)
-    -> Error {
+                      const std::vector<RenderTarget> &renderTargets) -> Error {
   TopOfStack->dirty = true;
 
   if (renderTargets.empty()) {
@@ -1902,7 +1901,7 @@ auto SetRenderTargets(const GraphicsContext &context,
     if (!differentFromCurrent) {
       auto iter = std::ranges::find_if(
           TopOfStack->renderTargets, [&](const auto &currentTarget) -> bool {
-            return currentTarget->texture->image == target->texture->image;
+            return currentTarget.texture->image == target.texture->image;
           });
 
       if (iter == TopOfStack->renderTargets.end()) {
@@ -1923,19 +1922,19 @@ auto SetRenderTargets(const GraphicsContext &context,
   if (GetIsCurrentlyRendering()) {
     ClearInfo clearInfo{};
     for (const auto &target : renderTargets) {
-      if (target->loadOp == VK_ATTACHMENT_LOAD_OP_CLEAR) {
-        if (target->texture->IsDepthTexture()) {
+      if (target.loadOp == VK_ATTACHMENT_LOAD_OP_CLEAR) {
+        if (target.texture->IsDepthTexture()) {
           clearInfo.clearDepth = true;
-          clearInfo.depthClearValue = target->clearValue.depthStencil.depth;
-        } else if (target->texture->IsStencilTexture()) {
+          clearInfo.depthClearValue = target.clearValue.depthStencil.depth;
+        } else if (target.texture->IsStencilTexture()) {
           clearInfo.clearStencil = true;
           clearInfo.stencilClearValue =
-              static_cast<int>(target->clearValue.depthStencil.stencil);
+              static_cast<int>(target.clearValue.depthStencil.stencil);
         } else {
-          clearInfo.colors.emplace_back(target->clearValue.color.float32[0],
-                                        target->clearValue.color.float32[1],
-                                        target->clearValue.color.float32[2],
-                                        target->clearValue.color.float32[3]);
+          clearInfo.colors.emplace_back(target.clearValue.color.float32[0],
+                                        target.clearValue.color.float32[1],
+                                        target.clearValue.color.float32[2],
+                                        target.clearValue.color.float32[3]);
         }
       }
     }
@@ -1973,7 +1972,7 @@ auto GetPolygonMode() -> VkPolygonMode { return TopOfStack->polygonMode; }
 auto GetMaximumAllowedViewport() -> VkViewport {
   auto viewport = TopOfStack->viewport;
 
-  auto size = TopOfStack->renderTargets[0]->texture->size;
+  auto size = TopOfStack->renderTargets[0].texture->size;
 
   viewport.width = static_cast<float>(size.width);
   viewport.height = static_cast<float>(size.height);
@@ -1996,7 +1995,7 @@ auto GetClippedViewport() -> VkViewport {
   auto viewport = TopOfStack->viewport;
 
   // Default to size of current attachments
-  auto size = TopOfStack->renderTargets[0]->texture->size;
+  auto size = TopOfStack->renderTargets[0].texture->size;
 
   viewport.width = std::min(viewport.width, static_cast<float>(size.width));
   viewport.height = std::min(viewport.height, static_cast<float>(size.height));
@@ -2061,7 +2060,7 @@ auto GetShader() -> Ref<Shader::ShaderModule> {
   return TopOfStack->shader;
 }
 
-auto GetRenderTargets() -> std::vector<Ref<RenderTarget>> {
+auto GetRenderTargets() -> std::vector<RenderTarget> {
   return TopOfStack->renderTargets;
 }
 
@@ -2113,15 +2112,15 @@ auto Clear(const GraphicsContext &context, const ClearInfo &clearInfo)
     VkClearAttachment clearAttachment = {};
     auto &rendertarget = TopOfStack->renderTargets[i];
 
-    if (Image::IsDepthTexture(rendertarget->texture->format) ||
-        Image::IsStencilTexture(rendertarget->texture->format)) {
+    if (Image::IsDepthTexture(rendertarget.texture->format) ||
+        Image::IsStencilTexture(rendertarget.texture->format)) {
       clearAttachment.aspectMask = 0;
       bool doClear = false;
-      if (Image::IsDepthTexture(rendertarget->texture->format)) {
+      if (Image::IsDepthTexture(rendertarget.texture->format)) {
         clearAttachment.aspectMask |= VK_IMAGE_ASPECT_DEPTH_BIT;
         doClear = clearInfo.clearDepth;
       }
-      if (Image::IsStencilTexture(rendertarget->texture->format)) {
+      if (Image::IsStencilTexture(rendertarget.texture->format)) {
         clearAttachment.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
         doClear = clearInfo.clearStencil;
       }
@@ -2172,7 +2171,7 @@ auto State::GetHash() const -> uint64_t {
 
 auto RenderTarget::GetHash() const -> uint64_t {
   if (dirty) {
-    hash = HashRenderTarget(this);
+    hash = HashRenderTarget(*this);
     dirty = false;
   }
 

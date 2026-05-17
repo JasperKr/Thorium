@@ -153,13 +153,13 @@ auto AquireNextSwapchainImage(Graphics::GraphicsContext &context) -> Error {
 
   {
     ZoneScopedN("Acquire next image");
-    auto result = Error::Create(vkAcquireNextImageKHR(
+    auto result = vkAcquireNextImageKHR(
         context.device, context.swapchainInfo.swapchain, UINT64_MAX,
         context.imageAvailable[context.frameIndex], VK_NULL_HANDLE,
-        &context.swapchainImageIndex));
+        &context.swapchainImageIndex);
 
     if (Error::IsError(result)) {
-      return result;
+      return Error::Create(result);
     }
   }
 

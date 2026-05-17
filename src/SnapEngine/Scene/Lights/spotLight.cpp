@@ -58,7 +58,7 @@ auto SpotLight::Write(std::span<uint8_t> buffer,
 }
 
 auto LuaSpotLight::Create(lua_State *state) -> int {
-  auto *scene = LuaWrap::ObjectFromLua<Scene>(state, 1);
+  auto *scene = ::LuaWrap::ObjectFromLua<Scene>(state, 1);
   const char *name = luaL_checkstring(state, 2);
 
   if (scene == nullptr) {
@@ -72,12 +72,12 @@ auto LuaSpotLight::Create(lua_State *state) -> int {
   entity.add<Userdata>();
 
   auto luaSpotLight = LuaSpotLight::FromEntity(entity);
-  LuaWrap::PushObject(state, LuaSpotLight::GetType(), luaSpotLight.get());
+  ::LuaWrap::PushObject(state, LuaSpotLight::GetType(), luaSpotLight.get());
 
   return 1;
 }
 
-const LuaWrap::LuaClass SpotLightClass = {
+const ::LuaWrap::LuaClass SpotLightClass = {
     .Name = "SpotLight",
     .Type = LuaSpotLight::GetType(),
     .Methods = {},

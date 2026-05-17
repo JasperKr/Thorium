@@ -250,8 +250,9 @@ function snap.draw()
   local gotBuffer = false
 
   while not gotBuffer do
-    if thread:getError() then
-      -- error("Render thread error: " .. thread:getError())
+    if thread:getStatus() ~= "running" then
+      print("Render thread status: " .. thread:getStatus() .. ", exiting main thread.")
+      print("Render thread error: " .. tostring(thread:getError()))
       snap.event.quit()
       collectgarbage("collect")
       collectgarbage("collect")

@@ -219,59 +219,54 @@ inline void BooleanFlag(const char *label, bool value,
   }
 }
 
-inline auto DrawRendertargetImGui(const DynamicRendering::RenderTarget *target,
+inline auto DrawRendertargetImGui(const DynamicRendering::RenderTarget &target,
                                   int index) -> void {
-  if (target != nullptr) {
-    auto name = target->texture->GetDebugName();
+  auto name = target.texture->GetDebugName();
 
-    if (ImGui::TreeNode("Rendertarget", "%s", name.data())) {
-      ImGui::Text("Format: %s",
-                  Format::ImageFormatToString(target->texture->format).data());
+  if (ImGui::TreeNode("Rendertarget", "%s", name.data())) {
+    ImGui::Text("Format: %s",
+                Format::ImageFormatToString(target.texture->format).data());
 
-      auto blend = target->blendMode;
-      BooleanFlag("Blend Mode:", blend.blendEnable != 0U);
+    auto blend = target.blendMode;
+    BooleanFlag("Blend Mode:", blend.blendEnable != 0U);
 
-      auto [isDefault, blendmode, alphamode] = BlendMode::ToString(blend);
-      if (isDefault) {
-        ImGui::Text("Blend Mode: %s, Alpha Mode: %s", blendmode.c_str(),
-                    alphamode.c_str());
-        ImGui::SetItemTooltip(
-            "Blend State:\nSrc-Color=%s\nDst-Color=%s\nColor Op=%s"
-            "\nSrc Alpha=%s\nDst Alpha=%s\nAlpha Op=%s",
-            BlendMode::ToString(blend.srcColorBlendFactor).data(),
-            BlendMode::ToString(blend.dstColorBlendFactor).data(),
-            BlendMode::ToString(blend.colorBlendOp).data(),
-            BlendMode::ToString(blend.srcAlphaBlendFactor).data(),
-            BlendMode::ToString(blend.dstAlphaBlendFactor).data(),
-            BlendMode::ToString(blend.alphaBlendOp).data());
-      } else {
-        ImGui::Text("Blend State:\nSrc-Color=%s\nDst-Color=%s\nColor Op=%s"
-                    "\nSrc Alpha=%s\nDst Alpha=%s\nAlpha Op=%s",
-                    BlendMode::ToString(blend.srcColorBlendFactor).data(),
-                    BlendMode::ToString(blend.dstColorBlendFactor).data(),
-                    BlendMode::ToString(blend.colorBlendOp).data(),
-                    BlendMode::ToString(blend.srcAlphaBlendFactor).data(),
-                    BlendMode::ToString(blend.dstAlphaBlendFactor).data(),
-                    BlendMode::ToString(blend.alphaBlendOp).data());
-      }
-
-      ImGui::Text("Clear Value: R=%.2f, G=%.2f, B=%.2f, A=%.2f",
-                  target->clearValue.color.float32[0],
-                  target->clearValue.color.float32[1],
-                  target->clearValue.color.float32[2],
-                  target->clearValue.color.float32[3]);
-      auto location = target->location;
-      if (location == -1) {
-        location = index;
-      }
-
-      ImGui::Text("Location: %d", location);
-      ImGui::Text("Layer: %d", target->layer);
-
-      ImGui::TreePop();
+    auto [isDefault, blendmode, alphamode] = BlendMode::ToString(blend);
+    if (isDefault) {
+      ImGui::Text("Blend Mode: %s, Alpha Mode: %s", blendmode.c_str(),
+                  alphamode.c_str());
+      ImGui::SetItemTooltip(
+          "Blend State:\nSrc-Color=%s\nDst-Color=%s\nColor Op=%s"
+          "\nSrc Alpha=%s\nDst Alpha=%s\nAlpha Op=%s",
+          BlendMode::ToString(blend.srcColorBlendFactor).data(),
+          BlendMode::ToString(blend.dstColorBlendFactor).data(),
+          BlendMode::ToString(blend.colorBlendOp).data(),
+          BlendMode::ToString(blend.srcAlphaBlendFactor).data(),
+          BlendMode::ToString(blend.dstAlphaBlendFactor).data(),
+          BlendMode::ToString(blend.alphaBlendOp).data());
+    } else {
+      ImGui::Text("Blend State:\nSrc-Color=%s\nDst-Color=%s\nColor Op=%s"
+                  "\nSrc Alpha=%s\nDst Alpha=%s\nAlpha Op=%s",
+                  BlendMode::ToString(blend.srcColorBlendFactor).data(),
+                  BlendMode::ToString(blend.dstColorBlendFactor).data(),
+                  BlendMode::ToString(blend.colorBlendOp).data(),
+                  BlendMode::ToString(blend.srcAlphaBlendFactor).data(),
+                  BlendMode::ToString(blend.dstAlphaBlendFactor).data(),
+                  BlendMode::ToString(blend.alphaBlendOp).data());
     }
-  } else {
-    ImGui::Text("- Unable to read rendertarget.");
+
+    ImGui::Text(
+        "Clear Value: R=%.2f, G=%.2f, B=%.2f, A=%.2f",
+        target.clearValue.color.float32[0], target.clearValue.color.float32[1],
+        target.clearValue.color.float32[2], target.clearValue.color.float32[3]);
+    auto location = target.location;
+    if (location == -1) {
+      location = index;
+    }
+
+    ImGui::Text("Location: %d", location);
+    ImGui::Text("Layer: %d", target.layer);
+
+    ImGui::TreePop();
   }
 }
 
@@ -297,7 +292,7 @@ auto GraphicsEvent::DrawStateImGui(ThreadSnapshot const *parent) const -> void {
   int rtIndex = 0;
   for (const auto &target : state.renderTargets) {
     ImGui::PushID(rtIndex++);
-    DrawRendertargetImGui(target.get(), rtIndex - 1);
+    DrawRendertargetImGui(target, rtIndex - 1);
     ImGui::PopID();
   }
   ImGui::Unindent();
@@ -383,7 +378,7 @@ auto GraphicsEvent::DrawStateImGui(ThreadSnapshot const *parent) const -> void {
                 state.viewport.x, state.viewport.y, state.viewport.width,
                 state.viewport.height);
   } else {
-    auto texture = state.renderTargets.at(0)->texture;
+    auto texture = state.renderTargets.at(0).texture;
     ImGui::Text("Viewport: x=0.00, y=0.00, width=%.2u, height=%.2u (Default)",
                 texture->GetWidth(), texture->GetHeight());
   }
@@ -393,7 +388,7 @@ auto GraphicsEvent::DrawStateImGui(ThreadSnapshot const *parent) const -> void {
                 state.scissor.offset.x, state.scissor.offset.y,
                 state.scissor.extent.width, state.scissor.extent.height);
   } else {
-    auto texture = state.renderTargets.at(0)->texture;
+    auto texture = state.renderTargets.at(0).texture;
     ImGui::Text("Scissor: x=0, y=0, width=%u, height=%u (Default)",
                 texture->GetWidth(), texture->GetHeight());
   }

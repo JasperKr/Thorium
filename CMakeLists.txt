@@ -26,6 +26,9 @@ else()
     set(CMAKE_CXX_STANDARD_REQUIRED ON)
 endif()
 
+find_package(TBB REQUIRED)
+
+
 # -------------------------------
 # SDL3
 # -------------------------------
@@ -77,11 +80,13 @@ target_link_libraries(snap
     PRIVATE
         snap_core
         SnapEngine
+        TBB::tbb
 )
 else()
 target_link_libraries(snap
     PRIVATE
         snap_core
+        TBB::tbb
 )
 endif()
 

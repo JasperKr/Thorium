@@ -491,8 +491,8 @@ auto Vec2::Normalize() const -> Vec2 {
 auto Vec2::Dot(const Vec2 &other) const -> Scalar {
   return (x * other.x) + (y * other.y);
 }
-auto Vec2::Cross(const Vec2 &other) const -> Scalar {
-  return (x * other.y) - (y * other.x);
+auto Vec2::Cross(const Vec2 &other) const -> Vec2 {
+  return {(x * other.y) - (y * other.x), (y * other.x) - (x * other.y)};
 }
 auto Vec2::Max(const Vec2 &other) const -> Vec2 {
   return {std::fmax(x, other.x), std::fmax(y, other.y)};
@@ -623,9 +623,9 @@ auto Vec3::Normalize() const -> Vec3 {
 auto Vec3::Dot(const Vec3 &other) const -> Scalar {
   return (x * other.x) + (y * other.y) + (z * other.z);
 }
-auto Vec3::Cross(const Vec3 &other) const -> Scalar {
-  return (y * other.z - z * other.y) + (z * other.x - x * other.z) +
-         (x * other.y - y * other.x);
+auto Vec3::Cross(const Vec3 &other) const -> Vec3 {
+  return {(y * other.z) - (z * other.y), (z * other.x) - (x * other.z),
+          (x * other.y) - (y * other.x)};
 }
 auto Vec3::Max(const Vec3 &other) const -> Vec3 {
   return {std::fmax(x, other.x), std::fmax(y, other.y), std::fmax(z, other.z)};
@@ -769,6 +769,10 @@ auto Vec4::Normalize() const -> Vec4 {
     return {0.0F, 0.0F, 0.0F, 0.0F};
   }
   return {x / len, y / len, z / len, w / len};
+}
+auto Vec4::Cross(const Vec4 &other) const -> Vec3 {
+  return {(y * other.z) - (z * other.y), (z * other.x) - (x * other.z),
+          (x * other.y) - (y * other.x)};
 }
 auto Vec4::Dot(const Vec4 &other) const -> Scalar {
   return (x * other.x) + (y * other.y) + (z * other.z) + (w * other.w);

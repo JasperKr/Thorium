@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Graphics/graphicsState.hpp"
 #include "Graphics/texture.hpp"
 #include "Modules/Helpers/LRU-Cache.hpp"
 #include "Modules/Helpers/hasher.hpp"
@@ -12,6 +13,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <unordered_map>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -238,8 +240,8 @@ extern thread_local bool DrawnToSwapchain;
 
 const static Type LuaRendertargetType = Type("RenderTarget");
 
-struct RenderTarget : Object {
-  VkPipelineColorBlendAttachmentState blendMode = {};
+struct RenderTarget {
+  VkPipelineColorBlendAttachmentState blendMode = DefaultBlendMode;
   VkClearValue clearValue = {};
   Ref<Texture> texture;
   int location = -1; // Default to index in the render target array
@@ -273,11 +275,18 @@ struct RenderTarget : Object {
 
     return true;
   }
+};
+
+struct LuaRenderTarget : Object {
+  explicit LuaRenderTarget(RenderTarget renderTarget)
+      : renderTarget(std::move(renderTarget)) {}
+
+  RenderTarget renderTarget;
 
   static auto GetType() -> Type const * { return &LuaRendertargetType; }
 
   [[nodiscard]] auto GetInstanceType() const -> Type const * override {
-    return RenderTarget::GetType();
+    return LuaRenderTarget::GetType();
   }
 };
 
@@ -307,7 +316,7 @@ struct State {
   VkPrimitiveTopology primitiveTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 
   VkPipelineBindPoint bindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-  std::vector<Ref<RenderTarget>> renderTargets;
+  std::vector<RenderTarget> renderTargets;
 
   mutable uint64_t hash;
   auto GetHash() const -> uint64_t;
@@ -333,7 +342,7 @@ struct State {
     }
 
     for (size_t i = 0; i < renderTargets.size(); ++i) {
-      if (*renderTargets[i] != *other.renderTargets[i]) {
+      if (renderTargets[i] != other.renderTargets[i]) {
         return false;
       }
     }
@@ -385,11 +394,11 @@ inline auto HashTexture(const Texture *texture) -> size_t {
   return hasher.Get();
 }
 
-inline auto HashRenderTarget(const RenderTarget *renderTarget) -> size_t {
+inline auto HashRenderTarget(const RenderTarget &renderTarget) -> size_t {
   Hash::Hasher hasher{};
 
-  hasher.Add(HashBlendmode(renderTarget->blendMode));
-  hasher.Add(HashTexture(renderTarget->texture.get()));
+  hasher.Add(HashBlendmode(renderTarget.blendMode));
+  hasher.Add(HashTexture(renderTarget.texture.get()));
 
   return hasher.Get();
 }
@@ -420,7 +429,7 @@ struct StateHash {
     hasher.Add(std::hash<VkPipelineBindPoint>()(state.bindPoint));
 
     for (const auto &renderTarget : state.renderTargets) {
-      hasher.Add(HashRenderTarget(renderTarget.get()));
+      hasher.Add(HashRenderTarget(renderTarget));
     }
 
     return hasher.Get();
@@ -469,8 +478,7 @@ auto SetScissor(const VkRect2D *scissor) -> void;
 auto ClipScissor(const VkRect2D &scissor) -> void;
 auto SetShader(const Ref<Shader::ShaderModule> &shader) -> void;
 auto SetRenderTargets(const GraphicsContext &context,
-                      const std::vector<Ref<RenderTarget>> &renderTargets)
-    -> Error;
+                      const std::vector<RenderTarget> &renderTargets) -> Error;
 auto SetWindingOrder(VkFrontFace frontFace) -> void;
 auto SetTopology(VkPrimitiveTopology topology) -> void;
 
@@ -482,7 +490,7 @@ auto GetClippedViewport() -> VkViewport;
 auto GetMaximumAllowedViewport() -> VkViewport;
 auto GetScissor() -> VkRect2D;
 auto GetShader() -> Ref<Shader::ShaderModule>;
-auto GetRenderTargets() -> std::vector<Ref<RenderTarget>>;
+auto GetRenderTargets() -> std::vector<RenderTarget>;
 auto GetWindingOrder() -> VkFrontFace;
 auto GetTopology() -> VkPrimitiveTopology;
 auto SetBindPoint(VkPipelineBindPoint bindPoint) -> void;

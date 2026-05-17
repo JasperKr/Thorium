@@ -8,12 +8,15 @@
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include <array>
-#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <string>
 #include <utility>
 
+#include "Scene/displayName.hpp"
+#include "Scene/userdata.hpp"
+#include "Wrap/wrap.hpp"
+#include "Wrap/wrap_engine.hpp"
 #include "lua.hpp"
 #include <flecs.h>
 
@@ -83,15 +86,6 @@ struct Material {
   // NOLINTNEXTLINE (magic numbers)
   std::array<int, 7> textureUVIndices = {0};
 
-  static auto wrap_setCullMode(lua_State *state) -> int;
-  static auto wrap_getCullMode(lua_State *state) -> int;
-
-  static auto wrap_setAlphaMode(lua_State *state) -> int;
-  static auto wrap_getAlphaMode(lua_State *state) -> int;
-
-  static auto wrap_setTextureUVIndex(lua_State *state) -> int;
-  static auto wrap_getTextureUVIndex(lua_State *state) -> int;
-
   [[nodiscard]] auto GetMainSortKey() const -> uint64_t {
     Hash::Hasher hasher;
 
@@ -131,8 +125,8 @@ private:
                      const Ref<Graphics::StructuredBuffer> &buffer) -> Error;
 };
 
-struct LuaMaterial : Object {
-  flecs::entity entity;
+struct LuaMaterial : LuaWrap::LuaECSObject {
+  explicit LuaMaterial(const flecs::entity &entity) : LuaECSObject(entity) {}
 
   static auto GetType() -> const Type * { return &materialType; }
   auto GetInstanceType() const -> const Type * override {
@@ -140,6 +134,33 @@ struct LuaMaterial : Object {
   }
 
   static auto Create(lua_State *state) -> int;
+
+  static auto wrap_setCullMode(lua_State *state) -> int;
+  static auto wrap_getCullMode(lua_State *state) -> int;
+
+  static auto wrap_setAlphaMode(lua_State *state) -> int;
+  static auto wrap_getAlphaMode(lua_State *state) -> int;
+
+  static auto wrap_setTextureUVIndex(lua_State *state) -> int;
+  static auto wrap_getTextureUVIndex(lua_State *state) -> int;
 };
+
+inline auto GetMaterialClass() -> ::LuaWrap::LuaClass {
+  return {.Name = "Material",
+          .Type = LuaMaterial::GetType(),
+          .Methods =
+              {
+                  {"setCullMode", LuaMaterial::wrap_setCullMode},
+                  {"getCullMode", LuaMaterial::wrap_getCullMode},
+                  {"setAlphaMode", LuaMaterial::wrap_setAlphaMode},
+                  {"getAlphaMode", LuaMaterial::wrap_getAlphaMode},
+                  {"setTextureUVIndex", LuaMaterial::wrap_setTextureUVIndex},
+                  {"getTextureUVIndex", LuaMaterial::wrap_getTextureUVIndex},
+              },
+          .Components = {
+              DisplayNameComponent,
+              UserdataComponent,
+          }};
+}
 
 } // namespace Engine::Renderer

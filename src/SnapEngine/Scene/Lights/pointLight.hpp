@@ -52,6 +52,6 @@ struct LuaPointLight : Object {
   }
 };
 
-extern const LuaWrap::LuaClass PointLightClass;
+extern const ::LuaWrap::LuaClass PointLightClass;
 
 } // namespace Engine
