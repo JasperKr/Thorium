@@ -8,6 +8,7 @@
 #include "Graphics/uniformWriter.hpp"
 #include "Modules/Math/matrix.hpp"
 #include "Modules/bindings.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Modules/reflectBindings.hpp"
@@ -29,6 +30,7 @@
 #include "material.hpp"
 #include "renderer.hpp"
 #include <algorithm>
+#include <cassert>
 #include <flecs.h>
 #include <imgui.h>
 #include <lua.hpp>
@@ -52,10 +54,6 @@ auto LuaScene::LoadBinding(lua_State *state) -> int {
 
 auto DrawEntity(const flecs::entity &entity) -> void {
   const char *entityName = entity.name();
-
-  if (strcmp(entityName, "flecs") == 0) {
-    return; // Skip internal flecs root entity
-  }
 
   if (entityName == nullptr || std::string_view(entityName).empty()) {
     if (entity != flecs::ChildOf) {
@@ -140,11 +138,22 @@ auto DrawEntityHierarchy(const flecs::entity &entity, std::string_view filter)
     return; // Skip entities that don't match the filter
   }
 
+  const char *entityName = entity.name();
+
+  if (strcmp(entityName, "flecs") == 0 || strcmp(entityName, "Engine") == 0) {
+    return; // Skip internal flecs root entity
+  }
+
+  // Skip systems
+  if (entity.has(flecs::System)) {
+    return;
+  }
+
   DrawEntity(entity);
 
   if (match == MatchType::This) {
-    filter =
-        ""; // If this entity matches, all children should be shown regardless of their names
+    // If this entity matches, all children should be shown regardless of their names
+    filter = "";
   }
 
   entity.children([&](flecs::entity child) -> void {
@@ -411,6 +420,34 @@ inline auto RenderDrawItem(const DrawItem &item,
   return {};
 }
 
+inline auto AddDrawItem(flecs::entity entity, const Geometry &geometry)
+    -> void {
+  const Renderer::Material *material = nullptr;
+  material = entity.try_get<Renderer::Material>();
+
+  if (material == nullptr) {
+    material = &Renderer::RendererInstance.GetNoMaterial();
+  }
+
+  if (material->alphaMode != Renderer::AlphaMode::Blend) {
+    DrawItems.emplace_back(
+        DrawItem{.geom_entity = entity,
+                 .geometry = geometry,
+                 .material = material,
+                 .primaryKey = material->GetMainSortKey(),
+                 .secondaryKey = geometry.mesh->GetHash(),
+                 .tertiaryKey = material->GetSecondarySortKey()});
+  } else {
+    TransparentDrawItems.emplace_back(
+        DrawItem{.geom_entity = entity,
+                 .geometry = geometry,
+                 .material = material,
+                 .primaryKey = material->GetMainSortKey(),
+                 .secondaryKey = geometry.mesh->GetHash(),
+                 .tertiaryKey = material->GetSecondarySortKey()});
+  }
+}
+
 auto Scene::DrawModels(const Graphics::GraphicsContext &context) -> Error {
   for (const auto &system : preRender) {
     system.run();
@@ -448,35 +485,16 @@ auto Scene::DrawModels(const Graphics::GraphicsContext &context) -> Error {
 
   world.each<Geometry>(
       [&](flecs::entity entity, const Geometry &geometry) -> void {
+        bool hasChildren = false;
         entity.children([&](flecs::entity child) -> void {
-          const Renderer::Material *material = nullptr;
+          hasChildren = true;
 
-          if (child.has<Engine::Renderer::Material>()) {
-            material = child.try_get<Engine::Renderer::Material>();
-          }
-
-          if (material == nullptr) {
-            material = &Renderer::RendererInstance.GetNoMaterial();
-          }
-
-          if (material->alphaMode != Renderer::AlphaMode::Blend) {
-            DrawItems.emplace_back(
-                DrawItem{.geom_entity = entity,
-                         .geometry = geometry,
-                         .material = material,
-                         .primaryKey = material->GetMainSortKey(),
-                         .secondaryKey = geometry.mesh->GetHash(),
-                         .tertiaryKey = material->GetSecondarySortKey()});
-          } else {
-            TransparentDrawItems.emplace_back(
-                DrawItem{.geom_entity = entity,
-                         .geometry = geometry,
-                         .material = material,
-                         .primaryKey = material->GetMainSortKey(),
-                         .secondaryKey = geometry.mesh->GetHash(),
-                         .tertiaryKey = material->GetSecondarySortKey()});
-          }
+          AddDrawItem(entity, geometry);
         });
+
+        if (!hasChildren) {
+          AddDrawItem(entity, geometry);
+        }
       });
 
   std::ranges::sort(DrawItems, CompareDrawItems);

@@ -230,13 +230,16 @@ inline auto LoadTexture(Graphics::GraphicsContext &context,
   auto textureResult = Graphics::LoadFromMemory(
       context, *ImageCache[texture.imageIndex.value()].get(),
       VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-      Graphics::TextureMipmapOption::Manual);
+      Graphics::TextureMipmapOption::Init);
 
   if (Error::IsError(textureResult)) {
     return textureResult.error().AsUnexpected();
   }
 
   auto textureRef = textureResult.value();
+  textureRef->SetLodRange(0.0F, (float)textureRef->GetMipmapCount());
+  textureRef->SetFilter(VK_FILTER_LINEAR, VK_FILTER_LINEAR,
+                        VK_SAMPLER_MIPMAP_MODE_LINEAR);
 
   return textureRef;
 }
@@ -1173,19 +1176,15 @@ inline auto LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
       // Load material if present.
       if (primitive.materialIndex.has_value()) {
         const auto &material = asset.materials[primitive.materialIndex.value()];
-        auto materialEntity = world->entity(
-            GetUniqueName(std::string(material.name) + " Material").c_str());
-        materialEntity.add<Engine::Renderer::Material>();
+        geometry.add<Engine::Renderer::Material>();
         auto rendererMaterial =
-            Ref<Engine::Renderer::LuaMaterial>::Make(materialEntity);
+            Ref<Engine::Renderer::LuaMaterial>::Make(geometry);
 
         auto materialResult =
             LoadMaterial(context, asset, basePath, material, rendererMaterial);
         if (Error::IsError(materialResult)) {
           return materialResult.AsUnexpected();
         }
-
-        rendererMaterial->entity.child_of(geometry);
       }
     }
 

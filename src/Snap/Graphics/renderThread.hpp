@@ -2,6 +2,7 @@
 
 #include "Graphics/barrier.hpp"
 #include "Graphics/graphicsContext.hpp"
+#include "Graphics/sampler.hpp"
 #include "Graphics/semaphoreManager.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
@@ -93,12 +94,7 @@ auto Initialize(Graphics::GraphicsContext &context) -> Error;
 auto Deinitialize(Graphics::GraphicsContext &context) -> Error;
 
 struct GraphicsConfiguration {
-  VkFilter minFilter = VK_FILTER_LINEAR;
-  VkFilter magFilter = VK_FILTER_LINEAR;
-  VkSamplerAddressMode addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-  VkSamplerAddressMode addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-  VkSamplerAddressMode addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-  float maxAnisotropy = 1.0F;
+  SamplerDescription defaultSamplerDescription{};
 };
 
 auto GetGraphicsConfiguration() -> GraphicsConfiguration &;

@@ -1039,10 +1039,10 @@ auto wrap_SetDefaultFilter(lua_State *state) -> int {
   }
 
   auto &config = ::Graphics::Threading::GetGraphicsConfiguration();
-  config.minFilter = minFilter;
-  config.magFilter = magFilter;
-  config.maxAnisotropy =
-      static_cast<float>(luaL_optnumber(state, 3, config.maxAnisotropy));
+  config.defaultSamplerDescription.minFilter = minFilter;
+  config.defaultSamplerDescription.magFilter = magFilter;
+  config.defaultSamplerDescription.maxAnisotropy = static_cast<float>(
+      luaL_optnumber(state, 3, config.defaultSamplerDescription.maxAnisotropy));
 
   return 0;
 }
@@ -1050,7 +1050,7 @@ auto wrap_SetDefaultFilter(lua_State *state) -> int {
 auto wrap_GetDefaultFilter(lua_State *state) -> int {
   auto &config = ::Graphics::Threading::GetGraphicsConfiguration();
 
-  switch (config.minFilter) {
+  switch (config.defaultSamplerDescription.minFilter) {
   case VK_FILTER_NEAREST:
     lua_pushstring(state, "nearest");
     break;
@@ -1059,7 +1059,7 @@ auto wrap_GetDefaultFilter(lua_State *state) -> int {
     break;
   }
 
-  switch (config.magFilter) {
+  switch (config.defaultSamplerDescription.magFilter) {
   case VK_FILTER_NEAREST:
     lua_pushstring(state, "nearest");
     break;
@@ -1069,7 +1069,8 @@ auto wrap_GetDefaultFilter(lua_State *state) -> int {
     break;
   }
 
-  lua_pushnumber(state, static_cast<lua_Number>(config.maxAnisotropy));
+  lua_pushnumber(state, static_cast<lua_Number>(
+                            config.defaultSamplerDescription.maxAnisotropy));
   return 3;
 }
 
@@ -1090,9 +1091,12 @@ auto inline StringToAddressMode(const char *addressModeStr)
 auto wrap_SetDefaultWrapMode(lua_State *state) -> int {
   auto &config = ::Graphics::Threading::GetGraphicsConfiguration();
 
-  config.addressModeU = StringToAddressMode(luaL_checkstring(state, 1));
-  config.addressModeV = StringToAddressMode(luaL_checkstring(state, 2));
-  config.addressModeW = StringToAddressMode(luaL_checkstring(state, 3));
+  config.defaultSamplerDescription.addressModeU =
+      StringToAddressMode(luaL_checkstring(state, 1));
+  config.defaultSamplerDescription.addressModeV =
+      StringToAddressMode(luaL_checkstring(state, 2));
+  config.defaultSamplerDescription.addressModeW =
+      StringToAddressMode(luaL_checkstring(state, 3));
 
   return 0;
 }
@@ -1114,9 +1118,12 @@ auto inline AddressModeToString(VkSamplerAddressMode addressMode) -> const
 auto wrap_GetDefaultWrapMode(lua_State *state) -> int {
   auto &config = ::Graphics::Threading::GetGraphicsConfiguration();
 
-  lua_pushstring(state, AddressModeToString(config.addressModeU));
-  lua_pushstring(state, AddressModeToString(config.addressModeV));
-  lua_pushstring(state, AddressModeToString(config.addressModeW));
+  lua_pushstring(state, AddressModeToString(
+                            config.defaultSamplerDescription.addressModeU));
+  lua_pushstring(state, AddressModeToString(
+                            config.defaultSamplerDescription.addressModeV));
+  lua_pushstring(state, AddressModeToString(
+                            config.defaultSamplerDescription.addressModeW));
 
   return 3;
 }

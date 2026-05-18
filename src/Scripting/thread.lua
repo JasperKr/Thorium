@@ -98,7 +98,7 @@ do
       return
     end
 
-    local quat = quaternion(snap.math.eulerToQuaternion(dx * 0.0015, -dy * 0.0015, 0))
+    local quat = quaternion(snap.math.eulerToQuaternion(dx * 0.0015, dy * 0.0015, 0))
     local currentQuat = quaternion(camera:getRotation())
     local newQuat = currentQuat * quat
     camera:setRotation(newQuat.x, newQuat.y, newQuat.z, newQuat.w)
@@ -158,6 +158,7 @@ do
     end
 
     snap.graphics.aquireGraphics(nil, nil, createSnapshot)
+    snap.graphics.setWindingOrder("cw")
     createSnapshot = false
     if firstFrame then
       snap.graphics.setDefaultFilter("linear", "linear", 4)

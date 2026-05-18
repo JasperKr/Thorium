@@ -11,9 +11,7 @@ local scene = snap.scene.newScene("Main")
 print(scene:getName())
 
 snap.graphics.aquireGraphics("load")
-
 snap.renderer.initialize()
-
 
 local vertexformat = {
   { name = "position",      format = "floatvec3",  location = 0 },
@@ -82,21 +80,26 @@ for i = 1, #indices, 3 do
   local edge1 = { v2[1] - v1[1], v2[2] - v1[2], v2[3] - v1[3] }
   local edge2 = { v3[1] - v1[1], v3[2] - v1[2], v3[3] - v1[3] }
 
-  -- local normal = {
-  --   edge1[2] * edge2[3] - edge1[3] * edge2[2],
-  --   edge1[3] * edge2[1] - edge1[1] * edge2[3],
-  --   edge1[1] * edge2[2] - edge1[2] * edge2[1],
-  -- }
+
   local normalX = edge1[2] * edge2[3] - edge1[3] * edge2[2]
   local normalY = edge1[3] * edge2[1] - edge1[1] * edge2[3]
   local normalZ = edge1[1] * edge2[2] - edge1[2] * edge2[1]
 
-  -- local length = math.sqrt(normal[1] ^ 2 + normal[2] ^ 2 + normal[3] ^ 2)
   local length = math.sqrt(normalX ^ 2 + normalY ^ 2 + normalZ ^ 2)
-  -- normal = { normal[1] / length, normal[2] / length, normal[3] / length }
+
   normalX = normalX / length
   normalY = normalY / length
   normalZ = normalZ / length
+
+  --[[
+  struct VertexInput {
+    float3 Position : POSITION;
+    float2 TexCoords : TEXCOORD;
+    uint Normal : NORMAL;
+    uint Tangent : TANGENT;
+    float4 Color : COLOR;
+  };
+  ]]
 
   table.insert(unpackedVertices, {
     v1[1],
@@ -142,23 +145,23 @@ for i = 1, #indices, 3 do
 end
 
 
--- local mesh = snap.graphics.newMesh(vertexformat, unpackedVertices, "triangles")
+local mesh = snap.graphics.newMesh(vertexformat, unpackedVertices, "triangles")
 
--- local lod = scene:createLOD("Test LOD")
--- local lod2 = scene:createLOD("Test LOD 2")
--- local lod3 = scene:createLOD("Test LOD 3", 0.25)
+local lod = scene:newLOD("Test LOD")
+local lod2 = scene:newLOD("Test LOD 2")
+local lod3 = scene:newLOD("Test LOD 3", 0.25)
 
--- lod:addGeometry(scene:createGeometry("Test geometry " .. i, mesh))
--- lod2:addGeometry(scene:createGeometry("Test geometry " .. i, mesh))
--- lod3:addGeometry(scene:createGeometry("Test geometry " .. i, mesh))
+lod:addGeometry(scene:newGeometry("Test geometry 1", mesh))
+lod2:addGeometry(scene:newGeometry("Test geometry 2", mesh))
+lod3:addGeometry(scene:newGeometry("Test geometry 3", mesh))
 
--- local shape = scene:createShape("Test shape", { lod })
--- local shape2 = scene:createShape("Test shape 2", { lod2 })
--- local shape3 = scene:createShape("Test shape 3", { lod3 })
+local shape = scene:newShape("Test shape", { lod })
+local shape2 = scene:newShape("Test shape 2", { lod2 })
+local shape3 = scene:newShape("Test shape 3", { lod3 })
 
--- local model = scene:createModel("Test model", { 0, 0, 0 }, { 0, 0, 0, 1 }, { 1, 1, 1 }, { shape })
--- local model2 = scene:createModel("Test model 2", { 0, 5, 0 }, { 0, 0, 0, 1 }, { 1, 1, 1 }, { shape2 })
--- local model3 = scene:createModel("Test model 3", { 0, 10, 0 }, { 0, 0, 0, 1 }, { 1, 1, 1 }, { shape3 })
+local model = scene:newModel("Test model", { 0, 0, 0 }, { 0, 0, 0, 1 }, { 1, 1, 1 }, { shape })
+local model2 = scene:newModel("Test model 2", { 0, 5, 0 }, { 0, 0, 0, 1 }, { 1, 1, 1 }, { shape2 })
+local model3 = scene:newModel("Test model 3", { 0, 10, 0 }, { 0, 0, 0, 1 }, { 1, 1, 1 }, { shape3 })
 
 local qx, qy, qz, qw = snap.math.eulerToQuaternion(0.3, -math.pi / 1.5, 0);
 scene:newDirectionalLight("Test directional light", qx, qy, qz, qw, 1, 1, 1, 5)

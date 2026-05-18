@@ -114,12 +114,7 @@ auto Create2D(const GraphicsContext &context, const TextureCreationInfo &info)
 
   const auto &config = Threading::GetGraphicsConfiguration();
 
-  texture->samplerDescription.minFilter = config.minFilter;
-  texture->samplerDescription.magFilter = config.magFilter;
-  texture->samplerDescription.addressModeU = config.addressModeU;
-  texture->samplerDescription.addressModeV = config.addressModeV;
-  texture->samplerDescription.addressModeW = config.addressModeW;
-  texture->samplerDescription.maxAnisotropy = config.maxAnisotropy;
+  texture->samplerDescription = config.defaultSamplerDescription;
 
   VkImageCreateInfo imageInfo = {};
   imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -167,13 +162,9 @@ auto Create2D(const GraphicsContext &context, const TextureCreationInfo &info)
   viewInfo.format = info.format;
   viewInfo.subresourceRange.aspectMask = GetAspectFlagsForFormat(info.format);
   viewInfo.subresourceRange.baseMipLevel = 0;
-  viewInfo.subresourceRange.levelCount = 1;
+  viewInfo.subresourceRange.levelCount = info.mipmapCount;
   viewInfo.subresourceRange.baseArrayLayer = 0;
   viewInfo.subresourceRange.layerCount = 1;
-  viewInfo.components = {.r = VK_COMPONENT_SWIZZLE_IDENTITY,
-                         .g = VK_COMPONENT_SWIZZLE_IDENTITY,
-                         .b = VK_COMPONENT_SWIZZLE_IDENTITY,
-                         .a = VK_COMPONENT_SWIZZLE_IDENTITY};
 
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
@@ -306,7 +297,7 @@ auto CreateCubeMap(const GraphicsContext &context,
   viewInfo.format = info.format;
   viewInfo.subresourceRange.aspectMask = GetAspectFlagsForFormat(info.format);
   viewInfo.subresourceRange.baseMipLevel = 0;
-  viewInfo.subresourceRange.levelCount = 1;
+  viewInfo.subresourceRange.levelCount = info.mipmapCount;
   viewInfo.subresourceRange.baseArrayLayer = 0;
   viewInfo.subresourceRange.layerCount = CubeFaceCount;
 
@@ -392,7 +383,7 @@ auto CreateVolume(const GraphicsContext &context,
   viewInfo.format = info.format;
   viewInfo.subresourceRange.aspectMask = GetAspectFlagsForFormat(info.format);
   viewInfo.subresourceRange.baseMipLevel = 0;
-  viewInfo.subresourceRange.levelCount = 1;
+  viewInfo.subresourceRange.levelCount = info.mipmapCount;
   viewInfo.subresourceRange.baseArrayLayer = 0;
   viewInfo.subresourceRange.layerCount = 1;
 
@@ -478,7 +469,7 @@ auto CreateArray(const GraphicsContext &context,
   viewInfo.format = info.format;
   viewInfo.subresourceRange.aspectMask = GetAspectFlagsForFormat(info.format);
   viewInfo.subresourceRange.baseMipLevel = 0;
-  viewInfo.subresourceRange.levelCount = 1;
+  viewInfo.subresourceRange.levelCount = info.mipmapCount;
   viewInfo.subresourceRange.baseArrayLayer = 0;
   viewInfo.subresourceRange.layerCount = info.depth;
 
@@ -554,7 +545,8 @@ auto LoadFromFile(GraphicsContext &context, const char *path,
     return result.AsUnexpected();
   }
 
-  if (mipmaps == TextureMipmapOption::Init) {
+  if (mipmaps == TextureMipmapOption::Init &&
+      !Image::IsCompressedTexture(imageData->GetFormat())) {
     auto err = GenerateMipmaps(context, texture.value().get());
     if (Error::IsError(err)) {
       return err.AsUnexpected();
@@ -624,7 +616,8 @@ auto LoadFromMemory(GraphicsContext &context,
     return result.AsUnexpected();
   }
 
-  if (mipmaps == TextureMipmapOption::Init) {
+  if (mipmaps == TextureMipmapOption::Init &&
+      !Image::IsCompressedTexture(format)) {
     auto err = GenerateMipmaps(context, texture.value().get());
     if (Error::IsError(err)) {
       return err.AsUnexpected();
@@ -663,6 +656,14 @@ auto LoadFromMemory(GraphicsContext &context, Image::ImageData &imageData,
   auto result = texture.value()->SetPixels(context, imageData, 0, 0);
   if (Error::IsError(result)) {
     return result.AsUnexpected();
+  }
+
+  if (mipmaps == TextureMipmapOption::Init &&
+      !Image::IsCompressedTexture(imageData.GetFormat())) {
+    auto err = GenerateMipmaps(context, texture.value().get());
+    if (Error::IsError(err)) {
+      return err.AsUnexpected();
+    }
   }
 
   return texture;
@@ -860,7 +861,7 @@ auto Texture::TransitionLayout(const GraphicsContext &context,
   barrier.image = image;
   barrier.subresourceRange.aspectMask = GetAspectFlagsForFormat(format);
   barrier.subresourceRange.baseMipLevel = 0;
-  barrier.subresourceRange.levelCount = 1;
+  barrier.subresourceRange.levelCount = mipmapcount;
   barrier.subresourceRange.baseArrayLayer = 0;
   barrier.subresourceRange.layerCount = 1;
 

@@ -71,7 +71,7 @@ float4 fragmentMain(FragmentInput input) {
   float4 tangent = float4(normalize(input.tangent.xyz), input.tangent.w);
 
   // For some reason normals are flipped so we remove the ! here ig.
-  if (!input.isFrontFace) {
+  if (input.isFrontFace) {
     normal = -normal;
     tangent.xyz = -tangent.xyz;
   }
