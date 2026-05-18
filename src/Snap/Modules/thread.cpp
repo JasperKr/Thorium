@@ -71,7 +71,6 @@ thread_local ThreadID CurrentThreadID = 0;
 auto Thread::Run(Thread *thread,
                  const std::vector<LuaWrap::Data::LuaType> &launchArguments,
                  int count, ThreadID identifier) -> void { // NOLINT
-
   CurrentThreadID = identifier;
   tracy::SetThreadName(thread->debugname.c_str());
 
@@ -109,12 +108,6 @@ auto Thread::Run(Thread *thread,
   bool isPath = (thread->script.size() > 4 &&
                  (thread->script.substr(thread->script.size() - 4) == ".lua" ||
                   thread->script.substr(thread->script.size() - 3) == ".luac"));
-
-  {
-    std::lock_guard<std::mutex> lock(thread->statusMutex);
-    thread->status = ThreadStatus::Running;
-  }
-  thread->statusCV.notify_all();
 
   int result = 0;
 

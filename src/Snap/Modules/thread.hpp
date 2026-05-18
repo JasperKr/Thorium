@@ -75,7 +75,7 @@ private:
 
   mutable std::mutex statusMutex;
   mutable std::condition_variable statusCV;
-  ThreadStatus status{ThreadStatus::Stopped};
+  ThreadStatus status{ThreadStatus::Running};
   std::string errorMessage;
   lua_State *state = nullptr;
 
