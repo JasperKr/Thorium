@@ -8,7 +8,6 @@
 #include "Graphics/uniformWriter.hpp"
 #include "Modules/Math/matrix.hpp"
 #include "Modules/bindings.hpp"
-#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Modules/reflectBindings.hpp"
@@ -23,10 +22,12 @@
 #include "Scene/Lights/sphereLight.hpp"
 #include "Scene/Lights/spotLight.hpp"
 #include "Scene/camera.hpp"
+#include "Scene/environment.hpp"
 #include "Scene/node.hpp"
 #include "Scene/transform.hpp"
 #include "Scene/userdata.hpp"
 #include "Wrap/wrap.hpp"
+#include "Wrap/wrap_engine.hpp"
 #include "material.hpp"
 #include "renderer.hpp"
 #include <algorithm>
@@ -517,6 +518,7 @@ auto Scene::DrawModels(const Graphics::GraphicsContext &context) -> Error {
   return {};
 }
 
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 Scene::Scene(std::string name) : name(std::move(name)) {
   world.component<Geometry>();
   world.component<LocalBounds>();
@@ -689,6 +691,14 @@ auto Scene::Update(double deltaTime) const -> Error {
   return lastUpdateResult;
 }
 
+auto Scene::SetEnvironment(flecs::entity environment) -> void {
+  currentEnvironment = environment;
+}
+
+auto Scene::GetEnvironment() const -> flecs::entity {
+  return currentEnvironment;
+}
+
 auto LuaScene::Update(lua_State *state) -> int {
   auto *scene = ::LuaWrap::ObjectFromLua<Scene>(state, 1);
 
@@ -720,6 +730,23 @@ auto LuaScene::DrawUiElement(lua_State *state) -> int {
   return 0;
 }
 
+auto LuaScene::SetEnvironment(lua_State *state) -> int {
+  auto *scene = ::LuaWrap::ObjectFromLua<Scene>(state, 1);
+
+  if (scene == nullptr) {
+    return luaL_error(state, "Expected a Scene object");
+  }
+
+  auto *environment = ::LuaWrap::EntityFromLua<LuaEnvironment>(state, 2);
+  if (environment == nullptr) {
+    return luaL_error(state, "Expected an Environment object");
+  }
+
+  scene->SetEnvironment(*environment);
+
+  return 0;
+}
+
 const ::LuaWrap::LuaClass SceneLuaClass{
     .Name = "Scene",
     .Type = Scene::GetType(),
@@ -737,6 +764,8 @@ const ::LuaWrap::LuaClass SceneLuaClass{
             {"newRectangleLight", LuaRectangleLight::Create},
             {"newSphereLight", LuaSphereLight::Create},
             {"newCamera", LuaCamera::Create},
+            {"setEnvironment", LuaScene::SetEnvironment},
+            {"newEnvironment", LuaEnvironment::Create},
         },
     .Children = {},
 };

@@ -15,6 +15,7 @@ auto CameraMatrices::Update() -> void {
   InverseViewProjectionMatrix = ViewProjectionMatrix.InverseTranspose();
   RotationProjectionMatrix = ProjectionMatrix * RotationMatrix;
   InverseRotationProjectionMatrix = RotationProjectionMatrix.InverseTranspose();
+  InverseRotationMatrix = RotationMatrix.Transpose();
 }
 
 auto LuaCameraMatrices::GetRotationMatrix(lua_State *state) -> int {

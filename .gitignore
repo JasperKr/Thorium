@@ -14,7 +14,7 @@ vgcore.*
 *.dylib
 *.glb
 *.gltf
-assets/
+Assets/
 *.so.*
 # external/
 *.log

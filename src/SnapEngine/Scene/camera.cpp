@@ -9,13 +9,13 @@
 #include "Modules/Math/math.hpp"
 #include "Modules/Math/mathTypes.hpp"
 #include "Modules/Math/vector.hpp"
-#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Modules/window.hpp"
 #include "Renderer/rendertargetManager.hpp"
 #include "Scene/cameraMatrices.hpp"
 #include "Scene/displayName.hpp"
+#include "Scene/environment.hpp"
 #include "Scene/frustum.hpp"
 #include "Scene/scene.hpp"
 #include "Scene/transform.hpp"
@@ -144,46 +144,30 @@ auto Camera::Create(const Graphics::GraphicsContext &context,
   }
 
   camera.CameraBuffer = bufferResult.value();
-  camera.ConfigureRendertargets();
 
+  camera.ConfigureRendertargets();
   return camera;
 }
 
 auto Camera::ApplyPostProcessing(const Graphics::GraphicsContext &context)
     -> Error {
-  auto shaderResult =
-      Renderer::RendererInstance.GetShader(Renderer::ShaderKey::PostProcessing);
-  if (Error::IsError(shaderResult)) {
-    return shaderResult.error();
-  }
-
-  auto &shader = shaderResult.value();
+  auto shader = CHECK_RES(Renderer::RendererInstance.GetShader(
+      Renderer::ShaderKey::PostProcessing));
   Graphics::DynamicRendering::SetShader(shader);
 
-  auto postProcessedTarget =
-      Renderer::GlobalRenderTargetManager.GetRendertarget(
-          context, Rendertargets.PostProcessed);
-  if (Error::IsError(postProcessedTarget)) {
-    return postProcessedTarget.error();
-  }
+  OwnedTextures.PostProcessed =
+      CHECK_RES(Renderer::GlobalRenderTargetManager.GetRendertarget(
+          context, Rendertargets.PostProcessed));
 
-  OwnedTextures.PostProcessed = postProcessedTarget.value();
-
-  auto setError = Graphics::DynamicRendering::SetRenderTargets(
+  CHECK_ERR(Graphics::DynamicRendering::SetRenderTargets(
       context, {{
                    .texture = OwnedTextures.PostProcessed,
                    .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-               }});
-  if (Error::IsError(setError)) {
-    return setError;
-  }
+               }}));
 
   static auto incomingLightKey = Graphics::ResourceKey{"IncomingLight"};
-  auto sendError =
-      shader->Send(context, incomingLightKey, OwnedTextures.IncomingLight);
-  if (Error::IsError(sendError)) {
-    return sendError;
-  }
+  CHECK_ERR(
+      shader->Send(context, incomingLightKey, OwnedTextures.IncomingLight));
 
   auto temperatureKey = Graphics::ResourceKey{"Temperature"};
   auto tintKey = Graphics::ResourceKey{"Tint"};
@@ -194,47 +178,22 @@ auto Camera::ApplyPostProcessing(const Graphics::GraphicsContext &context)
   auto exposureKey = Graphics::ResourceKey{"Exposure"};
 
   auto postProcessingConfig = GetPostProcessingConfig();
-  sendError = Graphics::Shader::UniformWriter::Send(
-      shader, context, temperatureKey, postProcessingConfig.Temperature);
-  if (Error::IsError(sendError)) {
-    return sendError;
-  }
-  sendError = Graphics::Shader::UniformWriter::Send(shader, context, tintKey,
-                                                    postProcessingConfig.Tint);
-  if (Error::IsError(sendError)) {
-    return sendError;
-  }
-  sendError = Graphics::Shader::UniformWriter::Send(
-      shader, context, applyAGXKey, postProcessingConfig.ApplyAGX);
-  if (Error::IsError(sendError)) {
-    return sendError;
-  }
-  sendError = Graphics::Shader::UniformWriter::Send(
-      shader, context, contrastKey, postProcessingConfig.Contrast);
-  if (Error::IsError(sendError)) {
-    return sendError;
-  }
-  sendError = Graphics::Shader::UniformWriter::Send(
-      shader, context, saturationKey, postProcessingConfig.Saturation);
-  if (Error::IsError(sendError)) {
-    return sendError;
-  }
-  sendError = Graphics::Shader::UniformWriter::Send(
-      shader, context, vignetteKey, postProcessingConfig.Vignette);
-  if (Error::IsError(sendError)) {
-    return sendError;
-  }
-  sendError = Graphics::Shader::UniformWriter::Send(
-      shader, context, exposureKey, postProcessingConfig.Exposure);
-  if (Error::IsError(sendError)) {
-    return sendError;
-  }
+  CHECK_ERR(Graphics::Shader::UniformWriter::Send(
+      shader, context, temperatureKey, postProcessingConfig.Temperature));
+  CHECK_ERR(Graphics::Shader::UniformWriter::Send(shader, context, tintKey,
+                                                  postProcessingConfig.Tint));
+  CHECK_ERR(Graphics::Shader::UniformWriter::Send(
+      shader, context, applyAGXKey, postProcessingConfig.ApplyAGX));
+  CHECK_ERR(Graphics::Shader::UniformWriter::Send(
+      shader, context, contrastKey, postProcessingConfig.Contrast));
+  CHECK_ERR(Graphics::Shader::UniformWriter::Send(
+      shader, context, saturationKey, postProcessingConfig.Saturation));
+  CHECK_ERR(Graphics::Shader::UniformWriter::Send(
+      shader, context, vignetteKey, postProcessingConfig.Vignette));
+  CHECK_ERR(Graphics::Shader::UniformWriter::Send(
+      shader, context, exposureKey, postProcessingConfig.Exposure));
 
-  auto result = Renderer::DrawFullScreen(context);
-  if (Error::IsError(result)) {
-    return result;
-  }
-
+  CHECK_ERR(Renderer::DrawFullScreen(context));
   return {};
 }
 
@@ -245,61 +204,54 @@ auto Camera::Render(const Graphics::GraphicsContext &context,
   Renderer::GlobalRenderTargetManager.ReleaseRendertarget(
       OwnedTextures.IncomingLight);
 
-  auto colorTarget = Renderer::GlobalRenderTargetManager.GetRendertarget(
-      context, Rendertargets.IncomingLight);
-  if (Error::IsError(colorTarget)) {
-    return colorTarget.error();
-  }
+  OwnedTextures.IncomingLight =
+      CHECK_RES(Renderer::GlobalRenderTargetManager.GetRendertarget(
+          context, Rendertargets.IncomingLight));
+  OwnedTextures.Depth =
+      CHECK_RES(Renderer::GlobalRenderTargetManager.GetRendertarget(
+          context, Rendertargets.Depth));
 
-  auto depthTarget = Renderer::GlobalRenderTargetManager.GetRendertarget(
-      context, Rendertargets.Depth);
-  if (Error::IsError(depthTarget)) {
-    return depthTarget.error();
-  }
-
-  OwnedTextures.IncomingLight = colorTarget.value();
-  OwnedTextures.Depth = depthTarget.value();
-
-  auto setError = Graphics::DynamicRendering::SetRenderTargets(
+  CHECK_ERR(Graphics::DynamicRendering::SetRenderTargets(
       context, {{
                     .clearValue = {0.0F, 0.0F, 0.0F, 1.0F},
-                    .texture = colorTarget.value(),
+                    .texture = OwnedTextures.IncomingLight,
                     .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
                 },
                 {
                     .clearValue = {0.0F, 0.0F},
-                    .texture = depthTarget.value(),
+                    .texture = OwnedTextures.Depth,
                     .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-                }});
-  if (Error::IsError(setError)) {
-    return setError;
-  }
+                }}));
 
-  auto shaderResult =
-      Renderer::RendererInstance.GetShader(Renderer::ShaderKey::Forward);
-  if (Error::IsError(shaderResult)) {
-    return shaderResult.error();
-  }
-  auto &shader = shaderResult.value();
+  auto shader = CHECK_RES(
+      Renderer::RendererInstance.GetShader(Renderer::ShaderKey::Forward));
 
   static auto cameraBufferKey = Graphics::ResourceKey{"CameraData"};
-  auto cameraBufferSendError =
-      shader->Send(context, cameraBufferKey, CameraBuffer);
-  if (Error::IsError(cameraBufferSendError)) {
-    return cameraBufferSendError;
-  }
+  CHECK_ERR(shader->Send(context, cameraBufferKey, CameraBuffer));
 
   Graphics::DynamicRendering::SetShader(shader);
 
-  auto error = scene->DrawModels(context);
-  if (Error::IsError(error)) {
-    return error;
+  CHECK_ERR(scene->DrawModels(context));
+  Graphics::DynamicRendering::SetDepthMode(false, false, VK_COMPARE_OP_ALWAYS);
+
+  if (scene->currentEnvironment) {
+    shader = CHECK_RES(
+        Renderer::RendererInstance.GetShader(Renderer::ShaderKey::Skybox));
+    auto environment = scene->currentEnvironment.get<Environment>();
+
+    static auto depthBufferKey = Graphics::ResourceKey{"DepthTexture"};
+    CHECK_ERR(shader->Send(context, depthBufferKey, OwnedTextures.Depth));
+
+    Graphics::DynamicRendering::SetShader(shader);
+    CHECK_ERR(shader->Send(context, cameraBufferKey, CameraBuffer));
+
+    // static auto skyboxKey = Graphics::ResourceKey{"SkyboxTexture"};
+    // CHECK_ERR(shader->Send(context, skyboxKey, environment.SkyboxTexture));
+
+    CHECK_ERR(Renderer::DrawFullScreen(context));
   }
 
-  error = ApplyPostProcessing(context);
-  if (Error::IsError(error)) {
-    return error;
-  }
+  CHECK_ERR(ApplyPostProcessing(context));
 
   return {};
 }
@@ -338,12 +290,9 @@ auto Camera::WriteToBuffer(flecs::entity entity) const -> Error {
 
   assert(sizeof(CameraBufferStruct) == CameraBuffer->GetStride());
 
-  auto result = CameraBuffer->GetBuffer()->CopyTo(
+  CHECK_ERR(CameraBuffer->GetBuffer()->CopyTo(
       context, *CameraBuffer->GetBuffer(), 0, sizeof(CameraBufferStruct),
-      sizeof(CameraBufferStruct));
-  if (Error::IsError(result)) {
-    return result;
-  }
+      sizeof(CameraBufferStruct)));
 
   const auto *cameraMatrices = entity.try_get<CameraMatrices>();
   if (cameraMatrices == nullptr) {

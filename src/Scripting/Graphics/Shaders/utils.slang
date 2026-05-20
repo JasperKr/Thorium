@@ -31,3 +31,9 @@ public func UnpackTangent(uint packedTangent)->half4 {
 public float3 Rotate(float3 v, float4 q) {
   return v + 2.0 * cross(q.xyz, cross(q.xyz, v) + q.w * v);
 }
+
+public float3 GetRayDirection(float2 uv, float4x4 inverseRotationProjection) {
+  float4 clipSpacePos = float4(uv * 2.0 - 1.0, 1.0, 1.0);
+  float4 worldSpacePos = mul(inverseRotationProjection, clipSpacePos);
+  return normalize(worldSpacePos.xyz);
+}

@@ -14,6 +14,7 @@ add_library(SnapEngine
   Scene/camera.cpp
   Scene/displayName.cpp
   Scene/cameraMatrices.cpp
+  Scene/environment.cpp
 
   Scene/Geometry/shape.cpp
   Scene/Geometry/levelOfDetail.cpp

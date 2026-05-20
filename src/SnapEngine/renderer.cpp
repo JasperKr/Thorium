@@ -341,7 +341,7 @@ auto Renderer::GetShader(ShaderKey shaderKey)
 
 auto DrawFullScreen(const Graphics::GraphicsContext &context) -> Error {
   return Graphics::Draw(context, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
-                        6, // NOLINT
+                        3, // NOLINT
                         1);
 }
 

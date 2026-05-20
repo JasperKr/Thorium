@@ -318,11 +318,10 @@ auto Error::Create(const std::string &message, ErrorCode code, ErrorLevel level)
     -> Error {
 
   if (code >= 0) {
-    return {.message = message, .backtrace = "", .code = code};
+    return Error(message, "", code);
   }
 
-  Error err = Error{
-      .message = message, .backtrace = GetStackTrace(level), .code = code};
+  Error err = Error(message, GetStackTrace(level), code);
 #if defined(LOG_ERRORS)
   if (code < 0) {
     PrintError("{}", err.ToString());
@@ -342,7 +341,7 @@ auto Error::Create(const char *message, ErrorCode code, ErrorLevel level)
 }
 
 auto Error::Success() -> Error {
-  static const Error success = {.message = "", .backtrace = "", .code = 0};
+  static const Error success = Error();
   return success;
 }
 

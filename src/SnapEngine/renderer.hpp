@@ -19,6 +19,7 @@ namespace Engine::Renderer {
 enum class ShaderKey : uint8_t {
   Forward,
   PostProcessing,
+  Skybox,
 };
 
 struct ShaderConfiguration {
@@ -34,6 +35,8 @@ const std::unordered_map<ShaderKey, ShaderConfiguration> ShaderConfigurations =
         {ShaderKey::PostProcessing,
          {.path = "Scripting/Graphics/Shaders/PostProcessing/"
                   "postProcessing.slang"}},
+        {ShaderKey::Skybox,
+         {.path = "Scripting/Graphics/Shaders/PostProcessing/skybox.slang"}},
 };
 
 const std::vector<Graphics::BufferComponent> MaterialBufferComponents = {

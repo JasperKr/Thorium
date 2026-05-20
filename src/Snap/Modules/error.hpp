@@ -4,6 +4,7 @@
 
 #include "slang/slang-com-ptr.h"
 #include "slang/slang.h"
+#include <cassert>
 #include <cstdint>
 #include <format>
 #include <string_view>
@@ -23,6 +24,19 @@ struct [[nodiscard]] Error {
   std::string message;
   std::string backtrace;
   ErrorCode code = 0; // Default to 0 for success, negative for errors
+
+  template <typename T>
+  explicit Error(const tl::expected<T, Error> &result)
+    requires(!std::same_as<std::remove_cvref_t<T>, Error>)
+  {
+    assert(!result.has_value());
+    *this = result.error();
+  }
+
+  Error() = default;
+  explicit Error(std::string message, std::string backtrace, ErrorCode code)
+      : message(std::move(message)), backtrace(std::move(backtrace)),
+        code(code) {}
 
   [[nodiscard]] auto ToString() const -> std::string;
 
@@ -98,3 +112,22 @@ struct [[nodiscard]] Error {
 };
 
 template <typename T> using Result = tl::expected<T, Error>;
+
+// NOLINTNEXTLINE
+#define CHECK_ERR(expr)                                                        \
+  {                                                                            \
+    auto error = (expr);                                                       \
+    if (Error::IsError(error)) {                                               \
+      return error;                                                            \
+    }                                                                          \
+  }
+
+// NOLINTNEXTLINE
+#define CHECK_RES(expr)                                                        \
+  ({                                                                           \
+    auto &&_result = (expr);                                                   \
+    if (!_result.has_value()) {                                                \
+      return _result.error();                                                  \
+    }                                                                          \
+    std::move(_result.value());                                                \
+  })

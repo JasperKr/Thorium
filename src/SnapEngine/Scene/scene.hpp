@@ -19,6 +19,7 @@ struct Scene : Object {
   flecs::system finalizePreRenderUploads;
   std::string name;
   Error lastUpdateResult = Error::Success();
+  flecs::entity currentEnvironment;
 
   explicit Scene();
   explicit Scene(std::string name);
@@ -32,6 +33,9 @@ struct Scene : Object {
 
   auto UpdateTransforms() const -> void;
   auto UpdateBoundingBoxes() const -> void;
+
+  auto SetEnvironment(flecs::entity environment) -> void;
+  auto GetEnvironment() const -> flecs::entity;
 };
 
 struct LuaScene : Object {
@@ -50,6 +54,8 @@ struct LuaScene : Object {
 
   static auto GetName(lua_State *state) -> int;
   static auto SetName(lua_State *state) -> int;
+
+  static auto SetEnvironment(lua_State *state) -> int;
 };
 
 extern const ::LuaWrap::LuaClass SceneLuaClass;

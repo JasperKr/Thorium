@@ -67,12 +67,13 @@ auto LuaDirectionalLight::Create(lua_State *state) -> int {
     return luaL_error(state, "Expected a Scene object");
   }
 
-  auto entity = scene->world.entity(name);
+  auto entity = scene->world.entity();
   entity.add<DirectionalLight>();
   entity.add<Light>();
   entity.add<Transform>();
   entity.add<Userdata>();
   entity.add<Frustum>();
+  entity.set<DisplayName>({name});
 
   bool tableSyntax = false;
   if (lua_istable(state, 3)) {

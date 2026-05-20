@@ -145,26 +145,41 @@ for i = 1, #indices, 3 do
 end
 
 
-local mesh = snap.graphics.newMesh(vertexformat, unpackedVertices, "triangles")
+-- local mesh = snap.graphics.newMesh(vertexformat, unpackedVertices, "triangles")
 
-local lod = scene:newLOD("Test LOD")
-local lod2 = scene:newLOD("Test LOD 2")
-local lod3 = scene:newLOD("Test LOD 3", 0.25)
+-- local lod = scene:newLOD("Test LOD")
+-- local lod2 = scene:newLOD("Test LOD 2")
+-- local lod3 = scene:newLOD("Test LOD 3", 0.25)
 
-lod:addGeometry(scene:newGeometry("Test geometry 1", mesh))
-lod2:addGeometry(scene:newGeometry("Test geometry 2", mesh))
-lod3:addGeometry(scene:newGeometry("Test geometry 3", mesh))
+-- lod:addGeometry(scene:newGeometry("Test geometry 1", mesh))
+-- lod2:addGeometry(scene:newGeometry("Test geometry 2", mesh))
+-- lod3:addGeometry(scene:newGeometry("Test geometry 3", mesh))
 
-local shape = scene:newShape("Test shape", { lod })
-local shape2 = scene:newShape("Test shape 2", { lod2 })
-local shape3 = scene:newShape("Test shape 3", { lod3 })
+-- local shape = scene:newShape("Test shape", { lod })
+-- local shape2 = scene:newShape("Test shape 2", { lod2 })
+-- local shape3 = scene:newShape("Test shape 3", { lod3 })
 
-local model = scene:newModel("Test model", { 0, 0, 0 }, { 0, 0, 0, 1 }, { 1, 1, 1 }, { shape })
-local model2 = scene:newModel("Test model 2", { 0, 5, 0 }, { 0, 0, 0, 1 }, { 1, 1, 1 }, { shape2 })
-local model3 = scene:newModel("Test model 3", { 0, 10, 0 }, { 0, 0, 0, 1 }, { 1, 1, 1 }, { shape3 })
+-- local model = scene:newModel("Test model", { 0, 0, 0 }, { 0, 0, 0, 1 }, { 1, 1, 1 }, { shape })
+-- local model2 = scene:newModel("Test model 2", { 0, 5, 0 }, { 0, 0, 0, 1 }, { 1, 1, 1 }, { shape2 })
+-- local model3 = scene:newModel("Test model 3", { 0, 10, 0 }, { 0, 0, 0, 1 }, { 1, 1, 1 }, { shape3 })
 
 local qx, qy, qz, qw = snap.math.eulerToQuaternion(0.3, -math.pi / 1.5, 0);
 scene:newDirectionalLight("Test directional light", qx, qy, qz, qw, 1, 1, 1, 5)
+
+-- local texture = snap.graphics.newTexture("src/Assets/skybox.hdr")
+local checkerboard = snap.data.newImagedata(16, 16)
+for x = 0, 15 do
+  for y = 0, 15 do
+    local color = ((x + y) % 2 == 0) and 1 or 0
+    checkerboard:setPixel(x, y, color, color, color, 1)
+  end
+end
+
+local texture = snap.graphics.newTexture(checkerboard)
+
+
+local env = scene:newEnvironment("Test environment", texture)
+scene:setEnvironment(env)
 
 thread:start(commandsChannel, startThreadChannel, scene, events)
 
