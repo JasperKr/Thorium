@@ -367,30 +367,22 @@ static inline auto LoadSlang(GraphicsContext &context,
       componentTypes.data(), static_cast<SlangInt>(componentTypes.size()),
       composedProgram.writeRef(), diagnosticsBlob.writeRef());
 
-  auto err = Error::Create(result, diagnosticsBlob, composedProgram.readRef());
-  if (Error::IsError(err)) {
-    return err;
-  }
+  CHECK_ERR(Error::Create(result, diagnosticsBlob, composedProgram.readRef()));
 
   PrintDebug("Linking program...");
 
   result = composedProgram->link(shader->linkedProgram.writeRef(),
                                  diagnosticsBlob.writeRef());
 
-  err = Error::Create(result, diagnosticsBlob, shader->linkedProgram.readRef());
-  if (Error::IsError(err)) {
-    return err;
-  }
+  CHECK_ERR(
+      Error::Create(result, diagnosticsBlob, shader->linkedProgram.readRef());)
 
   PrintDebug("Getting program layout...");
 
   shader->programLayout =
       shader->linkedProgram->getLayout(0, diagnosticsBlob.writeRef());
 
-  err = Error::Create(result, diagnosticsBlob, shader->programLayout);
-  if (Error::IsError(err)) {
-    return err;
-  }
+  CHECK_ERR(Error::Create(result, diagnosticsBlob, shader->programLayout));
 
   if (shader->stages.empty()) {
     return Error::Create("No valid entry points found in shader.");
@@ -449,10 +441,7 @@ static inline auto LoadSlang(GraphicsContext &context,
                                                 spirvCode.writeRef(),
                                                 diagnosticsBlob.writeRef());
 
-  err = Error::Create(result, diagnosticsBlob, spirvCode.readRef());
-  if (Error::IsError(err)) {
-    return err;
-  }
+  CHECK_ERR(Error::Create(result, diagnosticsBlob, spirvCode.readRef()));
 
   PrintDebug("Creating Vulkan shader module...");
 
@@ -526,16 +515,13 @@ auto ShaderModule::Create(
   }
 
   // Compile Slang to SPIR-V and create shader module
-  auto error = LoadSlang(context, shader);
-  if (Error::IsError(error)) {
-    return error.AsUnexpected();
-  }
+  CHECK_ERR(LoadSlang(context, shader));
 
   auto reflectResult =
       ReflectShader(context, shader->programLayout, shader->reflection);
 
   if (Error::IsError(reflectResult)) {
-    return reflectResult.AsUnexpected();
+    return reflectResult;
   }
 
   for (auto &layout : shader->reflection.resources) {

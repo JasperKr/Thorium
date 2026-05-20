@@ -205,6 +205,21 @@ auto RegisterAllLuaModules(lua_State *state) -> void {
   Engine::LuaWrap::RegisterModules(state);
 }
 
+#ifdef DEBUG_OBJECT_LIFETIMES
+inline auto AtExit() -> void {
+  if (!RefCounts.empty()) {
+    PrintWarning("There are still {} live objects at shutdown!",
+                 RefCounts.size());
+
+    for (const auto &[ptr, info] : RefCounts) {
+      PrintWarning(" - {} ({} references)", info.second, info.first.load());
+    }
+  } else {
+    PrintInfo("All objects were properly released at shutdown.");
+  }
+}
+#endif
+
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 auto MainLoop(const std::vector<std::string> &arguments) -> Error {
   Error::SetupTraceback();
@@ -233,35 +248,12 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
       Path::Sanitize(currentPath.string() + "/" + arguments[0]);
   sourceDirectory = Path::Directory(sourceDirectory);
 
-  Error fsInitErr = Filesystem::Init(".");
+  CHECK_ERR(Filesystem::Init("."));
+  CHECK_ERR(Filesystem::SetSourceDirectory(sourceDirectory));
+  CHECK_ERR(Filesystem::Mount(".", "/", true));
+  CHECK_ERR(Filesystem::Mount(sourceDirectory, "/", true));
 
-  if (Error::IsError(fsInitErr)) {
-    return fsInitErr;
-  }
-
-  auto sourceSetError = Filesystem::SetSourceDirectory(sourceDirectory);
-
-  if (Error::IsError(sourceSetError)) {
-    return sourceSetError;
-  }
-
-  Error fsMntErr = Filesystem::Mount(".", "/", true);
-  if (Error::IsError(fsMntErr)) {
-    return fsMntErr;
-  }
-
-  fsMntErr = Filesystem::Mount(sourceDirectory, "/", true);
-  if (Error::IsError(fsMntErr)) {
-    return fsMntErr;
-  }
-
-  auto configResult = Config::Configure(state, sourceDirectory);
-
-  if (Error::IsError(configResult)) {
-    return configResult.error();
-  }
-
-  auto config = configResult.value();
+  auto config = CHECK_RES(Config::Configure(state, sourceDirectory));
 
   Filesystem::GetConfig().identity = config.Identity;
 
@@ -269,66 +261,29 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
 
   PrintDebug("Initializing graphics...");
 
-  auto result = Graphics::Initialize(context, wcontext, config.deviceSettings);
-  if (Error::IsError(result)) {
-    return result;
-  }
+  CHECK_ERR(Graphics::Initialize(context, wcontext, config.deviceSettings));
 
   PrintDebug("Graphics initialized successfully.");
-  // PrintDebug(Graphics::Info::GetGpuInfoString(context.physicalDevice));
 
   Graphics::SetCurrentGraphicsContext(&context);
 
-  auto error = Graphics::InitializeGlobalTimelineSemaphore(context);
-  if (Error::IsError(error)) {
-    return error;
-  }
+  CHECK_ERR(Graphics::InitializeGlobalTimelineSemaphore(context));
 
-  PrintDebug("Loading shader modules...");
+  CHECK_ERR(Graphics::Shader::LoadModule());
 
-  auto shaderModuleLoadResult = Graphics::Shader::LoadModule();
+  CHECK_ERR(Graphics::InitializeRendering(context, wcontext));
+  CHECK_ERR(Graphics::DynamicRendering::Load(context));
 
-  if (Error::IsError(shaderModuleLoadResult)) {
-    return shaderModuleLoadResult;
-  }
+  CHECK_ERR(Graphics::LoadBufferModule(context));
+  CHECK_ERR(InitializeUniformBufferModule(context));
 
-  PrintDebug("Shader modules loaded successfully.");
+  CHECK_RES(Gui::LoadGUIState(state));
 
-  result = Graphics::InitializeRendering(context, wcontext);
+  CHECK_ERR(LoadLua(state, arguments));
 
-  if (Error::IsError(result)) {
-    return result;
-  }
-
-  auto rendertargetLoadError = Graphics::DynamicRendering::Load(context);
-
-  if (Error::IsError(rendertargetLoadError)) {
-    return rendertargetLoadError;
-  }
-
-  PrintDebug("Rendertargets loaded successfully.");
-
-  error = Graphics::LoadBufferModule(context);
-  if (Error::IsError(error)) {
-    return error;
-  }
-
-  error = InitializeUniformBufferModule(context);
-  if (Error::IsError(error)) {
-    return error;
-  }
-
-  auto guiLoadResult = Gui::LoadGUIState(state);
-
-  if (Error::IsError(guiLoadResult)) {
-    return guiLoadResult.error();
-  }
-
-  auto luaLoadErr = LoadLua(state, arguments);
-
-  if (Error::IsError(luaLoadErr)) {
-    return luaLoadErr;
-  }
+#ifdef DEBUG_OBJECT_LIFETIMES
+  std::atexit(AtExit);
+#endif
 
   PrintDebug("Entering main loop...");
 
@@ -408,15 +363,9 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
 
   PrintInfo("Unloading buffer module...");
 
-  result = Graphics::UnloadLocalBufferModule(context);
-  if (Error::IsError(result)) {
-    return result;
-  }
+  CHECK_ERR(Graphics::UnloadLocalBufferModule(context));
 
-  result = Graphics::UnloadBufferModule(context);
-  if (Error::IsError(result)) {
-    return result;
-  }
+  CHECK_ERR(Graphics::UnloadBufferModule(context));
 
   PrintInfo("Deinitializing global timeline semaphore...");
 
@@ -427,10 +376,7 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
   Graphics::Shader::UnloadModule(context);
 
   PrintInfo("Destroying rendertargets...");
-  result = Graphics::DynamicRendering::Shutdown(context);
-  if (Error::IsError(result)) {
-    return result;
-  }
+  CHECK_ERR(Graphics::DynamicRendering::Shutdown(context));
   Graphics::DynamicRendering::Destroy(context);
 
   PrintInfo("Destroying samplers...");
@@ -441,22 +387,7 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
 
   Graphics::Deinitialize(context);
 
-#ifdef DEBUG_OBJECT_LIFETIMES
-
-  if (!RefCounts.empty()) {
-    PrintWarning("There are still {} live objects at shutdown!",
-                 RefCounts.size());
-
-    for (const auto &[ptr, info] : RefCounts) {
-      PrintWarning(" - {} ({} references)", info.second, info.first.load());
-    }
-  } else {
-    PrintInfo("All objects were properly released at shutdown.");
-  }
-
-#else
   PrintInfo("App shutdown complete.");
-#endif
 
   return mainLoopResult;
 }

@@ -94,20 +94,11 @@ struct Renderer {
   auto Initialize(Graphics::GraphicsContext &context) -> Error {
     constexpr size_t InitialMaterialBufferSize = 1024UL;
 
-    auto error = InitializeDefaultMaterial(context);
-    if (Error::IsError(error)) {
-      return error;
-    }
+    CHECK_ERR(InitializeDefaultMaterial(context));
 
-    error = InitializeMaterialBuffer(context, InitialMaterialBufferSize);
-    if (Error::IsError(error)) {
-      return error;
-    }
+    CHECK_ERR(InitializeMaterialBuffer(context, InitialMaterialBufferSize));
 
-    error = InitializeLightBuffers(context);
-    if (Error::IsError(error)) {
-      return error;
-    }
+    CHECK_ERR(InitializeLightBuffers(context));
 
     initialized = true;
     return {};

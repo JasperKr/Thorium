@@ -237,10 +237,7 @@ auto SwapchainManager::Initialize(GraphicsContext &context,
     -> Result<SwapchainManager> {
   SwapchainManager manager;
 
-  auto result = manager.CreateVkSwapchain(context, windowContext);
-  if (Error::IsError(result)) {
-    return result.AsUnexpected();
-  }
+  CHECK_ERR(manager.CreateVkSwapchain(context, windowContext));
 
   manager.currentSwapchain = context.swapchainInfo.swapchain;
   manager.currentTextures = context.swapchainInfo.textures;
@@ -415,10 +412,7 @@ auto SwapchainManager::NewFrame(GraphicsContext &context,
   if (isDirty) {
     isDirty = false;
 
-    auto result = RecreateSwapchain(context, windowContext);
-    if (Error::IsError(result)) {
-      return result;
-    }
+    CHECK_ERR(RecreateSwapchain(context, windowContext));
   }
 
   CleanupOldSwapchains(context, currentFrame);
@@ -429,10 +423,7 @@ auto SwapchainManager::NewFrame(GraphicsContext &context,
 }
 auto SwapchainManager::EndFrame(const GraphicsContext &context) -> Error {
   ZoneScoped;
-  auto error = GetCurrentSwapchainTexture(context)->UseAsPresentSrc(context);
-  if (Error::IsError(error)) {
-    return error;
-  }
+  CHECK_ERR(GetCurrentSwapchainTexture(context)->UseAsPresentSrc(context));
 
   return Error::Success();
 }
@@ -595,17 +586,11 @@ auto SwapchainManager::CreateVkSwapchain(GraphicsContext &context,
     }
   }
 
-  auto result = GetSwapchainTextures(context);
-  if (Error::IsError(result)) {
-    return result;
-  }
+  CHECK_ERR(GetSwapchainTextures(context));
 
   if (context.imageReady.empty() ||
       context.imageReady.at(0) == VK_NULL_HANDLE) {
-    result = CreateFences(context);
-    if (Error::IsError(result)) {
-      return result;
-    }
+    CHECK_ERR(CreateFences(context));
   }
 
   return Error::Success();

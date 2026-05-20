@@ -151,13 +151,13 @@ auto Create2D(const GraphicsContext &context, const TextureCreationInfo &info)
                                                &texture->memory, nullptr));
 
     if (Error::IsError(error)) {
-      return error.AsUnexpected();
+      return error;
     }
   }
 
   auto setNameResult = SetDebugName(info.debugName, texture.get(), context);
   if (Error::IsError(setNameResult)) {
-    return setNameResult.AsUnexpected();
+    return setNameResult;
   }
 
   VkImageViewCreateInfo viewInfo = {};
@@ -177,7 +177,7 @@ auto Create2D(const GraphicsContext &context, const TextureCreationInfo &info)
         context.device, &viewInfo, GetAllocationCallbacks(), &texture->view));
 
     if (Error::IsError(error)) {
-      return error.AsUnexpected();
+      return error;
     }
   }
 
@@ -217,7 +217,7 @@ auto FromSwapchainTexture(const GraphicsContext &context,
       context.physicalDevice, context.surface, &surfaceCapabilities));
 
   if (Error::IsError(error)) {
-    return error.AsUnexpected();
+    return error;
   }
 
   texture->usage = surfaceCapabilities.supportedUsageFlags;
@@ -227,11 +227,7 @@ auto FromSwapchainTexture(const GraphicsContext &context,
   texture->lastUsedAccess = 0;
   texture->lastUsedStages = 0;
   texture->currentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-  texture->lastUsage = TextureUsage::Unknown;
-
-  if (Error::IsError(error)) {
-    return error.AsUnexpected();
-  }
+  CHECK_ERR(TextureUsage::Unknown);
 
   return texture;
 }
@@ -291,13 +287,13 @@ auto CreateCubeMap(const GraphicsContext &context,
                                                &texture->memory, nullptr));
 
     if (Error::IsError(error)) {
-      return error.AsUnexpected();
+      return error;
     }
   }
 
   auto setNameResult = SetDebugName(info.debugName, texture.get(), context);
   if (Error::IsError(setNameResult)) {
-    return setNameResult.AsUnexpected();
+    return setNameResult;
   }
 
   VkImageViewCreateInfo viewInfo = {};
@@ -317,7 +313,7 @@ auto CreateCubeMap(const GraphicsContext &context,
         context.device, &viewInfo, GetAllocationCallbacks(), &texture->view));
 
     if (Error::IsError(error)) {
-      return error.AsUnexpected();
+      return error;
     }
   }
 
@@ -382,13 +378,13 @@ auto CreateVolume(const GraphicsContext &context,
                                                &texture->memory, nullptr));
 
     if (Error::IsError(error)) {
-      return error.AsUnexpected();
+      return error;
     }
   }
 
   auto setNameResult = SetDebugName(info.debugName, texture.get(), context);
   if (Error::IsError(setNameResult)) {
-    return setNameResult.AsUnexpected();
+    return setNameResult;
   }
 
   VkImageViewCreateInfo viewInfo = {};
@@ -408,7 +404,7 @@ auto CreateVolume(const GraphicsContext &context,
         context.device, &viewInfo, GetAllocationCallbacks(), &texture->view));
 
     if (Error::IsError(error)) {
-      return error.AsUnexpected();
+      return error;
     }
   }
 
@@ -473,13 +469,13 @@ auto CreateArray(const GraphicsContext &context,
                                                &texture->memory, nullptr));
 
     if (Error::IsError(error)) {
-      return error.AsUnexpected();
+      return error;
     }
   }
 
   auto setNameResult = SetDebugName(info.debugName, texture.get(), context);
   if (Error::IsError(setNameResult)) {
-    return setNameResult.AsUnexpected();
+    return setNameResult;
   }
 
   VkImageViewCreateInfo viewInfo = {};
@@ -499,7 +495,7 @@ auto CreateArray(const GraphicsContext &context,
         context.device, &viewInfo, GetAllocationCallbacks(), &texture->view));
 
     if (Error::IsError(error)) {
-      return error.AsUnexpected();
+      return error;
     }
   }
 
@@ -522,7 +518,7 @@ auto LoadFromFile(GraphicsContext &context, const char *path,
   auto fileLoadResult = Filesystem::ReadFile(path);
 
   if (Error::IsError(fileLoadResult)) {
-    return fileLoadResult.error().AsUnexpected();
+    return fileLoadResult.error();
   }
 
   auto filedata = fileLoadResult.value();
@@ -532,7 +528,7 @@ auto LoadFromFile(GraphicsContext &context, const char *path,
   auto imageDataResult = Image::ImageData::Create(dataSpan);
 
   if (Error::IsError(imageDataResult)) {
-    return imageDataResult.error().AsUnexpected();
+    return imageDataResult.error();
   }
 
   auto imageData = imageDataResult.value();
@@ -556,21 +552,14 @@ auto LoadFromFile(GraphicsContext &context, const char *path,
                });
 
   if (Error::IsError(texture)) {
-    return texture.error().AsUnexpected();
+    return texture.error();
   }
 
-  auto result = texture.value()->SetPixels(context, *imageData);
-
-  if (Error::IsError(result)) {
-    return result.AsUnexpected();
-  }
+  CHECK_ERR(texture.value()->SetPixels(context, *imageData));
 
   if (mipmaps == TextureMipmapOption::Init &&
       !Image::IsCompressedTexture(imageData->GetFormat())) {
-    auto err = GenerateMipmaps(context, texture.value().get());
-    if (Error::IsError(err)) {
-      return err.AsUnexpected();
-    }
+    CHECK_ERR(GenerateMipmaps(context, texture.value().get()));
   }
 
   return texture;
@@ -591,7 +580,7 @@ auto LoadFromMemory(GraphicsContext &context,
   auto loadResult =
       Image::FromMemory(data, width, height, format, requiresFree);
   if (Error::IsError(loadResult)) {
-    return loadResult.error().AsUnexpected();
+    return loadResult.error();
   }
 
   int mipmapCount = 1;
@@ -612,7 +601,7 @@ auto LoadFromMemory(GraphicsContext &context,
                });
 
   if (Error::IsError(texture)) {
-    return texture.error().AsUnexpected();
+    return texture.error();
   }
 
   std::span<const uint8_t> dataSpan = loadResult.value();
@@ -633,15 +622,12 @@ auto LoadFromMemory(GraphicsContext &context,
   }
 
   if (Error::IsError(result)) {
-    return result.AsUnexpected();
+    return result;
   }
 
   if (mipmaps == TextureMipmapOption::Init &&
       !Image::IsCompressedTexture(format)) {
-    auto err = GenerateMipmaps(context, texture.value().get());
-    if (Error::IsError(err)) {
-      return err.AsUnexpected();
-    }
+    CHECK_ERR(GenerateMipmaps(context, texture.value().get()));
   }
 
   return texture;
@@ -670,20 +656,14 @@ auto LoadFromMemory(GraphicsContext &context, Image::ImageData &imageData,
                });
 
   if (Error::IsError(texture)) {
-    return texture.error().AsUnexpected();
+    return texture.error();
   }
 
-  auto result = texture.value()->SetPixels(context, imageData, 0, 0);
-  if (Error::IsError(result)) {
-    return result.AsUnexpected();
-  }
+  CHECK_ERR(texture.value()->SetPixels(context, imageData, 0, 0));
 
   if (mipmaps == TextureMipmapOption::Init &&
       !Image::IsCompressedTexture(imageData.GetFormat())) {
-    auto err = GenerateMipmaps(context, texture.value().get());
-    if (Error::IsError(err)) {
-      return err.AsUnexpected();
-    }
+    CHECK_ERR(GenerateMipmaps(context, texture.value().get()));
   }
 
   return texture;
@@ -726,7 +706,7 @@ auto LoadFromMemory(GraphicsContext &context,
                  });
 
     if (Error::IsError(cubeMapTexture)) {
-      return cubeMapTexture.error().AsUnexpected();
+      return cubeMapTexture.error();
     }
 
     texture = cubeMapTexture.value();
@@ -749,7 +729,7 @@ auto LoadFromMemory(GraphicsContext &context,
                  });
 
     if (Error::IsError(arrayTexture)) {
-      return arrayTexture.error().AsUnexpected();
+      return arrayTexture.error();
     }
 
     texture = arrayTexture.value();
@@ -773,7 +753,7 @@ auto LoadFromMemory(GraphicsContext &context,
                  });
 
     if (Error::IsError(volumeTexture)) {
-      return volumeTexture.error().AsUnexpected();
+      return volumeTexture.error();
     }
 
     texture = volumeTexture.value();
@@ -793,7 +773,7 @@ auto LoadFromMemory(GraphicsContext &context,
                            },
                            VkOffset2D{0, 0});
     if (Error::IsError(result)) {
-      return result.AsUnexpected();
+      return result;
     }
   }
 
@@ -1080,11 +1060,7 @@ auto Texture::SetPixels(const GraphicsContext &context,
 
       auto rowSpan = // NOLINTNEXTLINE pointer arithmetic
           std::span<uint8_t>(imageData.GetDataPtr() + sourceOffset, rowSize);
-      auto error = buffer->SetData(context, rowSpan, row * rowSize);
-
-      if (Error::IsError(error)) {
-        return error;
-      }
+      CHECK_ERR(buffer->SetData(context, rowSpan, row * rowSize));
     }
   }
 
@@ -1100,11 +1076,7 @@ auto Texture::SetPixels(const GraphicsContext &context,
   region.imageExtent = {
       .width = source.extent.width, .height = source.extent.height, .depth = 1};
 
-  auto error = UseAsTransferDst(context);
-
-  if (Error::IsError(error)) {
-    return error;
-  }
+  CHECK_ERR(UseAsTransferDst(context));
 
   auto *commandBuffer = GetCommandBuffer();
 
@@ -1115,11 +1087,7 @@ auto Texture::SetPixels(const GraphicsContext &context,
   vkCmdCopyBufferToImage(commandBuffer, buffer->handle, image,
                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
-  error = UseAsSampler(context, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT);
-
-  if (Error::IsError(error)) {
-    return error;
-  }
+  CHECK_ERR(UseAsSampler(context, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT));
 
   // TODO: Check lifetime
   buffer->MarkUse();
@@ -1184,11 +1152,7 @@ inline auto WritePixelData(const Ref<Texture> &texture,
     auto dataSpan = // NOLINTNEXTLINE pointer arithmetic
         std::span<const uint8_t>(data.data() + (source.offset.y * rowSize),
                                  rowSize * rowCount);
-    auto error = buffer->SetData(context, dataSpan, 0);
-
-    if (Error::IsError(error)) {
-      return error;
-    }
+    CHECK_ERR(buffer->SetData(context, dataSpan, 0));
   } else {
     for (size_t row = 0; row < rowCount; ++row) {
       size_t sourceOffset =
@@ -1197,11 +1161,7 @@ inline auto WritePixelData(const Ref<Texture> &texture,
 
       auto rowSpan = // NOLINTNEXTLINE pointer arithmetic
           std::span<const uint8_t>(data.data() + sourceOffset, rowSize);
-      auto error = buffer->SetData(context, rowSpan, row * rowSize);
-
-      if (Error::IsError(error)) {
-        return error;
-      }
+      CHECK_ERR(buffer->SetData(context, rowSpan, row * rowSize));
     }
   }
 
@@ -1217,11 +1177,7 @@ inline auto WritePixelData(const Ref<Texture> &texture,
   region.imageExtent = {
       .width = source.extent.width, .height = source.extent.height, .depth = 1};
 
-  auto error = texture->UseAsTransferDst(context);
-
-  if (Error::IsError(error)) {
-    return error;
-  }
+  CHECK_ERR(texture->UseAsTransferDst(context));
 
   auto *commandBuffer = GetCommandBuffer();
 
@@ -1232,11 +1188,8 @@ inline auto WritePixelData(const Ref<Texture> &texture,
   vkCmdCopyBufferToImage(commandBuffer, buffer->handle, texture->image,
                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
-  error = texture->UseAsSampler(context, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT);
-
-  if (Error::IsError(error)) {
-    return error;
-  }
+  CHECK_ERR(
+      texture->UseAsSampler(context, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT);)
 
   buffer->MarkUse();
   texture->MarkUse();
@@ -1274,11 +1227,7 @@ inline auto WriteSimplifiedPixelData(const Ref<Texture> &texture,
 
   auto buffer = bufferResult.value();
 
-  auto error = buffer->SetData(context, data, 0);
-
-  if (Error::IsError(error)) {
-    return error;
-  }
+  CHECK_ERR(buffer->SetData(context, data, 0));
 
   VkBufferImageCopy region = {};
   region.bufferOffset = 0;
@@ -1293,11 +1242,7 @@ inline auto WriteSimplifiedPixelData(const Ref<Texture> &texture,
                         .height = static_cast<uint32_t>(dataHeight),
                         .depth = 1};
 
-  error = texture->UseAsTransferDst(context);
-
-  if (Error::IsError(error)) {
-    return error;
-  }
+  CHECK_ERR(texture->UseAsTransferDst(context));
 
   auto *commandBuffer = GetCommandBuffer();
 
@@ -1308,11 +1253,8 @@ inline auto WriteSimplifiedPixelData(const Ref<Texture> &texture,
   vkCmdCopyBufferToImage(commandBuffer, buffer->handle, texture->image,
                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
-  error = texture->UseAsSampler(context, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT);
-
-  if (Error::IsError(error)) {
-    return error;
-  }
+  CHECK_ERR(
+      texture->UseAsSampler(context, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT);)
 
   buffer->MarkUse();
   texture->MarkUse();
@@ -1464,7 +1406,7 @@ auto GetDefaultTexture(const GraphicsContext &context, VkFormat format,
   auto imageDataResult = Image::ImageData::Create(1, 1, format);
 
   if (Error::IsError(imageDataResult)) {
-    return imageDataResult.error().AsUnexpected();
+    return imageDataResult.error();
   }
 
   auto imageData = imageDataResult.value();
@@ -1472,13 +1414,13 @@ auto GetDefaultTexture(const GraphicsContext &context, VkFormat format,
       Math::Uvec2{0, 0}, Color(UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX));
 
   if (Error::IsError(error)) {
-    return error.AsUnexpected();
+    return error;
   }
 
   auto setPixelsResult = texture->SetPixels(context, *imageData);
 
   if (Error::IsError(setPixelsResult)) {
-    return setPixelsResult.AsUnexpected();
+    return setPixelsResult;
   }
 
   DefaultTextureCache[key] = texture;
@@ -1662,14 +1604,8 @@ auto Texture::CopyTo(const GraphicsContext &context, Texture &dstTexture,
     return Error::Create("CopyTo: Failed to get command buffer for copying.");
   }
 
-  auto error = UseAsTransferSrc(context);
-  if (Error::IsError(error)) {
-    return error;
-  }
-  error = dstTexture.UseAsTransferDst(context);
-  if (Error::IsError(error)) {
-    return error;
-  }
+  CHECK_ERR(UseAsTransferSrc(context));
+  CHECK_ERR(dstTexture.UseAsTransferDst(context));
 
   VkImageCopy copyRegion = {};
   copyRegion.srcSubresource.aspectMask = GetAspectFlagsForFormat(format);
@@ -1725,10 +1661,7 @@ auto Texture::CopyTo(const GraphicsContext &context, Buffer &dstBuffer,
     return Error::Create("CopyTo: Failed to get command buffer for copying.");
   }
 
-  auto error = UseAsTransferSrc(context);
-  if (Error::IsError(error)) {
-    return error;
-  }
+  CHECK_ERR(UseAsTransferSrc(context));
 
   if ((dstBuffer.usage & VK_BUFFER_USAGE_TRANSFER_DST_BIT) == 0) {
     return Error::Create("CopyTo: Destination buffer must have "

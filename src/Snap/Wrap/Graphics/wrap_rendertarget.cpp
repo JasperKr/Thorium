@@ -319,7 +319,7 @@ auto RenderTargetsFromOptions(lua_State *state, int index)
   if (lua_istable(state, -1) != 0) {
     auto blendModeResult = FromLuaState(state);
     if (Error::IsError(blendModeResult)) {
-      return blendModeResult.error().AsUnexpected();
+      return blendModeResult.error();
     }
     rendertarget.blendMode = blendModeResult.value();
   } else {

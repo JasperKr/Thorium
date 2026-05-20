@@ -140,7 +140,7 @@ auto Camera::Create(const Graphics::GraphicsContext &context,
       Graphics::StructuredBuffer::Create(context, CameraBufferFormat, 2, info);
 
   if (Error::IsError(bufferResult)) {
-    return bufferResult.error().AsUnexpected();
+    return bufferResult.error();
   }
 
   camera.CameraBuffer = bufferResult.value();

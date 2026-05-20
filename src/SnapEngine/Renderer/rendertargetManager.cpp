@@ -141,7 +141,7 @@ auto RenderTargetManager::GetRendertarget(
   auto textureResult = ::Graphics::Create2D(context, info);
 
   if (Error::IsError(textureResult)) {
-    return textureResult.error().AsUnexpected();
+    return textureResult.error();
   }
 
   auto texture = textureResult.value();

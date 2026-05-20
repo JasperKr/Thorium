@@ -39,7 +39,7 @@ auto ComponentFromLua(lua_State *state, int index)
     auto result = FormatFromLua(state, -1);
     lua_pop(state, 1);
     if (Error::IsError(result)) {
-      return result.error().AsUnexpected();
+      return result.error();
     }
 
     component.format = result.value();
@@ -62,7 +62,7 @@ auto FormatFromLua(lua_State *state, int index, ::Graphics::Standard standard)
 
     auto result = ComponentFromLua(state, -1);
     if (Error::IsError(result)) {
-      return result.error().AsUnexpected();
+      return result.error();
     }
 
     components.emplace_back(result.value());

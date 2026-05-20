@@ -78,12 +78,8 @@ inline auto NameBuffer(VkBuffer buffer, VmaAllocation memory,
           static_cast<uint64_t>(reinterpret_cast<uintptr_t>(buffer)), // NOLINT
       .pObjectName = name.c_str(),
   };
-  auto result = Error::Create(
-      vkSetDebugUtilsObjectNameEXT(context.device, &debugNameInfo));
-
-  if (Error::IsError(result)) {
-    return result;
-  }
+  CHECK_ERR(Error::Create(
+      vkSetDebugUtilsObjectNameEXT(context.device, &debugNameInfo)));
 
   {
     std::lock_guard<std::mutex> lock(
@@ -110,11 +106,8 @@ auto LoadBufferModule(const GraphicsContext &context) -> Error {
   {
     std::scoped_lock<std::mutex, std::mutex> lock(
         Graphics::GraphicsContext::mutexes.device, uploadSemaphoreMutex);
-    auto result = Error::Create(vkCreateSemaphore(
-        context.device, &semInfo, GetAllocationCallbacks(), &uploadSemaphore));
-    if (Error::IsError(result)) {
-      return result;
-    }
+    CHECK_ERR(Error::Create(vkCreateSemaphore(
+        context.device, &semInfo, GetAllocationCallbacks(), &uploadSemaphore)));
   }
 
   return Error::Success();
@@ -154,11 +147,8 @@ auto FlushBufferUploads(const GraphicsContext &context) -> Error {
   {
     std::scoped_lock<std::mutex, std::mutex> lock(
         Graphics::GraphicsContext::mutexes.device, uploadSemaphoreMutex);
-    auto result = Error::Create(vkGetSemaphoreCounterValue(
-        context.device, uploadSemaphore, &completedValue));
-    if (Error::IsError(result)) {
-      return result;
-    }
+    CHECK_ERR(Error::Create(vkGetSemaphoreCounterValue(
+        context.device, uploadSemaphore, &completedValue)));
   }
 
   auto stagingBufferIterator = StagingBuffers.begin();
@@ -196,11 +186,8 @@ auto Buffer::MapMemory(const GraphicsContext &context) -> Error {
   std::lock_guard<std::mutex> lock(
       Graphics::GraphicsContext::mutexes.vmaAllocator);
 
-  auto result = Error::Create(
-      vmaMapMemory(context.vmaAllocator, this->memory, &mappedData));
-  if (Error::IsError(result)) {
-    return result;
-  }
+  CHECK_ERR(Error::Create(
+      vmaMapMemory(context.vmaAllocator, this->memory, &mappedData)));
 
   return Error::Success();
 }
@@ -338,21 +325,14 @@ auto Buffer::UploadRing(const GraphicsContext &context,
     bufferInfo.persistentMapping = true;
     bufferInfo.debugName = "Upload Buffer";
 
-    auto result = Graphics::Buffer::Create(context, bufferInfo);
-    if (Error::IsError(result)) {
-      return result.error();
-    }
-
-    UploadBuffers.at(context.frameIndex) = result.value();
+    UploadBuffers.at(context.frameIndex) =
+        CHECK_RES(Graphics::Buffer::Create(context, bufferInfo));
   }
 
   uploadBuffer = UploadBuffers.at(context.frameIndex);
 
   // Copy data to upload buffer
-  auto result = uploadBuffer->MapMemory(context);
-  if (Error::IsError(result)) {
-    return result;
-  }
+  CHECK_ERR(uploadBuffer->MapMemory(context));
 
   // NOLINTNEXTLINE, because of pointer arithmetic
   std::memcpy(static_cast<uint8_t *>(uploadBuffer->mappedData) + uploadOffset,
@@ -417,10 +397,7 @@ auto Buffer::Upload(const GraphicsContext &context,
     // the GPU reading from the buffer later
     // So we directly map and write to the buffer memory
 
-    auto result = MapMemory(context);
-    if (Error::IsError(result)) {
-      return result;
-    }
+    CHECK_ERR(MapMemory(context));
 
     // NOLINTNEXTLINE, because of pointer arithmetic
     std::memcpy(static_cast<uint8_t *>(mappedData) + offset, data.data(),
@@ -432,15 +409,10 @@ auto Buffer::Upload(const GraphicsContext &context,
   }
 
   if (uploadSize > LargeUploadThreshold) {
-    auto uploadResult = UploadLarge(context, data, offset, size);
-    if (Error::IsError(uploadResult)) {
-      return uploadResult;
-    }
+    CHECK_ERR(UploadLarge(context, data, offset, size));
+
   } else {
-    auto uploadResult = UploadRing(context, data, offset, size);
-    if (Error::IsError(uploadResult)) {
-      return uploadResult;
-    }
+    CHECK_ERR(UploadRing(context, data, offset, size));
   }
 
   return Error::Success();
@@ -536,10 +508,7 @@ auto Buffer::SetData(const GraphicsContext &context,
                      const std::span<const uint8_t> &data, // NOLINTNEXTLINE
                      VkDeviceSize offset, VkDeviceSize size) -> Error {
 
-  auto result = Upload(context, data, offset, size);
-  if (Error::IsError(result)) {
-    return result;
-  }
+  CHECK_ERR(Upload(context, data, offset, size));
 
   MarkUse();
 
@@ -614,10 +583,7 @@ auto Buffer::CopyTo(const GraphicsContext &context, Texture &dstTexture,
         "Source buffer was not created with TRANSFER_SRC usage flag for copy.");
   }
 
-  auto error = dstTexture.UseAsTransferDst(context);
-  if (Error::IsError(error)) {
-    return error;
-  }
+  CHECK_ERR(dstTexture.UseAsTransferDst(context));
 
   vkCmdCopyBufferToImage(commandBuffer, handle, dstTexture.image,
                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);

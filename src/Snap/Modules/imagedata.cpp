@@ -361,7 +361,7 @@ auto ImageData::GetColor(Math::Uvec2 position) -> Result<Color> {
   }
 
   // Unsupported format, handle error as needed
-  return Error::Create("Unsupported image format.").AsUnexpected();
+  return Error::Create("Unsupported image format.");
 }
 
 auto ImageData::Create(uint32_t width, uint32_t height, VkFormat format)
@@ -396,7 +396,7 @@ auto ImageData::Create(const std::string &filepath) -> Result<Ref<ImageData>> {
   auto fileLoadResult = Filesystem::ReadFile(filepath);
 
   if (Error::IsError(fileLoadResult)) {
-    return fileLoadResult.error().AsUnexpected();
+    return fileLoadResult.error();
   }
 
   auto filedata = fileLoadResult.value();
@@ -436,7 +436,7 @@ auto ImageData::Create(const std::span<const uint8_t> &data)
     stbi_image_free(pixels);
 
     if (Error::IsError(imageData)) {
-      return imageData.error().AsUnexpected();
+      return imageData.error();
     }
 
     return imageData.value();
@@ -463,7 +463,7 @@ auto ImageData::Create(const std::span<const uint8_t> &data)
     stbi_image_free(pixels);
 
     if (Error::IsError(imageData)) {
-      return imageData.error().AsUnexpected();
+      return imageData.error();
     }
 
     return imageData.value();

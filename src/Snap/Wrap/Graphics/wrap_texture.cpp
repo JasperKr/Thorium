@@ -476,7 +476,7 @@ struct LuaOptions {
     auto result = CheckTopOfStackTableKeys(state, index);
 
     if (Error::IsError(result)) {
-      return result.error().AsUnexpected();
+      return result.error();
     }
 
     // type
@@ -605,7 +605,7 @@ static inline auto TextureFromImagedata(lua_State *state)
   auto result =
       ::Graphics::LoadFromMemory(*ctx, *imageData, VK_IMAGE_USAGE_SAMPLED_BIT);
   if (Error::IsError(result)) {
-    return result.error().AsUnexpected();
+    return result.error();
   }
   return result.value();
 }
@@ -617,7 +617,7 @@ static inline auto TextureFromFilepath(lua_State *state)
 
   auto result = ::Graphics::LoadFromFile(*ctx, filepath);
   if (Error::IsError(result)) {
-    return result.error().AsUnexpected();
+    return result.error();
   }
   return result.value();
 }
@@ -629,7 +629,7 @@ static inline auto TextureFromImagedataAndOptions(lua_State *state)
   auto optionsResult = LuaOptions::Create(state, 2);
 
   if (Error::IsError(optionsResult)) {
-    return optionsResult.error().AsUnexpected();
+    return optionsResult.error();
   }
 
   LuaOptions options = optionsResult.value();
@@ -638,7 +638,7 @@ static inline auto TextureFromImagedataAndOptions(lua_State *state)
 
   auto result = ::Graphics::LoadFromMemory(*ctx, *imageData, usage);
   if (Error::IsError(result)) {
-    return result.error().AsUnexpected();
+    return result.error();
   }
   return result.value();
 }
@@ -650,7 +650,7 @@ static inline auto TextureFromFilepathAndOptions(lua_State *state)
   auto optionsResult = LuaOptions::Create(state, 2);
 
   if (Error::IsError(optionsResult)) {
-    return optionsResult.error().AsUnexpected();
+    return optionsResult.error();
   }
 
   LuaOptions options = optionsResult.value();
@@ -660,7 +660,7 @@ static inline auto TextureFromFilepathAndOptions(lua_State *state)
   auto result =
       ::Graphics::LoadFromFile(*ctx, filepath, usage, options.mipmaps);
   if (Error::IsError(result)) {
-    return result.error().AsUnexpected();
+    return result.error();
   }
   return result.value();
 }
@@ -679,7 +679,7 @@ static inline auto TextureFromImagedataArrayAndOptions(lua_State *state)
   auto optionsResult = LuaOptions::Create(state, 2);
 
   if (Error::IsError(optionsResult)) {
-    return optionsResult.error().AsUnexpected();
+    return optionsResult.error();
   }
 
   LuaOptions options = optionsResult.value();
@@ -688,7 +688,7 @@ static inline auto TextureFromImagedataArrayAndOptions(lua_State *state)
 
   auto result = ::Graphics::LoadFromMemory(*ctx, slices, options.type);
   if (Error::IsError(result)) {
-    return result.error().AsUnexpected();
+    return result.error();
   }
   return result.value();
 }
@@ -710,7 +710,7 @@ static inline auto TextureFromWidthAndHeight(lua_State *state)
           .debugName = "LuaTexture FromWidthAndHeight",
       });
   if (Error::IsError(result)) {
-    return result.error().AsUnexpected();
+    return result.error();
   }
   return result.value();
 }
@@ -723,7 +723,7 @@ static inline auto TextureFromWidthHeightAndOptions(lua_State *state)
   auto optionsResult = LuaOptions::Create(state, 3);
 
   if (Error::IsError(optionsResult)) {
-    return optionsResult.error().AsUnexpected();
+    return optionsResult.error();
   }
 
   LuaOptions options = optionsResult.value();
@@ -754,14 +754,11 @@ static inline auto TextureFromWidthHeightAndOptions(lua_State *state)
                 .debugName = "Lua texture from width, height and options",
             });
   if (Error::IsError(result)) {
-    return result.error().AsUnexpected();
+    return result.error();
   }
 
   if (options.mipmaps == ::Graphics::TextureMipmapOption::Init) {
-    auto err = ::Graphics::GenerateMipmaps(*ctx, result.value().get());
-    if (Error::IsError(err)) {
-      return err.AsUnexpected();
-    }
+    CHECK_ERR(::Graphics::GenerateMipmaps(*ctx, result.value().get()));
   }
 
   return result.value();
@@ -777,7 +774,7 @@ TextureFromWidthHeightDepthOrLayersAndOptions(lua_State *state)
   auto optionsResult = LuaOptions::Create(state, 4);
 
   if (Error::IsError(optionsResult)) {
-    return optionsResult.error().AsUnexpected();
+    return optionsResult.error();
   }
 
   LuaOptions options = optionsResult.value();
@@ -842,14 +839,11 @@ TextureFromWidthHeightDepthOrLayersAndOptions(lua_State *state)
   }
 
   if (Error::IsError(result)) {
-    return result.error().AsUnexpected();
+    return result.error();
   }
 
   if (options.mipmaps == ::Graphics::TextureMipmapOption::Init) {
-    auto err = ::Graphics::GenerateMipmaps(*ctx, result.value().get());
-    if (Error::IsError(err)) {
-      return err.AsUnexpected();
-    }
+    CHECK_ERR(::Graphics::GenerateMipmaps(*ctx, result.value().get()));
   }
 
   return result.value();

@@ -56,12 +56,9 @@ static auto StartRecording(Graphics::GraphicsContext &context) -> Error {
     {
       std::lock_guard<std::mutex> lock(
           Graphics::GraphicsContext::mutexes.device);
-      auto result = Error::Create(vkAllocateCommandBuffers(
+      CHECK_ERR(Error::Create(vkAllocateCommandBuffers(
           context.device, &allocInfo,
-          &GlobalStitchInfo.commandBuffers.at(context.frameIndex).at(0)));
-      if (Error::IsError(result)) {
-        return result;
-      }
+          &GlobalStitchInfo.commandBuffers.at(context.frameIndex).at(0))));
     }
   }
 
@@ -137,18 +134,12 @@ auto AquireNextSwapchainImage(Graphics::GraphicsContext &context) -> Error {
 
   if (context.inFlight[context.frameIndex] != VK_NULL_HANDLE) {
     ZoneScopedN("Wait for in-flight fence");
-    auto result = Error::Create(vkWaitForFences(
+    CHECK_ERR(Error::Create(vkWaitForFences(
         context.device, 1, &context.inFlight[context.frameIndex], VK_TRUE,
-        UINT64_MAX));
-    if (Error::IsError(result)) {
-      return result;
-    }
+        UINT64_MAX)));
 
-    result = Error::Create(vkResetFences(
-        context.device, 1, &context.inFlight[context.frameIndex]));
-    if (Error::IsError(result)) {
-      return result;
-    }
+    CHECK_ERR(Error::Create(vkResetFences(
+        context.device, 1, &context.inFlight[context.frameIndex])));
   }
 
   {
@@ -158,19 +149,14 @@ auto AquireNextSwapchainImage(Graphics::GraphicsContext &context) -> Error {
         context.imageAvailable[context.frameIndex], VK_NULL_HANDLE,
         &context.swapchainImageIndex);
 
-    if (Error::IsError(result)) {
-      return Error::Create(result);
-    }
+    CHECK_ERR(Error::Create(result));
   }
 
   if (context.imageInFlight[context.swapchainImageIndex] != VK_NULL_HANDLE) {
     ZoneScopedN("Wait for image in-flight fence");
-    auto result = Error::Create(vkWaitForFences(
+    CHECK_ERR(Error::Create(vkWaitForFences(
         context.device, 1, &context.imageInFlight[context.swapchainImageIndex],
-        VK_TRUE, UINT64_MAX));
-    if (Error::IsError(result)) {
-      return result;
-    }
+        VK_TRUE, UINT64_MAX)));
   }
 
   return Error::Success();
@@ -180,11 +166,7 @@ auto PrepareRecording(Graphics::GraphicsContext &context) -> Error {
   ZoneScoped;
   ResetCommandBuffers(context);
 
-  auto result = StartRecording(context);
-
-  if (Error::IsError(result)) {
-    return result;
-  }
+  CHECK_ERR(StartRecording(context));
 
   return Error::Success();
 }
@@ -215,17 +197,14 @@ auto SubmitCommandBuffers(Graphics::GraphicsContext &context,
   // Submit
   auto err = Error::Create(vkQueueSubmit(context.graphicsQueue, 1, &submitInfo,
                                          context.inFlight[context.frameIndex]));
-  if (Error::IsError(err)) {
-    return err;
+  CHECK_ERR(err);
+
+  if (err.code == VK_ERROR_OUT_OF_DATE_KHR || err.code == VK_SUBOPTIMAL_KHR) {
+    // Swapchain is out of date, need to recreate
+    swapchainManager.MakeDirty();
   }
 
-  auto updateResult = UpdateSemaphoreValues(context);
-
-  if (Error::IsError(updateResult)) {
-    return updateResult.error();
-  }
-
-  auto timelineValue = updateResult.value();
+  auto timelineValue = CHECK_RES(UpdateSemaphoreValues(context));
 
   {
     VkSemaphore globalTimelineSemaphore = Graphics::globalTimelineSemaphore;
@@ -245,9 +224,7 @@ auto SubmitCommandBuffers(Graphics::GraphicsContext &context,
 
       err = Error::Create(vkQueueSubmit(context.graphicsQueue, 1,
                                         &submitTimeline, VK_NULL_HANDLE));
-      if (Error::IsError(err)) {
-        return err;
-      }
+      CHECK_ERR(err);
     }
   }
 
@@ -289,18 +266,11 @@ auto InitializeRendering(Graphics::GraphicsContext &context,
 
   swapchainManager = swapchainManagerResult.value();
 
-  auto error = AquireNextSwapchainImage(context);
-  if (Error::IsError(error)) {
-    return error;
-  }
+  CHECK_ERR(AquireNextSwapchainImage(context));
 
-  auto result = StartRecording(context);
+  CHECK_ERR(StartRecording(context));
 
   auto *cmdBuffer = BeginSingleTimeCommands(context);
-
-  if (Error::IsError(result)) {
-    return result;
-  }
 
   for (VkImage image : context.swapchainInfo.images) {
     VkImageMemoryBarrier2 barrier2 = {};
@@ -404,11 +374,8 @@ PrepareCommands(GraphicsContext &context,
     {
       std::lock_guard<std::mutex> lock(
           Graphics::GraphicsContext::mutexes.device);
-      auto err = Error::Create(
-          vkAllocateCommandBuffers(context.device, &allocInfo, writeAddress));
-      if (Error::IsError(err)) {
-        return err;
-      }
+      CHECK_ERR(Error::Create(
+          vkAllocateCommandBuffers(context.device, &allocInfo, writeAddress)));
     }
   }
 
@@ -518,20 +485,9 @@ auto Present(Graphics::GraphicsContext &context,
     -> Error {
   ZoneScoped;
 
-  auto validateResult = DynamicRendering::FinalizeFrame(context);
-  if (Error::IsError(validateResult)) {
-    return validateResult;
-  }
-
-  auto orderResult = PrepareCommands(context, commands);
-  if (Error::IsError(orderResult)) {
-    return orderResult;
-  }
-
-  auto barrierResult = SubmitBarriers(context, commands);
-  if (Error::IsError(barrierResult)) {
-    return barrierResult;
-  }
+  CHECK_ERR(DynamicRendering::FinalizeFrame(context));
+  CHECK_ERR(PrepareCommands(context, commands));
+  CHECK_ERR(SubmitBarriers(context, commands));
 
   std::vector<VkCommandBuffer> finalCommandBuffers;
 
@@ -544,15 +500,8 @@ auto Present(Graphics::GraphicsContext &context,
   vkBeginCommandBuffer(presentTransitionBuffer, &beginInfo);
   GetThreadContext().commandBuffer = presentTransitionBuffer;
 
-  auto uploadResult = FlushBufferUploads(context);
-  if (Error::IsError(uploadResult)) {
-    return uploadResult;
-  }
-
-  auto endFrameResult = swapchainManager.EndFrame(context);
-  if (Error::IsError(endFrameResult)) {
-    return endFrameResult;
-  }
+  CHECK_ERR(FlushBufferUploads(context));
+  CHECK_ERR(swapchainManager.EndFrame(context));
 
   GetThreadContext().commandBuffer = nullptr;
   vkEndCommandBuffer(presentTransitionBuffer);
@@ -560,23 +509,13 @@ auto Present(Graphics::GraphicsContext &context,
   GlobalStitchInfo.usedCommandBuffers.clear();
 
   // Draw of this frame is done, end recording
-  auto endResult = EndRecording(context, context.frameIndex);
-  if (Error::IsError(endResult)) {
-    return endResult;
-  }
+  CHECK_ERR(EndRecording(context, context.frameIndex));
 
   // Submit command buffers
-  auto submitResult =
-      SubmitCommandBuffers(context, finalCommandBuffers, index + 1);
-  if (Error::IsError(submitResult)) {
-    return submitResult;
-  }
+  CHECK_ERR(SubmitCommandBuffers(context, finalCommandBuffers, index + 1));
 
   // Present the frame
-  auto presentResult = PresentFrame(context);
-  if (Error::IsError(presentResult)) {
-    return presentResult;
-  }
+  CHECK_ERR(PresentFrame(context));
 
   // Prepare for next frame
   context.currentFrame++;
@@ -594,16 +533,10 @@ auto Present(Graphics::GraphicsContext &context,
     swapchainManager.MakeDirty();
   }
 
-  auto newFrameResult =
-      swapchainManager.NewFrame(context, *windowContext, context.currentFrame);
-  if (Error::IsError(newFrameResult)) {
-    return newFrameResult;
-  }
+  CHECK_ERR(
+      swapchainManager.NewFrame(context, *windowContext, context.currentFrame));
 
-  auto error = AquireNextSwapchainImage(context);
-  if (Error::IsError(error)) {
-    return error;
-  }
+  CHECK_ERR(AquireNextSwapchainImage(context));
 
   {
     std::lock_guard<std::mutex> lock(Threading::CommandBufferCacheMutex);
@@ -616,17 +549,10 @@ auto Present(Graphics::GraphicsContext &context,
     }
   }
 
-  error = PrepareRecording(context);
-
-  if (Error::IsError(error)) {
-    return error;
-  }
+  CHECK_ERR(PrepareRecording(context));
 
   Graphics::SetDirtyState();
-  error = DynamicRendering::BeginFrame(context);
-  if (Error::IsError(error)) {
-    return error;
-  }
+  CHECK_ERR(DynamicRendering::BeginFrame(context));
 
   auto &buffer = GetGlobalUniformBuffer(context.frameIndex);
   buffer.NewFrame();

@@ -145,7 +145,7 @@ auto GetAvailableDeviceExtensions(const GraphicsContext &context)
       context.physicalDevice, nullptr, &extensionCount, nullptr));
 
   if (Error::IsError(error)) {
-    return error.AsUnexpected();
+    return error;
   }
 
   std::vector<VkExtensionProperties> extensions(extensionCount);
@@ -153,7 +153,7 @@ auto GetAvailableDeviceExtensions(const GraphicsContext &context)
       context.physicalDevice, nullptr, &extensionCount, extensions.data()));
 
   if (Error::IsError(error)) {
-    return error.AsUnexpected();
+    return error;
   }
 
   return extensions;
@@ -498,10 +498,7 @@ auto Initialize(GraphicsContext &context, Window::WindowContext &wcontext,
     return Error::Create("Failed to create Vulkan surface.");
   }
 
-  error = FindPhysicalDevice(context);
-  if (Error::IsError(error)) {
-    return error;
-  }
+  CHECK_ERR(FindPhysicalDevice(context));
 
   auto *windowContext = Window::GetWindowContext();
 
@@ -509,28 +506,16 @@ auto Initialize(GraphicsContext &context, Window::WindowContext &wcontext,
     return Error::Create("No current window context found.");
   }
 
-  error = CreateDevice(context, deviceSettings);
-  if (Error::IsError(error)) {
-    return error;
-  }
+  CHECK_ERR(CreateDevice(context, deviceSettings));
   PrintDebug("called: CreateDevice...");
-  error = CreateVmaAllocator(context);
-  if (Error::IsError(error)) {
-    return error;
-  }
+  CHECK_ERR(CreateVmaAllocator(context));
   PrintDebug("called: CreateVmaAllocator...");
 
   GetThreadContext().graphicsContext = &context;
 
-  error = CreateCommandPool(GetThreadContext());
-  if (Error::IsError(error)) {
-    return error;
-  }
+  CHECK_ERR(CreateCommandPool(GetThreadContext()));
   PrintDebug("called: CreateCommandPool...");
-  error = CreateSemaphores(context);
-  if (Error::IsError(error)) {
-    return error;
-  }
+  CHECK_ERR(CreateSemaphores(context));
   PrintDebug("called: CreateSemaphores...");
 
   return Error::Success();

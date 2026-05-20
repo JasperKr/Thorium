@@ -306,10 +306,7 @@ auto Draw(const GraphicsContext &context, const VkPrimitiveTopology &topology,
       context, VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT |
                    VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT));
 
-  auto error = DynamicRendering::PrepareRendering(context);
-  if (Error::IsError(error)) {
-    return error;
-  }
+  CHECK_ERR(DynamicRendering::PrepareRendering(context));
 
   vkCmdDraw(commandBuffer, vertexCount, instanceCount, 0, 0);
 
@@ -338,10 +335,7 @@ auto Draw(const GraphicsContext &context, const Ref<Buffer> &indexBuffer,
       context, VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT |
                    VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT));
 
-  auto error = DynamicRendering::PrepareRendering(context);
-  if (Error::IsError(error)) {
-    return error;
-  }
+  CHECK_ERR(DynamicRendering::PrepareRendering(context));
 
   {
     Barrier::UpdateUsage(context, *indexBuffer,

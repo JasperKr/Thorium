@@ -75,7 +75,7 @@ auto SetCursor(const Ref<MouseCursor> &cursor) -> Error {
 auto CreateSystemCursor(SDL_SystemCursor sdlCursorType)
     -> Result<Ref<MouseCursor>> {
   if (sdlCursorType == SDL_SYSTEM_CURSOR_COUNT) {
-    return Error::Create("Unknown system cursor type.").AsUnexpected();
+    return Error::Create("Unknown system cursor type.");
   }
 
   SDL_Cursor *sdlCursor = SDL_CreateSystemCursor(sdlCursorType);
@@ -83,8 +83,7 @@ auto CreateSystemCursor(SDL_SystemCursor sdlCursorType)
   if (sdlCursor == nullptr) {
     const auto *sdlError = SDL_GetError();
     return Error::Create("Failed to create system mouse cursor: " +
-                         std::string(sdlError))
-        .AsUnexpected();
+                         std::string(sdlError));
   }
 
   return Ref<MouseCursor>::Make(sdlCursor);

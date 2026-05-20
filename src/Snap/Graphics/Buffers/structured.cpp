@@ -28,7 +28,7 @@ auto StructuredBuffer::Create(const GraphicsContext &context,
   auto result = Buffer::Create(context, bufferCreateInfo);
 
   if (Error::IsError(result)) {
-    return result.error().AsUnexpected();
+    return result.error();
   }
 
   auto buffer = Ref<StructuredBuffer>::Make();

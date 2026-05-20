@@ -190,7 +190,7 @@ inline auto SerializeVarargs(lua_State *state, int startIndex)
 
     auto argResult = Data::FromStack(state, startIndex + i);
     if (Error::IsError(argResult)) {
-      return argResult.error().AsUnexpected();
+      return argResult.error();
     }
     launchArguments.emplace_back(argResult.value());
   }

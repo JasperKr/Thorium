@@ -18,7 +18,6 @@
 #include "Modules/image.hpp"
 #include "Modules/object.hpp"
 #include "slang/slang.h"
-#include "tl/expected.hpp"
 #include <algorithm>
 #include <mutex>
 #include <unordered_set>
@@ -109,7 +108,7 @@ auto GetDescriptorSetLayout(const DescriptorSetLayoutKey &layoutKey,
         &descriptorSetLayout));
 
     if (Error::IsError(error)) {
-      return error.AsUnexpected();
+      return error;
     }
 
     DescriptorSetLayoutCache[layoutKey] = descriptorSetLayout;
@@ -284,10 +283,7 @@ auto GetPipelineLayout(const GraphicsContext &context,
 
   std::vector<VkDescriptorSetLayout> setLayouts{};
 
-  auto error = TryCreateShaderDescriptorBindingInfo(context, shader);
-  if (Error::IsError(error)) {
-    return error.AsUnexpected();
-  }
+  CHECK_ERR(TryCreateShaderDescriptorBindingInfo(context, shader));
 
   // Find the maximum set index from the shader reflection
   uint32_t maxSet = 0;
@@ -306,7 +302,7 @@ auto GetPipelineLayout(const GraphicsContext &context,
 
     auto layoutResult = GetDescriptorSetLayout(layoutKey, context);
     if (Error::IsError(layoutResult)) {
-      return layoutResult.error().AsUnexpected();
+      return layoutResult.error();
     }
     setLayouts[setPair.first] = layoutResult.value();
   }
@@ -323,13 +319,9 @@ auto GetPipelineLayout(const GraphicsContext &context,
 
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    error = Error::Create(
+    CHECK_ERR(Error::Create(
         vkCreatePipelineLayout(context.device, &pipelineLayoutInfo,
-                               GetAllocationCallbacks(), &pipelineLayout));
-  }
-
-  if (Error::IsError(error)) {
-    return error.AsUnexpected();
+                               GetAllocationCallbacks(), &pipelineLayout)));
   }
 
   {
@@ -555,7 +547,7 @@ inline auto CreateGraphicsPipeline(const GraphicsContext &context, State &state)
 
   auto shaderStagesResult = GetShaderStages(state);
   if (Error::IsError(shaderStagesResult)) {
-    return shaderStagesResult.error().AsUnexpected();
+    return shaderStagesResult.error();
   }
 
   auto shaderStages = shaderStagesResult.value();
@@ -651,7 +643,7 @@ inline auto CreateGraphicsPipeline(const GraphicsContext &context, State &state)
   auto colorBlendingResult = GetColorBlendAttachmentState(context, state);
 
   if (Error::IsError(colorBlendingResult)) {
-    return colorBlendingResult.error().AsUnexpected();
+    return colorBlendingResult.error();
   }
 
   auto blendAttachments = colorBlendingResult.value();
@@ -680,7 +672,7 @@ inline auto CreateGraphicsPipeline(const GraphicsContext &context, State &state)
 
   auto layoutResult = GetPipelineLayout(context, shader);
   if (Error::IsError(layoutResult)) {
-    return layoutResult.error().AsUnexpected();
+    return layoutResult.error();
   }
 
   pipelineInfo.layout = layoutResult.value().layout;
@@ -698,7 +690,7 @@ inline auto CreateGraphicsPipeline(const GraphicsContext &context, State &state)
         GetAllocationCallbacks(), &pipeline));
 
     if (Error::IsError(error)) {
-      return error.AsUnexpected();
+      return error;
     }
   }
   PipelineCache.emplace(state, std::make_pair(pipeline, layoutResult.value()));
@@ -732,7 +724,7 @@ inline auto CreateComputePipeline(const GraphicsContext &context, State &state)
 
   auto layoutResult = GetPipelineLayout(context, state.shader.get());
   if (Error::IsError(layoutResult)) {
-    return layoutResult.error().AsUnexpected();
+    return layoutResult.error();
   }
 
   pipelineInfo.layout = layoutResult.value().layout;
@@ -746,7 +738,7 @@ inline auto CreateComputePipeline(const GraphicsContext &context, State &state)
         context.device, VK_NULL_HANDLE, 1, &pipelineInfo,
         GetAllocationCallbacks(), &pipeline));
     if (Error::IsError(error)) {
-      return error.AsUnexpected();
+      return error;
     }
   }
 
@@ -786,7 +778,7 @@ inline auto GetPipeline(const GraphicsContext &context, State &state)
   auto result = CreatePipeline(context, state);
 
   if (Error::IsError(result)) {
-    return result.error().AsUnexpected();
+    return result.error();
   }
 
   return result.value();
@@ -901,7 +893,7 @@ auto FlushCompute(const GraphicsContext &context) -> Result<bool> {
 
   auto pipelineResult = GetPipeline(context, *TopOfStack);
   if (Error::IsError(pipelineResult)) {
-    return pipelineResult.error().AsUnexpected();
+    return pipelineResult.error();
   }
 
   auto *commandBuffer = Graphics::GetCommandBuffer();
@@ -951,7 +943,7 @@ auto FlushGraphics(const GraphicsContext &context) -> Result<bool> {
 
   auto pipelineResult = GetPipeline(context, *TopOfStack);
   if (Error::IsError(pipelineResult)) {
-    return pipelineResult.error().AsUnexpected();
+    return pipelineResult.error();
   }
 
   auto *commandBuffer = Graphics::GetCommandBuffer();
@@ -1492,11 +1484,8 @@ inline auto AllocateDescriptorSets(const GraphicsContext &context,
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
 
-    auto error = Error::Create(
-        vkAllocateDescriptorSets(context.device, &allocInfo, &descriptorSet));
-    if (Error::IsError(error)) {
-      return error.AsUnexpected();
-    }
+    CHECK_ERR(Error::Create(
+        vkAllocateDescriptorSets(context.device, &allocInfo, &descriptorSet)));
   }
 
   thread_local std::vector<VkWriteDescriptorSet> writeDescriptorSets;
@@ -1577,23 +1566,11 @@ auto BindDescriptorSets(const GraphicsContext &context,
     thread_local std::vector<uint32_t> dynamicOffsets;
     dynamicOffsets.clear();
 
-    auto bindBuffersResult = BindBufferDesciptors(key, shader, state, setIndex);
-
-    if (Error::IsError(bindBuffersResult)) {
-      return bindBuffersResult;
-    }
-
-    auto bindTexturesResult =
-        BindTextureDescriptors(context, stageFlags, key, shader, setIndex);
-    if (Error::IsError(bindTexturesResult)) {
-      return bindTexturesResult;
-    }
-
-    auto bindGlobalsResult =
-        BindGlobalsDescriptor(context, key, shader, setIndex, dynamicOffsets);
-    if (Error::IsError(bindGlobalsResult)) {
-      return bindGlobalsResult;
-    }
+    CHECK_ERR(BindBufferDesciptors(key, shader, state, setIndex));
+    CHECK_ERR(
+        BindTextureDescriptors(context, stageFlags, key, shader, setIndex));
+    CHECK_ERR(
+        BindGlobalsDescriptor(context, key, shader, setIndex, dynamicOffsets));
 
     auto iter = DescriptorSetCache.find(key);
 
@@ -2149,10 +2126,7 @@ auto Clear(const GraphicsContext &context, const ClearInfo &clearInfo)
   }
 
   // TODO: Cache this step and only flush on state changes
-  auto error = PrepareRendering(context);
-  if (Error::IsError(error)) {
-    return error;
-  }
+  CHECK_ERR(PrepareRendering(context));
 
   vkCmdClearAttachments(
       commandBuffer, static_cast<uint32_t>(clearAttachments.size()),

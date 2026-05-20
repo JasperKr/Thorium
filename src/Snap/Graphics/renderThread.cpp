@@ -102,7 +102,7 @@ inline auto CreateDescriptorPool(ThreadContext &tcontext)
                                GetAllocationCallbacks(), &descriptorPool));
 
     if (Error::IsError(error)) {
-      return error.AsUnexpected();
+      return error;
     }
   }
 
@@ -193,7 +193,7 @@ auto AquireCommandBuffer(Graphics::GraphicsContext &context,
         context.device, &allocInfo, &threadInfo->threadData.commandBuffer));
 
     if (Error::IsError(allocationResult)) {
-      return allocationResult.AsUnexpected();
+      return allocationResult;
     }
   } else {
     threadInfo->threadData.commandBuffer = cachedCmdBuffer.value();
@@ -207,13 +207,13 @@ auto AquireCommandBuffer(Graphics::GraphicsContext &context,
       vkResetCommandBuffer(threadInfo->threadData.commandBuffer, resetFlags));
 
   if (Error::IsError(resetResult)) {
-    return resetResult.AsUnexpected();
+    return resetResult;
   }
 
   auto getDescriptorPoolResult = GetDescriptorPool(tcontext);
 
   if (Error::IsError(getDescriptorPoolResult)) {
-    return getDescriptorPoolResult.AsUnexpected();
+    return getDescriptorPoolResult;
   }
 
   VkCommandBufferBeginInfo beginInfo = {};
@@ -222,7 +222,7 @@ auto AquireCommandBuffer(Graphics::GraphicsContext &context,
       vkBeginCommandBuffer(threadInfo->threadData.commandBuffer, &beginInfo));
 
   if (Error::IsError(beginResult)) {
-    return beginResult.AsUnexpected();
+    return beginResult;
   }
 
   Barrier::ResetModule();
@@ -237,7 +237,7 @@ auto AquireCommandBuffer(Graphics::GraphicsContext &context,
   Graphics::SetDirtyState();
   auto frameBeginResult = Graphics::DynamicRendering::BeginFrame(context);
   if (Error::IsError(frameBeginResult)) {
-    return frameBeginResult.AsUnexpected();
+    return frameBeginResult;
   }
 
   GetGlobalUniformBuffer(context.frameIndex).NewFrame();
@@ -249,18 +249,18 @@ auto SubmitCommands(Graphics::GraphicsContext &context)
     -> Result<Ref<RenderThreadInfo>> {
   auto validateResult = DynamicRendering::FinalizeFrame(context);
   if (Error::IsError(validateResult)) {
-    return validateResult.AsUnexpected();
+    return validateResult;
   }
 
   auto flushResult = FlushBufferUploads(context);
   if (Error::IsError(flushResult)) {
-    return flushResult.AsUnexpected();
+    return flushResult;
   }
 
   auto endResult = Error::Create(
       vkEndCommandBuffer(CurrentRenderThreadInfo->threadData.commandBuffer));
   if (Error::IsError(endResult)) {
-    return endResult.AsUnexpected();
+    return endResult;
   }
 
   CurrentRenderThreadInfo->threadData.resourceSyncs =
@@ -328,10 +328,7 @@ auto Initialize(Graphics::GraphicsContext &context) -> Error {
 
   PrintDebug("Initializing uniform buffer module...");
 
-  auto error = InitializeUniformBufferModule(context);
-  if (Error::IsError(error)) {
-    return error;
-  }
+  CHECK_ERR(InitializeUniformBufferModule(context));
 
   auto rendertargetLoadError = Graphics::DynamicRendering::Load(context);
 
@@ -344,17 +341,9 @@ auto Initialize(Graphics::GraphicsContext &context) -> Error {
 
 auto Deinitialize(Graphics::GraphicsContext &context) -> Error {
   DeInitializeUniformBufferModule(context);
-  auto err = Graphics::UnloadLocalBufferModule(context);
+  CHECK_ERR(Graphics::UnloadLocalBufferModule(context));
 
-  if (Error::IsError(err)) {
-    return err;
-  }
-
-  err = DynamicRendering::Shutdown(context);
-
-  if (Error::IsError(err)) {
-    return err;
-  }
+  CHECK_ERR(DynamicRendering::Shutdown(context));
 
   Wrap::Graphics::ShutdownWrapGraphics();
 

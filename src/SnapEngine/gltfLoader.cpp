@@ -127,7 +127,7 @@ inline auto LoadURI(const std::string_view &basePath,
   auto fileResult = Filesystem::ReadFile(path);
 
   if (Error::IsError(fileResult)) {
-    return fileResult.error().AsUnexpected();
+    return fileResult.error();
   }
 
   URICache[path] = fileResult.value();
@@ -222,7 +222,7 @@ inline auto LoadTexture(Graphics::GraphicsContext &context,
 
   auto loadResult = LoadDataSource(asset, basePath, image.data);
   if (Error::IsError(loadResult)) {
-    return loadResult.error().AsUnexpected();
+    return loadResult.error();
   }
 
   auto span = loadResult.value();
@@ -233,7 +233,7 @@ inline auto LoadTexture(Graphics::GraphicsContext &context,
       Graphics::TextureMipmapOption::Init);
 
   if (Error::IsError(textureResult)) {
-    return textureResult.error().AsUnexpected();
+    return textureResult.error();
   }
 
   auto textureRef = textureResult.value();
@@ -509,7 +509,7 @@ auto ExtractVertexFormat(const fastgltf::Asset &asset,
     auto formatResult = GetVkFormat(accessor.componentType, count);
 
     if (Error::IsError(formatResult)) {
-      return formatResult.error().AsUnexpected();
+      return formatResult.error();
     }
 
     Graphics::VertexComponent attribute{};
@@ -859,7 +859,7 @@ LoadVertexData(Graphics::VertexFormat &format, const fastgltf::Asset &asset,
 
     auto dataSourceResult = LoadBufferView(asset, bufferView);
     if (Error::IsError(dataSourceResult)) {
-      return dataSourceResult.error().AsUnexpected();
+      return dataSourceResult.error();
     }
 
     auto span = dataSourceResult.value();
@@ -967,7 +967,7 @@ inline auto LoadIndexData(const fastgltf::Asset &asset,
 
   auto dataSourceResult = LoadBufferView(asset, bufferView);
   if (Error::IsError(dataSourceResult)) {
-    return dataSourceResult.error().AsUnexpected();
+    return dataSourceResult.error();
   }
 
   auto span = dataSourceResult.value();
@@ -1027,7 +1027,7 @@ inline auto LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
       auto childNodeResult =
           LoadNode(world, context, asset, basePath, childGltfNode);
       if (Error::IsError(childNodeResult)) {
-        return childNodeResult.error().AsUnexpected();
+        return childNodeResult.error();
       }
 
       for (auto &childObject : childNodeResult.value()) {
@@ -1057,7 +1057,7 @@ inline auto LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
 
       auto indexDataResult = LoadIndexData(asset, primitive);
       if (Error::IsError(indexDataResult)) {
-        return indexDataResult.error().AsUnexpected();
+        return indexDataResult.error();
       }
 
       auto indexData = indexDataResult.value();
@@ -1118,7 +1118,7 @@ inline auto LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
       auto vertexDataResult =
           LoadVertexData(vertexFormat, asset, primitive, indexData, indexType);
       if (Error::IsError(vertexDataResult)) {
-        return vertexDataResult.error().AsUnexpected();
+        return vertexDataResult.error();
       }
 
       const auto &vertexData = vertexDataResult.value();
@@ -1128,7 +1128,7 @@ inline auto LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
           context, vertexFormat, vertexCount, std::string(gltfMesh.name));
 
       if (Error::IsError(meshResult)) {
-        return meshResult.error().AsUnexpected();
+        return meshResult.error();
       }
 
       auto mesh = meshResult.value();
@@ -1137,13 +1137,13 @@ inline auto LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
         auto indexBufferResult =
             mesh->SetIndices(context, indexData, indexType);
         if (Error::IsError(indexBufferResult)) {
-          return indexBufferResult.AsUnexpected();
+          return indexBufferResult;
         }
       }
 
       auto vertexBufferResult = mesh->SetVertices(context, vertexData);
       if (Error::IsError(vertexBufferResult)) {
-        return vertexBufferResult.AsUnexpected();
+        return vertexBufferResult;
       }
       auto geometry = world->entity(
           GetUniqueName(std::string(gltfMesh.name) + " Geometry").c_str());
@@ -1183,7 +1183,7 @@ inline auto LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
         auto materialResult =
             LoadMaterial(context, asset, basePath, material, rendererMaterial);
         if (Error::IsError(materialResult)) {
-          return materialResult.AsUnexpected();
+          return materialResult;
         }
       }
     }

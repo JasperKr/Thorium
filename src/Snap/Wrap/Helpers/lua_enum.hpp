@@ -98,7 +98,7 @@ public:
   auto FromLua(lua_State *state, int index) const -> Result<T> {
     auto result = EnumFromLua<T>(state, index, EnumMap);
     if (Error::IsError(result)) {
-      return result.error().AsUnexpected();
+      return result.error();
     }
     return result.value();
   }

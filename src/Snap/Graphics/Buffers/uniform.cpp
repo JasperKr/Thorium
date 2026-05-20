@@ -58,7 +58,7 @@ auto FrameUniformBufferObject::Create(GraphicsContext &context)
 
   auto result = Buffer::Create(context, info);
   if (Error::IsError(result)) {
-    return result.error().AsUnexpected();
+    return result.error();
   }
   obj.buffer = result.value();
 
@@ -104,7 +104,7 @@ auto FrameUniformBufferObject::Write(const Graphics::GraphicsContext &context,
 
     auto result = Graphics::Buffer::Create(context, info);
     if (Error::IsError(result)) {
-      return result.error().AsUnexpected();
+      return result.error();
     }
 
     buffer = result.value();
@@ -125,7 +125,7 @@ auto FrameUniformBufferObject::Write(const Graphics::GraphicsContext &context,
       offset, context.deviceProperties.limits.minUniformBufferOffsetAlignment);
 
   if (Error::IsError(result)) {
-    return result.AsUnexpected();
+    return result;
   }
 
   return resized;

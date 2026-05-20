@@ -130,7 +130,7 @@ auto UpdateSemaphoreValues(const GraphicsContext &context) -> Result<uint64_t> {
         context.device, globalTimelineSemaphore, &completedValue));
 
     if (Error::IsError(result)) {
-      return result.AsUnexpected();
+      return result;
     }
   }
 

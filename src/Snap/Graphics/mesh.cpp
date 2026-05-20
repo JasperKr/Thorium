@@ -92,7 +92,7 @@ auto Mesh::Create(GraphicsContext &context, VertexFormat vertexFormat,
   auto bufferResult = Buffer::Create(context, vboCreationInfo);
 
   if (Error::IsError(bufferResult)) {
-    return bufferResult.error().AsUnexpected();
+    return bufferResult.error();
   }
 
   mesh->VertexBuffer = bufferResult.value();
@@ -100,11 +100,7 @@ auto Mesh::Create(GraphicsContext &context, VertexFormat vertexFormat,
   mesh->DrawRange.Offset = 0;
   mesh->DrawRange.Count = mesh->VertexCount;
 
-  Error error = mesh->UploadVertices(context, vertexData, 0);
-
-  if (Error::IsError(error)) {
-    return error.AsUnexpected();
-  }
+  CHECK_ERR(mesh->UploadVertices(context, vertexData, 0));
 
   return mesh;
 }
@@ -116,8 +112,7 @@ auto Mesh::Create(GraphicsContext &context, VertexFormat vertexFormat,
   auto size = VertexFormatSize(vertexFormat, 0);
 
   if (size == 0) {
-    return Error::Create("Vertex format has zero size for binding 0.")
-        .AsUnexpected();
+    return Error::Create("Vertex format has zero size for binding 0.");
   }
 
   auto vertexDataSize = vertexCount * size;
@@ -144,13 +139,9 @@ auto Mesh::Create(GraphicsContext &context, VertexFormat vertexFormat,
   vboCreationInfo.debugName = debugName + " Vertex Buffer";
   mesh->DebugName = debugName;
 
-  auto bufferResult = Buffer::Create(context, vboCreationInfo);
+  auto bufferResult = CHECK_RES(Buffer::Create(context, vboCreationInfo));
 
-  if (Error::IsError(bufferResult)) {
-    return bufferResult.error().AsUnexpected();
-  }
-
-  mesh->VertexBuffer = bufferResult.value();
+  mesh->VertexBuffer = bufferResult;
 
   mesh->DrawRange.Offset = 0;
   mesh->DrawRange.Count = mesh->VertexCount;

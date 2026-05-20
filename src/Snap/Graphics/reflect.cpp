@@ -159,7 +159,7 @@ auto SetupVariant(slang::VariableLayoutReflection *layout)
       case slang::TypeReflection::Kind::Struct: {
         auto result = SetupVariant(fieldVariable);
         if (Error::IsError(result)) {
-          return result.error().AsUnexpected();
+          return result.error();
         }
 
         auto structFieldInfo = result.value();
@@ -176,8 +176,7 @@ auto SetupVariant(slang::VariableLayoutReflection *layout)
           fieldInfo.info = std::get<MatrixInfo>(structFieldInfo);
         } else {
           return Error::Create("Unsupported struct field type in nested struct "
-                               "reflection.")
-              .AsUnexpected();
+                               "reflection.");
         }
 
         structInfo.fields.emplace_back(fieldInfo);
@@ -418,7 +417,7 @@ auto SetupResource(slang::VariableLayoutReflection *variableLayout,
     if (elementVarLayout != nullptr) {
       auto result = SetupVariant(elementVarLayout);
       if (Error::IsError(result)) {
-        return result.error().AsUnexpected();
+        return result.error();
       }
 
       bufferInfo.info = result.value();
@@ -433,7 +432,7 @@ auto SetupResource(slang::VariableLayoutReflection *variableLayout,
         auto *fieldVariable = bufferLayout->getFieldByIndex(i);
         auto result = SetupVariant(fieldVariable);
         if (Error::IsError(result)) {
-          return result.error().AsUnexpected();
+          return result.error();
         }
 
         ResourceInfo fieldInfo(fieldVariable->getName());
@@ -449,8 +448,7 @@ auto SetupResource(slang::VariableLayoutReflection *variableLayout,
         } else {
           return Error::Create("Unsupported struct field type in unnamed "
                                "structured buffer "
-                               "reflection.")
-              .AsUnexpected();
+                               "reflection.");
         }
 
         structInfo.fields.emplace_back(fieldInfo);
@@ -495,11 +493,7 @@ auto SetupFromType(slang::VariableLayoutReflection *variableLayout,
       auto *param = typeLayout->getFieldByIndex(i);
       auto kind = param->getTypeLayout()->getKind();
 
-      auto result = SetupFromType(param, reflection);
-
-      if (Error::IsError(result)) {
-        return result;
-      }
+      CHECK_ERR(SetupFromType(param, reflection));
 
       structInfo.fields.emplace_back(result.value());
     }
@@ -535,7 +529,7 @@ auto SetupFromType(slang::VariableLayoutReflection *variableLayout,
 
     auto result = SetupVariant(bufferLayout);
     if (Error::IsError(result)) {
-      return result.error().AsUnexpected();
+      return result.error();
     }
 
     bufferInfo.info = result.value();
@@ -549,10 +543,7 @@ auto SetupFromType(slang::VariableLayoutReflection *variableLayout,
     break;
   }
   case slang::TypeReflection::Kind::Resource: {
-    auto result = SetupResource(variableLayout, reflection);
-    if (Error::IsError(result)) {
-      return result;
-    }
+    CHECK_ERR(SetupResource(variableLayout, reflection));
 
     resourceInfo = result.value();
 

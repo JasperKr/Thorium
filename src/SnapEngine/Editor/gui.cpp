@@ -23,7 +23,7 @@ auto MainWindow() -> void {}
 auto LoadGUIState(lua_State *state) -> Result<GuiState> {
   auto loadResult = LoadImGuiCursorMap();
   if (Error::IsError(loadResult)) {
-    return loadResult.AsUnexpected();
+    return loadResult;
   }
 
   GuiState guiState{};
@@ -66,7 +66,7 @@ auto LoadGUIState(lua_State *state) -> Result<GuiState> {
   auto error =
       Engine::Style::ApplyDefaultStyle(Engine::Style::UIStyles::Greenish);
   if (Error::IsError(error)) {
-    return error.AsUnexpected();
+    return error;
   }
 
   style.FontScaleDpi = scale;

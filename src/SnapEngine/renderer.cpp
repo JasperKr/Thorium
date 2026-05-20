@@ -40,10 +40,7 @@ auto Renderer::InitializeDefaultMaterial(Graphics::GraphicsContext &context)
       Color pixelColor = isPrimaryColor ? CheckerboardColorPrimary
                                         : CheckerboardColorSecondary;
 
-      auto error = defaultTextureData.SetColor({column, row}, pixelColor);
-      if (Error::IsError(error)) {
-        return error;
-      }
+      CHECK_ERR(defaultTextureData.SetColor({column, row}, pixelColor));
     }
   }
 
@@ -57,10 +54,7 @@ auto Renderer::InitializeDefaultMaterial(Graphics::GraphicsContext &context)
   Image::ImageData defaultNormalTextureData(1, 1, VK_FORMAT_R8G8B8A8_UNORM);
 
   const Color pixelColor = {0.5F, 0.5F, 1.0F, 1.0F};
-  auto error = defaultNormalTextureData.SetColor({0, 0}, pixelColor);
-  if (Error::IsError(error)) {
-    return error;
-  }
+  CHECK_ERR(defaultNormalTextureData.SetColor({0, 0}, pixelColor));
 
   auto defaultNormalTextureResult = Graphics::LoadFromMemory(
       context, defaultNormalTextureData, VK_IMAGE_USAGE_SAMPLED_BIT);
@@ -72,10 +66,7 @@ auto Renderer::InitializeDefaultMaterial(Graphics::GraphicsContext &context)
 
   Image::ImageData defaultBlackTextureData(1, 1, VK_FORMAT_R8G8B8A8_UNORM);
   const Color blackColor = {0.0F, 0.0F, 0.0F, 1.0F};
-  error = defaultBlackTextureData.SetColor({0, 0}, blackColor);
-  if (Error::IsError(error)) {
-    return error;
-  }
+  CHECK_ERR(defaultBlackTextureData.SetColor({0, 0}, blackColor));
 
   auto defaultBlackTextureResult = Graphics::LoadFromMemory(
       context, defaultBlackTextureData, VK_IMAGE_USAGE_SAMPLED_BIT);
@@ -171,7 +162,7 @@ auto Renderer::GetNewMaterialIndex() -> Result<size_t> {
     auto resizeResult =
         ResizeMaterialBuffer(*Graphics::GetCurrentGraphicsContext(), newSize);
     if (Error::IsError(resizeResult)) {
-      return resizeResult.AsUnexpected();
+      return resizeResult;
     }
   }
 
@@ -330,7 +321,7 @@ auto Renderer::GetShader(ShaderKey shaderKey)
       context, configuration.path, configuration.name);
 
   if (Error::IsError(moduleResult)) {
-    return moduleResult.error().AsUnexpected();
+    return moduleResult.error();
   }
 
   auto shaderModule = moduleResult.value();

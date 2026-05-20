@@ -413,10 +413,7 @@ inline auto RenderDrawItem(const DrawItem &item,
     return Error::Create("Invalid geometry mesh");
   }
 
-  auto result = Graphics::Draw(ctx, *item.geometry.mesh);
-  if (Error::IsError(result)) {
-    return result;
-  }
+  CHECK_ERR(Graphics::Draw(ctx, *item.geometry.mesh));
 
   return {};
 }
@@ -502,17 +499,11 @@ auto Scene::DrawModels(const Graphics::GraphicsContext &context) -> Error {
   std::ranges::sort(TransparentDrawItems, CompareDrawItems);
 
   for (const auto &item : DrawItems) {
-    auto err = RenderDrawItem(item, shader, ctx);
-    if (Error::IsError(err)) {
-      return err;
-    }
+    CHECK_ERR(RenderDrawItem(item, shader, ctx));
   }
 
   for (const auto &item : TransparentDrawItems) {
-    auto err = RenderDrawItem(item, shader, ctx);
-    if (Error::IsError(err)) {
-      return err;
-    }
+    CHECK_ERR(RenderDrawItem(item, shader, ctx));
   }
 
   return {};

@@ -494,7 +494,7 @@ inline auto GetQuadMesh(::Graphics::GraphicsContext &context,
     auto meshResult = ::Graphics::Mesh::Create(context, vertexFormat, span);
 
     if (Error::IsError(meshResult)) {
-      return meshResult.error().AsUnexpected();
+      return meshResult.error();
     }
 
     QuadMeshCache = meshResult.value();
@@ -504,7 +504,7 @@ inline auto GetQuadMesh(::Graphics::GraphicsContext &context,
 
   auto setDataError = mesh->SetVertices(context, span);
   if (Error::IsError(setDataError)) {
-    return setDataError.AsUnexpected();
+    return setDataError;
   }
 
   auto indexSpan = std::span<uint8_t>( // NOLINTNEXTLINE
@@ -513,7 +513,7 @@ inline auto GetQuadMesh(::Graphics::GraphicsContext &context,
 
   setDataError = mesh->SetIndices(context, indexSpan, VK_INDEX_TYPE_UINT32);
   if (Error::IsError(setDataError)) {
-    return setDataError.AsUnexpected();
+    return setDataError;
   }
 
   return mesh;

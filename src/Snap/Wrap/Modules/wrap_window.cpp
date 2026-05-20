@@ -288,7 +288,7 @@ inline auto SettingsFromStack(lua_State *state) -> Result<::Window::Settings> {
   if (!lua_isnoneornil(state, -1)) {
     auto vsyncModeResult = StringToVsyncMode(luaL_checkstring(state, -1));
     if (Error::IsError(vsyncModeResult)) {
-      return vsyncModeResult.error().AsUnexpected();
+      return vsyncModeResult.error();
     }
     settings.vsync = vsyncModeResult.value();
   }
@@ -299,7 +299,7 @@ inline auto SettingsFromStack(lua_State *state) -> Result<::Window::Settings> {
     auto fullscreenModeResult =
         StringToFullscreenMode(luaL_checkstring(state, -1));
     if (Error::IsError(fullscreenModeResult)) {
-      return fullscreenModeResult.error().AsUnexpected();
+      return fullscreenModeResult.error();
     }
     settings.fullscreenMode = fullscreenModeResult.value();
   }
@@ -333,7 +333,7 @@ inline auto SettingsFromStack(lua_State *state) -> Result<::Window::Settings> {
   if (!lua_isnoneornil(state, -1)) {
     auto colorSpaceResult = StringToColorSpace(luaL_checkstring(state, -1));
     if (Error::IsError(colorSpaceResult)) {
-      return colorSpaceResult.error().AsUnexpected();
+      return colorSpaceResult.error();
     }
     settings.colorSpace = colorSpaceResult.value();
   }

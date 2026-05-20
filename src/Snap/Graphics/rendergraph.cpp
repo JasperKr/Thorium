@@ -554,16 +554,12 @@ struct AllocationInfo {
   // Create larger block if needed
   uint32_t allocationSize = (std::max)(info.size, graph.memoryBlockSize);
 
-  auto error = ReserveBlock(context, graph, allocationSize);
-  if (Error::IsError(error)) {
-    return error;
-  }
+  CHECK_ERR(ReserveBlock(context, graph, allocationSize));
 
   auto &block = graph.memoryBlocks.back();
 
   if (vmaVirtualAllocate(block.virtualBlock, &allocInfo, &alloc, &offset) ==
       VK_SUCCESS) {
-
     VirtualAllocation allocation = {
         .blockIndex = static_cast<uint32_t>(graph.memoryBlocks.size() - 1),
         .resource = info.handle,
@@ -1237,10 +1233,7 @@ auto inline ApplyPassBarriers(VkCommandBuffer commandBuffer,
         allocationInfo.alignment = QueryMemoryAlignmentOfBuffer(context, buf);
       }
 
-      auto error = AllocateResourceInBlocks(context, graph, allocationInfo);
-      if (Error::IsError(error)) {
-        return error;
-      }
+      CHECK_ERR(AllocateResourceInBlocks(context, graph, allocationInfo));
     } else if (entry.type == ResourceTimelineEntryType::Deallocate) {
       DeallocateResourceInBlocks(graph, resource.handle);
     }
@@ -1313,18 +1306,11 @@ auto inline AllocateResourceMemory(GraphicsContext &context, RenderGraph &graph,
     imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 
-    auto result = Error::Create(
-        vkCreateImage(context.device, &imageInfo, nullptr, &texture->image));
+    CHECK_ERR(Error::Create(
+        vkCreateImage(context.device, &imageInfo, nullptr, &texture->image)));
 
-    if (Error::IsError(result)) {
-      return result;
-    }
-
-    result = Error::Create(vkBindImageMemory(context.device, texture->image,
-                                             block.memory, allocation.offset));
-    if (Error::IsError(result)) {
-      return result;
-    }
+    CHECK_ERR(Error::Create(vkBindImageMemory(
+        context.device, texture->image, block.memory, allocation.offset)));
 
     VkImageViewCreateInfo viewInfo = {};
     viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -1442,10 +1428,7 @@ auto inline AllocateGraphResourceMemory(GraphicsContext &context,
   }
 
   for (const auto &resHandle : usedResources) {
-    auto error = AllocateResourceMemory(context, graph, resHandle);
-    if (Error::IsError(error)) {
-      return error;
-    }
+    CHECK_ERR(AllocateResourceMemory(context, graph, resHandle));
   }
 
   return Error::Success();
@@ -1486,22 +1469,13 @@ auto inline AllocateGraphResourceMemory(GraphicsContext &context,
   }
 
   CompileResourceTimeline(graph);
-  auto error = BuildVirtualMemory(context, graph);
-  if (Error::IsError(error)) {
-    return error;
-  }
-  error = AllocateBlockMemory(context, graph);
-  if (Error::IsError(error)) {
-    return error;
-  }
+  CHECK_ERR(BuildVirtualMemory(context, graph));
+  CHECK_ERR(AllocateBlockMemory(context, graph));
 
   PrintDebug("Allocated {} memory blocks for render graph.",
              graph.memoryBlocks.size());
 
-  error = AllocateGraphResourceMemory(context, graph);
-  if (Error::IsError(error)) {
-    return error;
-  }
+  CHECK_ERR(AllocateGraphResourceMemory(context, graph));
 
   PrintDebug("Allocated memory for render graph resources.");
 
@@ -1510,11 +1484,7 @@ auto inline AllocateGraphResourceMemory(GraphicsContext &context,
     return validationResult.error();
   }
 
-  error = CreateGraphDescriptorPool(context, graph);
-
-  if (Error::IsError(error)) {
-    return error;
-  }
+  CHECK_ERR(CreateGraphDescriptorPool(context, graph));
 
   PrintDebug("Created descriptor pool for render graph.");
 
