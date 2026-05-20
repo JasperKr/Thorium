@@ -131,6 +131,11 @@ auto Create2D(const GraphicsContext &context, const TextureCreationInfo &info)
   imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
   imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
+  if (imageInfo.mipLevels > 1) {
+    imageInfo.usage |= static_cast<uint32_t>(VK_IMAGE_USAGE_TRANSFER_SRC_BIT) |
+                       VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+  }
+
   VmaAllocationCreateInfo allocInfo = {};
   allocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
   allocInfo.requiredFlags = 0;
@@ -266,6 +271,11 @@ auto CreateCubeMap(const GraphicsContext &context,
   imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
   imageInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
 
+  if (imageInfo.mipLevels > 1) {
+    imageInfo.usage |= static_cast<uint32_t>(VK_IMAGE_USAGE_TRANSFER_SRC_BIT) |
+                       VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+  }
+
   VmaAllocationCreateInfo allocInfo = {};
   allocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
   allocInfo.requiredFlags = 0;
@@ -352,6 +362,11 @@ auto CreateVolume(const GraphicsContext &context,
   imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
   imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
+  if (imageInfo.mipLevels > 1) {
+    imageInfo.usage |= static_cast<uint32_t>(VK_IMAGE_USAGE_TRANSFER_SRC_BIT) |
+                       VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+  }
+
   VmaAllocationCreateInfo allocInfo = {};
   allocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
   allocInfo.requiredFlags = 0;
@@ -437,6 +452,11 @@ auto CreateArray(const GraphicsContext &context,
   imageInfo.usage = info.usage;
   imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
   imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+  if (imageInfo.mipLevels > 1) {
+    imageInfo.usage |= static_cast<uint32_t>(VK_IMAGE_USAGE_TRANSFER_SRC_BIT) |
+                       VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+  }
 
   VmaAllocationCreateInfo allocInfo = {};
   allocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
@@ -835,7 +855,8 @@ auto Texture::TransitionLayout(const GraphicsContext &context,
                                VkPipelineStageFlags2 sourceStage, // NOLINT
                                VkPipelineStageFlags2 destinationStage,
                                VkAccessFlags2 srcAccessMask, // NOLINT
-                               VkAccessFlags2 dstAccessMask) -> Error {
+                               VkAccessFlags2 dstAccessMask,
+                               VkImageSubresourceRange range) -> Error {
 
   if (layout == VK_IMAGE_LAYOUT_UNDEFINED) {
     return Error::Create("Cannot transition to UNDEFINED layout.");
@@ -859,11 +880,8 @@ auto Texture::TransitionLayout(const GraphicsContext &context,
   barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
   barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
   barrier.image = image;
+  barrier.subresourceRange = range;
   barrier.subresourceRange.aspectMask = GetAspectFlagsForFormat(format);
-  barrier.subresourceRange.baseMipLevel = 0;
-  barrier.subresourceRange.levelCount = mipmapcount;
-  barrier.subresourceRange.baseArrayLayer = 0;
-  barrier.subresourceRange.layerCount = 1;
 
   barrier.srcAccessMask = srcAccessMask;
   barrier.dstAccessMask = dstAccessMask;
@@ -1776,18 +1794,65 @@ auto GenerateMipmaps(GraphicsContext &context, Texture *texture) -> Error {
                          "compressed texture formats.");
   }
 
+  DynamicRendering::EndRendering(context);
+
   auto mipWidth = static_cast<int32_t>(texture->size.width);
   auto mipHeight = static_cast<int32_t>(texture->size.height);
 
-  for (uint32_t i = 1; i < texture->mipmapcount; ++i) {
-    auto barrierError = texture->TransitionLayout(
-        context, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-        VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_ACCESS_2_TRANSFER_READ_BIT);
+  VkImageMemoryBarrier2 barrier = {};
+  barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
+  barrier.srcAccessMask =
+      GetAccessFlagsForUsage(texture->lastUsage, texture->format);
+  barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  barrier.image = texture->image;
+  barrier.subresourceRange.aspectMask =
+      GetAspectFlagsForFormat(texture->format);
+  barrier.subresourceRange.baseMipLevel = 0;
+  barrier.subresourceRange.levelCount = texture->mipmapcount;
+  barrier.subresourceRange.baseArrayLayer = 0;
+  barrier.subresourceRange.layerCount =
+      static_cast<uint32_t>(texture->arrayLayers);
 
-    if (Error::IsError(barrierError)) {
-      return barrierError;
-    }
+  VkDependencyInfo dep = {};
+  dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+  dep.imageMemoryBarrierCount = 1;
+  dep.pImageMemoryBarriers = &barrier;
+
+  barrier.srcStageMask = texture->lastPipelineStage;
+  barrier.srcAccessMask =
+      GetAccessFlagsForUsage(texture->lastUsage, texture->format);
+  barrier.dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+  barrier.dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+  barrier.oldLayout =
+      GetRequiredTextureLayout(texture->lastUsage, texture->format);
+  barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+
+  vkCmdPipelineBarrier2(commandBuffer, &dep);
+
+  barrier.subresourceRange.levelCount = 1;
+
+  // [dst, dst, dst, ...]
+
+  for (uint32_t i = 1; i < texture->mipmapcount; ++i) {
+    auto baseExtent = Image::GetDimensions(texture->size, i - 1);
+    auto mipExtent = Image::GetDimensions(texture->size, i);
+
+    // mip - 1 is transfer write
+    // Now needs transfer read
+    // current mip is original layout but needs transfer write
+
+    // We convert mip - 1 to transfer read
+    barrier.srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+    barrier.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+    barrier.dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+    barrier.dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT;
+    barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    barrier.subresourceRange.baseMipLevel = i - 1;
+    // [src, dst, dst, dst, ...]
+
+    vkCmdPipelineBarrier2(commandBuffer, &dep);
 
     VkImageBlit blit = {};
     blit.srcSubresource.aspectMask = GetAspectFlagsForFormat(texture->format);
@@ -1795,40 +1860,43 @@ auto GenerateMipmaps(GraphicsContext &context, Texture *texture) -> Error {
     blit.srcSubresource.baseArrayLayer = 0;
     blit.srcSubresource.layerCount = texture->arrayLayers;
     blit.srcOffsets[0] = {.x = 0, .y = 0, .z = 0};
-    blit.srcOffsets[1] = {.x = mipWidth, .y = mipHeight, .z = 1};
+    blit.srcOffsets[1] = {.x = static_cast<int32_t>(baseExtent.width),
+                          .y = static_cast<int32_t>(baseExtent.height),
+                          .z = static_cast<int32_t>(baseExtent.depth)};
     blit.dstSubresource.aspectMask = GetAspectFlagsForFormat(texture->format);
     blit.dstSubresource.mipLevel = i;
     blit.dstSubresource.baseArrayLayer = 0;
     blit.dstSubresource.layerCount = texture->arrayLayers;
     blit.dstOffsets[0] = {.x = 0, .y = 0, .z = 0};
-    blit.dstOffsets[1] = {.x = std::max(1, mipWidth / 2),
-                          .y = std::max(1, mipHeight / 2),
-                          .z = 1};
+    blit.dstOffsets[1] = {.x = static_cast<int32_t>(mipExtent.width),
+                          .y = static_cast<int32_t>(mipExtent.height),
+                          .z = static_cast<int32_t>(mipExtent.depth)};
 
     vkCmdBlitImage(commandBuffer, texture->image,
                    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, texture->image,
                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit,
                    VK_FILTER_LINEAR);
-
-    auto layoutError = texture->TransitionLayout(
-        context, GetRequiredTextureLayout(texture->lastUsage, texture->format),
-        VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
-        VK_ACCESS_2_TRANSFER_READ_BIT,
-        GetAccessFlagsForUsage(texture->lastUsage, texture->format));
-
-    if (Error::IsError(layoutError)) {
-      return layoutError;
-    }
   }
 
-  // Transition the entire mip chain to the final layout
-  auto finalLayoutError = texture->TransitionLayout(
-      context, GetRequiredTextureLayout(texture->lastUsage, texture->format),
-      VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
-      VK_ACCESS_2_TRANSFER_READ_BIT,
-      GetAccessFlagsForUsage(texture->lastUsage, texture->format));
+  // The entire mip chain is now in transfer src, except for mip count - 1, which is in transfer dst
+  // We need convert the final mip from transfer dst to transfer src, so they all match
+  // Then we can signal the entire texture is transfer src, and the next usage will handle the transition from there
 
-  return finalLayoutError;
+  barrier.srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+  barrier.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+  barrier.dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+  barrier.dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT;
+  barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+  barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+  barrier.subresourceRange.baseMipLevel = texture->mipmapcount - 1;
+
+  vkCmdPipelineBarrier2(commandBuffer, &dep);
+
+  texture->lastUsage = TextureUsage::TransferSrc;
+  texture->lastPipelineStage = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+  texture->currentLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+
+  return {};
 }
 
 } // namespace Graphics

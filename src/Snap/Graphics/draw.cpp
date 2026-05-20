@@ -5,7 +5,10 @@
 #include "Graphics/graphics.hpp"
 #include "Graphics/graphicsContext.hpp"
 #include "Graphics/mesh.hpp"
+#include "Graphics/reflect.hpp"
+#include "Graphics/shader.hpp"
 #include "Graphics/snapshot.hpp"
+#include "Modules/Helpers/utils.hpp"
 #include "Modules/error.hpp"
 #include <cassert>
 #include <cstdint>
@@ -97,6 +100,27 @@ auto BindMesh(const GraphicsContext &context, VkCommandBuffer cmdBuffer,
   return Error::Success();
 }
 
+inline auto UpdateShaderResourceLayouts(const GraphicsContext &context,
+                                        VkPipelineStageFlags2 stage) -> Error {
+  auto shader = DynamicRendering::GetShader();
+  if (shader == nullptr) {
+    return Error::Success(); // No shader, so nothing to update
+  }
+
+  for (const auto &resource : shader->reflection.resources) {
+    if (!resource.IsSampler()) {
+      continue;
+    }
+
+    const auto &samplerInfo = resource.GetInfo<Reflect::SamplerInfo>();
+    auto key = Utils::SetBindingToSlot(samplerInfo.set, samplerInfo.binding);
+    auto texture = shader->GetState().userBoundTextures.at(key);
+    CHECK_ERR(texture.first->UseAsSampler(context, stage));
+  }
+
+  return Error::Success();
+}
+
 auto Draw(const GraphicsContext &context, Mesh &mesh, uint32_t instanceCount)
     -> Error {
   ZoneScoped;
@@ -107,20 +131,19 @@ auto Draw(const GraphicsContext &context, Mesh &mesh, uint32_t instanceCount)
     return Error::Create("Failed to get command buffer for draw call.");
   }
 
-  auto bindResult = BindMesh(context, commandBuffer, mesh);
-  if (Error::IsError(bindResult)) {
-    return bindResult;
-  }
+  CHECK_ERR(BindMesh(context, commandBuffer, mesh));
 
   DynamicRendering::SetBindPoint(VK_PIPELINE_BIND_POINT_GRAPHICS);
   DynamicRendering::SetTopology(mesh.GetTopology());
 
   auto &vertexFormat = mesh.GetVertexFormat();
   vertexFormat.BindDynamicInputState(commandBuffer);
-  auto error = DynamicRendering::PrepareRendering(context);
-  if (Error::IsError(error)) {
-    return error;
-  }
+
+  CHECK_ERR(UpdateShaderResourceLayouts(
+      context, VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT |
+                   VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT));
+
+  CHECK_ERR(DynamicRendering::PrepareRendering(context));
 
   auto vertexCount = mesh.GetVertexCount();
 
@@ -170,12 +193,11 @@ auto Dispatch(const GraphicsContext &context, const Math::Uvec3 &threadgroups)
   }
 
   DynamicRendering::SetBindPoint(VK_PIPELINE_BIND_POINT_COMPUTE);
-  auto error = DynamicRendering::PrepareRendering(context);
-  if (Error::IsError(error)) {
-    return error;
-  }
-
+  CHECK_ERR(DynamicRendering::PrepareRendering(context));
   DynamicRendering::EndRendering(context);
+
+  CHECK_ERR(UpdateShaderResourceLayouts(
+      context, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT));
 
   vkCmdDispatch(commandBuffer, threadgroups.x, threadgroups.y, threadgroups.z);
 
@@ -197,10 +219,11 @@ auto DispatchIndirect(const GraphicsContext &context,
   }
 
   DynamicRendering::SetBindPoint(VK_PIPELINE_BIND_POINT_COMPUTE);
-  auto error = DynamicRendering::PrepareRendering(context);
-  if (Error::IsError(error)) {
-    return error;
-  }
+  CHECK_ERR(DynamicRendering::PrepareRendering(context));
+  DynamicRendering::EndRendering(context);
+
+  CHECK_ERR(UpdateShaderResourceLayouts(
+      context, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT));
 
   vkCmdDispatchIndirect(commandBuffer, indirectBuffer->handle, offset);
 
@@ -222,20 +245,18 @@ auto DrawIndirect(const GraphicsContext &context, Mesh &mesh,
     return Error::Create("Failed to get command buffer for draw indirect.");
   }
 
-  auto bindResult = BindMesh(context, commandBuffer, mesh);
-  if (Error::IsError(bindResult)) {
-    return bindResult;
-  }
+  CHECK_ERR(BindMesh(context, commandBuffer, mesh));
 
   DynamicRendering::SetBindPoint(VK_PIPELINE_BIND_POINT_GRAPHICS);
   auto vertexFormat = mesh.GetVertexFormat();
   vertexFormat.BindDynamicInputState(commandBuffer);
   DynamicRendering::SetTopology(mesh.GetTopology());
 
-  auto error = DynamicRendering::PrepareRendering(context);
-  if (Error::IsError(error)) {
-    return error;
-  }
+  CHECK_ERR(UpdateShaderResourceLayouts(
+      context, VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT |
+                   VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT));
+
+  CHECK_ERR(DynamicRendering::PrepareRendering(context));
 
   if (offset % 4 != 0) {
     return Error::Create(
@@ -281,6 +302,10 @@ auto Draw(const GraphicsContext &context, const VkPrimitiveTopology &topology,
   vkCmdSetVertexInputEXT(commandBuffer, 0, nullptr, 0, nullptr);
   DynamicRendering::SetTopology(topology);
 
+  CHECK_ERR(UpdateShaderResourceLayouts(
+      context, VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT |
+                   VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT));
+
   auto error = DynamicRendering::PrepareRendering(context);
   if (Error::IsError(error)) {
     return error;
@@ -308,6 +333,10 @@ auto Draw(const GraphicsContext &context, const Ref<Buffer> &indexBuffer,
   DynamicRendering::SetBindPoint(VK_PIPELINE_BIND_POINT_GRAPHICS);
   vkCmdSetVertexInputEXT(commandBuffer, 0, nullptr, 0, nullptr);
   DynamicRendering::SetTopology(topology);
+
+  CHECK_ERR(UpdateShaderResourceLayouts(
+      context, VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT |
+                   VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT));
 
   auto error = DynamicRendering::PrepareRendering(context);
   if (Error::IsError(error)) {

@@ -4,6 +4,7 @@
 #include "Graphics/sampler.hpp"
 #include "Graphics/semaphoreManager.hpp"
 #include "Libraries/vma.hpp"
+#include "Modules/error.hpp"
 #include "Modules/image.hpp"
 #include "Modules/imagedata.hpp"
 #include "Modules/object.hpp"
@@ -15,6 +16,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <string>
+#include <utility>
 
 namespace Graphics {
 
@@ -220,6 +222,8 @@ struct Texture : Object, Barrier::BarrierSynced {
   }
 
   static auto GetType() -> Type const * { return &LuaTextureType; }
+
+  /// WARNING: Subresource ranges are not tracked. Make sure the range matches the global config of the texture after the transition.
   auto TransitionLayout(
       const GraphicsContext &context, VkImageLayout layout,
       VkPipelineStageFlags2 sourceStage = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT |
@@ -228,7 +232,9 @@ struct Texture : Object, Barrier::BarrierSynced {
           VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT |
           VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
       VkAccessFlags2 srcAccessMask = VK_ACCESS_NONE, // NOLINT
-      VkAccessFlags2 dstAccessMask = VK_ACCESS_NONE) -> Error;
+      VkAccessFlags2 dstAccessMask = VK_ACCESS_NONE,
+      VkImageSubresourceRange range = {.levelCount = 1, .layerCount = 1})
+      -> Error;
 
   [[nodiscard]] auto GetInstanceType() const -> Type const * override {
     return GetType();
@@ -258,7 +264,7 @@ struct TextureCreationInfo {
   uint32_t depth{};    // Depth in pixels (for 3D textures, or Array layers)
   VkFormat format = VK_FORMAT_UNDEFINED; // Texture format
   VkImageUsageFlags usage{};             // Vulkan usage flags
-  int mipmapCount{};                     // Number of mipmap levels
+  int mipmapCount = 1;                   // Number of mipmap levels
   std::string debugName;                 // Debug name
 };
 
@@ -276,9 +282,6 @@ auto CreateVolume(const GraphicsContext &context,
 auto CreateArray(const GraphicsContext &context,
                  const TextureCreationInfo &info) -> Result<Ref<Texture>>;
 
-auto TransitionLayout(GraphicsContext &context, Texture *texture,
-                      VkImageLayout oldLayout, VkImageLayout newLayout)
-    -> Error;
 auto CopyImageToBuffer(GraphicsContext &context, Texture *texture,
                        VkBuffer buffer) -> Error;
 auto GenerateMipmaps(GraphicsContext &context, Texture *texture) -> Error;

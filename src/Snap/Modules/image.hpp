@@ -117,6 +117,23 @@ static inline auto GetTextureAspectFlags(VkFormat format)
   return aspectFlags;
 }
 
+static inline auto GetDimensions(const VkExtent3D &extent, uint32_t mipLevel)
+    -> VkExtent3D {
+  return VkExtent3D{
+      .width = std::max(1U, extent.width >> mipLevel),
+      .height = std::max(1U, extent.height >> mipLevel),
+      .depth = std::max(1U, extent.depth >> mipLevel),
+  };
+}
+
+static inline auto GetDimensions(const VkExtent2D &extent, uint32_t mipLevel)
+    -> VkExtent2D {
+  return VkExtent2D{
+      .width = std::max(1U, extent.width >> mipLevel),
+      .height = std::max(1U, extent.height >> mipLevel),
+  };
+}
+
 static inline auto IsCompressedTexture(VkFormat format) -> bool {
   switch (format) {
   case VK_FORMAT_BC1_RGB_UNORM_BLOCK:
