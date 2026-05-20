@@ -126,12 +126,8 @@ auto UpdateSemaphoreValues(const GraphicsContext &context) -> Result<uint64_t> {
 
   {
     std::lock_guard lock(Graphics::GraphicsContext::mutexes.device);
-    auto result = Error::Create(vkGetSemaphoreCounterValue(
-        context.device, globalTimelineSemaphore, &completedValue));
-
-    if (Error::IsError(result)) {
-      return result;
-    }
+    CHECK_ERR(Error::Create(vkGetSemaphoreCounterValue(
+        context.device, globalTimelineSemaphore, &completedValue)));
   }
 
   // Find the index of the completed value
@@ -192,12 +188,9 @@ auto InitializeGlobalTimelineSemaphore(GraphicsContext &context) -> Error {
 
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    auto result = Error::Create(vkCreateSemaphore(context.device, &semInfo,
-                                                  GetAllocationCallbacks(),
-                                                  &globalTimelineSemaphore));
-    if (Error::IsError(result)) {
-      return result;
-    }
+    CHECK_ERR(Error::Create(vkCreateSemaphore(context.device, &semInfo,
+                                              GetAllocationCallbacks(),
+                                              &globalTimelineSemaphore)));
   }
 
   return Error::Success();

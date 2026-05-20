@@ -162,11 +162,8 @@ auto LoadImGuiCursorMap() -> Error {
   };
 
   for (const auto &mapping : mappings) {
-    auto result = Mouse::CreateSystemCursor(mapping.sdlCursor);
-    if (Error::IsError(result)) {
-      return result.error();
-    }
-    map[mapping.imguiCursor] = result.value();
+    map[mapping.imguiCursor] =
+        CHECK_RES(Mouse::CreateSystemCursor(mapping.sdlCursor));
   }
 
   return Error::Success();

@@ -114,8 +114,11 @@ inline auto UpdateShaderResourceLayouts(const GraphicsContext &context,
 
     const auto &samplerInfo = resource.GetInfo<Reflect::SamplerInfo>();
     auto key = Utils::SetBindingToSlot(samplerInfo.set, samplerInfo.binding);
-    auto texture = shader->GetState().userBoundTextures.at(key);
-    CHECK_ERR(texture.first->UseAsSampler(context, stage));
+    auto iter = shader->GetState().userBoundTextures.find(key);
+    if (iter == shader->GetState().userBoundTextures.end()) {
+      continue; // No texture bound to this sampler, so skip
+    }
+    CHECK_ERR(iter->second.first->UseAsSampler(context, stage));
   }
 
   return Error::Success();

@@ -7,7 +7,6 @@
 #include "Modules/error.hpp"
 #include "Wrap/Graphics/wrap_color.hpp"
 #include "Wrap/wrap.hpp"
-#include "tl/expected.hpp"
 #include <lua.hpp>
 #include <string>
 
@@ -262,6 +261,7 @@ auto RenderTargetsFromTexture(lua_State *state, int index)
   return rendertarget;
 }
 
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 auto RenderTargetsFromOptions(lua_State *state, int index)
     -> Result<Graphics::DynamicRendering::RenderTarget> {
 
@@ -317,11 +317,7 @@ auto RenderTargetsFromOptions(lua_State *state, int index)
   // blendmode
   lua_getfield(state, index, "blendmode");
   if (lua_istable(state, -1) != 0) {
-    auto blendModeResult = FromLuaState(state);
-    if (Error::IsError(blendModeResult)) {
-      return blendModeResult.error();
-    }
-    rendertarget.blendMode = blendModeResult.value();
+    rendertarget.blendMode = CHECK_RES(FromLuaState(state));
   } else {
     rendertarget.blendMode = DefaultBlendMode;
   }

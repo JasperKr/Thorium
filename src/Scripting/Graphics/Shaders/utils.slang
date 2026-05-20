@@ -34,6 +34,6 @@ public float3 Rotate(float3 v, float4 q) {
 
 public float3 GetRayDirection(float2 uv, float4x4 inverseRotationProjection) {
   float4 clipSpacePos = float4(uv * 2.0 - 1.0, 1.0, 1.0);
-  float4 worldSpacePos = mul(inverseRotationProjection, clipSpacePos);
+  float4 worldSpacePos = mul(clipSpacePos, inverseRotationProjection);
   return normalize(worldSpacePos.xyz);
 }

@@ -244,11 +244,7 @@ auto Material::Update(Graphics::GraphicsContext &context) -> Error {
   dirty = false;
 
   if (!obtainedSSBOIndex) {
-    auto indexResult = RendererInstance.GetNewMaterialIndex();
-    if (Error::IsError(indexResult)) {
-      return indexResult.error();
-    }
-    materialSSBOIndex = indexResult.value();
+    materialSSBOIndex = CHECK_RES(RendererInstance.GetNewMaterialIndex());
     obtainedSSBOIndex = true;
   }
 

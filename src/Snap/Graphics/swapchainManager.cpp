@@ -1,7 +1,6 @@
 #include "swapchainManager.hpp"
 
 #include "Graphics/allocations.hpp"
-#include "Graphics/dynamicRendering.hpp"
 #include "Graphics/graphicsContext.hpp"
 #include "Graphics/graphicsState.hpp"
 #include "Graphics/texture.hpp"
@@ -472,25 +471,15 @@ auto SwapchainManager::CreateVkSwapchain(GraphicsContext &context,
     -> Error {
   ZoneScoped;
 
-  auto presentResult = FindPresentMode(windowContext, context);
-  if (Error::IsError(presentResult)) {
-    return presentResult.error();
-  }
-  VkPresentModeKHR presentMode = presentResult.value();
-
-  context.surfaceInfo.presentMode = presentMode;
+  context.surfaceInfo.presentMode =
+      CHECK_RES(FindPresentMode(windowContext, context));
 
   VkSurfaceCapabilitiesKHR surfaceCapabilities;
   vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
       context.physicalDevice, context.surface, &surfaceCapabilities);
 
-  auto surfaceResult = FindSurfaceFormat(windowContext.colorSpace, context);
-  if (Error::IsError(surfaceResult)) {
-    return surfaceResult.error();
-  }
-  VkSurfaceFormatKHR surfaceFormat = surfaceResult.value();
-
-  context.surfaceInfo.format = surfaceFormat;
+  context.surfaceInfo.format =
+      CHECK_RES(FindSurfaceFormat(windowContext.colorSpace, context));
   context.surfaceInfo.capabilities = surfaceCapabilities;
 
   VkSwapchainCreateInfoKHR swapchainInfo = {};
@@ -510,15 +499,15 @@ auto SwapchainManager::CreateVkSwapchain(GraphicsContext &context,
 
   VkExtent2D extent = {(uint32_t)width, (uint32_t)height};
 
-  swapchainInfo.imageFormat = surfaceFormat.format;
-  swapchainInfo.imageColorSpace = surfaceFormat.colorSpace;
+  swapchainInfo.imageFormat = context.surfaceInfo.format.format;
+  swapchainInfo.imageColorSpace = context.surfaceInfo.format.colorSpace;
   swapchainInfo.imageExtent = extent;
   swapchainInfo.imageArrayLayers = 1;
   swapchainInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
   swapchainInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
   swapchainInfo.preTransform = surfaceCapabilities.currentTransform;
   swapchainInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-  swapchainInfo.presentMode = presentMode;
+  swapchainInfo.presentMode = context.surfaceInfo.presentMode;
   swapchainInfo.clipped = VK_TRUE;
   swapchainInfo.oldSwapchain = currentSwapchain;
 
@@ -534,7 +523,7 @@ auto SwapchainManager::CreateVkSwapchain(GraphicsContext &context,
   }
 
   context.swapchainInfo.swapchain = currentSwapchain;
-  context.swapchainInfo.format = surfaceFormat.format;
+  context.swapchainInfo.format = swapchainInfo.imageFormat;
   context.swapchainInfo.extent = swapchainInfo.imageExtent;
 
   {

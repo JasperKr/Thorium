@@ -220,12 +220,7 @@ inline auto LoadTexture(Graphics::GraphicsContext &context,
 
   const auto &image = asset.images[texture.imageIndex.value()];
 
-  auto loadResult = LoadDataSource(asset, basePath, image.data);
-  if (Error::IsError(loadResult)) {
-    return loadResult.error();
-  }
-
-  auto span = loadResult.value();
+  auto span = CHECK_RES(LoadDataSource(asset, basePath, image.data));
 
   auto textureResult = Graphics::LoadFromMemory(
       context, *ImageCache[texture.imageIndex.value()].get(),
@@ -857,12 +852,7 @@ LoadVertexData(Graphics::VertexFormat &format, const fastgltf::Asset &asset,
     const auto &bufferView =
         asset.bufferViews.at(accessor.bufferViewIndex.value());
 
-    auto dataSourceResult = LoadBufferView(asset, bufferView);
-    if (Error::IsError(dataSourceResult)) {
-      return dataSourceResult.error();
-    }
-
-    auto span = dataSourceResult.value();
+    auto span = CHECK_RES(LoadBufferView(asset, bufferView));
 
     const auto srcComponentSize =
         fastgltf::getComponentByteSize(accessor.componentType);
@@ -965,12 +955,7 @@ inline auto LoadIndexData(const fastgltf::Asset &asset,
   const auto &bufferView =
       asset.bufferViews.at(accessor.bufferViewIndex.value());
 
-  auto dataSourceResult = LoadBufferView(asset, bufferView);
-  if (Error::IsError(dataSourceResult)) {
-    return dataSourceResult.error();
-  }
-
-  auto span = dataSourceResult.value();
+  auto span = CHECK_RES(LoadBufferView(asset, bufferView));
 
   auto componentSize = fastgltf::getComponentByteSize(accessor.componentType);
   auto finalOffset = accessor.byteOffset;
@@ -1055,12 +1040,7 @@ inline auto LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
 
       shapes.emplace_back(shapeEntity);
 
-      auto indexDataResult = LoadIndexData(asset, primitive);
-      if (Error::IsError(indexDataResult)) {
-        return indexDataResult.error();
-      }
-
-      auto indexData = indexDataResult.value();
+      auto indexData = CHECK_RES(LoadIndexData(asset, primitive));
       VkIndexType indexType = VK_INDEX_TYPE_MAX_ENUM;
       if (!indexData.empty()) {
         const auto &accessor =
@@ -1214,11 +1194,7 @@ auto LoadGltfModel(Graphics::GraphicsContext &context, const std::string &path,
   URICache.clear();
   ImageCache.clear();
 
-  auto bytesResult = Filesystem::ReadFile(path);
-  if (Error::IsError(bytesResult)) {
-    return bytesResult.error();
-  }
-  auto bytes = bytesResult.value();
+  auto bytes = CHECK_RES(Filesystem::ReadFile(path));
   // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
   auto *bytedata = reinterpret_cast<std::byte *>(bytes.data());
 
@@ -1251,12 +1227,7 @@ auto LoadGltfModel(Graphics::GraphicsContext &context, const std::string &path,
 
   for (size_t i = 0; i < asset->buffers.size(); ++i) {
     const auto &buffer = asset->buffers[i];
-    auto bufferDataResult = LoadDataSource(asset.get(), view, buffer.data);
-    if (Error::IsError(bufferDataResult)) {
-      return bufferDataResult.error();
-    }
-
-    auto bufferData = bufferDataResult.value();
+    auto bufferData = CHECK_RES(LoadDataSource(asset.get(), view, buffer.data));
     Buffers.emplace_back(bufferData.begin(), bufferData.end());
   }
 
@@ -1294,10 +1265,7 @@ auto LoadGltfModel(Graphics::GraphicsContext &context, const std::string &path,
   for (const auto &glTFScene : asset->scenes) {
     for (const auto &nodeIndex : glTFScene.nodeIndices) {
       const auto &gltfNode = asset->nodes[nodeIndex];
-      auto nodeResult = LoadNode(world, context, asset.get(), view, gltfNode);
-      if (Error::IsError(nodeResult)) {
-        return nodeResult.error();
-      }
+      CHECK_RES(LoadNode(world, context, asset.get(), view, gltfNode));
     }
   }
 

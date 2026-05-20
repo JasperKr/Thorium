@@ -286,11 +286,7 @@ inline auto SettingsFromStack(lua_State *state) -> Result<::Window::Settings> {
 
   lua_getfield(state, 1, "vsync");
   if (!lua_isnoneornil(state, -1)) {
-    auto vsyncModeResult = StringToVsyncMode(luaL_checkstring(state, -1));
-    if (Error::IsError(vsyncModeResult)) {
-      return vsyncModeResult.error();
-    }
-    settings.vsync = vsyncModeResult.value();
+    settings.vsync = CHECK_RES(StringToVsyncMode(luaL_checkstring(state, -1)));
   }
   lua_pop(state, 1);
 
@@ -331,11 +327,8 @@ inline auto SettingsFromStack(lua_State *state) -> Result<::Window::Settings> {
 
   lua_getfield(state, 1, "colorspace");
   if (!lua_isnoneornil(state, -1)) {
-    auto colorSpaceResult = StringToColorSpace(luaL_checkstring(state, -1));
-    if (Error::IsError(colorSpaceResult)) {
-      return colorSpaceResult.error();
-    }
-    settings.colorSpace = colorSpaceResult.value();
+    settings.colorSpace =
+        CHECK_RES(StringToColorSpace(luaL_checkstring(state, -1)));
   }
   lua_pop(state, 1);
 

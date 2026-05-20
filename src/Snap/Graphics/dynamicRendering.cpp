@@ -103,13 +103,9 @@ auto GetDescriptorSetLayout(const DescriptorSetLayoutKey &layoutKey,
     layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
     layoutInfo.pBindings = bindings.data();
 
-    auto error = Error::Create(vkCreateDescriptorSetLayout(
+    CHECK_ERR(Error::Create(vkCreateDescriptorSetLayout(
         context.device, &layoutInfo, GetAllocationCallbacks(),
-        &descriptorSetLayout));
-
-    if (Error::IsError(error)) {
-      return error;
-    }
+        &descriptorSetLayout)));
 
     DescriptorSetLayoutCache[layoutKey] = descriptorSetLayout;
   }
@@ -300,11 +296,8 @@ auto GetPipelineLayout(const GraphicsContext &context,
     layoutKey.bindings = setPair.second;
     layoutKey.bindingFlags = {};
 
-    auto layoutResult = GetDescriptorSetLayout(layoutKey, context);
-    if (Error::IsError(layoutResult)) {
-      return layoutResult.error();
-    }
-    setLayouts[setPair.first] = layoutResult.value();
+    setLayouts[setPair.first] =
+        CHECK_RES(GetDescriptorSetLayout(layoutKey, context));
   }
 
   PrintDebug("Max descriptor set index: {}", maxSet);
@@ -545,13 +538,7 @@ inline auto CreateGraphicsPipeline(const GraphicsContext &context, State &state)
 
   PrintDebug("Creating graphics pipeline");
 
-  auto shaderStagesResult = GetShaderStages(state);
-  if (Error::IsError(shaderStagesResult)) {
-    return shaderStagesResult.error();
-  }
-
-  auto shaderStages = shaderStagesResult.value();
-
+  auto shaderStages = CHECK_RES(GetShaderStages(state));
   auto inputAssembly = GetInputAssemblyState(state);
   auto rasterizer = GetRasterizationState(state);
 
@@ -669,13 +656,9 @@ inline auto CreateGraphicsPipeline(const GraphicsContext &context, State &state)
   pipelineInfo.pDynamicState = &dynamicState;
 
   auto *shader = state.shader.get();
+  auto layout = CHECK_RES(GetPipelineLayout(context, shader));
 
-  auto layoutResult = GetPipelineLayout(context, shader);
-  if (Error::IsError(layoutResult)) {
-    return layoutResult.error();
-  }
-
-  pipelineInfo.layout = layoutResult.value().layout;
+  pipelineInfo.layout = layout.layout;
   pipelineInfo.renderPass = VK_NULL_HANDLE; // Not needed
   pipelineInfo.subpass = 0;
   pipelineInfo.pNext = &renderingCreateInfo;
@@ -685,22 +668,18 @@ inline auto CreateGraphicsPipeline(const GraphicsContext &context, State &state)
   VkPipeline pipeline = VK_NULL_HANDLE;
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    auto error = Error::Create(vkCreateGraphicsPipelines(
+    CHECK_ERR(Error::Create(vkCreateGraphicsPipelines(
         context.device, VK_NULL_HANDLE, 1, &pipelineInfo,
-        GetAllocationCallbacks(), &pipeline));
-
-    if (Error::IsError(error)) {
-      return error;
-    }
+        GetAllocationCallbacks(), &pipeline)));
   }
-  PipelineCache.emplace(state, std::make_pair(pipeline, layoutResult.value()));
+  PipelineCache.emplace(state, std::make_pair(pipeline, layout));
 
   {
     std::lock_guard<std::mutex> lock(PipelinesMutex);
     Pipelines.emplace_back(pipeline);
   }
 
-  return std::pair<VkPipeline, PipelineLayout>(pipeline, layoutResult.value());
+  return std::pair<VkPipeline, PipelineLayout>(pipeline, layout);
 }
 
 inline auto CreateComputePipeline(const GraphicsContext &context, State &state)
@@ -722,34 +701,27 @@ inline auto CreateComputePipeline(const GraphicsContext &context, State &state)
   // It is also valid in a single SPIR-V binary to have 'main' for two different stages.
   pipelineInfo.stage.pName = "main";
 
-  auto layoutResult = GetPipelineLayout(context, state.shader.get());
-  if (Error::IsError(layoutResult)) {
-    return layoutResult.error();
-  }
-
-  pipelineInfo.layout = layoutResult.value().layout;
+  auto layout = CHECK_RES(GetPipelineLayout(context, state.shader.get()));
+  pipelineInfo.layout = layout.layout;
 
   PrintDebug("Creating compute pipeline...");
 
   VkPipeline pipeline = VK_NULL_HANDLE;
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    auto error = Error::Create(vkCreateComputePipelines(
+    CHECK_ERR(Error::Create(vkCreateComputePipelines(
         context.device, VK_NULL_HANDLE, 1, &pipelineInfo,
-        GetAllocationCallbacks(), &pipeline));
-    if (Error::IsError(error)) {
-      return error;
-    }
+        GetAllocationCallbacks(), &pipeline)));
   }
 
-  PipelineCache.emplace(state, std::make_pair(pipeline, layoutResult.value()));
+  PipelineCache.emplace(state, std::make_pair(pipeline, layout));
 
   {
     std::lock_guard<std::mutex> lock(PipelinesMutex);
     Pipelines.emplace_back(pipeline);
   }
 
-  return std::pair<VkPipeline, PipelineLayout>(pipeline, layoutResult.value());
+  return std::pair<VkPipeline, PipelineLayout>(pipeline, layout);
 }
 
 inline auto CreatePipeline(const GraphicsContext &context, State &state)
@@ -821,12 +793,9 @@ auto Load(const GraphicsContext &context) -> Error {
   assert(StateStack.size() == 0 &&
          "RenderTarget state stack is not empty on Load.");
 
-  auto defaultStateResult = SetupDefaultState(context);
-  if (Error::IsError(defaultStateResult)) {
-    return defaultStateResult.error();
-  }
+  auto state = CHECK_RES(SetupDefaultState(context));
 
-  StateStack.emplace_back(defaultStateResult.value());
+  StateStack.emplace_back(state);
   TopOfStack = &StateStack.back();
 
   return Error::Success();
@@ -834,12 +803,8 @@ auto Load(const GraphicsContext &context) -> Error {
 
 auto Push(const GraphicsContext &context) -> Error {
   if (StateStack.size() == 0) {
-    auto defaultStateResult = SetupDefaultState(context);
-    if (Error::IsError(defaultStateResult)) {
-      return defaultStateResult.error();
-    }
-
-    StateStack.emplace_back(defaultStateResult.value());
+    auto state = CHECK_RES(SetupDefaultState(context));
+    StateStack.emplace_back(state);
   } else {
     StateStack.emplace_back(*TopOfStack);
   }
@@ -862,12 +827,9 @@ auto Pop(const GraphicsContext &context) -> Error {
 auto Reset(const GraphicsContext &context) -> Error {
   StateStack.clear();
 
-  auto defaultStateResult = SetupDefaultState(context);
-  if (Error::IsError(defaultStateResult)) {
-    return defaultStateResult.error();
-  }
+  auto state = CHECK_RES(SetupDefaultState(context));
 
-  StateStack.emplace_back(defaultStateResult.value());
+  StateStack.emplace_back(state);
   TopOfStack = &StateStack.back();
   LastState = nullptr;
 
@@ -891,10 +853,7 @@ auto FlushCompute(const GraphicsContext &context) -> Result<bool> {
     return Error::Unexpected("Current state is not a compute pipeline.");
   }
 
-  auto pipelineResult = GetPipeline(context, *TopOfStack);
-  if (Error::IsError(pipelineResult)) {
-    return pipelineResult.error();
-  }
+  auto pipeline = CHECK_RES(GetPipeline(context, *TopOfStack));
 
   auto *commandBuffer = Graphics::GetCommandBuffer();
 
@@ -906,12 +865,11 @@ auto FlushCompute(const GraphicsContext &context) -> Result<bool> {
 
   UsedShaderModules.emplace_back(TopOfStack->shader);
 
-  CurrentPipelineLayout = pipelineResult.value().second;
+  CurrentPipelineLayout = pipeline.second;
 
   PrintDebug("Binding pipeline");
 
-  vkCmdBindPipeline(commandBuffer, TopOfStack->bindPoint,
-                    pipelineResult.value().first);
+  vkCmdBindPipeline(commandBuffer, TopOfStack->bindPoint, pipeline.first);
 
   return true;
 }
@@ -941,10 +899,7 @@ auto FlushGraphics(const GraphicsContext &context) -> Result<bool> {
     }
   }
 
-  auto pipelineResult = GetPipeline(context, *TopOfStack);
-  if (Error::IsError(pipelineResult)) {
-    return pipelineResult.error();
-  }
+  auto pipeline = CHECK_RES(GetPipeline(context, *TopOfStack));
 
   auto *commandBuffer = Graphics::GetCommandBuffer();
 
@@ -974,14 +929,13 @@ auto FlushGraphics(const GraphicsContext &context) -> Result<bool> {
     }
   }
 
-  CurrentPipelineLayout = pipelineResult.value().second;
+  CurrentPipelineLayout = pipeline.second;
 
   PrintDebug("Binding pipeline");
 
   {
     ZoneScopedN("vkCmdBindPipeline");
-    vkCmdBindPipeline(commandBuffer, TopOfStack->bindPoint,
-                      pipelineResult.value().first);
+    vkCmdBindPipeline(commandBuffer, TopOfStack->bindPoint, pipeline.first);
   }
 
   return true;
@@ -1177,7 +1131,7 @@ auto InsertResourceBarriers(const GraphicsContext &context) -> Error {
     const auto &buffer = bufferPair.second;
     auto key = bufferPair.first;
 
-    if (key == 0U) {
+    if (key == 0U && shader->reflection.hasGlobals) {
       continue; // Skip slot 0, 0; set, binding = 0, 0; ubo.
     }
 
@@ -1428,42 +1382,44 @@ inline auto BindGlobalsDescriptor(const GraphicsContext &context,
     -> Error {
   ZoneScoped;
 
-  if (shader->reflection.hasGlobals) {
-    const auto set = shader->reflection.globals.set;
-    const auto binding = shader->reflection.globals.binding;
+  if (!shader->reflection.hasGlobals) {
+    return Error::Success();
+  }
 
-    if (set != setIndex) {
-      return Error::Success();
-    }
+  const auto set = shader->reflection.globals.set;
+  const auto binding = shader->reflection.globals.binding;
 
-    auto &buffer = GetGlobalUniformBuffer(context.frameIndex);
+  if (set != setIndex) {
+    return Error::Success();
+  }
 
-    dynamicOffsets.emplace_back(buffer.GetOffset());
+  auto &buffer = GetGlobalUniformBuffer(context.frameIndex);
+
+  dynamicOffsets.emplace_back(buffer.GetOffset());
 
 #if Enable_Snapshots
-    Snapshot::CaptureEvent(Snapshot::StructuredBufferUploadEvent(
-        buffer.GetBuffer()->handle, shader->reflection.globalBufferFormat));
+  Snapshot::CaptureEvent(Snapshot::StructuredBufferUploadEvent(
+      buffer.GetBuffer()->handle, shader->reflection.globalBufferFormat));
 #endif
 
-    auto flushResult = buffer.Write(context, shader->globalUniforms);
+  auto flushResult = buffer.Write(context, shader->globalUniforms);
 
-    if (Error::IsError(flushResult)) {
-      return flushResult.error();
-    }
-
-    key.bindings.emplace_back(ResourceBinding{
-        .binding = binding,
-        .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
-        .resourceInfo =
-            VkDescriptorBufferInfo{
-                .buffer = buffer.GetBuffer()->handle,
-                .offset = 0,
-                .range = Utils::AlignUp(shader->reflection.globals.size,
-                                        context.deviceProperties.limits
-                                            .minUniformBufferOffsetAlignment),
-            },
-    });
+  if (Error::IsError(flushResult)) {
+    return flushResult.error();
   }
+
+  key.bindings.emplace_back(ResourceBinding{
+      .binding = binding,
+      .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC,
+      .resourceInfo =
+          VkDescriptorBufferInfo{
+              .buffer = buffer.GetBuffer()->handle,
+              .offset = 0,
+              .range = Utils::AlignUp(shader->reflection.globals.size,
+                                      context.deviceProperties.limits
+                                          .minUniformBufferOffsetAlignment),
+          },
+  });
 
   return Error::Success();
 }
@@ -1589,11 +1545,9 @@ auto BindDescriptorSets(const GraphicsContext &context,
                               dynamicOffsets.data());
     } else {
       ZoneScopedN("Allocate and bind descriptor set");
-      auto descriptorSetResult = AllocateDescriptorSets(context, key, layout);
-      if (Error::IsError(descriptorSetResult)) {
-        return descriptorSetResult.error();
-      }
-      auto *descriptorSet = descriptorSetResult.value();
+
+      auto *descriptorSet =
+          CHECK_RES(AllocateDescriptorSets(context, key, layout));
 
       vkCmdBindDescriptorSets(commandBuffer, TopOfStack->bindPoint,
                               CurrentPipelineLayout.layout, setIndex, 1,
@@ -1771,12 +1725,8 @@ auto BeginFrame(const GraphicsContext &context) -> Error {
 
   StateStack.clear();
 
-  auto defaultStateResult = SetupDefaultState(context);
-  if (Error::IsError(defaultStateResult)) {
-    return defaultStateResult.error();
-  }
-
-  StateStack.emplace_back(defaultStateResult.value());
+  auto state = CHECK_RES(SetupDefaultState(context));
+  StateStack.emplace_back(state);
   TopOfStack = &StateStack.back();
   DrawnToSwapchain = false;
 

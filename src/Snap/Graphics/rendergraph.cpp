@@ -4,7 +4,6 @@
 #include "Modules/error.hpp"
 #include "Modules/image.hpp"
 #include "texture.hpp"
-#include "tl/expected.hpp"
 #include <unordered_map>
 
 #include "vulkan/vulkan_core.h"
@@ -1323,12 +1322,8 @@ auto inline AllocateResourceMemory(GraphicsContext &context, RenderGraph &graph,
     viewInfo.subresourceRange.baseArrayLayer = 0;
     viewInfo.subresourceRange.layerCount = texture->arrayLayers;
 
-    result = Error::Create(vkCreateImageView(context.device, &viewInfo, nullptr,
-                                             &(texture->view)));
-
-    if (Error::IsError(result)) {
-      return result;
-    }
+    CHECK_ERR(Error::Create(vkCreateImageView(context.device, &viewInfo,
+                                              nullptr, &(texture->view))));
   } else if (resource.type == Type::Buffer) {
     auto &buffer = std::get<Ref<Buffer>>(resource.info);
 
@@ -1463,10 +1458,7 @@ auto inline AllocateGraphResourceMemory(GraphicsContext &context,
 
   CalculateResourceLifetimes(graph);
 
-  auto validationResult = ValidateCompiledGraph(graph);
-  if (Error::IsError(validationResult)) {
-    return validationResult.error();
-  }
+  CHECK_RES(ValidateCompiledGraph(graph));
 
   CompileResourceTimeline(graph);
   CHECK_ERR(BuildVirtualMemory(context, graph));
@@ -1479,10 +1471,7 @@ auto inline AllocateGraphResourceMemory(GraphicsContext &context,
 
   PrintDebug("Allocated memory for render graph resources.");
 
-  error = ValidateResources(graph);
-  if (Error::IsError(validationResult)) {
-    return validationResult.error();
-  }
+  CHECK_ERR(ValidateResources(graph));
 
   CHECK_ERR(CreateGraphDescriptorPool(context, graph));
 

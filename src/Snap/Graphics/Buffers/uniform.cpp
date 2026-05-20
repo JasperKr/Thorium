@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "Modules/Helpers/utils.hpp"
+#include "Modules/error.hpp"
 #include "vulkan/vulkan_core.h"
 
 namespace Graphics {
@@ -56,11 +57,7 @@ auto FrameUniformBufferObject::Create(GraphicsContext &context)
                static_cast<uint32_t>(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
   info.debugName = "Frame Uniform Buffer";
 
-  auto result = Buffer::Create(context, info);
-  if (Error::IsError(result)) {
-    return result.error();
-  }
-  obj.buffer = result.value();
+  obj.buffer = CHECK_RES(Buffer::Create(context, info));
 
   return obj;
 }
@@ -102,12 +99,7 @@ auto FrameUniformBufferObject::Write(const Graphics::GraphicsContext &context,
                  static_cast<uint32_t>(VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
     info.debugName = "Frame Uniform Buffer";
 
-    auto result = Graphics::Buffer::Create(context, info);
-    if (Error::IsError(result)) {
-      return result.error();
-    }
-
-    buffer = result.value();
+    buffer = CHECK_RES(Graphics::Buffer::Create(context, info));
     resized = true;
   }
 

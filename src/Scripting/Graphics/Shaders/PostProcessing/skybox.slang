@@ -33,14 +33,14 @@ float4 fragmentMain(FragmentInput input) {
   }
 
   float3 rayDirection =
-      GetRayDirection(input.tex_coord, camera.ProjectionMatrix);
+      GetRayDirection(input.tex_coord, camera.InverseRotationProjectionMatrix);
 
-  // #if defined(CUBE_MAP)
-  //   return SkyboxTexture.Sample(rayDirection);
-  // #elif defined(ERP)
-  //   float2 uv = GetERPUvs(rayDirection);
-  //   return SkyboxTexture.Sample(uv);
-  // #endif
+#if defined(CUBE_MAP)
+  return SkyboxTexture.Sample(rayDirection);
+#elif defined(ERP)
+  float2 uv = GetERPUvs(rayDirection);
+  return SkyboxTexture.Sample(uv);
+#endif
 
-  return float4(saturate(rayDirection * 0.5 + 0.5), 1.0);
+  // return float4(saturate(rayDirection * 0.5 + 0.5), 1.0);
 }

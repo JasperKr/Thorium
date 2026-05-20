@@ -469,6 +469,7 @@ struct LuaOptions {
   uint32_t mipmapStart = 0;
   bool linear = true;
 
+  // NOLINTNEXTLINE(readability-function-cognitive-complexity)
   static auto Create(lua_State *state, int index) -> Result<LuaOptions> {
     LuaOptions options{};
     luaL_checktype(state, index, LUA_TTABLE);
@@ -602,12 +603,8 @@ static inline auto TextureFromImagedata(lua_State *state)
   auto *ctx = ::Graphics::GetCurrentGraphicsContext();
   auto *imageData = LuaWrap::ObjectFromLua<Image::ImageData>(state, 1);
 
-  auto result =
-      ::Graphics::LoadFromMemory(*ctx, *imageData, VK_IMAGE_USAGE_SAMPLED_BIT);
-  if (Error::IsError(result)) {
-    return result.error();
-  }
-  return result.value();
+  return CHECK_RES(
+      ::Graphics::LoadFromMemory(*ctx, *imageData, VK_IMAGE_USAGE_SAMPLED_BIT));
 }
 
 static inline auto TextureFromFilepath(lua_State *state)
@@ -615,11 +612,7 @@ static inline auto TextureFromFilepath(lua_State *state)
   auto *ctx = ::Graphics::GetCurrentGraphicsContext();
   const char *filepath = luaL_checkstring(state, 1);
 
-  auto result = ::Graphics::LoadFromFile(*ctx, filepath);
-  if (Error::IsError(result)) {
-    return result.error();
-  }
-  return result.value();
+  return CHECK_RES(::Graphics::LoadFromFile(*ctx, filepath));
 }
 
 static inline auto TextureFromImagedataAndOptions(lua_State *state)
@@ -635,12 +628,7 @@ static inline auto TextureFromImagedataAndOptions(lua_State *state)
   LuaOptions options = optionsResult.value();
 
   auto usage = TextureUsageToVkImageUsage(options.format, options.usage);
-
-  auto result = ::Graphics::LoadFromMemory(*ctx, *imageData, usage);
-  if (Error::IsError(result)) {
-    return result.error();
-  }
-  return result.value();
+  return CHECK_RES(::Graphics::LoadFromMemory(*ctx, *imageData, usage));
 }
 
 static inline auto TextureFromFilepathAndOptions(lua_State *state)
@@ -686,11 +674,7 @@ static inline auto TextureFromImagedataArrayAndOptions(lua_State *state)
 
   auto *ctx = ::Graphics::GetCurrentGraphicsContext();
 
-  auto result = ::Graphics::LoadFromMemory(*ctx, slices, options.type);
-  if (Error::IsError(result)) {
-    return result.error();
-  }
-  return result.value();
+  return CHECK_RES(::Graphics::LoadFromMemory(*ctx, slices, options.type));
 }
 
 static inline auto TextureFromWidthAndHeight(lua_State *state)

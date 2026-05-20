@@ -189,12 +189,8 @@ auto AquireCommandBuffer(Graphics::GraphicsContext &context,
     allocInfo.commandBufferCount = 1;
 
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    auto allocationResult = Error::Create(vkAllocateCommandBuffers(
-        context.device, &allocInfo, &threadInfo->threadData.commandBuffer));
-
-    if (Error::IsError(allocationResult)) {
-      return allocationResult;
-    }
+    CHECK_ERR(Error::Create(vkAllocateCommandBuffers(
+        context.device, &allocInfo, &threadInfo->threadData.commandBuffer)));
   } else {
     threadInfo->threadData.commandBuffer = cachedCmdBuffer.value();
   }
@@ -203,12 +199,8 @@ auto AquireCommandBuffer(Graphics::GraphicsContext &context,
 
   // Reset old command buffer
   VkCommandBufferResetFlags resetFlags{};
-  auto resetResult = Error::Create(
-      vkResetCommandBuffer(threadInfo->threadData.commandBuffer, resetFlags));
-
-  if (Error::IsError(resetResult)) {
-    return resetResult;
-  }
+  CHECK_ERR(Error::Create(
+      vkResetCommandBuffer(threadInfo->threadData.commandBuffer, resetFlags)));
 
   auto getDescriptorPoolResult = GetDescriptorPool(tcontext);
 
@@ -218,12 +210,8 @@ auto AquireCommandBuffer(Graphics::GraphicsContext &context,
 
   VkCommandBufferBeginInfo beginInfo = {};
   beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-  auto beginResult = Error::Create(
-      vkBeginCommandBuffer(threadInfo->threadData.commandBuffer, &beginInfo));
-
-  if (Error::IsError(beginResult)) {
-    return beginResult;
-  }
+  CHECK_ERR(Error::Create(
+      vkBeginCommandBuffer(threadInfo->threadData.commandBuffer, &beginInfo)));
 
   Barrier::ResetModule();
 
@@ -257,11 +245,8 @@ auto SubmitCommands(Graphics::GraphicsContext &context)
     return flushResult;
   }
 
-  auto endResult = Error::Create(
-      vkEndCommandBuffer(CurrentRenderThreadInfo->threadData.commandBuffer));
-  if (Error::IsError(endResult)) {
-    return endResult;
-  }
+  CHECK_ERR(Error::Create(
+      vkEndCommandBuffer(CurrentRenderThreadInfo->threadData.commandBuffer)));
 
   CurrentRenderThreadInfo->threadData.resourceSyncs =
       Barrier::GlobalResourceSyncTimeline;

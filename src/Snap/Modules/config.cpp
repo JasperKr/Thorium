@@ -18,7 +18,7 @@ inline auto SetIdentity(lua_State *state) -> int {
     return luaL_error(state, "Expected string for Identity");
   }
   globalConfig.Identity = lua_tostring(state, 1);
-  PrintInfo("Identity set to ", globalConfig.Identity);
+  PrintInfo("Identity set to {}", globalConfig.Identity);
   return 0;
 }
 

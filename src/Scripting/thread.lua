@@ -162,7 +162,21 @@ do
     createSnapshot = false
     if firstFrame then
       snap.graphics.setDefaultFilter("linear", "linear", 4)
-      snap.scene.loadModel(scene, "Assets/Terrain/sponza.glb")
+      -- snap.scene.loadModel(scene, "Assets/Terrain/sponza.glb")
+
+      texture = snap.graphics.newTexture("src/Assets/skybox.hdr")
+      -- local checkerboard = snap.data.newImagedata(16, 16)
+      -- for x = 0, 15 do
+      --   for y = 0, 15 do
+      --     local color = ((x + y) % 2 == 0) and 1 or 0
+      --     checkerboard:setPixel(x, y, color, color, color, 1)
+      --   end
+      -- end
+
+      -- local texture = snap.graphics.newTexture(checkerboard)
+
+      local env = scene:newEnvironment("Test environment", texture)
+      scene:setEnvironment(env)
 
       firstFrame = false
     end

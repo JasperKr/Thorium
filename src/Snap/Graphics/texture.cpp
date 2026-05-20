@@ -18,7 +18,6 @@
 #include "Modules/object.hpp"
 #include "sampler.hpp"
 #include "stb/stb_image.h"
-#include "tl/expected.hpp"
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -77,11 +76,8 @@ inline auto SetDebugName(const std::string &debugName, Texture *texture,
       reinterpret_cast<uintptr_t>(texture->image)), // NOLINT
       nameInfo.pObjectName = debugname.c_str();
 
-  auto error =
-      Error::Create(vkSetDebugUtilsObjectNameEXT(context.device, &nameInfo));
-  if (Error::IsError(error)) {
-    return error;
-  }
+  CHECK_ERR(
+      Error::Create(vkSetDebugUtilsObjectNameEXT(context.device, &nameInfo)));
 
   vmaSetAllocationName(context.vmaAllocator, texture->memory,
                        debugname.c_str());
@@ -173,12 +169,8 @@ auto Create2D(const GraphicsContext &context, const TextureCreationInfo &info)
 
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    auto error = Error::Create(vkCreateImageView(
-        context.device, &viewInfo, GetAllocationCallbacks(), &texture->view));
-
-    if (Error::IsError(error)) {
-      return error;
-    }
+    CHECK_ERR(Error::Create(vkCreateImageView(
+        context.device, &viewInfo, GetAllocationCallbacks(), &texture->view)));
   }
 
   VmaAllocationInfo memRequirements;
@@ -213,12 +205,8 @@ auto FromSwapchainTexture(const GraphicsContext &context,
 
   VkSurfaceCapabilitiesKHR surfaceCapabilities;
 
-  auto error = Error::Create(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
-      context.physicalDevice, context.surface, &surfaceCapabilities));
-
-  if (Error::IsError(error)) {
-    return error;
-  }
+  CHECK_ERR(Error::Create(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
+      context.physicalDevice, context.surface, &surfaceCapabilities)));
 
   texture->usage = surfaceCapabilities.supportedUsageFlags;
   texture->view = swapchainImageView;
@@ -227,7 +215,7 @@ auto FromSwapchainTexture(const GraphicsContext &context,
   texture->lastUsedAccess = 0;
   texture->lastUsedStages = 0;
   texture->currentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-  CHECK_ERR(TextureUsage::Unknown);
+  texture->lastUsage = TextureUsage::Unknown;
 
   return texture;
 }
@@ -309,12 +297,8 @@ auto CreateCubeMap(const GraphicsContext &context,
 
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    auto error = Error::Create(vkCreateImageView(
-        context.device, &viewInfo, GetAllocationCallbacks(), &texture->view));
-
-    if (Error::IsError(error)) {
-      return error;
-    }
+    CHECK_ERR(Error::Create(vkCreateImageView(
+        context.device, &viewInfo, GetAllocationCallbacks(), &texture->view)));
   }
 
   VmaAllocationInfo memRequirements;
@@ -400,12 +384,8 @@ auto CreateVolume(const GraphicsContext &context,
 
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    auto error = Error::Create(vkCreateImageView(
-        context.device, &viewInfo, GetAllocationCallbacks(), &texture->view));
-
-    if (Error::IsError(error)) {
-      return error;
-    }
+    CHECK_ERR(Error::Create(vkCreateImageView(
+        context.device, &viewInfo, GetAllocationCallbacks(), &texture->view)));
   }
 
   VmaAllocationInfo memRequirements;
@@ -491,12 +471,8 @@ auto CreateArray(const GraphicsContext &context,
 
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    auto error = Error::Create(vkCreateImageView(
-        context.device, &viewInfo, GetAllocationCallbacks(), &texture->view));
-
-    if (Error::IsError(error)) {
-      return error;
-    }
+    CHECK_ERR(Error::Create(vkCreateImageView(
+        context.device, &viewInfo, GetAllocationCallbacks(), &texture->view)));
   }
 
   VmaAllocationInfo memRequirements;
@@ -1189,7 +1165,7 @@ inline auto WritePixelData(const Ref<Texture> &texture,
                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
   CHECK_ERR(
-      texture->UseAsSampler(context, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT);)
+      texture->UseAsSampler(context, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT));
 
   buffer->MarkUse();
   texture->MarkUse();
@@ -1254,7 +1230,7 @@ inline auto WriteSimplifiedPixelData(const Ref<Texture> &texture,
                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
   CHECK_ERR(
-      texture->UseAsSampler(context, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT);)
+      texture->UseAsSampler(context, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT));
 
   buffer->MarkUse();
   texture->MarkUse();

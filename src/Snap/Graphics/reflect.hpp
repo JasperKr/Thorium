@@ -507,8 +507,8 @@ struct ShaderReflection {
       return Error::Create("Global UBO struct must not be a literal.");
     }
 
-    hasGlobals = true;
     globals.size = globalBufferFormat.GetStride();
+    hasGlobals = globals.size > 0;
 
     return {};
   }

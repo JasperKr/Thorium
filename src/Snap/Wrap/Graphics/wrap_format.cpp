@@ -60,12 +60,8 @@ auto FormatFromLua(lua_State *state, int index, ::Graphics::Standard standard)
   for (int i = 0; i < lua_objlen(state, index); i++) {
     lua_rawgeti(state, index, i + 1); // stack + index
 
-    auto result = ComponentFromLua(state, -1);
-    if (Error::IsError(result)) {
-      return result.error();
-    }
-
-    components.emplace_back(result.value());
+    auto component = CHECK_RES(ComponentFromLua(state, -1));
+    components.emplace_back(component);
     lua_pop(state, 1);
   }
 

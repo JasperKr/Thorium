@@ -166,21 +166,6 @@ end
 local qx, qy, qz, qw = snap.math.eulerToQuaternion(0.3, -math.pi / 1.5, 0);
 scene:newDirectionalLight("Test directional light", qx, qy, qz, qw, 1, 1, 1, 5)
 
--- local texture = snap.graphics.newTexture("src/Assets/skybox.hdr")
-local checkerboard = snap.data.newImagedata(16, 16)
-for x = 0, 15 do
-  for y = 0, 15 do
-    local color = ((x + y) % 2 == 0) and 1 or 0
-    checkerboard:setPixel(x, y, color, color, color, 1)
-  end
-end
-
-local texture = snap.graphics.newTexture(checkerboard)
-
-
-local env = scene:newEnvironment("Test environment", texture)
-scene:setEnvironment(env)
-
 thread:start(commandsChannel, startThreadChannel, scene, events)
 
 function snap.any(...)

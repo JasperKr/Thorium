@@ -19,7 +19,6 @@
 #include "shaderc/status.h"
 #include "slang/slang-com-ptr.h"
 #include "slang/slang.h"
-#include "tl/expected.hpp"
 #include <array>
 #include <cstring>
 #include <format>
@@ -375,7 +374,7 @@ static inline auto LoadSlang(GraphicsContext &context,
                                  diagnosticsBlob.writeRef());
 
   CHECK_ERR(
-      Error::Create(result, diagnosticsBlob, shader->linkedProgram.readRef());)
+      Error::Create(result, diagnosticsBlob, shader->linkedProgram.readRef()));
 
   PrintDebug("Getting program layout...");
 

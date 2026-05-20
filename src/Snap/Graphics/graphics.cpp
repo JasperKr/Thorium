@@ -141,20 +141,12 @@ static auto FindQueueFamilies(GraphicsContext &context) -> Error {
 auto GetAvailableDeviceExtensions(const GraphicsContext &context)
     -> Result<std::vector<VkExtensionProperties>> {
   uint32_t extensionCount = 0;
-  auto error = Error::Create(vkEnumerateDeviceExtensionProperties(
-      context.physicalDevice, nullptr, &extensionCount, nullptr));
-
-  if (Error::IsError(error)) {
-    return error;
-  }
+  CHECK_ERR(Error::Create(vkEnumerateDeviceExtensionProperties(
+      context.physicalDevice, nullptr, &extensionCount, nullptr)));
 
   std::vector<VkExtensionProperties> extensions(extensionCount);
-  error = Error::Create(vkEnumerateDeviceExtensionProperties(
-      context.physicalDevice, nullptr, &extensionCount, extensions.data()));
-
-  if (Error::IsError(error)) {
-    return error;
-  }
+  CHECK_ERR(Error::Create(vkEnumerateDeviceExtensionProperties(
+      context.physicalDevice, nullptr, &extensionCount, extensions.data())));
 
   return extensions;
 }
@@ -255,11 +247,8 @@ static auto CreateDevice(GraphicsContext &context,
   constexpr auto extOptional = ExtensionRequirement::Optional;
   constexpr auto extRequired = ExtensionRequirement::Required;
 
-  const auto &result = GetAvailableDeviceExtensions(context);
-  if (Error::IsError(result)) {
-    return result.error();
-  }
-  const auto &availableExtensions = result.value();
+  const auto &availableExtensions =
+      CHECK_RES(GetAvailableDeviceExtensions(context));
 
   auto extensions = std::vector<std::pair<const char *, ExtensionRequirement>>{
       {VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME, extOptional},

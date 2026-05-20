@@ -109,6 +109,7 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
         -Wnon-virtual-dtor
         -Wdouble-promotion
         -Werror
+        -Wno-gnu-statement-expression-from-macro-expansion
     )
 
 elseif (MSVC)

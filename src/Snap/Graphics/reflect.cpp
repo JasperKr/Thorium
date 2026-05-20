@@ -89,6 +89,7 @@ auto BufferInfo::ResolvePath(Graphics::ResourceKey::const_iterator iterator,
   return nullptr;
 }
 
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 auto SetupVariant(slang::VariableLayoutReflection *layout)
     -> Result<std::variant<StructInfo, ScalarInfo, VectorInfo, MatrixInfo>> {
 
@@ -157,12 +158,7 @@ auto SetupVariant(slang::VariableLayoutReflection *layout)
         break;
       }
       case slang::TypeReflection::Kind::Struct: {
-        auto result = SetupVariant(fieldVariable);
-        if (Error::IsError(result)) {
-          return result.error();
-        }
-
-        auto structFieldInfo = result.value();
+        auto structFieldInfo = CHECK_RES(SetupVariant(fieldVariable));
 
         ResourceInfo fieldInfo(fieldVariable->getName());
 
@@ -371,6 +367,7 @@ inline auto SlangStageToVkStage(SlangStage stage) -> VkShaderStageFlags {
   }
 }
 
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 auto SetupResource(slang::VariableLayoutReflection *variableLayout,
                    ShaderReflection &reflection) -> Result<ResourceInfo> {
 
@@ -415,12 +412,7 @@ auto SetupResource(slang::VariableLayoutReflection *variableLayout,
     auto *elementVarLayout = bufferLayout->getElementVarLayout();
 
     if (elementVarLayout != nullptr) {
-      auto result = SetupVariant(elementVarLayout);
-      if (Error::IsError(result)) {
-        return result.error();
-      }
-
-      bufferInfo.info = result.value();
+      bufferInfo.info = CHECK_RES(SetupVariant(elementVarLayout));
     } else {
       StructInfo structInfo{};
       structInfo.size = static_cast<uint32_t>(bufferLayout->getSize());
@@ -430,21 +422,18 @@ auto SetupResource(slang::VariableLayoutReflection *variableLayout,
 
       for (int i = 0; i < bufferLayout->getFieldCount(); ++i) {
         auto *fieldVariable = bufferLayout->getFieldByIndex(i);
-        auto result = SetupVariant(fieldVariable);
-        if (Error::IsError(result)) {
-          return result.error();
-        }
+        auto variant = CHECK_RES(SetupVariant(fieldVariable));
 
         ResourceInfo fieldInfo(fieldVariable->getName());
 
-        if (std::holds_alternative<StructInfo>(result.value())) {
-          fieldInfo.info = std::get<StructInfo>(result.value());
-        } else if (std::holds_alternative<ScalarInfo>(result.value())) {
-          fieldInfo.info = std::get<ScalarInfo>(result.value());
-        } else if (std::holds_alternative<VectorInfo>(result.value())) {
-          fieldInfo.info = std::get<VectorInfo>(result.value());
-        } else if (std::holds_alternative<MatrixInfo>(result.value())) {
-          fieldInfo.info = std::get<MatrixInfo>(result.value());
+        if (std::holds_alternative<StructInfo>(variant)) {
+          fieldInfo.info = std::get<StructInfo>(variant);
+        } else if (std::holds_alternative<ScalarInfo>(variant)) {
+          fieldInfo.info = std::get<ScalarInfo>(variant);
+        } else if (std::holds_alternative<VectorInfo>(variant)) {
+          fieldInfo.info = std::get<VectorInfo>(variant);
+        } else if (std::holds_alternative<MatrixInfo>(variant)) {
+          fieldInfo.info = std::get<MatrixInfo>(variant);
         } else {
           return Error::Create("Unsupported struct field type in unnamed "
                                "structured buffer "
@@ -493,9 +482,9 @@ auto SetupFromType(slang::VariableLayoutReflection *variableLayout,
       auto *param = typeLayout->getFieldByIndex(i);
       auto kind = param->getTypeLayout()->getKind();
 
-      CHECK_ERR(SetupFromType(param, reflection));
+      auto info = CHECK_RES(SetupFromType(param, reflection));
 
-      structInfo.fields.emplace_back(result.value());
+      structInfo.fields.emplace_back(info);
     }
 
     resourceInfo.name = variableLayout->getName();
@@ -527,12 +516,7 @@ auto SetupFromType(slang::VariableLayoutReflection *variableLayout,
     bufferInfo.bufferType =
         isPushConstant ? BufferType::PushConstant : BufferType::Uniform;
 
-    auto result = SetupVariant(bufferLayout);
-    if (Error::IsError(result)) {
-      return result.error();
-    }
-
-    bufferInfo.info = result.value();
+    bufferInfo.info = CHECK_RES(SetupVariant(bufferLayout));
 
     resourceInfo.name = variableLayout->getName();
     resourceInfo.stages = SlangStageToVkStage(variableLayout->getStage());
@@ -543,9 +527,7 @@ auto SetupFromType(slang::VariableLayoutReflection *variableLayout,
     break;
   }
   case slang::TypeReflection::Kind::Resource: {
-    CHECK_ERR(SetupResource(variableLayout, reflection));
-
-    resourceInfo = result.value();
+    resourceInfo = CHECK_RES(SetupResource(variableLayout, reflection));
 
     break;
   }
@@ -618,12 +600,8 @@ auto ReflectShader(Graphics::GraphicsContext &context,
 
     auto category = param->getCategory();
 
-    auto result = SetupFromType(param, outReflection);
-    if (Error::IsError(result)) {
-      return result.error();
-    }
-
-    outReflection.resources.emplace_back(result.value());
+    outReflection.resources.emplace_back(
+        CHECK_RES(SetupFromType(param, outReflection)));
   }
 
   auto *globalParamsLayout = programLayout->getGlobalParamsVarLayout();

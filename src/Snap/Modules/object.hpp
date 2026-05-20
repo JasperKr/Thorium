@@ -3,7 +3,7 @@
 #include "Modules/type.hpp"
 #include <atomic>
 
-#define DEBUG_OBJECT_LIFETIMES
+// #define DEBUG_OBJECT_LIFETIMES
 
 #ifdef DEBUG_OBJECT_LIFETIMES
 #include <concepts>

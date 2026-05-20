@@ -50,14 +50,16 @@ auto LuaEnvironment::Create(lua_State *state) -> int {
     return luaL_error(state, "Expected a Scene object");
   }
 
-  const auto &texture = ::LuaWrap::ObjectFromLua<Graphics::Texture>(state, 3);
+  auto *texture = ::LuaWrap::ObjectFromLua<Graphics::Texture>(state, 3);
   if (texture == nullptr) {
     return luaL_error(state, "Expected a Texture object for the skybox");
   }
 
+  Environment newEnvironment{};
+  newEnvironment.SkyboxTexture = Ref<Graphics::Texture>(texture);
+
   auto environmentEntity = scene->world.entity();
-  environmentEntity.set<Environment>(
-      Environment{Ref<Graphics::Texture>(texture)});
+  environmentEntity.set<Environment>(newEnvironment);
   environmentEntity.add<Userdata>();
   environmentEntity.set<DisplayName>({name});
 

@@ -203,6 +203,8 @@ auto Camera::Render(const Graphics::GraphicsContext &context,
   Renderer::GlobalRenderTargetManager.ReleaseRendertarget(OwnedTextures.Depth);
   Renderer::GlobalRenderTargetManager.ReleaseRendertarget(
       OwnedTextures.IncomingLight);
+  Renderer::GlobalRenderTargetManager.ReleaseRendertarget(
+      OwnedTextures.PostProcessed);
 
   OwnedTextures.IncomingLight =
       CHECK_RES(Renderer::GlobalRenderTargetManager.GetRendertarget(
@@ -242,11 +244,12 @@ auto Camera::Render(const Graphics::GraphicsContext &context,
     static auto depthBufferKey = Graphics::ResourceKey{"DepthTexture"};
     CHECK_ERR(shader->Send(context, depthBufferKey, OwnedTextures.Depth));
 
-    Graphics::DynamicRendering::SetShader(shader);
     CHECK_ERR(shader->Send(context, cameraBufferKey, CameraBuffer));
 
-    // static auto skyboxKey = Graphics::ResourceKey{"SkyboxTexture"};
-    // CHECK_ERR(shader->Send(context, skyboxKey, environment.SkyboxTexture));
+    static auto skyboxKey = Graphics::ResourceKey{"SkyboxTexture"};
+    CHECK_ERR(shader->Send(context, skyboxKey, environment.SkyboxTexture));
+
+    Graphics::DynamicRendering::SetShader(shader);
 
     CHECK_ERR(Renderer::DrawFullScreen(context));
   }

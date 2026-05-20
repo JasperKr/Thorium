@@ -28,8 +28,10 @@ cmake -G Ninja -DCMAKE_CXX_COMPILER=clang++ -B build \
   -DCMAKE_EXPORT_COMPILE_COMMANDS=1 \
   -DCMAKE_C_COMPILER=clang \
   -DCMAKE_CXX_FLAGS="-Wc23-extensions $FLAGS" \
-  -DCMAKE_C_FLAGS="-Wc23-extensions $FLAGS"
-  -DCMAKE_EXE_LINKER_FLAGS="-rdynamic"
+  -DCMAKE_C_FLAGS="-Wc23-extensions $FLAGS" \
+  -DCMAKE_EXE_LINKER_FLAGS="-rdynamic" \
+  -DENABLE_RTTI=OFF \
+  -DENABLE_EXCEPTIONS=OFF
 
 cmake --build build
 
