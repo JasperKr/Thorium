@@ -116,6 +116,12 @@ do
     local delta = snap.timer.getTime() - deltaTimestamp
     deltaTimestamp = snap.timer.getTime()
 
+    if createSnapshot then
+      print("Requesting snapshot creation")
+    end
+
+    snap.graphics.aquireGraphics(nil, nil, createSnapshot)
+
     local event = events:pop()
     while event do
       if snap[event[1]] then
@@ -153,18 +159,14 @@ do
       camera:setPosition(x + backX * speed, y + backY * speed, z + backZ * speed)
     end
 
-    if createSnapshot then
-      print("Requesting snapshot creation")
-    end
-
-    snap.graphics.aquireGraphics(nil, nil, createSnapshot)
     snap.graphics.setWindingOrder("cw")
     createSnapshot = false
     if firstFrame then
       snap.graphics.setDefaultFilter("linear", "linear", 4)
-      -- snap.scene.loadModel(scene, "Assets/Terrain/sponza.glb")
+      snap.scene.loadModel(scene, "Assets/Terrain/sponza.glb")
 
       texture = snap.graphics.newTexture("src/Assets/skybox.hdr", { sampler = true, mipmaps = "init" })
+      -- texture = snap.graphics.newTexture("src/Assets/skybox.hdr")
       -- local checkerboard = snap.data.newImagedata(16, 16)
       -- for x = 0, 15 do
       --   for y = 0, 15 do

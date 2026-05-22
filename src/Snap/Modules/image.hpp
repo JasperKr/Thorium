@@ -1,6 +1,7 @@
 #pragma once
 #include "Graphics/format.hpp"
 #include "Graphics/graphicsState.hpp"
+#include "Modules/Math/mathTypes.hpp"
 #include "Modules/error.hpp"
 #include <cstring>
 #include <public/tracy/Tracy.hpp>
@@ -11,6 +12,8 @@
 #include "vulkan/vulkan_core.h"
 #include <algorithm>
 #include <cstdint>
+#include <sys/types.h>
+#include <vector>
 
 namespace Image {
 
@@ -264,21 +267,41 @@ inline auto FromMemory(const std::span<const uint8_t> &data, int &outWidth,
       0) {
     ZoneScopedN("stbi_loadf_from_memory");
 
-    float *pixels = stbi_loadf_from_memory(
-        data.data(), static_cast<int>(data.size()), &outWidth, &outHeight,
-        &texChannels, STBI_rgb_alpha); // force 4 channels
+    float *pixels =
+        stbi_loadf_from_memory(data.data(), static_cast<int>(data.size()),
+                               &outWidth, &outHeight, &texChannels, STBI_rgb);
 
     if (pixels == nullptr) {
       return Error::Unexpected("Failed to load image.");
     }
 
-    outFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
+    outFormat = VK_FORMAT_B10G11R11_UFLOAT_PACK32;
 
-    // NOLINTNEXTLINE, reinterpret cast is safe here
-    return std::span<uint8_t>(reinterpret_cast<uint8_t *>(pixels),
-                              static_cast<size_t>(outWidth) *
-                                  static_cast<size_t>(outHeight) *
-                                  Graphics::Format::GetSize(outFormat));
+    std::vector<uint8_t> convertedData(
+        static_cast<size_t>(outWidth) * static_cast<size_t>(outHeight) *
+        Graphics::Format::GetSize(VK_FORMAT_B10G11R11_UFLOAT_PACK32));
+
+    std::span<uint32_t> convertedPixels = std::span<uint32_t>(
+        reinterpret_cast<uint32_t *>(convertedData.data()), // NOLINT
+        static_cast<size_t>(outWidth) * static_cast<size_t>(outHeight));
+
+// Parallel for-loop to convert from RGB float to B10G11R11
+#pragma omp parallel for
+    for (int i = 0; i < outWidth * outHeight; i++) {
+      int idx = i * 3;               // 3 channels (RGB)
+      float red = pixels[idx];       // NOLINT
+      float green = pixels[idx + 1]; // NOLINT
+      float blue = pixels[idx + 2];  // NOLINT
+
+      uint32_t lowp_red = Math::Float11::fromFloat(red).bits;
+      uint32_t lowp_green = Math::Float11::fromFloat(green).bits;
+      uint32_t lowp_blue = Math::Float10::fromFloat(blue).bits;
+
+      convertedPixels[i] =
+          (lowp_blue << 22U) | (lowp_green << 11U) | (lowp_red << 0U); // NOLINT
+    }
+
+    return std::span<uint8_t>(convertedData.data(), convertedData.size());
   }
 
   return Error::Unexpected("Unsupported image format.");

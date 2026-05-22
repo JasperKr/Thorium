@@ -3,6 +3,7 @@
 #include "Graphics/barrier.hpp"
 #include "Graphics/dynamicRendering.hpp"
 #include "Graphics/graphics.hpp"
+#include "Graphics/graphicsContext.hpp"
 #include "Graphics/graphicsState.hpp"
 #include "Graphics/resource.hpp"
 #include "Graphics/semaphoreManager.hpp"
@@ -17,6 +18,7 @@
 #include <cassert>
 #include <cstdint>
 #include <mutex>
+#include <public/tracy/Tracy.hpp>
 #include <span>
 #include <thread>
 #include <vector>
@@ -186,8 +188,7 @@ auto Buffer::MapMemory(const GraphicsContext &context) -> Error {
   std::lock_guard<std::mutex> lock(
       Graphics::GraphicsContext::mutexes.vmaAllocator);
 
-  CHECK_ERR(Error::Create(
-      vmaMapMemory(context.vmaAllocator, this->memory, &mappedData)));
+  CHECK_NEW_ERR(vmaMapMemory(context.vmaAllocator, this->memory, &mappedData));
 
   return Error::Success();
 }
@@ -208,6 +209,7 @@ auto Buffer::UploadLarge(const GraphicsContext &context,
                          std::span<const uint8_t> data, // NOLINTNEXTLINE
                          VkDeviceSize offset, VkDeviceSize size) const
     -> Error {
+  ZoneScoped;
 
   auto uploadSize = size == VK_WHOLE_SIZE ? data.size() : size;
 
@@ -225,11 +227,8 @@ auto Buffer::UploadLarge(const GraphicsContext &context,
   stagingBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
   // See: https://gpuopen-librariesandsdks.github.io/VulkanMemoryAllocator/html/usage_patterns.html
   VmaAllocationCreateInfo stagingAllocInfo = {};
-  stagingAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-  stagingAllocInfo.flags =
-      static_cast<uint32_t>(
-          VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT) |
-      static_cast<uint32_t>(VMA_ALLOCATION_CREATE_MAPPED_BIT);
+  stagingAllocInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+  stagingAllocInfo.flags = 0;
   VkBuffer stagingBuffer = nullptr;
   VmaAllocation stagingMemory = nullptr;
 
@@ -237,12 +236,9 @@ auto Buffer::UploadLarge(const GraphicsContext &context,
     std::lock_guard<std::mutex> lock(
         Graphics::GraphicsContext::mutexes.vmaAllocator);
 
-    VkResult result = vmaCreateBuffer(context.vmaAllocator, &stagingBufferInfo,
-                                      &stagingAllocInfo, &stagingBuffer,
-                                      &stagingMemory, nullptr);
-    if (result != VK_SUCCESS) {
-      return Error::Create(result);
-    }
+    CHECK_ERR(Error::Create(vmaCreateBuffer(
+        context.vmaAllocator, &stagingBufferInfo, &stagingAllocInfo,
+        &stagingBuffer, &stagingMemory, nullptr)));
   }
 
   auto nameResult = NameBuffer(stagingBuffer, stagingMemory, "Staging Buffer");
@@ -301,6 +297,7 @@ auto Buffer::UploadLarge(const GraphicsContext &context,
 auto Buffer::UploadRing(const GraphicsContext &context,
                         std::span<const uint8_t> data, // NOLINTNEXTLINE
                         VkDeviceSize offset, VkDeviceSize size) const -> Error {
+  ZoneScoped;
 
   auto uploadSize = size == VK_WHOLE_SIZE ? data.size() : size;
 
@@ -380,11 +377,7 @@ auto Buffer::UploadRing(const GraphicsContext &context,
 auto Buffer::Upload(const GraphicsContext &context,
                     std::span<const uint8_t> data, // NOLINTNEXTLINE
                     VkDeviceSize offset, VkDeviceSize size) -> Error {
-
-  if (((usage)&VK_BUFFER_USAGE_TRANSFER_DST_BIT) == 0) {
-    return Error::Create(
-        "Buffer was not created with TRANSFER_DST usage flag for upload.");
-  }
+  ZoneScoped;
 
   auto uploadSize = size == VK_WHOLE_SIZE ? data.size() : size;
 
@@ -400,6 +393,7 @@ auto Buffer::Upload(const GraphicsContext &context,
 #endif
 
   if (isStagingBuffer) {
+    ZoneScopedN("Direct upload to staging buffer");
     // We know this will be a large upload,
     // no need for upload buffers as it is a one time upload and we won't be interfering with
     // the GPU reading from the buffer later
@@ -416,6 +410,11 @@ auto Buffer::Upload(const GraphicsContext &context,
     return Error::Success();
   }
 
+  if (((usage)&VK_BUFFER_USAGE_TRANSFER_DST_BIT) == 0) {
+    return Error::Create(
+        "Buffer was not created with TRANSFER_DST usage flag for upload.");
+  }
+
   if (uploadSize > LargeUploadThreshold) {
     CHECK_ERR(UploadLarge(context, data, offset, size));
 
@@ -428,6 +427,8 @@ auto Buffer::Upload(const GraphicsContext &context,
 
 auto Buffer::Create(const GraphicsContext &context,
                     const BufferCreationInfo &info) -> Result<Ref<Buffer>> {
+  ZoneScoped;
+
   if (info.size == 0) {
     return Error::Unexpected("Cannot create buffer with size 0.");
   }
@@ -450,22 +451,21 @@ auto Buffer::Create(const GraphicsContext &context,
   bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
   VmaAllocationCreateInfo allocInfo = {};
-  allocInfo.usage = VMA_MEMORY_USAGE_AUTO; // Let VMA decide
+  allocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+
+  if (info.stagingBuffer || info.persistentMapping) {
+    allocInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+  }
+
   allocInfo.requiredFlags = info.properties;
-  allocInfo.flags = static_cast<uint32_t>(VMA_ALLOCATION_CREATE_MAPPED_BIT) |
-                    static_cast<uint32_t>(
-                        VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT);
+  allocInfo.flags = 0;
 
   {
     std::lock_guard<std::mutex> lock(
         Graphics::GraphicsContext::mutexes.vmaAllocator);
-    VkResult result =
-        vmaCreateBuffer(context.vmaAllocator, &bufferInfo, &allocInfo,
-                        &buffer->handle, &buffer->memory, nullptr);
 
-    if (result != VK_SUCCESS) {
-      return Error::Unexpected(result);
-    }
+    CHECK_NEW_ERR(vmaCreateBuffer(context.vmaAllocator, &bufferInfo, &allocInfo,
+                                  &buffer->handle, &buffer->memory, nullptr));
   }
 
   if (!buffer->debugName.empty()) {
@@ -499,11 +499,8 @@ auto Buffer::Create(const GraphicsContext &context,
     std::lock_guard<std::mutex> lock(
         Graphics::GraphicsContext::mutexes.vmaAllocator);
 
-    VkResult result =
-        vmaMapMemory(context.vmaAllocator, buffer->memory, &buffer->mappedData);
-    if (result != VK_SUCCESS) {
-      return Error::Unexpected(result);
-    }
+    CHECK_NEW_ERR(vmaMapMemory(context.vmaAllocator, buffer->memory,
+                               &buffer->mappedData));
   }
 
   PrintDebug("Buffer size in bytes: {}", buffer->sizeInBytes);
@@ -680,11 +677,8 @@ auto Buffer::Readback(const GraphicsContext &context,
   stagingBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
   // See: https://gpuopen-librariesandsdks.github.io/VulkanMemoryAllocator/html/usage_patterns.html
   VmaAllocationCreateInfo stagingAllocInfo = {};
-  stagingAllocInfo.usage = VMA_MEMORY_USAGE_AUTO;
-  stagingAllocInfo.flags =
-      static_cast<uint32_t>(
-          VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT) |
-      static_cast<uint32_t>(VMA_ALLOCATION_CREATE_MAPPED_BIT);
+  stagingAllocInfo.usage = VMA_MEMORY_USAGE_GPU_TO_CPU;
+  stagingAllocInfo.flags = 0;
   VkBuffer stagingBuffer = nullptr;
   VmaAllocation stagingMemory = nullptr;
 
@@ -692,12 +686,9 @@ auto Buffer::Readback(const GraphicsContext &context,
     std::lock_guard<std::mutex> lock(
         Graphics::GraphicsContext::mutexes.vmaAllocator);
 
-    VkResult result = vmaCreateBuffer(context.vmaAllocator, &stagingBufferInfo,
-                                      &stagingAllocInfo, &stagingBuffer,
-                                      &stagingMemory, nullptr);
-    if (result != VK_SUCCESS) {
-      return Error::Unexpected(result);
-    }
+    CHECK_NEW_ERR(vmaCreateBuffer(context.vmaAllocator, &stagingBufferInfo,
+                                  &stagingAllocInfo, &stagingBuffer,
+                                  &stagingMemory, nullptr));
   }
 
   auto *commandBuffer = GetCommandBuffer();

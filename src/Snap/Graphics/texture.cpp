@@ -142,19 +142,11 @@ auto Create2D(const GraphicsContext &context, const TextureCreationInfo &info)
         Graphics::GraphicsContext::mutexes.device,
         Graphics::GraphicsContext::mutexes.vmaAllocator);
 
-    Error error = Error::Create(vmaCreateImage(context.vmaAllocator, &imageInfo,
-                                               &allocInfo, &texture->image,
-                                               &texture->memory, nullptr));
-
-    if (Error::IsError(error)) {
-      return error;
-    }
+    CHECK_NEW_ERR(vmaCreateImage(context.vmaAllocator, &imageInfo, &allocInfo,
+                                 &texture->image, &texture->memory, nullptr));
   }
 
-  auto setNameResult = SetDebugName(info.debugName, texture.get(), context);
-  if (Error::IsError(setNameResult)) {
-    return setNameResult;
-  }
+  CHECK_ERR(SetDebugName(info.debugName, texture.get(), context));
 
   VkImageViewCreateInfo viewInfo = {};
   viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -169,8 +161,8 @@ auto Create2D(const GraphicsContext &context, const TextureCreationInfo &info)
 
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    CHECK_ERR(Error::Create(vkCreateImageView(
-        context.device, &viewInfo, GetAllocationCallbacks(), &texture->view)));
+    CHECK_NEW_ERR(vkCreateImageView(context.device, &viewInfo,
+                                    GetAllocationCallbacks(), &texture->view));
   }
 
   VmaAllocationInfo memRequirements;
@@ -182,6 +174,9 @@ auto Create2D(const GraphicsContext &context, const TextureCreationInfo &info)
                          &memRequirements);
   }
   texture->sizeInBytes = memRequirements.size;
+  PrintAlways("Created texture '{}' with size {}x{} and format {} ({} bytes)",
+              info.debugName, info.width, info.height,
+              std::to_string(info.format), memRequirements.size);
 
   return texture;
 }
@@ -270,13 +265,8 @@ auto CreateCubeMap(const GraphicsContext &context,
         Graphics::GraphicsContext::mutexes.device,
         Graphics::GraphicsContext::mutexes.vmaAllocator);
 
-    Error error = Error::Create(vmaCreateImage(context.vmaAllocator, &imageInfo,
-                                               &allocInfo, &texture->image,
-                                               &texture->memory, nullptr));
-
-    if (Error::IsError(error)) {
-      return error;
-    }
+    CHECK_NEW_ERR(vmaCreateImage(context.vmaAllocator, &imageInfo, &allocInfo,
+                                 &texture->image, &texture->memory, nullptr));
   }
 
   auto setNameResult = SetDebugName(info.debugName, texture.get(), context);
@@ -357,13 +347,8 @@ auto CreateVolume(const GraphicsContext &context,
         Graphics::GraphicsContext::mutexes.device,
         Graphics::GraphicsContext::mutexes.vmaAllocator);
 
-    Error error = Error::Create(vmaCreateImage(context.vmaAllocator, &imageInfo,
-                                               &allocInfo, &texture->image,
-                                               &texture->memory, nullptr));
-
-    if (Error::IsError(error)) {
-      return error;
-    }
+    CHECK_NEW_ERR(vmaCreateImage(context.vmaAllocator, &imageInfo, &allocInfo,
+                                 &texture->image, &texture->memory, nullptr));
   }
 
   auto setNameResult = SetDebugName(info.debugName, texture.get(), context);
@@ -444,13 +429,8 @@ auto CreateArray(const GraphicsContext &context,
         Graphics::GraphicsContext::mutexes.device,
         Graphics::GraphicsContext::mutexes.vmaAllocator);
 
-    Error error = Error::Create(vmaCreateImage(context.vmaAllocator, &imageInfo,
-                                               &allocInfo, &texture->image,
-                                               &texture->memory, nullptr));
-
-    if (Error::IsError(error)) {
-      return error;
-    }
+    CHECK_NEW_ERR(vmaCreateImage(context.vmaAllocator, &imageInfo, &allocInfo,
+                                 &texture->image, &texture->memory, nullptr));
   }
 
   auto setNameResult = SetDebugName(info.debugName, texture.get(), context);
@@ -491,23 +471,12 @@ auto CreateArray(const GraphicsContext &context,
 auto LoadFromFile(GraphicsContext &context, const char *path,
                   VkImageUsageFlags usage, TextureMipmapOption mipmaps)
     -> Result<Ref<Texture>> {
-  auto fileLoadResult = Filesystem::ReadFile(path);
+  auto filedata = CHECK_RES(Filesystem::ReadFile(path));
 
-  if (Error::IsError(fileLoadResult)) {
-    return fileLoadResult.error();
-  }
-
-  auto filedata = fileLoadResult.value();
   auto dataSpan =
       std::span<uint8_t>(filedata.data(), static_cast<size_t>(filedata.size()));
 
-  auto imageDataResult = Image::ImageData::Create(dataSpan);
-
-  if (Error::IsError(imageDataResult)) {
-    return imageDataResult.error();
-  }
-
-  auto imageData = imageDataResult.value();
+  auto imageData = CHECK_RES(Image::ImageData::Create(dataSpan));
 
   int mipmapCount = 1;
 
@@ -516,7 +485,7 @@ auto LoadFromFile(GraphicsContext &context, const char *path,
         Image::GetMipmapCount(imageData->GetWidth(), imageData->GetHeight()));
   }
 
-  auto texture = Create2D(
+  auto texture = CHECK_RES(Create2D(
       context, TextureCreationInfo{
                    .width = imageData->GetWidth(),
                    .height = imageData->GetHeight(),
@@ -525,17 +494,13 @@ auto LoadFromFile(GraphicsContext &context, const char *path,
                                         VK_IMAGE_USAGE_TRANSFER_DST_BIT),
                    .mipmapCount = mipmapCount,
                    .debugName = "Image_" + std::string(path),
-               });
+               }));
 
-  if (Error::IsError(texture)) {
-    return texture.error();
-  }
-
-  CHECK_ERR(texture.value()->SetPixels(context, *imageData));
+  CHECK_ERR(texture->SetPixels(context, *imageData));
 
   if (mipmaps == TextureMipmapOption::Init &&
       !Image::IsCompressedTexture(imageData->GetFormat())) {
-    CHECK_ERR(GenerateMipmaps(context, texture.value().get()));
+    CHECK_ERR(GenerateMipmaps(context, texture.get()));
   }
 
   return texture;
@@ -553,11 +518,8 @@ auto LoadFromMemory(GraphicsContext &context,
   auto format = VK_FORMAT_UNDEFINED;
   bool requiresFree = false;
 
-  auto loadResult =
-      Image::FromMemory(data, width, height, format, requiresFree);
-  if (Error::IsError(loadResult)) {
-    return loadResult.error();
-  }
+  auto dataSpan =
+      CHECK_RES(Image::FromMemory(data, width, height, format, requiresFree));
 
   int mipmapCount = 1;
 
@@ -565,7 +527,7 @@ auto LoadFromMemory(GraphicsContext &context,
     mipmapCount = static_cast<int>(Image::GetMipmapCount(width, height));
   }
 
-  auto texture = Create2D(
+  auto texture = CHECK_RES(Create2D(
       context, TextureCreationInfo{
                    .width = static_cast<uint32_t>(width),
                    .height = static_cast<uint32_t>(height),
@@ -574,13 +536,7 @@ auto LoadFromMemory(GraphicsContext &context,
                                         VK_IMAGE_USAGE_TRANSFER_DST_BIT),
                    .mipmapCount = mipmapCount,
                    .debugName = "Image_FromMemory",
-               });
-
-  if (Error::IsError(texture)) {
-    return texture.error();
-  }
-
-  std::span<const uint8_t> dataSpan = loadResult.value();
+               }));
 
   auto source = VkRect2D{
       .offset = VkOffset2D{0, 0},
@@ -590,8 +546,8 @@ auto LoadFromMemory(GraphicsContext &context,
 
   auto dst = VkOffset2D{0, 0};
 
-  auto result = texture.value()->SetPixels(context, dataSpan, width, height, 0,
-                                           0, source, dst);
+  auto result =
+      texture->SetPixels(context, dataSpan, width, height, 0, 0, source, dst);
 
   if (requiresFree) {
     stbi_image_free((void *)dataSpan.data());
@@ -603,7 +559,7 @@ auto LoadFromMemory(GraphicsContext &context,
 
   if (mipmaps == TextureMipmapOption::Init &&
       !Image::IsCompressedTexture(format)) {
-    CHECK_ERR(GenerateMipmaps(context, texture.value().get()));
+    CHECK_ERR(GenerateMipmaps(context, texture.get()));
   }
 
   return texture;
@@ -620,7 +576,7 @@ auto LoadFromMemory(GraphicsContext &context, Image::ImageData &imageData,
         Image::GetMipmapCount(imageData.GetWidth(), imageData.GetHeight()));
   }
 
-  auto texture = Create2D(
+  auto texture = CHECK_RES(Create2D(
       context, TextureCreationInfo{
                    .width = imageData.GetWidth(),
                    .height = imageData.GetHeight(),
@@ -629,17 +585,13 @@ auto LoadFromMemory(GraphicsContext &context, Image::ImageData &imageData,
                                         VK_IMAGE_USAGE_TRANSFER_DST_BIT),
                    .mipmapCount = mipmapCount,
                    .debugName = "Image_ImageData",
-               });
+               }));
 
-  if (Error::IsError(texture)) {
-    return texture.error();
-  }
-
-  CHECK_ERR(texture.value()->SetPixels(context, imageData, 0, 0));
+  CHECK_ERR(texture->SetPixels(context, imageData, 0, 0));
 
   if (mipmaps == TextureMipmapOption::Init &&
       !Image::IsCompressedTexture(imageData.GetFormat())) {
-    CHECK_ERR(GenerateMipmaps(context, texture.value().get()));
+    CHECK_ERR(GenerateMipmaps(context, texture.get()));
   }
 
   return texture;
@@ -988,11 +940,11 @@ auto Texture::SetPixels(const GraphicsContext &context,
   // Create staging buffer
   BufferCreationInfo bufferCreationInfo = {};
   bufferCreationInfo.size = imageData.GetSize();
-  bufferCreationInfo.usage =
-      VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+  bufferCreationInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
   bufferCreationInfo.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
                                   VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
   bufferCreationInfo.stagingBuffer = true;
+  bufferCreationInfo.persistentMapping = false;
 
   if (imageData.GetWidth() > size.width ||
       imageData.GetHeight() > size.height) {
@@ -1001,16 +953,7 @@ auto Texture::SetPixels(const GraphicsContext &context,
   }
 
   bufferCreationInfo.debugName = "Texture Staging Buffer for SetPixels";
-  auto bufferResult = Buffer::Create(context, bufferCreationInfo);
-
-  if (Error::IsError(bufferResult)) {
-    return bufferResult.error();
-  }
-
-  auto buffer = bufferResult.value();
-
-  // auto error = buffer->SetData(context, imageData.GetDataSpan());
-  // also sets the buffer usage semaphore value
+  auto buffer = CHECK_RES(Buffer::Create(context, bufferCreationInfo));
 
   auto rowSize =
       static_cast<size_t>(source.extent.width) * Format::GetSize(format);
@@ -1063,10 +1006,9 @@ auto Texture::SetPixels(const GraphicsContext &context,
   vkCmdCopyBufferToImage(commandBuffer, buffer->handle, image,
                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
-  CHECK_ERR(UseAsSampler(context, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT));
-
   // TODO: Check lifetime
   buffer->MarkUse();
+  buffer->ScheduleDestroy();
   MarkUse();
 
   return Error::Success();

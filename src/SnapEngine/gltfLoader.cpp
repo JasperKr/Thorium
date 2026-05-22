@@ -222,16 +222,11 @@ inline auto LoadTexture(Graphics::GraphicsContext &context,
 
   auto span = CHECK_RES(LoadDataSource(asset, basePath, image.data));
 
-  auto textureResult = Graphics::LoadFromMemory(
+  auto textureRef = CHECK_RES(Graphics::LoadFromMemory(
       context, *ImageCache[texture.imageIndex.value()].get(),
       VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-      Graphics::TextureMipmapOption::Init);
+      Graphics::TextureMipmapOption::None));
 
-  if (Error::IsError(textureResult)) {
-    return textureResult.error();
-  }
-
-  auto textureRef = textureResult.value();
   textureRef->SetLodRange(0.0F, (float)textureRef->GetMipmapCount() - 1);
   textureRef->SetFilter(VK_FILTER_LINEAR, VK_FILTER_LINEAR,
                         VK_SAMPLER_MIPMAP_MODE_LINEAR);
@@ -289,60 +284,30 @@ inline auto LoadMaterial(Graphics::GraphicsContext &context,
                  gltfMaterial.emissiveFactor[2]);
 
   if (gltfMaterial.pbrData.baseColorTexture.has_value()) {
-    auto albedoTextureLoadResult =
-        LoadTexture(context, asset, basePath,
-                    gltfMaterial.pbrData.baseColorTexture.value());
-
-    if (Error::IsError(albedoTextureLoadResult)) {
-      return albedoTextureLoadResult.error();
-    }
-
-    material->albedoTexture = albedoTextureLoadResult.value();
+    material->albedoTexture =
+        CHECK_RES(LoadTexture(context, asset, basePath,
+                              gltfMaterial.pbrData.baseColorTexture.value()));
   }
 
   if (gltfMaterial.pbrData.metallicRoughnessTexture.has_value()) {
-    auto metallicRoughnessLoadResult =
+    material->metallicRoughnessTexture = CHECK_RES(
         LoadTexture(context, asset, basePath,
-                    gltfMaterial.pbrData.metallicRoughnessTexture.value());
-
-    if (Error::IsError(metallicRoughnessLoadResult)) {
-      return metallicRoughnessLoadResult.error();
-    }
-
-    material->metallicRoughnessTexture = metallicRoughnessLoadResult.value();
+                    gltfMaterial.pbrData.metallicRoughnessTexture.value()));
   }
 
   if (gltfMaterial.occlusionTexture.has_value()) {
-    auto aoTextureLoadResult = LoadTexture(
-        context, asset, basePath, gltfMaterial.occlusionTexture.value());
-
-    if (Error::IsError(aoTextureLoadResult)) {
-      return aoTextureLoadResult.error();
-    }
-
-    material->ambientOcclusionTexture = aoTextureLoadResult.value();
+    material->ambientOcclusionTexture = CHECK_RES(LoadTexture(
+        context, asset, basePath, gltfMaterial.occlusionTexture.value()));
   }
 
   if (gltfMaterial.normalTexture.has_value()) {
-    auto normalTextureLoadResult = LoadTexture(
-        context, asset, basePath, gltfMaterial.normalTexture.value());
-
-    if (Error::IsError(normalTextureLoadResult)) {
-      return normalTextureLoadResult.error();
-    }
-
-    material->normalTexture = normalTextureLoadResult.value();
+    material->normalTexture = CHECK_RES(LoadTexture(
+        context, asset, basePath, gltfMaterial.normalTexture.value()));
   }
 
   if (gltfMaterial.emissiveTexture.has_value()) {
-    auto emissiveTextureLoadResult = LoadTexture(
-        context, asset, basePath, gltfMaterial.emissiveTexture.value());
-
-    if (Error::IsError(emissiveTextureLoadResult)) {
-      return emissiveTextureLoadResult.error();
-    }
-
-    material->emissiveTexture = emissiveTextureLoadResult.value();
+    material->emissiveTexture = CHECK_RES(LoadTexture(
+        context, asset, basePath, gltfMaterial.emissiveTexture.value()));
   }
 
   return Error::Success();
@@ -1009,13 +974,10 @@ inline auto LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
 
     for (const auto &childIndex : gltfNode.children) {
       const auto &childGltfNode = asset.nodes[childIndex];
-      auto childNodeResult =
-          LoadNode(world, context, asset, basePath, childGltfNode);
-      if (Error::IsError(childNodeResult)) {
-        return childNodeResult.error();
-      }
+      auto childNode =
+          CHECK_RES(LoadNode(world, context, asset, basePath, childGltfNode));
 
-      for (auto &childObject : childNodeResult.value()) {
+      for (auto &childObject : childNode) {
         childObject.child_of(node);
       }
     }
@@ -1095,23 +1057,13 @@ inline auto LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
       Graphics::VertexFormat DefaultVertexFormat(DefaultVertexComponents);
 
       auto vertexFormat = DefaultVertexFormat;
-      auto vertexDataResult =
-          LoadVertexData(vertexFormat, asset, primitive, indexData, indexType);
-      if (Error::IsError(vertexDataResult)) {
-        return vertexDataResult.error();
-      }
+      auto vertexData = CHECK_RES(
+          LoadVertexData(vertexFormat, asset, primitive, indexData, indexType));
 
-      const auto &vertexData = vertexDataResult.value();
       auto vertexCount = vertexData.size() / vertexFormat.GetStride(0);
 
-      auto meshResult = Graphics::Mesh::Create(
-          context, vertexFormat, vertexCount, std::string(gltfMesh.name));
-
-      if (Error::IsError(meshResult)) {
-        return meshResult.error();
-      }
-
-      auto mesh = meshResult.value();
+      auto mesh = CHECK_RES(Graphics::Mesh::Create(
+          context, vertexFormat, vertexCount, std::string(gltfMesh.name)));
 
       if (!indexData.empty()) {
         auto indexBufferResult =
@@ -1160,11 +1112,8 @@ inline auto LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
         auto rendererMaterial =
             Ref<Engine::Renderer::LuaMaterial>::Make(geometry);
 
-        auto materialResult =
-            LoadMaterial(context, asset, basePath, material, rendererMaterial);
-        if (Error::IsError(materialResult)) {
-          return materialResult;
-        }
+        CHECK_ERR(
+            LoadMaterial(context, asset, basePath, material, rendererMaterial));
       }
     }
 

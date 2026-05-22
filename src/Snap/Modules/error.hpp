@@ -129,6 +129,15 @@ template <class T> struct Result : tl::expected<T, Error> {
   }
 
 // NOLINTNEXTLINE
+#define CHECK_NEW_ERR(expr)                                                    \
+  ({                                                                           \
+    auto error = Error::Create(expr);                                          \
+    if (Error::IsError(error)) {                                               \
+      return error;                                                            \
+    }                                                                          \
+  })
+
+// NOLINTNEXTLINE
 #define CHECK_RES(expr)                                                        \
   ({                                                                           \
     auto &&_result = (expr);                                                   \

@@ -239,9 +239,8 @@ auto Camera::Render(const Graphics::GraphicsContext &context,
   if (scene->currentEnvironment) {
     CHECK_ERR(Graphics::DynamicRendering::SetRenderTargets(
         context, {{
-                     .clearValue = {0.0F, 0.0F, 0.0F, 1.0F},
                      .texture = OwnedTextures.IncomingLight,
-                     .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                     .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
                  }}));
 
     shader = CHECK_RES(

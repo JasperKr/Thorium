@@ -1,5 +1,6 @@
 #include "imagedata.hpp"
 #include "Graphics/format.hpp"
+#include "Modules/Math/mathTypes.hpp"
 #include "Modules/bytedata.hpp"
 #include "Modules/color.hpp"
 #include "Modules/error.hpp"
@@ -28,125 +29,6 @@ struct FormatFunctions {
   SetFunction set;
   GetFunction get;
 };
-
-static inline auto asuint32(float floatVal) -> uint32_t {
-  union {
-    float floatVal;
-    uint32_t u;
-  } conv{};
-  conv.floatVal = floatVal;
-  return conv.u;
-}
-
-static inline auto asfloat32(uint32_t uintVal) -> float {
-  union {
-    float f;
-    uint32_t uintVal;
-  } conv{};
-  conv.uintVal = uintVal;
-  return conv.f;
-}
-
-auto float11to32(uint16_t floatVal) -> float {
-  uint16_t exponent = floatVal >> 6U;
-  uint16_t mantissa = floatVal & 0x3FU;
-
-  if (exponent == 0) {
-    return mantissa == 0
-               ? 0
-               : powf(2.0F, -14.0F) * (static_cast<float>(mantissa) / 64.0F);
-  }
-
-  if (exponent < 31U) {
-    return powf(2.0F, static_cast<float>(exponent - 15U)) *
-           (1.0F + static_cast<float>(mantissa) / 64.0F);
-  }
-
-  return mantissa == 0 ? std::numeric_limits<float>::infinity()
-                       : std::numeric_limits<float>::quiet_NaN();
-}
-
-auto float32to11(float floatVal) -> uint16_t {
-  const uint16_t EXPONENT_BITS = 0x1F;
-  const uint16_t EXPONENT_SHIFT = 6;
-  const uint16_t EXPONENT_BIAS = 15;
-  const uint16_t MANTISSA_BITS = 0x3F;
-  const uint16_t MANTISSA_SHIFT = (23 - EXPONENT_SHIFT);
-  const uint16_t MAX_EXPONENT = (EXPONENT_BITS << EXPONENT_SHIFT);
-
-  uint32_t floatAsUint = asuint32(floatVal);
-
-  if ((floatAsUint & 0x80000000U) != 0U) {
-    return 0; // Negative values go to 0.
-  }
-
-  // Map exponent to the range [-127,128]
-  int32_t exponent = (int32_t)((floatAsUint >> 23U) & 0xFFU) - 127;
-  uint32_t mantissa = floatAsUint & 0x007FFFFFU;
-
-  if (exponent > 15) { // Infinity or NaN
-    return MAX_EXPONENT | (exponent == 128 ? (mantissa & MANTISSA_BITS) : 0);
-  }
-  if (exponent <= -15) {
-    return 0;
-  }
-
-  exponent += EXPONENT_BIAS;
-
-  return (uint16_t)(static_cast<uint32_t>(exponent) << EXPONENT_SHIFT) |
-         (mantissa >> MANTISSA_SHIFT);
-}
-
-auto float10to32(uint16_t floatVal) -> float {
-  uint16_t exponent = floatVal >> 5U;
-  uint16_t mantissa = floatVal & 0x1FU;
-
-  if (exponent == 0U) {
-    return mantissa == 0
-               ? 0
-               : powf(2.0F, -14.0F) * (static_cast<float>(mantissa) / 32.0F);
-  }
-
-  if (exponent < 31U) {
-    return powf(2.0F, static_cast<float>(exponent) - 15U) *
-           (1.0F + static_cast<float>(mantissa) / 32.0F);
-  }
-
-  return mantissa == 0 ? std::numeric_limits<float>::infinity()
-                       : std::numeric_limits<float>::quiet_NaN();
-}
-
-auto float32to10(float floatVal) -> uint16_t {
-  const uint16_t EXPONENT_BITS = 0x1F;
-  const uint16_t EXPONENT_SHIFT = 5;
-  const uint16_t EXPONENT_BIAS = 15;
-  const uint16_t MANTISSA_BITS = 0x1F;
-  const uint16_t MANTISSA_SHIFT = (23 - EXPONENT_SHIFT);
-  const uint16_t MAX_EXPONENT = (EXPONENT_BITS << EXPONENT_SHIFT);
-
-  uint32_t floatAsUint = asuint32(floatVal);
-
-  if ((floatAsUint & 0x80000000U) != 0U) {
-    return 0; // Negative values go to 0.
-  }
-
-  // Map exponent to the range [-127,128]
-  int32_t exponent = (int32_t)((floatAsUint >> 23U) & 0xFFU) - 127;
-  uint32_t mantissa = floatAsUint & 0x007FFFFFU;
-
-  if (exponent > 15) { // Infinity or NaN
-    return MAX_EXPONENT | (exponent == 128 ? (mantissa & MANTISSA_BITS) : 0);
-  }
-
-  if (exponent <= -15) {
-    return 0;
-  }
-
-  exponent += EXPONENT_BIAS;
-
-  return (static_cast<uint32_t>(exponent) << EXPONENT_SHIFT) |
-         (mantissa >> MANTISSA_SHIFT);
-}
 
 static constexpr float ToUint8_t = 255.0F;
 static constexpr float ToUint16_t = 65535.0F;
@@ -316,21 +198,21 @@ static const std::unordered_map<VkFormat, FormatFunctions> formatFunctionMap = {
       }}},
     {VK_FORMAT_B10G11R11_UFLOAT_PACK32,
      {.set = [](const Color &color, uint8_t *outData) -> void {
-        uint32_t r10 = float32to10(static_cast<float>(color.r));
-        uint32_t g11 = float32to11(static_cast<float>(color.g));
-        uint32_t b10 = float32to10(static_cast<float>(color.b));
-        uint32_t packed = (b10 << 22U) | (g11 << 11U) | (r10 << 0U);
+        uint32_t r11 = Math::Float11::fromFloat(color.r).bits;
+        uint32_t g11 = Math::Float11::fromFloat(color.g).bits;
+        uint32_t b10 = Math::Float10::fromFloat(color.b).bits;
+        uint32_t packed = (b10 << 22U) | (g11 << 11U) | (r11 << 0U);
         std::memcpy(outData, &packed, sizeof(uint32_t));
       },
       .get = [](const uint8_t *inData, Color &outColor) -> void {
         uint32_t packed{};
         std::memcpy(&packed, inData, sizeof(uint32_t));
-        auto r10 = static_cast<uint16_t>((packed >> 0U) & 0x3FFU);
-        auto g11 = static_cast<uint16_t>((packed >> 11U) & 0x7FFU);
-        auto b10 = static_cast<uint16_t>((packed >> 22U) & 0x3FFU);
-        outColor.r = float10to32(r10);
-        outColor.g = float11to32(g11);
-        outColor.b = float10to32(b10);
+        auto r11 = (packed >> 0U) & 0x3FFU;
+        auto g11 = (packed >> 11U) & 0x7FFU;
+        auto b10 = (packed >> 22U) & 0x3FFU;
+        outColor.r = Math::Float11::toFloat(Math::Float11::value(r11));
+        outColor.g = Math::Float11::toFloat(Math::Float11::value(g11));
+        outColor.b = Math::Float10::toFloat(Math::Float10::value(b10));
       }}}};
 
 namespace Image {
@@ -444,29 +326,36 @@ auto ImageData::Create(const std::span<const uint8_t> &data)
 
   if (stbi_is_hdr_from_memory(data.data(), static_cast<int>(data.size())) !=
       0) {
-    float *pixels = stbi_loadf_from_memory(
-        data.data(), static_cast<int>(data.size()), &texWidth, &texHeight,
-        &texChannels, STBI_rgb_alpha); // force 4 channels
+    float *pixels =
+        stbi_loadf_from_memory(data.data(), static_cast<int>(data.size()),
+                               &texWidth, &texHeight, &texChannels, STBI_rgb);
+
     if (pixels == nullptr) {
       return Error::Unexpected("Failed to load image.");
     }
 
-    // NOLINTNEXTLINE, reinterpret cast is safe here
-    const auto span = std::span<uint8_t>(reinterpret_cast<uint8_t *>(pixels),
-                                         static_cast<size_t>(texWidth) *
-                                             static_cast<size_t>(texHeight) *
-                                             4 * sizeof(float));
+    auto imageData = CHECK_RES(Image::ImageData::Create(
+        texWidth, texHeight, VK_FORMAT_B10G11R11_UFLOAT_PACK32));
+    auto *ptr = reinterpret_cast<uint32_t *>(imageData->GetDataPtr()); // NOLINT
 
-    auto imageData = Image::ImageData::Create(texWidth, texHeight, span,
-                                              VK_FORMAT_R32G32B32A32_SFLOAT);
+// Parallel for-loop to convert from RGB float to B10G11R11
+#pragma omp parallel for
+    for (int i = 0; i < texWidth * texHeight; i++) {
+      int idx = i * 3;               // 3 channels (RGB)
+      float red = pixels[idx];       // NOLINT
+      float green = pixels[idx + 1]; // NOLINT
+      float blue = pixels[idx + 2];  // NOLINT
+
+      uint32_t lowp_red = Math::Float11::fromFloat(red).bits;
+      uint32_t lowp_green = Math::Float11::fromFloat(green).bits;
+      uint32_t lowp_blue = Math::Float10::fromFloat(blue).bits;
+
+      ptr[i] = (lowp_blue << 22U) | (lowp_green << 11U) | (lowp_red << 0U);
+    }
 
     stbi_image_free(pixels);
 
-    if (Error::IsError(imageData)) {
-      return imageData.error();
-    }
-
-    return imageData.value();
+    return imageData;
   }
 
   return Error::Unexpected("Unsupported image format.");

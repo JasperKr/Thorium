@@ -27,6 +27,7 @@ else()
 endif()
 
 find_package(TBB REQUIRED)
+find_package(OpenMP REQUIRED)
 
 
 # -------------------------------
