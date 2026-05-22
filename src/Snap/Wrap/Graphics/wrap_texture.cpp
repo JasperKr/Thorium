@@ -612,7 +612,8 @@ static inline auto TextureFromFilepath(lua_State *state)
   auto *ctx = ::Graphics::GetCurrentGraphicsContext();
   const char *filepath = luaL_checkstring(state, 1);
 
-  return CHECK_RES(::Graphics::LoadFromFile(*ctx, filepath));
+  return CHECK_RES(
+      ::Graphics::LoadFromFile(*ctx, filepath, VK_IMAGE_USAGE_SAMPLED_BIT));
 }
 
 static inline auto TextureFromImagedataAndOptions(lua_State *state)

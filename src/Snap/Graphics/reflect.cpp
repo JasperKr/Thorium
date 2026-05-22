@@ -1,6 +1,7 @@
 #include "reflect.hpp"
 #include "Graphics/bufferformat.hpp"
 #include "Graphics/graphicsContext.hpp"
+#include "Modules/Helpers/utils.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "slang/slang.h"
@@ -784,6 +785,57 @@ auto ResourceInfoToBufferFormat(const ResourceInfo &info, Standard std)
   }
 
   return Error::Unexpected("Unsupported resource info type for buffer format.");
+}
+
+auto ShaderReflection::ConstructUBOStruct(uint32_t set, uint32_t binding)
+    -> Error {
+  ResourceInfo globalUBOInfo{};
+  globalUBOInfo.name = "Globals";
+  globalUBOInfo.stages = VK_SHADER_STAGE_ALL;
+  auto globalUBOStruct = StructInfo{};
+  globalUBOStruct.name = "Globals";
+
+  if (resources.size() == 0) {
+    return {};
+  }
+
+  // Ordered erase to preserve field order, as this affects offsets in the UBO
+  std::vector<ResourceInfo> filteredFields;
+  for (const auto &field : resources) {
+    if (!field.IsSampler() && !field.IsBuffer()) {
+      filteredFields.emplace_back(field);
+    }
+  }
+  globalUBOStruct.fields = std::move(filteredFields);
+  globalUBOInfo.info = globalUBOStruct;
+
+  globals = {
+      .name = "Globals",
+      .set = set,
+      .binding = binding,
+      .access = SlangResourceAccess::SLANG_RESOURCE_ACCESS_READ,
+      .bufferType = BufferType::Uniform,
+      .info = globalUBOStruct,
+  };
+
+  slotToInfo.emplace(Utils::SetBindingToSlot(set, binding), globalUBOInfo);
+
+  const auto &infoResult =
+      ResourceInfoToBufferFormat(globalUBOInfo, Standard::Std140);
+  if (Error::IsError(infoResult)) {
+    return infoResult.error();
+  }
+  auto formatOrComponent = infoResult.value();
+  if (std::holds_alternative<Graphics::BufferFormat>(formatOrComponent)) {
+    globalBufferFormat = std::get<Graphics::BufferFormat>(formatOrComponent);
+  } else {
+    return Error::Create("Global UBO struct must not be a literal.");
+  }
+
+  globals.size = globalBufferFormat.GetStride();
+  hasGlobals = globals.size > 0;
+
+  return {};
 }
 
 } // namespace Graphics::Reflect

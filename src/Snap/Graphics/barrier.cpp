@@ -3,7 +3,6 @@
 #include "Graphics/graphics.hpp"
 
 #include "Graphics/snapshot.hpp"
-#include "Modules/error.hpp"
 #include "vulkan/vulkan_core.h"
 #include <array>
 #include <cassert>
@@ -185,7 +184,7 @@ inline auto TimelineLookback(uint64_t currentTimelineIndex,
   return false; // All bits satisfied, no barrier needed
 }
 
-auto UpdateUsage(const GraphicsContext &context, BarrierSynced &resource,
+auto UpdateUsage(const GraphicsContext &context, const BarrierSynced &resource,
                  const ResourceState &usage) -> void {
   ZoneScoped;
 

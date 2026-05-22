@@ -164,7 +164,7 @@ do
       snap.graphics.setDefaultFilter("linear", "linear", 4)
       -- snap.scene.loadModel(scene, "Assets/Terrain/sponza.glb")
 
-      texture = snap.graphics.newTexture("src/Assets/skybox.hdr")
+      texture = snap.graphics.newTexture("src/Assets/skybox.hdr", { sampler = true, mipmaps = "init" })
       -- local checkerboard = snap.data.newImagedata(16, 16)
       -- for x = 0, 15 do
       --   for y = 0, 15 do

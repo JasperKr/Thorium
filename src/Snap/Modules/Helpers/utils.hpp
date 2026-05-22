@@ -7,6 +7,8 @@
 #include <vector>
 namespace Utils {
 
+// Unordered erase from vector, does not preserve order but is O(1)
+// If predicate returns true, the element is removed
 template <typename T, typename Pred>
 void UnorderedErase(std::vector<T> &vect, Pred &&predicate) {
   for (std::size_t i = 0; i < vect.size();) {

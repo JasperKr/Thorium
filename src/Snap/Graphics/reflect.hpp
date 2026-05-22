@@ -3,7 +3,6 @@
 #include "Graphics/bufferformat.hpp"
 #include "Graphics/graphicsContext.hpp"
 #include "Graphics/graphicsState.hpp"
-#include "Modules/Helpers/utils.hpp"
 #include "Modules/error.hpp"
 #include "slang/slang.h"
 #include <cstdint>
@@ -471,47 +470,7 @@ struct ShaderReflection {
   bool hasGlobals{false};
 
   // NOLINTNEXTLINE
-  auto ConstructUBOStruct(uint32_t set, uint32_t binding) -> Error {
-    ResourceInfo globalUBOInfo{};
-    globalUBOInfo.name = "Globals";
-    globalUBOInfo.stages = VK_SHADER_STAGE_ALL;
-    auto globalUBOStruct = StructInfo{};
-    globalUBOStruct.name = "Globals";
-    globalUBOStruct.fields = resources;
-    globalUBOInfo.info = globalUBOStruct;
-
-    if (resources.size() == 0) {
-      return {};
-    }
-
-    globals = {
-        .name = "Globals",
-        .set = set,
-        .binding = binding,
-        .access = SlangResourceAccess::SLANG_RESOURCE_ACCESS_READ,
-        .bufferType = BufferType::Uniform,
-        .info = globalUBOStruct,
-    };
-
-    slotToInfo.emplace(Utils::SetBindingToSlot(set, binding), globalUBOInfo);
-
-    const auto &infoResult =
-        ResourceInfoToBufferFormat(globalUBOInfo, Standard::Std140);
-    if (Error::IsError(infoResult)) {
-      return infoResult.error();
-    }
-    auto formatOrComponent = infoResult.value();
-    if (std::holds_alternative<Graphics::BufferFormat>(formatOrComponent)) {
-      globalBufferFormat = std::get<Graphics::BufferFormat>(formatOrComponent);
-    } else {
-      return Error::Create("Global UBO struct must not be a literal.");
-    }
-
-    globals.size = globalBufferFormat.GetStride();
-    hasGlobals = globals.size > 0;
-
-    return {};
-  }
+  auto ConstructUBOStruct(uint32_t set, uint32_t binding) -> Error;
 };
 
 auto ReflectShader(Graphics::GraphicsContext &context,

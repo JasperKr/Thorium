@@ -8,8 +8,9 @@
 #include "Graphics/reflect.hpp"
 #include "Graphics/shader.hpp"
 #include "Graphics/snapshot.hpp"
-#include "Modules/Helpers/utils.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
+#include "Modules/object.hpp"
 #include <cassert>
 #include <cstdint>
 #include <public/tracy/Tracy.hpp>
@@ -106,19 +107,94 @@ inline auto UpdateShaderResourceLayouts(const GraphicsContext &context,
   if (shader == nullptr) {
     return Error::Success(); // No shader, so nothing to update
   }
+  const auto &boundTextures = shader->GetState().userBoundTextures;
 
-  for (const auto &resource : shader->reflection.resources) {
-    if (!resource.IsSampler()) {
+  for (const auto &resource : boundTextures) {
+    CHECK_ERR(resource.second.first->UseAsSampler(context, stage));
+  }
+
+  return Error::Success();
+}
+
+inline auto InsertResourceBarriers(const GraphicsContext &context) -> Error {
+  auto shader = DynamicRendering::GetShader();
+  if (shader == nullptr) {
+    return Error::Success(); // No shader, so nothing to update
+  }
+
+  for (auto &texturePair : shader->GetState().userBoundTextures) {
+    auto &texture = texturePair.second;
+    auto key = texturePair.first;
+
+    const auto *infoResult = shader->GetSlotDescription(key);
+    if (infoResult == nullptr) {
+      return Error::Create(
+          "Failed to get slot description for bound texture slot.");
+    }
+
+    const auto &info = infoResult->GetInfo<Reflect::SamplerInfo>();
+
+    VkAccessFlags2 access = 0;
+
+    switch (info.access) {
+    case SLANG_RESOURCE_ACCESS_READ:
+      access = VK_ACCESS_2_SHADER_READ_BIT;
+      break;
+    case SLANG_RESOURCE_ACCESS_READ_WRITE:
+      access = VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT;
+      break;
+    case SLANG_RESOURCE_ACCESS_WRITE:
+      access = VK_ACCESS_2_SHADER_WRITE_BIT;
+      break;
+    default:
+      break;
+    }
+
+    if (access == 0) {
+      PrintWarning("Texture access type is Unknown for slang access: {}, "
+                   "skipping barrier.",
+                   static_cast<uint32_t>(info.access));
       continue;
     }
 
-    const auto &samplerInfo = resource.GetInfo<Reflect::SamplerInfo>();
-    auto key = Utils::SetBindingToSlot(samplerInfo.set, samplerInfo.binding);
-    auto iter = shader->GetState().userBoundTextures.find(key);
-    if (iter == shader->GetState().userBoundTextures.end()) {
-      continue; // No texture bound to this sampler, so skip
+    auto stages = VK_PIPELINE_STAGE_2_NONE;
+
+    for (const auto &stage : shader->stages) {
+      switch (stage) {
+      case VK_SHADER_STAGE_VERTEX_BIT:
+        stages |= VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT;
+        break;
+      case VK_SHADER_STAGE_FRAGMENT_BIT:
+        stages |= VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+        break;
+      case VK_SHADER_STAGE_COMPUTE_BIT:
+        stages |= VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+        break;
+      default:
+        break;
+      }
     }
-    CHECK_ERR(iter->second.first->UseAsSampler(context, stage));
+
+#ifndef NDEBUG
+    const auto &targets = DynamicRendering::GetRenderTargets();
+    for (const auto &target : targets) {
+      if (target.texture == texture.first) {
+        auto debugname = texture.first->GetDebugName();
+        return Error::Createf(
+            "Texture {} is bound as a render target, but is also used as a "
+            "shader "
+            "resource. This is not supported and may indicate a bug in the "
+            "application.",
+            debugname);
+      }
+    }
+#endif
+
+    Barrier::UpdateUsage(context, *texture.first,
+                         {
+                             .stages = stages,
+                             .access = access,
+                         });
   }
 
   return Error::Success();
@@ -145,6 +221,7 @@ auto Draw(const GraphicsContext &context, Mesh &mesh, uint32_t instanceCount)
   CHECK_ERR(UpdateShaderResourceLayouts(
       context, VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT |
                    VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT));
+  CHECK_ERR(InsertResourceBarriers(context));
 
   CHECK_ERR(DynamicRendering::PrepareRendering(context));
 
@@ -201,6 +278,7 @@ auto Dispatch(const GraphicsContext &context, const Math::Uvec3 &threadgroups)
 
   CHECK_ERR(UpdateShaderResourceLayouts(
       context, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT));
+  CHECK_ERR(InsertResourceBarriers(context));
 
   vkCmdDispatch(commandBuffer, threadgroups.x, threadgroups.y, threadgroups.z);
 
@@ -227,6 +305,7 @@ auto DispatchIndirect(const GraphicsContext &context,
 
   CHECK_ERR(UpdateShaderResourceLayouts(
       context, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT));
+  CHECK_ERR(InsertResourceBarriers(context));
 
   vkCmdDispatchIndirect(commandBuffer, indirectBuffer->handle, offset);
 
@@ -258,6 +337,7 @@ auto DrawIndirect(const GraphicsContext &context, Mesh &mesh,
   CHECK_ERR(UpdateShaderResourceLayouts(
       context, VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT |
                    VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT));
+  CHECK_ERR(InsertResourceBarriers(context));
 
   CHECK_ERR(DynamicRendering::PrepareRendering(context));
 
@@ -308,6 +388,7 @@ auto Draw(const GraphicsContext &context, const VkPrimitiveTopology &topology,
   CHECK_ERR(UpdateShaderResourceLayouts(
       context, VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT |
                    VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT));
+  CHECK_ERR(InsertResourceBarriers(context));
 
   CHECK_ERR(DynamicRendering::PrepareRendering(context));
 
@@ -337,6 +418,7 @@ auto Draw(const GraphicsContext &context, const Ref<Buffer> &indexBuffer,
   CHECK_ERR(UpdateShaderResourceLayouts(
       context, VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT |
                    VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT));
+  CHECK_ERR(InsertResourceBarriers(context));
 
   CHECK_ERR(DynamicRendering::PrepareRendering(context));
 

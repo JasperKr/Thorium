@@ -1,6 +1,7 @@
 #include "swapchainManager.hpp"
 
 #include "Graphics/allocations.hpp"
+#include "Graphics/barrier.hpp"
 #include "Graphics/graphicsContext.hpp"
 #include "Graphics/graphicsState.hpp"
 #include "Graphics/texture.hpp"
@@ -422,7 +423,9 @@ auto SwapchainManager::NewFrame(GraphicsContext &context,
 }
 auto SwapchainManager::EndFrame(const GraphicsContext &context) -> Error {
   ZoneScoped;
-  CHECK_ERR(GetCurrentSwapchainTexture(context)->UseAsPresentSrc(context));
+
+  auto swapchainTexture = GetCurrentSwapchainTexture(context);
+  CHECK_ERR(swapchainTexture->UseAsPresentSrc(context));
 
   return Error::Success();
 }

@@ -1,4 +1,5 @@
 #include "rendertargetManager.hpp"
+#include "Graphics/format.hpp"
 #include "Graphics/graphicsContext.hpp"
 #include "Graphics/texture.hpp"
 #include "Modules/Helpers/hasher.hpp"
@@ -6,6 +7,7 @@
 #include "Modules/object.hpp"
 #include <algorithm>
 #include <cstdint>
+#include <format>
 
 namespace Engine::Renderer {
 
@@ -18,6 +20,16 @@ auto RendertargetDescriptor::Score(const RendertargetDescriptor &other) const
   constexpr auto SizeMatchScore = 10;
   constexpr auto SizeDiffPixelCount = 100;
   constexpr auto MipmapMatchScore = 10;
+  constexpr auto UsageMatchScore = 5;
+
+  if ((usage & other.usage) == 0) {
+    // If the usage does not match, this rendertarget cannot be used.
+    return -1;
+  }
+
+  if (usage == other.usage) {
+    score += UsageMatchScore;
+  }
 
   if (size.x < other.size.x || size.y < other.size.y) {
     // This rendertarget is too small for the requirements.
@@ -54,7 +66,8 @@ auto RendertargetDescriptor::operator==(
          magFilter == other.magFilter && mipFilter == other.mipFilter &&
          addressModeU == other.addressModeU &&
          addressModeV == other.addressModeV &&
-         addressModeW == other.addressModeW && borderColor == other.borderColor;
+         addressModeW == other.addressModeW &&
+         borderColor == other.borderColor && usage == other.usage;
 }
 
 auto RendertargetDescriptor::operator!=(
@@ -76,6 +89,7 @@ auto RendertargetDescriptorHash::operator()(
   hasher.Add(desc.addressModeV);
   hasher.Add(desc.addressModeW);
   hasher.Add(desc.borderColor);
+  hasher.Add(desc.usage);
   return hasher.Get();
 }
 
@@ -119,23 +133,17 @@ auto RenderTargetManager::GetRendertarget(
                               MaxRendertargets);
   }
 
-  int usage = VK_IMAGE_USAGE_FLAG_BITS_MAX_ENUM;
-  if (Image::IsDepthTexture(descriptor.format) ||
-      Image::IsStencilTexture(descriptor.format)) {
-    usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
-            VK_IMAGE_USAGE_SAMPLED_BIT;
-  } else {
-    usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-  }
-
   auto info = ::Graphics::TextureCreationInfo{
       .width = descriptor.size.x,
       .height = descriptor.size.y,
       .depth = 1,
       .format = descriptor.format,
-      .usage = static_cast<VkImageUsageFlags>(usage),
+      .usage = descriptor.usage,
       .mipmapCount = static_cast<int>(descriptor.mipmapCount),
-      .debugName = "Rendertarget",
+      .debugName = std::format(
+          "Rendertarget / {} / {}x{}",
+          Graphics::Format::ImageFormatToString(descriptor.format),
+          std::to_string(descriptor.size.x), std::to_string(descriptor.size.y)),
   };
 
   auto textureResult = ::Graphics::Create2D(context, info);

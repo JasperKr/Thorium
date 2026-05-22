@@ -818,10 +818,10 @@ auto Texture::TransitionLayout(const GraphicsContext &context,
     return Error::Create("Cannot transition to UNDEFINED layout.");
   }
 
-  if (currentLayout == layout && sourceStage == destinationStage &&
-      srcAccessMask == dstAccessMask) {
-    return Error::Success();
-  }
+  // if (currentLayout == layout && sourceStage == destinationStage &&
+  //     srcAccessMask == dstAccessMask) {
+  //   return Error::Success();
+  // }
 
   auto *commandBuffer = GetCommandBuffer();
 
@@ -1408,7 +1408,7 @@ auto GetAccessFlagsForUsage(TextureUsage usage, VkFormat format)
     -> VkAccessFlags2 {
   switch (usage) {
   case TextureUsage::Sampler:
-    return VK_ACCESS_2_SHADER_READ_BIT;
+    return VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
   case TextureUsage::Storage:
     return VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT;
   case TextureUsage::Attachment:
@@ -1483,11 +1483,11 @@ auto Texture::UseAs(const GraphicsContext &context, TextureUsage newUsage,
   VkAccessFlags2 currentAccess = GetAccessFlagsForUsage(lastUsage, format);
   VkAccessFlags2 newAccess = GetAccessFlagsForUsage(newUsage, format);
 
-  if (lastUsage == TextureUsage::Unknown) {
-    // First time usage, so we can skip the transition from UNDEFINED
-    currentAccess = 0;
-    lastPipelineStage = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT;
-  }
+  // if (lastUsage == TextureUsage::Unknown) {
+  //   // First time usage, so we can skip the transition from UNDEFINED
+  //   currentAccess = 0;
+  //   lastPipelineStage = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT;
+  // }
 
   auto result = TransitionLayout(context, layout, lastPipelineStage, stage,
                                  currentAccess, newAccess);

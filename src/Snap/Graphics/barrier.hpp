@@ -96,8 +96,8 @@ struct BarrierSynced {
   // read from idx 0
   // whatever happens next.
   */
-  VkPipelineStageFlags2 lastUsedStages = 0;
-  VkAccessFlags2 lastUsedAccess = 0;
+  mutable VkPipelineStageFlags2 lastUsedStages = 0;
+  mutable VkAccessFlags2 lastUsedAccess = 0;
 
   // To make sure this scenario is handled correctly:
   // CS write to buffer 1
@@ -107,14 +107,14 @@ struct BarrierSynced {
   // No barrier here because of previous barrier
   // CS read from buffer 2
   // We need to know when stuff was synced last
-  uint64_t lastUsedTimelineIndex = 0;
+  mutable uint64_t lastUsedTimelineIndex = 0;
 
   // Whether this is the first usage recorded for this resource in the frame
   // When using it for async work.
   // We need to make sure to never add a barrier on first usage since we will insert this later
   // Before the command buffer is stitched together with others. Because the usage is unknown at the time of recording.
   // Due to async recording and reordering.
-  bool firstAsyncUsage = false;
+  mutable bool firstAsyncUsage = false;
 
   [[nodiscard]] virtual auto IsTexture() const -> bool { return false; }
   [[nodiscard]] virtual auto AsTexture() const -> struct Texture const * {
@@ -125,7 +125,7 @@ struct BarrierSynced {
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 extern thread_local std::vector<BarrierSynced> GraphicsResources;
 
-auto UpdateUsage(const GraphicsContext &context, BarrierSynced &resource,
+auto UpdateUsage(const GraphicsContext &context, const BarrierSynced &resource,
                  const ResourceState &usage) -> void;
 
 auto UpdateUsageVirtual(BarrierSynced &resource, const ResourceState &usage)

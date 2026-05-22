@@ -237,6 +237,13 @@ auto Camera::Render(const Graphics::GraphicsContext &context,
   Graphics::DynamicRendering::SetDepthMode(false, false, VK_COMPARE_OP_ALWAYS);
 
   if (scene->currentEnvironment) {
+    CHECK_ERR(Graphics::DynamicRendering::SetRenderTargets(
+        context, {{
+                     .clearValue = {0.0F, 0.0F, 0.0F, 1.0F},
+                     .texture = OwnedTextures.IncomingLight,
+                     .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+                 }}));
+
     shader = CHECK_RES(
         Renderer::RendererInstance.GetShader(Renderer::ShaderKey::Skybox));
     auto environment = scene->currentEnvironment.get<Environment>();
@@ -269,6 +276,8 @@ auto Camera::ConfigureRendertargets() -> void {
       .minFilter = VK_FILTER_NEAREST,
       .magFilter = VK_FILTER_NEAREST,
       .mipFilter = VK_SAMPLER_MIPMAP_MODE_NEAREST,
+      .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
+               VK_IMAGE_USAGE_SAMPLED_BIT,
   };
 
   Rendertargets.IncomingLight = Renderer::RendertargetDescriptor{
@@ -277,6 +286,7 @@ auto Camera::ConfigureRendertargets() -> void {
       .minFilter = VK_FILTER_LINEAR,
       .magFilter = VK_FILTER_LINEAR,
       .mipFilter = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+      .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
   };
 
   Rendertargets.PostProcessed = Renderer::RendertargetDescriptor{
@@ -285,6 +295,7 @@ auto Camera::ConfigureRendertargets() -> void {
       .minFilter = VK_FILTER_LINEAR,
       .magFilter = VK_FILTER_LINEAR,
       .mipFilter = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+      .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
   };
 }
 

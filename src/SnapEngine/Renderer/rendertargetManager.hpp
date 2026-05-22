@@ -23,6 +23,7 @@ struct RendertargetDescriptor {
   VkSamplerAddressMode addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
   VkSamplerAddressMode addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
   VkBorderColor borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
+  VkImageUsageFlags usage = VK_IMAGE_USAGE_SAMPLED_BIT;
 
   // Score using the rendertarget of this descriptor as a candidate for the other descriptor's requirements.
   [[nodiscard]] auto Score(const RendertargetDescriptor &other) const -> int;

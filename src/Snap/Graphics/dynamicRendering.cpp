@@ -1039,8 +1039,7 @@ inline auto BeginRendering(const GraphicsContext &context) -> Error {
         return Error::Create("Multiple depth attachments bound.");
       }
       depthAttachment = attachmentInfo;
-      depthAttachment.imageLayout =
-          VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+      depthAttachment.imageLayout = rendertarget.texture->currentLayout;
       hasDepth = true;
 
       Barrier::UpdateUsage(
@@ -1054,8 +1053,7 @@ inline auto BeginRendering(const GraphicsContext &context) -> Error {
         return Error::Create("Multiple stencil attachments bound.");
       }
       stencilAttachment = attachmentInfo;
-      stencilAttachment.imageLayout =
-          VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+      stencilAttachment.imageLayout = rendertarget.texture->currentLayout;
       hasStencil = true;
 
       Barrier::UpdateUsage(
@@ -1188,66 +1186,6 @@ auto InsertResourceBarriers(const GraphicsContext &context) -> Error {
     }
 
     Barrier::UpdateUsage(context, *buffer.first,
-                         {
-                             .stages = stages,
-                             .access = access,
-                         });
-  }
-
-  for (auto &texturePair : shader->GetState().userBoundTextures) {
-    auto &texture = texturePair.second;
-    auto key = texturePair.first;
-
-    const auto *infoResult = shader->GetSlotDescription(key);
-    if (infoResult == nullptr) {
-      return Error::Create(
-          "Failed to get slot description for bound texture slot.");
-    }
-
-    const auto &info = infoResult->GetInfo<Reflect::SamplerInfo>();
-
-    VkAccessFlags2 access = 0;
-
-    switch (info.access) {
-    case SLANG_RESOURCE_ACCESS_READ:
-      access = VK_ACCESS_2_SHADER_READ_BIT;
-      break;
-    case SLANG_RESOURCE_ACCESS_READ_WRITE:
-      access = VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT;
-      break;
-    case SLANG_RESOURCE_ACCESS_WRITE:
-      access = VK_ACCESS_2_SHADER_WRITE_BIT;
-      break;
-    default:
-      break;
-    }
-
-    if (access == 0) {
-      PrintWarning("Texture access type is Unknown for slang access: {}, "
-                   "skipping barrier.",
-                   static_cast<uint32_t>(info.access));
-      continue;
-    }
-
-    auto stages = VK_PIPELINE_STAGE_2_NONE;
-
-    for (const auto &stage : shader->stages) {
-      switch (stage) {
-      case VK_SHADER_STAGE_VERTEX_BIT:
-        stages |= VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT;
-        break;
-      case VK_SHADER_STAGE_FRAGMENT_BIT:
-        stages |= VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
-        break;
-      case VK_SHADER_STAGE_COMPUTE_BIT:
-        stages |= VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
-        break;
-      default:
-        break;
-      }
-    }
-
-    Barrier::UpdateUsage(context, *texture.first,
                          {
                              .stages = stages,
                              .access = access,

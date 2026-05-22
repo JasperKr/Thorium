@@ -40,8 +40,6 @@ static void ResetCommandBuffers(Graphics::GraphicsContext &context) {
 }
 
 static auto StartRecording(Graphics::GraphicsContext &context) -> Error {
-  // Begin command buffer, so recording can start
-
   if (GlobalStitchInfo.commandBuffers.at(context.frameIndex).empty()) {
     PrintDebug("Allocating stitch command buffer for frame {}",
                context.frameIndex);
