@@ -1,5 +1,4 @@
 #include "buffer.hpp"
-#include "Graphics/allocations.hpp"
 #include "Graphics/barrier.hpp"
 #include "Graphics/dynamicRendering.hpp"
 #include "Graphics/graphics.hpp"
@@ -14,7 +13,6 @@
 #include "Modules/object.hpp"
 #include "graphics.hpp"
 #include <algorithm>
-#include <atomic>
 #include <cassert>
 #include <cstdint>
 #include <mutex>
@@ -41,12 +39,6 @@ struct StagingBufferInfo {
 
 thread_local inline std::vector<Ref<Buffer>> UploadBuffers{FRAMES_IN_FLIGHT};
 thread_local inline std::array<size_t, FRAMES_IN_FLIGHT> UploadBufferOffsets;
-
-// we'll use staging buffers until upload buffers are initialized
-thread_local inline std::vector<StagingBufferInfo> StagingBuffers;
-inline std::mutex uploadSemaphoreMutex{};
-inline VkSemaphore uploadSemaphore = nullptr;
-inline std::atomic<uint64_t> currentTimelineValue = 0;
 
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
@@ -93,80 +85,8 @@ inline auto NameBuffer(VkBuffer buffer, VmaAllocation memory,
   return Error::Success();
 }
 
-auto LoadBufferModule(const GraphicsContext &context) -> Error {
-  VkSemaphoreTypeCreateInfo timelineInfo = {
-      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
-      .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
-      .initialValue = 0,
-  };
-
-  VkSemaphoreCreateInfo semInfo = {
-      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-      .pNext = &timelineInfo,
-  };
-
-  {
-    std::scoped_lock<std::mutex, std::mutex> lock(
-        Graphics::GraphicsContext::mutexes.device, uploadSemaphoreMutex);
-    CHECK_ERR(Error::Create(vkCreateSemaphore(
-        context.device, &semInfo, GetAllocationCallbacks(), &uploadSemaphore)));
-  }
-
-  return Error::Success();
-}
-
-auto UnloadLocalBufferModule(const GraphicsContext &context) -> Error {
-  for (auto &stagingBuffer : StagingBuffers) {
-    std::lock_guard<std::mutex> lock(
-        Graphics::GraphicsContext::mutexes.vmaAllocator);
-
-    vmaDestroyBuffer(context.vmaAllocator, stagingBuffer.buffer,
-                     stagingBuffer.memory);
-  }
-
-  StagingBuffers.clear();
-  UploadBuffers.clear();
-
-  return Error::Success();
-}
-
-auto UnloadBufferModule(const GraphicsContext &context) -> Error {
-  if (uploadSemaphore != nullptr) {
-    std::scoped_lock<std::mutex, std::mutex> lock(
-        Graphics::GraphicsContext::mutexes.device, uploadSemaphoreMutex);
-    vkDestroySemaphore(context.device, uploadSemaphore,
-                       GetAllocationCallbacks());
-    uploadSemaphore = nullptr;
-  }
-
-  return Error::Success();
-}
-
 // To be called at the end of each frame that uses uploads
 auto FlushBufferUploads(const GraphicsContext &context) -> Error {
-  // Check staging buffers for completed uploads
-  uint64_t completedValue = 0;
-  {
-    std::scoped_lock<std::mutex, std::mutex> lock(
-        Graphics::GraphicsContext::mutexes.device, uploadSemaphoreMutex);
-    CHECK_ERR(Error::Create(vkGetSemaphoreCounterValue(
-        context.device, uploadSemaphore, &completedValue)));
-  }
-
-  auto stagingBufferIterator = StagingBuffers.begin();
-  while (stagingBufferIterator != StagingBuffers.end()) {
-    if (stagingBufferIterator->timelineValue <= completedValue) {
-      std::lock_guard<std::mutex> lock(
-          Graphics::GraphicsContext::mutexes.vmaAllocator);
-
-      vmaDestroyBuffer(context.vmaAllocator, stagingBufferIterator->buffer,
-                       stagingBufferIterator->memory);
-      stagingBufferIterator = StagingBuffers.erase(stagingBufferIterator);
-    } else {
-      ++stagingBufferIterator;
-    }
-  }
-
   // Reset upload buffer offsets for next frame
   for (auto &offset : UploadBufferOffsets) {
     offset = 0;
@@ -218,54 +138,23 @@ auto Buffer::UploadLarge(const GraphicsContext &context,
         "Error uploading data, cannot upload more data than is allocated.");
   }
 
-  // Use staging buffer
-  VkBufferCreateInfo stagingBufferInfo = {};
-  stagingBufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+  static BufferCreationInfo stagingBufferInfo{
+      .usage =
+          VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+      .properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                    VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+      .stagingBuffer = true,
+      .persistentMapping = false,
+      .debugName = "Staging Buffer",
+  };
   stagingBufferInfo.size = uploadSize;
-  stagingBufferInfo.usage =
-      VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-  stagingBufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-  // See: https://gpuopen-librariesandsdks.github.io/VulkanMemoryAllocator/html/usage_patterns.html
-  VmaAllocationCreateInfo stagingAllocInfo = {};
-  stagingAllocInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
-  stagingAllocInfo.flags = 0;
-  VkBuffer stagingBuffer = nullptr;
-  VmaAllocation stagingMemory = nullptr;
 
-  {
-    std::lock_guard<std::mutex> lock(
-        Graphics::GraphicsContext::mutexes.vmaAllocator);
+  auto stagingBuffer = CHECK_RES(Buffer::Create(context, stagingBufferInfo));
+  CHECK_ERR(stagingBuffer->MapMemory(context));
 
-    CHECK_ERR(Error::Create(vmaCreateBuffer(
-        context.vmaAllocator, &stagingBufferInfo, &stagingAllocInfo,
-        &stagingBuffer, &stagingMemory, nullptr)));
-  }
-
-  auto nameResult = NameBuffer(stagingBuffer, stagingMemory, "Staging Buffer");
-  if (Error::IsError(nameResult)) {
-    // Not critical.
-    PrintError("Failed to name staging buffer: {}", nameResult.ToString());
-  }
-
-  void *mapped = nullptr;
-  {
-    std::lock_guard<std::mutex> lock(
-        Graphics::GraphicsContext::mutexes.vmaAllocator);
-
-    VkResult result =
-        vmaMapMemory(context.vmaAllocator, stagingMemory, &mapped);
-    if (result != VK_SUCCESS) {
-      vmaDestroyBuffer(context.vmaAllocator, stagingBuffer, stagingMemory);
-      return Error::Create(result);
-    }
-  }
-
-  std::memcpy(static_cast<uint8_t *>(mapped), data.data(), uploadSize);
-  {
-    std::lock_guard<std::mutex> lock(
-        Graphics::GraphicsContext::mutexes.vmaAllocator);
-    vmaUnmapMemory(context.vmaAllocator, stagingMemory);
-  }
+  std::memcpy(static_cast<uint8_t *>(stagingBuffer->mappedData), data.data(),
+              uploadSize);
+  stagingBuffer->UnmapMemory(context);
 
   auto *commandBuffer = GetCommandBuffer();
 
@@ -283,13 +172,7 @@ auto Buffer::UploadLarge(const GraphicsContext &context,
   copyRegion.srcOffset = 0;
   copyRegion.dstOffset = offset;
   copyRegion.size = uploadSize;
-  vkCmdCopyBuffer(commandBuffer, stagingBuffer, handle, 1, &copyRegion);
-  StagingBufferInfo stagingInfo = {};
-  stagingInfo.buffer = stagingBuffer;
-  stagingInfo.memory = stagingMemory;
-  stagingInfo.timelineValue = currentTimelineValue.fetch_add(1) + 1;
-
-  StagingBuffers.emplace_back(stagingInfo);
+  vkCmdCopyBuffer(commandBuffer, stagingBuffer->handle, handle, 1, &copyRegion);
 
   return Error::Success();
 }

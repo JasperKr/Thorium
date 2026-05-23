@@ -274,7 +274,6 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
   CHECK_ERR(Graphics::InitializeRendering(context, wcontext));
   CHECK_ERR(Graphics::DynamicRendering::Load(context));
 
-  CHECK_ERR(Graphics::LoadBufferModule(context));
   CHECK_ERR(InitializeUniformBufferModule(context));
 
   CHECK_RES(Gui::LoadGUIState(state));
@@ -362,10 +361,6 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
   Graphics::DeInitializeUniformBufferModule(context);
 
   PrintInfo("Unloading buffer module...");
-
-  CHECK_ERR(Graphics::UnloadLocalBufferModule(context));
-
-  CHECK_ERR(Graphics::UnloadBufferModule(context));
 
   PrintInfo("Deinitializing global timeline semaphore...");
 

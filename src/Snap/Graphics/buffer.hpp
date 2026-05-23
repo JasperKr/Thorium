@@ -47,9 +47,6 @@ struct BufferReadback : Object {
 };
 
 auto FlushBufferUploads(const GraphicsContext &context) -> Error;
-auto LoadBufferModule(const GraphicsContext &context) -> Error;
-auto UnloadLocalBufferModule(const GraphicsContext &context) -> Error;
-auto UnloadBufferModule(const GraphicsContext &context) -> Error;
 
 static const Type LuaInternalBufferType = Type("InternalBuffer");
 

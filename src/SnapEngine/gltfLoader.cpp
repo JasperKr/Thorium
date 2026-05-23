@@ -225,7 +225,7 @@ inline auto LoadTexture(Graphics::GraphicsContext &context,
   auto textureRef = CHECK_RES(Graphics::LoadFromMemory(
       context, *ImageCache[texture.imageIndex.value()].get(),
       VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-      Graphics::TextureMipmapOption::None));
+      Graphics::TextureMipmapOption::Init));
 
   textureRef->SetLodRange(0.0F, (float)textureRef->GetMipmapCount() - 1);
   textureRef->SetFilter(VK_FILTER_LINEAR, VK_FILTER_LINEAR,

@@ -770,10 +770,10 @@ auto Texture::TransitionLayout(const GraphicsContext &context,
     return Error::Create("Cannot transition to UNDEFINED layout.");
   }
 
-  // if (currentLayout == layout && sourceStage == destinationStage &&
-  //     srcAccessMask == dstAccessMask) {
-  //   return Error::Success();
-  // }
+  if (currentLayout == layout && sourceStage == destinationStage &&
+      srcAccessMask == dstAccessMask) {
+    return Error::Success();
+  }
 
   auto *commandBuffer = GetCommandBuffer();
 

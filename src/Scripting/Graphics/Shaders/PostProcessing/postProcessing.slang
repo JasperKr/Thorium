@@ -147,8 +147,19 @@ uniform float Exposure;
 
 [shader("fragment")]
 float4 fragmentMain(FragmentInput input) {
+  const float BigNumber = 3.402823466e+20;
+
   float3 incomingLight = IncomingLight.Sample(input.tex_coord).rgb;
   incomingLight *= Exposure;
+  if (isinf(incomingLight.r)) {
+    incomingLight.r = BigNumber;
+  }
+  if (isinf(incomingLight.g)) {
+    incomingLight.g = BigNumber;
+  }
+  if (isinf(incomingLight.b)) {
+    incomingLight.b = BigNumber;
+  }
 
   float3 color = whiteBalance(incomingLight, Temperature, Tint);
 
