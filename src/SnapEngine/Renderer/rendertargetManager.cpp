@@ -134,9 +134,7 @@ auto RenderTargetManager::GetRendertarget(
   }
 
   auto info = ::Graphics::TextureCreationInfo{
-      .width = descriptor.size.x,
-      .height = descriptor.size.y,
-      .depth = 1,
+      .size = {descriptor.size.x, descriptor.size.y, 1},
       .format = descriptor.format,
       .usage = descriptor.usage,
       .mipmapCount = static_cast<int>(descriptor.mipmapCount),
@@ -146,13 +144,8 @@ auto RenderTargetManager::GetRendertarget(
           std::to_string(descriptor.size.x), std::to_string(descriptor.size.y)),
   };
 
-  auto textureResult = ::Graphics::Create2D(context, info);
+  auto texture = CHECK_RES(::Graphics::Create(context, info));
 
-  if (Error::IsError(textureResult)) {
-    return textureResult.error();
-  }
-
-  auto texture = textureResult.value();
   Rendertargets.push_back(
       {.descriptor = descriptor, .inUse = true, .texture = texture});
   return texture;

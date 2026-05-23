@@ -21,15 +21,20 @@ struct ImageData : Object {
 public:
   ~ImageData() override { internalData = {}; }
 
-  auto SetColor(Math::Uvec2 position, const Color &color) -> Error;
-  auto GetColor(Math::Uvec2 position) -> Result<Color>;
+  auto SetColor(Math::Uvec3 position, const Color &color) -> Error;
+  auto GetColor(Math::Uvec3 position) -> Result<Color>;
   auto Copy(const ImageData &source) -> void;
   auto GetDataPtr() -> uint8_t * { return internalData->GetData(); }
+  auto GetSpan() -> std::span<uint8_t> {
+    return {internalData->GetData(), internalData->GetSize()};
+  }
   [[nodiscard]] auto GetSize() const -> size_t {
     return internalData->GetSize();
   }
-  [[nodiscard]] auto GetWidth() const -> uint32_t { return width; }
-  [[nodiscard]] auto GetHeight() const -> uint32_t { return height; }
+  [[nodiscard]] auto GetWidth() const -> uint32_t { return size.width; }
+  [[nodiscard]] auto GetHeight() const -> uint32_t { return size.height; }
+  [[nodiscard]] auto GetDepth() const -> uint32_t { return size.depth; }
+  [[nodiscard]] auto GetDimensions() const -> VkExtent3D { return size; }
   [[nodiscard]] auto GetFormat() const -> VkFormat { return format; }
   [[nodiscard]] auto GetChannelCount() const -> uint32_t {
     return Graphics::Format::GetChannelCount(format);
@@ -43,21 +48,20 @@ public:
   auto operator=(const ImageData &) -> ImageData & = delete;
   auto operator=(ImageData &&) -> ImageData & = delete;
   // NOLINTNEXTLINE
-  ImageData(uint32_t width, uint32_t height, Data::ByteData &byteData,
-            VkFormat format)
-      : internalData(&byteData), width(width), height(height), format(format) {}
+  ImageData(VkExtent3D dimensions, Data::ByteData &byteData, VkFormat format)
+      : internalData(&byteData), size(dimensions), format(format) {}
   // NOLINTNEXTLINE
-  ImageData(uint32_t width, uint32_t height, VkFormat format)
+  ImageData(VkExtent3D dimensions, VkFormat format)
       : internalData(Ref<Data::ByteData>::Make(static_cast<size_t>(
-            width * height * Graphics::Format::GetSize(format)))),
-        width(width), height(height), format(format) {}
+            dimensions.width * dimensions.height * dimensions.depth *
+            Graphics::Format::GetSize(format)))),
+        size(dimensions), format(format) {}
 
-  static auto Create(uint32_t width, uint32_t height, VkFormat format)
+  static auto Create(VkExtent3D dimensions, VkFormat format)
       -> Result<Ref<ImageData>>;
-  static auto Create(uint32_t width, uint32_t height,
-                     const std::span<uint8_t> &srcData, VkFormat format)
-      -> Result<Ref<ImageData>>;
-  static auto Create(uint32_t width, uint32_t height, Data::ByteData &byteData,
+  static auto Create(VkExtent3D dimensions, const std::span<uint8_t> &srcData,
+                     VkFormat format) -> Result<Ref<ImageData>>;
+  static auto Create(VkExtent3D dimensions, Data::ByteData &byteData,
                      VkFormat format) -> Result<Ref<ImageData>>;
   static auto Create(const std::string &filepath) -> Result<Ref<ImageData>>;
   static auto Create(const Data::ByteData &byteData) -> Result<Ref<ImageData>>;
@@ -70,13 +74,14 @@ public:
     return ImageData::GetType();
   }
 
-  auto GetPitch() const -> size_t {
-    return width * static_cast<size_t>(Graphics::Format::GetSize(format));
+  auto GetRowPitch() const -> size_t {
+    return size.width * static_cast<size_t>(Graphics::Format::GetSize(format));
   }
 
+  auto GetSlicePitch() const -> size_t { return GetRowPitch() * size.height; }
+
 private:
-  uint32_t width;
-  uint32_t height;
+  VkExtent3D size;
   VkFormat format;
 
   Ref<Data::ByteData> internalData;

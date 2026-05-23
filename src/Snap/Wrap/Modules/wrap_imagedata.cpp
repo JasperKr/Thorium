@@ -20,16 +20,19 @@ auto wrap_NewImagedata(lua_State *state) -> int {
     // Create new empty imagedata
     auto width = static_cast<size_t>(luaL_checkinteger(state, 1));
     auto height = static_cast<size_t>(luaL_checkinteger(state, 2));
+    auto depth = static_cast<size_t>(luaL_optinteger(state, 3, 1));
 
     VkFormat format = Graphics::DefaultPixelFormat;
 
-    if (lua_isstring(state, 3) != 0) {
-      const auto *formatStr = luaL_checkstring(state, 3);
+    if (lua_isstring(state, 4) != 0) {
+      const auto *formatStr = luaL_checkstring(state, 4);
       format = Graphics::Format::StringToImageFormat(formatStr);
     }
 
     auto imagedataResult = ::Image::ImageData::Create(
-        static_cast<uint32_t>(width), static_cast<uint32_t>(height), format);
+        {static_cast<uint32_t>(width), static_cast<uint32_t>(height),
+         static_cast<uint32_t>(depth)},
+        format);
 
     if (Error::IsError(imagedataResult)) {
       return luaL_error(state, "Failed to create ImageData: %s",
@@ -61,11 +64,12 @@ auto wrap_NewImagedata(lua_State *state) -> int {
 auto wrap_SetPixel(lua_State *state) -> int {
   auto x_pos = static_cast<size_t>(luaL_checkinteger(state, 2));
   auto y_pos = static_cast<size_t>(luaL_checkinteger(state, 3));
+  auto z_pos = static_cast<size_t>(luaL_optinteger(state, 4, 0));
 
-  auto r = luaL_checknumber(state, 4); // NOLINT
-  auto g = luaL_checknumber(state, 5); // NOLINT
-  auto b = luaL_checknumber(state, 6); // NOLINT
-  auto a = luaL_checknumber(state, 7); // NOLINT
+  auto r = luaL_checknumber(state, 5); // NOLINT
+  auto g = luaL_checknumber(state, 6); // NOLINT
+  auto b = luaL_checknumber(state, 7); // NOLINT
+  auto a = luaL_checknumber(state, 8); // NOLINT
 
   auto *imagedata = LuaWrap::ObjectFromLua<::Image::ImageData>(state, 1);
   if (imagedata == nullptr) {
@@ -73,7 +77,7 @@ auto wrap_SetPixel(lua_State *state) -> int {
   }
 
   Color color(r, g, b, a);
-  Math::Uvec2 position(x_pos, y_pos);
+  Math::Uvec3 position(x_pos, y_pos, z_pos);
 
   auto error = imagedata->SetColor(position, color);
   if (Error::IsError(error)) {
@@ -86,6 +90,7 @@ auto wrap_SetPixel(lua_State *state) -> int {
 auto wrap_GetPixel(lua_State *state) -> int {
   auto x_pos = static_cast<uint32_t>(luaL_checkinteger(state, 2));
   auto y_pos = static_cast<uint32_t>(luaL_checkinteger(state, 3));
+  auto z_pos = static_cast<uint32_t>(luaL_optinteger(state, 4, 0));
 
   auto *imagedata = LuaWrap::ObjectFromLua<::Image::ImageData>(state, 1);
 
@@ -93,7 +98,7 @@ auto wrap_GetPixel(lua_State *state) -> int {
     return luaL_error(state, "Expected Imagedata object as first argument.");
   }
 
-  auto result = imagedata->GetColor({x_pos, y_pos});
+  auto result = imagedata->GetColor({x_pos, y_pos, z_pos});
   if (Error::IsError(result)) {
     return luaL_error(state, "Failed to get pixel color: %s",
                       result.error().message.c_str());

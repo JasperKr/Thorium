@@ -5,6 +5,7 @@
 #include "Modules/bytedata.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
+#include <atomic>
 #include <condition_variable>
 #include <cstdint>
 #include <mutex>
@@ -70,6 +71,8 @@ struct Buffer : Object, Barrier::BarrierSynced {
 
   VkMemoryPropertyFlags properties = 0;
   VkBufferUsageFlags usage = 0;
+
+  static std::atomic<VkDeviceSize> TotalAllocatedMemory;
 
   // Indicates if this is a staging buffer, meaning it is used for temporary uploads
   bool isStagingBuffer = false;

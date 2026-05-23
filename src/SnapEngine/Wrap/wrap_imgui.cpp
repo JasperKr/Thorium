@@ -100,9 +100,8 @@ inline auto ChangeMouseState(ImGuiIO &inout) -> Error {
 inline auto HandleImguiCreateTextureEvent(Graphics::GraphicsContext &context,
                                           ImTextureData *tex) -> Error {
   Graphics::TextureCreationInfo createInfo{
-      .width = static_cast<uint32_t>(tex->Width),
-      .height = static_cast<uint32_t>(tex->Height),
-      .depth = 1,
+      .size = VkExtent3D{static_cast<uint32_t>(tex->Width),
+                         static_cast<uint32_t>(tex->Height), 1},
       .format = tex->BytesPerPixel == 1 ? VK_FORMAT_R8_UNORM
                                         : Graphics::DefaultPixelFormat,
       .usage = static_cast<uint32_t>(VK_IMAGE_USAGE_SAMPLED_BIT) |
@@ -111,7 +110,7 @@ inline auto HandleImguiCreateTextureEvent(Graphics::GraphicsContext &context,
       .debugName = "Imgui Texture",
   };
 
-  auto textureCreationResult = Graphics::Create2D(context, createInfo);
+  auto textureCreationResult = Graphics::Create(context, createInfo);
 
   if (Error::IsError(textureCreationResult)) {
     return textureCreationResult.error();
@@ -132,7 +131,7 @@ inline auto HandleImguiCreateTextureEvent(Graphics::GraphicsContext &context,
       static_cast<size_t>(tex->Width * tex->Height * tex->BytesPerPixel));
 
   auto imagedataResult = Image::ImageData::Create(
-      tex->Width, tex->Height,
+      createInfo.size,
       tex->BytesPerPixel == 1 ? VK_FORMAT_R8_UNORM : VK_FORMAT_R8G8B8A8_UNORM);
 
   if (Error::IsError(imagedataResult)) {
@@ -186,27 +185,25 @@ inline auto HandleImguiUpdateTextureEvent(Graphics::GraphicsContext &context,
   std::lock_guard<std::mutex> lock(texture->mutex);
 
   for (ImTextureRect &currentRect : tex->Updates) {
-
-    VkRect2D sourceRect{
-        .offset{
-            .x = static_cast<int32_t>(currentRect.x),
-            .y = static_cast<int32_t>(currentRect.y),
-        },
-        .extent{
-            .width = static_cast<uint32_t>(currentRect.w),
-            .height = static_cast<uint32_t>(currentRect.h),
-        },
+    VkExtent3D sourceSize{
+        .width = static_cast<uint32_t>(currentRect.w),
+        .height = static_cast<uint32_t>(currentRect.h),
+        .depth = 1,
     };
 
-    VkOffset2D destOffset{
+    VkExtent3D destSize = sourceSize;
+
+    VkOffset3D destOffset{
         .x = static_cast<int32_t>(currentRect.x),
         .y = static_cast<int32_t>(currentRect.y),
+        .z = 0,
     };
 
+    VkOffset3D sourceOffset = destOffset;
+
     // Use the update data from the current pixels
-    auto updateResult =
-        texture->SetPixels(context, pixelSpan, tex->Width, tex->Height, 0, 0,
-                           sourceRect, destOffset);
+    auto updateResult = texture->SetPixels(context, pixelSpan, 0, 0, sourceSize,
+                                           sourceOffset, destOffset, destSize);
 
     if (Error::IsError(updateResult)) {
       return updateResult;

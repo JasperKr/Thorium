@@ -28,9 +28,9 @@ auto Renderer::InitializeDefaultMaterial(Graphics::GraphicsContext &context)
   constexpr Color CheckerboardColorPrimary = {0.0F, 0.0F, 0.0F, 1.0F};
   constexpr Color CheckerboardColorSecondary = {1.0F, 0.0F, 1.0F, 1.0F};
 
-  Image::ImageData defaultTextureData(CheckerboardTextureSize,
-                                      CheckerboardTextureSize,
-                                      VK_FORMAT_R8G8B8A8_UNORM);
+  Image::ImageData defaultTextureData(
+      {CheckerboardTextureSize, CheckerboardTextureSize, 1},
+      VK_FORMAT_R8G8B8A8_UNORM);
 
   for (uint32_t column = 0; column < CheckerboardTextureSize; ++column) {
     for (uint32_t row = 0; row < CheckerboardTextureSize; ++row) {
@@ -40,7 +40,7 @@ auto Renderer::InitializeDefaultMaterial(Graphics::GraphicsContext &context)
       Color pixelColor = isPrimaryColor ? CheckerboardColorPrimary
                                         : CheckerboardColorSecondary;
 
-      CHECK_ERR(defaultTextureData.SetColor({column, row}, pixelColor));
+      CHECK_ERR(defaultTextureData.SetColor({column, row, 0}, pixelColor));
     }
   }
 
@@ -51,10 +51,11 @@ auto Renderer::InitializeDefaultMaterial(Graphics::GraphicsContext &context)
     return defaultTextureResult.error();
   }
 
-  Image::ImageData defaultNormalTextureData(1, 1, VK_FORMAT_R8G8B8A8_UNORM);
+  Image::ImageData defaultNormalTextureData({1, 1, 1},
+                                            VK_FORMAT_R8G8B8A8_UNORM);
 
   const Color pixelColor = {0.5F, 0.5F, 1.0F, 1.0F};
-  CHECK_ERR(defaultNormalTextureData.SetColor({0, 0}, pixelColor));
+  CHECK_ERR(defaultNormalTextureData.SetColor({}, pixelColor));
 
   auto defaultNormalTextureResult = Graphics::LoadFromMemory(
       context, defaultNormalTextureData, VK_IMAGE_USAGE_SAMPLED_BIT);
@@ -64,9 +65,9 @@ auto Renderer::InitializeDefaultMaterial(Graphics::GraphicsContext &context)
   }
   auto defaultNormalTexture = defaultNormalTextureResult.value();
 
-  Image::ImageData defaultBlackTextureData(1, 1, VK_FORMAT_R8G8B8A8_UNORM);
+  Image::ImageData defaultBlackTextureData({1, 1, 1}, VK_FORMAT_R8G8B8A8_UNORM);
   const Color blackColor = {0.0F, 0.0F, 0.0F, 1.0F};
-  CHECK_ERR(defaultBlackTextureData.SetColor({0, 0}, blackColor));
+  CHECK_ERR(defaultBlackTextureData.SetColor({}, blackColor));
 
   auto defaultBlackTextureResult = Graphics::LoadFromMemory(
       context, defaultBlackTextureData, VK_IMAGE_USAGE_SAMPLED_BIT);

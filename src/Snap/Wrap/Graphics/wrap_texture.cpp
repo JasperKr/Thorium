@@ -684,16 +684,15 @@ static inline auto TextureFromWidthAndHeight(lua_State *state)
   auto width = static_cast<uint32_t>(luaL_checkinteger(state, 1));
   auto height = static_cast<uint32_t>(luaL_checkinteger(state, 2));
 
-  auto result = ::Graphics::Create2D(
-      *ctx,
-      ::Graphics::TextureCreationInfo{
-          .width = width,
-          .height = height,
-          .format = ::Graphics::DefaultPixelFormat,
-          .usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-          .mipmapCount = 1,
-          .debugName = "LuaTexture FromWidthAndHeight",
-      });
+  auto result =
+      ::Graphics::Create(*ctx, ::Graphics::TextureCreationInfo{
+                                   .size = {width, height},
+                                   .format = ::Graphics::DefaultPixelFormat,
+                                   .usage = VK_IMAGE_USAGE_SAMPLED_BIT |
+                                            VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+                                   .mipmapCount = 1,
+                                   .debugName = "LuaTexture FromWidthAndHeight",
+                               });
   if (Error::IsError(result)) {
     return result.error();
   }
@@ -729,14 +728,14 @@ static inline auto TextureFromWidthHeightAndOptions(lua_State *state)
     return Error::Unexpected("mipmapstart is not yet implemented.");
   }
 
-  auto result = ::Graphics::Create2D(
+  auto result = ::Graphics::Create(
       *ctx, ::Graphics::TextureCreationInfo{
-                .width = width,
-                .height = height,
+                .size = {width, height},
                 .format = options.format,
                 .usage = usage,
                 .mipmapCount = mipmapCount,
                 .debugName = "Lua texture from width, height and options",
+                .textureType = options.type,
             });
   if (Error::IsError(result)) {
     return result.error();
@@ -767,61 +766,37 @@ TextureFromWidthHeightDepthOrLayersAndOptions(lua_State *state)
   auto usage = TextureUsageToVkImageUsage(options.format, options.usage);
 
   Result<Ref<::Graphics::Texture>> result;
-  switch (options.type) {
-  case ::Graphics::TextureType::VOLUME: {
-    int mipmapCount = 1;
-    if (options.mipmaps != ::Graphics::TextureMipmapOption::None) {
+  int mipmapCount = 1;
+  if (options.mipmaps != ::Graphics::TextureMipmapOption::None) {
+    mipmapCount =
+        static_cast<int>(Image::GetMipmapCount(width, height, depthOrLayers));
+
+    if (options.mipmapCount != 0) {
       mipmapCount =
-          static_cast<int>(Image::GetMipmapCount(width, height, depthOrLayers));
-
-      if (options.mipmapCount != 0) {
-        mipmapCount =
-            std::min(mipmapCount, static_cast<int>(options.mipmapCount));
-      }
-
-      if (options.mipmapStart != 0) {
-        return Error::Unexpected("mipmapstart is not yet implemented.");
-      }
+          std::min(mipmapCount, static_cast<int>(options.mipmapCount));
     }
 
-    result = ::Graphics::CreateVolume(
-        *ctx,
-        ::Graphics::TextureCreationInfo{
-            .width = width,
-            .height = height,
-            .depth = depthOrLayers,
-            .format = options.format,
-            .usage = usage,
-            .mipmapCount = mipmapCount,
-            .debugName =
-                "Lua texture from width, height, depth/layers and options",
-        });
-    break;
-  }
-  case ::Graphics::TextureType::ARRAY: {
-    int mipmapCount = 1;
-    if (options.mipmaps != ::Graphics::TextureMipmapOption::None) {
-      mipmapCount = static_cast<int>(Image::GetMipmapCount(width, height));
+    if (options.mipmapStart != 0) {
+      return Error::Unexpected("mipmapstart is not yet implemented.");
     }
+  }
 
-    result = ::Graphics::CreateArray(
-        *ctx,
-        ::Graphics::TextureCreationInfo{
-            .width = width,
-            .height = height,
-            .depth = depthOrLayers,
-            .format = options.format,
-            .usage = usage,
-            .mipmapCount = mipmapCount,
-            .debugName =
-                "Lua texture from width, height, depth/layers and options",
-        });
-    break;
-  }
-  default:
-    return Error::Unexpected(
-        "Invalid texture type for 3D/Array texture creation.");
-  }
+  auto depth =
+      (options.type == ::Graphics::TextureType::VOLUME) ? depthOrLayers : 1;
+  auto layers =
+      (options.type == ::Graphics::TextureType::ARRAY) ? depthOrLayers : 1;
+
+  result = ::Graphics::Create(
+      *ctx, ::Graphics::TextureCreationInfo{
+                .size = {width, height, depth},
+                .arrayLayers = layers,
+                .format = options.format,
+                .usage = usage,
+                .mipmapCount = mipmapCount,
+                .debugName =
+                    "Lua texture from width, height, depth/layers and options",
+                .textureType = options.type,
+            });
 
   if (Error::IsError(result)) {
     return result.error();

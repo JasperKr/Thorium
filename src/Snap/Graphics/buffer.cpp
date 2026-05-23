@@ -364,6 +364,8 @@ auto Buffer::Create(const GraphicsContext &context,
   buffer->usage = info.usage;
   buffer->properties = info.properties;
 
+  Buffer::TotalAllocatedMemory += buffer->sizeInBytes;
+
   PrintDebug("Buffer created with handle {}", (void *)buffer->handle);
 
   VmaAllocationInfo memRequirements;
@@ -671,6 +673,9 @@ Buffer::~Buffer() {
   }
 
   vmaDestroyBuffer(context->vmaAllocator, handle, memory);
+  Buffer::TotalAllocatedMemory -= sizeInBytes;
 }
+
+std::atomic<VkDeviceSize> Buffer::TotalAllocatedMemory{};
 
 } // namespace Graphics

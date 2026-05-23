@@ -216,10 +216,10 @@ static const std::unordered_map<VkFormat, FormatFunctions> formatFunctionMap = {
       }}}};
 
 namespace Image {
-auto ImageData::SetColor(Math::Uvec2 position, const Color &color) -> Error {
-  size_t index = (static_cast<size_t>(position.y) * static_cast<size_t>(width) +
-                  static_cast<size_t>(position.x)) *
-                 GetFormatSize();
+auto ImageData::SetColor(Math::Uvec3 position, const Color &color) -> Error {
+  size_t index = (GetSlicePitch() * position.z) + (GetRowPitch() * position.y) +
+                 (position.x * GetFormatSize());
+
   auto funcIterator = formatFunctionMap.find(format);
   if (funcIterator != formatFunctionMap.end()) {
     const FormatFunctions &functions = funcIterator->second;
@@ -230,10 +230,10 @@ auto ImageData::SetColor(Math::Uvec2 position, const Color &color) -> Error {
   return Error::Create("Unsupported image format.");
 }
 
-auto ImageData::GetColor(Math::Uvec2 position) -> Result<Color> {
-  size_t index = (static_cast<size_t>(position.y) * static_cast<size_t>(width) +
-                  static_cast<size_t>(position.x)) *
-                 GetFormatSize();
+auto ImageData::GetColor(Math::Uvec3 position) -> Result<Color> {
+  size_t index = (GetSlicePitch() * position.z) + (GetRowPitch() * position.y) +
+                 (position.x * GetFormatSize());
+
   auto funcIterator = formatFunctionMap.find(format);
   static Color outColor; // NOLINT
   if (funcIterator != formatFunctionMap.end()) {
@@ -246,31 +246,32 @@ auto ImageData::GetColor(Math::Uvec2 position) -> Result<Color> {
   return Error::Create("Unsupported image format.");
 }
 
-auto ImageData::Create(uint32_t width, uint32_t height, VkFormat format)
+auto ImageData::Create(VkExtent3D dimensions, VkFormat format)
     -> Result<Ref<ImageData>> {
   assert(Graphics::Format::GetSize(format) != 0);
-  return Ref<ImageData>::Make(width, height, format);
+  return Ref<ImageData>::Make(dimensions, format);
 }
 
-auto ImageData::Create(uint32_t width, uint32_t height,
-                       const std::span<uint8_t> &srcData, VkFormat format)
-    -> Result<Ref<ImageData>> {
+auto ImageData::Create(VkExtent3D dimensions, const std::span<uint8_t> &srcData,
+                       VkFormat format) -> Result<Ref<ImageData>> {
   assert(Graphics::Format::GetSize(format) != 0);
-  auto imgdata = Ref<ImageData>::Make(width, height, format);
+  auto imgdata = Ref<ImageData>::Make(dimensions, format);
   std::memcpy(imgdata->GetDataPtr(), srcData.data(), srcData.size());
   return imgdata;
 }
 
-auto ImageData::Create(uint32_t width, uint32_t height,
-                       Data::ByteData &byteData, VkFormat format)
-    -> Result<Ref<ImageData>> {
-  size_t dataSize = static_cast<size_t>(width) * static_cast<size_t>(height) *
+auto ImageData::Create(VkExtent3D dimensions, Data::ByteData &byteData,
+                       VkFormat format) -> Result<Ref<ImageData>> {
+  size_t dataSize = static_cast<size_t>(dimensions.width) *
+                    static_cast<size_t>(dimensions.height) *
+                    static_cast<size_t>(dimensions.depth) *
                     Graphics::Format::GetSize(format);
+
   if (byteData.GetSize() != dataSize && dataSize > 0) {
     return Error::Unexpected("ByteData size does not match image dimensions.");
   }
 
-  return Ref<ImageData>::Make(width, height, byteData, format);
+  return Ref<ImageData>::Make(dimensions, byteData, format);
 }
 
 auto ImageData::Create(const std::string &filepath) -> Result<Ref<ImageData>> {
@@ -312,8 +313,9 @@ auto ImageData::Create(const std::span<const uint8_t> &data)
         std::span<uint8_t>(pixels, static_cast<size_t>(texWidth) *
                                        static_cast<size_t>(texHeight) * 4);
 
-    auto imageData = Image::ImageData::Create(texWidth, texHeight, span,
-                                              VK_FORMAT_R8G8B8A8_UNORM);
+    auto imageData = Image::ImageData::Create(
+        {static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight), 1},
+        span, VK_FORMAT_R8G8B8A8_UNORM);
 
     stbi_image_free(pixels);
 
@@ -335,7 +337,8 @@ auto ImageData::Create(const std::span<const uint8_t> &data)
     }
 
     auto imageData = CHECK_RES(Image::ImageData::Create(
-        texWidth, texHeight, VK_FORMAT_B10G11R11_UFLOAT_PACK32));
+        {static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight), 1},
+        VK_FORMAT_B10G11R11_UFLOAT_PACK32));
     auto *ptr = reinterpret_cast<uint32_t *>(imageData->GetDataPtr()); // NOLINT
 
 // Parallel for-loop to convert from RGB float to B10G11R11

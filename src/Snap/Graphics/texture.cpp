@@ -21,12 +21,14 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <format>
 #include <mutex>
 #include <public/tracy/Tracy.hpp>
 #include <span>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #define VMA_VULKAN_VERSION 1004000
 
@@ -86,7 +88,7 @@ inline auto SetDebugName(const std::string &debugName, Texture *texture,
   return Error::Success();
 }
 
-auto Create2D(const GraphicsContext &context, const TextureCreationInfo &info)
+auto Create(const GraphicsContext &context, const TextureCreationInfo &info)
     -> Result<Ref<Texture>> {
   ZoneScoped;
 
@@ -100,12 +102,12 @@ auto Create2D(const GraphicsContext &context, const TextureCreationInfo &info)
 
   Ref<Texture> texture = Ref<Texture>::Make();
 
-  texture->size = VkExtent3D{info.width, info.height, 1};
+  texture->size = info.size;
   texture->format = info.format;
   texture->textureType = TextureType::DEFAULT;
   texture->mipmapcount = info.mipmapCount;
   texture->usage = info.usage;
-  texture->arrayLayers = 1;
+  texture->arrayLayers = info.arrayLayers;
   texture->samplerDirty = true;
 
   const auto &config = Threading::GetGraphicsConfiguration();
@@ -115,11 +117,9 @@ auto Create2D(const GraphicsContext &context, const TextureCreationInfo &info)
   VkImageCreateInfo imageInfo = {};
   imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
   imageInfo.imageType = VK_IMAGE_TYPE_2D;
-  imageInfo.extent.width = info.width;
-  imageInfo.extent.height = info.height;
-  imageInfo.extent.depth = 1;
+  imageInfo.extent = info.size;
   imageInfo.mipLevels = info.mipmapCount;
-  imageInfo.arrayLayers = 1;
+  imageInfo.arrayLayers = info.arrayLayers;
   imageInfo.format = info.format;
   imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
   imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -157,7 +157,7 @@ auto Create2D(const GraphicsContext &context, const TextureCreationInfo &info)
   viewInfo.subresourceRange.baseMipLevel = 0;
   viewInfo.subresourceRange.levelCount = info.mipmapCount;
   viewInfo.subresourceRange.baseArrayLayer = 0;
-  viewInfo.subresourceRange.layerCount = 1;
+  viewInfo.subresourceRange.layerCount = info.arrayLayers;
 
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
@@ -174,9 +174,7 @@ auto Create2D(const GraphicsContext &context, const TextureCreationInfo &info)
                          &memRequirements);
   }
   texture->sizeInBytes = memRequirements.size;
-  PrintAlways("Created texture '{}' with size {}x{} and format {} ({} bytes)",
-              info.debugName, info.width, info.height,
-              std::to_string(info.format), memRequirements.size);
+  Texture::TotalAllocatedMemory += texture->sizeInBytes;
 
   return texture;
 }
@@ -215,259 +213,6 @@ auto FromSwapchainTexture(const GraphicsContext &context,
   return texture;
 }
 
-auto CreateCubeMap(const GraphicsContext &context,
-                   const TextureCreationInfo &info) -> Result<Ref<Texture>> {
-
-  if (info.width != info.height) {
-    return Error::Unexpected(
-        "Cube map textures must have equal width and height.");
-  }
-  const int CubeFaceCount = 6;
-
-  Ref<Texture> texture = Ref<Texture>::Make();
-
-  texture->size = VkExtent3D{info.width, info.width, 1};
-  texture->format = info.format;
-  texture->textureType = TextureType::CUBEMAP;
-  texture->mipmapcount = info.mipmapCount;
-  texture->usage = info.usage;
-  texture->arrayLayers = CubeFaceCount;
-  texture->samplerDirty = true;
-
-  VkImageCreateInfo imageInfo = {};
-  imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-  imageInfo.imageType = VK_IMAGE_TYPE_2D;
-  imageInfo.extent.width = info.width;
-  imageInfo.extent.height = info.width;
-  imageInfo.extent.depth = 1;
-  imageInfo.mipLevels = info.mipmapCount;
-  imageInfo.arrayLayers = CubeFaceCount;
-  imageInfo.format = info.format;
-  imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-  imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-  imageInfo.usage = info.usage;
-  imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-  imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-  imageInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
-
-  if (imageInfo.mipLevels > 1) {
-    imageInfo.usage |= static_cast<uint32_t>(VK_IMAGE_USAGE_TRANSFER_SRC_BIT) |
-                       VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-  }
-
-  VmaAllocationCreateInfo allocInfo = {};
-  allocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
-  allocInfo.requiredFlags = 0;
-  allocInfo.preferredFlags = 0;
-
-  {
-    std::scoped_lock<std::mutex, std::mutex> lock(
-        Graphics::GraphicsContext::mutexes.device,
-        Graphics::GraphicsContext::mutexes.vmaAllocator);
-
-    CHECK_NEW_ERR(vmaCreateImage(context.vmaAllocator, &imageInfo, &allocInfo,
-                                 &texture->image, &texture->memory, nullptr));
-  }
-
-  auto setNameResult = SetDebugName(info.debugName, texture.get(), context);
-  if (Error::IsError(setNameResult)) {
-    return setNameResult;
-  }
-
-  VkImageViewCreateInfo viewInfo = {};
-  viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-  viewInfo.image = texture->image;
-  viewInfo.viewType = VK_IMAGE_VIEW_TYPE_CUBE;
-  viewInfo.format = info.format;
-  viewInfo.subresourceRange.aspectMask = GetAspectFlagsForFormat(info.format);
-  viewInfo.subresourceRange.baseMipLevel = 0;
-  viewInfo.subresourceRange.levelCount = info.mipmapCount;
-  viewInfo.subresourceRange.baseArrayLayer = 0;
-  viewInfo.subresourceRange.layerCount = CubeFaceCount;
-
-  {
-    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    CHECK_ERR(Error::Create(vkCreateImageView(
-        context.device, &viewInfo, GetAllocationCallbacks(), &texture->view)));
-  }
-
-  VmaAllocationInfo memRequirements;
-  {
-    std::lock_guard<std::mutex> lock(
-        Graphics::GraphicsContext::mutexes.vmaAllocator);
-
-    vmaGetAllocationInfo(context.vmaAllocator, texture->memory,
-                         &memRequirements);
-  }
-  texture->sizeInBytes = memRequirements.size;
-
-  return texture;
-}
-
-auto CreateVolume(const GraphicsContext &context,
-                  const TextureCreationInfo &info) -> Result<Ref<Texture>> {
-
-  Ref<Texture> texture = Ref<Texture>::Make();
-
-  texture->size = VkExtent3D{info.width, info.height, info.depth};
-  texture->format = info.format;
-  texture->textureType = TextureType::VOLUME;
-  texture->mipmapcount = info.mipmapCount;
-  texture->usage = info.usage;
-  texture->arrayLayers = 1;
-  texture->samplerDirty = true;
-
-  VkImageCreateInfo imageInfo = {};
-  imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-  imageInfo.imageType = VK_IMAGE_TYPE_3D;
-  imageInfo.extent.width = info.width;
-  imageInfo.extent.height = info.height;
-  imageInfo.extent.depth = info.depth;
-  imageInfo.mipLevels = info.mipmapCount;
-  imageInfo.arrayLayers = 1;
-  imageInfo.format = info.format;
-  imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-  imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-  imageInfo.usage = info.usage;
-  imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-  imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-  if (imageInfo.mipLevels > 1) {
-    imageInfo.usage |= static_cast<uint32_t>(VK_IMAGE_USAGE_TRANSFER_SRC_BIT) |
-                       VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-  }
-
-  VmaAllocationCreateInfo allocInfo = {};
-  allocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
-  allocInfo.requiredFlags = 0;
-  allocInfo.preferredFlags = 0;
-
-  {
-    std::scoped_lock<std::mutex, std::mutex> lock(
-        Graphics::GraphicsContext::mutexes.device,
-        Graphics::GraphicsContext::mutexes.vmaAllocator);
-
-    CHECK_NEW_ERR(vmaCreateImage(context.vmaAllocator, &imageInfo, &allocInfo,
-                                 &texture->image, &texture->memory, nullptr));
-  }
-
-  auto setNameResult = SetDebugName(info.debugName, texture.get(), context);
-  if (Error::IsError(setNameResult)) {
-    return setNameResult;
-  }
-
-  VkImageViewCreateInfo viewInfo = {};
-  viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-  viewInfo.image = texture->image;
-  viewInfo.viewType = VK_IMAGE_VIEW_TYPE_3D;
-  viewInfo.format = info.format;
-  viewInfo.subresourceRange.aspectMask = GetAspectFlagsForFormat(info.format);
-  viewInfo.subresourceRange.baseMipLevel = 0;
-  viewInfo.subresourceRange.levelCount = info.mipmapCount;
-  viewInfo.subresourceRange.baseArrayLayer = 0;
-  viewInfo.subresourceRange.layerCount = 1;
-
-  {
-    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    CHECK_ERR(Error::Create(vkCreateImageView(
-        context.device, &viewInfo, GetAllocationCallbacks(), &texture->view)));
-  }
-
-  VmaAllocationInfo memRequirements;
-  {
-    std::lock_guard<std::mutex> lock(
-        Graphics::GraphicsContext::mutexes.vmaAllocator);
-
-    vmaGetAllocationInfo(context.vmaAllocator, texture->memory,
-                         &memRequirements);
-  }
-  texture->sizeInBytes = memRequirements.size;
-
-  return texture;
-}
-
-auto CreateArray(const GraphicsContext &context,
-                 const TextureCreationInfo &info) -> Result<Ref<Texture>> {
-
-  Ref<Texture> texture = Ref<Texture>::Make();
-
-  texture->size = VkExtent3D{info.width, info.height, info.depth};
-  texture->format = info.format;
-  texture->textureType = TextureType::ARRAY;
-  texture->mipmapcount = info.mipmapCount;
-  texture->usage = info.usage;
-  texture->arrayLayers = info.depth;
-  texture->samplerDirty = true;
-
-  VkImageCreateInfo imageInfo = {};
-  imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-  imageInfo.imageType = VK_IMAGE_TYPE_2D;
-  imageInfo.extent.width = info.width;
-  imageInfo.extent.height = info.height;
-  imageInfo.extent.depth = 1;
-  imageInfo.mipLevels = info.mipmapCount;
-  imageInfo.arrayLayers = info.depth;
-  imageInfo.format = info.format;
-  imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-  imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-  imageInfo.usage = info.usage;
-  imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-  imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-
-  if (imageInfo.mipLevels > 1) {
-    imageInfo.usage |= static_cast<uint32_t>(VK_IMAGE_USAGE_TRANSFER_SRC_BIT) |
-                       VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-  }
-
-  VmaAllocationCreateInfo allocInfo = {};
-  allocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
-  allocInfo.requiredFlags = 0;
-  allocInfo.preferredFlags = 0;
-
-  {
-    std::scoped_lock<std::mutex, std::mutex> lock(
-        Graphics::GraphicsContext::mutexes.device,
-        Graphics::GraphicsContext::mutexes.vmaAllocator);
-
-    CHECK_NEW_ERR(vmaCreateImage(context.vmaAllocator, &imageInfo, &allocInfo,
-                                 &texture->image, &texture->memory, nullptr));
-  }
-
-  auto setNameResult = SetDebugName(info.debugName, texture.get(), context);
-  if (Error::IsError(setNameResult)) {
-    return setNameResult;
-  }
-
-  VkImageViewCreateInfo viewInfo = {};
-  viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-  viewInfo.image = texture->image;
-  viewInfo.viewType = VK_IMAGE_VIEW_TYPE_3D;
-  viewInfo.format = info.format;
-  viewInfo.subresourceRange.aspectMask = GetAspectFlagsForFormat(info.format);
-  viewInfo.subresourceRange.baseMipLevel = 0;
-  viewInfo.subresourceRange.levelCount = info.mipmapCount;
-  viewInfo.subresourceRange.baseArrayLayer = 0;
-  viewInfo.subresourceRange.layerCount = info.depth;
-
-  {
-    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    CHECK_ERR(Error::Create(vkCreateImageView(
-        context.device, &viewInfo, GetAllocationCallbacks(), &texture->view)));
-  }
-
-  VmaAllocationInfo memRequirements;
-  {
-    std::lock_guard<std::mutex> lock(
-        Graphics::GraphicsContext::mutexes.vmaAllocator);
-
-    vmaGetAllocationInfo(context.vmaAllocator, texture->memory,
-                         &memRequirements);
-  }
-  texture->sizeInBytes = memRequirements.size;
-
-  return texture;
-}
-
 auto LoadFromFile(GraphicsContext &context, const char *path,
                   VkImageUsageFlags usage, TextureMipmapOption mipmaps)
     -> Result<Ref<Texture>> {
@@ -485,16 +230,16 @@ auto LoadFromFile(GraphicsContext &context, const char *path,
         Image::GetMipmapCount(imageData->GetWidth(), imageData->GetHeight()));
   }
 
-  auto texture = CHECK_RES(Create2D(
-      context, TextureCreationInfo{
-                   .width = imageData->GetWidth(),
-                   .height = imageData->GetHeight(),
-                   .format = imageData->GetFormat(),
-                   .usage = usage | static_cast<uint32_t>(
-                                        VK_IMAGE_USAGE_TRANSFER_DST_BIT),
-                   .mipmapCount = mipmapCount,
-                   .debugName = "Image_" + std::string(path),
-               }));
+  auto texture = CHECK_RES(
+      Create(context, TextureCreationInfo{
+                          .size = imageData->GetDimensions(),
+                          .format = imageData->GetFormat(),
+                          .usage = usage | static_cast<uint32_t>(
+                                               VK_IMAGE_USAGE_TRANSFER_DST_BIT),
+                          .mipmapCount = mipmapCount,
+                          .debugName = "Image_" + std::string(path),
+                          .textureType = TextureType::DEFAULT,
+                      }));
 
   CHECK_ERR(texture->SetPixels(context, *imageData));
 
@@ -527,27 +272,34 @@ auto LoadFromMemory(GraphicsContext &context,
     mipmapCount = static_cast<int>(Image::GetMipmapCount(width, height));
   }
 
-  auto texture = CHECK_RES(Create2D(
-      context, TextureCreationInfo{
-                   .width = static_cast<uint32_t>(width),
-                   .height = static_cast<uint32_t>(height),
-                   .format = format,
-                   .usage = usage | static_cast<uint32_t>(
-                                        VK_IMAGE_USAGE_TRANSFER_DST_BIT),
-                   .mipmapCount = mipmapCount,
-                   .debugName = "Image_FromMemory",
-               }));
+  auto texture = CHECK_RES(
+      Create(context, TextureCreationInfo{
+                          .size = VkExtent3D{static_cast<uint32_t>(width),
+                                             static_cast<uint32_t>(height), 1},
+                          .format = format,
+                          .usage = usage | static_cast<uint32_t>(
+                                               VK_IMAGE_USAGE_TRANSFER_DST_BIT),
+                          .mipmapCount = mipmapCount,
+                          .debugName = "Image_FromMemory",
+                      }));
 
-  auto source = VkRect2D{
-      .offset = VkOffset2D{0, 0},
-      .extent = VkExtent2D{static_cast<uint32_t>(width),
-                           static_cast<uint32_t>(height)},
-  };
+  // auto source = VkRect2D{
+  //     .offset = VkOffset2D{0, 0},
+  //     .extent = VkExtent2D{static_cast<uint32_t>(width),
+  //                          static_cast<uint32_t>(height)},
+  // };
 
-  auto dst = VkOffset2D{0, 0};
+  // auto dst = VkOffset2D{0, 0};
 
-  auto result =
-      texture->SetPixels(context, dataSpan, width, height, 0, 0, source, dst);
+  auto sourceSize = VkExtent3D{static_cast<uint32_t>(width),
+                               static_cast<uint32_t>(height), 1};
+  auto sourceOffset = VkOffset3D{0, 0, 0};
+  auto destOffset = VkOffset3D{0, 0, 0};
+  auto destSize = VkExtent3D{static_cast<uint32_t>(width),
+                             static_cast<uint32_t>(height), 1};
+
+  auto result = texture->SetPixels(context, dataSpan, 0, 0, sourceSize,
+                                   sourceOffset, destOffset, destSize);
 
   if (requiresFree) {
     stbi_image_free((void *)dataSpan.data());
@@ -576,16 +328,15 @@ auto LoadFromMemory(GraphicsContext &context, Image::ImageData &imageData,
         Image::GetMipmapCount(imageData.GetWidth(), imageData.GetHeight()));
   }
 
-  auto texture = CHECK_RES(Create2D(
-      context, TextureCreationInfo{
-                   .width = imageData.GetWidth(),
-                   .height = imageData.GetHeight(),
-                   .format = imageData.GetFormat(),
-                   .usage = usage | static_cast<uint32_t>(
-                                        VK_IMAGE_USAGE_TRANSFER_DST_BIT),
-                   .mipmapCount = mipmapCount,
-                   .debugName = "Image_ImageData",
-               }));
+  auto texture = CHECK_RES(
+      Create(context, TextureCreationInfo{
+                          .size = imageData.GetDimensions(),
+                          .format = imageData.GetFormat(),
+                          .usage = usage | static_cast<uint32_t>(
+                                               VK_IMAGE_USAGE_TRANSFER_DST_BIT),
+                          .mipmapCount = mipmapCount,
+                          .debugName = "Image_ImageData",
+                      }));
 
   CHECK_ERR(texture->SetPixels(context, imageData, 0, 0));
 
@@ -623,14 +374,15 @@ auto LoadFromMemory(GraphicsContext &context,
       mipmapCount = static_cast<int>(Image::GetMipmapCount(width, height));
     }
 
-    auto cubeMapTexture = CreateCubeMap(
+    auto cubeMapTexture = Create(
         context, TextureCreationInfo{
-                     .width = width,
-                     .height = height,
+                     .size = VkExtent3D{width, height, 1},
+                     .arrayLayers = 6, // NOLINT
                      .format = slices[0]->GetFormat(),
                      .usage = usage | static_cast<uint32_t>(
                                           VK_IMAGE_USAGE_TRANSFER_DST_BIT),
                      .mipmapCount = mipmapCount,
+                     .textureType = TextureType::CUBEMAP,
                  });
 
     if (Error::IsError(cubeMapTexture)) {
@@ -645,15 +397,15 @@ auto LoadFromMemory(GraphicsContext &context,
       mipmapCount = static_cast<int>(Image::GetMipmapCount(width, height));
     }
 
-    auto arrayTexture = CreateArray(
+    auto arrayTexture = Create(
         context, TextureCreationInfo{
-                     .width = width,
-                     .height = height,
-                     .depth = static_cast<uint32_t>(slices.size()),
+                     .size = VkExtent3D{width, height, 1},
+                     .arrayLayers = static_cast<uint32_t>(slices.size()),
                      .format = slices[0]->GetFormat(),
                      .usage = usage | static_cast<uint32_t>(
                                           VK_IMAGE_USAGE_TRANSFER_DST_BIT),
                      .mipmapCount = mipmapCount,
+                     .textureType = TextureType::ARRAY,
                  });
 
     if (Error::IsError(arrayTexture)) {
@@ -669,15 +421,15 @@ auto LoadFromMemory(GraphicsContext &context,
           static_cast<int>(Image::GetMipmapCount(width, height, slices.size()));
     }
 
-    auto volumeTexture = CreateVolume(
+    auto volumeTexture = Create(
         context, TextureCreationInfo{
-                     .width = width,
-                     .height = height,
-                     .depth = static_cast<uint32_t>(slices.size()),
+                     .size = VkExtent3D{width, height,
+                                        static_cast<uint32_t>(slices.size())},
                      .format = slices[0]->GetFormat(),
                      .usage = usage | static_cast<uint32_t>(
                                           VK_IMAGE_USAGE_TRANSFER_DST_BIT),
                      .mipmapCount = mipmapCount,
+                     .textureType = TextureType::VOLUME,
                  });
 
     if (Error::IsError(volumeTexture)) {
@@ -694,12 +446,7 @@ auto LoadFromMemory(GraphicsContext &context,
 
   for (size_t i = 0; i < slices.size(); ++i) {
     auto result =
-        texture->SetPixels(context, *slices[i], 0, static_cast<uint32_t>(i),
-                           VkRect2D{
-                               .offset = VkOffset2D{0, 0},
-                               .extent = VkExtent2D{width, height},
-                           },
-                           VkOffset2D{0, 0});
+        texture->SetPixels(context, *slices[i], 0, static_cast<uint32_t>(i));
     if (Error::IsError(result)) {
       return result;
     }
@@ -906,58 +653,71 @@ auto Texture::GetSampler(const GraphicsContext &context) -> VkSampler {
   return sampler;
 }
 
+// Copies data from a 1D/2D/3D region from the provided data to the texture
+// sourceSize is the dimensions of the underlying data
+// sourceOffset is the offset within the data to start copying from
+// target is the offset within the texture to copy to
+// targetSize is the size of the region to copy within the texture
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 auto Texture::SetPixels(const GraphicsContext &context,
-                        Image::ImageData &imageData,
+                        const std::span<const uint8_t> &data,
                         uint32_t mipLevel, // NOLINT
-                        uint32_t arrayLayer,
-                        VkRect2D source, // NOLINT
-                        VkOffset2D target) -> Error {
+                        uint32_t arrayLayer, VkExtent3D sourceSize,
+                        VkOffset3D sourceOffset, // NOLINT
+                        VkOffset3D target, VkExtent3D targetSize) -> Error {
   ZoneScoped;
 
-  if (source.extent.width > size.width || source.extent.height > size.height) {
+  if (sourceSize.width == 0 || sourceSize.height == 0 ||
+      sourceSize.depth == 0) {
+    return Error::Create(
+        "Source size dimensions must be greater than zero in SetPixels.");
+  }
+
+  if (sourceOffset.x + sourceSize.width > size.width ||
+      sourceOffset.y + sourceSize.height > size.height ||
+      sourceOffset.z + sourceSize.depth > size.depth) {
     return Error::Create(
         "ImageData dimensions exceed texture dimensions in SetPixels.");
   }
-  if (source.extent.width + target.x > size.width ||
-      source.extent.height + target.y > size.height) {
+  if (sourceOffset.x + target.x > size.width ||
+      sourceOffset.y + target.y > size.height ||
+      sourceOffset.z + target.z > size.depth) {
     return Error::Create("Source width and target offset exceed texture "
                          "dimensions in SetPixels.");
   }
-  if (target.x < 0 || target.y < 0) {
+  if (target.x < 0 || target.y < 0 || target.z < 0) {
     return Error::Create(
         "Negative target offsets are not supported in SetPixels.");
   }
-  if (source.extent.width > imageData.GetWidth() ||
-      source.extent.height > imageData.GetHeight()) {
+  if (sourceOffset.x > sourceSize.width || sourceOffset.y > sourceSize.height ||
+      sourceOffset.z > sourceSize.depth) {
     return Error::Create(
         "Source rectangle exceeds ImageData dimensions in SetPixels.");
   }
-  if (source.offset.x < 0 || source.offset.y < 0) {
+  if (sourceOffset.x < 0 || sourceOffset.y < 0 || sourceOffset.z < 0) {
     return Error::Create(
         "Negative source offsets are not supported in SetPixels.");
   }
 
+  auto uploadSize = sourceSize.width * sourceSize.height * sourceSize.depth *
+                    Format::GetSize(format);
+
+  if (uploadSize > data.size()) {
+    return Error::Create("Provided data size is smaller than expected for "
+                         "given source dimensions and format in SetPixels.");
+  }
+
   // Create staging buffer
   BufferCreationInfo bufferCreationInfo = {};
-  bufferCreationInfo.size = imageData.GetSize();
+  bufferCreationInfo.size = uploadSize;
   bufferCreationInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
   bufferCreationInfo.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
                                   VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
   bufferCreationInfo.stagingBuffer = true;
   bufferCreationInfo.persistentMapping = false;
 
-  if (imageData.GetWidth() > size.width ||
-      imageData.GetHeight() > size.height) {
-    return Error::Create(
-        "ImageData dimensions exceed texture dimensions in SetPixels.");
-  }
-
   bufferCreationInfo.debugName = "Texture Staging Buffer for SetPixels";
   auto buffer = CHECK_RES(Buffer::Create(context, bufferCreationInfo));
-
-  auto rowSize =
-      static_cast<size_t>(source.extent.width) * Format::GetSize(format);
-  auto rowCount = static_cast<size_t>(source.extent.height);
 
   Graphics::Barrier::UpdateUsage(context, *this,
                                  Graphics::Barrier::ResourceState{
@@ -965,35 +725,48 @@ auto Texture::SetPixels(const GraphicsContext &context,
                                      .access = VK_ACCESS_2_HOST_WRITE_BIT,
                                  });
 
-  if (source.extent.width == size.width) {
-    // Fast path for full-width updates
-    auto dataSpan = // NOLINTNEXTLINE pointer arithmetic
-        std::span<uint8_t>(imageData.GetDataPtr() + (source.offset.y * rowSize),
-                           rowSize * rowCount);
-    auto error = buffer->SetData(context, dataSpan, 0);
-  } else {
-    for (size_t row = 0; row < rowCount; ++row) {
-      size_t sourceOffset =
-          ((row + source.offset.y) * imageData.GetWidth() + source.offset.x) *
-          Format::GetSize(format);
+  std::vector<uint8_t> tempBuffer(uploadSize);
+  auto formatSize = Format::GetSize(format);
+  auto *dstPtr = tempBuffer.data();
+  const auto *srcPtr = data.data();
 
-      auto rowSpan = // NOLINTNEXTLINE pointer arithmetic
-          std::span<uint8_t>(imageData.GetDataPtr() + sourceOffset, rowSize);
-      CHECK_ERR(buffer->SetData(context, rowSpan, row * rowSize));
+  for (size_t zSlice = 0; zSlice < sourceSize.depth; ++zSlice) {
+    auto Zoffset = (sourceOffset.z + zSlice) * sourceSize.width *
+                   sourceSize.height * formatSize;
+    auto ZdstOffset =
+        (target.z + zSlice) * sourceSize.width * sourceSize.height * formatSize;
+
+    for (size_t row = 0; row < sourceSize.height; ++row) {
+      auto Xoffset = sourceOffset.x * formatSize;
+      auto Yoffset = (sourceOffset.y + row) * sourceSize.width * formatSize;
+      auto srcOffset = Xoffset + Yoffset + Zoffset;
+
+      auto XdstOffset = (target.x) * formatSize;
+      auto YdstOffset = (target.y + row) * sourceSize.width * formatSize;
+      auto dstOffset = XdstOffset + YdstOffset + ZdstOffset;
+
+      auto copySize = sourceSize.width * formatSize;
+
+      assert(srcOffset + copySize <= data.size());
+      assert(dstOffset + copySize <= tempBuffer.size());
+
+      // NOLINTNEXTLINE
+      std::memcpy(dstPtr + dstOffset, srcPtr + srcOffset, copySize);
     }
   }
 
+  CHECK_ERR(buffer->SetData(context, tempBuffer));
+
   VkBufferImageCopy region = {};
   region.bufferOffset = 0;
-  region.bufferRowLength = source.extent.width;
-  region.bufferImageHeight = source.extent.height;
+  region.bufferRowLength = sourceSize.width;
+  region.bufferImageHeight = sourceSize.height;
   region.imageSubresource.aspectMask = GetAspectFlagsForFormat(format);
   region.imageSubresource.mipLevel = mipLevel;
   region.imageSubresource.baseArrayLayer = arrayLayer;
   region.imageSubresource.layerCount = 1;
-  region.imageOffset = {.x = target.x, .y = target.y, .z = 0};
-  region.imageExtent = {
-      .width = source.extent.width, .height = source.extent.height, .depth = 1};
+  region.imageOffset = target;
+  region.imageExtent = targetSize;
 
   CHECK_ERR(UseAsTransferDst(context));
 
@@ -1018,107 +791,15 @@ auto Texture::SetPixels(const GraphicsContext &context,
                         Image::ImageData &imageData, uint32_t mipLevel,
                         uint32_t arrayLayer) // NOLINT
     -> Error {
-  VkRect2D source = {};
-  source.offset = {.x = 0, .y = 0};
-  source.extent = {.width = size.width, .height = size.height};
-  VkOffset2D target = {0, 0};
-  return SetPixels(context, imageData, mipLevel, arrayLayer, source, target);
-}
-
-inline auto WritePixelData(const Ref<Texture> &texture,
-                           const GraphicsContext &context,
-                           const std::span<const uint8_t> &data,
-                           size_t dataWidth, size_t dataHeight,
-                           uint32_t mipLevel, // NOLINT
-                           uint32_t arrayLayer, VkRect2D source,
-                           VkOffset2D target) {
-  // Create staging buffer
-  BufferCreationInfo bufferCreationInfo = {};
-  bufferCreationInfo.size = data.size();
-  bufferCreationInfo.usage =
-      VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-  bufferCreationInfo.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-                                  VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-  bufferCreationInfo.stagingBuffer = true;
-
-  if (dataWidth > texture->size.width || dataHeight > texture->size.height) {
-    return Error::Create(
-        "provided source dimensions exceed texture dimensions in SetPixels.");
-  }
-  bufferCreationInfo.debugName = "Texture Staging Buffer for SetPixels";
-
-  auto bufferResult = Buffer::Create(context, bufferCreationInfo);
-
-  if (Error::IsError(bufferResult)) {
-    return bufferResult.error();
-  }
-
-  auto rowSize = static_cast<size_t>(source.extent.width) *
-                 Format::GetSize(texture->format);
-  auto rowCount = static_cast<size_t>(source.extent.height);
-
-  Graphics::Barrier::UpdateUsage(context, *texture,
-                                 Graphics::Barrier::ResourceState{
-                                     .stages = VK_PIPELINE_STAGE_2_HOST_BIT,
-                                     .access = VK_ACCESS_2_HOST_WRITE_BIT,
-                                 });
-
-  auto buffer = bufferResult.value();
-
-  if (source.extent.width == texture->size.width) {
-    // Fast path for full-width updates
-    auto dataSpan = // NOLINTNEXTLINE pointer arithmetic
-        std::span<const uint8_t>(data.data() + (source.offset.y * rowSize),
-                                 rowSize * rowCount);
-    CHECK_ERR(buffer->SetData(context, dataSpan, 0));
-  } else {
-    for (size_t row = 0; row < rowCount; ++row) {
-      size_t sourceOffset =
-          ((row + source.offset.y) * dataWidth + source.offset.x) *
-          Format::GetSize(texture->format);
-
-      auto rowSpan = // NOLINTNEXTLINE pointer arithmetic
-          std::span<const uint8_t>(data.data() + sourceOffset, rowSize);
-      CHECK_ERR(buffer->SetData(context, rowSpan, row * rowSize));
-    }
-  }
-
-  VkBufferImageCopy region = {};
-  region.bufferOffset = 0;
-  region.bufferRowLength = source.extent.width;
-  region.bufferImageHeight = source.extent.height;
-  region.imageSubresource.aspectMask = GetAspectFlagsForFormat(texture->format);
-  region.imageSubresource.mipLevel = mipLevel;
-  region.imageSubresource.baseArrayLayer = arrayLayer;
-  region.imageSubresource.layerCount = 1;
-  region.imageOffset = {.x = target.x, .y = target.y, .z = 0};
-  region.imageExtent = {
-      .width = source.extent.width, .height = source.extent.height, .depth = 1};
-
-  CHECK_ERR(texture->UseAsTransferDst(context));
-
-  auto *commandBuffer = GetCommandBuffer();
-
-  if (commandBuffer == nullptr) {
-    return Error::Create("Failed to get command buffer for SetPixels.");
-  }
-
-  vkCmdCopyBufferToImage(commandBuffer, buffer->handle, texture->image,
-                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-
-  CHECK_ERR(
-      texture->UseAsSampler(context, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT));
-
-  buffer->MarkUse();
-  texture->MarkUse();
-
-  return Error::Success();
+  return SetPixels(context, imageData.GetSpan(), mipLevel, arrayLayer,
+                   imageData.GetDimensions(), {0, 0, 0}, {0, 0, 0},
+                   imageData.GetDimensions());
 }
 
 inline auto WriteSimplifiedPixelData(const Ref<Texture> &texture,
                                      const GraphicsContext &context,
                                      const std::span<const uint8_t> &data,
-                                     size_t dataWidth, size_t dataHeight,
+                                     VkExtent3D dataSize,
                                      uint32_t mipLevel, // NOLINT
                                      uint32_t arrayLayer) {
   // Create staging buffer
@@ -1130,7 +811,8 @@ inline auto WriteSimplifiedPixelData(const Ref<Texture> &texture,
                                   VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
   bufferCreationInfo.stagingBuffer = true;
 
-  if (dataWidth > texture->size.width || dataHeight > texture->size.height) {
+  if (dataSize.width > texture->size.width ||
+      dataSize.height > texture->size.height) {
     return Error::Create(
         "provided source dimensions exceed texture dimensions in SetPixels.");
   }
@@ -1149,16 +831,14 @@ inline auto WriteSimplifiedPixelData(const Ref<Texture> &texture,
 
   VkBufferImageCopy region = {};
   region.bufferOffset = 0;
-  region.bufferRowLength = dataWidth;
-  region.bufferImageHeight = dataHeight;
+  region.bufferRowLength = dataSize.width;
+  region.bufferImageHeight = dataSize.height;
   region.imageSubresource.aspectMask = GetAspectFlagsForFormat(texture->format);
   region.imageSubresource.mipLevel = mipLevel;
   region.imageSubresource.baseArrayLayer = arrayLayer;
   region.imageSubresource.layerCount = 1;
   region.imageOffset = {.x = 0, .y = 0, .z = 0};
-  region.imageExtent = {.width = static_cast<uint32_t>(dataWidth),
-                        .height = static_cast<uint32_t>(dataHeight),
-                        .depth = 1};
+  region.imageExtent = dataSize;
 
   CHECK_ERR(texture->UseAsTransferDst(context));
 
@@ -1178,56 +858,6 @@ inline auto WriteSimplifiedPixelData(const Ref<Texture> &texture,
   texture->MarkUse();
 
   return Error::Success();
-}
-
-auto Texture::SetPixels(const GraphicsContext &context,
-                        const std::span<const uint8_t> &data, size_t dataWidth,
-                        size_t dataHeight, uint32_t mipLevel, // NOLINT
-                        uint32_t arrayLayer, VkRect2D source, VkOffset2D target)
-    -> Error {
-  ZoneScoped;
-
-  if (source.extent.width > size.width || source.extent.height > size.height) {
-    return Error::Create(
-        "Source rectangle dimensions exceed texture dimensions in SetPixels.");
-  }
-  if (source.extent.width + target.x > size.width ||
-      source.extent.height + target.y > size.height) {
-    return Error::Create("Source width and target offset exceed texture "
-                         "dimensions in SetPixels.");
-  }
-  if (target.x < 0 || target.y < 0) {
-    return Error::Create(
-        "Negative target offsets are not supported in SetPixels.");
-  }
-  if (source.extent.width > dataWidth || source.extent.height > dataHeight) {
-    return Error::Create(
-        "Source rectangle exceeds ImageData dimensions in SetPixels.");
-  }
-  if (source.offset.x < 0 || source.offset.y < 0) {
-    return Error::Create(
-        "Negative source offsets are not supported in SetPixels.");
-  }
-  if (data.size() <
-      Format::GetSize(format, source.extent.width, source.extent.height)) {
-    return Error::Create("Data size is insufficient for specified dimensions.");
-  }
-
-  if (Format::IsCompressedFormat(format)) {
-    if (source.extent.width != size.width ||
-        source.extent.height != size.height || source.offset.x != 0 ||
-        source.offset.y != 0 || target.x != 0 || target.y != 0) {
-      return Error::Create("Partial updates are not supported for compressed "
-                           "formats in SetPixels.");
-    }
-
-    return WriteSimplifiedPixelData(Ref<Texture>(this), context, data,
-                                    dataWidth, dataHeight, mipLevel,
-                                    arrayLayer);
-  }
-
-  return WritePixelData(Ref<Texture>(this), context, data, dataWidth,
-                        dataHeight, mipLevel, arrayLayer, source, target);
 }
 
 auto Texture::ScheduleDestroy() -> void {
@@ -1262,9 +892,7 @@ auto GetDefaultTexture(const GraphicsContext &context, VkFormat format,
   }
 
   TextureCreationInfo texInfo = {};
-  texInfo.width = 1;
-  texInfo.height = 1;
-  texInfo.depth = 1;
+  texInfo.size = VkExtent3D{1, 1, 1};
   texInfo.format = format;
   texInfo.usage = static_cast<uint32_t>(VK_IMAGE_USAGE_SAMPLED_BIT) |
                   static_cast<uint32_t>(VK_IMAGE_USAGE_TRANSFER_DST_BIT) |
@@ -1293,35 +921,13 @@ auto GetDefaultTexture(const GraphicsContext &context, VkFormat format,
                                   Format::ImageFormatToString(format));
 
   if (textureType == TextureType::CUBEMAP) {
-    texInfo.depth = 6; // NOLINT
+    texInfo.arrayLayers = 6; // NOLINT
   }
   texInfo.mipmapCount = 1;
 
-  Result<Ref<Texture>> result;
-  switch (textureType) {
-  case TextureType::DEFAULT:
-    result = Graphics::Create2D(context, texInfo);
-    break;
-  case TextureType::CUBEMAP:
-    result = Graphics::CreateCubeMap(context, texInfo);
-    break;
-  case TextureType::VOLUME:
-    result = Graphics::CreateVolume(context, texInfo);
-    break;
-  case TextureType::ARRAY:
-    result = Graphics::CreateArray(context, texInfo);
-    break;
-  default:
-    return Error::Unexpected("Unsupported texture type for default texture");
-  }
+  auto texture = CHECK_RES(Create(context, texInfo));
 
-  if (Error::IsError(result)) {
-    return result;
-  }
-
-  auto &texture = result.value();
-
-  auto imageDataResult = Image::ImageData::Create(1, 1, format);
+  auto imageDataResult = Image::ImageData::Create(texture->size, format);
 
   if (Error::IsError(imageDataResult)) {
     return imageDataResult.error();
@@ -1329,7 +935,7 @@ auto GetDefaultTexture(const GraphicsContext &context, VkFormat format,
 
   auto imageData = imageDataResult.value();
   auto error = imageData->SetColor(
-      Math::Uvec2{0, 0}, Color(UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX));
+      Math::Uvec3{}, Color(UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX));
 
   if (Error::IsError(error)) {
     return error;
@@ -1627,7 +1233,11 @@ Texture::~Texture() {
   image = VK_NULL_HANDLE;
   view = VK_NULL_HANDLE;
   memory = VK_NULL_HANDLE;
+
+  Texture::TotalAllocatedMemory -= sizeInBytes;
 }
+
+std::atomic<VkDeviceSize> Texture::TotalAllocatedMemory{};
 
 auto GenerateMipmaps(GraphicsContext &context, Texture *texture) -> Error {
   if (texture->mipmapcount <= 1) {

@@ -167,15 +167,16 @@ do
 
       texture = snap.graphics.newTexture("src/Assets/skybox.hdr", { sampler = true, mipmaps = "init" })
       -- texture = snap.graphics.newTexture("src/Assets/skybox.hdr")
-      -- local checkerboard = snap.data.newImagedata(16, 16)
-      -- for x = 0, 15 do
-      --   for y = 0, 15 do
+      -- Checkerboard = snap.data.newImagedata(4, 4, 1)
+      -- for x = 0, Checkerboard:getWidth() - 1 do
+      --   for y = 0, Checkerboard:getHeight() - 1 do
       --     local color = ((x + y) % 2 == 0) and 1 or 0
-      --     checkerboard:setPixel(x, y, color, color, color, 1)
+      --     Checkerboard:setPixel(x, y, 0, color, color, color, 1)
       --   end
       -- end
 
-      -- local texture = snap.graphics.newTexture(checkerboard)
+      -- local texture = snap.graphics.newTexture(Checkerboard)
+      -- texture:setFilter("nearest", "nearest", 1)
 
       local env = scene:newEnvironment("Test environment", texture)
       scene:setEnvironment(env)

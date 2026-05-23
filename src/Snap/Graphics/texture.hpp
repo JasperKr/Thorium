@@ -9,6 +9,7 @@
 #include "Modules/imagedata.hpp"
 #include "Modules/object.hpp"
 #include "Modules/type.hpp"
+#include <atomic>
 #include <mutex>
 #include <span>
 
@@ -85,6 +86,8 @@ struct ToBufferCopyRegion {
 
 struct Texture : Object, Barrier::BarrierSynced {
   std::mutex mutex;
+
+  static std::atomic<VkDeviceSize> TotalAllocatedMemory;
 
   SamplerDescription samplerDescription{};
   VkExtent3D size{};
@@ -191,15 +194,19 @@ struct Texture : Object, Barrier::BarrierSynced {
   };
   [[nodiscard]] auto GetDepth() const -> uint32_t { return size.depth; };
   auto GetSampler(const GraphicsContext &context) -> VkSampler;
-  auto SetPixels(const GraphicsContext &context, Image::ImageData &imageData,
-                 uint32_t mipLevel, uint32_t arrayLayer, VkRect2D source,
-                 VkOffset2D target) -> Error;
+  // Copies data from a 1D/2D/3D region from the provided data to the texture
+  // sourceSize is the dimensions of the underlying data
+  // sourceOffset is the offset within the data to start copying from
+  // target is the offset within the texture to copy to
+  // targetSize is the size of the region to copy within the texture
+  auto SetPixels(const GraphicsContext &context,
+                 const std::span<const uint8_t> &data,
+                 uint32_t mipLevel, // NOLINT
+                 uint32_t arrayLayer, VkExtent3D sourceSize,
+                 VkOffset3D sourceOffset, // NOLINT
+                 VkOffset3D target, VkExtent3D targetSize) -> Error;
   auto SetPixels(const GraphicsContext &context, Image::ImageData &imageData,
                  uint32_t mipLevel = 0, uint32_t arrayLayer = 0) -> Error;
-  auto SetPixels(const GraphicsContext &context,
-                 const std::span<const uint8_t> &data, size_t width,
-                 size_t height, uint32_t mipLevel, uint32_t arrayLayer,
-                 VkRect2D source, VkOffset2D target) -> Error;
   [[nodiscard]] auto GetMipmapCount() const -> size_t { return mipmapcount; }
   [[nodiscard]] auto GetFormat() const -> VkFormat { return format; }
   [[nodiscard]] auto SupportsStorage() const -> bool {
@@ -259,28 +266,35 @@ struct Texture : Object, Barrier::BarrierSynced {
 };
 
 struct TextureCreationInfo {
-  uint32_t width = 0;  // Width in pixels
-  uint32_t height = 0; // Height in pixels
-  uint32_t depth{};    // Depth in pixels (for 3D textures, or Array layers)
-  VkFormat format = VK_FORMAT_UNDEFINED; // Texture format
-  VkImageUsageFlags usage{};             // Vulkan usage flags
-  int mipmapCount = 1;                   // Number of mipmap levels
-  std::string debugName;                 // Debug name
+  // Dimensions in texels
+  VkExtent3D size{};
+
+  // Amount of array layers
+  uint32_t arrayLayers{1};
+
+  // Texture format
+  VkFormat format = VK_FORMAT_UNDEFINED;
+
+  // Vulkan usage flags
+  VkImageUsageFlags usage{};
+
+  // Number of mipmap levels to allocate.
+  int mipmapCount = 1;
+
+  // Debug name
+  std::string debugName;
+
+  // Type of the texture (2D, Cubemap, etc.)
+  TextureType textureType = TextureType::DEFAULT;
 };
 
-auto Create2D(const GraphicsContext &context, const TextureCreationInfo &info)
+auto Create(const GraphicsContext &context, const TextureCreationInfo &info)
     -> Result<Ref<Texture>>;
 auto FromSwapchainTexture(const GraphicsContext &context,
                           VkImage swapchainImage,
                           VkImageView swapchainImageView, VkFormat format,
                           uint32_t width, uint32_t height)
     -> Result<Ref<Texture>>;
-auto CreateCubeMap(const GraphicsContext &context,
-                   const TextureCreationInfo &info) -> Result<Ref<Texture>>;
-auto CreateVolume(const GraphicsContext &context,
-                  const TextureCreationInfo &info) -> Result<Ref<Texture>>;
-auto CreateArray(const GraphicsContext &context,
-                 const TextureCreationInfo &info) -> Result<Ref<Texture>>;
 
 auto CopyImageToBuffer(GraphicsContext &context, Texture *texture,
                        VkBuffer buffer) -> Error;
