@@ -159,8 +159,8 @@ inline auto InsertResourceBarriers(const GraphicsContext &context) -> Error {
 
     auto stages = VK_PIPELINE_STAGE_2_NONE;
 
-    for (const auto &stage : shader->stages) {
-      switch (stage) {
+    for (const auto &stage : shader->entryPoints) {
+      switch (stage.second) {
       case VK_SHADER_STAGE_VERTEX_BIT:
         stages |= VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT;
         break;

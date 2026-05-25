@@ -72,8 +72,28 @@ struct Camera {
 
   // Descriptors for the textures we'd like to own.
   struct CameraRendertargets {
+    // Depth texture
     Renderer::RendertargetDescriptor Depth;
+
+    // Normals, encoded as a2r10g10b10_unorm, should be encoded from [-1, 1] to [0, 1] when writing and [0, 1] to [-1, 1] when reading
+    Renderer::RendertargetDescriptor Normal;
+
+    // Albedo, encoded as a2r10g10b10_unorm
+    Renderer::RendertargetDescriptor Albedo;
+
+    // Materials, r8g8b8a8_unorm, where R = metallic, G = perceptual roughness, B = reflectance, A = texture ao
+    Renderer::RendertargetDescriptor Material;
+
+    // Emissive, encoded as b10g11r11_ufloat
+    Renderer::RendertargetDescriptor Emissive;
+
+    // Motion vectors, encoded as rg16_snorm
+    Renderer::RendertargetDescriptor Motion;
+
+    // Final Incoming light, encoded as b10g11r11_ufloat
     Renderer::RendertargetDescriptor IncomingLight;
+
+    // Post-processed output, encoded as a2r10g10b10_unorm
     Renderer::RendertargetDescriptor PostProcessed;
   };
 
@@ -82,6 +102,11 @@ struct Camera {
     Ref<Graphics::Texture> Depth;
     Ref<Graphics::Texture> IncomingLight;
     Ref<Graphics::Texture> PostProcessed;
+    Ref<Graphics::Texture> Normal;
+    Ref<Graphics::Texture> Albedo;
+    Ref<Graphics::Texture> Material;
+    Ref<Graphics::Texture> Emissive;
+    Ref<Graphics::Texture> Motion;
   };
 
   struct PostProcessingConfig {
@@ -100,6 +125,10 @@ struct Camera {
 
   [[nodiscard]] auto GetPostProcessingConfig() const -> PostProcessingConfig {
     return postProcessingConfig;
+  }
+
+  [[nodiscard]] auto GetOwnedTextures() const -> const AllocatedTextures & {
+    return OwnedTextures;
   }
 
 private:
@@ -121,6 +150,9 @@ private:
   auto ConfigureRendertargets() -> void;
 
   auto ApplyPostProcessing(const Graphics::GraphicsContext &context) -> Error;
+
+  auto FillSkybox(const Graphics::GraphicsContext &context, Scene *scene)
+      -> Error;
 };
 
 extern const Graphics::BufferFormat CameraBufferFormat;

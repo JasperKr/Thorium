@@ -239,12 +239,11 @@ auto Buffer::UploadRing(const GraphicsContext &context,
   copyRegion.dstOffset = offset;
   copyRegion.size = uploadSize;
 
-  DynamicRendering::EndRendering(context);
-
   Barrier::UpdateUsage(context, *this,
                        {.stages = VK_PIPELINE_STAGE_TRANSFER_BIT,
                         .access = VK_ACCESS_TRANSFER_WRITE_BIT});
 
+  DynamicRendering::EndRendering(context);
   vkCmdCopyBuffer(commandBuffer, uploadBuffer->handle, handle, 1, &copyRegion);
   uploadOffset += uploadSize;
 

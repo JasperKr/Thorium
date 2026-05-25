@@ -53,7 +53,7 @@ auto Thread::Close(ThreadStatus status, const std::string &message) -> void {
   }
 
   if (status == ThreadStatus::Error) {
-    PrintWarning("Thread encountered an error: {}", message);
+    // PrintWarning("Thread encountered an error: {}", message);
     Event::Push(Event::Event{
         .Name = "threaderror",
         .Values = {message},
@@ -137,9 +137,9 @@ auto Thread::Run(Thread *thread,
     const auto *luaErrorMessage = lua_tostring(state, -1);
     lua_pop(state, 1);
 
-    PrintError("Lua error in thread: {}", luaErrorMessage != nullptr
-                                              ? std::string(luaErrorMessage)
-                                              : "Unknown Lua error occurred.");
+    // PrintError("Lua error in thread: {}", luaErrorMessage != nullptr
+    //                                           ? std::string(luaErrorMessage)
+    //                                           : "Unknown Lua error occurred.");
 
     thread->Close(ThreadStatus::Error, luaErrorMessage != nullptr
                                            ? std::string(luaErrorMessage)

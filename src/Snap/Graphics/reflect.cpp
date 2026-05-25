@@ -8,6 +8,7 @@
 
 #include "vulkan/vulkan_core.h"
 #include <cassert>
+#include <cstring>
 #include <format>
 #include <iterator>
 
@@ -27,7 +28,8 @@ auto StructInfo::ResolvePath(Graphics::ResourceKey::const_iterator iterator,
   field = nullptr;
 
   for (const auto &currentField : fields) {
-    if (currentField.name == *iterator) {
+    // if (currentField.name == *iterator) {
+    if (strcmp(currentField.name, *iterator) == 0) {
       field = &currentField;
       break;
     }
@@ -53,7 +55,7 @@ auto ResourceInfo::ResolvePath(Graphics::ResourceKey::const_iterator iterator,
                                Graphics::ResourceKey::const_iterator end) const
     -> const ResourceInfo * {
   // Last element and name does not match, return nullptr
-  if (iterator == end || *iterator != name) {
+  if (iterator == end || strcmp(name, *iterator) != 0) {
     return nullptr;
   }
 
@@ -83,7 +85,8 @@ auto BufferInfo::ResolvePath(Graphics::ResourceKey::const_iterator iterator,
   }
 
   const auto &structInfo = std::get<StructInfo>(info);
-  if (structInfo.name == *iterator) {
+  // if (structInfo.name == *iterator) {
+  if (strcmp(structInfo.name, *iterator) == 0) {
     return structInfo.ResolvePath(std::next(iterator), end);
   }
 
@@ -520,6 +523,11 @@ auto SetupFromType(slang::VariableLayoutReflection *variableLayout,
     bufferInfo.info = CHECK_RES(SetupVariant(bufferLayout));
 
     resourceInfo.name = variableLayout->getName();
+
+    // PrintAlways("Reflected: {}, category: {}, set: {}, binding: {}",
+    //             bufferInfo.name, (int)category, bufferInfo.set,
+    //             bufferInfo.binding);
+
     resourceInfo.stages = SlangStageToVkStage(variableLayout->getStage());
     resourceInfo.info = bufferInfo;
 

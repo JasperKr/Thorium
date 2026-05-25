@@ -110,7 +110,12 @@ public float ComputeLambdaV(float roughness, float NoV) {
   return NoV * sqrt((NoV - rSqr * NoV) * NoV + rSqr);
 }
 
-public float ClampNoV(float NoV) {
-  // Neubelt and Pettineo 2013, "Crafting a Next-gen Material Pipeline for The Order: 1886"
-  return max(NoV, 1e-4);
+public float ClampNoV(float NoV) { return max(NoV, 1e-4); }
+
+public float ClampPerceptualRoughness(float perceptualRoughness) {
+  return max(perceptualRoughness, 0.045);
+}
+
+public float CalculateRoughness(float perceptualRoughness) {
+  return max(perceptualRoughness * perceptualRoughness, 0.002025);
 }

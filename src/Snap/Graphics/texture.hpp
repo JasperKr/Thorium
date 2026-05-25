@@ -107,9 +107,7 @@ struct Texture : Object, Barrier::BarrierSynced {
   size_t arrayLayers{1};
   VkImageUsageFlags usage{};
 
-  VkPipelineStageFlagBits2 lastPipelineStage =
-      VK_PIPELINE_STAGE_NONE_KHR; // NOLINT
-
+  VkPipelineStageFlagBits2 lastPipelineStage = VK_PIPELINE_STAGE_NONE_KHR;
   VkImageLayout currentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
   TextureUsage lastUsage = TextureUsage::Unknown;
 

@@ -59,6 +59,13 @@ static const std::vector<slang::CompilerOptionEntry> CompilerOptions = {
                 .kind = slang::CompilerOptionValueKind::Int,
                 .intValue0 = SlangEmitSpirvMethod::SLANG_EMIT_SPIRV_DIRECTLY,
             }},
+    slang::CompilerOptionEntry{
+        .name = slang::CompilerOptionName::VulkanUseEntryPointName,
+        .value =
+            slang::CompilerOptionValue{
+                .kind = slang::CompilerOptionValueKind::Int,
+                .intValue0 = 1,
+            }},
 };
 
 // NOLINTNEXTLINE
@@ -185,7 +192,7 @@ SpvCompilationStatusToString(const shaderc_compilation_status result)
   }
 }
 
-auto SlangStageToVkStage(SlangStage stage) {
+auto SlangStageToVkStage(SlangStage stage) -> VkShaderStageFlagBits {
   switch (stage) {
   case SLANG_STAGE_VERTEX:
     return VK_SHADER_STAGE_VERTEX_BIT;
@@ -320,7 +327,7 @@ static inline auto LoadSlang(GraphicsContext &context,
   auto entryPointCount = shader->slangModule->getDefinedEntryPointCount();
   std::vector<Slang::ComPtr<slang::IEntryPoint>> entryPoints;
   entryPoints.reserve(entryPointCount);
-  shader->stages.reserve(entryPointCount);
+  shader->entryPoints.reserve(entryPointCount);
   std::vector<SlangStage> stages;
   stages.reserve(entryPointCount);
 
@@ -330,7 +337,6 @@ static inline auto LoadSlang(GraphicsContext &context,
   auto allowedEntryPointCount = SlangStages.size();
   for (SlangInt32 i = 0; i < allowedEntryPointCount; i++) {
     auto stage = SlangStages.at(i);
-    // auto entryPointName = SlangStageToString(stage) + "Main";
     auto entryPointName = std::format("{}Main", SlangStageToString(stage));
 
     Slang::ComPtr<slang::IEntryPoint> entryPoint = nullptr;
@@ -345,7 +351,11 @@ static inline auto LoadSlang(GraphicsContext &context,
     shader->entryPointToStageIndex[stage] = entryPoints.size();
     entryPoints.emplace_back(entryPoint);
 
-    shader->stages.emplace_back(SlangStageToVkStage(stage));
+    auto vkStage = SlangStageToVkStage(stage);
+    shader->entryPoints.emplace_back(entryPointName, vkStage);
+    shader->combinedShaderStages = static_cast<VkShaderStageFlagBits>(
+        static_cast<uint32_t>(shader->combinedShaderStages) | (uint)vkStage);
+
     stages.emplace_back(stage);
 
     PrintDebug(" - {}; index: {}", entryPointName,
@@ -383,11 +393,11 @@ static inline auto LoadSlang(GraphicsContext &context,
 
   CHECK_ERR(Error::Create(result, diagnosticsBlob, shader->programLayout));
 
-  if (shader->stages.empty()) {
+  if (shader->entryPoints.empty()) {
     return Error::Create("No valid entry points found in shader.");
   }
 
-  if (shader->stages.at(0) == VK_SHADER_STAGE_COMPUTE_BIT) {
+  if (shader->entryPoints.at(0).second == VK_SHADER_STAGE_COMPUTE_BIT) {
     if (entryPointCount != 1) {
       return Error::Create("Compute shader must have exactly one entry point.");
     }
@@ -434,7 +444,7 @@ static inline auto LoadSlang(GraphicsContext &context,
 
   Slang::ComPtr<slang::IBlob> spirvCode;
 
-  shader->stages.resize(entryPointCount);
+  shader->entryPoints.resize(entryPointCount);
 
   result = shader->linkedProgram->getTargetCode(0, // targetIndex
                                                 spirvCode.writeRef(),
@@ -497,6 +507,10 @@ auto ShaderModule::Create(
   shader->name = name;
   shader->moduleName = modulename;
 
+  if (name == "") {
+    shader->name = modulename;
+  }
+
   if (preprocessorMacros != nullptr) {
     shader->preprocessorMacros = *preprocessorMacros;
   }
@@ -516,16 +530,19 @@ auto ShaderModule::Create(
   // Compile Slang to SPIR-V and create shader module
   CHECK_ERR(LoadSlang(context, shader));
 
-  auto reflectResult =
-      ReflectShader(context, shader->programLayout, shader->reflection);
+  CHECK_ERR(ReflectShader(context, shader->programLayout, shader->reflection));
 
-  if (Error::IsError(reflectResult)) {
-    return reflectResult;
-  }
+  // PrintAlways("Shader {} Has globals? {}", shader->name,
+  //             shader->reflection.hasGlobals);
 
   for (auto &layout : shader->reflection.resources) {
     if (layout.IsBuffer()) {
       const auto &bufferInfo = std::get<Reflect::BufferInfo>(layout.info);
+
+      // PrintAlways("Shader {} resource: Buffer - name: {}, set: {}, binding: "
+      //             "{}, type: {}",
+      //             shader->name, bufferInfo.name, bufferInfo.set,
+      //             bufferInfo.binding, (int)bufferInfo.bufferType);
 
       if (bufferInfo.bufferType == Reflect::BufferType::PushConstant) {
         auto result = PushBuffer(layout);
@@ -607,7 +624,8 @@ auto ShaderModule::GetUniform(const ResourceKey &key) const
   }
 
   for (const auto &resource : reflection.resources) {
-    if (resource.name == *key.begin()) {
+    // if (resource.name == *key.begin()) {
+    if (strcmp(resource.name, *key.begin()) == 0) {
       return &resource;
     }
   }
@@ -662,7 +680,8 @@ auto ShaderModule::Send(const GraphicsContext &context, const ResourceKey &key,
     }
 
     const auto &bufferInfo = std::get<Reflect::BufferInfo>(resource.info);
-    if (bufferInfo.name == *key.begin()) {
+    // if (bufferInfo.name == *key.begin()) {
+    if (strcmp(bufferInfo.name, *key.begin()) == 0) {
       auto locationKey =
           Utils::SetBindingToSlot(bufferInfo.set, bufferInfo.binding);
 
@@ -673,7 +692,9 @@ auto ShaderModule::Send(const GraphicsContext &context, const ResourceKey &key,
     }
   }
 
-  return Error::Create("Buffer not found in shader reflection: " + name);
+  auto keyname = Reflect::ResourceKeyToString(key);
+  return Error::Createf("Buffer {} not found in shader reflection: {}", keyname,
+                        name);
 }
 
 auto ShaderModule::Send(const GraphicsContext &context, const ResourceKey &key,
@@ -687,12 +708,16 @@ auto ShaderModule::Send(const GraphicsContext &context, const ResourceKey &key,
                         const Ref<Graphics::Texture> &texture) -> Error {
   ZoneScopedN("ShaderModule::Send texture");
 
+  [[unlikely]]
   if (!texture.isValid()) {
-    return Error::Create("Texture is null.");
+    auto keyname = Reflect::ResourceKeyToString(key);
+    return Error::Createf("Texture {} is null.", keyname);
   }
 
+  [[unlikely]]
   if (texture->view == VK_NULL_HANDLE) {
-    return Error::Create("Texture has no valid image view.");
+    auto keyname = Reflect::ResourceKeyToString(key);
+    return Error::Createf("Texture {} has no valid image view.", keyname);
   }
 
   for (const auto &resource : reflection.resources) {
@@ -701,7 +726,7 @@ auto ShaderModule::Send(const GraphicsContext &context, const ResourceKey &key,
     }
 
     const auto &samplerInfo = std::get<Reflect::SamplerInfo>(resource.info);
-    if (strcmp(resource.name, key.begin()->c_str()) == 0) {
+    if (strcmp(resource.name, *key.begin()) == 0) {
       auto key = Utils::SetBindingToSlot(samplerInfo.set, samplerInfo.binding);
 
       if ((samplerInfo.access == SLANG_RESOURCE_ACCESS_WRITE ||
@@ -717,7 +742,9 @@ auto ShaderModule::Send(const GraphicsContext &context, const ResourceKey &key,
     }
   }
 
-  return Error::Create("Sampler not found in shader reflection: " + name);
+  auto keyname = Reflect::ResourceKeyToString(key);
+  return Error::Createf("Sampler {}, not found in shader reflection: {}",
+                        keyname, name);
 }
 
 auto ShaderModule::hash() const -> size_t {
@@ -725,6 +752,7 @@ auto ShaderModule::hash() const -> size_t {
 }
 
 auto ShaderModule::GetThreadgroupSize() const -> Result<Math::Uvec3> {
+  [[unlikely]]
   if (threadgroupSize.x == 0 || threadgroupSize.y == 0 ||
       threadgroupSize.z == 0) {
     return Error::Unexpected(

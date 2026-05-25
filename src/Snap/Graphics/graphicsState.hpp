@@ -1,7 +1,6 @@
 #pragma once
 
 #include <forward_list>
-#include <string>
 #include <vulkan/vulkan_core.h>
 namespace Graphics {
 
@@ -36,9 +35,23 @@ constexpr VkPipelineColorBlendAttachmentState DefaultBlendMode = {
                       static_cast<uint32_t>(VK_COLOR_COMPONENT_A_BIT),
 };
 
+constexpr VkPipelineColorBlendAttachmentState BlendmodeNone = {
+    .blendEnable = VK_FALSE,
+    .srcColorBlendFactor = VK_BLEND_FACTOR_ONE,
+    .dstColorBlendFactor = VK_BLEND_FACTOR_ZERO,
+    .colorBlendOp = VK_BLEND_OP_ADD,
+    .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+    .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
+    .alphaBlendOp = VK_BLEND_OP_ADD,
+    .colorWriteMask = static_cast<uint32_t>(VK_COLOR_COMPONENT_R_BIT) |
+                      static_cast<uint32_t>(VK_COLOR_COMPONENT_G_BIT) |
+                      static_cast<uint32_t>(VK_COLOR_COMPONENT_B_BIT) |
+                      static_cast<uint32_t>(VK_COLOR_COMPONENT_A_BIT),
+};
+
 constexpr uint32_t FRAMES_IN_FLIGHT = 2;
 constexpr uint32_t MAX_SWAPCHAIN_IMAGES = 4;
 
-using ResourceKey = std::forward_list<std::string>;
+using ResourceKey = std::forward_list<const char *>;
 
 } // namespace Graphics

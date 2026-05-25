@@ -77,19 +77,15 @@ struct [[nodiscard]] Error {
 
   static auto Unexpected(VkResult result) -> tl::unexpected<Error>;
 
-  template <typename... Args>
+  template <typename... Args> // NOLINTNEXTLINE args forwarding
   static auto Unexpectedf(std::string_view format, Args &&...args) {
     return tl::unexpected<Error>(
-        Create(std::vformat(format,
-                            std::make_format_args(std::forward<Args>(args)...)),
-               -1, 1));
+        Create(std::vformat(format, std::make_format_args(args...)), -1, 1));
   }
 
-  template <typename... Args>
+  template <typename... Args> // NOLINTNEXTLINE args forwarding
   static auto Createf(std::string_view format, Args &&...args) -> Error {
-    return Create(std::vformat(format, std::make_format_args(
-                                           std::forward<Args>(args)...)),
-                  -1, 1);
+    return Create(std::vformat(format, std::make_format_args(args...)), -1, 1);
   }
 
   template <typename T>

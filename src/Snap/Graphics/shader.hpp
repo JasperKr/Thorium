@@ -97,7 +97,8 @@ struct ShaderModule : Object {
   std::string moduleName;
 
   VkShaderModule module{};
-  std::vector<VkShaderStageFlagBits> stages;
+  std::vector<std::pair<std::string, VkShaderStageFlagBits>> entryPoints;
+  VkShaderStageFlagBits combinedShaderStages{};
 
   uint64_t modTime{};
 
@@ -170,7 +171,7 @@ struct ShaderModule : Object {
       return false;
     }
 
-    if (stages != other.stages) {
+    if (entryPoints != other.entryPoints) {
       return false;
     }
 
@@ -192,6 +193,9 @@ struct ShaderModule : Object {
 
 extern Ref<ShaderModule> DefaultShaderModule;       // NOLINT
 extern std::vector<const char *> ShaderSearchPaths; // NOLINT
+
+auto SlangStageToString(SlangStage stage) -> std::string_view;
+auto SlangStageToVkStage(SlangStage stage) -> VkShaderStageFlagBits;
 
 auto LoadModule() -> Error;
 void UnloadModule(GraphicsContext &context);

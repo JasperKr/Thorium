@@ -18,3 +18,7 @@ public enum AlphaMode {
   Mask = 1,
   Blend = 2,
 };
+
+[vk::binding(0, 2)]
+public StructuredBuffer<MaterialData> MaterialBuffer;
+

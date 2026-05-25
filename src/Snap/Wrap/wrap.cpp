@@ -23,7 +23,7 @@
 
 // Enable if encountering C++ exceptions
 // Requires the Enable RTTI and Enable Exceptions options to be enabled in CMakeLists.txt
-// #define DEBUG_CPP_EXCEPTION
+#define DEBUG_CPP_EXCEPTION
 
 namespace LuaWrap {
 
@@ -185,6 +185,11 @@ auto LuaTrampoline(lua_State *state) -> int {
   } catch (int val) {
     return luaL_error(state, "C++ exception: int %d", val);
   } catch (...) {
+    // Check if luaL_error was called, just return it normally.
+    if (lua_type(state, -1) == LUA_TSTRING) {
+      return lua_error(state);
+    }
+
     return luaL_error(state, "Unknown C++ exception");
   }
 }

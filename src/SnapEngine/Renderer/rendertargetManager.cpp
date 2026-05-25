@@ -6,6 +6,7 @@
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include <algorithm>
+#include <cassert>
 #include <cstdint>
 #include <format>
 
@@ -98,8 +99,9 @@ auto RenderTargetManager::GetRendertarget(
     const RendertargetDescriptor &descriptor)
     -> Result<Ref<::Graphics::Texture>> {
   // First try to find an exact match.
-  for (const auto &entry : Rendertargets) {
-    if (entry.descriptor == descriptor) {
+  for (auto &entry : Rendertargets) {
+    if (entry.descriptor == descriptor && !entry.inUse) {
+      entry.inUse = true;
       return entry.texture;
     }
   }
@@ -119,9 +121,11 @@ auto RenderTargetManager::GetRendertarget(
     }
   }
 
-  if (bestTexture) {
+  if (bestTextureIndex != -1) {
     ReconfigureTexture(descriptor, bestTexture);
     auto &entry = Rendertargets[bestTextureIndex];
+    assert(!entry.inUse);
+
     entry.descriptor = descriptor;
     entry.inUse = true;
 
@@ -138,10 +142,11 @@ auto RenderTargetManager::GetRendertarget(
       .format = descriptor.format,
       .usage = descriptor.usage,
       .mipmapCount = static_cast<int>(descriptor.mipmapCount),
-      .debugName = std::format(
-          "Rendertarget / {} / {}x{}",
-          Graphics::Format::ImageFormatToString(descriptor.format),
-          std::to_string(descriptor.size.x), std::to_string(descriptor.size.y)),
+      .debugName =
+          std::format("Rendertarget / {} / {}x{} #{}",
+                      Graphics::Format::ImageFormatToString(descriptor.format),
+                      std::to_string(descriptor.size.x),
+                      std::to_string(descriptor.size.y), Rendertargets.size()),
   };
 
   auto texture = CHECK_RES(::Graphics::Create(context, info));
@@ -156,11 +161,13 @@ auto RenderTargetManager::ReleaseRendertarget(
   if (texture == nullptr) {
     return;
   }
+  bool found = false;
 
   for (auto &entry : Rendertargets) {
     if (entry.texture == texture) {
+      assert(!found && "Texture released multiple times.");
       entry.inUse = false;
-      return;
+      found = true;
     }
   }
 }

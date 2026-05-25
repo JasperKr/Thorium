@@ -15,7 +15,7 @@ float3 agx(float3 val) {
   static const float maxEv = 4.026069;
 
   // Input transform
-  val = mul(agx_mat, val);
+  val = mul(val, agx_mat);
 
   // Log2 space encoding
   val = clamp(log2(val), minEv, maxEv);
@@ -33,7 +33,7 @@ static const float3x3 inv_agx_mat =
              -0.09902974407972, -0.098961176844843, 1.1510736726412);
 float3 inv_agx(float3 val) {
   // Input transform
-  val = mul(inv_agx_mat, val);
+  val = mul(val, inv_agx_mat);
   return val;
 }
 
@@ -105,9 +105,9 @@ float3 whiteBalance(float3 In, float Temperature, float Tint) {
                              -2.10182e-1, 1.15820e+0,  3.24281e-4,
                              -4.18120e-2, -1.18169e-1, 1.06867e+0 };
 
-  float3 lms = mul(LIN_2_LMS_MAT, In);
+  float3 lms = mul(In, LIN_2_LMS_MAT);
   lms *= balance;
-  return mul(LMS_2_LIN_MAT, lms);
+  return mul(lms, LMS_2_LIN_MAT);
 }
 
 // https://docs.unity3d.com/Packages/com.unity.shadergraph@6.9/manual/Saturation-Node.html
@@ -117,7 +117,6 @@ float3 ApplySaturation(float3 In, float Saturation) {
 }
 
 // Fog>Exposure>Bloom>Chromatic Aberration>White Balancing>Contrast>Brightness>Color filtering>Saturation>Tone mapping
-
 float3 ApplyConstrast(float3 val, float contrast) {
   float3 mid = float3(0.5, 0.5, 0.5);
   return (val - mid) * contrast + mid;

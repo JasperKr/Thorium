@@ -1037,8 +1037,16 @@ auto Texture::UseAs(const GraphicsContext &context, TextureUsage newUsage,
   //   lastPipelineStage = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT;
   // }
 
+  auto range = VkImageSubresourceRange{
+      .aspectMask = GetAspectFlagsForFormat(format),
+      .baseMipLevel = 0,
+      .levelCount = static_cast<uint32_t>(mipmapcount),
+      .baseArrayLayer = 0,
+      .layerCount = static_cast<uint32_t>(arrayLayers),
+  };
+
   auto result = TransitionLayout(context, layout, lastPipelineStage, stage,
-                                 currentAccess, newAccess);
+                                 currentAccess, newAccess, range);
 
   lastUsage = newUsage;
   lastPipelineStage = stage;
@@ -1193,7 +1201,6 @@ auto Texture::CopyTo(const GraphicsContext &context, Buffer &dstBuffer,
                          "usage flag.");
   }
 
-  // TODO: Check if we need an update usage here after UseAsTransferSrc
   Barrier::UpdateUsage(context, dstBuffer,
                        Barrier::ResourceState{
                            .stages = VK_PIPELINE_STAGE_2_TRANSFER_BIT,

@@ -268,43 +268,6 @@ auto InitializeRendering(Graphics::GraphicsContext &context,
 
   CHECK_ERR(StartRecording(context));
 
-  auto *cmdBuffer = BeginSingleTimeCommands(context);
-
-  for (VkImage image : context.swapchainInfo.images) {
-    VkImageMemoryBarrier2 barrier2 = {};
-    barrier2.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-    barrier2.srcStageMask = 0;
-    barrier2.srcAccessMask = 0;
-    barrier2.dstStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
-    barrier2.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-    barrier2.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    barrier2.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    barrier2.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier2.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier2.image = image;
-    barrier2.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    barrier2.subresourceRange.baseMipLevel = 0;
-    barrier2.subresourceRange.levelCount = 1;
-    barrier2.subresourceRange.baseArrayLayer = 0;
-    barrier2.subresourceRange.layerCount = 1;
-
-    VkDependencyInfo depInfo = {};
-    depInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-    depInfo.imageMemoryBarrierCount = 1;
-    depInfo.pImageMemoryBarriers = &barrier2;
-
-    vkCmdPipelineBarrier2(cmdBuffer, &depInfo);
-
-    context.swapchainInfo.textures[context.swapchainImageIndex]->currentLayout =
-        VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    context.swapchainInfo.textures[context.swapchainImageIndex]->lastUsage =
-        TextureUsage::Unknown;
-    context.swapchainInfo.textures[context.swapchainImageIndex]
-        ->lastPipelineStage = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT;
-  }
-
-  EndSingleTimeCommands(context, cmdBuffer);
-
   return Error::Success();
 }
 

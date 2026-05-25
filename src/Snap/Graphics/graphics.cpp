@@ -227,6 +227,7 @@ static auto CreateDevice(GraphicsContext &context,
   VkPhysicalDeviceVulkan11Features features11{
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES,
       .pNext = &features12,
+      .shaderDrawParameters = VK_TRUE,
   };
 
   // --- Features2 root ---

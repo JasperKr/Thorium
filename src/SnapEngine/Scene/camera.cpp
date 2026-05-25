@@ -197,44 +197,10 @@ auto Camera::ApplyPostProcessing(const Graphics::GraphicsContext &context)
   return {};
 }
 
-auto Camera::Render(const Graphics::GraphicsContext &context,
-                    flecs::entity thisEntity, Scene *scene) -> Error {
-
-  Renderer::GlobalRenderTargetManager.ReleaseRendertarget(OwnedTextures.Depth);
-  Renderer::GlobalRenderTargetManager.ReleaseRendertarget(
-      OwnedTextures.IncomingLight);
-  Renderer::GlobalRenderTargetManager.ReleaseRendertarget(
-      OwnedTextures.PostProcessed);
-
-  OwnedTextures.IncomingLight =
-      CHECK_RES(Renderer::GlobalRenderTargetManager.GetRendertarget(
-          context, Rendertargets.IncomingLight));
-  OwnedTextures.Depth =
-      CHECK_RES(Renderer::GlobalRenderTargetManager.GetRendertarget(
-          context, Rendertargets.Depth));
-
-  CHECK_ERR(Graphics::DynamicRendering::SetRenderTargets(
-      context, {{
-                    .clearValue = {0.0F, 0.0F, 0.0F, 1.0F},
-                    .texture = OwnedTextures.IncomingLight,
-                    .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-                },
-                {
-                    .clearValue = {0.0F, 0.0F},
-                    .texture = OwnedTextures.Depth,
-                    .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-                }}));
-
-  auto shader = CHECK_RES(
-      Renderer::RendererInstance.GetShader(Renderer::ShaderKey::Forward));
-
-  static auto cameraBufferKey = Graphics::ResourceKey{"CameraData"};
-  CHECK_ERR(shader->Send(context, cameraBufferKey, CameraBuffer));
-
-  Graphics::DynamicRendering::SetShader(shader);
-
-  CHECK_ERR(scene->DrawModels(context));
+auto Camera::FillSkybox(const Graphics::GraphicsContext &context, Scene *scene)
+    -> Error {
   Graphics::DynamicRendering::SetDepthMode(false, false, VK_COMPARE_OP_ALWAYS);
+  static auto cameraBufferKey = Graphics::ResourceKey{"CameraData"};
 
   if (scene->currentEnvironment) {
     CHECK_ERR(Graphics::DynamicRendering::SetRenderTargets(
@@ -243,7 +209,7 @@ auto Camera::Render(const Graphics::GraphicsContext &context,
                      .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
                  }}));
 
-    shader = CHECK_RES(
+    auto shader = CHECK_RES(
         Renderer::RendererInstance.GetShader(Renderer::ShaderKey::Skybox));
     auto environment = scene->currentEnvironment.get<Environment>();
 
@@ -259,6 +225,56 @@ auto Camera::Render(const Graphics::GraphicsContext &context,
 
     CHECK_ERR(Renderer::DrawFullScreen(context));
   }
+
+  return {};
+}
+
+auto Camera::Render(const Graphics::GraphicsContext &context,
+                    flecs::entity thisEntity, Scene *scene) -> Error {
+
+  Renderer::GlobalRenderTargetManager.ReleaseRendertarget(OwnedTextures.Depth);
+  Renderer::GlobalRenderTargetManager.ReleaseRendertarget(
+      OwnedTextures.IncomingLight);
+  Renderer::GlobalRenderTargetManager.ReleaseRendertarget(
+      OwnedTextures.PostProcessed);
+  Renderer::GlobalRenderTargetManager.ReleaseRendertarget(OwnedTextures.Albedo);
+  Renderer::GlobalRenderTargetManager.ReleaseRendertarget(OwnedTextures.Normal);
+  Renderer::GlobalRenderTargetManager.ReleaseRendertarget(
+      OwnedTextures.Material);
+  Renderer::GlobalRenderTargetManager.ReleaseRendertarget(
+      OwnedTextures.Emissive);
+  Renderer::GlobalRenderTargetManager.ReleaseRendertarget(OwnedTextures.Motion);
+
+  OwnedTextures.IncomingLight =
+      CHECK_RES(Renderer::GlobalRenderTargetManager.GetRendertarget(
+          context, Rendertargets.IncomingLight));
+  OwnedTextures.Depth =
+      CHECK_RES(Renderer::GlobalRenderTargetManager.GetRendertarget(
+          context, Rendertargets.Depth));
+
+  OwnedTextures.Albedo =
+      CHECK_RES(Renderer::GlobalRenderTargetManager.GetRendertarget(
+          context, Rendertargets.Albedo));
+
+  OwnedTextures.Normal =
+      CHECK_RES(Renderer::GlobalRenderTargetManager.GetRendertarget(
+          context, Rendertargets.Normal));
+
+  OwnedTextures.Material =
+      CHECK_RES(Renderer::GlobalRenderTargetManager.GetRendertarget(
+          context, Rendertargets.Material));
+
+  OwnedTextures.Emissive =
+      CHECK_RES(Renderer::GlobalRenderTargetManager.GetRendertarget(
+          context, Rendertargets.Emissive));
+
+  OwnedTextures.Motion =
+      CHECK_RES(Renderer::GlobalRenderTargetManager.GetRendertarget(
+          context, Rendertargets.Motion));
+
+  CHECK_ERR(scene->DrawModels(*this, context));
+
+  CHECK_ERR(FillSkybox(context, scene));
 
   CHECK_ERR(ApplyPostProcessing(context));
 
@@ -290,7 +306,52 @@ auto Camera::ConfigureRendertargets() -> void {
 
   Rendertargets.PostProcessed = Renderer::RendertargetDescriptor{
       .size = Dimensions,
-      .format = Graphics::DefaultPixelFormat,
+      .format = VK_FORMAT_A2R10G10B10_UNORM_PACK32,
+      .minFilter = VK_FILTER_LINEAR,
+      .magFilter = VK_FILTER_LINEAR,
+      .mipFilter = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+      .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+  };
+
+  Rendertargets.Normal = Renderer::RendertargetDescriptor{
+      .size = Dimensions,
+      .format = VK_FORMAT_A2R10G10B10_UNORM_PACK32,
+      .minFilter = VK_FILTER_LINEAR,
+      .magFilter = VK_FILTER_LINEAR,
+      .mipFilter = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+      .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+  };
+
+  Rendertargets.Albedo = Renderer::RendertargetDescriptor{
+      .size = Dimensions,
+      .format = VK_FORMAT_A2R10G10B10_UNORM_PACK32,
+      .minFilter = VK_FILTER_LINEAR,
+      .magFilter = VK_FILTER_LINEAR,
+      .mipFilter = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+      .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+  };
+
+  Rendertargets.Material = Renderer::RendertargetDescriptor{
+      .size = Dimensions,
+      .format = VK_FORMAT_R8G8B8A8_UNORM,
+      .minFilter = VK_FILTER_LINEAR,
+      .magFilter = VK_FILTER_LINEAR,
+      .mipFilter = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+      .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+  };
+
+  Rendertargets.Emissive = Renderer::RendertargetDescriptor{
+      .size = Dimensions,
+      .format = VK_FORMAT_B10G11R11_UFLOAT_PACK32,
+      .minFilter = VK_FILTER_LINEAR,
+      .magFilter = VK_FILTER_LINEAR,
+      .mipFilter = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+      .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+  };
+
+  Rendertargets.Motion = Renderer::RendertargetDescriptor{
+      .size = Dimensions,
+      .format = VK_FORMAT_R16G16_SNORM,
       .minFilter = VK_FILTER_LINEAR,
       .magFilter = VK_FILTER_LINEAR,
       .mipFilter = VK_SAMPLER_MIPMAP_MODE_LINEAR,

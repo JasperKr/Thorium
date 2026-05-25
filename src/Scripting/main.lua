@@ -246,11 +246,11 @@ function snap.draw()
 
   while not gotBuffer do
     if thread:getStatus() ~= "running" then
-      print("Render thread status: " .. thread:getStatus() .. ", exiting main thread.")
-      print("Render thread error: " .. tostring(thread:getError()))
-      snap.event.quit()
-      collectgarbage("collect")
-      collectgarbage("collect")
+      -- print("Render thread status: " .. thread:getStatus() .. ", exiting main thread.")
+      -- print("Render thread error: " .. tostring(thread:getError()))
+      -- snap.event.quit()
+      -- collectgarbage("collect")
+      -- collectgarbage("collect")
       return
     end
 

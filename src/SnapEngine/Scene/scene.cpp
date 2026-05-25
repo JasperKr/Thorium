@@ -3,11 +3,13 @@
 #include "Graphics/dynamicRendering.hpp"
 #include "Graphics/graphics.hpp"
 #include "Graphics/graphicsContext.hpp"
+#include "Graphics/graphicsState.hpp"
 #include "Graphics/shader.hpp"
 #include "Graphics/texture.hpp"
 #include "Graphics/uniformWriter.hpp"
 #include "Modules/Math/matrix.hpp"
 #include "Modules/bindings.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Modules/reflectBindings.hpp"
@@ -32,11 +34,14 @@
 #include "renderer.hpp"
 #include <algorithm>
 #include <cassert>
+#include <cstdint>
 #include <flecs.h>
 #include <imgui.h>
 #include <lua.hpp>
 #include <string>
 #include <string_view>
+#include <vector>
+#include <vulkan/vulkan_core.h>
 
 namespace Engine {
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
@@ -278,12 +283,6 @@ struct DrawItem {
   uint64_t tertiaryKey;
 };
 
-// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
-std::vector<DrawItem> DrawItems;
-
-// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
-std::vector<DrawItem> TransparentDrawItems;
-
 inline auto CompareDrawItems(const DrawItem &first, const DrawItem &second)
     -> bool {
   if (first.primaryKey != second.primaryKey) {
@@ -297,7 +296,8 @@ inline auto CompareDrawItems(const DrawItem &first, const DrawItem &second)
 
 inline auto BindMaterial(const Ref<Graphics::Shader::ShaderModule> &shader,
                          Graphics::GraphicsContext &ctx,
-                         const Renderer::Material *material) -> Error {
+                         const Renderer::Material *material, uint8_t flags)
+    -> Error {
   const auto &defaultMaterial = Renderer::RendererInstance.GetDefaultMaterial();
 
   auto albedoTexture = material->albedoTexture;
@@ -329,84 +329,89 @@ inline auto BindMaterial(const Ref<Graphics::Shader::ShaderModule> &shader,
     reflectanceTexture = defaultMaterial.reflectanceTexture;
   }
 
-  static auto albedoKey = Graphics::ResourceKey{"AlbedoTexture"};
-  auto sendErr = shader->Send(ctx, albedoKey, albedoTexture);
-  if (Error::IsError(sendErr)) {
-    return sendErr;
+  // NOLINTBEGIN
+  if ((flags & 1U) != 0U) {
+    static auto albedoKey = Graphics::ResourceKey{"AlbedoTexture"};
+    CHECK_ERR(shader->Send(ctx, albedoKey, albedoTexture));
   }
 
-  static auto metallicRoughnessKey =
-      Graphics::ResourceKey{"MetallicRoughnessTexture"};
-  sendErr = shader->Send(ctx, metallicRoughnessKey, metallicRoughnessTexture);
-  if (Error::IsError(sendErr)) {
-    return sendErr;
+  if ((flags & 2U) != 0U) {
+    static auto metallicRoughnessKey =
+        Graphics::ResourceKey{"MetallicRoughnessTexture"};
+    CHECK_ERR(
+        shader->Send(ctx, metallicRoughnessKey, metallicRoughnessTexture));
   }
 
-  // static auto ambientOcclusionTextureKey =
-  //     Graphics::ResourceKey{"AmbientOcclusionTexture"};
+  // if ((flags & 4U) != 0U) {
+  //   static auto ambientOcclusionTextureKey =
+  //       Graphics::ResourceKey{"AmbientOcclusionTexture"};
 
-  // sendErr =
-  //     shader->Send(ctx, ambientOcclusionTextureKey, ambientOcclusionTexture);
-  // if (Error::IsError(sendErr)) {
-  //   return sendErr;
+  //   CHECK_ERR(
+  //       shader->Send(ctx, ambientOcclusionTextureKey, ambientOcclusionTexture));
   // }
 
-  static auto normalTextureKey = Graphics::ResourceKey{"NormalTexture"};
-  sendErr = shader->Send(ctx, normalTextureKey, normalTexture);
-  if (Error::IsError(sendErr)) {
-    return sendErr;
+  if ((flags & 8U) != 0U) {
+    static auto normalTextureKey = Graphics::ResourceKey{"NormalTexture"};
+    CHECK_ERR(shader->Send(ctx, normalTextureKey, normalTexture));
   }
 
-  static auto emissiveTextureKey = Graphics::ResourceKey{"EmissiveTexture"};
-  sendErr = shader->Send(ctx, emissiveTextureKey, emissiveTexture);
-  if (Error::IsError(sendErr)) {
-    return sendErr;
+  if ((flags & 16U) != 0U) {
+    static auto emissiveTextureKey = Graphics::ResourceKey{"EmissiveTexture"};
+    CHECK_ERR(shader->Send(ctx, emissiveTextureKey, emissiveTexture));
   }
 
-  static auto reflectanceTextureKey =
-      Graphics::ResourceKey{"ReflectanceTexture"};
-  sendErr = shader->Send(ctx, reflectanceTextureKey, reflectanceTexture);
-  if (Error::IsError(sendErr)) {
-    return sendErr;
+  if ((flags & 32U) != 0U) {
+    static auto reflectanceTextureKey =
+        Graphics::ResourceKey{"ReflectanceTexture"};
+    CHECK_ERR(shader->Send(ctx, reflectanceTextureKey, reflectanceTexture));
   }
+  // NOLINTEND
 
   return {};
 }
 
+struct DrawConfig {
+  bool sendNormalMatrix = false;
+  /*
+    albedoTexture
+    metallicRoughnessTexture
+    ambientOcclusionTexture
+    normalTexture
+    emissiveTexture
+    reflectanceTexture
+  */
+  uint8_t bindMaterialTextures{};
+  bool bindMaterialBuffer = false;
+};
+
 inline auto RenderDrawItem(const DrawItem &item,
                            const Ref<Graphics::Shader::ShaderModule> &shader,
-                           Graphics::GraphicsContext &ctx) -> Error {
+                           Graphics::GraphicsContext &ctx,
+                           const DrawConfig &config) -> Error {
   const auto &worldMatrix = item.geom_entity.get<Transform>().GetWorldMatrix();
   const auto &normalMatrix = Math::Matrix3x3(worldMatrix).InverseTranspose();
 
   static auto modelMatrixKey = Graphics::ResourceKey{"ModelMatrix"};
   static auto normalMatrixKey = Graphics::ResourceKey{"NormalMatrix"};
 
-  auto sendErr = Graphics::Shader::UniformWriter::Send(
-      shader, ctx, modelMatrixKey, worldMatrix);
+  CHECK_ERR(Graphics::Shader::UniformWriter::Send(shader, ctx, modelMatrixKey,
+                                                  worldMatrix));
 
-  if (Error::IsError(sendErr)) {
-    return sendErr;
+  if (config.sendNormalMatrix) {
+    CHECK_ERR(Graphics::Shader::UniformWriter::Send(
+        shader, ctx, normalMatrixKey, normalMatrix));
   }
 
-  sendErr = Graphics::Shader::UniformWriter::Send(shader, ctx, normalMatrixKey,
-                                                  normalMatrix);
-
-  if (Error::IsError(sendErr)) {
-    return sendErr;
+  if (config.bindMaterialTextures != 0) {
+    CHECK_ERR(
+        BindMaterial(shader, ctx, item.material, config.bindMaterialTextures));
   }
 
-  auto materialBindError = BindMaterial(shader, ctx, item.material);
-  if (Error::IsError(materialBindError)) {
-    return materialBindError;
-  }
-
-  static auto materialBufferIndexKey =
-      Graphics::ResourceKey{"MaterialBufferIndex"};
-  sendErr = Graphics::Shader::UniformWriter::Send(
-      shader, ctx, materialBufferIndexKey, item.material->materialSSBOIndex);
-  if (Error::IsError(sendErr)) {
-    return sendErr;
+  if (config.bindMaterialBuffer) {
+    static auto materialBufferIndexKey =
+        Graphics::ResourceKey{"MaterialBufferIndex"};
+    CHECK_ERR(Graphics::Shader::UniformWriter::Send(
+        shader, ctx, materialBufferIndexKey, item.material->materialSSBOIndex));
   }
 
   if (item.geometry.mesh.get() == nullptr) {
@@ -418,7 +423,10 @@ inline auto RenderDrawItem(const DrawItem &item,
   return {};
 }
 
-inline auto AddDrawItem(flecs::entity entity, const Geometry &geometry)
+inline auto AddDrawItem(std::vector<DrawItem> &OpaqueDrawItems,
+                        std::vector<DrawItem> &MaskedDrawItems,
+                        std::vector<DrawItem> &TransparentDrawItems,
+                        flecs::entity entity, const Geometry &geometry)
     -> void {
   const Renderer::Material *material = nullptr;
   material = entity.try_get<Renderer::Material>();
@@ -427,42 +435,182 @@ inline auto AddDrawItem(flecs::entity entity, const Geometry &geometry)
     material = &Renderer::RendererInstance.GetNoMaterial();
   }
 
-  if (material->alphaMode != Renderer::AlphaMode::Blend) {
-    DrawItems.emplace_back(
-        DrawItem{.geom_entity = entity,
-                 .geometry = geometry,
-                 .material = material,
-                 .primaryKey = material->GetMainSortKey(),
-                 .secondaryKey = geometry.mesh->GetHash(),
-                 .tertiaryKey = material->GetSecondarySortKey()});
-  } else {
-    TransparentDrawItems.emplace_back(
-        DrawItem{.geom_entity = entity,
-                 .geometry = geometry,
-                 .material = material,
-                 .primaryKey = material->GetMainSortKey(),
-                 .secondaryKey = geometry.mesh->GetHash(),
-                 .tertiaryKey = material->GetSecondarySortKey()});
+  auto drawItem = DrawItem{.geom_entity = entity,
+                           .geometry = geometry,
+                           .material = material,
+                           .primaryKey = material->GetMainSortKey(),
+                           .secondaryKey = geometry.mesh->GetHash(),
+                           .tertiaryKey = material->GetSecondarySortKey()};
+
+  switch (material->alphaMode) {
+  case Renderer::AlphaMode::Opaque:
+    OpaqueDrawItems.emplace_back(drawItem);
+    break;
+  case Renderer::AlphaMode::Mask:
+    MaskedDrawItems.emplace_back(drawItem);
+    break;
+  case Renderer::AlphaMode::Blend:
+    TransparentDrawItems.emplace_back(drawItem);
+    break;
   }
 }
 
-auto Scene::DrawModels(const Graphics::GraphicsContext &context) -> Error {
+auto Scene::DrawModels(const Camera &camera,
+                       const Graphics::GraphicsContext &context) -> Error {
   for (const auto &system : preRender) {
     system.run();
   }
   finalizePreRenderUploads.run();
 
   auto &ctx = *Graphics::GetCurrentGraphicsContext();
+  const auto &textures = camera.GetOwnedTextures();
 
-  const auto &shader = Graphics::DynamicRendering::GetShader();
+  auto depthOpaque = CHECK_RES(
+      Renderer::RendererInstance.GetShader(Renderer::ShaderKey::DepthPrepass));
+  auto depthMasked = CHECK_RES(
+      Renderer::RendererInstance.GetShader(Renderer::ShaderKey::DepthMaskPass));
+  auto deferred = CHECK_RES(
+      Renderer::RendererInstance.GetShader(Renderer::ShaderKey::Deferred));
+
+  static auto cameraBufferKey = Graphics::ResourceKey{"CameraData"};
+  auto cameraBuffer = camera.GetBuffer()->GetBuffer();
+
+  CHECK_ERR(Graphics::Shader::UniformWriter::Send(
+      depthOpaque, ctx, cameraBufferKey, cameraBuffer));
+  CHECK_ERR(Graphics::Shader::UniformWriter::Send(
+      depthMasked, ctx, cameraBufferKey, cameraBuffer));
+  CHECK_ERR(Graphics::Shader::UniformWriter::Send(
+      deferred, ctx, cameraBufferKey, cameraBuffer));
 
   static auto materialBufferKey = Graphics::ResourceKey{"MaterialBuffer"};
-  auto materialSendError = shader->Send(
-      ctx, materialBufferKey,
-      Renderer::RendererInstance.GetMaterialsBuffer()->GetBuffer());
-  if (Error::IsError(materialSendError)) {
-    return materialSendError;
+  auto materialBuffer =
+      Renderer::RendererInstance.GetMaterialsBuffer()->GetBuffer();
+  CHECK_ERR(depthMasked->Send(ctx, materialBufferKey, materialBuffer));
+  CHECK_ERR(deferred->Send(ctx, materialBufferKey, materialBuffer));
+
+  static std::vector<DrawItem> OpaqueDrawItems;
+  static std::vector<DrawItem> MaskedDrawItems;
+  static std::vector<DrawItem> TransparentDrawItems;
+
+  OpaqueDrawItems.clear();
+  MaskedDrawItems.clear();
+  TransparentDrawItems.clear();
+
+  world.each<Geometry>(
+      [&](flecs::entity entity, const Geometry &geometry) -> void {
+        bool hasChildren = false;
+        entity.children([&](flecs::entity child) -> void {
+          hasChildren = true;
+
+          AddDrawItem(OpaqueDrawItems, MaskedDrawItems, TransparentDrawItems,
+                      child, geometry);
+        });
+
+        if (!hasChildren) {
+          AddDrawItem(OpaqueDrawItems, MaskedDrawItems, TransparentDrawItems,
+                      entity, geometry);
+        }
+      });
+
+  std::ranges::sort(OpaqueDrawItems, CompareDrawItems);
+  std::ranges::sort(MaskedDrawItems, CompareDrawItems);
+  std::ranges::sort(TransparentDrawItems, CompareDrawItems);
+
+  Graphics::DynamicRendering::SetDepthMode(true, true, VK_COMPARE_OP_GREATER);
+  Graphics::DynamicRendering::SetShader(depthOpaque);
+
+  CHECK_ERR(Graphics::DynamicRendering::SetRenderTargets(
+      ctx, {{
+               .clearValue = VkClearValue{0.0F, 0},
+               .texture = textures.Depth,
+               .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+           }}));
+
+  static auto opaqueConfig = DrawConfig{
+      .sendNormalMatrix = false,
+      .bindMaterialTextures = 0,
+      .bindMaterialBuffer = false,
+  };
+  for (const auto &item : OpaqueDrawItems) {
+    CHECK_ERR(RenderDrawItem(item, depthOpaque, ctx, opaqueConfig));
   }
+
+  static auto maskedConfig = DrawConfig{
+      .sendNormalMatrix = false,
+      .bindMaterialTextures = 1,
+      .bindMaterialBuffer = true,
+  };
+  Graphics::DynamicRendering::SetShader(depthMasked);
+  for (const auto &item : MaskedDrawItems) {
+    CHECK_ERR(RenderDrawItem(item, depthMasked, ctx, maskedConfig));
+  }
+
+  Graphics::DynamicRendering::SetDepthMode(true, false, VK_COMPARE_OP_EQUAL);
+  Graphics::DynamicRendering::SetShader(deferred);
+
+  CHECK_ERR(Graphics::DynamicRendering::SetRenderTargets(
+      ctx, {{
+                .texture = textures.Depth,
+                .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+            },
+            {
+                .blendMode = Graphics::BlendmodeNone,
+                .texture = textures.Albedo,
+                .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+            },
+            {
+                .blendMode = Graphics::BlendmodeNone,
+                .texture = textures.Normal,
+                .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+            },
+            {
+                .blendMode = Graphics::BlendmodeNone,
+                .texture = textures.Material,
+                .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+            },
+            {
+                .blendMode = Graphics::BlendmodeNone,
+                .texture = textures.Emissive,
+                .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+            },
+            {
+                .blendMode = Graphics::BlendmodeNone,
+                .texture = textures.Motion,
+                .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+            }}));
+
+  static auto deferredConfig = DrawConfig{
+      .sendNormalMatrix = true,
+      .bindMaterialTextures = UINT8_MAX,
+      .bindMaterialBuffer = true,
+  };
+  for (const auto &item : OpaqueDrawItems) {
+    CHECK_ERR(RenderDrawItem(item, deferred, ctx, deferredConfig));
+  }
+  for (const auto &item : MaskedDrawItems) {
+    CHECK_ERR(RenderDrawItem(item, deferred, ctx, deferredConfig));
+  }
+
+  // Graphics::DynamicRendering::SetDepthMode(true, false, VK_COMPARE_OP_LESS);
+  // for (const auto &item : TransparentDrawItems) {
+  //   CHECK_ERR(RenderDrawItem(item, shader, ctx));
+  // }
+
+  auto shader = CHECK_RES(Renderer::RendererInstance.GetShader(
+      Renderer::ShaderKey::SimpleLighting));
+  Graphics::DynamicRendering::SetShader(shader);
+  CHECK_ERR(shader->Send(ctx, cameraBufferKey, cameraBuffer));
+  static auto albedoTextureKey = Graphics::ResourceKey{"AlbedoTexture"};
+  static auto normalTextureKey = Graphics::ResourceKey{"NormalTexture"};
+  static auto materialTextureKey = Graphics::ResourceKey{"MaterialTexture"};
+  static auto emissiveTextureKey = Graphics::ResourceKey{"EmissiveTexture"};
+  static auto depthBufferKey = Graphics::ResourceKey{"DepthTexture"};
+
+  CHECK_ERR(shader->Send(ctx, albedoTextureKey, textures.Albedo));
+  CHECK_ERR(shader->Send(ctx, normalTextureKey, textures.Normal));
+  CHECK_ERR(shader->Send(ctx, materialTextureKey, textures.Material));
+  CHECK_ERR(shader->Send(ctx, emissiveTextureKey, textures.Emissive));
+  CHECK_ERR(shader->Send(ctx, depthBufferKey, textures.Depth));
 
   auto countKey = Graphics::ResourceKey{"DirectionalLightCount"};
   auto dirLightCountError = Graphics::Shader::UniformWriter::Send(
@@ -478,33 +626,13 @@ auto Scene::DrawModels(const Graphics::GraphicsContext &context) -> Error {
     return lightBufferSendError;
   }
 
-  DrawItems.clear();
-  TransparentDrawItems.clear();
+  CHECK_ERR(Graphics::DynamicRendering::SetRenderTargets(
+      context, {{
+                   .texture = textures.IncomingLight,
+                   .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+               }}));
 
-  world.each<Geometry>(
-      [&](flecs::entity entity, const Geometry &geometry) -> void {
-        bool hasChildren = false;
-        entity.children([&](flecs::entity child) -> void {
-          hasChildren = true;
-
-          AddDrawItem(entity, geometry);
-        });
-
-        if (!hasChildren) {
-          AddDrawItem(entity, geometry);
-        }
-      });
-
-  std::ranges::sort(DrawItems, CompareDrawItems);
-  std::ranges::sort(TransparentDrawItems, CompareDrawItems);
-
-  for (const auto &item : DrawItems) {
-    CHECK_ERR(RenderDrawItem(item, shader, ctx));
-  }
-
-  for (const auto &item : TransparentDrawItems) {
-    CHECK_ERR(RenderDrawItem(item, shader, ctx));
-  }
+  CHECK_ERR(Renderer::DrawFullScreen(context));
 
   return {};
 }

@@ -17,7 +17,10 @@
 namespace Engine::Renderer {
 
 enum class ShaderKey : uint8_t {
-  Forward,
+  DepthPrepass,
+  DepthMaskPass,
+  Deferred,
+  SimpleLighting,
   PostProcessing,
   Skybox,
 };
@@ -30,8 +33,14 @@ struct ShaderConfiguration {
 
 const std::unordered_map<ShaderKey, ShaderConfiguration> ShaderConfigurations =
     {
-        {ShaderKey::Forward,
-         {.path = "Scripting/Graphics/Shaders/Geometry/forward.slang"}},
+        {ShaderKey::DepthPrepass,
+         {.path = "Scripting/Graphics/Shaders/Geometry/depthPrepass.slang"}},
+        {ShaderKey::DepthMaskPass,
+         {.path = "Scripting/Graphics/Shaders/Geometry/depthMaskPass.slang"}},
+        {ShaderKey::Deferred,
+         {.path = "Scripting/Graphics/Shaders/Geometry/deferred.slang"}},
+        {ShaderKey::SimpleLighting,
+         {.path = "Scripting/Graphics/Shaders/Lighting/simple.slang"}},
         {ShaderKey::PostProcessing,
          {.path = "Scripting/Graphics/Shaders/PostProcessing/"
                   "postProcessing.slang"}},
