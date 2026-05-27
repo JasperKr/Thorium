@@ -15,6 +15,7 @@ namespace glTF {
 extern std::vector<std::vector<std::uint8_t>> Buffers;
 extern std::unordered_map<std::string, std::vector<std::uint8_t>> URICache;
 extern std::vector<Ref<Image::ImageData>> ImageCache;
+extern std::vector<Ref<struct Graphics::Texture>> TextureCache;
 extern std::unordered_map<std::string, uint16_t> NameDuplicateCount;
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 

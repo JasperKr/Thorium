@@ -46,6 +46,7 @@ std::vector<std::vector<std::uint8_t>> Buffers;
 std::unordered_map<std::string, std::vector<std::uint8_t>> URICache;
 std::unordered_map<std::string, uint16_t> NameDuplicateCount;
 std::vector<Ref<Image::ImageData>> ImageCache;
+std::vector<Ref<Graphics::Texture>> TextureCache;
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
 inline auto GetUniqueName(const std::string &baseName) -> std::string {
@@ -209,6 +210,11 @@ inline auto LoadTexture(Graphics::GraphicsContext &context,
     -> Result<Ref<Graphics::Texture>> {
   ZoneScoped;
 
+  if (gltfTexture.textureIndex < TextureCache.size() &&
+      TextureCache[gltfTexture.textureIndex].isValid()) {
+    return TextureCache[gltfTexture.textureIndex];
+  }
+
   const auto &texture = asset.textures[gltfTexture.textureIndex];
   const auto &sampler = texture.samplerIndex.has_value()
                             ? asset.samplers[texture.samplerIndex.value()]
@@ -230,6 +236,12 @@ inline auto LoadTexture(Graphics::GraphicsContext &context,
   textureRef->SetLodRange(0.0F, (float)textureRef->GetMipmapCount() - 1);
   textureRef->SetFilter(VK_FILTER_LINEAR, VK_FILTER_LINEAR,
                         VK_SAMPLER_MIPMAP_MODE_LINEAR);
+
+  if (TextureCache.size() <= gltfTexture.textureIndex) {
+    TextureCache.resize(gltfTexture.textureIndex + 100UL); // NOLINT
+  }
+
+  TextureCache[gltfTexture.textureIndex] = textureRef;
 
   return textureRef;
 }
@@ -1142,6 +1154,7 @@ auto LoadGltfModel(Graphics::GraphicsContext &context, const std::string &path,
   Buffers.clear();
   URICache.clear();
   ImageCache.clear();
+  TextureCache.clear();
 
   auto bytes = CHECK_RES(Filesystem::ReadFile(path));
   // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)

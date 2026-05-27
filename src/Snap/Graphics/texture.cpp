@@ -673,16 +673,10 @@ auto Texture::SetPixels(const GraphicsContext &context,
         "Source size dimensions must be greater than zero in SetPixels.");
   }
 
-  if (sourceOffset.x + sourceSize.width > size.width ||
-      sourceOffset.y + sourceSize.height > size.height ||
-      sourceOffset.z + sourceSize.depth > size.depth) {
-    return Error::Create(
-        "ImageData dimensions exceed texture dimensions in SetPixels.");
-  }
-  if (sourceOffset.x + target.x > size.width ||
-      sourceOffset.y + target.y > size.height ||
-      sourceOffset.z + target.z > size.depth) {
-    return Error::Create("Source width and target offset exceed texture "
+  if (targetSize.width + target.x > size.width ||
+      targetSize.height + target.y > size.height ||
+      targetSize.depth + target.z > size.depth) {
+    return Error::Create("Target dimensions and target offset exceed texture "
                          "dimensions in SetPixels.");
   }
   if (target.x < 0 || target.y < 0 || target.z < 0) {
@@ -692,7 +686,7 @@ auto Texture::SetPixels(const GraphicsContext &context,
   if (sourceOffset.x > sourceSize.width || sourceOffset.y > sourceSize.height ||
       sourceOffset.z > sourceSize.depth) {
     return Error::Create(
-        "Source rectangle exceeds ImageData dimensions in SetPixels.");
+        "Source rectangle exceeds Input dimensions in SetPixels.");
   }
   if (sourceOffset.x < 0 || sourceOffset.y < 0 || sourceOffset.z < 0) {
     return Error::Create(
