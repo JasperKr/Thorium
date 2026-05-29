@@ -1,7 +1,5 @@
 module material;
 
-uniform public uint32_t MaterialBufferIndex;
-
 public struct MaterialData {
   public float4 albedoFactor;
   public float roughnessFactor;

@@ -256,6 +256,8 @@ auto Transform::UpdateWorldMatrix(const Transform *parent) -> void {
     WorldMatrix = LocalMatrix;
   }
 
+  NormalMatrix = Math::Matrix3x3(WorldMatrix).InverseTranspose();
+
   // WorldDirty = false;
 }
 

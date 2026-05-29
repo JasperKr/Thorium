@@ -3,6 +3,15 @@ module depthMaskPrepass;
 import camera;
 import material;
 
+import transform;
+struct PushConstantBuffer {
+  uint MaterialBufferIndex;
+  uint ModelTransformIndex;
+};
+
+[[vk::push_constant]]
+PushConstantBuffer PushConstants;
+
 struct VertexStageOutput {
   float4 sv_position : SV_Position;
   float2 tex_coord : TEXCOORDS;
@@ -13,14 +22,15 @@ struct VertexInput {
   float2 TexCoords : TEXCOORD;
 };
 
-uniform float4x4 ModelMatrix;
 Sampler2D AlbedoTexture;
 
 [shader("vertex")]
 VertexStageOutput vertexMain(VertexInput input) {
   VertexStageOutput out;
 
-  float4 worldPos = mul(float4(input.Position, 1.0), ModelMatrix);
+  Transform transform = GetModelTransform(PushConstants.ModelTransformIndex);
+
+  float4 worldPos = mul(float4(input.Position, 1.0), transform.ModelMatrix);
   out.sv_position = mul(camera.ViewProjectionMatrix, worldPos);
   out.tex_coord = input.TexCoords;
 
@@ -34,7 +44,7 @@ struct FragmentInput {
 [shader("fragment")]
 void fragmentMain(FragmentInput input) {
   float4 texColor = AlbedoTexture.Sample(input.tex_coord);
-  MaterialData matData = MaterialBuffer[MaterialBufferIndex];
+  MaterialData matData = MaterialBuffer[PushConstants.MaterialBufferIndex];
 
   float alpha = texColor.a * matData.albedoFactor.a;
 

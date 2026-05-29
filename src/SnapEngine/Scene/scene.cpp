@@ -9,7 +9,6 @@
 #include "Graphics/uniformWriter.hpp"
 #include "Modules/Math/matrix.hpp"
 #include "Modules/bindings.hpp"
-#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Modules/reflectBindings.hpp"
@@ -34,6 +33,7 @@
 #include "renderer.hpp"
 #include <algorithm>
 #include <cassert>
+#include <cstddef>
 #include <cstdint>
 #include <flecs.h>
 #include <imgui.h>
@@ -277,6 +277,7 @@ struct DrawItem {
   flecs::entity geom_entity;
   Geometry geometry;
   const Renderer::Material *material{};
+  uint32_t transformIndex{};
 
   uint64_t primaryKey;
   uint64_t secondaryKey;
@@ -388,20 +389,6 @@ inline auto RenderDrawItem(const DrawItem &item,
                            const Ref<Graphics::Shader::ShaderModule> &shader,
                            Graphics::GraphicsContext &ctx,
                            const DrawConfig &config) -> Error {
-  const auto &worldMatrix = item.geom_entity.get<Transform>().GetWorldMatrix();
-  const auto &normalMatrix = Math::Matrix3x3(worldMatrix).InverseTranspose();
-
-  static auto modelMatrixKey = Graphics::ResourceKey{"ModelMatrix"};
-  static auto normalMatrixKey = Graphics::ResourceKey{"NormalMatrix"};
-
-  CHECK_ERR(Graphics::Shader::UniformWriter::Send(shader, ctx, modelMatrixKey,
-                                                  worldMatrix));
-
-  if (config.sendNormalMatrix) {
-    CHECK_ERR(Graphics::Shader::UniformWriter::Send(
-        shader, ctx, normalMatrixKey, normalMatrix));
-  }
-
   if (config.bindMaterialTextures != 0) {
     CHECK_ERR(
         BindMaterial(shader, ctx, item.material, config.bindMaterialTextures));
@@ -413,6 +400,11 @@ inline auto RenderDrawItem(const DrawItem &item,
     CHECK_ERR(Graphics::Shader::UniformWriter::Send(
         shader, ctx, materialBufferIndexKey, item.material->materialSSBOIndex));
   }
+
+  static auto modelTransformIndexKey =
+      Graphics::ResourceKey{"ModelTransformIndex"};
+  CHECK_ERR(Graphics::Shader::UniformWriter::Send(
+      shader, ctx, modelTransformIndexKey, item.transformIndex));
 
   if (item.geometry.mesh.get() == nullptr) {
     return Error::Create("Invalid geometry mesh");
@@ -455,8 +447,12 @@ inline auto AddDrawItem(std::vector<DrawItem> &OpaqueDrawItems,
   }
 }
 
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 auto Scene::DrawModels(const Camera &camera,
                        const Graphics::GraphicsContext &context) -> Error {
+
+  Renderer::RendererInstance.NewFrame();
+
   for (const auto &system : preRender) {
     system.run();
   }
@@ -515,6 +511,51 @@ auto Scene::DrawModels(const Camera &camera,
   std::ranges::sort(OpaqueDrawItems, CompareDrawItems);
   std::ranges::sort(MaskedDrawItems, CompareDrawItems);
   std::ranges::sort(TransparentDrawItems, CompareDrawItems);
+
+  struct ModelTransformData {
+    std::array<float, 16> modelMatrix{};  // NOLINT
+    std::array<float, 16> normalMatrix{}; // NOLINT
+
+    constexpr explicit ModelTransformData(Transform transform) {
+      std::memcpy(modelMatrix.data(), // NOLINT
+                  transform.GetWorldMatrix().floatData(),
+                  sizeof(float) * Math::Matrix4x4::Size);
+
+      std::memcpy(normalMatrix.data(), // NOLINT
+                  Math::Matrix4x4(transform.GetNormalMatrix()).floatData(),
+                  sizeof(float) * Math::Matrix4x4::Size);
+    }
+  };
+
+  std::vector<ModelTransformData> modelTransforms;
+  size_t transformCount = 0UL;
+  modelTransforms.reserve(OpaqueDrawItems.size() + MaskedDrawItems.size() +
+                          TransparentDrawItems.size());
+
+  for (auto &item : OpaqueDrawItems) {
+    item.transformIndex = transformCount++;
+    modelTransforms.emplace_back(item.geom_entity.get<Transform>());
+  }
+
+  for (auto &item : MaskedDrawItems) {
+    item.transformIndex = transformCount++;
+    modelTransforms.emplace_back(item.geom_entity.get<Transform>());
+  }
+
+  for (auto &item : TransparentDrawItems) {
+    item.transformIndex = transformCount++;
+    modelTransforms.emplace_back(item.geom_entity.get<Transform>());
+  }
+
+  CHECK_ERR(Renderer::RendererInstance.AssureModelTransformBufferSize(
+      transformCount));
+
+  auto span = std::span<const ModelTransformData>(modelTransforms.data(),
+                                                  modelTransforms.size());
+
+  CHECK_ERR(Renderer::RendererInstance.GetModelTransformsBuffer()
+                ->GetBuffer()
+                ->SetData(ctx, span));
 
   Graphics::DynamicRendering::SetDepthMode(true, true, VK_COMPARE_OP_GREATER);
   Graphics::DynamicRendering::SetShader(depthOpaque);

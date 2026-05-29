@@ -1,5 +1,6 @@
 #include "renderer.hpp"
 #include "Graphics/draw.hpp"
+#include "Graphics/graphics.hpp"
 #include "Graphics/graphicsContext.hpp"
 #include "Graphics/graphicsState.hpp"
 #include "Graphics/shader.hpp"
@@ -115,41 +116,6 @@ auto Renderer::InitializeDefaultMaterial(Graphics::GraphicsContext &context)
   return {};
 }
 
-auto Renderer::ResizeMaterialBuffer(Graphics::GraphicsContext &context,
-                                    size_t newSize) -> Error {
-  auto previousSize = MaterialsBuffer->GetElementCount();
-  if (newSize <= previousSize) {
-    return {};
-  }
-
-  auto format = Graphics::BufferFormat(MaterialBufferComponents);
-
-  auto newBufferResult = Graphics::StructuredBuffer::Create(
-      *Graphics::GetCurrentGraphicsContext(), format, newSize,
-      Graphics::StructuredBufferCreationInfo{
-          .memoryFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-          .usageFlags = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
-                        VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-          .debugName = "Material Buffer",
-      });
-
-  if (Error::IsError(newBufferResult)) {
-    return newBufferResult.error();
-  }
-
-  auto newBuffer = newBufferResult.value();
-
-  auto copyError = MaterialsBuffer->GetBuffer()->CopyTo(
-      context, *newBuffer->GetBuffer(), 0, 0, MaterialsBuffer->GetSize());
-  if (Error::IsError(copyError)) {
-    return copyError;
-  }
-
-  MaterialsBuffer = std::move(newBuffer);
-
-  return {};
-}
-
 auto Renderer::GetNewMaterialIndex() -> Result<size_t> {
   size_t newIndex = 0;
   while (UsedMaterialIndices.contains(newIndex)) {
@@ -160,14 +126,23 @@ auto Renderer::GetNewMaterialIndex() -> Result<size_t> {
   if (newIndex >= MaterialsBuffer->GetElementCount()) {
     auto newSize = MaterialsBuffer->GetElementCount() * 2;
 
-    auto resizeResult =
-        ResizeMaterialBuffer(*Graphics::GetCurrentGraphicsContext(), newSize);
-    if (Error::IsError(resizeResult)) {
-      return resizeResult;
-    }
+    MaterialsBuffer->GetBuffer() = CHECK_RES(MaterialsBuffer->GetBuffer()->Grow(
+        *Graphics::GetCurrentGraphicsContext(), newSize));
   }
 
   return newIndex;
+}
+
+auto Renderer::AssureModelTransformBufferSize(size_t minimumSize) -> Error {
+  if (minimumSize >= ModelTransformsBuffer->GetElementCount()) {
+    auto newSize = ModelTransformsBuffer->GetElementCount() * 2;
+
+    ModelTransformsBuffer->GetBuffer() =
+        CHECK_RES(ModelTransformsBuffer->GetBuffer()->Grow(
+            *Graphics::GetCurrentGraphicsContext(), newSize));
+  }
+
+  return {};
 }
 
 auto Renderer::InitializeMaterialBuffer(Graphics::GraphicsContext &context,
@@ -202,49 +177,32 @@ auto Renderer::InitializeLightBuffers(Graphics::GraphicsContext &context)
       .debugName = "Directional Light Buffer",
   };
 
-  auto bufferResult = Graphics::StructuredBuffer::Create(
-      context, DirectionalLight::GetBufferFormat(), MaxDirectionalLights,
-      bufferCreateInfo);
-
-  if (Error::IsError(bufferResult)) {
-    return bufferResult.error();
-  }
-  SceneLightBuffers.DirectionalLightsBuffer = bufferResult.value();
+  SceneLightBuffers.DirectionalLightsBuffer =
+      CHECK_RES(Graphics::StructuredBuffer::Create(
+          context, DirectionalLight::GetBufferFormat(), MaxDirectionalLights,
+          bufferCreateInfo));
 
   bufferCreateInfo.debugName = "Point Light Buffer";
-  bufferResult = Graphics::StructuredBuffer::Create(
-      context, PointLight::GetBufferFormat(), MaxPointLights, bufferCreateInfo);
-
-  if (Error::IsError(bufferResult)) {
-    return bufferResult.error();
-  }
-  SceneLightBuffers.PointLightsBuffer = bufferResult.value();
+  SceneLightBuffers.PointLightsBuffer = CHECK_RES(
+      Graphics::StructuredBuffer::Create(context, PointLight::GetBufferFormat(),
+                                         MaxPointLights, bufferCreateInfo));
 
   bufferCreateInfo.debugName = "Spot Light Buffer";
-  bufferResult = Graphics::StructuredBuffer::Create(
-      context, SpotLight::GetBufferFormat(), MaxSpotLights, bufferCreateInfo);
-  if (Error::IsError(bufferResult)) {
-    return bufferResult.error();
-  }
-  SceneLightBuffers.SpotLightsBuffer = bufferResult.value();
+  SceneLightBuffers.SpotLightsBuffer = CHECK_RES(
+      Graphics::StructuredBuffer::Create(context, SpotLight::GetBufferFormat(),
+                                         MaxSpotLights, bufferCreateInfo));
 
   bufferCreateInfo.debugName = "Rectangle Light Buffer";
-  bufferResult = Graphics::StructuredBuffer::Create(
-      context, RectangleLight::GetBufferFormat(), MaxRectangleLights,
-      bufferCreateInfo);
-  if (Error::IsError(bufferResult)) {
-    return bufferResult.error();
-  }
-  SceneLightBuffers.RectangleLightsBuffer = bufferResult.value();
+  SceneLightBuffers.RectangleLightsBuffer =
+      CHECK_RES(Graphics::StructuredBuffer::Create(
+          context, RectangleLight::GetBufferFormat(), MaxRectangleLights,
+          bufferCreateInfo));
 
   bufferCreateInfo.debugName = "Sphere Light Buffer";
-  bufferResult = Graphics::StructuredBuffer::Create(
-      context, SphereLight::GetBufferFormat(), MaxSphereLights,
-      bufferCreateInfo);
-  if (Error::IsError(bufferResult)) {
-    return bufferResult.error();
-  }
-  SceneLightBuffers.SphereLightsBuffer = bufferResult.value();
+  SceneLightBuffers.SphereLightsBuffer =
+      CHECK_RES(Graphics::StructuredBuffer::Create(
+          context, SphereLight::GetBufferFormat(), MaxSphereLights,
+          bufferCreateInfo));
 
   SceneLightBuffers.DirectionalLightData.resize(
       MaxDirectionalLights *
@@ -258,6 +216,23 @@ auto Renderer::InitializeLightBuffers(Graphics::GraphicsContext &context)
       SceneLightBuffers.RectangleLightsBuffer->GetStride());
   SceneLightBuffers.SphereLightData.resize(
       MaxSphereLights * SceneLightBuffers.SphereLightsBuffer->GetStride());
+
+  return {};
+}
+
+auto Renderer::InitializeModelTransformsBuffer(
+    Graphics::GraphicsContext &context, size_t initialSize) -> Error {
+  const Graphics::StructuredBufferCreationInfo bufferCreateInfo{
+      .memoryFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+      .usageFlags =
+          VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+      .debugName = "Model Transforms Buffer",
+  };
+
+  auto format = Graphics::BufferFormat(ModelTransformBufferComponents);
+
+  ModelTransformsBuffer = CHECK_RES(Graphics::StructuredBuffer::Create(
+      context, format, initialSize, bufferCreateInfo));
 
   return {};
 }

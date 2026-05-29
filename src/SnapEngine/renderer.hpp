@@ -79,6 +79,21 @@ const std::vector<Graphics::BufferComponent> MaterialBufferComponents = {
     },
 };
 
+const std::vector<Graphics::BufferComponent> ModelTransformBufferComponents = {
+    Graphics::BufferComponent{
+        .name = "ModelMatrix",
+        .format = VK_FORMAT_R32G32B32A32_SFLOAT,
+        .arraySize = 4,
+        .isMatrix = true,
+    },
+    Graphics::BufferComponent{
+        .name = "NormalMatrix",
+        .format = VK_FORMAT_R32G32B32_SFLOAT,
+        .arraySize = 3,
+        .isMatrix = true,
+    },
+};
+
 struct Renderer {
   struct Lights {
     Ref<Graphics::StructuredBuffer> PointLightsBuffer;
@@ -102,10 +117,13 @@ struct Renderer {
 
   auto Initialize(Graphics::GraphicsContext &context) -> Error {
     constexpr size_t InitialMaterialBufferSize = 1024UL;
+    constexpr size_t InitialModelTransformBufferSize = 4096UL;
 
     CHECK_ERR(InitializeDefaultMaterial(context));
 
     CHECK_ERR(InitializeMaterialBuffer(context, InitialMaterialBufferSize));
+    CHECK_ERR(InitializeModelTransformsBuffer(context,
+                                              InitialModelTransformBufferSize));
 
     CHECK_ERR(InitializeLightBuffers(context));
 
@@ -120,10 +138,10 @@ struct Renderer {
 
     NoMaterial = Material();
     MaterialsBuffer.reset();
-  }
+    ModelTransformsBuffer.reset();
 
-  auto ResizeMaterialBuffer(Graphics::GraphicsContext &context, size_t newSize)
-      -> Error;
+    SceneLightBuffers = Lights();
+  }
 
   auto GetNewMaterialIndex() -> Result<size_t>;
 
@@ -141,27 +159,40 @@ struct Renderer {
   auto GetMaterialsBuffer() const -> Ref<Graphics::StructuredBuffer> {
     return MaterialsBuffer;
   }
+  auto GetModelTransformsBuffer() const -> Ref<Graphics::StructuredBuffer> {
+    return ModelTransformsBuffer;
+  }
+  auto AssureModelTransformBufferSize(size_t minimumSize) -> Error;
+
   auto GetSceneLightBuffers() -> Lights & { return SceneLightBuffers; }
   auto GetSceneLightBuffers() const -> const Lights & {
     return SceneLightBuffers;
   }
+
+  auto NewFrame() -> void { ModelTransformBufferElementCount = 0; }
 
 private:
   std::unordered_map<ShaderKey, Ref<Graphics::Shader::ShaderModule>>
       LoadedShaders;
   Material NoMaterial;
   Material DefaultMaterial;
+
   Ref<Graphics::StructuredBuffer> MaterialsBuffer;
-  Lights SceneLightBuffers;
   std::unordered_set<size_t> UsedMaterialIndices;
+
+  Ref<Graphics::StructuredBuffer> ModelTransformsBuffer;
+  size_t ModelTransformBufferElementCount = 0;
+
+  Lights SceneLightBuffers;
   bool initialized = false;
 
   auto InitializeMaterialBuffer(Graphics::GraphicsContext &context,
                                 size_t initialSize) -> Error;
+  auto InitializeLightBuffers(Graphics::GraphicsContext &context) -> Error;
+  auto InitializeModelTransformsBuffer(Graphics::GraphicsContext &context,
+                                       size_t initialSize) -> Error;
 
   auto InitializeDefaultMaterial(Graphics::GraphicsContext &context) -> Error;
-
-  auto InitializeLightBuffers(Graphics::GraphicsContext &context) -> Error;
 };
 
 auto DrawFullScreen(const Graphics::GraphicsContext &context) -> Error;

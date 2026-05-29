@@ -498,6 +498,44 @@ auto Buffer::CopyTo(const GraphicsContext &context, Texture &dstTexture,
   return Error::Success();
 }
 
+auto Buffer::Grow(const GraphicsContext &context, size_t newSize)
+    -> Result<Ref<Buffer>> {
+
+  uint32_t requiredUsageFlags =
+      VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+
+  if ((usage & requiredUsageFlags) != requiredUsageFlags) {
+    return Error::Create("Buffer must have TRANSFER_DST and TRANSFER_SRC usage "
+                         "flags to be resized.");
+  }
+
+  if (newSize == size) {
+    return {};
+  }
+
+  if (newSize < size) {
+    return Error::Create("Don't grow buffers to smaller sizes.");
+  }
+
+  if (isStagingBuffer) {
+    return Error::Create("Cannot grow staging buffers, as they are meant to be "
+                         "temporary and short-lived.");
+  }
+
+  auto newBuffer = CHECK_RES(
+      Buffer::Create(context, BufferCreationInfo{
+                                  .size = newSize,
+                                  .usage = usage,
+                                  .properties = properties,
+                                  .persistentMapping = persistentMapping,
+                                  .debugName = debugName,
+                              }));
+
+  CHECK_ERR(CopyTo(context, *newBuffer, 0, 0, size));
+
+  return newBuffer;
+}
+
 auto Buffer::ScheduleDestroy() -> void {
   if (released) {
     return;

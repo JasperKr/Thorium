@@ -9,6 +9,15 @@ import constants;
 
 import Lighting.Lights.directionalLight;
 
+import transform;
+struct PushConstantBuffer {
+  uint MaterialBufferIndex;
+  uint ModelTransformIndex;
+};
+
+[[vk::push_constant]]
+PushConstantBuffer PushConstants;
+
 struct VertexStageOutput {
   float4 sv_position : SV_Position;
   float3 normal : NORMAL;
@@ -26,16 +35,17 @@ struct VertexInput {
   float4 Color : COLOR;
 };
 
-uniform float4x4 ModelMatrix;
-uniform float3x3 NormalMatrix;
-
 [shader("vertex")]
 VertexStageOutput vertexMain(VertexInput input) {
   VertexStageOutput out;
 
-  float4 worldPos = mul(float4(input.Position, 1.0), ModelMatrix);
+  Transform transform = GetModelTransform(PushConstants.ModelTransformIndex);
+
+  float4 worldPos = mul(float4(input.Position, 1.0), transform.ModelMatrix);
   out.sv_position = mul(camera.ViewProjectionMatrix, worldPos);
   float4 previousClip = mul(previousCamera.ViewProjectionMatrix, worldPos);
+
+  float3x3 NormalMatrix = float3x3(transform.NormalMatrix);
 
   out.tex_coord = input.TexCoords;
   float3 normal = UnpackNormal(input.Normal).xyz;
@@ -92,7 +102,7 @@ FragmentOutput fragmentMain(FragmentInput input) {
   }
 
   float4 texColor = AlbedoTexture.Sample(input.tex_coord);
-  MaterialData matData = MaterialBuffer[MaterialBufferIndex];
+  MaterialData matData = MaterialBuffer[PushConstants.MaterialBufferIndex];
 
   float3 albedo = texColor.rgb * matData.albedoFactor.rgb;
 

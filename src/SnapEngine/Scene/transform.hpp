@@ -21,6 +21,7 @@ private:
 
   Math::Matrix4x4 LocalMatrix;
   Math::Matrix4x4 WorldMatrix;
+  Math::Matrix3x3 NormalMatrix;
 
 public:
   [[nodiscard]] auto GetLocalMatrix() const -> const Math::Matrix4x4 & {
@@ -28,6 +29,9 @@ public:
   }
   [[nodiscard]] auto GetWorldMatrix() const -> const Math::Matrix4x4 & {
     return WorldMatrix;
+  }
+  [[nodiscard]] auto GetNormalMatrix() const -> const Math::Matrix3x3 & {
+    return NormalMatrix;
   }
   [[nodiscard]] auto GetPosition() const -> Math::Vec3 { return Position; }
   [[nodiscard]] auto GetRotation() const -> Math::Quaternion {

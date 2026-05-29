@@ -24,6 +24,8 @@ struct Matrix4x4 {
     }
   }
 
+  explicit Matrix4x4(struct Matrix3x3 init);
+
   auto AsSpan() -> std::span<const Scalar> { return {elements}; }
   auto AsByteSpan()
       -> std::span<const uint8_t> { // NOLINTNEXTLINE reinterpret cast
@@ -101,6 +103,29 @@ struct Matrix4x4 {
     return {reinterpret_cast<const uint8_t *>(elements.data()),
             sizeof(Scalar) * Size};
   }
+  [[nodiscard]] auto floatSpan() const
+      -> std::span<const float> { // NOLINT reinterpret cast
+    thread_local std::array<float, Size> floatElements{};
+
+#pragma unroll
+    for (size_t i = 0; i < Size; ++i) {
+      floatElements.at(i) = static_cast<float>(elements.at(i));
+    }
+
+    return {floatElements.data(), Size};
+  }
+
+  [[nodiscard]] auto floatData() const -> const
+      float * { // NOLINT reinterpret cast
+    thread_local std::array<float, Size> floatElements{};
+
+#pragma unroll
+    for (size_t i = 0; i < Size; ++i) {
+      floatElements.at(i) = static_cast<float>(elements.at(i));
+    }
+
+    return floatElements.data();
+  }
 };
 
 struct Matrix3x3 {
@@ -156,6 +181,18 @@ struct Matrix3x3 {
       -> std::span<const uint8_t> { // NOLINTNEXTLINE reinterpret cast
     return {reinterpret_cast<const uint8_t *>(elements.data()),
             sizeof(Scalar) * Size};
+  }
+
+  [[nodiscard]] auto FloatSpan() const
+      -> std::span<const float> { // NOLINT reinterpret cast
+    static std::array<float, Size> floatElements{};
+
+#pragma unroll
+    for (size_t i = 0; i < Size; ++i) {
+      floatElements.at(i) = static_cast<float>(elements.at(i));
+    }
+
+    return {floatElements.data(), Size};
   }
 };
 

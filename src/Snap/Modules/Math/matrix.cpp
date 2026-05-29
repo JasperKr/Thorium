@@ -6,6 +6,15 @@
 
 namespace Math {
 
+Matrix4x4::Matrix4x4(Matrix3x3 init) {
+  for (size_t row = 0; row < Matrix3x3::Rows; ++row) {
+    for (size_t col = 0; col < Matrix3x3::Cols; ++col) {
+      At(row, col) = init.At(row, col);
+    }
+  }
+  At(3, 3) = 1.0F;
+}
+
 auto Matrix4x4::FromRows(std::initializer_list<Scalar> init) -> Matrix4x4 {
   return {init};
 }

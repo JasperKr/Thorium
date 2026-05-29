@@ -120,6 +120,9 @@ struct Buffer : Object, Barrier::BarrierSynced {
   auto CopyTo(const GraphicsContext &context, Texture &dstTexture,
               VkBufferImageCopy region) -> Error;
 
+  auto Grow(const GraphicsContext &context, size_t newSize)
+      -> Result<Ref<Buffer>>;
+
   auto MapMemory(const GraphicsContext &context) -> Error;
   auto UnmapMemory(const GraphicsContext &context) -> void;
 
