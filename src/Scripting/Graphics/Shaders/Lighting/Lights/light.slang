@@ -25,3 +25,16 @@ public interface ILight {
     return float3(0.0f);
   }
 };
+
+public float AttenuateCusp(float distance, float radius, float falloff) {
+  float s = distance / radius;
+
+  if (s >= 1.0) {
+    return 0.0;
+  }
+
+  float s2 = s * s;
+  float iS2 = 1.0 - s2;
+
+  return (iS2 * iS2) / (1.0 + falloff * s);
+}
