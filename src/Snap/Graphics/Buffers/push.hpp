@@ -17,7 +17,7 @@ struct FlushInfo {
 
 struct PushBuffer {
 public:
-  explicit PushBuffer(const Reflect::ResourceInfo &layout,
+  explicit PushBuffer(Reflect::ResourceInfo inputLayout,
                       VkShaderStageFlags stage = VK_SHADER_STAGE_ALL);
 
   [[nodiscard]] auto GetBufferOffset() const -> size_t;

@@ -1,7 +1,7 @@
 #include "wrap_mouse.hpp"
 #include "Graphics/graphics.hpp"
 #include "Modules/Peripherals/mouse.hpp"
-#include "Modules/imagedata.hpp"
+#include "Modules/imageData.hpp"
 #include "Modules/object.hpp"
 #include "SDL3/SDL_mouse.h"
 #include "SDL3/SDL_surface.h"

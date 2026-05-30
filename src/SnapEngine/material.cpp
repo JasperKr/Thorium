@@ -1,6 +1,7 @@
 #include "material.hpp"
 #include "Graphics/Buffers/structured.hpp"
 #include "Modules/Math/vector.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Wrap/Helpers/lua_enum.hpp"
 #include "Wrap/wrap_engine.hpp"
@@ -295,6 +296,8 @@ auto Material::WriteToBuffer(Graphics::GraphicsContext &context,
   materialData.textureUVIndices[1] = (packedIndices >> UINT32_WIDTH) & ~0U;
 
   auto span = std::span<MaterialData>(&materialData, 1);
+
+  PrintAlways("Updating material buffer at index {}", materialSSBOIndex);
 
   return buffer->GetBuffer()->SetData(context, span,
                                       materialSSBOIndex * buffer->GetStride());

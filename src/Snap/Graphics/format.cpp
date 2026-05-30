@@ -2,6 +2,7 @@
 #include "Modules/console.hpp"
 #include "float16_t/float16_t.hpp"
 #include <cassert>
+#include <cstdint>
 #include <unordered_map>
 #include <vulkan/vulkan_core.h>
 

@@ -2,21 +2,22 @@
 #include "Graphics/reflect.hpp"
 #include "Modules/console.hpp"
 #include <cstring>
+#include <iterator>
+#include <utility>
 #include <vector>
 
 namespace Graphics {
 
-PushBuffer::PushBuffer(const Reflect::ResourceInfo &layout,
+PushBuffer::PushBuffer(Reflect::ResourceInfo inputLayout,
                        VkShaderStageFlags stage)
-    : layout(layout), stageFlags(stage) {
-  PrintError("Constructing PushBuffer with layout: {}", layout.name);
+    : layout(std::move(inputLayout)), stageFlags(stage) {
 
   if (!layout.IsBuffer()) {
     PrintError("PushBuffer layout must be a buffer.");
     return;
   }
 
-  const auto &bufferInfo = std::get<Reflect::BufferInfo>(layout.info);
+  auto &bufferInfo = std::get<Reflect::BufferInfo>(layout.info);
 
   if (std::holds_alternative<Reflect::ScalarInfo>(bufferInfo.info)) {
     data.resize(std::get<Reflect::ScalarInfo>(bufferInfo.info).size);
@@ -27,6 +28,9 @@ PushBuffer::PushBuffer(const Reflect::ResourceInfo &layout,
   } else if (std::holds_alternative<Reflect::StructInfo>(bufferInfo.info)) {
     data.resize(std::get<Reflect::StructInfo>(bufferInfo.info).size);
   }
+
+  bufferInfo.name = layout.name;
+  bufferInfo.GetInfo<Reflect::StructInfo>().name = layout.name;
 }
 
 auto PushBuffer::GetBufferSize() const -> size_t {
@@ -56,9 +60,14 @@ auto PushBuffer::FlushData(FlushInfo &info) -> void {
 auto PushBuffer::ContainsUniform(ResourceKey::const_iterator iterator,
                                  ResourceKey::const_iterator end) const
     -> bool {
+
   if (std::next(iterator) == end) {
     // return *iterator == layout.name;
     return strcmp(*iterator, layout.name) == 0;
+  }
+
+  if (strcmp(*iterator, layout.name) != 0) {
+    return false;
   }
 
   const auto &bufferInfo = std::get<Reflect::BufferInfo>(layout.info);

@@ -3,7 +3,7 @@
 #include "Graphics/graphicsState.hpp"
 #include "Modules/Math/vector.hpp"
 #include "Modules/color.hpp"
-#include "Modules/imagedata.hpp"
+#include "Modules/imageData.hpp"
 #include "Wrap/wrap.hpp"
 #include <lua.hpp>
 
@@ -41,7 +41,7 @@ auto wrap_NewImagedata(lua_State *state) -> int {
 
     auto imagedata = imagedataResult.value();
 
-    LuaWrap::PushObject(state, ::Image::ImageData::GetType(), imagedata.get());
+    LuaWrap::PushObject(state, ::Image::ImageData::GetType(), imageData.get());
   } else if (lua_isstring(state, 1) != 0) {
     const auto *filepath = luaL_checkstring(state, 1);
     auto imagedataResult = ::Image::ImageData::Create(filepath);
@@ -53,7 +53,7 @@ auto wrap_NewImagedata(lua_State *state) -> int {
 
     auto imagedata = imagedataResult.value();
 
-    LuaWrap::PushObject(state, ::Image::ImageData::GetType(), imagedata.get());
+    LuaWrap::PushObject(state, ::Image::ImageData::GetType(), imageData.get());
   } else {
     return luaL_error(state, "Invalid arguments to Imagedata constructor.");
   }

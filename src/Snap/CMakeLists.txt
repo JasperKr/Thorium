@@ -273,6 +273,7 @@ add_library(snap_core OBJECT
     Modules/error.cpp
     Modules/window.cpp
     Modules/reflectBindings.cpp
+    Modules/image.cpp
 
 # Math Modules
     Modules/Math/vector.cpp

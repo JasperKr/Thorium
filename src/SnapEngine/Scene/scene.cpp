@@ -9,6 +9,7 @@
 #include "Graphics/uniformWriter.hpp"
 #include "Modules/Math/matrix.hpp"
 #include "Modules/bindings.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Modules/reflectBindings.hpp"
@@ -396,13 +397,13 @@ inline auto RenderDrawItem(const DrawItem &item,
 
   if (config.bindMaterialBuffer) {
     static auto materialBufferIndexKey =
-        Graphics::ResourceKey{"MaterialBufferIndex"};
+        Graphics::ResourceKey{"PushConstants", "MaterialBufferIndex"};
     CHECK_ERR(Graphics::Shader::UniformWriter::Send(
         shader, ctx, materialBufferIndexKey, item.material->materialSSBOIndex));
   }
 
   static auto modelTransformIndexKey =
-      Graphics::ResourceKey{"ModelTransformIndex"};
+      Graphics::ResourceKey{"PushConstants", "ModelTransformIndex"};
   CHECK_ERR(Graphics::Shader::UniformWriter::Send(
       shader, ctx, modelTransformIndexKey, item.transformIndex));
 
@@ -478,6 +479,18 @@ auto Scene::DrawModels(const Camera &camera,
   CHECK_ERR(Graphics::Shader::UniformWriter::Send(
       deferred, ctx, cameraBufferKey, cameraBuffer));
 
+  static auto modelTransformsBufferKey =
+      Graphics::ResourceKey{"ModelTransforms"};
+
+  auto modelTransformsBuffer =
+      Renderer::RendererInstance.GetModelTransformsBuffer()->GetBuffer();
+  CHECK_ERR(Graphics::Shader::UniformWriter::Send(
+      depthOpaque, ctx, modelTransformsBufferKey, modelTransformsBuffer));
+  CHECK_ERR(Graphics::Shader::UniformWriter::Send(
+      depthMasked, ctx, modelTransformsBufferKey, modelTransformsBuffer));
+  CHECK_ERR(Graphics::Shader::UniformWriter::Send(
+      deferred, ctx, modelTransformsBufferKey, modelTransformsBuffer));
+
   static auto materialBufferKey = Graphics::ResourceKey{"MaterialBuffer"};
   auto materialBuffer =
       Renderer::RendererInstance.GetMaterialsBuffer()->GetBuffer();
@@ -511,6 +524,9 @@ auto Scene::DrawModels(const Camera &camera,
   std::ranges::sort(OpaqueDrawItems, CompareDrawItems);
   std::ranges::sort(MaskedDrawItems, CompareDrawItems);
   std::ranges::sort(TransparentDrawItems, CompareDrawItems);
+
+  PrintAlways("Opaque: {}, Masked: {}, Transparent: {}", OpaqueDrawItems.size(),
+              MaskedDrawItems.size(), TransparentDrawItems.size());
 
   struct ModelTransformData {
     std::array<float, 16> modelMatrix{};  // NOLINT

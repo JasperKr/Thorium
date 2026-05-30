@@ -1,4 +1,4 @@
-#include "imagedata.hpp"
+#include "imageData.hpp"
 #include "Graphics/format.hpp"
 #include "Modules/Math/mathTypes.hpp"
 #include "Modules/bytedata.hpp"
@@ -8,6 +8,7 @@
 #include <cassert>
 #include <vector>
 
+#include "Modules/image.hpp"
 #include "stb/stb_image.h"
 #include "vulkan/vulkan_core.h"
 #include <cstdint>
@@ -290,13 +291,18 @@ auto ImageData::Create(const std::string &filepath) -> Result<Ref<ImageData>> {
   return Create(bytedata);
 }
 
-auto ImageData::Create(const std::span<const uint8_t> &data)
+auto ImageData::Create(const std::span<uint8_t> &data)
     -> Result<Ref<ImageData>> {
   // Allowed formats: jpeg, png, tga, bmp, psd, gif, hdr, pic, ppm
 
   int texWidth = 0;
   int texHeight = 0;
   int texChannels = 0;
+  VkFormat format{};
+
+  if (IsDDS(data)) {
+    return Error::Create("Use CompressedImageData for DDS files.");
+  }
 
   // check for LDR formats, supported by default stbi_load
   if (stbi_is_hdr_from_memory(data.data(), static_cast<int>(data.size())) ==
@@ -306,7 +312,7 @@ auto ImageData::Create(const std::span<const uint8_t> &data)
         &texChannels, STBI_rgb_alpha);
 
     if (pixels == nullptr) {
-      return Error::Unexpected("Failed to load image.");
+      return Error::Unexpected("Failed to load rgba8 imageData.");
     }
 
     auto span =
@@ -333,7 +339,7 @@ auto ImageData::Create(const std::span<const uint8_t> &data)
                                &texWidth, &texHeight, &texChannels, STBI_rgb);
 
     if (pixels == nullptr) {
-      return Error::Unexpected("Failed to load image.");
+      return Error::Unexpected("Failed to load b10gr11f imageData.");
     }
 
     auto imageData = CHECK_RES(Image::ImageData::Create(

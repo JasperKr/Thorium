@@ -5,9 +5,10 @@
 #include "Graphics/texture.hpp"
 #include "Graphics/vertexformat.hpp"
 #include "Modules/Math/vector.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/filesystem.hpp"
-#include "Modules/imagedata.hpp"
+#include "Modules/imageData.hpp"
 #include "Modules/object.hpp"
 #include "Scene/Geometry/boundingBox.hpp"
 #include "Scene/Geometry/geometry.hpp"
@@ -24,6 +25,7 @@
 #include <cstring>
 #include <execution>
 #include <flecs.h>
+#include <mutex>
 #include <numeric>
 #include <public/tracy/Tracy.hpp>
 #include <span>
@@ -32,6 +34,7 @@
 #include "fastgltf/include/fastgltf/core.hpp"
 #include "fastgltf/include/fastgltf/types.hpp"
 
+#include "meshoptimizer.h"
 #include "vulkan/vulkan_core.h"
 
 #include <string_view>
@@ -44,6 +47,7 @@ namespace glTF {
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
 std::vector<std::vector<std::uint8_t>> Buffers;
 std::unordered_map<std::string, std::vector<std::uint8_t>> URICache;
+std::mutex URICacheMutex{};
 std::unordered_map<std::string, uint16_t> NameDuplicateCount;
 std::vector<Ref<Image::ImageData>> ImageCache;
 std::vector<Ref<Graphics::Texture>> TextureCache;
@@ -79,11 +83,11 @@ static fastgltf::Parser Parser =
 inline auto LoadDataSource(const fastgltf::Asset &asset,
                            const std::string_view &basePath,
                            const fastgltf::DataSource &dataSource)
-    -> Result<std::span<const uint8_t>>;
+    -> Result<std::span<uint8_t>>;
 
 inline auto LoadBufferView(const fastgltf::Asset &asset,
                            const fastgltf::BufferView &bufferView)
-    -> Result<std::span<const uint8_t>> {
+    -> Result<std::span<uint8_t>> {
   const auto &buffer = asset.buffers[bufferView.bufferIndex];
 
   const auto byteOffset = static_cast<long>(bufferView.byteOffset);
@@ -107,10 +111,10 @@ inline auto LoadBufferView(const fastgltf::Asset &asset,
     return Error::Unexpected("BufferView byte range exceeds buffer size.");
   }
 
-  const auto &data = Buffers[bufferView.bufferIndex];
+  auto &data = Buffers[bufferView.bufferIndex];
 
-  return std::span<const uint8_t>(data.data() + byteOffset, // NOLINT
-                                  byteLength);
+  return std::span<uint8_t>(data.data() + byteOffset, // NOLINT
+                            byteLength);
 }
 
 inline auto LoadURI(const std::string_view &basePath,
@@ -124,21 +128,24 @@ inline auto LoadURI(const std::string_view &basePath,
   if (iter != URICache.end()) {
     return iter->second;
   }
+  PrintAlways("Loading URI: {}", path);
 
-  auto fileResult = Filesystem::ReadFile(path);
+  {
+    std::lock_guard<std::mutex> lock(URICacheMutex);
+    auto data = CHECK_RES(Filesystem::ReadFile(path));
 
-  if (Error::IsError(fileResult)) {
-    return fileResult.error();
+    URICache[path] = std::move(data);
+    auto &cached = URICache[path];
+
+    auto span = std::span<uint8_t>(cached.data(), cached.size()); // NOLINT
+    return span;
   }
-
-  URICache[path] = fileResult.value();
-  return URICache[path];
 }
 
 inline auto LoadDataSource(const fastgltf::Asset &asset,
                            const std::string_view &basePath,
                            const fastgltf::DataSource &dataSource)
-    -> Result<std::span<const uint8_t>> {
+    -> Result<std::span<uint8_t>> {
   ZoneScoped;
 
   // never monostate
@@ -161,9 +168,10 @@ inline auto LoadDataSource(const fastgltf::Asset &asset,
 
     // NOLINTBEGIN
 
-    auto dataSpan = std::span<const uint8_t>(
-        reinterpret_cast<const uint8_t *>(arraySource.bytes.data()),
-        arraySource.bytes.size());
+    auto dataSpan =
+        std::span<uint8_t>(reinterpret_cast<uint8_t *>(const_cast<std::byte *>(
+                               arraySource.bytes.data())),
+                           arraySource.bytes.size());
 
     // NOLINTEND
 
@@ -173,9 +181,10 @@ inline auto LoadDataSource(const fastgltf::Asset &asset,
     const auto &vectorSource = std::get<fastgltf::sources::Vector>(dataSource);
 
     // NOLINTBEGIN
-    auto dataSpan = std::span<const uint8_t>(
-        reinterpret_cast<const uint8_t *>(vectorSource.bytes.data()),
-        vectorSource.bytes.size());
+    auto dataSpan =
+        std::span<uint8_t>(reinterpret_cast<uint8_t *>(const_cast<std::byte *>(
+                               vectorSource.bytes.data())),
+                           vectorSource.bytes.size());
     // NOLINTEND
 
     return dataSpan;
@@ -192,9 +201,10 @@ inline auto LoadDataSource(const fastgltf::Asset &asset,
 
     // NOLINTBEGIN
 
-    auto dataSpan = std::span<const uint8_t>(
-        reinterpret_cast<const uint8_t *>(byteViewSource.bytes.data()),
-        byteViewSource.bytes.size());
+    auto dataSpan =
+        std::span<uint8_t>(reinterpret_cast<uint8_t *>(const_cast<std::byte *>(
+                               byteViewSource.bytes.data())),
+                           byteViewSource.bytes.size());
     // NOLINTEND
 
     return dataSpan;
@@ -944,6 +954,31 @@ inline auto LoadIndexData(const fastgltf::Asset &asset,
                                   finalLength);
 }
 
+template <typename IndexT>
+void OptimizeMesh(std::span<IndexT> indices, std::span<uint8_t> vertices,
+                  size_t vertexCount, size_t vertexStride) {
+
+  size_t indexCount = indices.size();
+
+  std::vector<unsigned int> remap(vertexCount);
+
+  size_t newVertexCount =
+      meshopt_generateVertexRemap(remap.data(), indices.data(), indexCount,
+                                  vertices.data(), vertexCount, vertexStride);
+
+  meshopt_remapIndexBuffer(indices.data(), indices.data(), indexCount,
+                           remap.data());
+
+  meshopt_remapVertexBuffer(vertices.data(), vertices.data(), vertexCount,
+                            vertexStride, remap.data());
+
+  meshopt_optimizeVertexCache(indices.data(), indices.data(), indexCount,
+                              vertexCount);
+
+  meshopt_optimizeVertexFetch(vertices.data(), indices.data(), indexCount,
+                              vertices.data(), vertexCount, vertexStride);
+}
+
 // NOLINTNEXTLINE
 inline auto LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
                      const fastgltf::Asset &asset,
@@ -1072,7 +1107,32 @@ inline auto LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
       auto vertexData = CHECK_RES(
           LoadVertexData(vertexFormat, asset, primitive, indexData, indexType));
 
-      auto vertexCount = vertexData.size() / vertexFormat.GetStride(0);
+      auto stride = vertexFormat.GetStride(0);
+      auto vertexCount = vertexData.size() / stride;
+
+      switch (indexType) {
+      case VK_INDEX_TYPE_UINT8:
+        OptimizeMesh( // NOLINTNEXTLINE
+            std::span(reinterpret_cast<uint8_t *>(indexData.data()),
+                      indexData.size() / sizeof(uint8_t)),
+            vertexData, vertexCount, stride);
+        break;
+      case VK_INDEX_TYPE_UINT16:
+        OptimizeMesh( // NOLINTNEXTLINE
+            std::span(reinterpret_cast<uint16_t *>(indexData.data()),
+                      indexData.size() / sizeof(uint16_t)),
+            vertexData, vertexCount, stride);
+        break;
+      case VK_INDEX_TYPE_UINT32:
+        OptimizeMesh( // NOLINTNEXTLINE
+            std::span(reinterpret_cast<uint32_t *>(indexData.data()),
+                      indexData.size() / sizeof(uint32_t)),
+            vertexData, vertexCount, stride);
+        break;
+      case VK_INDEX_TYPE_NONE_KHR:
+      case VK_INDEX_TYPE_MAX_ENUM:
+        break;
+      }
 
       auto mesh = CHECK_RES(Graphics::Mesh::Create(
           context, vertexFormat, vertexCount, std::string(gltfMesh.name)));
@@ -1151,10 +1211,14 @@ auto LoadGltfModel(Graphics::GraphicsContext &context, const std::string &path,
                    flecs::world *world) -> Error {
   /// Load the file into a data buffer.
 
-  Buffers.clear();
-  URICache.clear();
-  ImageCache.clear();
-  TextureCache.clear();
+  {
+    std::lock_guard<std::mutex> lock(URICacheMutex);
+
+    Buffers.clear();
+    URICache.clear();
+    ImageCache.clear();
+    TextureCache.clear();
+  }
 
   auto bytes = CHECK_RES(Filesystem::ReadFile(path));
   // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
@@ -1200,7 +1264,7 @@ auto LoadGltfModel(Graphics::GraphicsContext &context, const std::string &path,
 
   std::for_each(std::execution::par, indices.begin(), indices.end(),
                 [&](const auto &index) -> auto {
-                  const auto &image = asset->images[index];
+                  const fastgltf::Image &image = asset->images[index];
                   auto loadResult =
                       LoadDataSource(asset.get(), basePath, image.data);
                   if (Error::IsError(loadResult)) {

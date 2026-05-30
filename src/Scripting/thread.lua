@@ -20,11 +20,18 @@ do
 
   local function draw()
     snap.graphics.setCullMode("none")
-    snap.graphics.setCullMode("none")
     snap.graphics.setWindingOrder("ccw")
     snap.graphics.setDepthMode("greater", true)
     camera:render(scene)
     snap.graphics.setShader()
+
+    if Imgui.Begin("Debug Info") then
+      Imgui.Text(string.format("Frame time: %.3f ms", snap.timer.getDelta() * 1000))
+      Imgui.Text(string.format("FPS: %.1f", snap.timer.getFPS()))
+      Imgui.Text(string.format("ImGui draw time: %.3f ms", lastShownImDrawTime * 1000))
+    end
+    Imgui.End()
+
     if Imgui.Begin("Viewport") then
       Imgui.Image(camera:getRendertarget("PostProcessed"), ffi.new("ImVec2", { cameraWidth, cameraHeight }))
     end
@@ -163,7 +170,7 @@ do
     createSnapshot = false
     if firstFrame then
       snap.graphics.setDefaultFilter("linear", "linear", 4)
-      snap.scene.loadModel(scene, "Assets/Terrain/sponza.glb")
+      snap.scene.loadModel(scene, "Assets/Terrain/Bistro/bistro.gltf")
 
       texture = snap.graphics.newTexture("src/Assets/skybox.hdr", { sampler = true, mipmaps = "init" })
       -- texture = snap.graphics.newTexture("src/Assets/skybox.hdr")

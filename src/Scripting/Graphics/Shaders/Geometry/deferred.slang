@@ -34,6 +34,11 @@ struct VertexInput {
   uint Tangent : TANGENT;
   float4 Color : COLOR;
 };
+public struct PushConstantsData {
+  public float4x4 ModelMatrix;
+  public float3x3 NormalMatrix;
+  public uint MaterialBufferIndex;
+};
 
 [shader("vertex")]
 VertexStageOutput vertexMain(VertexInput input) {

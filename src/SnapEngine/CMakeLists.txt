@@ -47,7 +47,13 @@ target_include_directories(SnapEngine
 
 message(STATUS "SnapEngine include: ${PROJECT_SOURCE_DIR}/src/Snap")
 
+add_subdirectory(
+  ${CMAKE_SOURCE_DIR}/include/meshoptimizer EXCLUDE_FROM_ALL
+  ${CMAKE_BINARY_DIR}/include/meshoptimizer
+)
+
 target_link_libraries(SnapEngine
   PUBLIC snap_core
   PRIVATE TBB::tbb
+  meshoptimizer
 )

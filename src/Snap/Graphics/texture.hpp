@@ -6,7 +6,7 @@
 #include "Libraries/vma.hpp"
 #include "Modules/error.hpp"
 #include "Modules/image.hpp"
-#include "Modules/imagedata.hpp"
+#include "Modules/imageData.hpp"
 #include "Modules/object.hpp"
 #include "Modules/type.hpp"
 #include <atomic>
@@ -302,8 +302,7 @@ auto LoadFromFile(GraphicsContext &context, const char *path,
     -> Result<Ref<Texture>>;
 
 // texture 2D From byte array
-auto LoadFromMemory(GraphicsContext &context,
-                    const std::span<const uint8_t> &data,
+auto LoadFromMemory(GraphicsContext &context, const std::span<uint8_t> &data,
                     VkImageUsageFlags usage = 0,
                     TextureMipmapOption mipmaps = {}) -> Result<Ref<Texture>>;
 

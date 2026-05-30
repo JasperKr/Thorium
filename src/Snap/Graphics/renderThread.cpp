@@ -64,12 +64,14 @@ auto GetCachedCommandBuffer(const GraphicsContext &context)
 inline auto CreateDescriptorPool(ThreadContext &tcontext)
     -> Result<VkDescriptorPool> {
   constexpr uint32_t poolSize = 512;
+  constexpr uint32_t sampledPoolSize = 8192;
 
   static const std::vector<VkDescriptorPoolSize> poolSizes = {
-      {.type = VK_DESCRIPTOR_TYPE_SAMPLER, .descriptorCount = poolSize},
+      {.type = VK_DESCRIPTOR_TYPE_SAMPLER, .descriptorCount = sampledPoolSize},
       {.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-       .descriptorCount = poolSize},
-      {.type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, .descriptorCount = poolSize},
+       .descriptorCount = sampledPoolSize},
+      {.type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+       .descriptorCount = sampledPoolSize},
       {.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .descriptorCount = poolSize},
       {.type = VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER,
        .descriptorCount = poolSize},

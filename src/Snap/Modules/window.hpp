@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Modules/Math/vector.hpp"
-#include "Modules/imagedata.hpp"
+#include "Modules/imageData.hpp"
 #include "Modules/object.hpp"
 #include "SDL3/SDL_video.h"
 #include <cstdint>

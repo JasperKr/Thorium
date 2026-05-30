@@ -50,6 +50,10 @@ struct StructuredBuffer : Object {
 
   [[nodiscard]] auto GetBuffer() -> Ref<Buffer> { return buffer; }
 
+  // Copies the old buffer's data into a new buffer with the new size
+  auto Grow(const GraphicsContext &context, size_t newElementCount)
+      -> Result<Ref<StructuredBuffer>>;
+
   static auto Create(const GraphicsContext &context, const BufferFormat &format,
                      size_t elementCount,
                      StructuredBufferCreationInfo const &info)

@@ -134,8 +134,8 @@ auto Buffer::UploadLarge(const GraphicsContext &context,
   auto uploadSize = size == VK_WHOLE_SIZE ? data.size() : size;
 
   if (uploadSize > this->size) {
-    return Error::Create(
-        "Error uploading data, cannot upload more data than is allocated.");
+    return Error::Create("Error uploading large data, cannot upload more data "
+                         "than is allocated.");
   }
 
   static BufferCreationInfo stagingBufferInfo{
@@ -185,8 +185,8 @@ auto Buffer::UploadRing(const GraphicsContext &context,
   auto uploadSize = size == VK_WHOLE_SIZE ? data.size() : size;
 
   if (uploadSize > this->size) {
-    return Error::Create(
-        "Error uploading data, cannot upload more data than is allocated.");
+    return Error::Create("Error uploading ring data, cannot upload more data "
+                         "than is allocated.");
   }
 
   // Use upload buffer
@@ -486,6 +486,8 @@ auto Buffer::CopyTo(const GraphicsContext &context, Texture &dstTexture,
     return Error::Create(
         "Source buffer was not created with TRANSFER_SRC usage flag for copy.");
   }
+
+  DynamicRendering::EndRendering(context);
 
   CHECK_ERR(dstTexture.UseAsTransferDst(context));
 

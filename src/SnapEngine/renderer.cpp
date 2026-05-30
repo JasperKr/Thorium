@@ -7,7 +7,7 @@
 #include "Graphics/texture.hpp"
 #include "Modules/color.hpp"
 #include "Modules/error.hpp"
-#include "Modules/imagedata.hpp"
+#include "Modules/imageData.hpp"
 #include "Scene/Lights/directionalLight.hpp"
 #include "Scene/Lights/pointLight.hpp"
 #include "Scene/Lights/rectangleLight.hpp"
@@ -124,10 +124,10 @@ auto Renderer::GetNewMaterialIndex() -> Result<size_t> {
   UsedMaterialIndices.insert(newIndex);
 
   if (newIndex >= MaterialsBuffer->GetElementCount()) {
-    auto newSize = MaterialsBuffer->GetElementCount() * 2;
+    auto newElementCount = MaterialsBuffer->GetElementCount() * 2;
 
-    MaterialsBuffer->GetBuffer() = CHECK_RES(MaterialsBuffer->GetBuffer()->Grow(
-        *Graphics::GetCurrentGraphicsContext(), newSize));
+    MaterialsBuffer = CHECK_RES(MaterialsBuffer->Grow(
+        *Graphics::GetCurrentGraphicsContext(), newElementCount));
   }
 
   return newIndex;
@@ -135,11 +135,10 @@ auto Renderer::GetNewMaterialIndex() -> Result<size_t> {
 
 auto Renderer::AssureModelTransformBufferSize(size_t minimumSize) -> Error {
   if (minimumSize >= ModelTransformsBuffer->GetElementCount()) {
-    auto newSize = ModelTransformsBuffer->GetElementCount() * 2;
+    auto newElementCount = ModelTransformsBuffer->GetElementCount() * 2;
 
-    ModelTransformsBuffer->GetBuffer() =
-        CHECK_RES(ModelTransformsBuffer->GetBuffer()->Grow(
-            *Graphics::GetCurrentGraphicsContext(), newSize));
+    ModelTransformsBuffer = CHECK_RES(ModelTransformsBuffer->Grow(
+        *Graphics::GetCurrentGraphicsContext(), newElementCount));
   }
 
   return {};
@@ -149,21 +148,16 @@ auto Renderer::InitializeMaterialBuffer(Graphics::GraphicsContext &context,
                                         size_t initialSize) -> Error {
   const Graphics::StructuredBufferCreationInfo materialBufferCreateInfo{
       .memoryFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-      .usageFlags =
-          VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+      .usageFlags = static_cast<uint32_t>(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT) |
+                    VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
+                    VK_BUFFER_USAGE_TRANSFER_DST_BIT,
       .debugName = "Material Buffer",
   };
 
   auto format = Graphics::BufferFormat(MaterialBufferComponents);
 
-  auto materialBufferResult = Graphics::StructuredBuffer::Create(
-      context, format, initialSize, materialBufferCreateInfo);
-
-  if (Error::IsError(materialBufferResult)) {
-    return materialBufferResult.error();
-  }
-
-  MaterialsBuffer = materialBufferResult.value();
+  MaterialsBuffer = CHECK_RES(Graphics::StructuredBuffer::Create(
+      context, format, initialSize, materialBufferCreateInfo));
 
   return {};
 }

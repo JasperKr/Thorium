@@ -23,15 +23,18 @@ fi
 echo "Building with configuration: $CONFIG"
 echo "Using flags: $FLAGS"
 
-cmake -G Ninja -DCMAKE_CXX_COMPILER=clang++ -B build \
+cmake -G Ninja -B build \
   -DCMAKE_BUILD_TYPE=$CONFIG \
   -DCMAKE_EXPORT_COMPILE_COMMANDS=1 \
   -DCMAKE_C_COMPILER=clang \
+  -DCMAKE_CXX_COMPILER=clang++ \
+  -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
   -DCMAKE_CXX_FLAGS="-Wc23-extensions $FLAGS" \
   -DCMAKE_C_FLAGS="-Wc23-extensions $FLAGS" \
   -DCMAKE_EXE_LINKER_FLAGS="-rdynamic" \
-  -DENABLE_RTTI=ON \
-  -DENABLE_EXCEPTIONS=ON
+  -DENABLE_RTTI=OFF \
+  -DENABLE_EXCEPTIONS=OFF
 
 cmake --build build
 
@@ -45,7 +48,7 @@ cmake --build build
 if [ "$2" == "profile" ]; then
   #rmv radeom memory visualizer. Needs /opt/radeon-gpu-profiler/scripts/setup.sh to be run beforehand
   #rgp for radeon gpu profiler.
-  SDL_VIDEODRIVER=x11 RADV_PERFTEST=rt MESA_VK_TRACE=rmv MESA_VK_TRACE_TRIGGER=/tmp/trigger ./build/snap src/Scripting/main.lua
+  AMD_VULKAN_ICD=AMDVLK SDL_VIDEODRIVER=x11 MESA_VK_TRACE=rgp MESA_VK_TRACE_TRIGGER=/tmp/trigger ./build/snap src/Scripting/main.lua
 fi
 
 # if second argument is "run", run the built executable

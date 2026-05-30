@@ -49,4 +49,20 @@ auto StructuredBuffer::Clear(GraphicsContext &context, uint32_t value,
   return buffer->Clear(context, value, offset, size);
 }
 
+// Copies the old buffer's data into a new buffer with the new size
+auto StructuredBuffer::Grow(const GraphicsContext &context,
+                            size_t newElementCount)
+    -> Result<Ref<StructuredBuffer>> {
+  auto newBuffer =
+      CHECK_RES(buffer->Grow(context, newElementCount * elementStride));
+
+  auto newStructuredBuffer = Ref<StructuredBuffer>::Make();
+  newStructuredBuffer->format = format;
+  newStructuredBuffer->elementCount = newElementCount;
+  newStructuredBuffer->elementStride = elementStride;
+  newStructuredBuffer->buffer = newBuffer;
+
+  return newStructuredBuffer;
+}
+
 } // namespace Graphics

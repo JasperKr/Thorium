@@ -11,7 +11,7 @@
 #include "Modules/Peripherals/keyboard.hpp"
 #include "Modules/Peripherals/mouse.hpp"
 #include "Modules/error.hpp"
-#include "Modules/imagedata.hpp"
+#include "Modules/imageData.hpp"
 #include "Modules/object.hpp"
 #include "imgui.h"
 
@@ -185,13 +185,11 @@ inline auto HandleImguiUpdateTextureEvent(Graphics::GraphicsContext &context,
   std::lock_guard<std::mutex> lock(texture->mutex);
 
   for (ImTextureRect &currentRect : tex->Updates) {
-    VkExtent3D sourceSize{
+    VkExtent3D destSize{
         .width = static_cast<uint32_t>(currentRect.w),
         .height = static_cast<uint32_t>(currentRect.h),
         .depth = 1,
     };
-
-    VkExtent3D destSize = sourceSize;
 
     VkOffset3D destOffset{
         .x = static_cast<int32_t>(currentRect.x),
@@ -202,8 +200,11 @@ inline auto HandleImguiUpdateTextureEvent(Graphics::GraphicsContext &context,
     VkOffset3D sourceOffset = destOffset;
 
     // Use the update data from the current pixels
-    auto updateResult = texture->SetPixels(context, pixelSpan, 0, 0, sourceSize,
-                                           sourceOffset, destOffset, destSize);
+    auto updateResult =
+        texture->SetPixels(context, pixelSpan, 0, 0,
+                           {static_cast<uint32_t>(tex->Width),
+                            static_cast<uint32_t>(tex->Height), 1},
+                           sourceOffset, destOffset, destSize);
 
     if (Error::IsError(updateResult)) {
       return updateResult;

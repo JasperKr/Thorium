@@ -144,6 +144,7 @@ if [ "$override" -eq 1 ] || [ ! -d "include/fastgltf" ]; then
     rm -rf include/fastgltf
     git clone --depth 1 "$URL" include/fastgltf
 fi
+
 URL="https://github.com/simdjson/simdjson/releases/download/v4.2.4/singleheader.zip"
 if [ "$override" -eq 1 ] || [ ! -d "include/simdjson" ]; then
     rm -rf include/simdjson
@@ -151,6 +152,17 @@ if [ "$override" -eq 1 ] || [ ! -d "include/simdjson" ]; then
     curl -L "$URL" -o "include/simdjson/singleheader.zip"
     unzip -q "include/simdjson/singleheader.zip" -d "include/simdjson/"
     rm "include/simdjson/singleheader.zip"
+fi
+
+URL="https://github.com/zeux/meshoptimizer/archive/v1.1.zip"
+if [ "$override" -eq 1 ] || [ ! -d "include/meshoptimizer" ]; then
+    rm -rf include/meshoptimizer
+    mkdir -p include/meshoptimizer
+    curl -L "$URL" -o "include/meshoptimizer.zip"
+    unzip -q "include/meshoptimizer.zip" -d "include/meshoptimizer/"
+    mv include/meshoptimizer/meshoptimizer-1.1/* include/meshoptimizer/
+    rm -rf include/meshoptimizer/meshoptimizer-1.1
+    rm include/meshoptimizer.zip
 fi
 
 echo "All dependencies fetched into include/"

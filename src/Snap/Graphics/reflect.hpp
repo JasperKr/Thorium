@@ -252,6 +252,10 @@ struct BufferInfo {
   [[nodiscard]] constexpr auto GetInfo() const -> const T & {
     return std::get<T>(info);
   }
+  template <typename T> [[nodiscard]] constexpr auto GetInfo() -> T & {
+    return std::get<T>(info);
+  }
+
   template <typename T> [[nodiscard]] constexpr auto Is() const -> bool {
     return std::holds_alternative<T>(info);
   }

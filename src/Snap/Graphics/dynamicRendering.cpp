@@ -281,15 +281,35 @@ auto GetPipelineLayout(const GraphicsContext &context,
 
   CHECK_ERR(TryCreateShaderDescriptorBindingInfo(context, shader));
 
-  // Find the maximum set index from the shader reflection
-  uint32_t maxSet = 0;
+  std::unordered_set<uint32_t> uniqueSets{};
+  bool hasBindings = false;
   for (const auto &setPair : shader->bindingInfos) {
-    maxSet = std::max<unsigned long>(setPair.first, maxSet);
+    uniqueSets.insert(setPair.first);
+    PrintAlways("Set pair: {}", setPair.first);
+    hasBindings = true;
+  }
+
+  uint32_t setCount = uniqueSets.size();
+  uint32_t maxSet = 0;
+  auto maxSetIter = std::ranges::max_element(uniqueSets);
+  if (maxSetIter != uniqueSets.end()) {
+    maxSet = std::max(setCount - 1, *maxSetIter);
+  }
+
+  thread_local VkDescriptorSetLayout emptySetLayout = VK_NULL_HANDLE;
+  if (emptySetLayout == VK_NULL_HANDLE) {
+    VkDescriptorSetLayoutCreateInfo layoutInfo = {};
+    layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    layoutInfo.bindingCount = 0;
+    layoutInfo.pBindings = nullptr;
+    CHECK_ERR(Error::Create(vkCreateDescriptorSetLayout(
+        context.device, &layoutInfo, GetAllocationCallbacks(),
+        &emptySetLayout)));
   }
 
   // PrintAlways("Max descriptor set index from shader reflection: {}", maxSet);
 
-  setLayouts.resize(maxSet + 1);
+  setLayouts.resize(maxSet + 1, emptySetLayout);
 
   // For each set, build the DescriptorSetLayoutKey and get the layout
   for (const auto &setPair : shader->bindingInfos) {
@@ -298,15 +318,19 @@ auto GetPipelineLayout(const GraphicsContext &context,
     layoutKey.bindings = setPair.second;
     layoutKey.bindingFlags = {};
 
-    setLayouts[setPair.first] =
-        CHECK_RES(GetDescriptorSetLayout(layoutKey, context));
+    const auto &layout = CHECK_RES(GetDescriptorSetLayout(layoutKey, context));
+    // setLayouts.emplace_back(layout);
+    setLayouts.at(setPair.first) = layout;
+    PrintAlways("Set {}: {} bindings", setPair.first, setPair.second.size());
   }
 
-  PrintDebug("Max descriptor set index: {}", maxSet);
+  PrintAlways("Shader {} has {} descriptor sets", shader->name, setCount);
+  PrintAlways("Set layout count: {}",
+              hasBindings ? static_cast<uint32_t>(setLayouts.size()) : 0);
 
   VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
   pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-  pipelineLayoutInfo.setLayoutCount = static_cast<uint32_t>(setLayouts.size());
+  pipelineLayoutInfo.setLayoutCount = setLayouts.size();
   pipelineLayoutInfo.pSetLayouts = setLayouts.data();
   pipelineLayoutInfo.pushConstantRangeCount = pushConstantRanges.size();
   pipelineLayoutInfo.pPushConstantRanges = pushConstantRanges.data();
@@ -683,7 +707,7 @@ inline auto CreateGraphicsPipeline(const GraphicsContext &context, State &state)
   VkPipeline pipeline = VK_NULL_HANDLE;
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    CHECK_ERR(Error::Create(vkCreateGraphicsPipelines( // < Segv here
+    CHECK_ERR(Error::Create(vkCreateGraphicsPipelines(
         context.device, VK_NULL_HANDLE, 1, &pipelineInfo,
         GetAllocationCallbacks(), &pipeline)));
   }
@@ -1107,6 +1131,8 @@ inline auto BeginRendering(const GraphicsContext &context) -> Error {
         "Tried to begin rendering, but command buffer is null.");
   }
 
+  // Add a tracy marker to indicate the start of a rendering pass
+  TracyMessageL("Begin Rendering");
   vkCmdBeginRendering(Graphics::GetCommandBuffer(), &renderingInfo);
   GetIsCurrentlyRendering() = true;
 
@@ -1121,12 +1147,15 @@ inline auto BeginRendering(const GraphicsContext &context) -> Error {
 }
 
 auto EndRendering(const GraphicsContext &context) -> void {
+  ZoneScoped;
   if (GetIsCurrentlyRendering()) {
     if (Graphics::GetCommandBuffer() == VK_NULL_HANDLE) {
       PrintWarning(
           "Tried to end rendering, but command buffer is null. Skipping.");
       return;
     }
+
+    TracyMessageL("End Rendering");
     vkCmdEndRendering(Graphics::GetCommandBuffer());
     GetIsCurrentlyRendering() = false;
   }
@@ -1488,6 +1517,18 @@ auto BindDescriptorSets(const GraphicsContext &context,
     stageFlags |= VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
   }
 
+  thread_local std::vector<std::pair<void *, std::vector<uint32_t>>>
+      BoundDescriptorSets{};
+  thread_local VkCommandBuffer DescriptorsBoundAtCmdBuffer = VK_NULL_HANDLE;
+  thread_local VkPipelineLayout DescriporsBoundAtLayout = {};
+
+  if (DescriptorsBoundAtCmdBuffer != Graphics::GetCommandBuffer() ||
+      CurrentPipelineLayout.layout != DescriporsBoundAtLayout) {
+    BoundDescriptorSets.clear();
+    DescriptorsBoundAtCmdBuffer = Graphics::GetCommandBuffer();
+    DescriporsBoundAtLayout = CurrentPipelineLayout.layout;
+  }
+
   int setIndex = 0;
   for (const auto &layout : CurrentPipelineLayout.descriptorSetLayouts) {
     thread_local DescriptorKey key = {
@@ -1495,6 +1536,7 @@ auto BindDescriptorSets(const GraphicsContext &context,
         .bindings = {},
     };
     key.bindings.clear();
+    key.layout = layout;
 
     thread_local std::vector<uint32_t> dynamicOffsets;
     dynamicOffsets.clear();
@@ -1513,8 +1555,24 @@ auto BindDescriptorSets(const GraphicsContext &context,
       return Error::Create("Command buffer is null in BindDescriptorSets.");
     }
 
+    if (BoundDescriptorSets.size() <= setIndex) {
+      BoundDescriptorSets.resize(setIndex + 1);
+    }
+
+    auto &currentlyBound = BoundDescriptorSets.at(setIndex);
+
     if (iter != DescriptorSetCache.end()) {
       ZoneScopedN("vkCmdBindDescriptorSets cached");
+
+      if (currentlyBound.first == iter->second) {
+        if (currentlyBound.second == dynamicOffsets) {
+          setIndex++;
+          continue;
+        }
+      }
+
+      currentlyBound.first = (void *)iter->second;
+      currentlyBound.second = dynamicOffsets;
 
       vkCmdBindDescriptorSets(commandBuffer, TopOfStack->bindPoint,
                               CurrentPipelineLayout.layout, setIndex, 1,
@@ -1525,6 +1583,8 @@ auto BindDescriptorSets(const GraphicsContext &context,
 
       auto *descriptorSet =
           CHECK_RES(AllocateDescriptorSets(context, key, layout));
+
+      BoundDescriptorSets[setIndex] = {(void *)descriptorSet, dynamicOffsets};
 
       vkCmdBindDescriptorSets(commandBuffer, TopOfStack->bindPoint,
                               CurrentPipelineLayout.layout, setIndex, 1,

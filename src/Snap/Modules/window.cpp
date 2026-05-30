@@ -2,7 +2,7 @@
 
 #include "Graphics/graphicsState.hpp"
 #include "Modules/Math/vector.hpp"
-#include "Modules/imagedata.hpp"
+#include "Modules/imageData.hpp"
 #include "Modules/object.hpp"
 #include "SDL3/SDL_pixels.h"
 #include "SDL3/SDL_surface.h"

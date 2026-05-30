@@ -14,7 +14,7 @@
 #include "Modules/error.hpp"
 #include "Modules/filesystem.hpp"
 #include "Modules/image.hpp"
-#include "Modules/imagedata.hpp"
+#include "Modules/imageData.hpp"
 #include "Modules/object.hpp"
 #include "sampler.hpp"
 #include "stb/stb_image.h"
@@ -252,8 +252,7 @@ auto LoadFromFile(GraphicsContext &context, const char *path,
 }
 
 // texture 2D From byte array
-auto LoadFromMemory(GraphicsContext &context,
-                    const std::span<const uint8_t> &data,
+auto LoadFromMemory(GraphicsContext &context, const std::span<uint8_t> &data,
                     VkImageUsageFlags usage, TextureMipmapOption mipmaps)
     -> Result<Ref<Texture>> {
   ZoneScoped;
@@ -322,6 +321,12 @@ auto LoadFromMemory(GraphicsContext &context, Image::ImageData &imageData,
                     VkImageUsageFlags usage, TextureMipmapOption mipmaps)
     -> Result<Ref<Texture>> {
 
+  if (Image::IsCompressedTexture(imageData.GetFormat()) &&
+      mipmaps != TextureMipmapOption::None) {
+    // Mipmaps for compressed textures must be provided manually
+    mipmaps = TextureMipmapOption::Manual;
+  }
+
   int mipmapCount = 1;
   if (mipmaps != TextureMipmapOption::None) {
     mipmapCount = static_cast<int>(
@@ -340,8 +345,7 @@ auto LoadFromMemory(GraphicsContext &context, Image::ImageData &imageData,
 
   CHECK_ERR(texture->SetPixels(context, imageData, 0, 0));
 
-  if (mipmaps == TextureMipmapOption::Init &&
-      !Image::IsCompressedTexture(imageData.GetFormat())) {
+  if (mipmaps == TextureMipmapOption::Init) {
     CHECK_ERR(GenerateMipmaps(context, texture.get()));
   }
 
@@ -653,6 +657,60 @@ auto Texture::GetSampler(const GraphicsContext &context) -> VkSampler {
   return sampler;
 }
 
+inline auto WriteSimplifiedPixelData(const Ref<Texture> &texture,
+                                     const GraphicsContext &context,
+                                     const std::span<const uint8_t> &data,
+                                     uint32_t mipLevel, // NOLINT
+                                     uint32_t arrayLayer) {
+  // Create staging buffer
+  BufferCreationInfo bufferCreationInfo = {};
+  bufferCreationInfo.size = data.size();
+  bufferCreationInfo.usage =
+      VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+  bufferCreationInfo.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                                  VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+  bufferCreationInfo.stagingBuffer = true;
+
+  bufferCreationInfo.debugName =
+      "Texture Staging Buffer for SetPixels (Compressed Format)";
+
+  auto buffer = CHECK_RES(Buffer::Create(context, bufferCreationInfo));
+
+  CHECK_ERR(buffer->SetData(context, data, 0));
+
+  VkBufferImageCopy region = {};
+  region.bufferOffset = 0;
+  region.bufferRowLength = 0;
+  region.bufferImageHeight = 0;
+  region.imageSubresource.aspectMask = GetAspectFlagsForFormat(texture->format);
+  region.imageSubresource.mipLevel = mipLevel;
+  region.imageSubresource.baseArrayLayer = arrayLayer;
+  region.imageSubresource.layerCount = 1;
+  region.imageOffset = {.x = 0, .y = 0, .z = 0};
+  region.imageExtent = texture->size;
+
+  CHECK_ERR(texture->UseAsTransferDst(context));
+
+  auto *commandBuffer = GetCommandBuffer();
+
+  if (commandBuffer == nullptr) {
+    return Error::Create("Failed to get command buffer for SetPixels.");
+  }
+
+  DynamicRendering::EndRendering(context);
+
+  vkCmdCopyBufferToImage(commandBuffer, buffer->handle, texture->image,
+                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+
+  CHECK_ERR(
+      texture->UseAsSampler(context, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT));
+
+  buffer->MarkUse();
+  texture->MarkUse();
+
+  return Error::Success();
+}
+
 // Copies data from a 1D/2D/3D region from the provided data to the texture
 // sourceSize is the dimensions of the underlying data
 // sourceOffset is the offset within the data to start copying from
@@ -667,33 +725,55 @@ auto Texture::SetPixels(const GraphicsContext &context,
                         VkOffset3D target, VkExtent3D targetSize) -> Error {
   ZoneScoped;
 
+  if (targetSize.width == size.width && targetSize.height == size.height &&
+      targetSize.depth == size.depth) {
+    // Fast path for full texture updates
+    return WriteSimplifiedPixelData(Ref<Texture>(this), context, data, mipLevel,
+                                    arrayLayer);
+  }
+
+  if (Image::IsCompressedTexture(format)) {
+    return Error::Create("SetPixels with region copy is not supported for "
+                         "compressed texture formats.");
+  }
+
+#ifndef NDEBUG
   if (sourceSize.width == 0 || sourceSize.height == 0 ||
       sourceSize.depth == 0) {
     return Error::Create(
         "Source size dimensions must be greater than zero in SetPixels.");
   }
 
-  if (targetSize.width + target.x > size.width ||
-      targetSize.height + target.y > size.height ||
-      targetSize.depth + target.z > size.depth) {
-    return Error::Create("Target dimensions and target offset exceed texture "
-                         "dimensions in SetPixels.");
+  if (sourceSize.width < targetSize.width ||
+      sourceSize.height < targetSize.height ||
+      sourceSize.depth < targetSize.depth) {
+    return Error::Create("Source size must be greater than or equal to target "
+                         "size in SetPixels.");
+  }
+
+  if (target.x + targetSize.width > size.width ||
+      target.y + targetSize.height > size.height ||
+      target.z + targetSize.depth > size.depth) {
+    return Error::Create(
+        "Target dimensions exceed texture dimensions in SetPixels.");
   }
   if (target.x < 0 || target.y < 0 || target.z < 0) {
     return Error::Create(
         "Negative target offsets are not supported in SetPixels.");
   }
-  if (sourceOffset.x > sourceSize.width || sourceOffset.y > sourceSize.height ||
-      sourceOffset.z > sourceSize.depth) {
-    return Error::Create(
-        "Source rectangle exceeds Input dimensions in SetPixels.");
-  }
   if (sourceOffset.x < 0 || sourceOffset.y < 0 || sourceOffset.z < 0) {
     return Error::Create(
         "Negative source offsets are not supported in SetPixels.");
   }
+  if (sourceOffset.x + targetSize.width > sourceSize.width ||
+      sourceOffset.y + targetSize.height > sourceSize.height ||
+      sourceOffset.z + targetSize.depth > sourceSize.depth) {
+    return Error::Create(
+        "Source offset and target size exceed source dimensions in SetPixels.");
+  }
+#endif
 
-  auto uploadSize = sourceSize.width * sourceSize.height * sourceSize.depth *
+  auto uploadSize = targetSize.width * targetSize.height * targetSize.depth *
                     Format::GetSize(format);
 
   if (uploadSize > data.size()) {
@@ -724,22 +804,36 @@ auto Texture::SetPixels(const GraphicsContext &context,
   auto *dstPtr = tempBuffer.data();
   const auto *srcPtr = data.data();
 
-  for (size_t zSlice = 0; zSlice < sourceSize.depth; ++zSlice) {
+  // PrintAlways(
+  //     "Copying texture data for SetPixels: sourceSize=({}, {}, {}), "
+  //     "sourceOffset=({}, {}, {}), target=({}, {}, {}), targetSize=({}, {}, "
+  //     "{}), formatSize={}, uploadSize={}",
+  //     sourceSize.width, sourceSize.height, sourceSize.depth, sourceOffset.x,
+  //     sourceOffset.y, sourceOffset.z, target.x, target.y, target.z,
+  //     targetSize.width, targetSize.height, targetSize.depth, formatSize,
+  //     uploadSize);
+  // PrintAlways("Data size: {}, Temp buffer size: {}", data.size(),
+  //             tempBuffer.size());
+  // PrintAlways("Target texture size: ({}, {}, {})", size.width, size.height,
+  //             size.depth);
+
+  auto copySize = targetSize.width * formatSize;
+  auto Xoffset = sourceOffset.x * formatSize;
+
+  for (size_t zSlice = 0; zSlice < targetSize.depth; ++zSlice) {
     auto Zoffset = (sourceOffset.z + zSlice) * sourceSize.width *
                    sourceSize.height * formatSize;
-    auto ZdstOffset =
-        (target.z + zSlice) * sourceSize.width * sourceSize.height * formatSize;
 
-    for (size_t row = 0; row < sourceSize.height; ++row) {
-      auto Xoffset = sourceOffset.x * formatSize;
+    for (size_t row = 0; row < targetSize.height; ++row) {
       auto Yoffset = (sourceOffset.y + row) * sourceSize.width * formatSize;
       auto srcOffset = Xoffset + Yoffset + Zoffset;
 
-      auto XdstOffset = (target.x) * formatSize;
-      auto YdstOffset = (target.y + row) * sourceSize.width * formatSize;
-      auto dstOffset = XdstOffset + YdstOffset + ZdstOffset;
+      auto dstOffset =
+          ((zSlice * targetSize.height + row) * targetSize.width) * formatSize;
 
-      auto copySize = sourceSize.width * formatSize;
+      // PrintAlways(
+      //     "Copying row {} of slice {}: srcOffset={}, dstOffset={}, copySize={}",
+      //     row, zSlice, srcOffset, dstOffset, copySize);
 
       assert(srcOffset + copySize <= data.size());
       assert(dstOffset + copySize <= tempBuffer.size());
@@ -753,8 +847,8 @@ auto Texture::SetPixels(const GraphicsContext &context,
 
   VkBufferImageCopy region = {};
   region.bufferOffset = 0;
-  region.bufferRowLength = sourceSize.width;
-  region.bufferImageHeight = sourceSize.height;
+  region.bufferRowLength = targetSize.width;
+  region.bufferImageHeight = targetSize.height;
   region.imageSubresource.aspectMask = GetAspectFlagsForFormat(format);
   region.imageSubresource.mipLevel = mipLevel;
   region.imageSubresource.baseArrayLayer = arrayLayer;
@@ -769,6 +863,8 @@ auto Texture::SetPixels(const GraphicsContext &context,
   if (commandBuffer == nullptr) {
     return Error::Create("Failed to get command buffer for SetPixels.");
   }
+
+  DynamicRendering::EndRendering(context);
 
   vkCmdCopyBufferToImage(commandBuffer, buffer->handle, image,
                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
@@ -788,70 +884,6 @@ auto Texture::SetPixels(const GraphicsContext &context,
   return SetPixels(context, imageData.GetSpan(), mipLevel, arrayLayer,
                    imageData.GetDimensions(), {0, 0, 0}, {0, 0, 0},
                    imageData.GetDimensions());
-}
-
-inline auto WriteSimplifiedPixelData(const Ref<Texture> &texture,
-                                     const GraphicsContext &context,
-                                     const std::span<const uint8_t> &data,
-                                     VkExtent3D dataSize,
-                                     uint32_t mipLevel, // NOLINT
-                                     uint32_t arrayLayer) {
-  // Create staging buffer
-  BufferCreationInfo bufferCreationInfo = {};
-  bufferCreationInfo.size = data.size();
-  bufferCreationInfo.usage =
-      VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-  bufferCreationInfo.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-                                  VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-  bufferCreationInfo.stagingBuffer = true;
-
-  if (dataSize.width > texture->size.width ||
-      dataSize.height > texture->size.height) {
-    return Error::Create(
-        "provided source dimensions exceed texture dimensions in SetPixels.");
-  }
-  bufferCreationInfo.debugName =
-      "Texture Staging Buffer for SetPixels (Compressed Format)";
-
-  auto bufferResult = Buffer::Create(context, bufferCreationInfo);
-
-  if (Error::IsError(bufferResult)) {
-    return bufferResult.error();
-  }
-
-  auto buffer = bufferResult.value();
-
-  CHECK_ERR(buffer->SetData(context, data, 0));
-
-  VkBufferImageCopy region = {};
-  region.bufferOffset = 0;
-  region.bufferRowLength = dataSize.width;
-  region.bufferImageHeight = dataSize.height;
-  region.imageSubresource.aspectMask = GetAspectFlagsForFormat(texture->format);
-  region.imageSubresource.mipLevel = mipLevel;
-  region.imageSubresource.baseArrayLayer = arrayLayer;
-  region.imageSubresource.layerCount = 1;
-  region.imageOffset = {.x = 0, .y = 0, .z = 0};
-  region.imageExtent = dataSize;
-
-  CHECK_ERR(texture->UseAsTransferDst(context));
-
-  auto *commandBuffer = GetCommandBuffer();
-
-  if (commandBuffer == nullptr) {
-    return Error::Create("Failed to get command buffer for SetPixels.");
-  }
-
-  vkCmdCopyBufferToImage(commandBuffer, buffer->handle, texture->image,
-                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-
-  CHECK_ERR(
-      texture->UseAsSampler(context, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT));
-
-  buffer->MarkUse();
-  texture->MarkUse();
-
-  return Error::Success();
 }
 
 auto Texture::ScheduleDestroy() -> void {
