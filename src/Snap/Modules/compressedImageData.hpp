@@ -7,6 +7,7 @@
 #include "Modules/object.hpp"
 #include "Modules/type.hpp"
 #include "color.hpp"
+#include "image.hpp"
 #include <cassert>
 #include <cstddef>
 #include <span>
@@ -28,18 +29,34 @@ public:
   auto GetSpan() -> std::span<uint8_t> {
     return {internalData->GetData(), internalData->GetSize()};
   }
+  auto GetSpan() const -> std::span<const uint8_t> {
+    return {internalData->GetData(), internalData->GetSize()};
+  }
   auto GetMipmapCount() const -> int { return mipmapCount; }
+  auto GetMipSize(int mipmap) const -> size_t {
+    auto size = GetDimensions(mipmap);
+    auto blocksX = (size.width + 3) / 4;
+    auto blocksY = (size.height + 3) / 4;
+    return static_cast<size_t>(blocksX) * static_cast<size_t>(blocksY) *
+           Graphics::Format::GetSize(format);
+  }
   auto GetMipSpan(int mipmap) const -> std::span<uint8_t> {
     assert(mipmap >= 0 && mipmap < mipmapCount);
-    return mipData.at(mipmap);
+    size_t offset = 0;
+    for (int i = 0; i < mipmap; ++i) {
+      offset += GetMipSize(i);
+    }
+    // NOLINTNEXTLINE
+    return {internalData->GetData() + offset, GetMipSize(mipmap)};
   }
   auto GetMipPtr(int mipmap) const -> uint8_t * {
     assert(mipmap >= 0 && mipmap < mipmapCount);
-    return mipData.at(mipmap).data();
-  }
-  auto GetMipSize(int mipmap) const -> size_t {
-    assert(mipmap >= 0 && mipmap < mipmapCount);
-    return mipData.at(mipmap).size();
+    size_t offset = 0;
+    for (int i = 0; i < mipmap; ++i) {
+      offset += GetMipSize(i);
+    }
+    // NOLINTNEXTLINE
+    return internalData->GetData() + offset;
   }
   [[nodiscard]] auto GetSize() const -> size_t {
     return internalData->GetSize();
@@ -47,6 +64,9 @@ public:
   [[nodiscard]] auto GetWidth() const -> uint32_t { return size.width; }
   [[nodiscard]] auto GetHeight() const -> uint32_t { return size.height; }
   [[nodiscard]] auto GetDimensions() const -> VkExtent2D { return size; }
+  [[nodiscard]] auto GetDimensions(int miplevel) const -> VkExtent2D {
+    return Image::GetDimensions(size, miplevel);
+  }
   [[nodiscard]] auto GetFormat() const -> VkFormat { return format; }
   [[nodiscard]] auto GetChannelCount() const -> uint32_t {
     return Graphics::Format::GetChannelCount(format);
@@ -101,7 +121,6 @@ private:
 
   Ref<Data::ByteData> internalData;
   int mipmapCount{1};
-  std::vector<std::span<uint8_t>> mipData;
 };
 
 } // namespace Image

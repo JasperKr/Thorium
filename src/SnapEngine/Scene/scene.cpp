@@ -525,9 +525,6 @@ auto Scene::DrawModels(const Camera &camera,
   std::ranges::sort(MaskedDrawItems, CompareDrawItems);
   std::ranges::sort(TransparentDrawItems, CompareDrawItems);
 
-  PrintAlways("Opaque: {}, Masked: {}, Transparent: {}", OpaqueDrawItems.size(),
-              MaskedDrawItems.size(), TransparentDrawItems.size());
-
   struct ModelTransformData {
     std::array<float, 16> modelMatrix{};  // NOLINT
     std::array<float, 16> normalMatrix{}; // NOLINT

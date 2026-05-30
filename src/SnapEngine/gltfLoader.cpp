@@ -5,6 +5,7 @@
 #include "Graphics/texture.hpp"
 #include "Graphics/vertexformat.hpp"
 #include "Modules/Math/vector.hpp"
+#include "Modules/compressedImageData.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/filesystem.hpp"
@@ -49,7 +50,9 @@ std::vector<std::vector<std::uint8_t>> Buffers;
 std::unordered_map<std::string, std::vector<std::uint8_t>> URICache;
 std::mutex URICacheMutex{};
 std::unordered_map<std::string, uint16_t> NameDuplicateCount;
-std::vector<Ref<Image::ImageData>> ImageCache;
+std::vector<
+    std::variant<Ref<Image::ImageData>, Ref<Image::CompressedImageData>>>
+    ImageCache;
 std::vector<Ref<Graphics::Texture>> TextureCache;
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
@@ -234,14 +237,26 @@ inline auto LoadTexture(Graphics::GraphicsContext &context,
     return Error::Unexpected("Texture has no image index.");
   }
 
-  const auto &image = asset.images[texture.imageIndex.value()];
+  const auto &gltfimage = asset.images[texture.imageIndex.value()];
 
-  auto span = CHECK_RES(LoadDataSource(asset, basePath, image.data));
+  auto span = CHECK_RES(LoadDataSource(asset, basePath, gltfimage.data));
+  Ref<Graphics::Texture> textureRef;
 
-  auto textureRef = CHECK_RES(Graphics::LoadFromMemory(
-      context, *ImageCache[texture.imageIndex.value()].get(),
-      VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-      Graphics::TextureMipmapOption::Init));
+  const auto &image = ImageCache[texture.imageIndex.value()];
+
+  if (std::holds_alternative<Ref<Image::ImageData>>(image)) {
+    textureRef = CHECK_RES(Graphics::LoadFromMemory(
+        context, *std::get<Ref<Image::ImageData>>(image).get(),
+        VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+        Graphics::TextureMipmapOption::Init));
+  } else if (std::holds_alternative<Ref<Image::CompressedImageData>>(image)) {
+    textureRef = CHECK_RES(Graphics::LoadFromMemory(
+        context, *std::get<Ref<Image::CompressedImageData>>(image).get(),
+        VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+        Graphics::TextureMipmapOption::Manual));
+  } else {
+    return Error::Unexpected("Invalid image type in cache.");
+  }
 
   textureRef->SetLodRange(0.0F, (float)textureRef->GetMipmapCount() - 1);
   textureRef->SetFilter(VK_FILTER_LINEAR, VK_FILTER_LINEAR,
@@ -1207,6 +1222,7 @@ inline auto LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
   return Error::Unexpected("Failed to determine node type.");
 }
 
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 auto LoadGltfModel(Graphics::GraphicsContext &context, const std::string &path,
                    flecs::world *world) -> Error {
   /// Load the file into a data buffer.
@@ -1274,18 +1290,30 @@ auto LoadGltfModel(Graphics::GraphicsContext &context, const std::string &path,
 
                   auto span = loadResult.value();
 
-                  auto imageDataResult = Image::ImageData::Create(span);
-                  if (Error::IsError(imageDataResult)) {
-                    imageLoadError = imageDataResult.error();
-                    return;
-                  }
+                  if (Image::IsDDS(span)) {
+                    auto imageDataResult =
+                        Image::CompressedImageData::Create(span);
+                    if (Error::IsError(imageDataResult)) {
+                      imageLoadError = imageDataResult.error();
+                      return;
+                    }
+                    ImageCache.at(index) = imageDataResult.value();
+                  } else {
+                    auto imageDataResult = Image::ImageData::Create(span);
+                    if (Error::IsError(imageDataResult)) {
+                      imageLoadError = imageDataResult.error();
+                      return;
+                    }
 
-                  ImageCache.at(index) = imageDataResult.value();
+                    ImageCache.at(index) = imageDataResult.value();
+                  }
                 });
 
   if (Error::IsError(imageLoadError)) {
     return imageLoadError;
   }
+
+  PrintWarning("Loaded {} images for glTF asset.", ImageCache.size());
 
   // loop through scenes
   for (const auto &glTFScene : asset->scenes) {

@@ -4,6 +4,7 @@
 #include "Graphics/sampler.hpp"
 #include "Graphics/semaphoreManager.hpp"
 #include "Libraries/vma.hpp"
+#include "Modules/compressedImageData.hpp"
 #include "Modules/error.hpp"
 #include "Modules/image.hpp"
 #include "Modules/imageData.hpp"
@@ -301,20 +302,18 @@ auto LoadFromFile(GraphicsContext &context, const char *path,
                   VkImageUsageFlags usage = 0, TextureMipmapOption mipmaps = {})
     -> Result<Ref<Texture>>;
 
-// texture 2D From byte array
-auto LoadFromMemory(GraphicsContext &context, const std::span<uint8_t> &data,
-                    VkImageUsageFlags usage = 0,
-                    TextureMipmapOption mipmaps = {}) -> Result<Ref<Texture>>;
-
-// texture 2D From ImageData
 auto LoadFromMemory(GraphicsContext &context, Image::ImageData &imageData,
                     VkImageUsageFlags usage = 0,
                     TextureMipmapOption mipmaps = {}) -> Result<Ref<Texture>>;
 
-// texture 3D/Array/Cubemap From array of ImageData slices
 auto LoadFromMemory(GraphicsContext &context,
                     const std::vector<Image::ImageData *> &slices,
                     TextureType type, VkImageUsageFlags usage = 0,
+                    TextureMipmapOption mipmaps = {}) -> Result<Ref<Texture>>;
+
+auto LoadFromMemory(GraphicsContext &context,
+                    const Image::CompressedImageData &compressedData,
+                    VkImageUsageFlags usage = 0,
                     TextureMipmapOption mipmaps = {}) -> Result<Ref<Texture>>;
 
 auto GetDefaultTexture(const GraphicsContext &context, VkFormat format,

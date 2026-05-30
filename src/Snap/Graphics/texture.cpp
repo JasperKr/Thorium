@@ -251,71 +251,6 @@ auto LoadFromFile(GraphicsContext &context, const char *path,
   return texture;
 }
 
-// texture 2D From byte array
-auto LoadFromMemory(GraphicsContext &context, const std::span<uint8_t> &data,
-                    VkImageUsageFlags usage, TextureMipmapOption mipmaps)
-    -> Result<Ref<Texture>> {
-  ZoneScoped;
-
-  auto width = 0;
-  auto height = 0;
-  auto format = VK_FORMAT_UNDEFINED;
-  bool requiresFree = false;
-
-  auto dataSpan =
-      CHECK_RES(Image::FromMemory(data, width, height, format, requiresFree));
-
-  int mipmapCount = 1;
-
-  if (mipmaps != TextureMipmapOption::None) {
-    mipmapCount = static_cast<int>(Image::GetMipmapCount(width, height));
-  }
-
-  auto texture = CHECK_RES(
-      Create(context, TextureCreationInfo{
-                          .size = VkExtent3D{static_cast<uint32_t>(width),
-                                             static_cast<uint32_t>(height), 1},
-                          .format = format,
-                          .usage = usage | static_cast<uint32_t>(
-                                               VK_IMAGE_USAGE_TRANSFER_DST_BIT),
-                          .mipmapCount = mipmapCount,
-                          .debugName = "Image_FromMemory",
-                      }));
-
-  // auto source = VkRect2D{
-  //     .offset = VkOffset2D{0, 0},
-  //     .extent = VkExtent2D{static_cast<uint32_t>(width),
-  //                          static_cast<uint32_t>(height)},
-  // };
-
-  // auto dst = VkOffset2D{0, 0};
-
-  auto sourceSize = VkExtent3D{static_cast<uint32_t>(width),
-                               static_cast<uint32_t>(height), 1};
-  auto sourceOffset = VkOffset3D{0, 0, 0};
-  auto destOffset = VkOffset3D{0, 0, 0};
-  auto destSize = VkExtent3D{static_cast<uint32_t>(width),
-                             static_cast<uint32_t>(height), 1};
-
-  auto result = texture->SetPixels(context, dataSpan, 0, 0, sourceSize,
-                                   sourceOffset, destOffset, destSize);
-
-  if (requiresFree) {
-    stbi_image_free((void *)dataSpan.data());
-  }
-
-  if (Error::IsError(result)) {
-    return result;
-  }
-
-  if (mipmaps == TextureMipmapOption::Init &&
-      !Image::IsCompressedTexture(format)) {
-    CHECK_ERR(GenerateMipmaps(context, texture.get()));
-  }
-
-  return texture;
-}
-
 // texture 2D From ImageData
 auto LoadFromMemory(GraphicsContext &context, Image::ImageData &imageData,
                     VkImageUsageFlags usage, TextureMipmapOption mipmaps)
@@ -348,6 +283,103 @@ auto LoadFromMemory(GraphicsContext &context, Image::ImageData &imageData,
   if (mipmaps == TextureMipmapOption::Init) {
     CHECK_ERR(GenerateMipmaps(context, texture.get()));
   }
+
+  return texture;
+}
+
+auto LoadFromMemory(GraphicsContext &context,
+                    const Image::CompressedImageData &compressedData,
+                    VkImageUsageFlags usage, TextureMipmapOption mipmaps)
+    -> Result<Ref<Texture>> {
+  if (mipmaps == TextureMipmapOption::Init) {
+    return Error::Unexpected(
+        "Automatic mipmap generation is not supported for compressed textures. "
+        "Please provide mipmaps manually.");
+  }
+
+  auto texture = CHECK_RES(Create(
+      context,
+      TextureCreationInfo{
+          .size = {compressedData.GetWidth(), compressedData.GetHeight(), 1},
+          .format = compressedData.GetFormat(),
+          .usage =
+              usage | static_cast<uint32_t>(VK_IMAGE_USAGE_TRANSFER_DST_BIT),
+          .mipmapCount = compressedData.GetMipmapCount(),
+          .debugName = "Image_CompressedImageData",
+          .textureType = TextureType::DEFAULT,
+      }));
+
+  // Create staging buffer
+  BufferCreationInfo bufferCreationInfo = {};
+  bufferCreationInfo.size = compressedData.GetSize();
+  bufferCreationInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+  bufferCreationInfo.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                                  VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+  bufferCreationInfo.stagingBuffer = true;
+  bufferCreationInfo.persistentMapping = false;
+
+  bufferCreationInfo.debugName = "Texture Staging Buffer for SetPixels";
+  auto buffer = CHECK_RES(Buffer::Create(context, bufferCreationInfo));
+
+  Graphics::Barrier::UpdateUsage(context, *texture.get(),
+                                 Graphics::Barrier::ResourceState{
+                                     .stages = VK_PIPELINE_STAGE_2_HOST_BIT,
+                                     .access = VK_ACCESS_2_HOST_WRITE_BIT,
+                                 });
+
+  CHECK_ERR(buffer->SetData(context, compressedData.GetSpan()));
+
+  int mipLevelCount = compressedData.GetMipmapCount();
+
+  if (mipmaps == TextureMipmapOption::None) {
+    mipLevelCount = 1;
+  }
+
+  std::vector<VkBufferImageCopy> copyRegions;
+  copyRegions.reserve(mipLevelCount);
+  VkDeviceSize offset = 0;
+
+  for (int mip = 0; mip < mipLevelCount; ++mip) {
+    VkBufferImageCopy region = {};
+    region.bufferOffset = offset;
+    region.bufferRowLength = 0;
+    region.bufferImageHeight = 0;
+    region.imageSubresource.aspectMask =
+        GetAspectFlagsForFormat(compressedData.GetFormat());
+    region.imageSubresource.mipLevel = static_cast<uint32_t>(mip);
+    region.imageSubresource.baseArrayLayer = 0;
+    region.imageSubresource.layerCount = 1;
+    region.imageOffset = {.x = 0, .y = 0, .z = 0};
+
+    auto size = Image::GetDimensions(compressedData.GetDimensions(), mip);
+
+    region.imageExtent = {
+        .width = size.width, .height = size.height, .depth = 1};
+
+    copyRegions.emplace_back(region);
+
+    offset += compressedData.GetMipSize(mip);
+  }
+
+  CHECK_ERR(texture->UseAsTransferDst(context));
+
+  auto *commandBuffer = GetCommandBuffer();
+
+  if (commandBuffer == nullptr) {
+    return Error::Create("Failed to get command buffer for SetPixels.");
+  }
+
+  DynamicRendering::EndRendering(context);
+
+  vkCmdCopyBufferToImage(commandBuffer, buffer->handle, texture->image,
+                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                         static_cast<uint32_t>(copyRegions.size()),
+                         copyRegions.data());
+
+  // TODO: Check lifetime
+  buffer->MarkUse();
+  buffer->ScheduleDestroy();
+  texture->MarkUse();
 
   return texture;
 }
@@ -804,19 +836,6 @@ auto Texture::SetPixels(const GraphicsContext &context,
   auto *dstPtr = tempBuffer.data();
   const auto *srcPtr = data.data();
 
-  // PrintAlways(
-  //     "Copying texture data for SetPixels: sourceSize=({}, {}, {}), "
-  //     "sourceOffset=({}, {}, {}), target=({}, {}, {}), targetSize=({}, {}, "
-  //     "{}), formatSize={}, uploadSize={}",
-  //     sourceSize.width, sourceSize.height, sourceSize.depth, sourceOffset.x,
-  //     sourceOffset.y, sourceOffset.z, target.x, target.y, target.z,
-  //     targetSize.width, targetSize.height, targetSize.depth, formatSize,
-  //     uploadSize);
-  // PrintAlways("Data size: {}, Temp buffer size: {}", data.size(),
-  //             tempBuffer.size());
-  // PrintAlways("Target texture size: ({}, {}, {})", size.width, size.height,
-  //             size.depth);
-
   auto copySize = targetSize.width * formatSize;
   auto Xoffset = sourceOffset.x * formatSize;
 
@@ -830,10 +849,6 @@ auto Texture::SetPixels(const GraphicsContext &context,
 
       auto dstOffset =
           ((zSlice * targetSize.height + row) * targetSize.width) * formatSize;
-
-      // PrintAlways(
-      //     "Copying row {} of slice {}: srcOffset={}, dstOffset={}, copySize={}",
-      //     row, zSlice, srcOffset, dstOffset, copySize);
 
       assert(srcOffset + copySize <= data.size());
       assert(dstOffset + copySize <= tempBuffer.size());

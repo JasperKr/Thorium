@@ -1567,6 +1567,8 @@ auto BindDescriptorSets(const GraphicsContext &context,
       if (currentlyBound.first == iter->second) {
         if (currentlyBound.second == dynamicOffsets) {
           setIndex++;
+          TracyMessageL("Descriptor set already bound with same dynamic "
+                        "offsets, skipping.");
           continue;
         }
       }

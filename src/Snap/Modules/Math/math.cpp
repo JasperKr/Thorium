@@ -88,15 +88,15 @@ auto ToMatrix(EulerAngle euler) -> Matrix4x4 {
   Matrix4x4 mat{}; // Identity
 
   mat.At(0, 0) = (cos_yaw * cos_roll) + (sin_yaw * sin_pitch * sin_roll);
-  mat.At(0, 1) = (-cos_yaw * sin_roll) + (sin_yaw * sin_pitch * cos_roll);
-  mat.At(0, 2) = sin_yaw * cos_pitch;
+  mat.At(1, 0) = (-cos_yaw * sin_roll) + (sin_yaw * sin_pitch * cos_roll);
+  mat.At(2, 0) = sin_yaw * cos_pitch;
 
-  mat.At(1, 0) = cos_pitch * sin_roll;
+  mat.At(0, 1) = cos_pitch * sin_roll;
   mat.At(1, 1) = cos_pitch * cos_roll;
-  mat.At(1, 2) = -sin_pitch;
+  mat.At(2, 1) = -sin_pitch;
 
-  mat.At(2, 0) = (-sin_yaw * cos_roll) + (cos_yaw * sin_pitch * sin_roll);
-  mat.At(2, 1) = (sin_yaw * sin_roll) + (cos_yaw * sin_pitch * cos_roll);
+  mat.At(0, 2) = (-sin_yaw * cos_roll) + (cos_yaw * sin_pitch * sin_roll);
+  mat.At(1, 2) = (sin_yaw * sin_roll) + (cos_yaw * sin_pitch * cos_roll);
   mat.At(2, 2) = cos_yaw * cos_pitch;
 
   return mat;
@@ -115,15 +115,15 @@ auto Tomatrix3x3(EulerAngle euler) -> Matrix3x3 {
   Matrix3x3 mat{}; // Identity
 
   mat.At(0, 0) = (cos_yaw * cos_roll) + (sin_yaw * sin_pitch * sin_roll);
-  mat.At(0, 1) = (-cos_yaw * sin_roll) + (sin_yaw * sin_pitch * cos_roll);
-  mat.At(0, 2) = sin_yaw * cos_pitch;
+  mat.At(1, 0) = (-cos_yaw * sin_roll) + (sin_yaw * sin_pitch * cos_roll);
+  mat.At(2, 0) = sin_yaw * cos_pitch;
 
-  mat.At(1, 0) = cos_pitch * sin_roll;
+  mat.At(0, 1) = cos_pitch * sin_roll;
   mat.At(1, 1) = cos_pitch * cos_roll;
-  mat.At(1, 2) = -sin_pitch;
+  mat.At(2, 1) = -sin_pitch;
 
-  mat.At(2, 0) = (-sin_yaw * cos_roll) + (cos_yaw * sin_pitch * sin_roll);
-  mat.At(2, 1) = (sin_yaw * sin_roll) + (cos_yaw * sin_pitch * cos_roll);
+  mat.At(0, 2) = (-sin_yaw * cos_roll) + (cos_yaw * sin_pitch * sin_roll);
+  mat.At(1, 2) = (sin_yaw * sin_roll) + (cos_yaw * sin_pitch * cos_roll);
   mat.At(2, 2) = cos_yaw * cos_pitch;
 
   return mat;
@@ -136,25 +136,25 @@ auto ToEuler(Matrix4x4 matrix) -> EulerAngle {
   // mat[2][2] = cos(yaw)*cos(pitch)
   EulerAngle result;
 
-  Scalar sinPitch = -matrix.At(1, 2);
+  Scalar sinPitch = -matrix.At(2, 1);
 
   if (sinPitch > 0.999F) { // singularity at north pole (pitch = +90°)
     result.pitch = std::numbers::pi_v<Scalar> / 2.0F;
-    result.yaw = std::atan2(matrix.At(0, 1), matrix.At(0, 0));
+    result.yaw = std::atan2(matrix.At(1, 0), matrix.At(0, 0));
     result.roll = 0;
     return result;
   }
 
   if (sinPitch < -0.999F) { // singularity at south pole (pitch = -90°)
     result.pitch = -std::numbers::pi_v<Scalar> / 2.0F;
-    result.yaw = std::atan2(-matrix.At(0, 1), matrix.At(0, 0));
+    result.yaw = std::atan2(-matrix.At(1, 0), matrix.At(0, 0));
     result.roll = 0;
     return result;
   }
 
   result.pitch = std::asin(sinPitch);
-  result.yaw = std::atan2(matrix.At(0, 2), matrix.At(2, 2));
-  result.roll = std::atan2(matrix.At(1, 0), matrix.At(1, 1));
+  result.yaw = std::atan2(matrix.At(2, 0), matrix.At(2, 2));
+  result.roll = std::atan2(matrix.At(0, 1), matrix.At(1, 1));
 
   return result;
 }
@@ -162,36 +162,38 @@ auto ToEuler(Matrix4x4 matrix) -> EulerAngle {
 auto ToQuaternion(Matrix4x4 matrix) -> Quaternion {
   Quaternion quat;
 
+  matrix = matrix;
+
   Scalar trace = matrix.At(0, 0) + matrix.At(1, 1) +
                  matrix.At(2, 2); // I removed + 1.0f; see discussion with Ethan
   if (trace > 0) {                // I changed M_EPSILON to 0
     Scalar scale = 0.5F / std::sqrt(trace + 1.0F);
     quat.w = 0.25F / scale;
-    quat.x = (matrix.At(2, 1) - matrix.At(1, 2)) * scale;
-    quat.y = (matrix.At(0, 2) - matrix.At(2, 0)) * scale;
-    quat.z = (matrix.At(1, 0) - matrix.At(0, 1)) * scale;
+    quat.x = (matrix.At(1, 2) - matrix.At(2, 1)) * scale;
+    quat.y = (matrix.At(2, 0) - matrix.At(0, 2)) * scale;
+    quat.z = (matrix.At(0, 1) - matrix.At(1, 0)) * scale;
   } else {
     if (matrix.At(0, 0) > matrix.At(1, 1) &&
         matrix.At(0, 0) > matrix.At(2, 2)) {
       Scalar scale = 2.0F * std::sqrt(1.0F + matrix.At(0, 0) - matrix.At(1, 1) -
                                       matrix.At(2, 2));
-      quat.w = (matrix.At(2, 1) - matrix.At(1, 2)) / scale;
+      quat.w = (matrix.At(1, 2) - matrix.At(2, 1)) / scale;
       quat.x = 0.25F * scale;
-      quat.y = (matrix.At(0, 1) + matrix.At(1, 0)) / scale;
-      quat.z = (matrix.At(0, 2) + matrix.At(2, 0)) / scale;
+      quat.y = (matrix.At(1, 0) + matrix.At(0, 1)) / scale;
+      quat.z = (matrix.At(2, 0) + matrix.At(0, 2)) / scale;
     } else if (matrix.At(1, 1) > matrix.At(2, 2)) {
       Scalar scale = 2.0F * std::sqrt(1.0F + matrix.At(1, 1) - matrix.At(0, 0) -
                                       matrix.At(2, 2));
-      quat.w = (matrix.At(0, 2) - matrix.At(2, 0)) / scale;
-      quat.x = (matrix.At(0, 1) + matrix.At(1, 0)) / scale;
+      quat.w = (matrix.At(2, 0) - matrix.At(0, 2)) / scale;
+      quat.x = (matrix.At(1, 0) + matrix.At(0, 1)) / scale;
       quat.y = 0.25F * scale;
-      quat.z = (matrix.At(1, 2) + matrix.At(2, 1)) / scale;
+      quat.z = (matrix.At(2, 1) + matrix.At(1, 2)) / scale;
     } else {
       Scalar scale = 2.0F * std::sqrt(1.0F + matrix.At(2, 2) - matrix.At(0, 0) -
                                       matrix.At(1, 1));
-      quat.w = (matrix.At(1, 0) - matrix.At(0, 1)) / scale;
-      quat.x = (matrix.At(0, 2) + matrix.At(2, 0)) / scale;
-      quat.y = (matrix.At(1, 2) + matrix.At(2, 1)) / scale;
+      quat.w = (matrix.At(0, 1) - matrix.At(1, 0)) / scale;
+      quat.x = (matrix.At(2, 0) + matrix.At(0, 2)) / scale;
+      quat.y = (matrix.At(2, 1) + matrix.At(1, 2)) / scale;
       quat.z = 0.25F * scale;
     }
   }
@@ -217,17 +219,17 @@ auto ToMatrix(Quaternion quat) -> Matrix4x4 {
 
   Scalar tmp1 = quat.x * quat.y;
   Scalar tmp2 = quat.z * quat.w;
-  mat.At(1, 0) = 2.0F * (tmp1 + tmp2) * invs;
-  mat.At(0, 1) = 2.0F * (tmp1 - tmp2) * invs;
+  mat.At(0, 1) = 2.0F * (tmp1 + tmp2) * invs;
+  mat.At(1, 0) = 2.0F * (tmp1 - tmp2) * invs;
 
   tmp1 = quat.x * quat.z;
   tmp2 = quat.y * quat.w;
-  mat.At(2, 0) = 2.0F * (tmp1 - tmp2) * invs;
-  mat.At(0, 2) = 2.0F * (tmp1 + tmp2) * invs;
+  mat.At(0, 2) = 2.0F * (tmp1 - tmp2) * invs;
+  mat.At(2, 0) = 2.0F * (tmp1 + tmp2) * invs;
   tmp1 = quat.y * quat.z;
   tmp2 = quat.x * quat.w;
-  mat.At(2, 1) = 2.0F * (tmp1 + tmp2) * invs;
-  mat.At(1, 2) = 2.0F * (tmp1 - tmp2) * invs;
+  mat.At(1, 2) = 2.0F * (tmp1 + tmp2) * invs;
+  mat.At(2, 1) = 2.0F * (tmp1 - tmp2) * invs;
 
   return mat;
 }
@@ -250,17 +252,17 @@ auto ToMatrix3x3(Quaternion quat) -> Matrix3x3 {
 
   Scalar tmp1 = quat.x * quat.y;
   Scalar tmp2 = quat.z * quat.w;
-  mat.At(1, 0) = 2.0F * (tmp1 + tmp2) * invs;
-  mat.At(0, 1) = 2.0F * (tmp1 - tmp2) * invs;
+  mat.At(0, 1) = 2.0F * (tmp1 + tmp2) * invs;
+  mat.At(1, 0) = 2.0F * (tmp1 - tmp2) * invs;
 
   tmp1 = quat.x * quat.z;
   tmp2 = quat.y * quat.w;
-  mat.At(2, 0) = 2.0F * (tmp1 - tmp2) * invs;
-  mat.At(0, 2) = 2.0F * (tmp1 + tmp2) * invs;
+  mat.At(0, 2) = 2.0F * (tmp1 - tmp2) * invs;
+  mat.At(2, 0) = 2.0F * (tmp1 + tmp2) * invs;
   tmp1 = quat.y * quat.z;
   tmp2 = quat.x * quat.w;
-  mat.At(2, 1) = 2.0F * (tmp1 + tmp2) * invs;
-  mat.At(1, 2) = 2.0F * (tmp1 - tmp2) * invs;
+  mat.At(1, 2) = 2.0F * (tmp1 + tmp2) * invs;
+  mat.At(2, 1) = 2.0F * (tmp1 - tmp2) * invs;
 
   return mat;
 }

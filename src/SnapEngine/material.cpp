@@ -297,8 +297,6 @@ auto Material::WriteToBuffer(Graphics::GraphicsContext &context,
 
   auto span = std::span<MaterialData>(&materialData, 1);
 
-  PrintAlways("Updating material buffer at index {}", materialSSBOIndex);
-
   return buffer->GetBuffer()->SetData(context, span,
                                       materialSSBOIndex * buffer->GetStride());
 }

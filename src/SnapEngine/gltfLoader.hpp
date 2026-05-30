@@ -9,6 +9,7 @@
 #include <mutex>
 #include <string>
 #include <unordered_map>
+#include <variant>
 #include <vector>
 namespace glTF {
 
@@ -16,7 +17,9 @@ namespace glTF {
 extern std::vector<std::vector<std::uint8_t>> Buffers;
 extern std::unordered_map<std::string, std::vector<std::uint8_t>> URICache;
 extern std::mutex URICacheMutex;
-extern std::vector<Ref<Image::ImageData>> ImageCache;
+extern std::vector<
+    std::variant<Ref<Image::ImageData>, Ref<Image::CompressedImageData>>>
+    ImageCache;
 extern std::vector<Ref<struct Graphics::Texture>> TextureCache;
 extern std::unordered_map<std::string, uint16_t> NameDuplicateCount;
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)

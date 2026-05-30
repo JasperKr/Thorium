@@ -1,5 +1,7 @@
-#include "Modules/compressedImageData.hpp"
+#include "compressedImageData.hpp"
+#include "Modules/console.hpp"
 #include "Modules/dds.hpp"
+#include "Modules/error.hpp"
 #include "Modules/filesystem.hpp"
 #include "Modules/image.hpp"
 #include <vector>
@@ -105,11 +107,18 @@ auto CompressedImageData::Create(const std::span<uint8_t> &data)
     return Error::Unexpected("DDS data is too small for headers.");
   }
 
-  size_t pixelDataSize = data.size() - headerSize;
-
   VkExtent2D size = {header.width, header.height};
 
-  return CompressedImageData::Create(size, data.subspan(headerSize), format);
+  const auto &imgdata = CHECK_RES(
+      CompressedImageData::Create(size, data.subspan(headerSize), format));
+
+  imgdata->mipmapCount = static_cast<int>(header.mipMapCount);
+  PrintAlways(
+      "Loaded DDS with dimensions {}x{}, format {}, and {} mipmap levels.",
+      size.width, size.height, Graphics::Format::ImageFormatToString(format),
+      imgdata->GetMipmapCount());
+
+  return imgdata;
 }
 
 auto CompressedImageData::Create(const Data::ByteData &byteData)

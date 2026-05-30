@@ -1,14 +1,8 @@
-#pragma once
-#include <cstring>
-#include <public/tracy/Tracy.hpp>
-#include <span>
-
-#include "dds.hpp"
-#include "stb/stb_image.h"
-#include "vulkan/vulkan_core.h"
+#include "Modules/dds.hpp"
 #include <algorithm>
-#include <cstdint>
-#include <sys/types.h>
+#include <cstring>
+#include <span>
+#include <vulkan/vulkan_core.h>
 
 namespace Image {
 

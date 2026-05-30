@@ -20,7 +20,6 @@ do
 
   local function draw()
     snap.graphics.setCullMode("none")
-    snap.graphics.setWindingOrder("ccw")
     snap.graphics.setDepthMode("greater", true)
     camera:render(scene)
     snap.graphics.setShader()
@@ -105,9 +104,9 @@ do
       return
     end
 
-    local quat = quaternion(snap.math.eulerToQuaternion(dx * 0.0015, dy * 0.0015, 0))
+    local quat = quaternion(snap.math.eulerToQuaternion(-dx * 0.0015, dy * 0.0015, 0))
     local currentQuat = quaternion(camera:getRotation())
-    local newQuat = currentQuat * quat
+    local newQuat = quat * currentQuat
     camera:setRotation(newQuat.x, newQuat.y, newQuat.z, newQuat.w)
   end
 
@@ -141,26 +140,26 @@ do
     local speed = delta * 10
 
     if (isDown["a"]) then
-      local leftX, leftY, leftZ = camera:getInverseRight()
+      local leftX, leftY, leftZ = camera:getRight()
       leftX, leftY, leftZ = -leftX, -leftY, -leftZ
       local x, y, z = camera:getPosition()
       camera:setPosition(x + leftX * speed, y + leftY * speed, z + leftZ * speed)
     end
 
     if (isDown["d"]) then
-      local rightX, rightY, rightZ = camera:getInverseRight()
+      local rightX, rightY, rightZ = camera:getRight()
       local x, y, z = camera:getPosition()
       camera:setPosition(x + rightX * speed, y + rightY * speed, z + rightZ * speed)
     end
 
     if (isDown["w"]) then
-      local forwardX, forwardY, forwardZ = camera:getInverseForward()
+      local forwardX, forwardY, forwardZ = camera:getForward()
       local x, y, z = camera:getPosition()
       camera:setPosition(x + forwardX * speed, y + forwardY * speed, z + forwardZ * speed)
     end
 
     if (isDown["s"]) then
-      local backX, backY, backZ = camera:getInverseForward()
+      local backX, backY, backZ = camera:getForward()
       backX, backY, backZ = -backX, -backY, -backZ
       local x, y, z = camera:getPosition()
       camera:setPosition(x + backX * speed, y + backY * speed, z + backZ * speed)
@@ -171,6 +170,7 @@ do
     if firstFrame then
       snap.graphics.setDefaultFilter("linear", "linear", 4)
       snap.scene.loadModel(scene, "Assets/Terrain/Bistro/bistro.gltf")
+      -- snap.scene.loadModel(scene, "Assets/Objects/OrientationTest/OrientationTest.gltf")
 
       texture = snap.graphics.newTexture("src/Assets/skybox.hdr", { sampler = true, mipmaps = "init" })
       -- texture = snap.graphics.newTexture("src/Assets/skybox.hdr")
