@@ -8,6 +8,7 @@
 #include "Graphics/graphicsContext.hpp"
 #include "Graphics/renderThread.hpp"
 #include "Graphics/resource.hpp"
+#include "Modules/Helpers/utils.hpp"
 #include "Modules/Math/vector.hpp"
 #include "Modules/color.hpp"
 #include "Modules/console.hpp"
@@ -309,9 +310,33 @@ auto LoadFromMemory(GraphicsContext &context,
           .textureType = TextureType::DEFAULT,
       }));
 
+  size_t paddedSize = 0U;
+
+  int mipLevelCount = compressedData.GetMipmapCount();
+
+  if (mipmaps == TextureMipmapOption::None) {
+    mipLevelCount = 1;
+  }
+
+  auto blockSize = Graphics::Format::GetSize(compressedData.GetFormat());
+
+  for (int mip = 0; mip < mipLevelCount; ++mip) {
+    auto size = Image::GetDimensions(compressedData.GetDimensions(), mip);
+    auto blocksX = (size.width + 3) / 4;
+    auto blocksY = (size.height + 3) / 4;
+    size_t levelSize = static_cast<size_t>(blocksX) * blocksY * blockSize;
+
+    // Align each mip level to the device's optimal buffer copy offset alignment
+    auto limits =
+        GetCurrentGraphicsContext()
+            ->deviceProperties.limits.optimalBufferCopyOffsetAlignment;
+
+    paddedSize += Utils::AlignUp(levelSize, limits);
+  }
+
   // Create staging buffer
   BufferCreationInfo bufferCreationInfo = {};
-  bufferCreationInfo.size = compressedData.GetSize();
+  bufferCreationInfo.size = paddedSize;
   bufferCreationInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
   bufferCreationInfo.properties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
                                   VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
@@ -327,17 +352,27 @@ auto LoadFromMemory(GraphicsContext &context,
                                      .access = VK_ACCESS_2_HOST_WRITE_BIT,
                                  });
 
-  CHECK_ERR(buffer->SetData(context, compressedData.GetSpan()));
+  size_t offset = 0;
 
-  int mipLevelCount = compressedData.GetMipmapCount();
+  for (int mip = 0; mip < mipLevelCount; ++mip) {
+    auto size = Image::GetDimensions(compressedData.GetDimensions(), mip);
+    auto blocksX = (size.width + 3) / 4;
+    auto blocksY = (size.height + 3) / 4;
+    size_t levelSize = static_cast<size_t>(blocksX) * blocksY * blockSize;
 
-  if (mipmaps == TextureMipmapOption::None) {
-    mipLevelCount = 1;
+    CHECK_ERR(buffer->SetData(context, compressedData.GetSpan().subspan(offset),
+                              offset, levelSize));
+
+    auto limits =
+        GetCurrentGraphicsContext()
+            ->deviceProperties.limits.optimalBufferCopyOffsetAlignment;
+
+    offset += Utils::AlignUp(levelSize, limits);
   }
 
   std::vector<VkBufferImageCopy> copyRegions;
   copyRegions.reserve(mipLevelCount);
-  VkDeviceSize offset = 0;
+  offset = 0;
 
   for (int mip = 0; mip < mipLevelCount; ++mip) {
     VkBufferImageCopy region = {};
@@ -358,7 +393,15 @@ auto LoadFromMemory(GraphicsContext &context,
 
     copyRegions.emplace_back(region);
 
-    offset += compressedData.GetMipSize(mip);
+    auto blocksX = (size.width + 3) / 4;
+    auto blocksY = (size.height + 3) / 4;
+
+    auto limits =
+        GetCurrentGraphicsContext()
+            ->deviceProperties.limits.optimalBufferCopyOffsetAlignment;
+
+    offset += Utils::AlignUp(
+        static_cast<VkDeviceSize>(blocksX) * blocksY * blockSize, limits);
   }
 
   CHECK_ERR(texture->UseAsTransferDst(context));

@@ -54,6 +54,14 @@ struct Camera {
     return CameraBuffer;
   }
 
+  [[nodiscard]] auto GetDimensions() const -> Math::Uvec2 { return Dimensions; }
+
+  auto SetDimensions(Math::Uvec2 newDimensions) -> void {
+    Dimensions = newDimensions;
+    projectionDirty = true;
+    ConfigureRendertargets();
+  }
+
   static void RegisterCameraSystems(Scene &scene);
 
   static auto Create(const Graphics::GraphicsContext &context,
@@ -188,6 +196,9 @@ struct LuaCamera : LuaWrap::LuaECSObject {
 
   static auto GetBuffer(lua_State *state) -> int;
   static auto GetRendertarget(lua_State *state) -> int;
+
+  static auto GetDimensions(lua_State *state) -> int;
+  static auto SetDimensions(lua_State *state) -> int;
 };
 
 auto GetLuaCameraClass() -> ::LuaWrap::LuaClass;

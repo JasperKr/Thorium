@@ -35,10 +35,10 @@ const std::unordered_map<UIStyles, UIStyleDefinition> UIStylePresets{
      }},
     {UIStyles::Greenish,
      {
-         .Primary = Color(0x2C3930FF),
-         .Secondary = Color(0x3F4F44FF),
-         .Tertiary = Color(0x52665AFF),
-         .Quaternary = Color(0xDCD7C9FF),
+         .Primary = Color(0x343434FF),
+         .Secondary = Color(0x474f49FF),
+         .Tertiary = Color(0x5b665fFF),
+         .Quaternary = Color(0x8e8b81FF),
      }},
 };
 

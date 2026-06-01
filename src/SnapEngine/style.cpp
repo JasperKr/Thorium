@@ -15,7 +15,7 @@ auto ApplyDefaultStyle(UIStyles uiStyle) -> Error {
   auto &style = ImGui::GetStyle();
 
   constexpr auto Rounding = 5.0F;
-  constexpr auto BorderSize = 1.5F;
+  constexpr auto BorderSize = 1.0F;
 
   // NOLINTBEGIN(readability-magic-numbers, cppcoreguidelines-avoid-magic-numbers)
   style.Alpha = 1.0F;
@@ -28,7 +28,7 @@ auto ApplyDefaultStyle(UIStyles uiStyle) -> Error {
   style.ChildBorderSize = BorderSize;
   style.PopupRounding = Rounding;
   style.PopupBorderSize = BorderSize;
-  style.FramePadding = ImVec2(4.0F, 3.0F);
+  style.FramePadding = ImVec2(8.0F, 4.0F);
   style.FrameRounding = Rounding;
   style.FrameBorderSize = BorderSize;
   style.ItemSpacing = ImVec2(8.0F, 4.0F);
@@ -83,23 +83,23 @@ auto ApplyDefaultStyle(UIStyles uiStyle) -> Error {
   colors[ImGuiCol_BorderShadow] = ToImVec4(Accent(primary, 0.8F), 1.0F);
 
   // Frames
-  colors[ImGuiCol_FrameBg] = ToImVec4(Accent(primary), 0.F);
-  colors[ImGuiCol_FrameBgHovered] = ToImVec4(Accent(primary, 1.0F), 0.F);
-  colors[ImGuiCol_FrameBgActive] = ToImVec4(Accent(primary, 1.0F), 0.F);
+  colors[ImGuiCol_FrameBg] = ToImVec4(Accent(primary), 1.F);
+  colors[ImGuiCol_FrameBgHovered] = ToImVec4(Accent(primary, 1.05F), 1.F);
+  colors[ImGuiCol_FrameBgActive] = ToImVec4(Accent(primary, 1.1F), 1.F);
 
   // Titles
   colors[ImGuiCol_TitleBg] = ToImVec4(primary);
-  colors[ImGuiCol_TitleBgActive] = ToImVec4(Accent(primary));
-  colors[ImGuiCol_TitleBgCollapsed] = ToImVec4(Accent(primary, 1.5F));
+  colors[ImGuiCol_TitleBgActive] = ToImVec4(Accent(primary, 1.1F));
+  colors[ImGuiCol_TitleBgCollapsed] = ToImVec4(Accent(primary, 1.2F));
 
   // Menu bar
   colors[ImGuiCol_MenuBarBg] = ToImVec4(Accent(primary, 1.2F));
 
   // Scrollbars
-  colors[ImGuiCol_ScrollbarBg] = ToImVec4(Accent(primary, 1.2F));
-  colors[ImGuiCol_ScrollbarGrab] = ToImVec4(Accent(primary));
-  colors[ImGuiCol_ScrollbarGrabHovered] = ToImVec4(Accent(primary));
-  colors[ImGuiCol_ScrollbarGrabActive] = ToImVec4(Accent(primary, 1.2F));
+  colors[ImGuiCol_ScrollbarBg] = ToImVec4(Accent(primary, 0.9F));
+  colors[ImGuiCol_ScrollbarGrab] = ToImVec4(Accent(primary, 1.3F));
+  colors[ImGuiCol_ScrollbarGrabHovered] = ToImVec4(Accent(primary, 1.5));
+  colors[ImGuiCol_ScrollbarGrabActive] = ToImVec4(Accent(primary, 1.7F));
 
   // Check marks and sliders
   colors[ImGuiCol_CheckMark] = ToImVec4(secondary);
@@ -118,8 +118,8 @@ auto ApplyDefaultStyle(UIStyles uiStyle) -> Error {
 
   // Separators
   colors[ImGuiCol_Separator] = ToImVec4(Accent(primary));
-  colors[ImGuiCol_SeparatorHovered] = ToImVec4(Accent(primary, 2.0F));
-  colors[ImGuiCol_SeparatorActive] = ToImVec4(Accent(primary, 2.5F));
+  colors[ImGuiCol_SeparatorHovered] = ToImVec4(Accent(primary, 1.0F));
+  colors[ImGuiCol_SeparatorActive] = ToImVec4(Accent(primary, 1.1F));
 
   // Resize grips
   colors[ImGuiCol_ResizeGrip] = ToImVec4(Accent(secondary));
@@ -127,14 +127,13 @@ auto ApplyDefaultStyle(UIStyles uiStyle) -> Error {
   colors[ImGuiCol_ResizeGripActive] = ToImVec4(Accent(secondary, 2.5F));
 
   // Tabs
-  colors[ImGuiCol_Tab] = ToImVec4(secondary);
-  colors[ImGuiCol_TabHovered] = ToImVec4(Accent(secondary));
-  colors[ImGuiCol_TabSelected] = ToImVec4(Accent(secondary, 1.5F));
-  colors[ImGuiCol_TabSelectedOverline] = ToImVec4(Accent(secondary, 2.0F));
-  colors[ImGuiCol_TabDimmed] = ToImVec4(Accent(secondary));
-  colors[ImGuiCol_TabDimmedSelected] = ToImVec4(Accent(secondary, 1.5F));
-  colors[ImGuiCol_TabDimmedSelectedOverline] =
-      ToImVec4(Accent(secondary, 2.0F));
+  colors[ImGuiCol_Tab] = ToImVec4(tertiary);
+  colors[ImGuiCol_TabHovered] = ToImVec4(Accent(tertiary, 1.05));
+  colors[ImGuiCol_TabSelected] = ToImVec4(Accent(tertiary, 1.1F));
+  colors[ImGuiCol_TabSelectedOverline] = ToImVec4(Accent(tertiary, 1.15F));
+  colors[ImGuiCol_TabDimmed] = ToImVec4(Accent(tertiary, 0.8F));
+  colors[ImGuiCol_TabDimmedSelected] = ToImVec4(Accent(tertiary, 0.85F));
+  colors[ImGuiCol_TabDimmedSelectedOverline] = ToImVec4(Accent(tertiary, 0.9F));
 
   // Docking
   colors[ImGuiCol_DockingPreview] = ToImVec4(Accent(primary));
@@ -142,9 +141,9 @@ auto ApplyDefaultStyle(UIStyles uiStyle) -> Error {
 
   // Plots
   colors[ImGuiCol_PlotLines] = ToImVec4(tertiary);
-  colors[ImGuiCol_PlotLinesHovered] = ToImVec4(Accent(tertiary, 2.0F));
-  colors[ImGuiCol_PlotHistogram] = ToImVec4(quaternary);
-  colors[ImGuiCol_PlotHistogramHovered] = ToImVec4(Accent(quaternary, 2.0F));
+  colors[ImGuiCol_PlotLinesHovered] = ToImVec4(Accent(tertiary, 1.0F));
+  colors[ImGuiCol_PlotHistogram] = ToImVec4(tertiary);
+  colors[ImGuiCol_PlotHistogramHovered] = ToImVec4(Accent(tertiary));
 
   // Tables
   colors[ImGuiCol_TableHeaderBg] = ToImVec4(secondary);
@@ -214,19 +213,44 @@ auto Accent(const Color &color, float accentStrength) -> Color {
   auto brightness = ColorToBrightness(color);
   // Bright colors get a darker accent, dark colors get a brighter accent
   // NOLINTBEGIN(readability-magic-numbers, cppcoreguidelines-avoid-magic-numbers)
+
+  Color accentColor;
+
   switch (brightness) {
   case Brightness::Bright:
-    return Desaturate(color, 0.2F * accentStrength) * 0.8F * accentStrength;
+    accentColor =
+        Desaturate(color, 0.2F * accentStrength) * 0.8F * accentStrength;
+    break;
   case Brightness::LightGray:
-    return Desaturate(color, 0.1F * accentStrength) * 0.9F * accentStrength;
+    accentColor =
+        Desaturate(color, 0.1F * accentStrength) * 0.9F * accentStrength;
+    break;
   case Brightness::DarkGray:
-    return Saturate(color, 0.1F * accentStrength) * 1.1F * accentStrength;
+    accentColor =
+        Saturate(color, 0.1F * accentStrength) * 1.1F * accentStrength;
+    break;
   case Brightness::Dark:
-    return Saturate(color, 0.2F * accentStrength) * 1.2F * accentStrength;
+    accentColor =
+        Saturate(color, 0.2F * accentStrength) * 1.2F * accentStrength;
+    break;
   default:
-    return color; // Fallback to original color
+    accentColor = color; // Fallback to original color
+    break;
   }
   // NOLINTEND(readability-magic-numbers, cppcoreguidelines-avoid-magic-numbers)
+
+  accentColor.a = color.a; // Preserve original alpha
+
+  return accentColor;
+}
+
+auto Lerp(const Color &first, const Color &second, float time) -> Color {
+  return Color{
+      (first.r * (1.0F - time)) + (second.r * time),
+      (first.g * (1.0F - time)) + (second.g * time),
+      (first.b * (1.0F - time)) + (second.b * time),
+      (first.a * (1.0F - time)) + (second.a * time),
+  };
 }
 
 auto Saturate(const Color &color, float saturationFactor) -> Color {
@@ -234,24 +258,14 @@ auto Saturate(const Color &color, float saturationFactor) -> Color {
   float gray = LuminanceFromColor(color);
 
   // Interpolate between the original color and the grayscale color based on the saturation factor
-  return {
-      gray + ((color.r - gray) * saturationFactor),
-      gray + ((color.g - gray) * saturationFactor),
-      gray + ((color.b - gray) * saturationFactor),
-      color.a, // Preserve alpha
-  };
+  return Lerp(color, {gray, gray, gray, color.a}, 1.0F - saturationFactor);
 }
 auto Desaturate(const Color &color, float desaturationFactor) -> Color {
   // Convert to grayscale using the perceived brightness
   float gray = LuminanceFromColor(color);
 
   // Interpolate between the original color and the grayscale color based on the desaturation factor
-  return {
-      gray + ((color.r - gray) * (1.0F - desaturationFactor)),
-      gray + ((color.g - gray) * (1.0F - desaturationFactor)),
-      gray + ((color.b - gray) * (1.0F - desaturationFactor)),
-      color.a, // Preserve alpha
-  };
+  return Lerp(color, {gray, gray, gray, color.a}, desaturationFactor);
 }
 
 } // namespace Engine::Style

@@ -1547,8 +1547,6 @@ auto BindDescriptorSets(const GraphicsContext &context,
     CHECK_ERR(
         BindGlobalsDescriptor(context, key, shader, setIndex, dynamicOffsets));
 
-    auto iter = DescriptorSetCache.find(key);
-
     auto *commandBuffer = Graphics::GetCommandBuffer();
 
     if (commandBuffer == VK_NULL_HANDLE) {
@@ -1561,25 +1559,34 @@ auto BindDescriptorSets(const GraphicsContext &context,
 
     auto &currentlyBound = BoundDescriptorSets.at(setIndex);
 
-    if (iter != DescriptorSetCache.end()) {
+    VkDescriptorSet cached = VK_NULL_HANDLE;
+    bool cacheHit = false;
+
+    {
+      ZoneScopedN("Check descriptor set cache");
+      auto iter = DescriptorSetCache.find(key);
+      cacheHit = iter != DescriptorSetCache.end();
+      if (cacheHit) {
+        cached = iter->second;
+      }
+    }
+
+    if (cacheHit) {
       ZoneScopedN("vkCmdBindDescriptorSets cached");
 
-      if (currentlyBound.first == iter->second) {
+      if (currentlyBound.first == cached) {
         if (currentlyBound.second == dynamicOffsets) {
           setIndex++;
-          TracyMessageL("Descriptor set already bound with same dynamic "
-                        "offsets, skipping.");
           continue;
         }
       }
 
-      currentlyBound.first = (void *)iter->second;
+      currentlyBound.first = (void *)cached;
       currentlyBound.second = dynamicOffsets;
 
-      vkCmdBindDescriptorSets(commandBuffer, TopOfStack->bindPoint,
-                              CurrentPipelineLayout.layout, setIndex, 1,
-                              &iter->second, dynamicOffsets.size(),
-                              dynamicOffsets.data());
+      vkCmdBindDescriptorSets(
+          commandBuffer, TopOfStack->bindPoint, CurrentPipelineLayout.layout,
+          setIndex, 1, &cached, dynamicOffsets.size(), dynamicOffsets.data());
     } else {
       ZoneScopedN("Allocate and bind descriptor set");
 

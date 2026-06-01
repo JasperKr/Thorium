@@ -60,7 +60,7 @@ struct Color {
            static_cast<uint32_t>(alpha);
   }
 
-  [[nodiscard]] static auto ToGammaCorrect(Color color) -> Color {
+  [[nodiscard]] auto ToGammaCorrect() const -> Color {
     // sRGB gamma correction
     static auto GammaCorrectChannel = [](float channel) -> float {
       // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers, readability-magic-numbers)
@@ -72,11 +72,11 @@ struct Color {
       // NOLINTEND(cppcoreguidelines-avoid-magic-numbers, readability-magic-numbers)
     };
 
-    return {GammaCorrectChannel(color.r), GammaCorrectChannel(color.g),
-            GammaCorrectChannel(color.b), color.a};
+    return {GammaCorrectChannel(r), GammaCorrectChannel(g),
+            GammaCorrectChannel(b), a};
   };
 
-  [[nodiscard]] static auto ToLinear(Color color) -> Color {
+  [[nodiscard]] auto ToLinear() const -> Color {
     // Inverse sRGB gamma correction
     static auto LinearizeChannel = [](float channel) -> float {
       // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers, readability-magic-numbers)
@@ -88,8 +88,7 @@ struct Color {
       // NOLINTEND(cppcoreguidelines-avoid-magic-numbers, readability-magic-numbers)
     };
 
-    return {LinearizeChannel(color.r), LinearizeChannel(color.g),
-            LinearizeChannel(color.b), color.a};
+    return {LinearizeChannel(r), LinearizeChannel(g), LinearizeChannel(b), a};
   };
 
   auto operator==(const Color &other) const -> bool {

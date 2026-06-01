@@ -21,6 +21,9 @@ do
   local function draw()
     snap.graphics.setCullMode("none")
     snap.graphics.setDepthMode("greater", true)
+
+    Editor.drawGUI()
+
     camera:render(scene)
     snap.graphics.setShader()
 
@@ -31,16 +34,21 @@ do
     end
     Imgui.End()
 
-    if Imgui.Begin("Viewport") then
-      Imgui.Image(camera:getRendertarget("PostProcessed"), ffi.new("ImVec2", { cameraWidth, cameraHeight }))
+    Imgui.SetNextWindowDockID(Editor.dockId, Imgui.ImGuiCond_FirstUseEver)
+
+    local flags = bit.bor(Imgui.ImGuiWindowFlags_NoScrollbar, Imgui.ImGuiWindowFlags_NoScrollWithMouse)
+    if Imgui.Begin("Viewport", nil, flags) then
+      local windowSize = Imgui.GetWindowSize()
+      Imgui.SetCursorPos(ffi.new("ImVec2", 0, 0))
+      Imgui.Image(camera:getRendertarget("PostProcessed"), windowSize)
+
+      camera:setDimensions(windowSize.x, windowSize.y)
     end
     Imgui.End()
 
-    Editor.drawGUI()
     scene:drawUIElement();
 
     local startTime = snap.timer.getTime()
-
 
     Imgui.ShowDemoWindow()
 

@@ -1,7 +1,6 @@
 #include "Graphics/semaphoreManager.hpp"
 #include "Graphics/allocations.hpp"
 #include "Graphics/graphicsContext.hpp"
-#include "Modules/console.hpp"
 
 #include "vulkan/vulkan_core.h"
 #include <algorithm>
@@ -9,6 +8,7 @@
 #include <condition_variable>
 #include <cstdint>
 #include <mutex>
+#include <public/tracy/Tracy.hpp>
 #include <shared_mutex>
 #include <unordered_map>
 #include <unordered_set>
@@ -78,6 +78,8 @@ auto SetPendingTimelineValues(const std::vector<uint64_t> &values) -> void {
 // Update the semaphore values before submitting command buffers
 // And returns the latest queued timeline value for signalling with a semaphore
 auto UpdateSemaphoreValues(const GraphicsContext &context) -> Result<uint64_t> {
+  ZoneScoped;
+
   std::lock_guard lock(timelineSetsMutex);
 
   if (sortedPendingTimelineValues.empty()) {

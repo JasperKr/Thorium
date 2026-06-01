@@ -679,6 +679,44 @@ auto LuaCamera::GetRendertarget(lua_State *state) -> int {
   return 1;
 }
 
+auto LuaCamera::GetDimensions(lua_State *state) -> int {
+  auto *obj = ::LuaWrap::ObjectFromLua<LuaCamera>(state, 1);
+  if (obj == nullptr) {
+    return luaL_error(state, "Invalid Camera object");
+  }
+
+  const auto *camera = obj->entity.try_get<Camera>();
+  if (camera == nullptr) {
+    return luaL_error(state, "Camera component not found on entity");
+  }
+
+  const auto &size = camera->GetDimensions();
+
+  lua_pushinteger(state, size.x);
+  lua_pushinteger(state, size.y);
+  return 2;
+}
+
+auto LuaCamera::SetDimensions(lua_State *state) -> int {
+  auto *obj = ::LuaWrap::ObjectFromLua<LuaCamera>(state, 1);
+  if (obj == nullptr) {
+    return luaL_error(state, "Invalid Camera object");
+  }
+
+  auto *camera = obj->entity.try_get_mut<Camera>();
+  if (camera == nullptr) {
+    return luaL_error(state, "Camera component not found on entity");
+  }
+
+  const auto width = luaL_checkinteger(state, 2);
+  const auto height = luaL_checkinteger(state, 3);
+
+  camera->SetDimensions(
+      {static_cast<uint32_t>(width), static_cast<uint32_t>(height)});
+
+  return 0;
+}
+
 auto GetLuaCameraClass() -> ::LuaWrap::LuaClass {
   const ::LuaWrap::LuaClass LuaCameraClass = {
       .Name = "Camera",
@@ -698,6 +736,8 @@ auto GetLuaCameraClass() -> ::LuaWrap::LuaClass {
               {"getBuffer", LuaCamera::GetBuffer},
               {"render", LuaCamera::Render},
               {"getRendertarget", LuaCamera::GetRendertarget},
+              {"getDimensions", LuaCamera::GetDimensions},
+              {"setDimensions", LuaCamera::SetDimensions},
           },
       .Components = {
           TransformComponent,

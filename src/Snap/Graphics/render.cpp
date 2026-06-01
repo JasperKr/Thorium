@@ -192,19 +192,25 @@ auto SubmitCommandBuffers(Graphics::GraphicsContext &context,
   submitInfo.pSignalSemaphores =
       &context.imageReady.at(context.swapchainImageIndex);
 
-  // Submit
-  auto err = Error::Create(vkQueueSubmit(context.graphicsQueue, 1, &submitInfo,
-                                         context.inFlight[context.frameIndex]));
-  CHECK_ERR(err);
+  {
+    ZoneScopedN("Submit command buffer to queue");
+    // Submit
+    auto err =
+        Error::Create(vkQueueSubmit(context.graphicsQueue, 1, &submitInfo,
+                                    context.inFlight[context.frameIndex]));
+    CHECK_ERR(err);
 
-  if (err.code == VK_ERROR_OUT_OF_DATE_KHR || err.code == VK_SUBOPTIMAL_KHR) {
-    // Swapchain is out of date, need to recreate
-    swapchainManager.MakeDirty();
+    if (err.code == VK_ERROR_OUT_OF_DATE_KHR || err.code == VK_SUBOPTIMAL_KHR) {
+      // Swapchain is out of date, need to recreate
+      swapchainManager.MakeDirty();
+    }
   }
 
   auto timelineValue = CHECK_RES(UpdateSemaphoreValues(context));
 
   {
+    ZoneScopedN("Submit timeline semaphore signal");
+
     VkSemaphore globalTimelineSemaphore = Graphics::globalTimelineSemaphore;
     if (globalTimelineSemaphore != VK_NULL_HANDLE) {
       VkTimelineSemaphoreSubmitInfo timelineInfo{};
@@ -220,9 +226,8 @@ auto SubmitCommandBuffers(Graphics::GraphicsContext &context,
       submitTimeline.signalSemaphoreCount = 1;
       submitTimeline.pSignalSemaphores = &globalTimelineSemaphore;
 
-      err = Error::Create(vkQueueSubmit(context.graphicsQueue, 1,
-                                        &submitTimeline, VK_NULL_HANDLE));
-      CHECK_ERR(err);
+      CHECK_NEW_ERR(vkQueueSubmit(context.graphicsQueue, 1, &submitTimeline,
+                                  VK_NULL_HANDLE));
     }
   }
 

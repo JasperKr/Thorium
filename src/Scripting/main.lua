@@ -8,7 +8,6 @@ local commandsChannel = snap.thread.newChannel()
 local startThreadChannel = snap.thread.newChannel()
 local events = snap.thread.newChannel()
 local scene = snap.scene.newScene("Main")
-print(scene:getName())
 
 snap.graphics.aquireGraphics("load")
 snap.renderer.initialize()

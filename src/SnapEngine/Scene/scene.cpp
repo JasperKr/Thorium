@@ -176,21 +176,19 @@ auto Scene::DrawUiElement() const -> Error {
   // This is just a placeholder for now
 
   ImGui::Begin(name.c_str());
-  auto availableWidth = ImGui::GetContentRegionAvail().x;
+  auto availableHeight = ImGui::GetContentRegionAvail().y;
   if (ImGui::BeginChild("Entity Hierarchy",
-                        ImVec2(availableWidth * 0.5F, 0), // NOLINT
+                        ImVec2(0, availableHeight * 0.5F), // NOLINT
                         ImGuiChildFlags_Borders)) {
 
     static char buf[256] = {};                    // NOLINT
     ImGui::InputText("Search", buf, sizeof(buf)); // NOLINT
 
     world.entity(0).children([&](flecs::entity entity) -> void {
-      DrawEntityHierarchy(
-          entity, std::string_view(buf, strnlen(buf, sizeof(buf)))); // NOLINT
+      DrawEntityHierarchy(entity, std::string_view(buf)); // NOLINT
     });
   }
   ImGui::EndChild();
-  ImGui::SameLine();
 
   if (ImGui::BeginChild("Selected Entity", ImVec2(0, 0),
                         ImGuiChildFlags_Borders)) {

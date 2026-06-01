@@ -121,8 +121,8 @@ inline auto HandleImguiCreateTextureEvent(Graphics::GraphicsContext &context,
   tex->SetTexID( // NOLINTNEXTLINE reinterpret-cast
       reinterpret_cast<ImTextureID>(texture.get()));
 
-  texture->SetFilter(VK_FILTER_NEAREST, VK_FILTER_NEAREST,
-                     VK_SAMPLER_MIPMAP_MODE_NEAREST);
+  texture->SetFilter(VK_FILTER_LINEAR, VK_FILTER_LINEAR,
+                     VK_SAMPLER_MIPMAP_MODE_LINEAR);
 
   Gui::ImGuiTextures.emplace(tex->GetTexID(), texture);
 
