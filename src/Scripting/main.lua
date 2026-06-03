@@ -9,6 +9,7 @@ local startThreadChannel = snap.thread.newChannel()
 local events = snap.thread.newChannel()
 local scene = snap.scene.newScene("Main")
 
+
 snap.graphics.aquireGraphics("load")
 snap.renderer.initialize()
 

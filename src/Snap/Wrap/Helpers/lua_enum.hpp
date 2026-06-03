@@ -137,6 +137,15 @@ public:
     }
     return iter->second;
   }
+
+  [[nodiscard]] auto GetOptions() const
+      -> std::vector<std::pair<std::string, T>> {
+    std::vector<std::pair<std::string, T>> options;
+    for (const auto &[key, value] : EnumMap) {
+      options.emplace_back(key, value);
+    }
+    return options;
+  }
 };
 
 } // namespace LuaWrap

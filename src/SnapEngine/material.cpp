@@ -153,13 +153,45 @@ auto LuaMaterial::wrap_getAlphaMode(lua_State *state) -> int {
 }
 
 auto Material::DrawGUI() -> void {
-  ImGui::Text("Cull Mode: %s", LuaCullModeEnum.ToString(cullMode).c_str());
-  ImGui::Text("Alpha Mode: %s", LuaAlphaModeEnum.ToString(alphaMode).c_str());
+  // ImGui::Text("Cull Mode: %s", LuaCullModeEnum.ToString(cullMode).c_str());
+  // ImGui::Text("Alpha Mode: %s", LuaAlphaModeEnum.ToString(alphaMode).c_str());
+
+  if (ImGui::BeginCombo("Cull Mode",
+                        LuaCullModeEnum.ToString(cullMode).c_str())) {
+    for (const auto &option : LuaCullModeEnum.GetOptions()) {
+      bool isSelected = option.second == cullMode;
+      if (ImGui::Selectable(option.first.c_str(), isSelected)) {
+        cullMode = option.second;
+      }
+      if (isSelected) {
+        ImGui::SetItemDefaultFocus();
+      }
+    }
+    ImGui::EndCombo();
+  }
+
+  if (ImGui::BeginCombo("Alpha Mode",
+                        LuaAlphaModeEnum.ToString(alphaMode).c_str())) {
+    for (const auto &option : LuaAlphaModeEnum.GetOptions()) {
+      bool isSelected = option.second == alphaMode;
+      if (ImGui::Selectable(option.first.c_str(), isSelected)) {
+        alphaMode = option.second;
+      }
+      if (isSelected) {
+        ImGui::SetItemDefaultFocus();
+      }
+    }
+    ImGui::EndCombo();
+  }
+
   ImGui::ColorEdit4("Albedo Factor", albedoFactor.Ptr());
   ImGui::SliderFloat("Roughness Factor", &roughnessFactor, 0.0F, 1.0F);
   ImGui::SliderFloat("Metallic Factor", &metallicFactor, 0.0F, 1.0F);
   ImGui::SliderFloat("Reflectance Factor", &reflectanceFactor, 0.0F, 1.0F);
-  ImGui::ColorEdit3("Emissive Factor", &emissiveFactor.x);
+  ImGui::DragFloat3("Emissive Factor", emissiveFactor.Ptr(), 0.01F); // NOLINT
+  ImGui::SliderFloat("Alpha Cutoff", &alphaCutoff, 0.0F, 1.0F);
+
+  ImGui::Separator();
 
   if (ImGui::CollapsingHeader("Texture UV Indices")) {
     constexpr int MaxUVSets = 4;

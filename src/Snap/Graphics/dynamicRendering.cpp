@@ -1790,6 +1790,7 @@ auto BeginFrame(const GraphicsContext &context) -> Error {
 }
 
 // Setters //
+
 auto SetDepthMode(bool enable, bool writeEnable, VkCompareOp compareOp)
     -> void {
   TopOfStack->depthTestEnable = enable;
@@ -1800,6 +1801,7 @@ auto SetDepthMode(bool enable, bool writeEnable, VkCompareOp compareOp)
 }
 
 auto SetCullMode(VkCullModeFlags cullMode) -> void {
+  // TODO: This should be dynamic state.
   TopOfStack->cullMode = cullMode;
   TopOfStack->dirty = true;
 }

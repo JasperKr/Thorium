@@ -84,6 +84,10 @@ auto BindMesh(const GraphicsContext &context, VkCommandBuffer cmdBuffer,
     if (threadContext.currentIndexBuffer != indexBuffer->handle) {
       std::lock_guard<std::mutex> lock(indexBuffer->mutex);
 
+      if (indexBuffer->handle == VK_NULL_HANDLE) {
+        return Error::Create("Index buffer handle is null.");
+      }
+
       vkCmdBindIndexBuffer(cmdBuffer, indexBuffer->handle, 0,
                            mesh.GetIndexFormat());
       threadContext.currentIndexBuffer = indexBuffer->handle;
@@ -93,6 +97,10 @@ auto BindMesh(const GraphicsContext &context, VkCommandBuffer cmdBuffer,
   if (threadContext.currentVertexBuffer != vertexBuffer->handle) {
     std::lock_guard<std::mutex> lock(vertexBuffer->mutex);
     VkDeviceSize offset = 0;
+
+    if (vertexBuffer->handle == VK_NULL_HANDLE) {
+      return Error::Create("Vertex buffer handle is null.");
+    }
 
     vkCmdBindVertexBuffers(cmdBuffer, 0, 1, &vertexBuffer->handle, &offset);
     threadContext.currentVertexBuffer = vertexBuffer->handle;
@@ -383,6 +391,7 @@ auto Draw(const GraphicsContext &context, const VkPrimitiveTopology &topology,
 
   DynamicRendering::SetBindPoint(VK_PIPELINE_BIND_POINT_GRAPHICS);
   vkCmdSetVertexInputEXT(commandBuffer, 0, nullptr, 0, nullptr);
+  GetThreadContext().currentVertexFormatHash = 0; // No vertex format
   DynamicRendering::SetTopology(topology);
 
   CHECK_ERR(UpdateShaderResourceLayouts(
@@ -413,6 +422,7 @@ auto Draw(const GraphicsContext &context, const Ref<Buffer> &indexBuffer,
 
   DynamicRendering::SetBindPoint(VK_PIPELINE_BIND_POINT_GRAPHICS);
   vkCmdSetVertexInputEXT(commandBuffer, 0, nullptr, 0, nullptr);
+  GetThreadContext().currentVertexFormatHash = 0; // No vertex format
   DynamicRendering::SetTopology(topology);
 
   CHECK_ERR(UpdateShaderResourceLayouts(

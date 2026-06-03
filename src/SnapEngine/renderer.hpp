@@ -23,6 +23,7 @@ enum class ShaderKey : uint8_t {
   SimpleLighting,
   PostProcessing,
   Skybox,
+  TransparencyForward,
 };
 
 struct ShaderConfiguration {
@@ -46,6 +47,9 @@ const std::unordered_map<ShaderKey, ShaderConfiguration> ShaderConfigurations =
                   "postProcessing.slang"}},
         {ShaderKey::Skybox,
          {.path = "Scripting/Graphics/Shaders/PostProcessing/skybox.slang"}},
+        {ShaderKey::TransparencyForward,
+         {.path =
+              "Scripting/Graphics/Shaders/Geometry/transparencyForward.slang"}},
 };
 
 const std::vector<Graphics::BufferComponent> MaterialBufferComponents = {

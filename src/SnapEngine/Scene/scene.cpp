@@ -371,7 +371,6 @@ inline auto BindMaterial(const Ref<Graphics::Shader::ShaderModule> &shader,
 }
 
 struct DrawConfig {
-  bool sendNormalMatrix = false;
   /*
     albedoTexture
     metallicRoughnessTexture
@@ -408,6 +407,8 @@ inline auto RenderDrawItem(const DrawItem &item,
   if (item.geometry.mesh.get() == nullptr) {
     return Error::Create("Invalid geometry mesh");
   }
+
+  Graphics::DynamicRendering::SetCullMode(item.material->cullMode);
 
   CHECK_ERR(Graphics::Draw(ctx, *item.geometry.mesh));
 
@@ -470,6 +471,8 @@ auto Scene::DrawModels(Camera &camera, const Graphics::GraphicsContext &context)
       Renderer::RendererInstance.GetShader(Renderer::ShaderKey::DepthMaskPass));
   auto deferred = CHECK_RES(
       Renderer::RendererInstance.GetShader(Renderer::ShaderKey::Deferred));
+  auto forward = CHECK_RES(Renderer::RendererInstance.GetShader(
+      Renderer::ShaderKey::TransparencyForward));
 
   static auto cameraBufferKey = Graphics::ResourceKey{"CameraData"};
   auto cameraBuffer = camera.GetBuffer()->GetBuffer();
@@ -480,6 +483,8 @@ auto Scene::DrawModels(Camera &camera, const Graphics::GraphicsContext &context)
       depthMasked, ctx, cameraBufferKey, cameraBuffer));
   CHECK_ERR(Graphics::Shader::UniformWriter::Send(
       deferred, ctx, cameraBufferKey, cameraBuffer));
+  CHECK_ERR(Graphics::Shader::UniformWriter::Send(forward, ctx, cameraBufferKey,
+                                                  cameraBuffer));
 
   static auto modelTransformsBufferKey =
       Graphics::ResourceKey{"ModelTransforms"};
@@ -492,12 +497,15 @@ auto Scene::DrawModels(Camera &camera, const Graphics::GraphicsContext &context)
       depthMasked, ctx, modelTransformsBufferKey, modelTransformsBuffer));
   CHECK_ERR(Graphics::Shader::UniformWriter::Send(
       deferred, ctx, modelTransformsBufferKey, modelTransformsBuffer));
+  CHECK_ERR(Graphics::Shader::UniformWriter::Send(
+      forward, ctx, modelTransformsBufferKey, modelTransformsBuffer));
 
   static auto materialBufferKey = Graphics::ResourceKey{"MaterialBuffer"};
   auto materialBuffer =
       Renderer::RendererInstance.GetMaterialsBuffer()->GetBuffer();
   CHECK_ERR(depthMasked->Send(ctx, materialBufferKey, materialBuffer));
   CHECK_ERR(deferred->Send(ctx, materialBufferKey, materialBuffer));
+  CHECK_ERR(forward->Send(ctx, materialBufferKey, materialBuffer));
 
   // Draw sorting
 
@@ -595,7 +603,6 @@ auto Scene::DrawModels(Camera &camera, const Graphics::GraphicsContext &context)
            }}));
 
   static auto opaqueConfig = DrawConfig{
-      .sendNormalMatrix = false,
       .bindMaterialTextures = 0,
       .bindMaterialBuffer = false,
   };
@@ -604,7 +611,6 @@ auto Scene::DrawModels(Camera &camera, const Graphics::GraphicsContext &context)
   }
 
   static auto maskedConfig = DrawConfig{
-      .sendNormalMatrix = false,
       .bindMaterialTextures = 1,
       .bindMaterialBuffer = true,
   };
@@ -664,21 +670,33 @@ auto Scene::DrawModels(Camera &camera, const Graphics::GraphicsContext &context)
             }}));
 
   static auto deferredConfig = DrawConfig{
-      .sendNormalMatrix = true,
       .bindMaterialTextures = UINT8_MAX,
       .bindMaterialBuffer = true,
   };
+
   for (const auto &item : OpaqueDrawItems) {
     CHECK_ERR(RenderDrawItem(item, deferred, ctx, deferredConfig));
   }
+
   for (const auto &item : MaskedDrawItems) {
     CHECK_ERR(RenderDrawItem(item, deferred, ctx, deferredConfig));
   }
 
-  // Graphics::DynamicRendering::SetDepthMode(true, false, VK_COMPARE_OP_LESS);
-  // for (const auto &item : TransparentDrawItems) {
-  //   CHECK_ERR(RenderDrawItem(item, shader, ctx));
-  // }
+  if (OpaqueDrawItems.empty() && MaskedDrawItems.empty()) {
+    CHECK_ERR(Graphics::DynamicRendering::Clear(
+        ctx, {
+                 .colors =
+                     {
+                         {0.0F, 0.0F, 0.0F, 1.0F}, // Albedo
+                         {0.0F, 0.0F, 0.0F, 1.0F}, // Normal
+                         {0.0F, 0.0F, 0.0F, 1.0F}, // Material
+                         {0.0F, 0.0F, 0.0F, 1.0F}, // Emissive
+                         {0.0F, 0.0F, 0.0F, 1.0F}, // Motion
+                     },
+                 .depthClearValue = 0.0F,
+                 .clearDepth = true,
+             }));
+  }
 
   auto shader = CHECK_RES(Renderer::RendererInstance.GetShader(
       Renderer::ShaderKey::SimpleLighting));
@@ -702,6 +720,7 @@ auto Scene::DrawModels(Camera &camera, const Graphics::GraphicsContext &context)
       Renderer::RendererInstance.GetSceneLightBuffers().DirectionalLightCount));
 
   CHECK_ERR(Renderer::RendererInstance.BindLightBuffers(ctx, shader));
+  CHECK_ERR(Renderer::RendererInstance.BindLightBuffers(ctx, forward));
 
   textures.IncomingLight =
       CHECK_RES(Renderer::GlobalRenderTargetManager.GetRendertarget(
@@ -725,6 +744,30 @@ auto Scene::DrawModels(Camera &camera, const Graphics::GraphicsContext &context)
   // Now left: IncomingLight and Depth
 
   CHECK_ERR(Renderer::DrawFullScreen(context));
+
+  CHECK_ERR(Graphics::DynamicRendering::SetRenderTargets(
+      ctx, {{
+                .texture = textures.Depth,
+                .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+            },
+            {
+                .blendMode = Graphics::DefaultBlendMode,
+                .texture = textures.IncomingLight,
+                .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+            }}));
+
+  static auto forwardConfig = DrawConfig{
+      .bindMaterialTextures = UINT8_MAX,
+      .bindMaterialBuffer = true,
+  };
+
+  // Skybox should be drawn before transparent objects, this is currently wrong.
+  Graphics::DynamicRendering::SetDepthMode(true, false, VK_COMPARE_OP_GREATER);
+  Graphics::DynamicRendering::SetShader(forward);
+  Graphics::DynamicRendering::SetCullMode(VK_CULL_MODE_NONE);
+  for (const auto &item : TransparentDrawItems) {
+    CHECK_ERR(RenderDrawItem(item, forward, ctx, forwardConfig));
+  }
 
   return {};
 }

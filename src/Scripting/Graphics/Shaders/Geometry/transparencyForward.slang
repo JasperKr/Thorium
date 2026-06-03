@@ -10,6 +10,7 @@ import constants;
 import Lighting.Lights.directionalLight;
 
 import transform;
+
 struct PushConstantBuffer {
   uint MaterialBufferIndex;
   uint ModelTransformIndex;
@@ -90,16 +91,6 @@ float4 fragmentMain(FragmentInput input) {
 
   float alpha = texColor.a * matData.albedoFactor.a;
 
-  if (matData.alphaMode == AlphaMode::Mask) {
-    if (alpha <= matData.alphaCutoff) {
-      discard;
-    }
-  }
-
-  if (matData.alphaMode != AlphaMode::Blend) {
-    alpha = 1.0;
-  }
-
   float3 albedo = texColor.rgb * matData.albedoFactor.rgb;
 
   float2 metallicRoughness =
@@ -145,5 +136,5 @@ float4 fragmentMain(FragmentInput input) {
 
   float3 color = direct + irradiance + radiance + emissive;
 
-  return float4(color, 1.0);
+  return float4(color * alpha, alpha);
 }
