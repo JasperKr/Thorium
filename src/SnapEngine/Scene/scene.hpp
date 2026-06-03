@@ -28,7 +28,7 @@ struct Scene : Object {
   auto GetInstanceType() const -> const Type * override { return &SceneType; }
 
   auto DrawUiElement() const -> Error;
-  auto DrawModels(const struct Camera &camera,
+  auto DrawModels(struct Camera &camera,
                   const struct Graphics::GraphicsContext &context) -> Error;
   auto Update(double deltaTime) const -> Error;
 

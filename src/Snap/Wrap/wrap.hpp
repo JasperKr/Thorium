@@ -217,3 +217,42 @@ inline auto PushVarargs(lua_State *state,
 auto luaL_checkscalar(lua_State *state, int index) -> Math::Scalar;
 auto luaL_optscalar(lua_State *state, int index, Math::Scalar defaultValue)
     -> Math::Scalar;
+
+// NOLINTNEXTLINE
+#define LUA_CK_NULL(expr)                                                      \
+  ({                                                                           \
+    auto &&_result = (expr);                                                   \
+    if (_result == nullptr) {                                                  \
+      return luaL_error(state, "Null pointer at " #expr);                      \
+    }                                                                          \
+    std::move(_result);                                                        \
+  })
+
+// NOLINTNEXTLINE
+#define LUA_CK_NULL_MSG(expr, msg)                                             \
+  ({                                                                           \
+    auto &&_result = (expr);                                                   \
+    if (_result == nullptr) {                                                  \
+      return luaL_error(state, "%s", (msg));                                   \
+    }                                                                          \
+    std::move(_result);                                                        \
+  })
+
+// NOLINTNEXTLINE
+#define LUA_CK_ERR(expr)                                                       \
+  {                                                                            \
+    auto error = (expr);                                                       \
+    if (Error::IsError(error)) {                                               \
+      return luaL_error(state, "%s", error.ToString().c_str());                \
+    }                                                                          \
+  }
+
+// NOLINTNEXTLINE
+#define LUA_CK_RES(expr)                                                       \
+  ({                                                                           \
+    auto &&_result = (expr);                                                   \
+    if (Error::IsError(_result)) {                                             \
+      return luaL_error(state, "%s", _result.error().ToString().c_str());      \
+    }                                                                          \
+    std::move(_result);                                                        \
+  })

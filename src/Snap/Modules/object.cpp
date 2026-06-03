@@ -55,19 +55,15 @@ auto Object::release() -> bool {
 #endif
   auto refcount = count.fetch_sub(1) - 1;
   if (refcount <= 0) {
-    if (UseDeferredDestruction()) {
-      this->ScheduleDestroy();
-    } else {
 #ifdef DEBUG_OBJECT_LIFETIMES
-      {
-        std::lock_guard<std::mutex> lock(RefCountsMutex);
-        RefCounts.erase(this);
-      }
+    {
+      std::lock_guard<std::mutex> lock(RefCountsMutex);
+      RefCounts.erase(this);
+    }
 #endif
 #ifndef DEBUG_DOUBLE_RELEASE
-      delete this;
+    delete this;
 #endif
-    }
 
     return true;
   }

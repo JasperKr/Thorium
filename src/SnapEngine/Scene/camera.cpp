@@ -5,6 +5,7 @@
 #include "Graphics/graphics.hpp"
 #include "Graphics/graphicsContext.hpp"
 #include "Graphics/graphicsState.hpp"
+#include "Graphics/texture.hpp"
 #include "Graphics/uniformWriter.hpp"
 #include "Modules/Math/math.hpp"
 #include "Modules/Math/mathTypes.hpp"
@@ -24,6 +25,7 @@
 #include <flecs.h>
 #include <lauxlib.h>
 #include <span>
+#include <vector>
 #include <vulkan/vulkan_core.h>
 
 namespace Engine {
@@ -232,51 +234,21 @@ auto Camera::FillSkybox(const Graphics::GraphicsContext &context, Scene *scene)
 auto Camera::Render(const Graphics::GraphicsContext &context,
                     flecs::entity thisEntity, Scene *scene) -> Error {
 
-  Renderer::GlobalRenderTargetManager.ReleaseRendertarget(OwnedTextures.Depth);
-  Renderer::GlobalRenderTargetManager.ReleaseRendertarget(
-      OwnedTextures.IncomingLight);
-  Renderer::GlobalRenderTargetManager.ReleaseRendertarget(
-      OwnedTextures.PostProcessed);
-  Renderer::GlobalRenderTargetManager.ReleaseRendertarget(OwnedTextures.Albedo);
-  Renderer::GlobalRenderTargetManager.ReleaseRendertarget(OwnedTextures.Normal);
-  Renderer::GlobalRenderTargetManager.ReleaseRendertarget(
-      OwnedTextures.Material);
-  Renderer::GlobalRenderTargetManager.ReleaseRendertarget(
-      OwnedTextures.Emissive);
-  Renderer::GlobalRenderTargetManager.ReleaseRendertarget(OwnedTextures.Motion);
-
-  OwnedTextures.IncomingLight =
-      CHECK_RES(Renderer::GlobalRenderTargetManager.GetRendertarget(
-          context, Rendertargets.IncomingLight));
-  OwnedTextures.Depth =
-      CHECK_RES(Renderer::GlobalRenderTargetManager.GetRendertarget(
-          context, Rendertargets.Depth));
-
-  OwnedTextures.Albedo =
-      CHECK_RES(Renderer::GlobalRenderTargetManager.GetRendertarget(
-          context, Rendertargets.Albedo));
-
-  OwnedTextures.Normal =
-      CHECK_RES(Renderer::GlobalRenderTargetManager.GetRendertarget(
-          context, Rendertargets.Normal));
-
-  OwnedTextures.Material =
-      CHECK_RES(Renderer::GlobalRenderTargetManager.GetRendertarget(
-          context, Rendertargets.Material));
-
-  OwnedTextures.Emissive =
-      CHECK_RES(Renderer::GlobalRenderTargetManager.GetRendertarget(
-          context, Rendertargets.Emissive));
-
-  OwnedTextures.Motion =
-      CHECK_RES(Renderer::GlobalRenderTargetManager.GetRendertarget(
-          context, Rendertargets.Motion));
+  // Release last frame's post-processed texture if it exists
+  CHECK_ERR(Renderer::GlobalRenderTargetManager.ReleaseRendertarget(
+      OwnedTextures.PostProcessed));
+  OwnedTextures.PostProcessed = nullptr;
 
   CHECK_ERR(scene->DrawModels(*this, context));
 
   CHECK_ERR(FillSkybox(context, scene));
 
   CHECK_ERR(ApplyPostProcessing(context));
+
+  CHECK_ERR(Renderer::GlobalRenderTargetManager.ReleaseRendertargets({
+      OwnedTextures.IncomingLight,
+      OwnedTextures.Depth,
+  }));
 
   return {};
 }
@@ -410,10 +382,7 @@ auto Camera::WriteToBuffer(flecs::entity entity) const -> Error {
 
 // scene:newCamera(name, verticalFOV, width, height, near, far)
 auto LuaCamera::Create(lua_State *state) -> int {
-  auto *scene = ::LuaWrap::ObjectFromLua<Scene>(state, 1);
-  if (scene == nullptr) {
-    return luaL_error(state, "Invalid Scene object");
-  }
+  auto *scene = LUA_CK_NULL(::LuaWrap::ObjectFromLua<Scene>(state, 1));
 
   auto context = *Graphics::GetCurrentGraphicsContext();
 
@@ -425,14 +394,10 @@ auto LuaCamera::Create(lua_State *state) -> int {
   const auto near = luaL_optscalar(state, 6, 0.1F);
   const auto far = luaL_optscalar(state, 7, 1000.0F);
 
-  auto cameraResult = Camera::Create(
+  auto cameraResult = LUA_CK_RES(Camera::Create(
       context, fov,
-      {static_cast<uint32_t>(width), static_cast<uint32_t>(height)}, near, far);
-
-  if (Error::IsError(cameraResult)) {
-    return luaL_error(state, "Failed to create Camera: %s",
-                      cameraResult.error().message.c_str());
-  }
+      {static_cast<uint32_t>(width), static_cast<uint32_t>(height)}, near,
+      far));
 
   auto entity = scene->world.entity();
   entity.set<Camera>(cameraResult.value());
@@ -448,10 +413,7 @@ auto LuaCamera::Create(lua_State *state) -> int {
 }
 
 auto LuaCamera::GetName(lua_State *state) -> int {
-  auto *obj = ::LuaWrap::ObjectFromLua<LuaCamera>(state, 1);
-  if (obj == nullptr) {
-    return luaL_error(state, "Invalid Camera object");
-  }
+  auto *obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
 
   const auto *displayName = obj->entity.try_get<DisplayName>();
   if (displayName == nullptr) {
@@ -464,10 +426,7 @@ auto LuaCamera::GetName(lua_State *state) -> int {
 }
 
 auto LuaCamera::SetName(lua_State *state) -> int {
-  auto *obj = ::LuaWrap::ObjectFromLua<LuaCamera>(state, 1);
-  if (obj == nullptr) {
-    return luaL_error(state, "Invalid Camera object");
-  }
+  auto *obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
 
   auto *displayName = obj->entity.try_get_mut<DisplayName>();
   if (displayName == nullptr) {
@@ -480,15 +439,8 @@ auto LuaCamera::SetName(lua_State *state) -> int {
 }
 
 auto LuaCamera::SetAspectRatio(lua_State *state) -> int {
-  auto *obj = ::LuaWrap::ObjectFromLua<LuaCamera>(state, 1);
-  if (obj == nullptr) {
-    return luaL_error(state, "Invalid Camera object");
-  }
-
-  auto *camera = obj->entity.try_get_mut<Camera>();
-  if (camera == nullptr) {
-    return luaL_error(state, "Camera component not found on entity");
-  }
+  auto *obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
+  auto *camera = LUA_CK_NULL(obj->entity.try_get_mut<Camera>());
 
   camera->SetAspectRatio(luaL_checkscalar(state, 2));
 
@@ -496,15 +448,8 @@ auto LuaCamera::SetAspectRatio(lua_State *state) -> int {
 }
 
 auto LuaCamera::SetVerticalFOV(lua_State *state) -> int {
-  auto *obj = ::LuaWrap::ObjectFromLua<LuaCamera>(state, 1);
-  if (obj == nullptr) {
-    return luaL_error(state, "Invalid Camera object");
-  }
-
-  auto *camera = obj->entity.try_get_mut<Camera>();
-  if (camera == nullptr) {
-    return luaL_error(state, "Camera component not found on entity");
-  }
+  auto *obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
+  auto *camera = LUA_CK_NULL(obj->entity.try_get_mut<Camera>());
 
   camera->SetVerticalFOV(luaL_checkscalar(state, 2));
 
@@ -512,15 +457,8 @@ auto LuaCamera::SetVerticalFOV(lua_State *state) -> int {
 }
 
 auto LuaCamera::SetNearPlane(lua_State *state) -> int {
-  auto *obj = ::LuaWrap::ObjectFromLua<LuaCamera>(state, 1);
-  if (obj == nullptr) {
-    return luaL_error(state, "Invalid Camera object");
-  }
-
-  auto *camera = obj->entity.try_get_mut<Camera>();
-  if (camera == nullptr) {
-    return luaL_error(state, "Camera component not found on entity");
-  }
+  auto *obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
+  auto *camera = LUA_CK_NULL(obj->entity.try_get_mut<Camera>());
 
   camera->SetNearPlane(luaL_checkscalar(state, 2));
 
@@ -528,15 +466,8 @@ auto LuaCamera::SetNearPlane(lua_State *state) -> int {
 }
 
 auto LuaCamera::SetFarPlane(lua_State *state) -> int {
-  auto *obj = ::LuaWrap::ObjectFromLua<LuaCamera>(state, 1);
-  if (obj == nullptr) {
-    return luaL_error(state, "Invalid Camera object");
-  }
-
-  auto *camera = obj->entity.try_get_mut<Camera>();
-  if (camera == nullptr) {
-    return luaL_error(state, "Camera component not found on entity");
-  }
+  auto *obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
+  auto *camera = LUA_CK_NULL(obj->entity.try_get_mut<Camera>());
 
   camera->SetFarPlane(luaL_checkscalar(state, 2));
 
@@ -544,75 +475,40 @@ auto LuaCamera::SetFarPlane(lua_State *state) -> int {
 }
 
 auto LuaCamera::GetAspectRatio(lua_State *state) -> int {
-  auto *obj = ::LuaWrap::ObjectFromLua<LuaCamera>(state, 1);
-  if (obj == nullptr) {
-    return luaL_error(state, "Invalid Camera object");
-  }
-
-  const auto *camera = obj->entity.try_get<Camera>();
-  if (camera == nullptr) {
-    return luaL_error(state, "Camera component not found on entity");
-  }
+  auto *obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
+  const auto *camera = LUA_CK_NULL(obj->entity.try_get<Camera>());
 
   lua_pushnumber(state, camera->GetAspectRatio());
   return 1;
 }
 
 auto LuaCamera::GetVerticalFOV(lua_State *state) -> int {
-  auto *obj = ::LuaWrap::ObjectFromLua<LuaCamera>(state, 1);
-  if (obj == nullptr) {
-    return luaL_error(state, "Invalid Camera object");
-  }
-
-  const auto *camera = obj->entity.try_get<Camera>();
-  if (camera == nullptr) {
-    return luaL_error(state, "Camera component not found on entity");
-  }
+  auto *obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
+  const auto *camera = LUA_CK_NULL(obj->entity.try_get<Camera>());
 
   lua_pushnumber(state, camera->GetVerticalFOV());
   return 1;
 }
 
 auto LuaCamera::GetNearPlane(lua_State *state) -> int {
-  auto *obj = ::LuaWrap::ObjectFromLua<LuaCamera>(state, 1);
-  if (obj == nullptr) {
-    return luaL_error(state, "Invalid Camera object");
-  }
-
-  const auto *camera = obj->entity.try_get<Camera>();
-  if (camera == nullptr) {
-    return luaL_error(state, "Camera component not found on entity");
-  }
+  auto *obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
+  const auto *camera = LUA_CK_NULL(obj->entity.try_get<Camera>());
 
   lua_pushnumber(state, camera->GetNearPlane());
   return 1;
 }
 
 auto LuaCamera::GetFarPlane(lua_State *state) -> int {
-  auto *obj = ::LuaWrap::ObjectFromLua<LuaCamera>(state, 1);
-  if (obj == nullptr) {
-    return luaL_error(state, "Invalid Camera object");
-  }
-
-  const auto *camera = obj->entity.try_get<Camera>();
-  if (camera == nullptr) {
-    return luaL_error(state, "Camera component not found on entity");
-  }
+  auto *obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
+  const auto *camera = LUA_CK_NULL(obj->entity.try_get<Camera>());
 
   lua_pushnumber(state, camera->GetFarPlane());
   return 1;
 }
 
 auto LuaCamera::GetBuffer(lua_State *state) -> int {
-  auto *obj = ::LuaWrap::ObjectFromLua<LuaCamera>(state, 1);
-  if (obj == nullptr) {
-    return luaL_error(state, "Invalid Camera object");
-  }
-
-  const auto *camera = obj->entity.try_get<Camera>();
-  if (camera == nullptr) {
-    return luaL_error(state, "Camera component not found on entity");
-  }
+  auto *obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
+  const auto *camera = LUA_CK_NULL(obj->entity.try_get<Camera>());
 
   ::LuaWrap::PushObject(state, Graphics::StructuredBuffer::GetType(),
                         camera->GetBuffer().get());
@@ -620,41 +516,20 @@ auto LuaCamera::GetBuffer(lua_State *state) -> int {
 }
 
 auto LuaCamera::Render(lua_State *state) -> int {
-  auto *obj = ::LuaWrap::ObjectFromLua<LuaCamera>(state, 1);
-  if (obj == nullptr) {
-    return luaL_error(state, "Invalid Camera object");
-  }
+  auto *obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
+  auto *camera = LUA_CK_NULL(obj->entity.try_get_mut<Camera>());
 
-  auto *camera = obj->entity.try_get_mut<Camera>();
-  if (camera == nullptr) {
-    return luaL_error(state, "Camera component not found on entity");
-  }
-
-  auto *scene = ::LuaWrap::ObjectFromLua<Scene>(state, 2);
-  if (scene == nullptr) {
-    return luaL_error(state, "Invalid Scene object");
-  }
-
+  auto *scene = LUA_CK_NULL(::LuaWrap::ObjectFromLua<Scene>(state, 2));
   auto context = *Graphics::GetCurrentGraphicsContext();
 
-  auto error = camera->Render(context, obj->entity, scene);
-  if (Error::IsError(error)) {
-    return luaL_error(state, "%s", error.ToString().c_str());
-  }
+  LUA_CK_ERR(camera->Render(context, obj->entity, scene));
 
   return 0;
 }
 
 auto LuaCamera::GetRendertarget(lua_State *state) -> int {
-  auto *obj = ::LuaWrap::ObjectFromLua<LuaCamera>(state, 1);
-  if (obj == nullptr) {
-    return luaL_error(state, "Invalid Camera object");
-  }
-
-  auto *camera = obj->entity.try_get_mut<Camera>();
-  if (camera == nullptr) {
-    return luaL_error(state, "Camera component not found on entity");
-  }
+  auto *obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
+  auto *camera = LUA_CK_NULL(obj->entity.try_get_mut<Camera>());
 
   auto context = *Graphics::GetCurrentGraphicsContext();
 
@@ -680,15 +555,8 @@ auto LuaCamera::GetRendertarget(lua_State *state) -> int {
 }
 
 auto LuaCamera::GetDimensions(lua_State *state) -> int {
-  auto *obj = ::LuaWrap::ObjectFromLua<LuaCamera>(state, 1);
-  if (obj == nullptr) {
-    return luaL_error(state, "Invalid Camera object");
-  }
-
-  const auto *camera = obj->entity.try_get<Camera>();
-  if (camera == nullptr) {
-    return luaL_error(state, "Camera component not found on entity");
-  }
+  auto *obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
+  const auto *camera = LUA_CK_NULL(obj->entity.try_get<Camera>());
 
   const auto &size = camera->GetDimensions();
 
@@ -698,15 +566,8 @@ auto LuaCamera::GetDimensions(lua_State *state) -> int {
 }
 
 auto LuaCamera::SetDimensions(lua_State *state) -> int {
-  auto *obj = ::LuaWrap::ObjectFromLua<LuaCamera>(state, 1);
-  if (obj == nullptr) {
-    return luaL_error(state, "Invalid Camera object");
-  }
-
-  auto *camera = obj->entity.try_get_mut<Camera>();
-  if (camera == nullptr) {
-    return luaL_error(state, "Camera component not found on entity");
-  }
+  auto *obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
+  auto *camera = LUA_CK_NULL(obj->entity.try_get_mut<Camera>());
 
   const auto width = luaL_checkinteger(state, 2);
   const auto height = luaL_checkinteger(state, 3);

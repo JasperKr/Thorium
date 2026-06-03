@@ -350,6 +350,8 @@ target_link_libraries(snap_core
         flecs::flecs_static
         backtrace
         dl
+        unwind
+        unwind-x86_64
 )
 
 # Copy LuaJIT DLL after build

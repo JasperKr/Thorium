@@ -1,14 +1,17 @@
 #include "rendertargetManager.hpp"
 #include "Graphics/format.hpp"
+#include "Graphics/graphics.hpp"
 #include "Graphics/graphicsContext.hpp"
 #include "Graphics/texture.hpp"
 #include "Modules/Helpers/hasher.hpp"
+#include "Modules/Helpers/utils.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include <algorithm>
 #include <cassert>
 #include <cstdint>
 #include <format>
+#include <string>
 
 namespace Engine::Renderer {
 
@@ -32,16 +35,21 @@ auto RendertargetDescriptor::Score(const RendertargetDescriptor &other) const
     score += UsageMatchScore;
   }
 
-  if (size.x < other.size.x || size.y < other.size.y) {
-    // This rendertarget is too small for the requirements.
+  // if (size.x < other.size.x || size.y < other.size.y) {
+  //   // This rendertarget is too small for the requirements.
+  //   return -1;
+  // }
+  // if (size.x == other.size.x && size.y == other.size.y) {
+  //   score += SizeMatchScore;
+  // } else {
+  //   // The rendertarget is larger than the requirements, deduct points based on difference.
+  //   auto diff = std::max(size.x - other.size.x, size.y - other.size.y);
+  //   score += std::max(1U, SizeMatchScore - (diff / SizeDiffPixelCount));
+  // }
+
+  // ^ For now we force a perfect size match until we can return a texture view with a different size than the underlying texture
+  if (size != other.size) {
     return -1;
-  }
-  if (size.x == other.size.x && size.y == other.size.y) {
-    score += SizeMatchScore;
-  } else {
-    // The rendertarget is larger than the requirements, deduct points based on difference.
-    auto diff = std::max(size.x - other.size.x, size.y - other.size.y);
-    score += std::max(1U, SizeMatchScore - (diff / SizeDiffPixelCount));
   }
 
   if (mipmapCount < other.mipmapCount) {
@@ -102,6 +110,7 @@ auto RenderTargetManager::GetRendertarget(
   for (auto &entry : Rendertargets) {
     if (entry.descriptor == descriptor && !entry.inUse) {
       entry.inUse = true;
+      entry.lastUsedFrame = Graphics::GetCurrentGraphicsContext()->currentFrame;
       return entry.texture;
     }
   }
@@ -128,11 +137,36 @@ auto RenderTargetManager::GetRendertarget(
 
     entry.descriptor = descriptor;
     entry.inUse = true;
+    entry.lastUsedFrame = Graphics::GetCurrentGraphicsContext()->currentFrame;
 
     return bestTexture;
   }
 
+  // This might look a bit strange;
   if (Rendertargets.size() >= MaxRendertargets) {
+    Cleanup(); // Cleanup old rendertargets
+
+    if (Rendertargets.size() >= MaxRendertargets) {
+      Cleanup(true); // Force cleanup all unused rendertargets
+    }
+
+    // We do a normal cleanup first, if that's not enough, try to evict anything we can
+    // If this still fails we raise an error.
+  }
+
+  if (Rendertargets.size() >= MaxRendertargets) {
+    std::string message = "Currently allocated:\n";
+    for (const auto &entry : Rendertargets) {
+      message += std::format(
+          "- {}x{}, format: {}, usage: {}, mip levels: {}, filters: {} / {}\n",
+          entry.descriptor.size.x, entry.descriptor.size.y,
+          Graphics::Format::ImageFormatToString(entry.descriptor.format),
+          (int)entry.descriptor.usage, entry.descriptor.mipmapCount,
+          (int)entry.descriptor.minFilter, (int)entry.descriptor.magFilter);
+    }
+
+    PrintError("RenderTargetManager: {}", message);
+
     return Error::Unexpectedf("Exceeded maximum number of rendertargets ({}).",
                               MaxRendertargets);
   }
@@ -152,24 +186,44 @@ auto RenderTargetManager::GetRendertarget(
   auto texture = CHECK_RES(::Graphics::Create(context, info));
 
   Rendertargets.push_back(
-      {.descriptor = descriptor, .inUse = true, .texture = texture});
+      {.descriptor = descriptor,
+       .inUse = true,
+       .texture = texture,
+       .lastUsedFrame = Graphics::GetCurrentGraphicsContext()->currentFrame});
+
   return texture;
 }
 
 auto RenderTargetManager::ReleaseRendertarget(
-    const Ref<::Graphics::Texture> &texture) -> void {
+    const Ref<::Graphics::Texture> &texture) -> Error {
   if (texture == nullptr) {
-    return;
+    return {};
   }
-  bool found = false;
 
+  size_t count = 0;
   for (auto &entry : Rendertargets) {
     if (entry.texture == texture) {
-      assert(!found && "Texture released multiple times.");
       entry.inUse = false;
-      found = true;
+      entry.lastUsedFrame = Graphics::GetCurrentGraphicsContext()->currentFrame;
+      count++;
     }
   }
+
+  if (count > 1) {
+    return Error::Create(
+        "RenderTargetManager: Released more than one rendertarget texture");
+  }
+
+  return {};
+}
+
+auto RenderTargetManager::ReleaseRendertargets(
+    const std::vector<Ref<::Graphics::Texture>> &textures) -> Error {
+  for (const auto &texture : textures) {
+    CHECK_ERR(ReleaseRendertarget(texture));
+  }
+
+  return {};
 }
 
 auto RenderTargetManager::ReconfigureTexture(
@@ -181,5 +235,25 @@ auto RenderTargetManager::ReconfigureTexture(
                        descriptor.addressModeW);
   texture->SetBorderColor(descriptor.borderColor);
 }
+
+// Clean up old rendertargets that haven't been used for a while.
+// Optionally force all unused rendertargets to be evicted prematurely
+auto RenderTargetManager::Cleanup(bool evictAll) -> void {
+  auto currentFrame = Graphics::GetCurrentGraphicsContext()->currentFrame;
+  Utils::UnorderedErase(
+      Rendertargets,
+      [currentFrame, evictAll](RendertargetEntry &entry) -> bool {
+        bool expired =
+            (currentFrame - entry.lastUsedFrame) > RendertargetLifetime;
+        bool clean = !entry.inUse && (expired || evictAll);
+        if (clean) {
+          entry.texture = nullptr;
+        }
+
+        return clean;
+      });
+}
+
+auto RenderTargetManager::Update() -> void { Cleanup(); }
 
 } // namespace Engine::Renderer

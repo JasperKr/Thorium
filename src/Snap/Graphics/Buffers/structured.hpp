@@ -31,12 +31,6 @@ struct StructuredBuffer : Object {
   auto Clear(GraphicsContext &context, uint32_t value, VkDeviceSize offset = 0,
              VkDeviceSize size = VK_WHOLE_SIZE) const -> Error;
 
-  [[nodiscard]] auto UseDeferredDestruction() const -> bool override {
-    return false;
-  }
-
-  auto ScheduleDestroy() -> void override { buffer.reset(); }
-
   static auto GetType() -> Type const * { return &LuaBufferType; }
   [[nodiscard]] auto GetInstanceType() const -> Type const * override {
     return StructuredBuffer::GetType();

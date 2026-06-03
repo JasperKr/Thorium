@@ -285,7 +285,6 @@ auto GetPipelineLayout(const GraphicsContext &context,
   bool hasBindings = false;
   for (const auto &setPair : shader->bindingInfos) {
     uniqueSets.insert(setPair.first);
-    PrintAlways("Set pair: {}", setPair.first);
     hasBindings = true;
   }
 
@@ -321,12 +320,7 @@ auto GetPipelineLayout(const GraphicsContext &context,
     const auto &layout = CHECK_RES(GetDescriptorSetLayout(layoutKey, context));
     // setLayouts.emplace_back(layout);
     setLayouts.at(setPair.first) = layout;
-    PrintAlways("Set {}: {} bindings", setPair.first, setPair.second.size());
   }
-
-  PrintAlways("Shader {} has {} descriptor sets", shader->name, setCount);
-  PrintAlways("Set layout count: {}",
-              hasBindings ? static_cast<uint32_t>(setLayouts.size()) : 0);
 
   VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
   pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;

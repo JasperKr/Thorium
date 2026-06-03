@@ -54,9 +54,9 @@ static auto StartRecording(Graphics::GraphicsContext &context) -> Error {
     {
       std::lock_guard<std::mutex> lock(
           Graphics::GraphicsContext::mutexes.device);
-      CHECK_ERR(Error::Create(vkAllocateCommandBuffers(
+      CHECK_NEW_ERR(vkAllocateCommandBuffers(
           context.device, &allocInfo,
-          &GlobalStitchInfo.commandBuffers.at(context.frameIndex).at(0))));
+          &GlobalStitchInfo.commandBuffers.at(context.frameIndex).at(0)));
     }
   }
 
@@ -142,12 +142,10 @@ auto AquireNextSwapchainImage(Graphics::GraphicsContext &context) -> Error {
 
   {
     ZoneScopedN("Acquire next image");
-    auto result = vkAcquireNextImageKHR(
+    CHECK_NEW_ERR(vkAcquireNextImageKHR(
         context.device, context.swapchainInfo.swapchain, UINT64_MAX,
         context.imageAvailable[context.frameIndex], VK_NULL_HANDLE,
-        &context.swapchainImageIndex);
-
-    CHECK_ERR(Error::Create(result));
+        &context.swapchainImageIndex));
   }
 
   if (context.imageInFlight[context.swapchainImageIndex] != VK_NULL_HANDLE) {

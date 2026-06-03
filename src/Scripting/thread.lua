@@ -177,7 +177,7 @@ do
     createSnapshot = false
     if firstFrame then
       snap.graphics.setDefaultFilter("linear", "linear", 4)
-      snap.scene.loadModel(scene, "Assets/Terrain/Bistro/bistro.gltf")
+      -- snap.scene.loadModel(scene, "Assets/Terrain/Bistro/bistro.gltf")
       -- snap.scene.loadModel(scene, "Assets/Objects/OrientationTest/OrientationTest.gltf")
 
       texture = snap.graphics.newTexture("src/Assets/skybox.hdr", { sampler = true, mipmaps = "init" })

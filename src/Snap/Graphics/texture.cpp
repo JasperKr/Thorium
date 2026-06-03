@@ -62,12 +62,6 @@ auto GetAspectFlagsForFormat(VkFormat format) -> VkImageAspectFlagBits {
 inline auto SetDebugName(const std::string &debugName, Texture *texture,
                          const GraphicsContext &context) -> Error {
 
-  auto debugname = debugName;
-
-  if (debugName.empty()) {
-    debugname = "Unnamed Texture";
-  }
-
   std::scoped_lock<std::mutex, std::mutex> lock(
       Graphics::GraphicsContext::mutexes.device,
       Graphics::GraphicsContext::mutexes.vmaAllocator);
@@ -77,14 +71,13 @@ inline auto SetDebugName(const std::string &debugName, Texture *texture,
   nameInfo.objectType = VK_OBJECT_TYPE_IMAGE;
   nameInfo.objectHandle = static_cast<uint64_t>(
       reinterpret_cast<uintptr_t>(texture->image)), // NOLINT
-      nameInfo.pObjectName = debugname.c_str();
+      nameInfo.pObjectName = debugName.c_str();
 
   CHECK_ERR(
       Error::Create(vkSetDebugUtilsObjectNameEXT(context.device, &nameInfo)));
 
   vmaSetAllocationName(context.vmaAllocator, texture->memory,
-                       debugname.c_str());
-  texture->debugName = debugname;
+                       debugName.c_str());
 
   return Error::Success();
 }
@@ -96,9 +89,30 @@ auto Create(const GraphicsContext &context, const TextureCreationInfo &info)
   if (((info.usage & VK_IMAGE_USAGE_STORAGE_BIT) != 0U) &&
       (info.format == VK_FORMAT_R8G8B8A8_SRGB ||
        info.format == VK_FORMAT_B8G8R8A8_SRGB)) {
-    assert(false);
     return Error::Unexpected("SRGB formats are not supported for storage "
                              "usage.");
+  }
+
+  if (info.size.width == 0 || info.size.height == 0 || info.size.depth == 0) {
+    return Error::Unexpected("Texture dimensions must be greater than 0.");
+  }
+
+  if (info.arrayLayers == 0) {
+    return Error::Unexpected("Texture array layers must be greater than 0.");
+  }
+
+  if (info.mipmapCount == 0) {
+    return Error::Unexpected("Texture mipmap count must be greater than 0.");
+  }
+
+  if (info.format == VK_FORMAT_UNDEFINED) {
+    return Error::Unexpected("Texture format must be defined.");
+  }
+
+  if ((info.usage & VK_IMAGE_USAGE_SAMPLED_BIT) == 0U &&
+      (info.usage & VK_IMAGE_USAGE_STORAGE_BIT) == 0U) {
+    return Error::Unexpected(
+        "Texture usage must include at least sampled or storage usage.");
   }
 
   Ref<Texture> texture = Ref<Texture>::Make();
@@ -110,6 +124,8 @@ auto Create(const GraphicsContext &context, const TextureCreationInfo &info)
   texture->usage = info.usage;
   texture->arrayLayers = info.arrayLayers;
   texture->samplerDirty = true;
+  texture->debugName =
+      info.debugName.empty() ? "Unnamed Texture" : info.debugName;
 
   const auto &config = Threading::GetGraphicsConfiguration();
 
@@ -138,16 +154,20 @@ auto Create(const GraphicsContext &context, const TextureCreationInfo &info)
   allocInfo.requiredFlags = 0;
   allocInfo.preferredFlags = 0;
 
+  VmaAllocationInfo memRequirements;
+
   {
     std::scoped_lock<std::mutex, std::mutex> lock(
         Graphics::GraphicsContext::mutexes.device,
         Graphics::GraphicsContext::mutexes.vmaAllocator);
 
     CHECK_NEW_ERR(vmaCreateImage(context.vmaAllocator, &imageInfo, &allocInfo,
-                                 &texture->image, &texture->memory, nullptr));
+                                 &texture->image, &texture->memory,
+                                 &memRequirements));
   }
 
-  CHECK_ERR(SetDebugName(info.debugName, texture.get(), context));
+  // ignore set debug name error, since it's not critical
+  auto err = SetDebugName(info.debugName, texture.get(), context);
 
   VkImageViewCreateInfo viewInfo = {};
   viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -166,14 +186,6 @@ auto Create(const GraphicsContext &context, const TextureCreationInfo &info)
                                     GetAllocationCallbacks(), &texture->view));
   }
 
-  VmaAllocationInfo memRequirements;
-  {
-    std::lock_guard<std::mutex> lock(
-        Graphics::GraphicsContext::mutexes.vmaAllocator);
-
-    vmaGetAllocationInfo(context.vmaAllocator, texture->memory,
-                         &memRequirements);
-  }
   texture->sizeInBytes = memRequirements.size;
   Texture::TotalAllocatedMemory += texture->sizeInBytes;
 
@@ -210,6 +222,12 @@ auto FromSwapchainTexture(const GraphicsContext &context,
   texture->lastUsedStages = 0;
   texture->currentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
   texture->lastUsage = TextureUsage::Unknown;
+
+  Barrier::UpdateUsage(context, *texture,
+                       Barrier::ResourceState{
+                           .stages = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
+                           .access = 0,
+                       });
 
   return texture;
 }
@@ -421,7 +439,6 @@ auto LoadFromMemory(GraphicsContext &context,
 
   // TODO: Check lifetime
   buffer->MarkUse();
-  buffer->ScheduleDestroy();
   texture->MarkUse();
 
   return texture;
@@ -929,7 +946,6 @@ auto Texture::SetPixels(const GraphicsContext &context,
 
   // TODO: Check lifetime
   buffer->MarkUse();
-  buffer->ScheduleDestroy();
   MarkUse();
 
   return Error::Success();
@@ -942,13 +958,6 @@ auto Texture::SetPixels(const GraphicsContext &context,
   return SetPixels(context, imageData.GetSpan(), mipLevel, arrayLayer,
                    imageData.GetDimensions(), {0, 0, 0}, {0, 0, 0},
                    imageData.GetDimensions());
-}
-
-auto Texture::ScheduleDestroy() -> void {
-  assert(!released);
-
-  ScheduleDestruction(this);
-  released = true;
 }
 
 struct VkFormatTextureTypeHash {
@@ -1115,11 +1124,11 @@ auto Texture::UseAs(const GraphicsContext &context, TextureUsage newUsage,
   VkAccessFlags2 currentAccess = GetAccessFlagsForUsage(lastUsage, format);
   VkAccessFlags2 newAccess = GetAccessFlagsForUsage(newUsage, format);
 
-  // if (lastUsage == TextureUsage::Unknown) {
-  //   // First time usage, so we can skip the transition from UNDEFINED
-  //   currentAccess = 0;
-  //   lastPipelineStage = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT;
-  // }
+  if (lastUsage == TextureUsage::Unknown) {
+    // First time usage, so we can skip the transition from UNDEFINED
+    currentAccess = 0;
+    lastPipelineStage = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT;
+  }
 
   auto range = VkImageSubresourceRange{
       .aspectMask = GetAspectFlagsForFormat(format),
@@ -1298,34 +1307,21 @@ auto Texture::CopyTo(const GraphicsContext &context, Buffer &dstBuffer,
   return Error::Success();
 }
 
-auto Texture::UseDeferredDestruction() const -> bool {
-  return GetDeferredDestructionAllowed() && !isDestroyed;
-}
-
 Texture::~Texture() {
   if (isSwapchainView) { // Not owned, don't destroy
     return;
   }
 
-  std::scoped_lock<std::mutex, std::mutex> lock(
-      Graphics::GraphicsContext::mutexes.device,
-      Graphics::GraphicsContext::mutexes.vmaAllocator);
-
-  auto *context = GetCurrentGraphicsContext();
-
-  if (context == nullptr || context->device == VK_NULL_HANDLE ||
-      context->vmaAllocator == VK_NULL_HANDLE) {
-    return;
-  }
-
-  vkDestroyImageView(context->device, view, GetAllocationCallbacks());
-  vmaDestroyImage(context->vmaAllocator, image, memory);
-
-  image = VK_NULL_HANDLE;
-  view = VK_NULL_HANDLE;
-  memory = VK_NULL_HANDLE;
+  ScheduleDestruction(TextureMemory{.allocation = memory,
+                                    .image = image,
+                                    .imageView = view,
+                                    .timelineValue = lastUsedTimestamp});
 
   Texture::TotalAllocatedMemory -= sizeInBytes;
+
+  memory = VK_NULL_HANDLE;
+  image = VK_NULL_HANDLE;
+  view = VK_NULL_HANDLE;
 }
 
 std::atomic<VkDeviceSize> Texture::TotalAllocatedMemory{};

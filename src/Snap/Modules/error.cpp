@@ -4,6 +4,7 @@
 #include "slang/slang.h"
 #include <cstring>
 #include <iostream>
+#include <print>
 #include <sstream>
 #include <unordered_map>
 
@@ -27,8 +28,13 @@
 
 #include <dbghelp.h>
 #elif defined(__linux__) || defined(__APPLE__) && defined(__MACH__)
+#include <backtrace.h>
 #include <cstdlib>
+#include <cxxabi.h>
+#include <dlfcn.h>
 #include <execinfo.h>
+#include <libunwind-x86_64.h>
+#include <libunwind.h>
 #endif
 #endif
 
@@ -92,6 +98,30 @@ inline auto CleanupTracebackLine(const std::string &line) -> std::string {
   return "\t" + sanitizedLine;
 }
 
+static auto Demangle(const char *name) -> std::string {
+  int status = 0;
+  char *demangled = abi::__cxa_demangle(name, nullptr, nullptr, &status);
+  std::string result = (status == 0) ? demangled : name;
+  free(demangled); // NOLINT
+  return result;
+}
+
+static void callback(void * /*unused*/, uintptr_t _pc, const char *filename,
+                     int lineno, const char *function) {
+  std::println("{}:{} {}", filename, lineno, function);
+}
+
+static auto is_noisy(const char *file) -> bool {
+  if (file == nullptr) {
+    return true;
+  }
+
+  std::string_view name(file);
+  return name.find("bits/") != std::string_view::npos ||
+         name.find("include/c++") != std::string_view::npos ||
+         name.find("__") != std::string_view::npos;
+};
+
 inline auto GetStackTrace(ErrorLevel level = 0) -> std::string {
   const int MaxStackDepth = 64;
 
@@ -125,17 +155,61 @@ inline auto GetStackTrace(ErrorLevel level = 0) -> std::string {
 
   return trace;
 #elif defined(__linux__) || defined(__APPLE__) && defined(__MACH__)
-  int frames = backtrace(stack.data(), MaxStackDepth);
-  char **symbols = backtrace_symbols(stack.data(), frames);
+
+  static backtrace_state *state =
+      backtrace_create_state("/proc/self/exe", 0, nullptr, nullptr);
+
+  struct TraceCtx {
+    std::string *out;
+  };
 
   std::string trace;
-  for (int i = 0; i < frames; i++) {
-    // NOLINTNEXTLINE
-    trace += std::string(symbols[i]) + "\n";
-  }
 
-  free(symbols); // NOLINT
+  unw_cursor_t cursor;
+  unw_context_t context;
+
+  unw_getcontext(&context);
+  unw_init_local(&cursor, &context);
+
+  TraceCtx traceCtx{.out = &trace};
+
+  // NOLINTBEGIN
+  while (unw_step(&cursor) > 0) {
+    unw_word_t ip;
+    unw_get_reg(&cursor, UNW_REG_IP, &ip);
+
+    // char name[256];
+    // unw_get_proc_name(&cursor, name, sizeof(name), nullptr);
+    // std::string demangledName = Demangle(name);
+    // trace += "\t" + demangledName + "\n";
+
+    backtrace_pcinfo(
+        state, ip,
+        [](void *data, uintptr_t, const char *filename, int lineno,
+           const char *function) {
+          if (is_noisy(filename)) {
+            return 0; // Skip noisy frames
+          }
+
+          std::string demangledFunction =
+              Demangle(function == nullptr ? "??" : function);
+          std::string line =
+              "\t" + std::string(filename == nullptr ? "??" : filename) + ":" +
+              std::to_string(lineno) + " in function " + demangledFunction +
+              "\n";
+
+          auto *ctx = static_cast<TraceCtx *>(data);
+
+          ctx->out->append(line);
+
+          return 0;
+        },
+        nullptr, &traceCtx);
+  }
+  // NOLINTEND
+
   return trace;
+
 #endif
 #else
   std::string trace;

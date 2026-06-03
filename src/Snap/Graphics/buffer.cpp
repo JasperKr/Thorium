@@ -138,6 +138,10 @@ auto Buffer::UploadLarge(const GraphicsContext &context,
                          "than is allocated.");
   }
 
+  if (uploadSize == 0) {
+    return Error::Success();
+  }
+
   static BufferCreationInfo stagingBufferInfo{
       .usage =
           VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
@@ -187,6 +191,10 @@ auto Buffer::UploadRing(const GraphicsContext &context,
   if (uploadSize > this->size) {
     return Error::Create("Error uploading ring data, cannot upload more data "
                          "than is allocated.");
+  }
+
+  if (uploadSize == 0) {
+    return Error::Success();
   }
 
   // Use upload buffer
@@ -440,6 +448,10 @@ auto Buffer::CopyTo(const GraphicsContext &context,
     }
   }
 
+  if (size == 0) {
+    return Error::Success();
+  }
+
   DynamicRendering::EndRendering(context);
 
   if (handle != dstBuffer.handle) {
@@ -538,16 +550,6 @@ auto Buffer::Grow(const GraphicsContext &context, size_t newSize)
   return newBuffer;
 }
 
-auto Buffer::ScheduleDestroy() -> void {
-  if (released) {
-    return;
-  }
-  assert(handle != nullptr);
-
-  ScheduleDestruction(this);
-  released = true;
-}
-
 auto Buffer::MarkUse() -> void {
   lastUsedTimestamp = (std::max)(lastUsedTimestamp, GetSemaphoreValue());
 }
@@ -590,6 +592,13 @@ auto Buffer::Readback(const GraphicsContext &context,
   if (output.isValid() && uploadSize > output->GetSize()) {
     return Error::Unexpected("Error reading back data, output buffer is too "
                              "small for requested readback size.");
+  }
+
+  if (uploadSize == 0) {
+    auto bufferReadback = Ref<BufferReadback>::Make();
+    bufferReadback->data = Ref<Data::ByteData>::Make(0);
+    bufferReadback->completed = true;
+    return bufferReadback;
   }
 
   // Use staging buffer
@@ -695,12 +704,12 @@ auto Buffer::Readback(const GraphicsContext &context,
   return bufferReadback;
 }
 
-auto Buffer::UseDeferredDestruction() const -> bool {
-  return GetDeferredDestructionAllowed() && !isDestroyed;
-}
-
 Buffer::~Buffer() {
   auto *context = GetCurrentGraphicsContext();
+
+  ScheduleDestruction(BufferMemory{.allocation = memory,
+                                   .buffer = handle,
+                                   .timelineValue = lastUsedTimestamp});
 
   std::scoped_lock<std::mutex, std::mutex> lock(
       Graphics::GraphicsContext::mutexes.device,
@@ -711,7 +720,6 @@ Buffer::~Buffer() {
     mappedData = nullptr;
   }
 
-  vmaDestroyBuffer(context->vmaAllocator, handle, memory);
   Buffer::TotalAllocatedMemory -= sizeInBytes;
 }
 

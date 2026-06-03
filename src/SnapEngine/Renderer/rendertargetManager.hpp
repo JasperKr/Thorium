@@ -11,6 +11,7 @@ namespace Engine::Renderer {
 
 // Max render targets, a safety limit to prevent a scenario where the user forgot to call ReleaseRendertarget.
 static constexpr size_t MaxRendertargets = 128;
+static constexpr size_t RendertargetLifetime = 32; // 32 frames.
 
 struct RendertargetDescriptor {
   Math::Uvec2 size{};
@@ -40,13 +41,22 @@ struct RenderTargetManager {
   auto GetRendertarget(const struct ::Graphics::GraphicsContext &context,
                        const RendertargetDescriptor &descriptor)
       -> Result<Ref<::Graphics::Texture>>;
-  auto ReleaseRendertarget(const Ref<::Graphics::Texture> &texture) -> void;
+  auto ReleaseRendertarget(const Ref<::Graphics::Texture> &texture) -> Error;
+  auto
+  ReleaseRendertargets(const std::vector<Ref<::Graphics::Texture>> &textures)
+      -> Error;
+
+  [[nodiscard]] auto GetRendertargetCount() const -> size_t {
+    return Rendertargets.size();
+  }
+  auto Update() -> void;
 
 private:
   struct RendertargetEntry {
     RendertargetDescriptor descriptor;
     bool inUse = false;
     Ref<::Graphics::Texture> texture;
+    uint64_t lastUsedFrame = 0;
   };
 
   std::vector<RendertargetEntry> Rendertargets;
@@ -54,6 +64,8 @@ private:
   static auto ReconfigureTexture(const RendertargetDescriptor &descriptor,
                                  const Ref<::Graphics::Texture> &texture)
       -> void;
+
+  auto Cleanup(bool evictAll = false) -> void;
 };
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)

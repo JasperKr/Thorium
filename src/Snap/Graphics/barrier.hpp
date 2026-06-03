@@ -70,13 +70,6 @@ to see if we need to sync by checking our last usage and looking back in time if
 
 // base class for buffers and textures
 struct BarrierSynced {
-  BarrierSynced() = default;
-  BarrierSynced(const BarrierSynced &) = default;
-  BarrierSynced(BarrierSynced &&) = delete;
-  auto operator=(const BarrierSynced &) -> BarrierSynced & = default;
-  auto operator=(BarrierSynced &&) -> BarrierSynced & = delete;
-  virtual ~BarrierSynced() = default;
-
   // Now, for future me.
   /*
   We might be inclined to make this a map. For example:
@@ -115,11 +108,6 @@ struct BarrierSynced {
   // Before the command buffer is stitched together with others. Because the usage is unknown at the time of recording.
   // Due to async recording and reordering.
   mutable bool firstAsyncUsage = false;
-
-  [[nodiscard]] virtual auto IsTexture() const -> bool { return false; }
-  [[nodiscard]] virtual auto AsTexture() const -> struct Texture const * {
-    return nullptr;
-  }
 };
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)

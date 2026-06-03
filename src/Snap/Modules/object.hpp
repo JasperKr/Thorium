@@ -31,10 +31,6 @@ public:
 
   virtual ~Object() = 0;
 
-  virtual auto ScheduleDestroy() -> void {}
-  [[nodiscard]] virtual auto UseDeferredDestruction() const -> bool {
-    return false;
-  }
   [[nodiscard]] virtual auto GetInstanceType() const -> Type const * = 0;
 
   void retain() const;
@@ -63,15 +59,18 @@ public:
       ptr->retain();
     }
   }
+
   auto operator=(const Ref &reference) -> Ref & {
-    if (this != &reference && ptr != reference.ptr) {
+    if (this != &reference) {
+      if (reference.ptr != nullptr) {
+        reference.ptr->retain();
+      }
+
       if (ptr != nullptr) {
         ptr->release();
       }
+
       ptr = reference.ptr;
-      if (ptr != nullptr) {
-        ptr->retain();
-      }
     }
     return *this;
   }
@@ -80,6 +79,7 @@ public:
   Ref(Ref &&reference) noexcept : ptr(reference.ptr) {
     reference.ptr = nullptr;
   }
+
   auto operator=(Ref &&reference) noexcept -> Ref & {
     if (this != &reference) {
       if (ptr != nullptr) {
@@ -92,6 +92,14 @@ public:
   }
 
   explicit Ref(std::nullptr_t) : ptr(nullptr) {}
+
+  auto operator=(std::nullptr_t) noexcept -> Ref & {
+    if (ptr != nullptr) {
+      ptr->release();
+      ptr = nullptr;
+    }
+    return *this;
+  }
 
   ~Ref() {
     if (ptr != nullptr) {

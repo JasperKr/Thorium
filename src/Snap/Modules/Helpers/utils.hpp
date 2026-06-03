@@ -7,18 +7,52 @@
 #include <vector>
 namespace Utils {
 
-// Unordered erase from vector, does not preserve order but is O(1)
+// Unordered erase from vector, does not preserve order but is O(1) (at least, for remove cost, iterating is still O(n))
 // If predicate returns true, the element is removed
 template <typename T, typename Pred>
-void UnorderedErase(std::vector<T> &vect, Pred &&predicate) {
+  requires std::is_invocable_r_v<bool, Pred, T &>
+auto UnorderedErase(std::vector<T> &vect, Pred &&predicate) -> uint32_t {
+  uint32_t count = 0;
   for (std::size_t i = 0; i < vect.size();) {
     if (std::forward<Pred>(predicate)(vect[i])) {
       vect[i] = std::move(vect.back());
       vect.pop_back();
+      count++;
     } else {
-      ++i;
+      i++;
     }
   }
+
+  return count;
+}
+
+template <typename T>
+  requires std::equality_comparable<T>
+auto UnorderedErase(std::vector<T> &vect, const T &value) -> uint32_t {
+  uint32_t count = 0;
+
+  for (std::size_t i = 0; i < vect.size();) {
+    if (vect[i] == value) {
+      vect[i] = std::move(vect.back());
+      vect.pop_back();
+      count++;
+    } else {
+      i++;
+    }
+  }
+
+  return count;
+}
+
+template <typename T>
+auto UnorderedErase(std::vector<T> &vect, std::size_t index) -> uint32_t {
+  if (index >= vect.size()) {
+    return 0;
+  }
+  vect[index] = std::move(vect.back());
+  vect.pop_back();
+
+  return 1;
 }
 
 auto InterleaveSpans(

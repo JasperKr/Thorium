@@ -93,10 +93,6 @@ struct Buffer : Object, Barrier::BarrierSynced {
                      const Graphics::BufferCreationInfo &info)
       -> Result<Ref<Graphics::Buffer>>;
 
-  // Release the resources for safe automatic destruction later
-  auto ScheduleDestroy() -> void override;
-  auto UseDeferredDestruction() const -> bool override;
-
   ~Buffer() override;
 
   // Set data into the buffer at the given offset

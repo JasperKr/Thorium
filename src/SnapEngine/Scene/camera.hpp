@@ -57,9 +57,15 @@ struct Camera {
   [[nodiscard]] auto GetDimensions() const -> Math::Uvec2 { return Dimensions; }
 
   auto SetDimensions(Math::Uvec2 newDimensions) -> void {
+    if (Dimensions == newDimensions) {
+      return;
+    }
+
     Dimensions = newDimensions;
     projectionDirty = true;
     ConfigureRendertargets();
+    AspectRatio = static_cast<Math::Scalar>(Dimensions.x) /
+                  static_cast<Math::Scalar>(Dimensions.y);
   }
 
   static void RegisterCameraSystems(Scene &scene);
@@ -137,6 +143,14 @@ struct Camera {
 
   [[nodiscard]] auto GetOwnedTextures() const -> const AllocatedTextures & {
     return OwnedTextures;
+  }
+
+  [[nodiscard]] auto GetOwnedTextures() -> AllocatedTextures & {
+    return OwnedTextures;
+  }
+
+  [[nodiscard]] auto GetRendertargets() const -> const CameraRendertargets & {
+    return Rendertargets;
   }
 
 private:

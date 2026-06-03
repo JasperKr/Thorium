@@ -1,13 +1,29 @@
 #pragma once
 
-#include "Graphics/buffer.hpp"
 #include "Graphics/graphics.hpp"
-#include "Graphics/texture.hpp"
-#include "Modules/object.hpp"
 #include <cassert>
 #include <mutex>
 
 namespace Graphics {
+
+struct BufferMemory {
+  VmaAllocation allocation;
+  VkBuffer buffer;
+
+  uint64_t timelineValue;
+
+  auto Destroy() -> void;
+};
+
+struct TextureMemory {
+  VmaAllocation allocation;
+  VkImage image;
+  VkImageView imageView;
+
+  uint64_t timelineValue;
+
+  auto Destroy() -> void;
+};
 
 struct GraphicsResource {
   GraphicsResource(const GraphicsResource &) = delete;
@@ -38,8 +54,8 @@ private:
 };
 
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
-extern std::vector<Ref<Texture>> ReleasedTextures;
-extern std::vector<Ref<Buffer>> ReleasedBuffers;
+extern std::vector<TextureMemory> ReleasedTextures;
+extern std::vector<BufferMemory> ReleasedBuffers;
 
 extern std::mutex ReleasedTexturesMutex;
 extern std::mutex ReleasedBuffersMutex;
@@ -48,7 +64,7 @@ extern std::mutex ReleasedBuffersMutex;
 
 auto ProcessReleasedResources(GraphicsContext &context) -> void;
 
-auto ScheduleDestruction(Texture *texture) -> void;
-auto ScheduleDestruction(Buffer *buffer) -> void;
+auto ScheduleDestruction(const TextureMemory &texture) -> void;
+auto ScheduleDestruction(const BufferMemory &buffer) -> void;
 
 } // namespace Graphics

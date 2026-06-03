@@ -3,7 +3,6 @@
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "buffer.hpp"
-#include "graphics.hpp"
 #include <cstdint>
 #include <span>
 #include <string>
@@ -34,11 +33,6 @@ inline auto GetIndexFormatSize(VkIndexType format) -> size_t {
 static const Type meshType = Type("Mesh");
 
 struct Mesh : Object {
-  auto ScheduleDestroy() -> void override;
-  auto UseDeferredDestruction() const -> bool override {
-    return Graphics::GetDeferredDestructionAllowed();
-  }
-
   static auto Create(GraphicsContext &context, VertexFormat vertexFormat,
                      const std::span<uint8_t> &vertexData,
                      const std::string &debugName = "Mesh")

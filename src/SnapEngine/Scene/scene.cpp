@@ -9,10 +9,10 @@
 #include "Graphics/uniformWriter.hpp"
 #include "Modules/Math/matrix.hpp"
 #include "Modules/bindings.hpp"
-#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Modules/reflectBindings.hpp"
+#include "Renderer/rendertargetManager.hpp"
 #include "Scene/Geometry/boundingBox.hpp"
 #include "Scene/Geometry/geometry.hpp"
 #include "Scene/Geometry/levelOfDetail.hpp"
@@ -447,8 +447,10 @@ inline auto AddDrawItem(std::vector<DrawItem> &OpaqueDrawItems,
 }
 
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
-auto Scene::DrawModels(const Camera &camera,
-                       const Graphics::GraphicsContext &context) -> Error {
+auto Scene::DrawModels(Camera &camera, const Graphics::GraphicsContext &context)
+    -> Error {
+
+  // Pre-frame setup
 
   Renderer::RendererInstance.NewFrame();
 
@@ -457,8 +459,10 @@ auto Scene::DrawModels(const Camera &camera,
   }
   finalizePreRenderUploads.run();
 
+  // Shader configuration
+
   auto &ctx = *Graphics::GetCurrentGraphicsContext();
-  const auto &textures = camera.GetOwnedTextures();
+  auto &textures = camera.GetOwnedTextures();
 
   auto depthOpaque = CHECK_RES(
       Renderer::RendererInstance.GetShader(Renderer::ShaderKey::DepthPrepass));
@@ -495,6 +499,8 @@ auto Scene::DrawModels(const Camera &camera,
   CHECK_ERR(depthMasked->Send(ctx, materialBufferKey, materialBuffer));
   CHECK_ERR(deferred->Send(ctx, materialBufferKey, materialBuffer));
 
+  // Draw sorting
+
   static std::vector<DrawItem> OpaqueDrawItems;
   static std::vector<DrawItem> MaskedDrawItems;
   static std::vector<DrawItem> TransparentDrawItems;
@@ -522,6 +528,8 @@ auto Scene::DrawModels(const Camera &camera,
   std::ranges::sort(OpaqueDrawItems, CompareDrawItems);
   std::ranges::sort(MaskedDrawItems, CompareDrawItems);
   std::ranges::sort(TransparentDrawItems, CompareDrawItems);
+
+  // Prepare model transform buffer
 
   struct ModelTransformData {
     std::array<float, 16> modelMatrix{};  // NOLINT
@@ -568,6 +576,14 @@ auto Scene::DrawModels(const Camera &camera,
                 ->GetBuffer()
                 ->SetData(ctx, span));
 
+  // Depth Opaque prepass
+
+  const auto &rendertargets = camera.GetRendertargets();
+
+  textures.Depth =
+      CHECK_RES(Renderer::GlobalRenderTargetManager.GetRendertarget(
+          context, rendertargets.Depth));
+
   Graphics::DynamicRendering::SetDepthMode(true, true, VK_COMPARE_OP_GREATER);
   Graphics::DynamicRendering::SetShader(depthOpaque);
 
@@ -596,6 +612,22 @@ auto Scene::DrawModels(const Camera &camera,
   for (const auto &item : MaskedDrawItems) {
     CHECK_ERR(RenderDrawItem(item, depthMasked, ctx, maskedConfig));
   }
+
+  textures.Albedo =
+      CHECK_RES(Renderer::GlobalRenderTargetManager.GetRendertarget(
+          context, rendertargets.Albedo));
+  textures.Normal =
+      CHECK_RES(Renderer::GlobalRenderTargetManager.GetRendertarget(
+          context, rendertargets.Normal));
+  textures.Material =
+      CHECK_RES(Renderer::GlobalRenderTargetManager.GetRendertarget(
+          context, rendertargets.Material));
+  textures.Emissive =
+      CHECK_RES(Renderer::GlobalRenderTargetManager.GetRendertarget(
+          context, rendertargets.Emissive));
+  textures.Motion =
+      CHECK_RES(Renderer::GlobalRenderTargetManager.GetRendertarget(
+          context, rendertargets.Motion));
 
   Graphics::DynamicRendering::SetDepthMode(true, false, VK_COMPARE_OP_EQUAL);
   Graphics::DynamicRendering::SetShader(deferred);
@@ -665,24 +697,32 @@ auto Scene::DrawModels(const Camera &camera,
   CHECK_ERR(shader->Send(ctx, depthBufferKey, textures.Depth));
 
   auto countKey = Graphics::ResourceKey{"DirectionalLightCount"};
-  auto dirLightCountError = Graphics::Shader::UniformWriter::Send(
+  CHECK_ERR(Graphics::Shader::UniformWriter::Send(
       shader, ctx, countKey,
-      Renderer::RendererInstance.GetSceneLightBuffers().DirectionalLightCount);
-  if (Error::IsError(dirLightCountError)) {
-    return dirLightCountError;
-  }
+      Renderer::RendererInstance.GetSceneLightBuffers().DirectionalLightCount));
 
-  auto lightBufferSendError =
-      Renderer::RendererInstance.BindLightBuffers(ctx, shader);
-  if (Error::IsError(lightBufferSendError)) {
-    return lightBufferSendError;
-  }
+  CHECK_ERR(Renderer::RendererInstance.BindLightBuffers(ctx, shader));
+
+  textures.IncomingLight =
+      CHECK_RES(Renderer::GlobalRenderTargetManager.GetRendertarget(
+          context, rendertargets.IncomingLight));
 
   CHECK_ERR(Graphics::DynamicRendering::SetRenderTargets(
       context, {{
                    .texture = textures.IncomingLight,
                    .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
                }}));
+
+  // TODO: Remove Normals, Motion and Material here once we need them for post-processing effects
+  CHECK_ERR(Renderer::GlobalRenderTargetManager.ReleaseRendertargets({
+      textures.Albedo,
+      textures.Normal,
+      textures.Material,
+      textures.Emissive,
+      textures.Motion,
+  }));
+
+  // Now left: IncomingLight and Depth
 
   CHECK_ERR(Renderer::DrawFullScreen(context));
 
@@ -858,6 +898,7 @@ Scene::Scene(std::string name) : name(std::move(name)) {
 
 auto Scene::Update(double deltaTime) const -> Error {
   world.progress(static_cast<float>(deltaTime));
+  Renderer::GlobalRenderTargetManager.Update();
 
   return lastUpdateResult;
 }

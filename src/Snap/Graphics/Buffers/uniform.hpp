@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Graphics/buffer.hpp"
-#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include <atomic>
@@ -26,8 +25,6 @@ public:
   auto Write(const Graphics::GraphicsContext &context,
              const std::span<const uint8_t> &data, size_t writeOffset = 0UL)
       -> Result<bool>;
-
-  auto ScheduleDestroy() -> void { buffer.reset(); }
 
   [[nodiscard]] auto GetOffset() const -> size_t { return offset; }
   [[nodiscard]] auto GetSize() const -> size_t { return buffer->size; }

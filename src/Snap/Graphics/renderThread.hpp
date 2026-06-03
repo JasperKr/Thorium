@@ -57,8 +57,6 @@ struct RenderThreadInfo : Object {
     return &renderInfoType;
   }
 
-  auto UseDeferredDestruction() const -> bool override { return false; }
-
   ~RenderThreadInfo() override {
     if (threadData.commandBuffer != VK_NULL_HANDLE) {
       std::lock_guard<std::mutex> lock(CommandBufferCacheMutex);

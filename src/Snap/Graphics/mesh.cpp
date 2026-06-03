@@ -10,7 +10,6 @@
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "buffer.hpp"
-#include "tl/expected.hpp"
 #include <cstdint>
 #include <span>
 #include <vector>
@@ -20,11 +19,6 @@
 #include "vertexformat.hpp"
 
 namespace Graphics {
-
-auto Mesh::ScheduleDestroy() -> void {
-  VertexBuffer.reset();
-  IndexBuffer.reset();
-}
 
 static auto VertexFormatSize(VertexFormat &format, uint32_t binding)
     -> uint32_t {

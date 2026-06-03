@@ -142,9 +142,6 @@ struct Texture : Object, Barrier::BarrierSynced {
     lastUsedTimestamp = (std::max)(lastUsedTimestamp, GetSemaphoreValue());
   }
 
-  auto ScheduleDestroy() -> void override;
-  auto UseDeferredDestruction() const -> bool override;
-
   auto CopyTo(const GraphicsContext &context, Texture &dstTexture,
               CopyRegion region) -> Error;
 
@@ -156,12 +153,6 @@ struct Texture : Object, Barrier::BarrierSynced {
   auto operator=(const Texture &) -> Texture & = delete;
   Texture(Texture &&) noexcept = delete;
   auto operator=(Texture &&) noexcept -> Texture & = delete;
-
-  [[nodiscard]] auto IsTexture() const -> bool override { return true; }
-  [[nodiscard]] auto AsTexture() const -> struct Texture const * override {
-    return this;
-  }
-
   ~Texture() override;
 
   enum TextureType textureType = TextureType::DEFAULT;

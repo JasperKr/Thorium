@@ -216,17 +216,13 @@ inline auto GetSwapchainTextures(GraphicsContext &context) -> Error {
   context.swapchainInfo.textures.resize(context.swapchainInfo.imageCount);
 
   for (uint32_t i = 0; i < context.swapchainInfo.imageCount; i++) {
-    auto textureResult = Graphics::FromSwapchainTexture(
+    auto texture = CHECK_RES(Graphics::FromSwapchainTexture(
         context, context.swapchainInfo.images[i],
         context.swapchainInfo.imageViews[i], context.swapchainInfo.format,
         context.swapchainInfo.extent.width,
-        context.swapchainInfo.extent.height);
+        context.swapchainInfo.extent.height));
 
-    if (Error::IsError(textureResult)) {
-      return textureResult.error();
-    }
-
-    context.swapchainInfo.textures.at(i) = textureResult.value();
+    context.swapchainInfo.textures.at(i) = texture;
   }
 
   return Error::Success();
@@ -354,7 +350,7 @@ auto SwapchainManager::CleanupOldSwapchains(GraphicsContext &context,
         auto swapchainImageCount = oldSwapchain.textures.size();
         if (currentFrame - oldSwapchain.lastFrameUsed >
             swapchainImageCount * 2) {
-          for (auto &texture : oldSwapchain.textures) {
+          for (const auto &texture : oldSwapchain.textures) {
             auto *image = texture->image;
             auto *view = texture->view;
 
@@ -377,11 +373,11 @@ auto SwapchainManager::CleanupOldSwapchains(GraphicsContext &context,
                                 GetAllocationCallbacks());
           oldSwapchain.swapchain = VK_NULL_HANDLE;
 
-          for (auto &fence : oldSwapchain.imageInFlight) {
+          for (const auto &fence : oldSwapchain.imageInFlight) {
             vkDestroyFence(context.device, fence, GetAllocationCallbacks());
           }
 
-          for (auto &semaphore : oldSwapchain.imageReady) {
+          for (const auto &semaphore : oldSwapchain.imageReady) {
             vkDestroySemaphore(context.device, semaphore,
                                GetAllocationCallbacks());
           }
