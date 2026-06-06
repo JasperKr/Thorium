@@ -49,7 +49,7 @@ constexpr VkPipelineColorBlendAttachmentState BlendmodeNone = {
                       static_cast<uint32_t>(VK_COLOR_COMPONENT_A_BIT),
 };
 
-constexpr uint32_t FRAMES_IN_FLIGHT = 2;
+constexpr uint32_t FRAMES_IN_FLIGHT = 3;
 constexpr uint32_t MAX_SWAPCHAIN_IMAGES = 4;
 
 using ResourceKey = std::forward_list<const char *>;

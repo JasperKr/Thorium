@@ -384,9 +384,7 @@ inline auto CreateCommandPool(ThreadContext &tcontext) -> Error {
   VkCommandPoolCreateInfo poolInfo = {};
   poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
   poolInfo.queueFamilyIndex = tcontext.graphicsContext->graphicsQueueFamily;
-  poolInfo.flags =
-      static_cast<uint32_t>(VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT) |
-      static_cast<uint32_t>(VK_COMMAND_POOL_CREATE_TRANSIENT_BIT);
+  poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
@@ -414,7 +412,7 @@ auto Initialize(GraphicsContext &context, Window::WindowContext &wcontext,
   GlobalAllocations.RegisterNewThreadAllocations();
 
   PrintDebug("Initializing Volk...");
-  Error error = Error::Create(volkInitialize());
+  CHECK_NEW_ERR(volkInitialize());
 
   // Initialize SDL for Vulkan
   if (!SDL_Init(SDL_INIT_VIDEO)) {
@@ -471,12 +469,8 @@ auto Initialize(GraphicsContext &context, Window::WindowContext &wcontext,
   createInfo.ppEnabledExtensionNames = extensionList.data();
   createInfo.pApplicationInfo = &appInfo;
 
-  error = Error::Create(vkCreateInstance(&createInfo, GetAllocationCallbacks(),
-                                         &context.instance));
-
-  if (Error::IsError(error)) {
-    return error;
-  }
+  CHECK_NEW_ERR(vkCreateInstance(&createInfo, GetAllocationCallbacks(),
+                                 &context.instance));
 
   PrintDebug("Loading Vulkan instance with Volk...");
   // Load instance-level Vulkan functions using Volk

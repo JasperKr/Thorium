@@ -80,8 +80,7 @@ float4 fragmentMain(FragmentInput input) {
   float3 normal = normalize(input.normal);
   float4 tangent = float4(normalize(input.tangent.xyz), input.tangent.w);
 
-  // For some reason normals are flipped so we remove the ! here ig.
-  if (input.isFrontFace) {
+  if (!input.isFrontFace) {
     normal = -normal;
     tangent.xyz = -tangent.xyz;
   }
@@ -96,7 +95,8 @@ float4 fragmentMain(FragmentInput input) {
   float2 metallicRoughness =
       MetallicRoughnessTexture.Sample(input.tex_coord).bg;
 
-  float3 normalMap = NormalTexture.Sample(input.tex_coord).xyz * 2.0f - 1.0f;
+  float3 normalMap =
+      normalize(NormalTexture.Sample(input.tex_coord).xyz * 2.0f - 1.0f);
 
   float3 bitangent = cross(normal, tangent.xyz) * tangent.w;
   float3x3 TBN = float3x3(tangent.xyz, bitangent, normal);
@@ -107,7 +107,7 @@ float4 fragmentMain(FragmentInput input) {
   float reflectanceSample = ReflectanceTexture.Sample(input.tex_coord).r;
 
   float metallic = metallicRoughness.x * matData.metallicFactor;
-  float roughness = metallicRoughness.y * matData.roughnessFactor;
+  float perceptualRoughness = metallicRoughness.y * matData.roughnessFactor;
   float reflectance = reflectanceSample * matData.reflectanceFactor;
   float3 emissive = emissiveSample * matData.emissiveFactor;
 
@@ -115,11 +115,12 @@ float4 fragmentMain(FragmentInput input) {
   pixel.Normal = normal;
   pixel.Albedo = albedo;
   pixel.Metallic = metallic;
-  pixel.Roughness = roughness * roughness;
-  pixel.PerceptualRoughness = roughness;
+  pixel.Roughness = CalculateRoughness(perceptualRoughness);
+  pixel.PerceptualRoughness = perceptualRoughness;
   pixel.Fresnel0 = ComputeFresnel0(albedo, metallic, reflectance);
 
   float3 viewDir = normalize(camera.Position - input.WorldPosition);
+
   float NoV = ClampNoV(dot(normal, viewDir));
   float lambdaV = ComputeLambdaV(pixel.Roughness, NoV);
 
@@ -128,9 +129,10 @@ float4 fragmentMain(FragmentInput input) {
   float3 E = prefilteredDFG(pixel.PerceptualRoughness, pixel.Fresnel0, NoV);
   float3 diffuse = ComputeDiffuseColor(pixel.Albedo, pixel.Metallic);
 
-  float3 irradiance = float3(1, 1, 1); // Some ambient lighting
-  float3 radiance = irradiance;        // Specular IBL contribution
+  float3 irradiance = float3(0.5, 0.5, 0.5); // Some ambient lighting
   irradiance *= INV_PI;
+
+  float3 radiance = irradiance; // Specular IBL contribution
   irradiance *= (1.0f.xxx - E) * diffuse;
   radiance *= E;
 

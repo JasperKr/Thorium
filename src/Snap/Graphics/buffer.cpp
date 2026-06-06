@@ -29,12 +29,6 @@ namespace Graphics {
 constexpr size_t UploadBufferSize = static_cast<size_t>(16L * 1024L * 1024L);
 constexpr size_t LargeUploadThreshold = static_cast<size_t>(128L * 1024L);
 
-struct StagingBufferInfo {
-  VkBuffer buffer;
-  VmaAllocation memory;
-  uint64_t timelineValue;
-};
-
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
 
 thread_local inline std::vector<Ref<Buffer>> UploadBuffers{FRAMES_IN_FLIGHT};

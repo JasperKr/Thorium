@@ -27,13 +27,13 @@ public struct CameraData {
 
   public float3 GetWorldPosition(float2 uv, float depth) {
     float4 clipPos = float4(uv * 2.0 - 1.0, depth, 1.0);
-    float4 worldPos = mul(InverseViewProjectionMatrix, clipPos);
+    float4 worldPos = mul(clipPos, InverseViewProjectionMatrix);
     return worldPos.xyz / worldPos.w;
   }
 
   public float3 GetRayDirection(float2 uv) {
     float4 clipPos = float4(uv * 2.0 - 1.0, 1.0, 1.0);
-    float4 worldPos = mul(InverseRotationProjectionMatrix, clipPos);
+    float4 worldPos = mul(clipPos, InverseRotationProjectionMatrix);
     return normalize(worldPos.xyz);
   }
 };

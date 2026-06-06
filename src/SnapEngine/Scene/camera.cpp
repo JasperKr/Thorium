@@ -98,7 +98,7 @@ void Camera::RegisterCameraSystems(Scene &scene) {
             // Since moving the camera in one direction should move the world in the opposite direction
             matrices.ViewMatrix = worldMatrix.InverseTranspose();
             matrices.InverseViewMatrix = worldMatrix;
-            matrices.RotationMatrix = worldMatrix.AsMatrix3x3();
+            matrices.RotationMatrix = matrices.ViewMatrix.AsMatrix3x3();
             matrices.InverseRotationMatrix =
                 matrices.RotationMatrix.Transpose();
             matrices.Update();

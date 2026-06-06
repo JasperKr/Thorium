@@ -107,7 +107,7 @@ public float SpecularOcclusion(float NoV, float AO, float roughness) {
 
 public float ComputeLambdaV(float roughness, float NoV) {
   float rSqr = roughness * roughness;
-  return NoV * sqrt((NoV - rSqr * NoV) * NoV + rSqr);
+  return sqrt((NoV - rSqr * NoV) * NoV + rSqr);
 }
 
 public float ClampNoV(float NoV) { return max(NoV, 1e-4); }

@@ -718,6 +718,9 @@ auto Scene::DrawModels(Camera &camera, const Graphics::GraphicsContext &context)
   CHECK_ERR(Graphics::Shader::UniformWriter::Send(
       shader, ctx, countKey,
       Renderer::RendererInstance.GetSceneLightBuffers().DirectionalLightCount));
+  CHECK_ERR(Graphics::Shader::UniformWriter::Send(
+      forward, ctx, countKey,
+      Renderer::RendererInstance.GetSceneLightBuffers().DirectionalLightCount));
 
   CHECK_ERR(Renderer::RendererInstance.BindLightBuffers(ctx, shader));
   CHECK_ERR(Renderer::RendererInstance.BindLightBuffers(ctx, forward));

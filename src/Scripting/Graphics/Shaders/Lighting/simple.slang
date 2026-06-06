@@ -42,7 +42,7 @@ FragmentOutput fragmentMain(FragmentInput input) {
     discard;
   }
 
-  float3 normal = normalData.xyz * 2.0f - 1.0f;
+  float3 normal = normalize(normalData.xyz * 2.0f - 1.0f);
   float metallic = materialData.r;
   float perceptualRoughness = ClampPerceptualRoughness(materialData.g);
   float reflectance = materialData.b;
@@ -50,7 +50,7 @@ FragmentOutput fragmentMain(FragmentInput input) {
 
   float3 incomingLight = emissive.rgb;
 
-  float3 viewDir = camera.GetRayDirection(input.tex_coord);
+  float3 viewDir = -camera.GetRayDirection(input.tex_coord);
   float3 worldPosition = camera.GetWorldPosition(input.tex_coord, depth);
 
   Pixel pixel;
@@ -75,8 +75,8 @@ FragmentOutput fragmentMain(FragmentInput input) {
   float3 diffuse = ComputeDiffuseColor(pixel.Albedo, pixel.Metallic);
 
   float3 irradiance = float3(0.5, 0.5, 0.5); // Some ambient lighting
-  float3 radiance = irradiance;              // Specular IBL contribution
   irradiance *= INV_PI;
+  float3 radiance = irradiance; // Specular IBL contribution
   irradiance *= (1.0f.xxx - E) * diffuse;
   radiance *= E;
 
