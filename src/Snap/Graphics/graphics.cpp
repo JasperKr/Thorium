@@ -189,10 +189,18 @@ static auto CreateDevice(GraphicsContext &context,
   createInfo.queueCreateInfoCount = 1;
   createInfo.pEnabledFeatures = &deviceFeatures;
 
+  VkPhysicalDeviceExtendedDynamicState3FeaturesEXT dyn3{};
+  dyn3.sType =
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_3_FEATURES_EXT;
+  dyn3.extendedDynamicState3ColorBlendEquation = VK_TRUE;
+  dyn3.extendedDynamicState3ColorWriteMask = VK_TRUE;
+  dyn3.extendedDynamicState3ColorBlendEnable = VK_TRUE;
+
   VkPhysicalDeviceVertexInputDynamicStateFeaturesEXT feature{};
   feature.sType =
       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VERTEX_INPUT_DYNAMIC_STATE_FEATURES_EXT;
   feature.vertexInputDynamicState = VK_TRUE;
+  feature.pNext = &dyn3;
 
   // --- Vulkan 1.3 features ---
   VkPhysicalDeviceVulkan13Features features13{
@@ -252,8 +260,10 @@ static auto CreateDevice(GraphicsContext &context,
       CHECK_RES(GetAvailableDeviceExtensions(context));
 
   auto extensions = std::vector<std::pair<const char *, ExtensionRequirement>>{
-      {VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME, extOptional},
       {VK_EXT_VERTEX_INPUT_DYNAMIC_STATE_EXTENSION_NAME, extRequired},
+      {VK_EXT_COLOR_WRITE_ENABLE_EXTENSION_NAME, extRequired},
+      {VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME, extRequired},
+
       {VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
        settings.hardwareRaytracing},
       {VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME, settings.hardwareRaytracing},

@@ -20,6 +20,7 @@ inline auto SetDirtyState() -> void { GetIsStateDirty() = true; }
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 inline auto DefaultPixelFormat = VK_FORMAT_R8G8B8A8_UNORM;
+constexpr uint32_t MAX_COLOR_ATTACHMENTS = 8;
 
 constexpr VkPipelineColorBlendAttachmentState DefaultBlendMode = {
     .blendEnable = VK_TRUE,

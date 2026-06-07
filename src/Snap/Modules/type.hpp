@@ -1,6 +1,5 @@
 #pragma once
 
-#include <cstdint>
 #include <string>
 #include <utility>
 
@@ -12,14 +11,10 @@ public:
 
   [[nodiscard]] auto GetName() const -> const std::string & { return Name; }
   [[nodiscard]] auto GetParent() const -> const Type * { return Parent; }
-  [[nodiscard]] auto GetID() const -> uint32_t { return ID; }
 
-  auto operator==(const Type &other) const -> bool {
-    return Name == other.Name;
-  }
+  auto operator==(const Type &other) const -> bool { return this == &other; }
 
 private:
   std::string Name;
   const Type *Parent{nullptr};
-  uint32_t ID{};
 };

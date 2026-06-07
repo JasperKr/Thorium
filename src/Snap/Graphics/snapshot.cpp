@@ -289,10 +289,15 @@ auto GraphicsEvent::DrawStateImGui(ThreadSnapshot const *parent) const -> void {
               state.shader->moduleName.c_str());
   ImGui::Text("Rendertargets:");
   ImGui::Indent();
-  int rtIndex = 0;
-  for (const auto &target : state.renderTargets) {
-    ImGui::PushID(rtIndex++);
-    DrawRendertargetImGui(target, rtIndex - 1);
+  for (int i = 0; i < state.colorAttachmentCount; i++) {
+    const auto &target = state.colorAttachments.at(i);
+    ImGui::PushID(i);
+    DrawRendertargetImGui(target, i);
+    ImGui::PopID();
+  }
+  if (state.hasDepthStencilAttachment) {
+    ImGui::PushID("DepthStencil");
+    DrawRendertargetImGui(state.depthStencilAttachment, 0);
     ImGui::PopID();
   }
   ImGui::Unindent();
@@ -330,9 +335,9 @@ auto GraphicsEvent::DrawStateImGui(ThreadSnapshot const *parent) const -> void {
   }
   ImGui::Text("Front Face: %s", polygonModeStr.c_str());
 
-  BooleanFlag("Depth Test:", state.depthTestEnable);
-  BooleanFlag("Depth Write:", state.depthWriteEnable);
-  BooleanFlag("Stencil Test:", state.stencilTestEnable);
+  BooleanFlag("Depth Test:", state.depthTestEnable != 0U);
+  BooleanFlag("Depth Write:", state.depthWriteEnable != 0U);
+  BooleanFlag("Stencil Test:", state.stencilTestEnable != 0U);
 
   std::string topologyStr;
   switch (state.primitiveTopology) {
@@ -378,7 +383,7 @@ auto GraphicsEvent::DrawStateImGui(ThreadSnapshot const *parent) const -> void {
                 state.viewport.x, state.viewport.y, state.viewport.width,
                 state.viewport.height);
   } else {
-    auto texture = state.renderTargets.at(0).texture;
+    auto texture = state.colorAttachments.at(0).texture;
     ImGui::Text("Viewport: x=0.00, y=0.00, width=%.2u, height=%.2u (Default)",
                 texture->GetWidth(), texture->GetHeight());
   }
@@ -388,7 +393,7 @@ auto GraphicsEvent::DrawStateImGui(ThreadSnapshot const *parent) const -> void {
                 state.scissor.offset.x, state.scissor.offset.y,
                 state.scissor.extent.width, state.scissor.extent.height);
   } else {
-    auto texture = state.renderTargets.at(0).texture;
+    auto texture = state.colorAttachments.at(0).texture;
     ImGui::Text("Scissor: x=0, y=0, width=%u, height=%u (Default)",
                 texture->GetWidth(), texture->GetHeight());
   }

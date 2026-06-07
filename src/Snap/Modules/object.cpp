@@ -8,14 +8,19 @@
 #include <execinfo.h>
 #endif
 
-#ifdef DEBUG_OBJECT_LIFETIMES
+#if defined(DEBUG_OBJECT_LIFETIMES) || defined(DEBUG_OBJECT_REFERENCES)
+#include "Modules/error.hpp"
+#include <unordered_map>
+#endif
 
+#ifdef DEBUG_OBJECT_LIFETIMES
 std::mutex RefCountsMutex; // NOLINT
 std::unordered_map<void const *, std::pair<std::atomic<int>, const char *>>
     RefCounts; // NOLINT
 #endif
 
 Object::~Object() {
+
 #ifdef DEBUG_DOUBLE_RELEASE
   if (getReferenceCount() != 0) {
     PrintFatal(
@@ -35,9 +40,16 @@ Object::~Object() {
 #endif
 }
 auto Object::getReferenceCount() const -> int { return count.load(); }
+#ifdef DEBUG_OBJECT_REFERENCES
+void Object::retain(void *parent) const {
+#else
 void Object::retain() const {
+#endif
   assert(count.load() >= 0);
   count.fetch_add(1);
+#ifdef DEBUG_OBJECT_REFERENCES
+  backtraceStrings.emplace(parent, GetStackTrace(1));
+#endif
 
 #ifdef DEBUG_OBJECT_LIFETIMES
   {
@@ -46,7 +58,12 @@ void Object::retain() const {
   }
 #endif
 }
+
+#ifdef DEBUG_OBJECT_REFERENCES
+auto Object::release(void *parent) -> bool {
+#else
 auto Object::release() -> bool {
+#endif
 #ifdef DEBUG_OBJECT_LIFETIMES
   {
     std::lock_guard<std::mutex> lock(RefCountsMutex);
@@ -54,6 +71,9 @@ auto Object::release() -> bool {
   }
 #endif
   auto refcount = count.fetch_sub(1) - 1;
+#ifdef DEBUG_OBJECT_REFERENCES
+  backtraceStrings.erase(parent);
+#endif
   if (refcount <= 0) {
 #ifdef DEBUG_OBJECT_LIFETIMES
     {
@@ -77,3 +97,5 @@ auto Object::release() -> bool {
 
   return false;
 }
+
+auto Object::getID() const -> uint64_t { return id; }

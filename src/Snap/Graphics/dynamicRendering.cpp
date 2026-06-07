@@ -10,12 +10,12 @@
 #include "Graphics/snapshot.hpp"
 #include "Graphics/texture.hpp"
 #include "Graphics/uniformWriter.hpp"
+#include "Libraries/vma.hpp"
 #include "Modules/Helpers/utils.hpp"
 #include "Modules/Math/matrix.hpp"
 #include "Modules/color.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
-#include "Modules/image.hpp"
 #include "Modules/object.hpp"
 #include "slang/slang.h"
 #include <algorithm>
@@ -43,7 +43,7 @@ namespace Graphics::DynamicRendering {
 
 constexpr size_t PipelineCacheSize = 512UL;
 
-LRUCache<State, std::pair<VkPipeline, PipelineLayout>, StateHash>
+LRUCache<StateKey, std::pair<VkPipeline, PipelineLayout>, StateKeyHash>
     PipelineCache(PipelineCacheSize);
 thread_local std::vector<Ref<Shader::ShaderModule>> UsedShaderModules{};
 thread_local PipelineLayout CurrentPipelineLayout; // NOLINT
@@ -57,10 +57,8 @@ std::mutex PipelineLayoutsMutex;
 std::vector<PipelineLayout> PipelineLayouts;
 
 thread_local std::vector<State> StateStack{};
-
 thread_local State LastStateStorage;
 thread_local State *LastState = nullptr;
-
 thread_local State *TopOfStack = nullptr;
 
 thread_local bool StateUpdated = false;
@@ -79,10 +77,22 @@ thread_local std::unordered_map<DescriptorKey, VkDescriptorSet,
 inline auto GetRenderExtent(const GraphicsContext &context, const State &state)
     -> VkExtent2D {
 
-  return VkExtent2D{
-      .width = state.renderTargets.at(0).texture->size.width,
-      .height = state.renderTargets.at(0).texture->size.height,
-  };
+  if (state.colorAttachmentCount > 0) {
+    return VkExtent2D{
+        .width = state.colorAttachments.at(0).texture->size.width,
+        .height = state.colorAttachments.at(0).texture->size.height,
+    };
+  }
+
+  if (state.hasDepthStencilAttachment) {
+    return VkExtent2D{
+        .width = state.depthStencilAttachment.texture->size.width,
+        .height = state.depthStencilAttachment.texture->size.height,
+    };
+  }
+
+  assert(false && "Trying to get render extent with no attachments.");
+  return VkExtent2D{0, 0};
 }
 
 auto GetDescriptorSetLayout(const DescriptorSetLayoutKey &layoutKey,
@@ -227,31 +237,6 @@ inline auto DescriptorTypeToString(VkDescriptorType type) -> std::string_view {
     return "MAX_ENUM";
     break;
   }
-}
-
-auto State::ToString() const -> std::string {
-  std::string result;
-
-  result = std::format("Shader: {}\n", shader ? shader->moduleName : "null");
-
-  for (size_t i = 0; i < renderTargets.size(); ++i) {
-    const auto &target = renderTargets[i];
-    result = std::format("{}Render Target {}: {}\n", result, i,
-                         target.texture->GetDebugName());
-  }
-
-  result = std::format("{}Depth Test Enable: {}\n", result,
-                       depthTestEnable ? "true" : "false");
-  result = std::format("{}Depth Write Enable: {}\n", result,
-                       depthWriteEnable ? "true" : "false");
-  result = std::format("{}Depth Compare Op: {}\n", result, (int)depthCompareOp);
-  result = std::format("{}Stencil Test Enable: {}\n", result,
-                       stencilTestEnable ? "true" : "false");
-  result = std::format("{}Polygon Mode: {}\n", result, (int)polygonMode);
-  result =
-      std::format("{}Bind Point: {}", result, static_cast<uint32_t>(bindPoint));
-
-  return result;
 }
 
 auto GetPipelineLayout(const GraphicsContext &context,
@@ -459,6 +444,7 @@ auto inline GetColorBlendAttachmentState(const GraphicsContext &context,
 
   auto *shader = state.shader.get();
 
+#ifndef NDEBUG
   if (!shader->entryPointToStageIndex.contains(
           SlangStage::SLANG_STAGE_FRAGMENT)) {
     return std::vector<VkPipelineColorBlendAttachmentState>{};
@@ -492,36 +478,40 @@ auto inline GetColorBlendAttachmentState(const GraphicsContext &context,
       expectedAttachments.insert(outVar->getSemanticIndex());
     }
   }
+#endif
 
   // Get Actual Set Render Targets //
 
-  auto idx = 0;
-  auto blendAttachments = std::vector<VkPipelineColorBlendAttachmentState>(
-      state.renderTargets.size() + 1);
-  auto filled = std::vector<bool>(blendAttachments.size(), false);
+  auto blendAttachments = std::vector<VkPipelineColorBlendAttachmentState>();
+  blendAttachments.resize(MAX_COLOR_ATTACHMENTS);
 
-  for (const auto &rendertarget : state.renderTargets) {
-    if (rendertarget.texture->IsDepthTexture() ||
-        rendertarget.texture->IsStencilTexture()) {
-      continue;
-    }
+  bool hasImplicitLocation = false;
+  bool hasExplicitLocation = false;
 
+  for (int i = 0; i < state.colorAttachmentCount; ++i) {
+    const auto &rendertarget = state.colorAttachments.at(i);
     int location = rendertarget.location;
     if (location == -1) {
-      while (idx < filled.size() && filled[idx]) {
-        idx++;
-      }
-
-      location = idx;
+      location = i;
+      hasImplicitLocation = true;
+    } else {
+      hasExplicitLocation = true;
     }
 
-    blendAttachments.resize(location + 1);
-    filled.resize(location + 1);
+    if (location < 0 || location >= MAX_COLOR_ATTACHMENTS) {
+      return Error::Unexpected("Render target location is out of bounds: " +
+                               std::to_string(location));
+    }
 
-    blendAttachments[location] = rendertarget.blendMode;
-    filled[location] = true;
+    blendAttachments.at(location) = rendertarget.blendMode;
   }
 
+  if (hasImplicitLocation && hasExplicitLocation) {
+    return Error::Unexpected(
+        "Cannot mix implicit and explicit render target locations.");
+  }
+
+#ifndef NDEBUG
   for (uint32_t i = 0; i <= blendAttachments.size(); ++i) {
     if (expectedAttachments.contains(i)) {
       if (i >= blendAttachments.size()) {
@@ -531,29 +521,9 @@ auto inline GetColorBlendAttachmentState(const GraphicsContext &context,
       }
     }
   }
+#endif
 
   return blendAttachments;
-}
-
-auto inline GetRenderFormatInfo(const GraphicsContext &context,
-                                const State &state) -> std::vector<VkFormat> {
-
-  auto idx = 0;
-  auto formats = std::vector<VkFormat>(state.renderTargets.size() + 1,
-                                       VK_FORMAT_UNDEFINED);
-
-  for (const auto &rendertarget : state.renderTargets) {
-    int location = rendertarget.location;
-    if (location == -1) {
-      location = idx;
-    }
-    idx++;
-
-    formats.resize(location + 1);
-    formats[location] = rendertarget.texture->format;
-  }
-
-  return formats;
 }
 
 inline auto CreateGraphicsPipeline(const GraphicsContext &context, State &state)
@@ -596,10 +566,22 @@ inline auto CreateGraphicsPipeline(const GraphicsContext &context, State &state)
   VkPipelineDynamicStateCreateInfo dynamicState = {};
   dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
 
-  std::array<VkDynamicState, 3> dynamicStates = {
+  // NOLINTNEXTLINE
+  std::array<VkDynamicState, 11> dynamicStates = {
       VK_DYNAMIC_STATE_VIEWPORT,
       VK_DYNAMIC_STATE_SCISSOR,
       VK_DYNAMIC_STATE_VERTEX_INPUT_EXT,
+
+      VK_DYNAMIC_STATE_CULL_MODE,
+      VK_DYNAMIC_STATE_FRONT_FACE,
+
+      VK_DYNAMIC_STATE_COLOR_WRITE_MASK_EXT,
+      VK_DYNAMIC_STATE_COLOR_BLEND_EQUATION_EXT,
+      VK_DYNAMIC_STATE_COLOR_BLEND_ENABLE_EXT,
+
+      VK_DYNAMIC_STATE_DEPTH_TEST_ENABLE,
+      VK_DYNAMIC_STATE_DEPTH_WRITE_ENABLE,
+      VK_DYNAMIC_STATE_DEPTH_COMPARE_OP,
   };
 
   dynamicState.pDynamicStates = dynamicStates.data();
@@ -610,52 +592,56 @@ inline auto CreateGraphicsPipeline(const GraphicsContext &context, State &state)
   VkPipelineDepthStencilStateCreateInfo depthStencilState = {};
   depthStencilState.sType =
       VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-  depthStencilState.depthTestEnable =
-      static_cast<VkBool32>(state.depthTestEnable);
-  depthStencilState.depthWriteEnable =
-      static_cast<VkBool32>(state.depthWriteEnable);
+  depthStencilState.depthTestEnable = state.depthTestEnable;
+  depthStencilState.depthWriteEnable = state.depthWriteEnable;
   depthStencilState.depthCompareOp = state.depthCompareOp;
   depthStencilState.depthBoundsTestEnable = VK_FALSE;
-  depthStencilState.stencilTestEnable =
-      static_cast<VkBool32>(state.stencilTestEnable);
+  depthStencilState.stencilTestEnable = state.stencilTestEnable;
 
   /// Attachment Formats ///
 
-  auto idx = 0;
-  auto formats = std::vector<VkFormat>();
+  auto formats = std::array<VkFormat, MAX_COLOR_ATTACHMENTS>();
   VkFormat depthFormat = VK_FORMAT_UNDEFINED;
   VkFormat stencilFormat = VK_FORMAT_UNDEFINED;
 
-  for (const auto &rendertarget : state.renderTargets) {
+  if (state.hasDepthStencilAttachment) {
+    auto &rendertarget = state.depthStencilAttachment;
+
     if (rendertarget.texture->IsDepthTexture()) {
       depthFormat = rendertarget.texture->format;
-    } else if (rendertarget.texture->IsStencilTexture()) {
+    }
+    if (rendertarget.texture->IsStencilTexture()) {
       stencilFormat = rendertarget.texture->format;
-    } else {
-      int location = rendertarget.location;
-      if (location == -1) {
-        location = idx;
-      }
-      idx++;
-
-      formats.resize(location + 1);
-
-      formats[location] = rendertarget.texture->format;
     }
   }
 
-  // PrintAlways("Shader: {}", state.shader ? state.shader->name : "null");
-  // PrintAlways("Color Attachment Formats:");
-  // PrintAlways("Count: {}", formats.size());
-  // for (size_t i = 0; i < formats.size(); ++i) {
-  //   PrintAlways("Location {}: {}", i, (int)formats[i]);
-  // }
+  bool hasImplicitLocation = false;
+  bool hasExplicitLocation = false;
+
+  for (int i = 0; i < state.colorAttachmentCount; i++) {
+    const auto &rendertarget = state.colorAttachments.at(i);
+
+    int location = rendertarget.location;
+    if (location == -1) {
+      location = i;
+      hasImplicitLocation = true;
+    } else {
+      hasExplicitLocation = true;
+    }
+
+    formats.at(location) = rendertarget.texture->format;
+  }
+
+  if (hasImplicitLocation && hasExplicitLocation) {
+    return Error::Unexpected(
+        "Cannot mix explicit and implicit render target locations.");
+  }
 
   /// Color Attachments ///
 
   VkPipelineRenderingCreateInfo renderingCreateInfo = {};
   renderingCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
-  renderingCreateInfo.colorAttachmentCount = formats.size();
+  renderingCreateInfo.colorAttachmentCount = state.colorAttachmentCount;
   renderingCreateInfo.pColorAttachmentFormats = formats.data();
   renderingCreateInfo.depthAttachmentFormat = depthFormat;
   renderingCreateInfo.stencilAttachmentFormat = stencilFormat;
@@ -667,11 +653,10 @@ inline auto CreateGraphicsPipeline(const GraphicsContext &context, State &state)
   colorBlending.sType =
       VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
   colorBlending.logicOpEnable = VK_FALSE;
-  colorBlending.attachmentCount = blendAttachments.size();
+  colorBlending.attachmentCount = state.colorAttachmentCount;
   colorBlending.pAttachments = blendAttachments.data();
 
-  if (blendAttachments.empty()) {
-    colorBlending.attachmentCount = 0;
+  if (state.colorAttachmentCount == 0) {
     colorBlending.pAttachments = nullptr;
   }
 
@@ -705,7 +690,9 @@ inline auto CreateGraphicsPipeline(const GraphicsContext &context, State &state)
         context.device, VK_NULL_HANDLE, 1, &pipelineInfo,
         GetAllocationCallbacks(), &pipeline)));
   }
-  PipelineCache.emplace(state, std::make_pair(pipeline, layout));
+
+  auto key = StateKey(state);
+  PipelineCache.emplace(key, std::make_pair(pipeline, layout));
 
   {
     std::lock_guard<std::mutex> lock(PipelinesMutex);
@@ -725,14 +712,9 @@ inline auto CreateComputePipeline(const GraphicsContext &context, State &state)
       VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
   pipelineInfo.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
   pipelineInfo.stage.module = state.shader->module;
-  // computeMain doesn't work here because of SPIR-V entry point naming, i guess that only applies to raster stages?
-  // See:
-  // pCreateInfos[0].stage.pName "computeMain" entry point not found for stage VK_SHADER_STAGE_COMPUTE_BIT.
-  // (The only entry point found was "main" for VK_SHADER_STAGE_COMPUTE_BIT
-  // Some shading languages will let you name the main function something else, but when compiled to SPIR-V,
-  // it will keep it as 'main' to match defaults found in other shading langauges such as GLSL.
-  // It is also valid in a single SPIR-V binary to have 'main' for two different stages.
-  pipelineInfo.stage.pName = "main";
+
+  // If we get a validation error / crash about this not existing; rename to "main"
+  pipelineInfo.stage.pName = "computeMain";
 
   auto layout = CHECK_RES(GetPipelineLayout(context, state.shader.get()));
   pipelineInfo.layout = layout.layout;
@@ -747,7 +729,8 @@ inline auto CreateComputePipeline(const GraphicsContext &context, State &state)
         GetAllocationCallbacks(), &pipeline)));
   }
 
-  PipelineCache.emplace(state, std::make_pair(pipeline, layout));
+  auto key = StateKey(state);
+  PipelineCache.emplace(key, std::make_pair(pipeline, layout));
 
   {
     std::lock_guard<std::mutex> lock(PipelinesMutex);
@@ -774,7 +757,7 @@ inline auto GetPipeline(const GraphicsContext &context, State &state)
     -> Result<std::pair<VkPipeline, PipelineLayout>> {
   ZoneScoped;
 
-  auto *pipeline = PipelineCache.get(state);
+  auto *pipeline = PipelineCache.get(StateKey(state));
 
   if (pipeline != nullptr) {
     return *pipeline;
@@ -817,7 +800,9 @@ inline auto SetupDefaultState(const GraphicsContext &context) -> Result<State> {
   PrintDebug("Setup default state with swapchain handle: {}",
              (void *)texture->view);
 
-  defaultState.renderTargets = {swapchainRendertarget};
+  defaultState.colorAttachments.at(0) = swapchainRendertarget;
+  defaultState.colorAttachmentCount = 1;
+  defaultState.hasDepthStencilAttachment = false;
 
   return defaultState;
 }
@@ -926,7 +911,8 @@ auto FlushGraphics(const GraphicsContext &context) -> Result<bool> {
     return Error::Unexpected("Current state is not a graphics pipeline.");
   }
 
-  for (const auto &rendertarget : TopOfStack->renderTargets) {
+  for (int i = 0; i < TopOfStack->colorAttachmentCount; ++i) {
+    const auto &rendertarget = TopOfStack->colorAttachments.at(i);
     if (IsSwapchainTexture(context, *rendertarget.texture)) {
       DrawnToSwapchain = true;
       break;
@@ -1022,6 +1008,7 @@ auto Destroy(const GraphicsContext &context) -> void {
   DynamicRendering::DescriptorSetLayoutCache.clear();
 }
 
+// NOLINTNEXTLINE
 inline auto BeginRendering(const GraphicsContext &context) -> Error {
   ZoneScoped;
 
@@ -1034,7 +1021,7 @@ inline auto BeginRendering(const GraphicsContext &context) -> Error {
   renderingInfo.viewMask = 0;
   renderingInfo.flags = 0;
 
-  if (TopOfStack->renderTargets.size() >
+  if (TopOfStack->colorAttachmentCount >
       context.deviceProperties.limits.maxColorAttachments) {
     return Error::Create(
         "Number of bound render targets exceeds device limits.");
@@ -1045,16 +1032,13 @@ inline auto BeginRendering(const GraphicsContext &context) -> Error {
     return Error::Create("Render area has zero width or height.");
   }
 
-  thread_local auto colorAttachments = std::vector<VkRenderingAttachmentInfo>{};
-  thread_local auto depthAttachment = VkRenderingAttachmentInfo{};
-  thread_local auto stencilAttachment = VkRenderingAttachmentInfo{};
+  auto colorAttachments =
+      std::array<VkRenderingAttachmentInfo, MAX_COLOR_ATTACHMENTS>{};
+  auto depthAttachment = VkRenderingAttachmentInfo{};
+  auto stencilAttachment = VkRenderingAttachmentInfo{};
 
-  colorAttachments.clear();
-
-  bool hasDepth = false;
-  bool hasStencil = false;
-
-  for (const auto &rendertarget : TopOfStack->renderTargets) {
+  for (int i = 0; i < TopOfStack->colorAttachmentCount; i++) {
+    const auto &rendertarget = TopOfStack->colorAttachments.at(i);
     CHECK_ERR(rendertarget.texture->UseAsAttachment(context));
 
     VkRenderingAttachmentInfo attachmentInfo = {};
@@ -1065,60 +1049,77 @@ inline auto BeginRendering(const GraphicsContext &context) -> Error {
     attachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     attachmentInfo.clearValue = rendertarget.clearValue;
 
-    if (Image::IsDepthTexture(rendertarget.texture->format)) {
-      if (hasDepth) {
-        return Error::Create("Multiple depth attachments bound.");
-      }
+    colorAttachments.at(i) = attachmentInfo;
+
+    Barrier::UpdateUsage(
+        context, *rendertarget.texture,
+        {.stages = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+         .access = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT |
+                   VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT});
+  }
+
+  bool hasDepth = false;
+  bool hasStencil = false;
+
+  if (TopOfStack->hasDepthStencilAttachment) {
+    auto &rendertarget = TopOfStack->depthStencilAttachment;
+    CHECK_ERR(rendertarget.texture->UseAsAttachment(context));
+
+    VkRenderingAttachmentInfo attachmentInfo = {};
+    attachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+    attachmentInfo.imageView = rendertarget.texture->view;
+    attachmentInfo.imageLayout =
+        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    attachmentInfo.loadOp = rendertarget.loadOp;
+    attachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    attachmentInfo.clearValue = rendertarget.clearValue;
+
+    if (rendertarget.texture->IsDepthTexture()) {
       depthAttachment = attachmentInfo;
-      depthAttachment.imageLayout = rendertarget.texture->currentLayout;
       hasDepth = true;
+    }
 
-      Barrier::UpdateUsage(
-          context, *rendertarget.texture,
-          {.stages = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT |
-                     VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
-           .access = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT |
-                     VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT});
-    } else if (Image::IsStencilTexture(rendertarget.texture->format)) {
-      if (hasStencil) {
-        return Error::Create("Multiple stencil attachments bound.");
-      }
+    if (rendertarget.texture->IsStencilTexture()) {
       stencilAttachment = attachmentInfo;
-      stencilAttachment.imageLayout = rendertarget.texture->currentLayout;
       hasStencil = true;
+    }
 
-      Barrier::UpdateUsage(
-          context, *rendertarget.texture,
-          {.stages = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT |
-                     VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
-           .access = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT |
-                     VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT});
-    } else {
-      colorAttachments.emplace_back(attachmentInfo);
+    Barrier::UpdateUsage(
+        context, *rendertarget.texture,
+        {.stages = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT |
+                   VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+         .access = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT |
+                   VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT});
+  }
 
-      Barrier::UpdateUsage(
-          context, *rendertarget.texture,
-          {.stages = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-           .access = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT |
-                     VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT});
+#ifndef NDEBUG
+  VkExtent2D expectedExtent = GetRenderExtent(context, *TopOfStack);
+
+  for (int i = 0; i < TopOfStack->colorAttachmentCount; i++) {
+    const auto &rendertarget = TopOfStack->colorAttachments.at(i);
+    if (rendertarget.texture->size.width != expectedExtent.width ||
+        rendertarget.texture->size.height != expectedExtent.height) {
+      return Error::Create(
+          "Color attachment extent does not match render area extent.");
     }
   }
 
-  renderingInfo.colorAttachmentCount =
-      static_cast<uint32_t>(colorAttachments.size());
+  if (hasDepth || hasStencil) {
+    if (TopOfStack->depthStencilAttachment.texture->size.width !=
+            expectedExtent.width ||
+        TopOfStack->depthStencilAttachment.texture->size.height !=
+            expectedExtent.height) {
+      return Error::Create(
+          "Depth/stencil attachment extent does not match render area extent.");
+    }
+  }
+#endif
+
+  renderingInfo.colorAttachmentCount = TopOfStack->colorAttachmentCount;
   renderingInfo.pColorAttachments = colorAttachments.data();
 
-  if (hasDepth) {
-    renderingInfo.pDepthAttachment = &depthAttachment;
-  } else {
-    renderingInfo.pDepthAttachment = nullptr;
-  }
-
-  if (hasStencil) {
-    renderingInfo.pStencilAttachment = &stencilAttachment;
-  } else {
-    renderingInfo.pStencilAttachment = nullptr;
-  }
+  renderingInfo.pStencilAttachment = hasStencil ? &stencilAttachment : nullptr;
+  renderingInfo.pDepthAttachment = hasDepth ? &depthAttachment : nullptr;
 
   if (Graphics::GetCommandBuffer() == VK_NULL_HANDLE) {
     return Error::Create(
@@ -1132,9 +1133,14 @@ inline auto BeginRendering(const GraphicsContext &context) -> Error {
 
   UsedShaderModules.emplace_back(TopOfStack->shader);
 
-  for (auto &rendertarget : TopOfStack->renderTargets) {
+  for (int i = 0; i < TopOfStack->colorAttachmentCount; i++) {
+    auto &rendertarget = TopOfStack->colorAttachments.at(i);
     // Make sure subsequent renders load from the existing content if we ever need to re-bind mid-pass
     rendertarget.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+  }
+
+  if (TopOfStack->hasDepthStencilAttachment) {
+    TopOfStack->depthStencilAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
   }
 
   return Error::Success();
@@ -1658,14 +1664,72 @@ auto compareViewports(const State &first, const State &second) -> bool {
   return true;
 }
 
+auto CompareVkPipelineColorBlendAttachmentState(
+    const VkPipelineColorBlendAttachmentState &first,
+    const VkPipelineColorBlendAttachmentState &second) -> bool {
+  return first.blendEnable == second.blendEnable &&
+         first.srcColorBlendFactor == second.srcColorBlendFactor &&
+         first.dstColorBlendFactor == second.dstColorBlendFactor &&
+         first.colorBlendOp == second.colorBlendOp &&
+         first.srcAlphaBlendFactor == second.srcAlphaBlendFactor &&
+         first.dstAlphaBlendFactor == second.dstAlphaBlendFactor &&
+         first.alphaBlendOp == second.alphaBlendOp &&
+         first.colorWriteMask == second.colorWriteMask;
+}
+
+auto compareDepthConfigs(const State &first, const State &second) -> bool {
+  return first.depthTestEnable == second.depthTestEnable &&
+         first.depthWriteEnable == second.depthWriteEnable &&
+         first.depthCompareOp == second.depthCompareOp;
+}
+
+auto compareBlendmodes(const State &first, const State &second) -> bool {
+  if (first.colorAttachmentCount != second.colorAttachmentCount) {
+    return false;
+  }
+
+  for (size_t i = 0; i < first.colorAttachmentCount; i++) {
+    if (!CompareVkPipelineColorBlendAttachmentState(
+            first.colorAttachments.at(i).blendMode,
+            second.colorAttachments.at(i).blendMode)) {
+      return false;
+    }
+  }
+
+  if (first.hasDepthStencilAttachment != second.hasDepthStencilAttachment) {
+    return false;
+  }
+
+  if (first.hasDepthStencilAttachment && second.hasDepthStencilAttachment) {
+    if (first.depthStencilAttachment.blendMode.blendEnable !=
+        second.depthStencilAttachment.blendMode.blendEnable) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 auto PrepareRendering(const GraphicsContext &context) -> Error {
   ZoneScoped;
 
+  bool sameViewport = false;
+  bool sameScissor = false;
+  bool sameDepth = false;
+  bool sameBlendMode = false;
+  bool sameCullmode = false;
+  bool sameFFWinding = false;
+
   // Flush updates the last state so we need to compare before updating it
-  bool sameViewport =
-      LastState != nullptr && compareViewports(*TopOfStack, *LastState);
-  bool sameScissor =
-      LastState != nullptr && compareScissors(*TopOfStack, *LastState);
+  if (LastState != nullptr) {
+    sameViewport = compareViewports(*TopOfStack, *LastState);
+    sameScissor = compareScissors(*TopOfStack, *LastState);
+    sameDepth = compareDepthConfigs(*TopOfStack, *LastState);
+    sameBlendMode = compareBlendmodes(*TopOfStack, *LastState);
+    sameCullmode = TopOfStack->cullMode == LastState->cullMode;
+    sameFFWinding = TopOfStack->frontFace == LastState->frontFace;
+  }
 
   auto updatedState = CHECK_RES(Flush(context));
   if (updatedState) {
@@ -1718,32 +1782,66 @@ auto PrepareRendering(const GraphicsContext &context) -> Error {
   }
 
   bool wasRendering = GetIsCurrentlyRendering();
+  bool isGraphics = TopOfStack->bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS;
 
-  if (TopOfStack->bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS &&
-      !wasRendering) {
-    auto beginResult = BeginRendering(context);
+  if (isGraphics) {
+    ZoneScopedN("Dynamic state setup");
 
-    if (Error::IsError(beginResult)) {
-      return beginResult;
+    auto *commandBuffer = Graphics::GetCommandBuffer();
+
+    if (!wasRendering) {
+      CHECK_ERR(BeginRendering(context));
+      sameViewport = false;
+      sameScissor = false;
+      sameDepth = false;
+      sameBlendMode = false;
+      sameCullmode = false;
+      sameFFWinding = false;
     }
-  }
 
-  if ((TopOfStack->bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS &&
-       !sameViewport) ||
-      !wasRendering) {
-    ZoneScopedN("Set Viewport And Scissor");
+    if (!sameViewport) {
+      auto viewport = GetClippedViewport();
+      vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+    }
 
-    auto viewport = GetClippedViewport();
-    vkCmdSetViewport(Graphics::GetCommandBuffer(), 0, 1, &viewport);
-  }
+    if (!sameScissor) {
+      auto scissor = GetScissor();
+      vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+    }
 
-  if ((TopOfStack->bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS &&
-       !sameScissor) ||
-      !wasRendering) {
-    ZoneScopedN("Set Scissor");
+    if (!sameDepth) {
+      vkCmdSetDepthTestEnable(commandBuffer, TopOfStack->depthTestEnable);
+      vkCmdSetDepthWriteEnable(commandBuffer, TopOfStack->depthWriteEnable);
+      vkCmdSetDepthCompareOp(commandBuffer, TopOfStack->depthCompareOp);
+    }
 
-    auto scissor = GetScissor();
-    vkCmdSetScissor(Graphics::GetCommandBuffer(), 0, 1, &scissor);
+    if (!sameBlendMode && TopOfStack->colorAttachmentCount > 0) {
+      std::array<VkBool32, MAX_COLOR_ATTACHMENTS> blendEnables = {};
+      std::array<VkColorComponentFlags, MAX_COLOR_ATTACHMENTS> colorWriteMasks =
+          {};
+      int attachmentCount = TopOfStack->colorAttachmentCount;
+
+      for (uint32_t i = 0; i < attachmentCount; i++) {
+        const auto &attachment = TopOfStack->colorAttachments.at(i);
+        blendEnables.at(i) = attachment.blendMode.blendEnable;
+        colorWriteMasks.at(i) = attachment.blendMode.colorWriteMask;
+      }
+
+      vkCmdSetColorBlendEquationEXT(commandBuffer, 0, attachmentCount,
+                                    TopOfStack->colorBlendEquations.data());
+      vkCmdSetColorBlendEnableEXT(commandBuffer, 0, attachmentCount,
+                                  blendEnables.data());
+      vkCmdSetColorWriteMaskEXT(commandBuffer, 0, attachmentCount,
+                                colorWriteMasks.data());
+    }
+
+    if (!sameCullmode) {
+      vkCmdSetCullMode(commandBuffer, TopOfStack->cullMode);
+    }
+
+    if (!sameFFWinding) {
+      vkCmdSetFrontFace(commandBuffer, TopOfStack->frontFace);
+    }
   }
 
   Graphics::GetIsStateDirty() = false;
@@ -1755,23 +1853,17 @@ auto FinalizeFrame(const GraphicsContext &context) -> Error {
   if (StateStack.size() != 1) {
     return Error::Create("More pushes than pops.");
   }
-  if (TopOfStack->renderTargets.size() != 0) {
-    for (const auto &rendertarget : TopOfStack->renderTargets) {
-      if (!IsSwapchainTexture(context, *rendertarget.texture)) {
-        return Error::Create(
-            "Non-swapchain render targets remain bound at end of frame.");
-      }
+
+  for (int i = 0; i < TopOfStack->colorAttachmentCount; i++) {
+    auto &rendertarget = TopOfStack->colorAttachments.at(i);
+    if (!IsSwapchainTexture(context, *rendertarget.texture)) {
+      return Error::Create(
+          "Non-swapchain render targets remain bound at end of frame.");
     }
   }
+
   EndRendering(context);
   return Error::Success();
-}
-
-auto UsedInPass(const Texture &texture) -> bool {
-  return std::ranges::any_of(TopOfStack->renderTargets,
-                             [&](const auto &target) -> auto {
-                               return target.texture->image == texture.image;
-                             });
 }
 
 auto BeginFrame(const GraphicsContext &context) -> Error {
@@ -1782,6 +1874,9 @@ auto BeginFrame(const GraphicsContext &context) -> Error {
   auto state = CHECK_RES(SetupDefaultState(context));
   StateStack.emplace_back(state);
   TopOfStack = &StateStack.back();
+  LastState = nullptr;
+  LastStateStorage = state;
+
   DrawnToSwapchain = false;
 
   UsedShaderModules.clear();
@@ -1793,15 +1888,14 @@ auto BeginFrame(const GraphicsContext &context) -> Error {
 
 auto SetDepthMode(bool enable, bool writeEnable, VkCompareOp compareOp)
     -> void {
-  TopOfStack->depthTestEnable = enable;
-  TopOfStack->depthWriteEnable = writeEnable;
+  TopOfStack->depthTestEnable = static_cast<VkBool32>(enable);
+  TopOfStack->depthWriteEnable = static_cast<VkBool32>(writeEnable);
   TopOfStack->depthCompareOp = compareOp;
 
   TopOfStack->dirty = true;
 }
 
 auto SetCullMode(VkCullModeFlags cullMode) -> void {
-  // TODO: This should be dynamic state.
   TopOfStack->cullMode = cullMode;
   TopOfStack->dirty = true;
 }
@@ -1871,6 +1965,7 @@ auto SetShader(const Ref<Shader::ShaderModule> &shader) -> void {
   }
 }
 
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 auto SetRenderTargets(const GraphicsContext &context,
                       const std::vector<RenderTarget> &renderTargets) -> Error {
   TopOfStack->dirty = true;
@@ -1879,18 +1974,51 @@ auto SetRenderTargets(const GraphicsContext &context,
     return Error::Create("No render targets provided.");
   }
 
-  bool differentFromCurrent =
-      renderTargets.size() != TopOfStack->renderTargets.size();
+  bool differentFromCurrent = false;
+  bool topHadDepthStencil = TopOfStack->hasDepthStencilAttachment;
+  TopOfStack->hasDepthStencilAttachment = false;
 
-  if (!differentFromCurrent) {
-    for (int i = 0; i < renderTargets.size(); i++) {
-      if (renderTargets.at(i) != TopOfStack->renderTargets.at(i)) {
+  VkExtent2D expectedExtent = {renderTargets.at(0).texture->size.width,
+                               renderTargets.at(0).texture->size.height};
+
+  int colorIdx = 0;
+
+  for (const auto &target : renderTargets) {
+
+    if (target.texture->size.width != expectedExtent.width ||
+        target.texture->size.height != expectedExtent.height) {
+      return Error::Create("All render targets must have the same dimensions.");
+    }
+
+    // Depth/Stencil is separate
+    if (target.texture->IsDepthTexture() ||
+        target.texture->IsStencilTexture()) {
+      if (!topHadDepthStencil) {
         differentFromCurrent = true;
       }
+      TopOfStack->hasDepthStencilAttachment = true;
+      TopOfStack->depthStencilAttachment = target;
+      continue;
     }
+
+    if (colorIdx >= TopOfStack->colorAttachmentCount ||
+        target != TopOfStack->colorAttachments.at(colorIdx)) {
+      differentFromCurrent = true;
+    }
+    TopOfStack->colorAttachments.at(colorIdx) = target;
+    TopOfStack->colorBlendEquations.at(colorIdx) = {
+        .srcColorBlendFactor = target.blendMode.srcColorBlendFactor,
+        .dstColorBlendFactor = target.blendMode.dstColorBlendFactor,
+        .colorBlendOp = target.blendMode.colorBlendOp,
+        .srcAlphaBlendFactor = target.blendMode.srcAlphaBlendFactor,
+        .dstAlphaBlendFactor = target.blendMode.dstAlphaBlendFactor,
+        .alphaBlendOp = target.blendMode.alphaBlendOp,
+    };
+
+    colorIdx++;
   }
 
-  TopOfStack->renderTargets = renderTargets;
+  TopOfStack->colorAttachmentCount = colorIdx;
   SetViewport(nullptr);
 
   // Only clear if we have the same render targets as before
@@ -1901,22 +2029,23 @@ auto SetRenderTargets(const GraphicsContext &context,
 
   if (GetIsCurrentlyRendering()) {
     ClearInfo clearInfo{};
-    for (const auto &target : renderTargets) {
+    for (int i = 0; i < TopOfStack->colorAttachmentCount; i++) {
+      const auto &target = TopOfStack->colorAttachments.at(i);
+
       if (target.loadOp == VK_ATTACHMENT_LOAD_OP_CLEAR) {
-        if (target.texture->IsDepthTexture()) {
-          clearInfo.clearDepth = true;
-          clearInfo.depthClearValue = target.clearValue.depthStencil.depth;
-        } else if (target.texture->IsStencilTexture()) {
-          clearInfo.clearStencil = true;
-          clearInfo.stencilClearValue =
-              static_cast<int>(target.clearValue.depthStencil.stencil);
-        } else {
-          clearInfo.colors.emplace_back(target.clearValue.color.float32[0],
-                                        target.clearValue.color.float32[1],
-                                        target.clearValue.color.float32[2],
-                                        target.clearValue.color.float32[3]);
-        }
+        clearInfo.colors.emplace_back(target.clearValue.color.float32[0],
+                                      target.clearValue.color.float32[1],
+                                      target.clearValue.color.float32[2],
+                                      target.clearValue.color.float32[3]);
       }
+    }
+
+    if (TopOfStack->hasDepthStencilAttachment &&
+        TopOfStack->depthStencilAttachment.loadOp ==
+            VK_ATTACHMENT_LOAD_OP_CLEAR) {
+      clearInfo.clearDepth = true;
+      clearInfo.depthClearValue =
+          TopOfStack->depthStencilAttachment.clearValue.depthStencil.depth;
     }
 
     CHECK_ERR(Clear(context, clearInfo));
@@ -1946,10 +2075,29 @@ auto GetCullMode() -> VkCullModeFlags { return TopOfStack->cullMode; }
 
 auto GetPolygonMode() -> VkPolygonMode { return TopOfStack->polygonMode; }
 
+auto GetTargetSize() -> VkExtent2D {
+  if (TopOfStack->colorAttachmentCount > 0) {
+    return {
+        TopOfStack->colorAttachments.at(0).texture->size.width,
+        TopOfStack->colorAttachments.at(0).texture->size.height,
+    };
+  }
+
+  if (TopOfStack->hasDepthStencilAttachment) {
+    return {
+        TopOfStack->depthStencilAttachment.texture->size.width,
+        TopOfStack->depthStencilAttachment.texture->size.height,
+    };
+  }
+
+  // No attachments, return zero size
+  return {0, 0};
+}
+
 auto GetMaximumAllowedViewport() -> VkViewport {
   auto viewport = TopOfStack->viewport;
 
-  auto size = TopOfStack->renderTargets[0].texture->size;
+  auto size = GetTargetSize();
 
   viewport.width = static_cast<float>(size.width);
   viewport.height = static_cast<float>(size.height);
@@ -1972,7 +2120,7 @@ auto GetClippedViewport() -> VkViewport {
   auto viewport = TopOfStack->viewport;
 
   // Default to size of current attachments
-  auto size = TopOfStack->renderTargets[0].texture->size;
+  VkExtent2D size = GetTargetSize();
 
   viewport.width = std::min(viewport.width, static_cast<float>(size.width));
   viewport.height = std::min(viewport.height, static_cast<float>(size.height));
@@ -2038,7 +2186,9 @@ auto GetShader() -> Ref<Shader::ShaderModule> {
 }
 
 auto GetRenderTargets() -> std::vector<RenderTarget> {
-  return TopOfStack->renderTargets;
+  return {TopOfStack->colorAttachments.begin(),
+          TopOfStack->colorAttachments.begin() + // NOLINT
+              TopOfStack->colorAttachmentCount};
 }
 
 auto GetWindingOrder() -> VkFrontFace { return TopOfStack->frontFace; }
@@ -2060,12 +2210,6 @@ auto Clear(const GraphicsContext &context, const ClearInfo &clearInfo)
 
   if (commandBuffer == nullptr) {
     return Error::Create("Command buffer is null in Clear.");
-  }
-
-  auto count = TopOfStack->renderTargets.size();
-
-  if (count == 0) {
-    return Error::Create("No render targets to clear.");
   }
 
   if (!clearInfo.clearDepth && !clearInfo.clearStencil &&
@@ -2090,42 +2234,30 @@ auto Clear(const GraphicsContext &context, const ClearInfo &clearInfo)
   clearRect.baseArrayLayer = 0;
   clearRect.layerCount = 1;
 
-  for (uint32_t i = 0; i < count; ++i) {
+  for (uint32_t i = 0; i < TopOfStack->colorAttachmentCount; i++) {
     VkClearAttachment clearAttachment = {};
-    auto &rendertarget = TopOfStack->renderTargets[i];
+    const auto &rendertarget = TopOfStack->colorAttachments.at(i);
 
-    if (Image::IsDepthTexture(rendertarget.texture->format) ||
-        Image::IsStencilTexture(rendertarget.texture->format)) {
-      clearAttachment.aspectMask = 0;
-      bool doClear = false;
-      if (Image::IsDepthTexture(rendertarget.texture->format)) {
-        clearAttachment.aspectMask |= VK_IMAGE_ASPECT_DEPTH_BIT;
-        doClear = clearInfo.clearDepth;
-      }
-      if (Image::IsStencilTexture(rendertarget.texture->format)) {
-        clearAttachment.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
-        doClear = clearInfo.clearStencil;
-      }
-      clearAttachment.clearValue.depthStencil.depth = clearInfo.depthClearValue;
-      clearAttachment.clearValue.depthStencil.stencil =
-          clearInfo.stencilClearValue;
-      if (doClear) {
-        clearAttachments.emplace_back(clearAttachment);
-        clearRects.emplace_back(clearRect);
-      }
-    } else {
-      clearAttachment.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-      clearAttachment.colorAttachment = i;
-      auto color = clearInfo.colors.size() > i ? clearInfo.colors[i]
-                                               : Color{0.0F, 0.0F, 0.0F, 1.0F};
-      clearAttachment.clearValue.color.float32[0] = color.r;
-      clearAttachment.clearValue.color.float32[1] = color.g;
-      clearAttachment.clearValue.color.float32[2] = color.b;
-      clearAttachment.clearValue.color.float32[3] = color.a;
+    clearAttachment.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    clearAttachment.colorAttachment = i;
+    auto color = clearInfo.colors.size() > i ? clearInfo.colors[i]
+                                             : Color{0.0F, 0.0F, 0.0F, 1.0F};
+    clearAttachment.clearValue.color.float32[0] = color.r;
+    clearAttachment.clearValue.color.float32[1] = color.g;
+    clearAttachment.clearValue.color.float32[2] = color.b;
+    clearAttachment.clearValue.color.float32[3] = color.a;
 
-      clearAttachments.emplace_back(clearAttachment);
-      clearRects.emplace_back(clearRect);
-    }
+    clearAttachments.emplace_back(clearAttachment);
+    clearRects.emplace_back(clearRect);
+  }
+
+  if (clearInfo.clearDepth) {
+    VkClearAttachment clearAttachment = {};
+    clearAttachment.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+    clearAttachment.clearValue.depthStencil.depth = clearInfo.depthClearValue;
+
+    clearAttachments.emplace_back(clearAttachment);
+    clearRects.emplace_back(clearRect);
   }
 
   // TODO: Cache this step and only flush on state changes
@@ -2141,7 +2273,7 @@ auto Clear(const GraphicsContext &context, const ClearInfo &clearInfo)
 
 auto State::GetHash() const -> uint64_t {
   if (dirty) {
-    hash = StateHash::Hash(*this);
+    hash = StateKeyHash::Hash(StateKey(*this));
     dirty = false;
   }
 

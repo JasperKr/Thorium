@@ -12,7 +12,7 @@ public float Distribution_GGX(float NoH, float roughness) {
 
   float a = NoH * roughness;
   float k = roughness / (oneMinusNoH2 + a * a);
-  float d = k * k / PI;
+  float d = k * k * INV_PI;
   return saturate(d);
 }
 
@@ -25,8 +25,8 @@ public float3 Fresnel_Schlick(const float3 Fresnel0, float Fresnel90,
 public float Visibility_SmithGGXCorrelated(float roughness, float NoV,
                                            float NoL, float lambdaV) {
   float rSqr = roughness * roughness;
-  float lambdaL = NoL * sqrt((NoL - rSqr * NoL) * NoL + rSqr);
-  float visibility = 0.5 / max(lambdaV + lambdaL, 1e-5);
+  float lambdaL = NoV * sqrt((NoL - rSqr * NoL) * NoL + rSqr);
+  float visibility = 0.5 / max(lambdaV * NoL + lambdaL, 1e-5);
   return saturate(visibility);
 }
 

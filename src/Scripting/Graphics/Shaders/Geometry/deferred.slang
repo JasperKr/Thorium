@@ -111,7 +111,7 @@ FragmentOutput fragmentMain(FragmentInput input) {
   float3 normalMap =
       normalize(NormalTexture.Sample(input.tex_coord).xyz * 2.0f - 1.0f);
 
-  float3 bitangent = cross(normal, tangent.xyz) * tangent.w;
+  float3 bitangent = cross(normal, tangent.xyz) * -tangent.w;
   float3x3 TBN = float3x3(tangent.xyz, bitangent, normal);
   TBN = transpose(TBN);
   normal = mul(TBN, normalMap);

@@ -10,6 +10,7 @@
 #include "Modules/type.hpp"
 #include "graphicsContext.hpp"
 #include "shader.hpp"
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <unordered_map>
@@ -235,6 +236,10 @@ struct DescriptorSetLayoutKeyHash {
   }
 };
 
+auto CompareVkPipelineColorBlendAttachmentState(
+    const VkPipelineColorBlendAttachmentState &first,
+    const VkPipelineColorBlendAttachmentState &second) -> bool;
+
 // NOLINTNEXTLINE
 extern thread_local bool DrawnToSwapchain;
 
@@ -254,26 +259,11 @@ struct RenderTarget {
   auto GetHash() const -> uint64_t;
 
   auto operator==(const RenderTarget &other) const -> bool {
-    if (*texture != *other.texture) {
+    if (texture->getID() != other.texture->getID()) {
       return false;
     }
 
-    if (location != other.location || layer != other.layer) {
-      return false;
-    }
-
-    if (blendMode.blendEnable != other.blendMode.blendEnable ||
-        blendMode.srcColorBlendFactor != other.blendMode.srcColorBlendFactor ||
-        blendMode.dstColorBlendFactor != other.blendMode.dstColorBlendFactor ||
-        blendMode.colorBlendOp != other.blendMode.colorBlendOp ||
-        blendMode.srcAlphaBlendFactor != other.blendMode.srcAlphaBlendFactor ||
-        blendMode.dstAlphaBlendFactor != other.blendMode.dstAlphaBlendFactor ||
-        blendMode.alphaBlendOp != other.blendMode.alphaBlendOp ||
-        blendMode.colorWriteMask != other.blendMode.colorWriteMask) {
-      return false;
-    }
-
-    return true;
+    return location == other.location && layer == other.layer;
   }
 };
 
@@ -296,13 +286,24 @@ struct SetBindingEntry {
   std::string name;
 };
 
+struct RendertargetKey {
+  ObjectID textureID;
+  int location;
+  int layer;
+
+  auto operator==(const RendertargetKey &other) const -> bool {
+    return textureID == other.textureID && location == other.location &&
+           layer == other.layer;
+  }
+};
+
 struct State {
   VkCullModeFlags cullMode = VK_CULL_MODE_BACK_BIT;
   VkFrontFace frontFace = VK_FRONT_FACE_CLOCKWISE;
-  bool depthTestEnable = true;
-  bool depthWriteEnable = true;
+  VkBool32 depthTestEnable = 1;
+  VkBool32 depthWriteEnable = 1;
   VkCompareOp depthCompareOp = VK_COMPARE_OP_LESS;
-  bool stencilTestEnable = false;
+  VkBool32 stencilTestEnable = 0;
   VkPolygonMode polygonMode = VK_POLYGON_MODE_FILL;
   VkViewport viewport;
   VkRect2D scissor;
@@ -311,18 +312,24 @@ struct State {
   bool hasScissor = false;
   mutable bool dirty = true;
 
+  std::array<VkColorBlendEquationEXT, MAX_COLOR_ATTACHMENTS>
+      colorBlendEquations = {};
+
   Ref<Shader::ShaderModule> shader;
 
   VkPrimitiveTopology primitiveTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 
   VkPipelineBindPoint bindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-  std::vector<RenderTarget> renderTargets;
+  std::array<RenderTarget, MAX_COLOR_ATTACHMENTS> colorAttachments;
+  RenderTarget depthStencilAttachment;
+  bool hasDepthStencilAttachment = false;
+  uint8_t colorAttachmentCount = 0;
 
   mutable uint64_t hash;
   auto GetHash() const -> uint64_t;
 
   auto operator==(const State &other) const -> bool {
-    if (renderTargets.size() != other.renderTargets.size()) {
+    if (colorAttachmentCount != other.colorAttachmentCount) {
       return false;
     }
 
@@ -330,19 +337,26 @@ struct State {
       return false;
     }
 
-    if (cullMode != other.cullMode || frontFace != other.frontFace ||
-        depthTestEnable != other.depthTestEnable ||
-        depthWriteEnable != other.depthWriteEnable ||
-        depthCompareOp != other.depthCompareOp ||
-        stencilTestEnable != other.stencilTestEnable ||
+    if (stencilTestEnable != other.stencilTestEnable ||
         polygonMode != other.polygonMode ||
         primitiveTopology != other.primitiveTopology ||
         bindPoint != other.bindPoint) {
       return false;
     }
 
-    for (size_t i = 0; i < renderTargets.size(); ++i) {
-      if (renderTargets[i] != other.renderTargets[i]) {
+    if (hasDepthStencilAttachment != other.hasDepthStencilAttachment) {
+      return false;
+    }
+
+    if (hasDepthStencilAttachment) {
+      if (depthStencilAttachment != other.depthStencilAttachment) {
+        return false;
+      }
+    }
+
+    for (int i = 0; i < colorAttachmentCount; i++) {
+      if (colorAttachments.at(i).texture->getID() !=
+          other.colorAttachments.at(i).texture->getID()) {
         return false;
       }
     }
@@ -353,64 +367,99 @@ struct State {
   auto ToString() const -> std::string;
 };
 
+struct StateKey {
+  std::array<RendertargetKey, MAX_COLOR_ATTACHMENTS> colorAttachments{};
+  uint32_t colorAttachmentCount;
+  bool hasDepthStencilAttachment;
+  RendertargetKey depthStencilTextureID{};
+  ObjectID shaderModuleID;
+  VkPipelineBindPoint bindPoint;
+  VkBool32 stencilTestEnable;
+  VkPolygonMode polygonMode;
+  VkPrimitiveTopology primitiveTopology;
+
+  explicit StateKey(const State &state)
+      : colorAttachmentCount(state.colorAttachmentCount),
+        hasDepthStencilAttachment(state.hasDepthStencilAttachment),
+        shaderModuleID(state.shader->getID()), bindPoint(state.bindPoint),
+        stencilTestEnable(state.stencilTestEnable),
+        polygonMode(state.polygonMode),
+        primitiveTopology(state.primitiveTopology) {
+
+    colorAttachments.fill({0, -1, -1});
+    depthStencilTextureID = {.textureID = 0, .location = -1, .layer = -1};
+
+    for (int i = 0; i < state.colorAttachmentCount; i++) {
+      const auto &attachment = state.colorAttachments.at(i);
+      colorAttachments.at(i) = RendertargetKey{
+          .textureID = attachment.texture->getID(),
+          .location = attachment.location,
+          .layer = attachment.layer,
+      };
+    }
+
+    if (state.hasDepthStencilAttachment) {
+      depthStencilTextureID = RendertargetKey{
+          .textureID = state.depthStencilAttachment.texture->getID(),
+          .location = 0,
+          .layer = 0,
+      };
+    }
+  }
+
+  auto operator==(const StateKey &other) const -> bool {
+    if (colorAttachmentCount != other.colorAttachmentCount ||
+        hasDepthStencilAttachment != other.hasDepthStencilAttachment ||
+        shaderModuleID != other.shaderModuleID ||
+        bindPoint != other.bindPoint ||
+        stencilTestEnable != other.stencilTestEnable ||
+        polygonMode != other.polygonMode ||
+        primitiveTopology != other.primitiveTopology) {
+      return false;
+    }
+
+    if (hasDepthStencilAttachment &&
+        !(depthStencilTextureID == other.depthStencilTextureID)) {
+      return false;
+    }
+
+    for (int i = 0; i < colorAttachmentCount; i++) {
+      if (!(colorAttachments.at(i) == other.colorAttachments.at(i))) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+};
+
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
 extern thread_local std::vector<State> StateStack;
 
 extern thread_local State LastStateStorage;
 extern thread_local State *LastState;
-
 extern thread_local State *TopOfStack;
 
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
-inline auto HashBlendmode(VkPipelineColorBlendAttachmentState const &blendMode)
-    -> size_t {
-  Hash::Hasher hasher{};
-
-  hasher.Add(std::hash<bool>()(blendMode.blendEnable != 0U));
-  hasher.Add(std::hash<VkBlendFactor>()(blendMode.srcColorBlendFactor));
-  hasher.Add(std::hash<VkBlendFactor>()(blendMode.dstColorBlendFactor));
-  hasher.Add(std::hash<VkBlendOp>()(blendMode.colorBlendOp));
-  hasher.Add(std::hash<VkBlendFactor>()(blendMode.srcAlphaBlendFactor));
-  hasher.Add(std::hash<VkBlendFactor>()(blendMode.dstAlphaBlendFactor));
-  hasher.Add(std::hash<VkBlendOp>()(blendMode.alphaBlendOp));
-  hasher.Add(std::hash<uint32_t>()(blendMode.colorWriteMask));
-
-  return hasher.Get();
-}
-
-inline auto HashTexture(const Texture *texture) -> size_t {
-  Hash::Hasher hasher{};
-
-  hasher.Add(std::hash<VkFormat>()(texture->format));
-  hasher.Add(std::hash<uint32_t>()(texture->size.width));
-  hasher.Add(std::hash<uint32_t>()(texture->size.height));
-  hasher.Add(std::hash<uint32_t>()(texture->size.depth));
-  hasher.Add(std::hash<uint32_t>()(texture->mipmapcount));
-  hasher.Add(std::hash<uint32_t>()(texture->arrayLayers));
-  hasher.Add(std::hash<VkImageUsageFlags>()(texture->usage));
-  hasher.Add(std::hash<TextureType>()(texture->textureType));
-
-  return hasher.Get();
-}
-
 inline auto HashRenderTarget(const RenderTarget &renderTarget) -> size_t {
   Hash::Hasher hasher{};
 
-  hasher.Add(HashBlendmode(renderTarget.blendMode));
-  hasher.Add(HashTexture(renderTarget.texture.get()));
+  hasher.Add(renderTarget.texture->getID());
+  hasher.Add(renderTarget.location);
+  hasher.Add(renderTarget.layer);
 
   return hasher.Get();
 }
 
-struct StateHash {
-  static auto Hash(const State &state) -> size_t {
+struct StateKeyHash {
+  static auto Hash(const StateKey &state) -> size_t {
     Hash::Hasher hasher{};
 
     // Special case for compute pipelines
     if (state.bindPoint == VK_PIPELINE_BIND_POINT_COMPUTE) {
       hasher.Add(std::hash<VkPipelineBindPoint>()(state.bindPoint));
-      hasher.Add(state.shader.get() == nullptr ? 0 : state.shader->hash());
+      hasher.Add(state.shaderModuleID);
       return hasher.Get();
     }
 
@@ -418,31 +467,27 @@ struct StateHash {
       PrintError("Trying to hash unsupported pipeline bind point.");
     }
 
-    hasher.Add(std::hash<VkCullModeFlags>()(state.cullMode));
-    hasher.Add(std::hash<VkFrontFace>()(state.frontFace));
-    hasher.Add(std::hash<bool>()(state.depthTestEnable));
-    hasher.Add(std::hash<bool>()(state.depthWriteEnable));
-    hasher.Add(std::hash<VkCompareOp>()(state.depthCompareOp));
-    hasher.Add(std::hash<bool>()(state.stencilTestEnable));
+    hasher.Add(std::hash<bool>()(state.stencilTestEnable == 1));
     hasher.Add(std::hash<VkPolygonMode>()(state.polygonMode));
-    hasher.Add(state.shader.get() == nullptr ? 0 : state.shader->hash());
     hasher.Add(std::hash<VkPipelineBindPoint>()(state.bindPoint));
+    hasher.Add(std::hash<VkPrimitiveTopology>()(state.primitiveTopology));
+    hasher.Add(state.shaderModuleID);
 
-    for (const auto &renderTarget : state.renderTargets) {
-      hasher.Add(HashRenderTarget(renderTarget));
+    for (int i = 0; i < state.colorAttachmentCount; ++i) {
+      hasher.Add(state.colorAttachments.at(i).textureID);
+      hasher.Add(state.colorAttachments.at(i).location);
+      hasher.Add(state.colorAttachments.at(i).layer);
     }
 
     return hasher.Get();
   }
 
-  auto operator()(const State &state) const -> size_t {
-    return state.GetHash();
-  }
+  auto operator()(const StateKey &state) const -> size_t { return Hash(state); }
 };
 
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
 
-extern LRUCache<State, std::pair<VkPipeline, PipelineLayout>, StateHash>
+extern LRUCache<StateKey, std::pair<VkPipeline, PipelineLayout>, StateKeyHash>
     PipelineCache;
 
 extern thread_local std::vector<Ref<Shader::ShaderModule>> UsedShaderModules;
@@ -505,8 +550,6 @@ struct ClearInfo {
 };
 
 auto Clear(const GraphicsContext &context, const ClearInfo &clearInfo) -> Error;
-
-auto UsedInPass(const Texture &texture) -> bool;
 
 } // namespace DynamicRendering
 } // namespace Graphics

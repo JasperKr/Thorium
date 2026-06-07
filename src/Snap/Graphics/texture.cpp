@@ -1312,6 +1312,8 @@ Texture::~Texture() {
     return;
   }
 
+  PrintError("Destroying texture: {}", debugName);
+
   ScheduleDestruction(TextureMemory{.allocation = memory,
                                     .image = image,
                                     .imageView = view,

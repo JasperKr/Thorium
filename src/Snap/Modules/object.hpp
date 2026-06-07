@@ -4,11 +4,15 @@
 #include <atomic>
 
 // #define DEBUG_OBJECT_LIFETIMES
+// #define DEBUG_OBJECT_REFERENCES
+
+#ifdef DEBUG_OBJECT_REFERENCES
+#include <unordered_map>
+#endif
 
 #ifdef DEBUG_OBJECT_LIFETIMES
 #include <concepts>
 #include <mutex>
-#include <unordered_map>
 #include <utility>
 
 extern std::mutex RefCountsMutex; // NOLINT
@@ -18,11 +22,17 @@ extern std::unordered_map<void const *,
 
 #endif
 
+using ObjectID = uint64_t;
+
 class Object {
 protected:
   Object() = default;
 
 public:
+#ifdef DEBUG_OBJECT_REFERENCES
+  mutable std::unordered_map<void *, std::string> backtraceStrings; // NOLINT
+#endif
+
   Object(const Object &) = delete;
   Object(Object &&) = delete;
 
@@ -33,13 +43,24 @@ public:
 
   [[nodiscard]] virtual auto GetInstanceType() const -> Type const * = 0;
 
+#ifdef DEBUG_OBJECT_REFERENCES
+  void retain(void *parent = nullptr) const;
+  auto release(void *parent = nullptr) -> bool;
+#else
   void retain() const;
   auto release() -> bool;
+#endif
 
   [[nodiscard]] auto getReferenceCount() const -> int;
+  [[nodiscard]] auto getID() const -> ObjectID;
+
+  auto operator==(const Object &other) const -> bool { return id == other.id; }
 
 private:
   mutable std::atomic<int> count{0};
+
+  static inline std::atomic<ObjectID> globalIDCounter{0};
+  ObjectID id = globalIDCounter.fetch_add(1UL, std::memory_order_relaxed);
 };
 
 template <typename T> class Ref {
@@ -49,25 +70,41 @@ public:
   Ref() = default;
   explicit Ref(T *pointer) : ptr(pointer) {
     if (ptr != nullptr) {
+#ifdef DEBUG_OBJECT_REFERENCES
+      ptr->retain(this);
+#else
       ptr->retain();
+#endif
     }
   }
 
   // copy
   Ref(const Ref &reference) : ptr(reference.ptr) {
     if (ptr != nullptr) {
+#ifdef DEBUG_OBJECT_REFERENCES
+      ptr->retain(this);
+#else
       ptr->retain();
+#endif
     }
   }
 
   auto operator=(const Ref &reference) -> Ref & {
     if (this != &reference) {
       if (reference.ptr != nullptr) {
+#ifdef DEBUG_OBJECT_REFERENCES
+        reference.ptr->retain(this);
+#else
         reference.ptr->retain();
+#endif
       }
 
       if (ptr != nullptr) {
+#ifdef DEBUG_OBJECT_REFERENCES
+        ptr->release(this);
+#else
         ptr->release();
+#endif
       }
 
       ptr = reference.ptr;
@@ -83,7 +120,11 @@ public:
   auto operator=(Ref &&reference) noexcept -> Ref & {
     if (this != &reference) {
       if (ptr != nullptr) {
+#ifdef DEBUG_OBJECT_REFERENCES
+        ptr->release(this);
+#else
         ptr->release();
+#endif
       }
       ptr = reference.ptr;
       reference.ptr = nullptr;
@@ -95,7 +136,11 @@ public:
 
   auto operator=(std::nullptr_t) noexcept -> Ref & {
     if (ptr != nullptr) {
+#ifdef DEBUG_OBJECT_REFERENCES
+      ptr->release(this);
+#else
       ptr->release();
+#endif
       ptr = nullptr;
     }
     return *this;
@@ -103,7 +148,11 @@ public:
 
   ~Ref() {
     if (ptr != nullptr) {
+#ifdef DEBUG_OBJECT_REFERENCES
+      ptr->release(this);
+#else
       ptr->release();
+#endif
       ptr = nullptr;
     }
   }
@@ -115,7 +164,11 @@ public:
 
   auto reset() -> void {
     if (ptr != nullptr) {
+#ifdef DEBUG_OBJECT_REFERENCES
+      ptr->release(this);
+#else
       ptr->release();
+#endif
       ptr = nullptr;
     }
   }

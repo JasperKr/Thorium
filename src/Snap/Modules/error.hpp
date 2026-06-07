@@ -20,6 +20,8 @@
 using ErrorCode = int32_t;
 using ErrorLevel = uint16_t;
 
+auto GetStackTrace(ErrorLevel level = 0) -> std::string;
+
 struct [[nodiscard]] Error {
   std::string message;
   std::string backtrace;

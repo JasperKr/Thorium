@@ -9,10 +9,12 @@
 #include "Graphics/uniformWriter.hpp"
 #include "Modules/Math/matrix.hpp"
 #include "Modules/bindings.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Modules/reflectBindings.hpp"
 #include "Renderer/rendertargetManager.hpp"
+#include "SDL3/SDL_keycode.h"
 #include "Scene/Geometry/boundingBox.hpp"
 #include "Scene/Geometry/geometry.hpp"
 #include "Scene/Geometry/levelOfDetail.hpp"
@@ -43,6 +45,8 @@
 #include <string_view>
 #include <vector>
 #include <vulkan/vulkan_core.h>
+
+#include "../Snap/Modules/Peripherals/keyboard.hpp"
 
 namespace Engine {
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
@@ -771,6 +775,28 @@ auto Scene::DrawModels(Camera &camera, const Graphics::GraphicsContext &context)
   for (const auto &item : TransparentDrawItems) {
     CHECK_ERR(RenderDrawItem(item, forward, ctx, forwardConfig));
   }
+
+  // if (Keyboard::IsDown(SDLK_L)) {
+  //   auto logTextureRefInfo = [](const Ref<Graphics::Texture> &texture) -> void {
+  //     auto refCount = texture->getReferenceCount();
+
+  //     PrintAlways("-----------------------------------------------");
+  //     PrintAlways("Texture {} has {} references", texture->GetDebugName(),
+  //                 refCount);
+
+  //     for (const auto &pair : texture->backtraceStrings) {
+  //       PrintAlways("{}", pair.second);
+  //     }
+  //   };
+
+  //   logTextureRefInfo(textures.Depth);
+  //   logTextureRefInfo(textures.Albedo);
+  //   logTextureRefInfo(textures.Normal);
+  //   logTextureRefInfo(textures.Material);
+  //   logTextureRefInfo(textures.Emissive);
+  //   logTextureRefInfo(textures.Motion);
+  //   logTextureRefInfo(textures.IncomingLight);
+  // }
 
   return {};
 }
