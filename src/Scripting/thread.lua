@@ -31,6 +31,14 @@ do
       Imgui.Text(string.format("Frame time: %.3f ms", snap.timer.getDelta() * 1000))
       Imgui.Text(string.format("FPS: %.1f", snap.timer.getFPS()))
       Imgui.Text(string.format("ImGui draw time: %.3f ms", lastShownImDrawTime * 1000))
+
+      local stats = snap.graphics.getStats()
+
+      Imgui.Text(string.format("Draw calls: %d", stats.drawcalls))
+      Imgui.Text(string.format("Dispatches: %d", stats.dispatches))
+      Imgui.Text(string.format("Triangles: %d", stats.triangles))
+      Imgui.Text(string.format("Instances: %d", stats.instances))
+      Imgui.Text(string.format("Context switches: %d", stats.contextswitches))
     end
     Imgui.End()
 

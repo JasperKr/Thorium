@@ -128,6 +128,22 @@ struct DescriptorKeyHash {
   }
 };
 
+struct Stats {
+  uint64_t drawCalls = 0;
+  uint64_t dispatchCalls = 0;
+  uint64_t triangleCount = 0;
+  uint64_t instanceCount = 0;
+  uint64_t contextSwitches = 0;
+
+  void Reset() {
+    drawCalls = 0;
+    dispatchCalls = 0;
+    triangleCount = 0;
+    instanceCount = 0;
+    contextSwitches = 0;
+  }
+};
+
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
 
 // Only used for cleanup
@@ -148,6 +164,8 @@ extern std::unordered_map<struct DescriptorSetLayoutKey, VkDescriptorSetLayout,
 extern thread_local std::unordered_map<DescriptorKey, VkDescriptorSet,
                                        DescriptorKeyHash>
     DescriptorSetCache;
+
+extern thread_local Stats CurrentStats;
 
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
@@ -490,7 +508,6 @@ struct StateKeyHash {
 extern LRUCache<StateKey, std::pair<VkPipeline, PipelineLayout>, StateKeyHash>
     PipelineCache;
 
-extern thread_local std::vector<Ref<Shader::ShaderModule>> UsedShaderModules;
 extern thread_local PipelineLayout CurrentPipelineLayout;
 
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)

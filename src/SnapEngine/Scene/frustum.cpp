@@ -12,34 +12,33 @@ auto Frustum::IntersectsAABB(const Math::Vec3 &min, const Math::Vec3 &max,
     int out = 0;
     auto plane = GetPlane(i);
 
-    out += plane.Dot(Math::Vec3(min.x, min.y, min.z)) < 0.0F ? 1 : 0;
-    out += plane.Dot(Math::Vec3(max.x, min.y, min.z)) < 0.0F ? 1 : 0;
-    out += plane.Dot(Math::Vec3(min.x, max.y, min.z)) < 0.0F ? 1 : 0;
-    out += plane.Dot(Math::Vec3(max.x, max.y, min.z)) < 0.0F ? 1 : 0;
-    out += plane.Dot(Math::Vec3(min.x, min.y, max.z)) < 0.0F ? 1 : 0;
-    out += plane.Dot(Math::Vec3(max.x, min.y, max.z)) < 0.0F ? 1 : 0;
-    out += plane.Dot(Math::Vec3(min.x, max.y, max.z)) < 0.0F ? 1 : 0;
-    out += plane.Dot(Math::Vec3(max.x, max.y, max.z)) < 0.0F ? 1 : 0;
+    out += plane.Dot(min) + plane.w < 0.0F ? 1 : 0;
+    out += plane.Dot(Math::Vec3(max.x, min.y, min.z)) + plane.w < 0.0F ? 1 : 0;
+    out += plane.Dot(Math::Vec3(min.x, max.y, min.z)) + plane.w < 0.0F ? 1 : 0;
+    out += plane.Dot(Math::Vec3(max.x, max.y, min.z)) + plane.w < 0.0F ? 1 : 0;
+    out += plane.Dot(Math::Vec3(min.x, min.y, max.z)) + plane.w < 0.0F ? 1 : 0;
+    out += plane.Dot(Math::Vec3(max.x, min.y, max.z)) + plane.w < 0.0F ? 1 : 0;
+    out += plane.Dot(Math::Vec3(min.x, max.y, max.z)) + plane.w < 0.0F ? 1 : 0;
+    out += plane.Dot(max) + plane.w < 0.0F ? 1 : 0;
 
     if (out == 8) { // NOLINT
       return false;
     }
   }
 
-  [[likely]]
-  if (precise) {
-    int out = 0;
-    // clang-format off
-    // NOLINTBEGIN
-    out = 0; for (const auto &corner : Corners) { out += corner.x > max.x ? 1 : 0; }; if (out == 8) { return false; }
-    out = 0; for (const auto &corner : Corners) { out += corner.x < min.x ? 1 : 0; }; if (out == 8) { return false; }
-    out = 0; for (const auto &corner : Corners) { out += corner.y > max.y ? 1 : 0; }; if (out == 8) { return false; }
-    out = 0; for (const auto &corner : Corners) { out += corner.y < min.y ? 1 : 0; }; if (out == 8) { return false; }
-    out = 0; for (const auto &corner : Corners) { out += corner.z > max.z ? 1 : 0; }; if (out == 8) { return false; }
-    out = 0; for (const auto &corner : Corners) { out += corner.z < min.z ? 1 : 0; }; if (out == 8) { return false; }
-    // NOLINTEND
-    // clang-format on
-  }
+  // if (precise) {
+  //   int out = 0;
+  //   // clang-format off
+  //   // NOLINTBEGIN
+  //   out = 0; for (const auto &corner : Corners) { out += corner.x > max.x ? 1 : 0; }; if (out == 8) { return false; }
+  //   out = 0; for (const auto &corner : Corners) { out += corner.x < min.x ? 1 : 0; }; if (out == 8) { return false; }
+  //   out = 0; for (const auto &corner : Corners) { out += corner.y > max.y ? 1 : 0; }; if (out == 8) { return false; }
+  //   out = 0; for (const auto &corner : Corners) { out += corner.y < min.y ? 1 : 0; }; if (out == 8) { return false; }
+  //   out = 0; for (const auto &corner : Corners) { out += corner.z > max.z ? 1 : 0; }; if (out == 8) { return false; }
+  //   out = 0; for (const auto &corner : Corners) { out += corner.z < min.z ? 1 : 0; }; if (out == 8) { return false; }
+  //   // NOLINTEND
+  //   // clang-format on
+  // }
 
   return true;
 }
@@ -49,8 +48,7 @@ auto Frustum::FromMatrices(const Math::Matrix4x4 &viewProjectionMatrix,
     -> Frustum {
   Frustum frustum;
 
-  // Define the corners of the NDC cube
-  std::array<Math::Vec4, CornerCount> ndc_corners = {
+  static std::array<Math::Vec4, CornerCount> ndc_corners = {
       Math::Vec4(-1.0F, -1.0F, -1.0F, 1.0F), // NTL
       Math::Vec4(1.0F, -1.0F, -1.0F, 1.0F),  // NTR
       Math::Vec4(1.0F, -1.0F, 1.0F, 1.0F),   // NBR
@@ -61,10 +59,12 @@ auto Frustum::FromMatrices(const Math::Matrix4x4 &viewProjectionMatrix,
       Math::Vec4(-1.0F, 1.0F, 1.0F, 1.0F)    // FBL
   };
 
-  for (size_t i = 0; i < CornerCount; ++i) {
-    Math::Vec4 world_pos = inverseViewProjectionMatrix * ndc_corners.at(i);
-    frustum.Corners.at(i) = Math::Vec3{world_pos / world_pos.w};
-  }
+  // for (size_t i = 0; i < CornerCount; ++i) {
+  //   auto ndc_corner = ndc_corners.at(i);
+  //   ndc_corner.z *= -1.0F; // Reverse Z
+  //   Math::Vec4 world_pos = inverseViewProjectionMatrix * ndc_corner;
+  //   frustum.Corners.at(i) = Math::Vec3{world_pos / world_pos.w};
+  // }
 
   // Gribb/Hartmann method for extracting planes from the view-projection matrix
   const auto &mat = viewProjectionMatrix;
@@ -219,10 +219,14 @@ auto LuaFrustum::GetCorner(lua_State *state) -> int {
     return luaL_error(state, "Corner index out of range");
   }
 
-  const auto &corner = frustum->Corners.at(static_cast<size_t>(index));
-  lua_pushnumber(state, corner.x);
-  lua_pushnumber(state, corner.y);
-  lua_pushnumber(state, corner.z);
+  // const auto &corner = frustum->Corners.at(static_cast<size_t>(index));
+  // lua_pushnumber(state, corner.x);
+  // lua_pushnumber(state, corner.y);
+  // lua_pushnumber(state, corner.z);
+
+  lua_pushnumber(state, 0);
+  lua_pushnumber(state, 0);
+  lua_pushnumber(state, 0);
 
   return 3;
 };

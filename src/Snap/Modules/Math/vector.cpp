@@ -1508,8 +1508,7 @@ auto Plane::Normal() const -> Vec3 { return {x, y, z}; }
 auto Plane::Distance() const -> Scalar { return w; }
 
 auto Plane::Normalize() const -> Plane {
-  Vec3 normal = Normal();
-  Scalar length = normal.Length();
+  Scalar length = Normal().Length();
   if (length <= Epsilon) {
     return {0.0F, 0.0F, 0.0F, 0.0F};
   }

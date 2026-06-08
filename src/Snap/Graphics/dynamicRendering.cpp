@@ -45,7 +45,7 @@ constexpr size_t PipelineCacheSize = 512UL;
 
 LRUCache<StateKey, std::pair<VkPipeline, PipelineLayout>, StateKeyHash>
     PipelineCache(PipelineCacheSize);
-thread_local std::vector<Ref<Shader::ShaderModule>> UsedShaderModules{};
+
 thread_local PipelineLayout CurrentPipelineLayout; // NOLINT
 
 // Only used for cleanup
@@ -71,6 +71,8 @@ std::unordered_map<DescriptorSetLayoutKey, VkDescriptorSetLayout,
 thread_local std::unordered_map<DescriptorKey, VkDescriptorSet,
                                 DescriptorKeyHash>
     DescriptorSetCache{};
+
+thread_local Stats CurrentStats;
 
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
@@ -844,6 +846,7 @@ auto Pop(const GraphicsContext &context) -> Error {
 
 auto Reset(const GraphicsContext &context) -> Error {
   StateStack.clear();
+  CurrentStats.Reset();
 
   auto state = CHECK_RES(SetupDefaultState(context));
 
@@ -856,7 +859,7 @@ auto Reset(const GraphicsContext &context) -> Error {
 
 auto Shutdown(const GraphicsContext &context) -> Error {
   StateStack.clear();
-  UsedShaderModules.clear();
+  CurrentStats.Reset();
   LastState = nullptr;
   TopOfStack = nullptr;
   PipelineCache.clear();
@@ -881,8 +884,6 @@ auto FlushCompute(const GraphicsContext &context) -> Result<bool> {
 
   assert(TopOfStack->shader->entryPoints.at(0).second ==
          VK_SHADER_STAGE_COMPUTE_BIT);
-
-  UsedShaderModules.emplace_back(TopOfStack->shader);
 
   CurrentPipelineLayout = pipeline.second;
 
@@ -972,6 +973,8 @@ auto Flush(const GraphicsContext &context) -> Result<bool> {
 
   LastStateStorage = *TopOfStack; // Copy current state to last state storage
   LastState = &LastStateStorage;  // Point last state to the storage
+
+  CurrentStats.contextSwitches++;
 
   if (TopOfStack->bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS) {
     auto result = FlushGraphics(context);
@@ -1130,8 +1133,6 @@ inline auto BeginRendering(const GraphicsContext &context) -> Error {
   TracyMessageL("Begin Rendering");
   vkCmdBeginRendering(Graphics::GetCommandBuffer(), &renderingInfo);
   GetIsCurrentlyRendering() = true;
-
-  UsedShaderModules.emplace_back(TopOfStack->shader);
 
   for (int i = 0; i < TopOfStack->colorAttachmentCount; i++) {
     auto &rendertarget = TopOfStack->colorAttachments.at(i);
@@ -1867,9 +1868,8 @@ auto FinalizeFrame(const GraphicsContext &context) -> Error {
 }
 
 auto BeginFrame(const GraphicsContext &context) -> Error {
-  // Setup stack with new swapchain texture
-
   StateStack.clear();
+  CurrentStats.Reset();
 
   auto state = CHECK_RES(SetupDefaultState(context));
   StateStack.emplace_back(state);
@@ -1878,8 +1878,6 @@ auto BeginFrame(const GraphicsContext &context) -> Error {
   LastStateStorage = state;
 
   DrawnToSwapchain = false;
-
-  UsedShaderModules.clear();
 
   return Error::Success();
 }

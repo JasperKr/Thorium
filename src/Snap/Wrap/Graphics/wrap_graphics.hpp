@@ -64,6 +64,8 @@ auto wrap_GetDefaultFilter(lua_State *state) -> int;
 auto wrap_SetDefaultWrapMode(lua_State *state) -> int;
 auto wrap_GetDefaultWrapMode(lua_State *state) -> int;
 
+auto wrap_GetStats(lua_State *state) -> int;
+
 auto ShutdownWrapGraphics() -> void;
 
 // NOLINTNEXTLINE
@@ -112,6 +114,7 @@ static const std::vector<luaL_Reg> GraphicsLib = {
     {"getDefaultFilter", wrap_GetDefaultFilter},
     {"setDefaultWrapMode", wrap_SetDefaultWrapMode},
     {"getDefaultWrapMode", wrap_GetDefaultWrapMode},
+    {"getStats", wrap_GetStats},
 };
 
 const static std::vector<lua_CFunction> childrenInitFunctions = {

@@ -239,7 +239,7 @@ auto Camera::Render(const Graphics::GraphicsContext &context,
       OwnedTextures.PostProcessed));
   OwnedTextures.PostProcessed = nullptr;
 
-  CHECK_ERR(scene->DrawModels(*this, context));
+  CHECK_ERR(scene->DrawModels(thisEntity, context));
 
   CHECK_ERR(FillSkybox(context, scene));
 

@@ -1185,9 +1185,11 @@ inline auto LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
       }
 
       lod.add<Engine::LevelOfDetail>();
-      lod.set<Engine::LocalBounds>(localBounds);
       lod.add<Engine::WorldBounds>();
       lod.add<Engine::Transform>();
+
+      geometry.set<Engine::LocalBounds>(localBounds);
+      geometry.add<Engine::WorldBounds>();
 
       geometry.child_of(lod);
       lod.child_of(shapeEntity);

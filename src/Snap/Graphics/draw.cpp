@@ -12,6 +12,7 @@
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include <cassert>
+#include <cstddef>
 #include <cstdint>
 #include <public/tracy/Tracy.hpp>
 
@@ -237,6 +238,11 @@ auto Draw(const GraphicsContext &context, Mesh &mesh, uint32_t instanceCount)
 
   {
     ZoneScopedN("Vk Draw");
+    DynamicRendering::CurrentStats.drawCalls++;
+    DynamicRendering::CurrentStats.triangleCount +=
+        static_cast<uint64_t>(mesh.GetIndexCount() * instanceCount);
+    DynamicRendering::CurrentStats.instanceCount += instanceCount;
+
     MeshDrawRange range = mesh.GetDrawRange();
 
     if (mesh.GetIndexCount() > 0) {
@@ -288,6 +294,7 @@ auto Dispatch(const GraphicsContext &context, const Math::Uvec3 &threadgroups)
       context, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT));
   CHECK_ERR(InsertResourceBarriers(context));
 
+  DynamicRendering::CurrentStats.dispatchCalls++;
   vkCmdDispatch(commandBuffer, threadgroups.x, threadgroups.y, threadgroups.z);
 
 #if Enable_Snapshots
@@ -315,6 +322,7 @@ auto DispatchIndirect(const GraphicsContext &context,
       context, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT));
   CHECK_ERR(InsertResourceBarriers(context));
 
+  DynamicRendering::CurrentStats.dispatchCalls++;
   vkCmdDispatchIndirect(commandBuffer, indirectBuffer->handle, offset);
 
 #if Enable_Snapshots
@@ -353,6 +361,11 @@ auto DrawIndirect(const GraphicsContext &context, Mesh &mesh,
     return Error::Create(
         "Offset for vkCmdDrawIndirect must be a multiple of 4.");
   }
+
+  DynamicRendering::CurrentStats.drawCalls++;
+  DynamicRendering::CurrentStats.triangleCount +=
+      static_cast<uint64_t>(mesh.GetIndexCount() * count);
+  DynamicRendering::CurrentStats.instanceCount += count;
 
   vkCmdDrawIndirect(commandBuffer, indirectBuffer->handle, offset, count,
                     sizeof(VkDrawIndirectCommand));
@@ -401,6 +414,11 @@ auto Draw(const GraphicsContext &context, const VkPrimitiveTopology &topology,
 
   CHECK_ERR(DynamicRendering::PrepareRendering(context));
 
+  DynamicRendering::CurrentStats.drawCalls++;
+  DynamicRendering::CurrentStats.triangleCount +=
+      static_cast<uint64_t>(vertexCount * instanceCount);
+  DynamicRendering::CurrentStats.instanceCount += instanceCount;
+
   vkCmdDraw(commandBuffer, vertexCount, instanceCount, 0, 0);
 
 #if Enable_Snapshots
@@ -445,6 +463,11 @@ auto Draw(const GraphicsContext &context, const Ref<Buffer> &indexBuffer,
                          VK_INDEX_TYPE_UINT32);
     indexBuffer->MarkUse();
   }
+
+  DynamicRendering::CurrentStats.drawCalls++;
+  DynamicRendering::CurrentStats.triangleCount +=
+      static_cast<uint64_t>(indexCount * instanceCount);
+  DynamicRendering::CurrentStats.instanceCount += instanceCount;
 
   vkCmdDrawIndexed(commandBuffer, indexCount, instanceCount, 0, 0, 0);
 

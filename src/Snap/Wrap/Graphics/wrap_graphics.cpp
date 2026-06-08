@@ -1123,4 +1123,29 @@ auto wrap_GetDefaultWrapMode(lua_State *state) -> int {
   return 3;
 }
 
+auto wrap_GetStats(lua_State *state) -> int {
+  auto stats = ::Graphics::DynamicRendering::CurrentStats;
+
+  if (lua_istable(state, 1) == 0) {
+    lua_newtable(state);
+  }
+
+  lua_pushinteger(state, static_cast<lua_Integer>(stats.drawCalls));
+  lua_setfield(state, -2, "drawcalls");
+
+  lua_pushinteger(state, static_cast<lua_Integer>(stats.dispatchCalls));
+  lua_setfield(state, -2, "dispatches");
+
+  lua_pushinteger(state, static_cast<lua_Integer>(stats.triangleCount));
+  lua_setfield(state, -2, "triangles");
+
+  lua_pushinteger(state, static_cast<lua_Integer>(stats.instanceCount));
+  lua_setfield(state, -2, "instances");
+
+  lua_pushinteger(state, static_cast<lua_Integer>(stats.contextSwitches));
+  lua_setfield(state, -2, "contextswitches");
+
+  return 1;
+}
+
 } // namespace Wrap::Graphics

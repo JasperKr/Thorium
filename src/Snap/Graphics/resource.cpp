@@ -54,10 +54,9 @@ auto TextureMemory::Destroy() -> void {
 
   auto *context = GetCurrentGraphicsContext();
 
-  if (context == nullptr || context->device == VK_NULL_HANDLE ||
-      context->vmaAllocator == VK_NULL_HANDLE) {
-    return;
-  }
+  assert(context != nullptr && context->device != VK_NULL_HANDLE &&
+         context->vmaAllocator != VK_NULL_HANDLE &&
+         "Invalid graphics context during texture destruction.");
 
   vkDestroyImageView(context->device, imageView, GetAllocationCallbacks());
   vmaDestroyImage(context->vmaAllocator, image, allocation);
@@ -100,6 +99,8 @@ auto ProcessReleasedResources(GraphicsContext &context) -> void {
 
     Utils::UnorderedErase(ReleasedTextures, [&](TextureMemory &res) -> auto {
       if (CanBeDestroyed(res.timelineValue)) {
+        PrintWarning("Destroying texture resource with handle: {}",
+                     (void *)res.image);
         res.Destroy();
 
         return true;
@@ -113,6 +114,8 @@ auto ProcessReleasedResources(GraphicsContext &context) -> void {
 
     Utils::UnorderedErase(ReleasedBuffers, [&](BufferMemory &res) -> auto {
       if (CanBeDestroyed(res.timelineValue)) {
+        PrintWarning("Destroying buffer resource with handle: {}",
+                     (void *)res.buffer);
         res.Destroy();
         return true;
       }

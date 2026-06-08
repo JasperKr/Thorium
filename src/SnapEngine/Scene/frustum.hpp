@@ -1,5 +1,6 @@
 #include "Modules/Math/matrix.hpp"
 #include "Modules/Math/vector.hpp"
+#include "Scene/Geometry/boundingBox.hpp"
 #include "Wrap/wrap.hpp"
 #include "Wrap/wrap_engine.hpp"
 #include <algorithm>
@@ -21,13 +22,13 @@ struct Frustum {
   Math::Plane Top{};
   Math::Plane Bottom{};
 
-  std::array<Math::Vec3, CornerCount> Corners{};
+  // std::array<Math::Vec3, CornerCount> Corners{};
 
   // Returns the corners of the frustum in the following order:
   // NTL, NTR, NBR, NBL, FTL, FTR, FBR, FBL
-  [[nodiscard]] auto GetCorners() const -> std::array<Math::Vec3, CornerCount> {
-    return Corners;
-  };
+  // [[nodiscard]] auto GetCorners() const -> std::array<Math::Vec3, CornerCount> {
+  //   return Corners;
+  // };
 
   constexpr static size_t NTL = 0;
   constexpr static size_t NTR = 1;
@@ -38,11 +39,11 @@ struct Frustum {
   constexpr static size_t FBR = 6;
   constexpr static size_t FBL = 7;
 
-  [[nodiscard]] auto GetCorner(size_t index) const -> Math::Vec3 {
-    assert(index < CornerCount && "Frustum corner index out of range");
-    assert(index >= 0 && "Frustum corner index out of range");
-    return Corners.at(index);
-  }
+  // [[nodiscard]] auto GetCorner(size_t index) const -> Math::Vec3 {
+  //   assert(index < CornerCount && "Frustum corner index out of range");
+  //   assert(index >= 0 && "Frustum corner index out of range");
+  //   return Corners.at(index);
+  // }
 
   // Returns the planes of the frustum in the following order:
   // Near, Far, Left, Right, Top, Bottom
@@ -109,6 +110,11 @@ struct Frustum {
   [[nodiscard]] auto IntersectsAABB(const Math::Vec3 &min,
                                     const Math::Vec3 &max,
                                     bool precise = true) const -> bool;
+
+  [[nodiscard]] auto IntersectsAABB(const BoundingBox &box,
+                                    bool precise = true) const -> bool {
+    return IntersectsAABB(box.Min, box.Max, precise);
+  }
 
   static auto FromMatrices(const Math::Matrix4x4 &viewProjectionMatrix,
                            const Math::Matrix4x4 &inverseViewProjectionMatrix)

@@ -142,5 +142,6 @@ template <class T> struct Result : tl::expected<T, Error> {
     if (!_result.has_value()) {                                                \
       return _result.error();                                                  \
     }                                                                          \
-    std::move(_result.value());                                                \
+    auto _res = std::move(_result.value());                                    \
+    _res;                                                                      \
   })

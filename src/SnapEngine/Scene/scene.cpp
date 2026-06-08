@@ -9,12 +9,10 @@
 #include "Graphics/uniformWriter.hpp"
 #include "Modules/Math/matrix.hpp"
 #include "Modules/bindings.hpp"
-#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Modules/reflectBindings.hpp"
 #include "Renderer/rendertargetManager.hpp"
-#include "SDL3/SDL_keycode.h"
 #include "Scene/Geometry/boundingBox.hpp"
 #include "Scene/Geometry/geometry.hpp"
 #include "Scene/Geometry/levelOfDetail.hpp"
@@ -27,6 +25,7 @@
 #include "Scene/Lights/spotLight.hpp"
 #include "Scene/camera.hpp"
 #include "Scene/environment.hpp"
+#include "Scene/frustum.hpp"
 #include "Scene/node.hpp"
 #include "Scene/transform.hpp"
 #include "Scene/userdata.hpp"
@@ -422,13 +421,20 @@ inline auto RenderDrawItem(const DrawItem &item,
 inline auto AddDrawItem(std::vector<DrawItem> &OpaqueDrawItems,
                         std::vector<DrawItem> &MaskedDrawItems,
                         std::vector<DrawItem> &TransparentDrawItems,
-                        flecs::entity entity, const Geometry &geometry)
-    -> void {
+                        flecs::entity entity, const Geometry &geometry,
+                        const Frustum &frustum) -> void {
   const Renderer::Material *material = nullptr;
   material = entity.try_get<Renderer::Material>();
 
   if (material == nullptr) {
     material = &Renderer::RendererInstance.GetNoMaterial();
+  }
+
+  const auto &worldBounds = entity.get<WorldBounds>();
+  const auto &boundingBox = worldBounds.Bounds;
+
+  if (!frustum.IntersectsAABB(boundingBox)) {
+    return; // Skip entities that are outside the camera frustum
   }
 
   auto drawItem = DrawItem{.geom_entity = entity,
@@ -452,10 +458,12 @@ inline auto AddDrawItem(std::vector<DrawItem> &OpaqueDrawItems,
 }
 
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
-auto Scene::DrawModels(Camera &camera, const Graphics::GraphicsContext &context)
-    -> Error {
-
+auto Scene::DrawModels(flecs::entity &cameraEntity,
+                       const Graphics::GraphicsContext &context) -> Error {
   // Pre-frame setup
+
+  auto &camera = cameraEntity.get_mut<Camera>();
+  const auto &frustum = cameraEntity.get<Frustum>();
 
   Renderer::RendererInstance.NewFrame();
 
@@ -528,12 +536,12 @@ auto Scene::DrawModels(Camera &camera, const Graphics::GraphicsContext &context)
           hasChildren = true;
 
           AddDrawItem(OpaqueDrawItems, MaskedDrawItems, TransparentDrawItems,
-                      child, geometry);
+                      child, geometry, frustum);
         });
 
         if (!hasChildren) {
           AddDrawItem(OpaqueDrawItems, MaskedDrawItems, TransparentDrawItems,
-                      entity, geometry);
+                      entity, geometry, frustum);
         }
       });
 
