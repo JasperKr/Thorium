@@ -2,7 +2,6 @@
 
 #include "Graphics/barrier.hpp"
 #include "Graphics/sampler.hpp"
-#include "Graphics/semaphoreManager.hpp"
 #include "Libraries/vma.hpp"
 #include "Modules/compressedImageData.hpp"
 #include "Modules/error.hpp"
@@ -15,7 +14,6 @@
 #include <span>
 
 #include "vulkan/vulkan_core.h"
-#include <algorithm>
 #include <cstdint>
 #include <string>
 #include <utility>
@@ -138,9 +136,7 @@ struct Texture : Object, Barrier::BarrierSynced {
 
   auto GetTimestamp() const -> uint64_t { return lastUsedTimestamp; }
 
-  auto MarkUse() -> void {
-    lastUsedTimestamp = (std::max)(lastUsedTimestamp, GetSemaphoreValue());
-  }
+  auto MarkUse() -> void;
 
   auto CopyTo(const GraphicsContext &context, Texture &dstTexture,
               CopyRegion region) -> Error;

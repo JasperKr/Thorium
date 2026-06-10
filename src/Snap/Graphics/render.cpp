@@ -204,12 +204,13 @@ auto SubmitCommandBuffers(Graphics::GraphicsContext &context,
     }
   }
 
-  auto timelineValue = CHECK_RES(UpdateSemaphoreValues(context));
+  auto timelineValue =
+      CHECK_RES(Graphics::semaphoreManager.UpdateSemaphoreValues(context));
 
   {
     ZoneScopedN("Submit timeline semaphore signal");
 
-    VkSemaphore globalTimelineSemaphore = Graphics::globalTimelineSemaphore;
+    VkSemaphore globalTimelineSemaphore = Graphics::semaphoreManager.semaphore;
     if (globalTimelineSemaphore != VK_NULL_HANDLE) {
       VkTimelineSemaphoreSubmitInfo timelineInfo{};
       timelineInfo.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO;
@@ -299,22 +300,15 @@ PrepareCommands(GraphicsContext &context,
     }
   }
 
-  auto unorderedSemaphoreValues = Graphics::GetPendingTimelineValues();
   std::vector<uint64_t> orderedSemaphoreValues = {};
 
+  orderedSemaphoreValues.reserve(commands.size());
   for (const auto &command : commands) {
-    auto iter =
-        unorderedSemaphoreValues.find(command->threadData.commandBuffer);
-    if (iter != unorderedSemaphoreValues.end()) {
-      orderedSemaphoreValues.emplace_back(iter->second);
-    } else {
-      return Error::Createf(
-          "No pending timeline value found for command buffer of thread {}",
-          command->threadData.name);
-    }
+    orderedSemaphoreValues.emplace_back(
+        command->threadData.cmdBufferTimelineValue);
   }
 
-  Graphics::SetPendingTimelineValues(orderedSemaphoreValues);
+  Graphics::semaphoreManager.QueueTimelineValues(orderedSemaphoreValues);
 
   // Insert a command buffer before each recorded command buffer to handle resource barriers
   // And one at the end to transition the swapchain image to present
@@ -507,7 +501,8 @@ auto Present(Graphics::GraphicsContext &context,
     for (const auto &command : commands) {
       if (command->threadData.commandBuffer != nullptr) {
         Threading::CommandBufferCache.emplace_back(
-            GetSemaphoreValue(), command->threadData.commandBuffer);
+            Graphics::semaphoreManager.GetSemaphoreValue(),
+            command->threadData.commandBuffer);
         command->threadData.commandBuffer = nullptr;
       }
     }

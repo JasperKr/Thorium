@@ -14,6 +14,7 @@
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Wrap/Graphics/wrap_color.hpp"
+#include "Wrap/Graphics/wrap_texture.hpp"
 #include "Wrap/wrap.hpp"
 #include <cassert>
 
@@ -1144,6 +1145,14 @@ auto wrap_GetStats(lua_State *state) -> int {
 
   lua_pushinteger(state, static_cast<lua_Integer>(stats.contextSwitches));
   lua_setfield(state, -2, "contextswitches");
+
+  lua_pushinteger(state, static_cast<lua_Integer>(
+                             ::Graphics::Texture::TotalAllocatedMemory));
+  lua_setfield(state, -2, "texturememory");
+
+  lua_pushinteger(state, static_cast<lua_Integer>(
+                             ::Graphics::Buffer::TotalAllocatedMemory));
+  lua_setfield(state, -2, "buffermemory");
 
   return 1;
 }

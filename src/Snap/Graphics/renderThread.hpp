@@ -3,7 +3,6 @@
 #include "Graphics/barrier.hpp"
 #include "Graphics/graphicsContext.hpp"
 #include "Graphics/sampler.hpp"
-#include "Graphics/semaphoreManager.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Modules/type.hpp"
@@ -30,8 +29,9 @@ struct RenderThreadData {
   int64_t priority = 0; // Tie-breaker for overlapping keys
 
   VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
+  uint64_t cmdBufferTimelineValue{};
   bool drawsToSwapchain = false;
-  uint64_t aquiredAtFrame = 0;
+  uint64_t aquiredAtFrame{};
 
   std::string name;
   uint64_t id{};
@@ -60,7 +60,7 @@ struct RenderThreadInfo : Object {
   ~RenderThreadInfo() override {
     if (threadData.commandBuffer != VK_NULL_HANDLE) {
       std::lock_guard<std::mutex> lock(CommandBufferCacheMutex);
-      CommandBufferCache.emplace_back(GetSemaphoreValue(),
+      CommandBufferCache.emplace_back(threadData.cmdBufferTimelineValue,
                                       threadData.commandBuffer);
       threadData.commandBuffer = VK_NULL_HANDLE;
     }

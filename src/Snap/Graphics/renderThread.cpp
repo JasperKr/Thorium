@@ -38,16 +38,6 @@ auto GetCachedCommandBuffer(const GraphicsContext &context)
 
   uint64_t completedValue = UINT64_MAX;
 
-  {
-    std::lock_guard lock(Graphics::GraphicsContext::mutexes.device);
-    auto result = Error::Create(vkGetSemaphoreCounterValue(
-        context.device, globalTimelineSemaphore, &completedValue));
-
-    if (Error::IsError(result)) {
-      return std::nullopt;
-    }
-  }
-
   std::lock_guard<std::mutex> lock(CommandBufferCacheMutex);
   for (auto it = CommandBufferCache.begin(); it != CommandBufferCache.end();
        ++it) {
@@ -118,9 +108,11 @@ inline auto GetDescriptorPool(ThreadContext &tcontext) -> Error {
   VkDescriptorPool pool = VK_NULL_HANDLE;
 
   for (auto &descriptorPoolInfo : tcontext.descriptorPools) {
-    if (!IsInUse(descriptorPoolInfo.lastUsedTimestamp)) {
+    if (!Graphics::semaphoreManager.IsInUse(
+            descriptorPoolInfo.lastUsedTimestamp)) {
       pool = descriptorPoolInfo.descriptorPool;
-      descriptorPoolInfo.lastUsedTimestamp = GetSemaphoreValue();
+      descriptorPoolInfo.lastUsedTimestamp =
+          Graphics::semaphoreManager.GetSemaphoreValue();
       break;
     }
   }
@@ -135,7 +127,8 @@ inline auto GetDescriptorPool(ThreadContext &tcontext) -> Error {
     pool = createResult.value();
 
     tcontext.descriptorPools.push_back(
-        {pool, GetSemaphoreValue()}); // Add new pool to the list
+        {pool, Graphics::semaphoreManager
+                   .GetSemaphoreValue()}); // Add new pool to the list
 
     tcontext.descriptorPool = pool;
   } else {
@@ -197,7 +190,9 @@ auto AquireCommandBuffer(Graphics::GraphicsContext &context,
     threadInfo->threadData.commandBuffer = cachedCmdBuffer.value();
   }
 
-  NewSemaphoreValue(threadInfo->threadData.commandBuffer);
+  threadInfo->threadData.cmdBufferTimelineValue =
+      Graphics::semaphoreManager.NewSemaphoreValue(
+          threadInfo->threadData.commandBuffer);
 
   // Reset old command buffer
   VkCommandBufferResetFlags resetFlags{};
@@ -256,8 +251,6 @@ auto SubmitCommands(Graphics::GraphicsContext &context)
       Barrier::GlobalResourceStateUpdates;
   CurrentRenderThreadInfo->threadData.drawsToSwapchain =
       Graphics::DynamicRendering::DrawnToSwapchain;
-
-  auto timelineValue = GetSemaphoreValue();
 
   auto &threadContext = GetThreadContext();
 

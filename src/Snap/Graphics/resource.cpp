@@ -1,5 +1,6 @@
 #include "resource.hpp"
 #include "Graphics/allocations.hpp"
+#include "Graphics/graphics.hpp"
 #include "Graphics/semaphoreManager.hpp"
 #include "Libraries/vma.hpp"
 #include "Modules/Helpers/utils.hpp"
@@ -86,7 +87,7 @@ inline auto CanBeDestroyed( // NOLINTNEXTLINE
     return true;
   }
 
-  return !IsInUse(resourceTimelineValue);
+  return !Graphics::semaphoreManager.IsInUse(resourceTimelineValue);
 }
 
 auto ProcessReleasedResources(GraphicsContext &context) -> void {

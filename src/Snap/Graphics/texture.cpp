@@ -960,6 +960,12 @@ auto Texture::SetPixels(const GraphicsContext &context,
                    imageData.GetDimensions());
 }
 
+auto Texture::MarkUse() -> void {
+  lastUsedTimestamp =
+      (std::max)(lastUsedTimestamp,
+                 Graphics::semaphoreManager.GetSemaphoreValue());
+}
+
 struct VkFormatTextureTypeHash {
   auto operator()(const std::pair<VkFormat, TextureType> &key) const noexcept
       -> size_t {

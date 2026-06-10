@@ -39,6 +39,8 @@ do
       Imgui.Text(string.format("Triangles: %d", stats.triangles))
       Imgui.Text(string.format("Instances: %d", stats.instances))
       Imgui.Text(string.format("Context switches: %d", stats.contextswitches))
+      Imgui.Text(string.format("Texture memory: %.2f MiB", stats.texturememory / (1024 * 1024)))
+      Imgui.Text(string.format("Buffer memory: %.2f MiB", stats.buffermemory / (1024 * 1024)))
     end
     Imgui.End()
 

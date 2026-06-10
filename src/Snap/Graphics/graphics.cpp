@@ -30,6 +30,7 @@ thread_local std::string ContextDebugname{};
 
 std::vector<VkCommandPool> CommandPools{};
 std::mutex CommandPoolsMutex{};
+SemaphoreManager semaphoreManager{};
 
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 

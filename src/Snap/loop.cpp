@@ -1,7 +1,6 @@
 #include "loop.hpp"
 #include "Editor/gui.hpp"
 #include "Graphics/Buffers/uniform.hpp"
-#include "Graphics/buffer.hpp"
 #include "Graphics/deviceInfo.hpp"
 #include "Graphics/dynamicRendering.hpp"
 #include "Graphics/graphics.hpp"
@@ -267,7 +266,7 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
 
   Graphics::SetCurrentGraphicsContext(&context);
 
-  CHECK_ERR(Graphics::InitializeGlobalTimelineSemaphore(context));
+  CHECK_ERR(Graphics::semaphoreManager.Initialize(context));
 
   CHECK_ERR(Graphics::Shader::LoadModule());
 
@@ -364,7 +363,7 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
 
   PrintInfo("Deinitializing global timeline semaphore...");
 
-  DeInitializeGlobalTimelineSemaphore(context);
+  Graphics::semaphoreManager.DeInitialize(context);
 
   PrintInfo("Unloading shader modules...");
 

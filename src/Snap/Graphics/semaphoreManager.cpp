@@ -2,181 +2,100 @@
 #include "Graphics/allocations.hpp"
 #include "Graphics/graphicsContext.hpp"
 
+#include "Modules/Helpers/utils.hpp"
 #include "vulkan/vulkan_core.h"
-#include <algorithm>
 #include <atomic>
 #include <condition_variable>
 #include <cstdint>
 #include <mutex>
 #include <public/tracy/Tracy.hpp>
 #include <shared_mutex>
-#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
 namespace Graphics {
 
-// NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
+auto SemaphoreManager::GetSemaphoreValue() -> uint64_t {
+  return currentCPUTimelineValue.load();
+}
 
-VkSemaphore globalTimelineSemaphore{};
-
-// Current CPU timeline value for generating unique semaphore values
-std::atomic<uint64_t> currentCPUTimelineValue{};
-std::condition_variable timelineCompletionCV{};
-std::mutex timelineCompletionMutex{};
-
-// Mutex to protect timeline sets
-std::shared_mutex timelineSetsMutex{};
-
-// Timeline values that have been submitted but not yet completed
-std::unordered_set<uint64_t> uncompletedTimelineValues{};
-std::vector<uint64_t> sortedUncompletedTimelineValues{};
-
-// Pending timeline values mapped to command buffers, not yet submitted
-std::unordered_map<VkCommandBuffer, uint64_t> pendingTimelineValues{};
-std::unordered_map<uint64_t, VkCommandBuffer> pendingTimelineValueInv{};
-
-// Sorted pending timeline values for submission
-std::vector<uint64_t> sortedPendingTimelineValues{};
-
-// Semaphore values may be remapped since they must be incrementing each submit
-// but command buffers may be submitted out of order
-std::unordered_map<uint64_t, uint64_t> semaphoreValueMap{};
-
-// NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
-
-auto GetSemaphoreValue() -> uint64_t { return currentCPUTimelineValue.load(); }
-
-auto NewSemaphoreValue(VkCommandBuffer cmdBuffer) -> uint64_t {
+auto SemaphoreManager::NewSemaphoreValue(VkCommandBuffer cmdBuffer)
+    -> uint64_t {
   // Does not have to be an increasing value, just unique
   auto value = currentCPUTimelineValue.fetch_add(1) + 1;
   {
     std::unique_lock lock(timelineSetsMutex);
-    pendingTimelineValues.emplace(cmdBuffer, value);
-    pendingTimelineValueInv.emplace(value, cmdBuffer);
+    uncompletedTimelineValues.emplace(value);
   }
   return value;
 }
 
-auto IsInUse(uint64_t value) -> bool {
+auto SemaphoreManager::IsInUse(uint64_t value) -> bool {
   std::shared_lock lock(timelineSetsMutex);
-  return uncompletedTimelineValues.contains(value) ||
-         pendingTimelineValueInv.contains(value);
+  return uncompletedTimelineValues.contains(value);
 }
 
-auto GetPendingTimelineValues()
-    -> std::unordered_map<VkCommandBuffer, uint64_t> {
-  std::shared_lock lock(timelineSetsMutex);
-  return pendingTimelineValues;
-}
-
-auto SetPendingTimelineValues(const std::vector<uint64_t> &values) -> void {
+auto SemaphoreManager::QueueTimelineValues(const std::vector<uint64_t> &values)
+    -> void {
   std::unique_lock lock(timelineSetsMutex);
-  sortedPendingTimelineValues = values;
+  sortedUncompletedTimelineValues.insert(sortedUncompletedTimelineValues.end(),
+                                         values.begin(), values.end());
 }
 
 // Update the semaphore values before submitting command buffers
 // And returns the latest queued timeline value for signalling with a semaphore
-auto UpdateSemaphoreValues(const GraphicsContext &context) -> Result<uint64_t> {
+auto SemaphoreManager::UpdateSemaphoreValues(const GraphicsContext &context)
+    -> Result<uint64_t> {
   ZoneScoped;
 
   std::lock_guard lock(timelineSetsMutex);
 
-  if (sortedPendingTimelineValues.empty()) {
-    for (const auto &pair : pendingTimelineValues) {
-      sortedUncompletedTimelineValues.emplace_back(pair.second);
-    }
-
-    pendingTimelineValues.clear();
-  } else {
-    sortedUncompletedTimelineValues.insert(
-        sortedUncompletedTimelineValues.end(),
-        sortedPendingTimelineValues.begin(), sortedPendingTimelineValues.end());
-
-    // Remove only the values that were added
-    for (const auto &pair : sortedPendingTimelineValues) {
-      auto iter = pendingTimelineValues.find(pendingTimelineValueInv.at(pair));
-      if (iter != pendingTimelineValues.end()) {
-        pendingTimelineValues.erase(iter);
-      }
-      pendingTimelineValueInv.erase(pair);
-    }
-  }
-
-  if (sortedUncompletedTimelineValues.empty()) {
-    // No commands.
-    return GetSemaphoreValue();
-  }
-
+  // currentFrame starts at 0, but vulkan complains when signalling a timeline semaphore with value 0, so we start at 1
+  uint64_t frameIdx = context.currentFrame + 1;
   uint64_t maxValue = GetSemaphoreValue();
+
+  // No commands.
+  if (sortedUncompletedTimelineValues.empty()) {
+    return maxValue;
+  }
+
   for (const auto &value : sortedUncompletedTimelineValues) {
     uncompletedTimelineValues.insert(value);
-    maxValue = (std::max)(value, maxValue);
   }
 
-  auto latestValue = sortedUncompletedTimelineValues.back();
-
-  if (latestValue != maxValue) {
-    semaphoreValueMap[maxValue] = latestValue;
-  }
-
-  latestValue = maxValue;
-
-  sortedPendingTimelineValues.clear();
-
-  uint64_t completedValue = UINT64_MAX;
+  uncompletedFrames.emplace_back(frameIdx, sortedUncompletedTimelineValues);
+  sortedUncompletedTimelineValues.clear();
 
   {
-    std::lock_guard lock(Graphics::GraphicsContext::mutexes.device);
-    CHECK_ERR(Error::Create(vkGetSemaphoreCounterValue(
-        context.device, globalTimelineSemaphore, &completedValue)));
+    std::unique_lock<std::mutex> lock(
+        Graphics::GraphicsContext::mutexes.device);
+
+    CHECK_NEW_ERR(vkGetSemaphoreCounterValue(context.device, semaphore,
+                                             &gpuCompletedTimelineValue));
   }
 
-  // Find the index of the completed value
-  // This will have been ordered so all values less than or equal to the completed value
-  // Will be considered completed and can be removed from the uncompleted set
-  auto newStart = -1;
+  // Remove completed timeline values
+  Utils::UnorderedErase(uncompletedFrames, [&](const auto &value) -> bool {
+    bool erase = value.first <= gpuCompletedTimelineValue;
 
-  // If some values were remapped, get the original value
-  // For example: we submit [1], [3], [4, 2], [5]
-  // We remap 2 -> 4, so when we get completed value 4, we need to map it back to 2
-  auto iter = semaphoreValueMap.find(completedValue);
-  if (iter != semaphoreValueMap.end()) {
-    completedValue = iter->second;
-    semaphoreValueMap.erase(iter);
-  }
-
-  for (size_t i = 0; i < sortedUncompletedTimelineValues.size(); i++) {
-    if (sortedUncompletedTimelineValues[i] == completedValue) {
-      newStart = static_cast<int>(i) + 1; // +1 to move past completed value
-      break;
+    if (erase) {
+      for (const auto &originalValue : value.second) {
+        uncompletedTimelineValues.erase(originalValue);
+      }
     }
-  }
 
-  if (newStart == -1) {
-    // No values completed
-    return latestValue;
-  }
-
-  // Remove completed values from the uncompleted set
-  for (int i = 0; i < newStart; i++) {
-    uncompletedTimelineValues.erase(sortedUncompletedTimelineValues[i]);
-  }
-
-  // Cut off completed values from the sorted vector
-  sortedUncompletedTimelineValues.erase(
-      sortedUncompletedTimelineValues.begin(),
-      sortedUncompletedTimelineValues.begin() + newStart);
+    return erase;
+  });
 
   {
     std::lock_guard lock(timelineCompletionMutex);
     timelineCompletionCV.notify_all();
   }
 
-  return latestValue;
+  return frameIdx;
 }
 
-auto InitializeGlobalTimelineSemaphore(GraphicsContext &context) -> Error {
+auto SemaphoreManager::Initialize(GraphicsContext &context) -> Error {
   VkSemaphoreTypeCreateInfo timelineInfo = {
       .sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
       .semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE,
@@ -190,20 +109,18 @@ auto InitializeGlobalTimelineSemaphore(GraphicsContext &context) -> Error {
 
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    CHECK_ERR(Error::Create(vkCreateSemaphore(context.device, &semInfo,
-                                              GetAllocationCallbacks(),
-                                              &globalTimelineSemaphore)));
+    CHECK_ERR(Error::Create(vkCreateSemaphore(
+        context.device, &semInfo, GetAllocationCallbacks(), &semaphore)));
   }
 
   return Error::Success();
 }
 
-auto DeInitializeGlobalTimelineSemaphore(GraphicsContext &context) -> void {
-  if (globalTimelineSemaphore != VK_NULL_HANDLE) {
+auto SemaphoreManager::DeInitialize(GraphicsContext &context) -> void {
+  if (semaphore != VK_NULL_HANDLE) {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    vkDestroySemaphore(context.device, globalTimelineSemaphore,
-                       GetAllocationCallbacks());
-    globalTimelineSemaphore = VK_NULL_HANDLE;
+    vkDestroySemaphore(context.device, semaphore, GetAllocationCallbacks());
+    semaphore = VK_NULL_HANDLE;
   }
 }
 

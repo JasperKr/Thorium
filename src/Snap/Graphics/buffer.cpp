@@ -365,8 +365,6 @@ auto Buffer::Create(const GraphicsContext &context,
   buffer->usage = info.usage;
   buffer->properties = info.properties;
 
-  Buffer::TotalAllocatedMemory += buffer->sizeInBytes;
-
   PrintDebug("Buffer created with handle {}", (void *)buffer->handle);
 
   VmaAllocationInfo memRequirements;
@@ -378,6 +376,7 @@ auto Buffer::Create(const GraphicsContext &context,
                          &memRequirements);
   }
   buffer->sizeInBytes = memRequirements.size;
+  Buffer::TotalAllocatedMemory += buffer->sizeInBytes;
 
   if (info.persistentMapping) {
     PrintDebug("Persistently mapping buffer memory.");
@@ -390,7 +389,7 @@ auto Buffer::Create(const GraphicsContext &context,
   }
 
   PrintDebug("Buffer size in bytes: {}", buffer->sizeInBytes);
-  buffer->lastUsedTimestamp = GetSemaphoreValue();
+  buffer->lastUsedTimestamp = Graphics::semaphoreManager.GetSemaphoreValue();
 
   return buffer;
 }
@@ -545,7 +544,9 @@ auto Buffer::Grow(const GraphicsContext &context, size_t newSize)
 }
 
 auto Buffer::MarkUse() -> void {
-  lastUsedTimestamp = (std::max)(lastUsedTimestamp, GetSemaphoreValue());
+  lastUsedTimestamp =
+      (std::max)(lastUsedTimestamp,
+                 Graphics::semaphoreManager.GetSemaphoreValue());
 }
 
 // NOLINTNEXTLINE
@@ -638,7 +639,7 @@ auto Buffer::Readback(const GraphicsContext &context,
   vkCmdCopyBuffer(commandBuffer, handle, stagingBuffer, 1, &copyRegion);
 
   MarkUse();
-  auto timelineValue = GetSemaphoreValue();
+  auto timelineValue = Graphics::semaphoreManager.GetSemaphoreValue();
 
   auto bufferReadback = Ref<BufferReadback>::Make();
   if (output.isValid()) {
@@ -672,9 +673,11 @@ auto Buffer::Readback(const GraphicsContext &context,
     }
 
     {
-      std::unique_lock<std::mutex> lock(timelineCompletionMutex);
-      timelineCompletionCV.wait(
-          lock, [&]() -> bool { return !IsInUse(timelineValue); });
+      std::unique_lock<std::mutex> lock(
+          Graphics::semaphoreManager.timelineCompletionMutex);
+      Graphics::semaphoreManager.timelineCompletionCV.wait(lock, [&]() -> bool {
+        return !Graphics::semaphoreManager.IsInUse(timelineValue);
+      });
     }
 
     std::memcpy(bufferReadback->data->GetData(), mapped, uploadSize);

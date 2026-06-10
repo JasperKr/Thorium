@@ -2,6 +2,7 @@
 
 #include "Graphics/deviceSettings.hpp"
 #include "Graphics/graphicsContext.hpp"
+#include "Graphics/semaphoreManager.hpp"
 #include "Graphics/threadContext.hpp"
 #include "Modules/window.hpp"
 
@@ -35,7 +36,7 @@ auto GetCurrentGraphicsContext() -> GraphicsContext *;
 auto GetDeferredDestructionAllowed() -> bool &;
 
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
-extern std::mutex globalTimelineSemaphoreMutex;
+extern SemaphoreManager semaphoreManager;
 thread_local extern std::string ContextDebugname;
 
 extern std::vector<VkCommandPool> CommandPools;

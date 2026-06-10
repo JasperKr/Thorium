@@ -6,50 +6,57 @@
 #include <cstdint>
 #include <mutex>
 #include <shared_mutex>
-#include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include "vulkan/vulkan_core.h"
 
 namespace Graphics {
 
-// NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
+/*
+Semaphores are signalled every submit, so every vsync.
+Every time a command buffer is aquired (async) We call NewSemaphoreValue
+This increments the current timeline value and adds it to the pending map,
+Each value in this map corresponds to a not-yet submitted command buffer
+The uncompletedTimelineValues correspond to submitted not yet completed command buffers
+We expect at least one command buffer to always be submitted, meaning
+currentCPUTimelineValue will be incremented by AT LEAST 1 every vsync, but may be more.
 
-extern VkSemaphore globalTimelineSemaphore;
-extern std::atomic<uint64_t> currentCPUTimelineValue;
-extern std::condition_variable timelineCompletionCV;
-extern std::mutex timelineCompletionMutex;
+when the user submits their command buffers in a vector, we consider them "sorted"
+each of these have a unique timeline value, but are not in order.
+*/
 
-extern std::shared_mutex timelineSetsMutex;
+struct SemaphoreManager {
+  VkSemaphore semaphore;
+  uint64_t gpuCompletedTimelineValue = 0;
 
-extern std::unordered_set<uint64_t> uncompletedTimelineValues;
-extern std::vector<uint64_t> sortedUncompletedTimelineValues;
+  std::atomic<uint64_t> currentCPUTimelineValue;
+  std::condition_variable timelineCompletionCV;
+  std::mutex timelineCompletionMutex;
 
-extern std::unordered_map<VkCommandBuffer, uint64_t> pendingTimelineValues;
-extern std::vector<uint64_t> sortedPendingTimelineValues;
+  std::shared_mutex timelineSetsMutex;
 
-// NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
+  std::unordered_set<uint64_t> uncompletedTimelineValues;
+  std::vector<uint64_t> sortedUncompletedTimelineValues;
 
-auto GetSemaphoreValue() -> uint64_t;
-auto NewSemaphoreValue(VkCommandBuffer cmdBuffer) -> uint64_t;
+  // [completed frame value] -> [original values that were remapped to this value]
+  std::vector<std::pair<uint64_t, std::vector<uint64_t>>> uncompletedFrames;
 
-auto IsInUse(uint64_t value) -> bool;
+  auto GetSemaphoreValue() -> uint64_t;
+  auto NewSemaphoreValue(VkCommandBuffer cmdBuffer) -> uint64_t;
 
-// Get the pending timeline semaphore values
-auto GetPendingTimelineValues()
-    -> std::unordered_map<VkCommandBuffer, uint64_t>;
+  auto IsInUse(uint64_t value) -> bool;
 
-// Set the pending timeline semaphore values
-// This will overwrite the existing set, this is to reorder the values
-// When command buffers are reordered before submission
-auto SetPendingTimelineValues(const std::vector<uint64_t> &values) -> void;
+  // Set the pending timeline semaphore values
+  // This will overwrite the existing set, this is to reorder the values
+  // When command buffers are reordered before submission
+  auto QueueTimelineValues(const std::vector<uint64_t> &values) -> void;
 
-auto UpdateSemaphoreValues(const struct GraphicsContext &context)
-    -> Result<uint64_t>;
-auto InitializeGlobalTimelineSemaphore(struct GraphicsContext &context)
-    -> Error;
-auto DeInitializeGlobalTimelineSemaphore(struct GraphicsContext &context)
-    -> void;
+  auto UpdateSemaphoreValues(const struct GraphicsContext &context)
+      -> Result<uint64_t>;
+  auto Initialize(struct GraphicsContext &context) -> Error;
+  auto DeInitialize(struct GraphicsContext &context) -> void;
+};
 
 } // namespace Graphics
