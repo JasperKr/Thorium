@@ -3,6 +3,7 @@
 #include "Graphics/deviceSettings.hpp"
 #include "Graphics/graphicsContext.hpp"
 #include "Graphics/graphicsState.hpp"
+#include "Graphics/resource.hpp"
 #include "Libraries/vma.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
@@ -519,11 +520,17 @@ auto Initialize(GraphicsContext &context, Window::WindowContext &wcontext,
 void Deinitialize(GraphicsContext &context) {
   PrintInfo("Deinitializing graphics context...");
 
+  vkDeviceWaitIdle(context.device);
+
+  Graphics::Barrier::ResetModule();
+
+  PrintInfo("Processing released resources...");
+  // (BEFORE device, allocator lock)
+  Graphics::ProcessReleasedResources(context);
+
   std::scoped_lock<std::mutex, std::mutex> lock(
       Graphics::GraphicsContext::mutexes.device,
       Graphics::GraphicsContext::mutexes.vmaAllocator);
-
-  vkDeviceWaitIdle(context.device);
 
   for (auto &descriptorPoolInfo : GetThreadContext().descriptorPools) {
     vkDestroyDescriptorPool(context.device, descriptorPoolInfo.descriptorPool,

@@ -222,10 +222,11 @@ auto FromSwapchainTexture(const GraphicsContext &context,
   texture->lastUsedStages = 0;
   texture->currentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
   texture->lastUsage = TextureUsage::Unknown;
+  texture->lastPipelineStage = VK_PIPELINE_STAGE_NONE_KHR;
 
   Barrier::UpdateUsage(context, *texture,
                        Barrier::ResourceState{
-                           .stages = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
+                           .stages = VK_PIPELINE_STAGE_2_NONE_KHR,
                            .access = 0,
                        });
 
@@ -961,9 +962,7 @@ auto Texture::SetPixels(const GraphicsContext &context,
 }
 
 auto Texture::MarkUse() -> void {
-  lastUsedTimestamp =
-      (std::max)(lastUsedTimestamp,
-                 Graphics::semaphoreManager.GetSemaphoreValue());
+  lastUsedTimestamp = Graphics::semaphoreManager.GetSemaphoreValue();
 }
 
 struct VkFormatTextureTypeHash {

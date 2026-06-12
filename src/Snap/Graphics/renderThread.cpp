@@ -36,12 +36,10 @@ inline std::atomic<uint64_t> threadDataIDCounter = 0;
 auto GetCachedCommandBuffer(const GraphicsContext &context)
     -> std::optional<VkCommandBuffer> {
 
-  uint64_t completedValue = UINT64_MAX;
-
   std::lock_guard<std::mutex> lock(CommandBufferCacheMutex);
   for (auto it = CommandBufferCache.begin(); it != CommandBufferCache.end();
        ++it) {
-    if (it->first <= completedValue) {
+    if (it->first < Graphics::semaphoreManager.GetCompletedSemaphoreValue()) {
       auto *commandBuffer = it->second;
       CommandBufferCache.erase(it);
       return commandBuffer;
@@ -207,6 +205,7 @@ auto AquireCommandBuffer(Graphics::GraphicsContext &context,
 
   VkCommandBufferBeginInfo beginInfo = {};
   beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+  beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
   CHECK_ERR(Error::Create(
       vkBeginCommandBuffer(threadInfo->threadData.commandBuffer, &beginInfo)));
 
@@ -242,8 +241,8 @@ auto SubmitCommands(Graphics::GraphicsContext &context)
     return flushResult;
   }
 
-  CHECK_ERR(Error::Create(
-      vkEndCommandBuffer(CurrentRenderThreadInfo->threadData.commandBuffer)));
+  CHECK_NEW_ERR(
+      vkEndCommandBuffer(CurrentRenderThreadInfo->threadData.commandBuffer));
 
   CurrentRenderThreadInfo->threadData.resourceSyncs =
       Barrier::GlobalResourceSyncTimeline;
@@ -330,10 +329,7 @@ auto Deinitialize(Graphics::GraphicsContext &context) -> Error {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
 
     // TODO: Delay thread destruction until this isn't needed anymore since this will never fire if another thread is doing shit
-    auto result = vkDeviceWaitIdle(context.device);
-    if (Error::IsError(result)) {
-      return Error::Create(result);
-    }
+    CHECK_NEW_ERR(vkDeviceWaitIdle(context.device));
 
     for (auto &descriptorPoolInfo : GetThreadContext().descriptorPools) {
       vkDestroyDescriptorPool(context.device, descriptorPoolInfo.descriptorPool,

@@ -19,6 +19,10 @@ auto SemaphoreManager::GetSemaphoreValue() -> uint64_t {
   return currentCPUTimelineValue.load();
 }
 
+auto SemaphoreManager::GetCompletedSemaphoreValue() const -> uint64_t {
+  return gpuCompletedTimelineValue;
+}
+
 auto SemaphoreManager::NewSemaphoreValue(VkCommandBuffer cmdBuffer)
     -> uint64_t {
   // Does not have to be an increasing value, just unique
@@ -76,7 +80,7 @@ auto SemaphoreManager::UpdateSemaphoreValues(const GraphicsContext &context)
 
   // Remove completed timeline values
   Utils::UnorderedErase(uncompletedFrames, [&](const auto &value) -> bool {
-    bool erase = value.first <= gpuCompletedTimelineValue;
+    bool erase = value.first < gpuCompletedTimelineValue;
 
     if (erase) {
       for (const auto &originalValue : value.second) {

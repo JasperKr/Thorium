@@ -138,6 +138,11 @@ struct ShaderModule : Object {
       vkDestroyShaderModule(ctx->device, module, GetAllocationCallbacks());
       module = VK_NULL_HANDLE;
     }
+
+    auto &state = GetState();
+    state.userBoundBuffers.clear();
+    state.userBoundTextures.clear();
+    BoundStates.erase(module);
   }
 
   static auto

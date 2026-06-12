@@ -148,13 +148,6 @@ auto AquireNextSwapchainImage(Graphics::GraphicsContext &context) -> Error {
         &context.swapchainImageIndex));
   }
 
-  if (context.imageInFlight[context.swapchainImageIndex] != VK_NULL_HANDLE) {
-    ZoneScopedN("Wait for image in-flight fence");
-    CHECK_ERR(Error::Create(vkWaitForFences(
-        context.device, 1, &context.imageInFlight[context.swapchainImageIndex],
-        VK_TRUE, UINT64_MAX)));
-  }
-
   return Error::Success();
 }
 
@@ -188,7 +181,7 @@ auto SubmitCommandBuffers(Graphics::GraphicsContext &context,
   // Signal the swapchain finished semaphore
   submitInfo.signalSemaphoreCount = 1;
   submitInfo.pSignalSemaphores =
-      &context.imageReady.at(context.swapchainImageIndex);
+      &context.renderFinished.at(context.swapchainImageIndex);
 
   {
     ZoneScopedN("Submit command buffer to queue");
@@ -240,7 +233,7 @@ auto PresentFrame(Graphics::GraphicsContext &context) -> Error {
   presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
   presentInfo.waitSemaphoreCount = 1;
   presentInfo.pWaitSemaphores =
-      &context.imageReady.at(context.swapchainImageIndex);
+      &context.renderFinished.at(context.swapchainImageIndex);
   presentInfo.swapchainCount = 1;
   presentInfo.pSwapchains = &context.swapchainInfo.swapchain;
   presentInfo.pImageIndices = &context.swapchainImageIndex;
@@ -356,6 +349,7 @@ SubmitBarriers(const GraphicsContext &context,
 
     VkCommandBufferBeginInfo beginInfo = {};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
     bool begunCmdBuffer = false;
 
@@ -455,6 +449,8 @@ auto Present(Graphics::GraphicsContext &context,
   auto *presentTransitionBuffer = finalCommandBuffers.at(index);
   VkCommandBufferBeginInfo beginInfo = {};
   beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+  beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
   vkBeginCommandBuffer(presentTransitionBuffer, &beginInfo);
   GetThreadContext().commandBuffer = presentTransitionBuffer;
 
@@ -477,7 +473,7 @@ auto Present(Graphics::GraphicsContext &context,
 
   // Prepare for next frame
   context.currentFrame++;
-  context.frameIndex = (++context.frameIndex) % FRAMES_IN_FLIGHT;
+  context.frameIndex = context.currentFrame % FRAMES_IN_FLIGHT;
   Barrier::ResetFrameTimeline();
 
   auto *windowContext = Window::GetWindowContext();

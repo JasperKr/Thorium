@@ -269,16 +269,11 @@ auto SwapchainManager::Deinitialize(GraphicsContext &context) -> void {
 
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    for (auto &fence : context.imageInFlight) {
-      vkDestroyFence(context.device, fence, GetAllocationCallbacks());
-    }
-
-    for (auto &semaphore : context.imageReady) {
+    for (auto &semaphore : context.renderFinished) {
       vkDestroySemaphore(context.device, semaphore, GetAllocationCallbacks());
     }
 
-    context.imageInFlight.clear();
-    context.imageReady.clear();
+    context.renderFinished.clear();
   }
 
   currentSwapchain = VK_NULL_HANDLE;
@@ -294,14 +289,12 @@ auto SwapchainManager::RecreateSwapchain(GraphicsContext &context,
       .swapchain = currentSwapchain,
       .textures = currentTextures,
       .lastFrameUsed = lastFrameUsed,
-      .imageReady = context.imageReady,
-      .imageInFlight = context.imageInFlight,
+      .imageReady = context.renderFinished,
   };
 
   oldSwapchains.emplace_back(oldSwapchain);
 
-  context.imageReady.clear();
-  context.imageInFlight.clear();
+  context.renderFinished.clear();
 
   auto createResult = CreateVkSwapchain(context, wcontext);
   if (Error::IsError(createResult)) {
@@ -311,34 +304,6 @@ auto SwapchainManager::RecreateSwapchain(GraphicsContext &context,
   currentSwapchain = context.swapchainInfo.swapchain;
   currentTextures = context.swapchainInfo.textures;
   isDirty = false;
-
-  context.frameIndex = 0;
-
-  // TODO: Keep track of pipelines that use the old swapchain textures
-  // And destroy them once we are sure they are no longer in use, which is tricky because i would
-  // need to track another fucking resource but whatever
-  // {
-  //   std::scoped_lock<std::mutex, std::mutex> lock(
-  //       Graphics::GraphicsContext::mutexes.device,
-  //       DynamicRendering::PipelinesMutex);
-  //   for (const auto &pipeline : DynamicRendering::Pipelines) {
-  //     if (pipeline != VK_NULL_HANDLE) {
-  //       vkDestroyPipeline(context.device, pipeline, GetAllocationCallbacks());
-  //     }
-  //   }
-  //   for (const auto &layout : DynamicRendering::PipelineLayouts) {
-  //     vkDestroyPipelineLayout(context.device, layout.layout,
-  //                             GetAllocationCallbacks());
-  //   }
-  //   for (auto &layouts : DynamicRendering::DescriptorSetLayoutCache) {
-  //     vkDestroyDescriptorSetLayout(context.device, layouts.second,
-  //                                  GetAllocationCallbacks());
-  //   }
-
-  //   DynamicRendering::Pipelines.clear();
-  //   DynamicRendering::PipelineLayouts.clear();
-  //   DynamicRendering::DescriptorSetLayoutCache.clear();
-  // }
 
   return Error::Success();
 }
@@ -373,16 +338,11 @@ auto SwapchainManager::CleanupOldSwapchains(GraphicsContext &context,
                                 GetAllocationCallbacks());
           oldSwapchain.swapchain = VK_NULL_HANDLE;
 
-          for (const auto &fence : oldSwapchain.imageInFlight) {
-            vkDestroyFence(context.device, fence, GetAllocationCallbacks());
-          }
-
           for (const auto &semaphore : oldSwapchain.imageReady) {
             vkDestroySemaphore(context.device, semaphore,
                                GetAllocationCallbacks());
           }
 
-          oldSwapchain.imageInFlight.clear();
           oldSwapchain.imageReady.clear();
 
           return true;
@@ -436,25 +396,14 @@ inline auto CreateFences(GraphicsContext &context) -> Error {
   VkSemaphoreCreateInfo semaphoreInfo = {};
   semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
-  context.imageInFlight.resize(MAX_SWAPCHAIN_IMAGES);
-  context.imageReady.resize(MAX_SWAPCHAIN_IMAGES);
+  context.renderFinished.resize(FRAMES_IN_FLIGHT);
 
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    for (int i = 0; i < MAX_SWAPCHAIN_IMAGES; i++) {
-      Error error = Error::Create(vkCreateFence(context.device, &fenceInfo,
-                                                GetAllocationCallbacks(),
-                                                &context.imageInFlight.at(i)));
-      if (Error::IsError(error)) {
-        return error;
-      }
-
-      error = Error::Create(vkCreateSemaphore(context.device, &semaphoreInfo,
-                                              GetAllocationCallbacks(),
-                                              &context.imageReady.at(i)));
-      if (Error::IsError(error)) {
-        return error;
-      }
+    for (int i = 0; i < FRAMES_IN_FLIGHT; i++) {
+      CHECK_NEW_ERR(vkCreateSemaphore(context.device, &semaphoreInfo,
+                                      GetAllocationCallbacks(),
+                                      &context.renderFinished.at(i)));
     }
   }
 
@@ -507,7 +456,7 @@ auto SwapchainManager::CreateVkSwapchain(GraphicsContext &context,
   swapchainInfo.preTransform = surfaceCapabilities.currentTransform;
   swapchainInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
   swapchainInfo.presentMode = context.surfaceInfo.presentMode;
-  swapchainInfo.clipped = VK_TRUE;
+  swapchainInfo.clipped = VK_FALSE;
   swapchainInfo.oldSwapchain = currentSwapchain;
 
   {
@@ -576,8 +525,8 @@ auto SwapchainManager::CreateVkSwapchain(GraphicsContext &context,
 
   CHECK_ERR(GetSwapchainTextures(context));
 
-  if (context.imageReady.empty() ||
-      context.imageReady.at(0) == VK_NULL_HANDLE) {
+  if (context.renderFinished.empty() ||
+      context.renderFinished.at(0) == VK_NULL_HANDLE) {
     CHECK_ERR(CreateFences(context));
   }
 

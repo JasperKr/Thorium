@@ -158,6 +158,7 @@ extern std::mutex DescriptorSetLayoutCacheMutex;
 extern std::unordered_map<struct DescriptorSetLayoutKey, VkDescriptorSetLayout,
                           struct DescriptorSetLayoutKeyHash>
     DescriptorSetLayoutCache;
+extern VkDescriptorSetLayout DefaultEmptySetLayout;
 
 // Key to cache descriptor sets based on layout and resource pointers
 // Immutable pointers but a weak reference is needed to avoid keeping resources alive indefinitely

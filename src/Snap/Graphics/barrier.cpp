@@ -221,6 +221,7 @@ auto UpdateUsage(const GraphicsContext &context, const BarrierSynced &resource,
 
     vkCmdPipelineBarrier2(Graphics::GetCommandBuffer(), &depInfo);
 
+#if Enable_Snapshots
     auto sync = ResourceSync{
         .srcStages = barrier.srcStageMask,
         .srcAccess = barrier.srcAccessMask,
@@ -230,7 +231,6 @@ auto UpdateUsage(const GraphicsContext &context, const BarrierSynced &resource,
 
     auto event = Snapshot::BarrierEvent(sync);
 
-#if Enable_Snapshots
     Snapshot::CaptureEvent(event);
 #endif
 

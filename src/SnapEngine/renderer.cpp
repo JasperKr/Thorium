@@ -8,6 +8,7 @@
 #include "Modules/color.hpp"
 #include "Modules/error.hpp"
 #include "Modules/imageData.hpp"
+#include "Renderer/rendertargetManager.hpp"
 #include "Scene/Lights/directionalLight.hpp"
 #include "Scene/Lights/pointLight.hpp"
 #include "Scene/Lights/rectangleLight.hpp"
@@ -77,12 +78,8 @@ auto Renderer::InitializeDefaultMaterial(Graphics::GraphicsContext &context)
   }
   auto defaultBlackTexture = defaultBlackTextureResult.value();
 
-  auto defaultWhiteTextureResult = Graphics::GetDefaultTexture(
-      context, VK_FORMAT_R8G8B8A8_UNORM, Graphics::TextureType::DEFAULT);
-  if (Error::IsError(defaultWhiteTextureResult)) {
-    return defaultWhiteTextureResult.error();
-  }
-  auto defaultWhiteTexture = defaultWhiteTextureResult.value();
+  auto defaultWhiteTexture = CHECK_RES(Graphics::GetDefaultTexture(
+      context, VK_FORMAT_R8G8B8A8_UNORM, Graphics::TextureType::DEFAULT));
 
   auto material = Material();
 
@@ -304,6 +301,22 @@ auto DrawFullScreen(const Graphics::GraphicsContext &context) -> Error {
   return Graphics::Draw(context, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
                         3, // NOLINT
                         1);
+}
+
+void Renderer::Deinitialize() {
+  GlobalRenderTargetManager.Deinitialize();
+
+  if (!initialized) {
+    return;
+  }
+
+  NoMaterial = Material();
+  DefaultMaterial = Material();
+  MaterialsBuffer.reset();
+  ModelTransformsBuffer.reset();
+  LoadedShaders.clear();
+
+  SceneLightBuffers = Lights();
 }
 
 } // namespace Engine::Renderer

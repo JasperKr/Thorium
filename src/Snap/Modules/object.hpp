@@ -6,7 +6,7 @@
 // #define DEBUG_OBJECT_LIFETIMES
 // #define DEBUG_OBJECT_REFERENCES
 
-#ifdef DEBUG_OBJECT_REFERENCES
+#if defined(DEBUG_OBJECT_REFERENCES) || defined(DEBUG_OBJECT_LIFETIMES)
 #include <unordered_map>
 #endif
 

@@ -135,17 +135,7 @@ struct Renderer {
     return {};
   }
 
-  void Deinitialize() {
-    if (!initialized) {
-      return;
-    }
-
-    NoMaterial = Material();
-    MaterialsBuffer.reset();
-    ModelTransformsBuffer.reset();
-
-    SceneLightBuffers = Lights();
-  }
+  void Deinitialize();
 
   auto GetNewMaterialIndex() -> Result<size_t>;
 

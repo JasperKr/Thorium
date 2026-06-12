@@ -51,6 +51,8 @@ struct RenderTargetManager {
   }
   auto Update() -> void;
 
+  auto Deinitialize() -> void;
+
 private:
   struct RendertargetEntry {
     RendertargetDescriptor descriptor;

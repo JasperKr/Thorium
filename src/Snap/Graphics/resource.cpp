@@ -91,9 +91,22 @@ inline auto CanBeDestroyed( // NOLINTNEXTLINE
 }
 
 auto ProcessReleasedResources(GraphicsContext &context) -> void {
-  // TODO: Issue with buffers
-  // PrintAlways("Processing {} released textures and {} released buffers.",
-  //             ReleasedTextures.size(), ReleasedBuffers.size());
+  if (!GetDeferredDestructionAllowed()) {
+    std::scoped_lock<std::mutex, std::mutex> lock(ReleasedTexturesMutex,
+                                                  ReleasedBuffersMutex);
+
+    for (auto &res : ReleasedTextures) {
+      res.Destroy();
+    }
+    ReleasedTextures.clear();
+
+    for (auto &res : ReleasedBuffers) {
+      res.Destroy();
+    }
+    ReleasedBuffers.clear();
+
+    return;
+  }
 
   {
     std::lock_guard<std::mutex> lock(ReleasedTexturesMutex);

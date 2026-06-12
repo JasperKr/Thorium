@@ -806,6 +806,11 @@ auto Scene::DrawModels(flecs::entity &cameraEntity,
   //   logTextureRefInfo(textures.IncomingLight);
   // }
 
+  // Otherwise meshes won't be destroyed due to living in these vectors
+  OpaqueDrawItems.clear();
+  MaskedDrawItems.clear();
+  TransparentDrawItems.clear();
+
   return {};
 }
 

@@ -17,7 +17,6 @@ struct OldSwapchain {
   uint64_t lastFrameUsed = 0;
 
   std::vector<VkSemaphore> imageReady;
-  std::vector<VkFence> imageInFlight;
 };
 
 class SwapchainManager {

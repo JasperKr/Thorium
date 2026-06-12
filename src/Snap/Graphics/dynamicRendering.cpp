@@ -74,6 +74,8 @@ thread_local std::unordered_map<DescriptorKey, VkDescriptorSet,
 
 thread_local Stats CurrentStats;
 
+VkDescriptorSetLayout DefaultEmptySetLayout = VK_NULL_HANDLE;
+
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
 inline auto GetRenderExtent(const GraphicsContext &context, const State &state)
@@ -282,20 +284,9 @@ auto GetPipelineLayout(const GraphicsContext &context,
     maxSet = std::max(setCount - 1, *maxSetIter);
   }
 
-  thread_local VkDescriptorSetLayout emptySetLayout = VK_NULL_HANDLE;
-  if (emptySetLayout == VK_NULL_HANDLE) {
-    VkDescriptorSetLayoutCreateInfo layoutInfo = {};
-    layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    layoutInfo.bindingCount = 0;
-    layoutInfo.pBindings = nullptr;
-    CHECK_ERR(Error::Create(vkCreateDescriptorSetLayout(
-        context.device, &layoutInfo, GetAllocationCallbacks(),
-        &emptySetLayout)));
-  }
-
   // PrintAlways("Max descriptor set index from shader reflection: {}", maxSet);
 
-  setLayouts.resize(maxSet + 1, emptySetLayout);
+  setLayouts.resize(maxSet + 1, DefaultEmptySetLayout);
 
   // For each set, build the DescriptorSetLayoutKey and get the layout
   for (const auto &setPair : shader->bindingInfos) {
@@ -359,14 +350,7 @@ auto BindDefaultTextures(const GraphicsContext &context,
         type = TextureType::ARRAY;
       }
 
-      auto defaultTextureResult = GetDefaultTexture(context, format, type);
-
-      if (Error::IsError(defaultTextureResult)) {
-        return defaultTextureResult.error();
-      }
-
-      auto defaultTexture = defaultTextureResult.value();
-
+      auto defaultTexture = CHECK_RES(GetDefaultTexture(context, format, type));
       state.userBoundTextures[key] = {defaultTexture, &samplerInfo};
     }
   }
@@ -818,6 +802,16 @@ auto Load(const GraphicsContext &context) -> Error {
   StateStack.emplace_back(state);
   TopOfStack = &StateStack.back();
 
+  if (DefaultEmptySetLayout == VK_NULL_HANDLE) {
+    VkDescriptorSetLayoutCreateInfo layoutInfo = {};
+    layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    layoutInfo.bindingCount = 0;
+    layoutInfo.pBindings = nullptr;
+    CHECK_ERR(Error::Create(vkCreateDescriptorSetLayout(
+        context.device, &layoutInfo, GetAllocationCallbacks(),
+        &DefaultEmptySetLayout)));
+  }
+
   return Error::Success();
 }
 
@@ -863,6 +857,7 @@ auto Shutdown(const GraphicsContext &context) -> Error {
   LastState = nullptr;
   TopOfStack = nullptr;
   PipelineCache.clear();
+  LastStateStorage = State();
 
   return Error::Success();
 }
@@ -997,14 +992,19 @@ auto Destroy(const GraphicsContext &context) -> void {
       vkDestroyPipeline(context.device, pipeline, GetAllocationCallbacks());
     }
   }
+
   for (const auto &layout : PipelineLayouts) {
     vkDestroyPipelineLayout(context.device, layout.layout,
                             GetAllocationCallbacks());
   }
+
   for (auto &layouts : DynamicRendering::DescriptorSetLayoutCache) {
     vkDestroyDescriptorSetLayout(context.device, layouts.second,
                                  GetAllocationCallbacks());
   }
+
+  vkDestroyDescriptorSetLayout(context.device, DefaultEmptySetLayout,
+                               GetAllocationCallbacks());
 
   Pipelines.clear();
   PipelineLayouts.clear();

@@ -256,4 +256,11 @@ auto RenderTargetManager::Cleanup(bool evictAll) -> void {
 
 auto RenderTargetManager::Update() -> void { Cleanup(); }
 
+auto RenderTargetManager::Deinitialize() -> void {
+  for (auto &entry : Rendertargets) {
+    entry.texture = nullptr;
+  }
+  Rendertargets.clear();
+}
+
 } // namespace Engine::Renderer

@@ -33,8 +33,7 @@ struct GraphicsResource {
 
   // Call when the resource is used
   auto Use() -> void {
-    timelineValue = (std::max)(timelineValue,
-                               Graphics::semaphoreManager.GetSemaphoreValue());
+    timelineValue = Graphics::semaphoreManager.GetSemaphoreValue();
   }
 
   // Check if the resource is currently in use by the GPU

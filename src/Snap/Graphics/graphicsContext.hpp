@@ -52,13 +52,14 @@ struct GraphicsContext {
   SurfaceInfo surfaceInfo;
   VkPhysicalDeviceProperties deviceProperties;
 
-  // per frame-in-flight
+  // Frame resources & image are ready for reuse
   std::vector<VkSemaphore> imageAvailable;
-  std::vector<VkFence> inFlight;
 
-  // per swapchain image
-  std::vector<VkSemaphore> imageReady;
-  std::vector<VkFence> imageInFlight;
+  // Render finished and ready for presentation
+  std::vector<VkSemaphore> renderFinished;
+
+  // Fences to ensure that command buffers have finished executing before being reused
+  std::vector<VkFence> inFlight;
 
   uint64_t currentFrame;
   uint32_t frameIndex;

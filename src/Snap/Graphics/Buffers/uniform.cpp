@@ -20,13 +20,9 @@ std::atomic<int> UniformBufferObjectCount{0};
 
 auto InitializeUniformBufferModule(GraphicsContext &context) -> Error {
   for (uint32_t j = 0; j < FRAMES_IN_FLIGHT; j++) {
-    auto createResult = FrameUniformBufferObject::Create(context);
+    auto buffer = CHECK_RES(FrameUniformBufferObject::Create(context));
 
-    if (Error::IsError(createResult)) {
-      return createResult.error();
-    }
-
-    ThreadUniformBuffers.emplace_back(createResult.value());
+    ThreadUniformBuffers.emplace_back(buffer);
   }
 
   return Error::Success();

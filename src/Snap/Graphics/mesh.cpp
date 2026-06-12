@@ -83,13 +83,7 @@ auto Mesh::Create(GraphicsContext &context, VertexFormat vertexFormat,
   vboCreationInfo.debugName = debugName + " Vertex Buffer";
   mesh->DebugName = debugName;
 
-  auto bufferResult = Buffer::Create(context, vboCreationInfo);
-
-  if (Error::IsError(bufferResult)) {
-    return bufferResult.error();
-  }
-
-  mesh->VertexBuffer = bufferResult.value();
+  mesh->VertexBuffer = CHECK_RES(Buffer::Create(context, vboCreationInfo));
 
   mesh->DrawRange.Offset = 0;
   mesh->DrawRange.Count = mesh->VertexCount;
@@ -133,9 +127,7 @@ auto Mesh::Create(GraphicsContext &context, VertexFormat vertexFormat,
   vboCreationInfo.debugName = debugName + " Vertex Buffer";
   mesh->DebugName = debugName;
 
-  auto bufferResult = CHECK_RES(Buffer::Create(context, vboCreationInfo));
-
-  mesh->VertexBuffer = bufferResult;
+  mesh->VertexBuffer = CHECK_RES(Buffer::Create(context, vboCreationInfo));
 
   mesh->DrawRange.Offset = 0;
   mesh->DrawRange.Count = mesh->VertexCount;

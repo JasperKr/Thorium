@@ -327,12 +327,6 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
   // Uses internal lua state so we must do this before closing lua
   runCallback.reset();
 
-  PrintInfo("Waiting on device idle...");
-  {
-    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    vkDeviceWaitIdle(context.device);
-  }
-
   // Force all deferred destructions to happen now
   Graphics::GetDeferredDestructionAllowed() = false;
 
@@ -346,7 +340,7 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
 
   Graphics::UnloadModule();
 
-  Graphics::ProcessReleasedResources(context);
+  Graphics::DeInitializeUniformBufferModule(context);
 
   PrintInfo("Closing Lua state...");
   lua_close(state);
@@ -354,12 +348,6 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
   PrintInfo("Deinitializing threading module...");
 
   Threading::UnloadModule();
-
-  PrintInfo("Deinitializing graphics...");
-
-  Graphics::DeInitializeUniformBufferModule(context);
-
-  PrintInfo("Unloading buffer module...");
 
   PrintInfo("Deinitializing global timeline semaphore...");
 
@@ -378,6 +366,11 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
   Graphics::DestroySamplers(context);
 
   PrintInfo("Destroying graphics context...");
+
+  PrintInfo("Texture memory: {} bytes",
+            Graphics::Texture::TotalAllocatedMemory.load());
+  PrintInfo("Buffer memory: {} bytes",
+            Graphics::Buffer::TotalAllocatedMemory.load());
 
   Graphics::Deinitialize(context);
 

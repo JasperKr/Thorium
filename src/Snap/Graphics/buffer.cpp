@@ -147,6 +147,10 @@ auto Buffer::UploadLarge(const GraphicsContext &context,
   };
   stagingBufferInfo.size = uploadSize;
 
+  // TODO: Use separate queue for copying.
+  // See: https://gpuopen.com/learn/rdna-performance-guide/
+  // This is done async and has faster hardware for data transfers
+
   auto stagingBuffer = CHECK_RES(Buffer::Create(context, stagingBufferInfo));
   CHECK_ERR(stagingBuffer->MapMemory(context));
 
@@ -217,6 +221,10 @@ auto Buffer::UploadRing(const GraphicsContext &context,
 
   uploadBuffer = UploadBuffers.at(context.frameIndex);
 
+  // TODO: Use separate queue for copying.
+  // See: https://gpuopen.com/learn/rdna-performance-guide/
+  // This is done async and has faster hardware for data transfers
+
   // Copy data to upload buffer
   CHECK_ERR(uploadBuffer->MapMemory(context));
 
@@ -232,9 +240,6 @@ auto Buffer::UploadRing(const GraphicsContext &context,
   if (commandBuffer == nullptr) {
     return Error::Create("Failed to get command buffer for buffer upload.");
   }
-
-  VkCommandBufferBeginInfo beginInfo = {};
-  beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
   VkBufferCopy copyRegion = {};
   copyRegion.srcOffset = uploadOffset;
@@ -544,9 +549,7 @@ auto Buffer::Grow(const GraphicsContext &context, size_t newSize)
 }
 
 auto Buffer::MarkUse() -> void {
-  lastUsedTimestamp =
-      (std::max)(lastUsedTimestamp,
-                 Graphics::semaphoreManager.GetSemaphoreValue());
+  lastUsedTimestamp = Graphics::semaphoreManager.GetSemaphoreValue();
 }
 
 // NOLINTNEXTLINE
@@ -703,6 +706,9 @@ auto Buffer::Readback(const GraphicsContext &context,
 
 Buffer::~Buffer() {
   auto *context = GetCurrentGraphicsContext();
+
+  PrintAlways("Destroying buffer: {}",
+              debugName.empty() ? "(unnamed)" : debugName);
 
   ScheduleDestruction(BufferMemory{.allocation = memory,
                                    .buffer = handle,

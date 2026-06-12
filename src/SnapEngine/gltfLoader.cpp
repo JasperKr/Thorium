@@ -1153,17 +1153,10 @@ inline auto LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
           context, vertexFormat, vertexCount, std::string(gltfMesh.name)));
 
       if (!indexData.empty()) {
-        auto indexBufferResult =
-            mesh->SetIndices(context, indexData, indexType);
-        if (Error::IsError(indexBufferResult)) {
-          return indexBufferResult;
-        }
+        CHECK_ERR(mesh->SetIndices(context, indexData, indexType));
       }
+      CHECK_ERR(mesh->SetVertices(context, vertexData));
 
-      auto vertexBufferResult = mesh->SetVertices(context, vertexData);
-      if (Error::IsError(vertexBufferResult)) {
-        return vertexBufferResult;
-      }
       auto geometry = world->entity(
           GetUniqueName(std::string(gltfMesh.name) + " Geometry").c_str());
       geometry.set<Engine::Geometry>(Engine::Geometry{mesh});
@@ -1228,15 +1221,6 @@ inline auto LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
 auto LoadGltfModel(Graphics::GraphicsContext &context, const std::string &path,
                    flecs::world *world) -> Error {
   /// Load the file into a data buffer.
-
-  {
-    std::lock_guard<std::mutex> lock(URICacheMutex);
-
-    Buffers.clear();
-    URICache.clear();
-    ImageCache.clear();
-    TextureCache.clear();
-  }
 
   auto bytes = CHECK_RES(Filesystem::ReadFile(path));
   // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
@@ -1323,6 +1307,15 @@ auto LoadGltfModel(Graphics::GraphicsContext &context, const std::string &path,
       const auto &gltfNode = asset->nodes[nodeIndex];
       CHECK_RES(LoadNode(world, context, asset.get(), view, gltfNode));
     }
+  }
+
+  {
+    std::lock_guard<std::mutex> lock(URICacheMutex);
+
+    Buffers.clear();
+    URICache.clear();
+    ImageCache.clear();
+    TextureCache.clear();
   }
 
   return Error::Success();

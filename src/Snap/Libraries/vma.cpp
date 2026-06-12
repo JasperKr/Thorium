@@ -7,6 +7,8 @@
 
 #define VMA_DEBUG_LOG(format, ...) PrintLibrary(format, ##__VA_ARGS__)
 #define VMA_IMPLEMENTATION
+// #define VMA_DEBUG_MARGIN 16
+// #define VMA_DEBUG_DETECT_CORRUPTION 1
 
 // Define macro VMA_DEBUG_LOG_FORMAT or more specialized VMA_LEAK_LOG_FORMAT
 // to receive the list of the unfreed allocations.
