@@ -308,7 +308,6 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
       Event::ExitCode = 1;
 
       mainLoopResult = Error::Create(luaErrorMessage);
-      PrintError("Error in main loop: {}", luaErrorMessage);
     }
     FrameMarkEnd("Frame");
 

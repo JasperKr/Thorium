@@ -186,7 +186,7 @@ do
     snap.graphics.setWindingOrder("ccw")
     createSnapshot = false
     if firstFrame then
-      snap.graphics.setDefaultFilter("linear", "linear", 4)
+      snap.graphics.setDefaultFilter("linear", "linear", 16)
       -- snap.scene.loadModel(scene, "Assets/Terrain/Bistro/bistro.gltf")
       snap.scene.loadModel(scene, "Assets/Terrain/sponza.glb")
       -- snap.scene.loadModel(scene, "Assets/Objects/OrientationTest/OrientationTest.gltf")

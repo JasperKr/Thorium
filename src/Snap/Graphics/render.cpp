@@ -142,10 +142,17 @@ auto AquireNextSwapchainImage(Graphics::GraphicsContext &context) -> Error {
 
   {
     ZoneScopedN("Acquire next image");
-    CHECK_NEW_ERR(vkAcquireNextImageKHR(
+    auto res = (vkAcquireNextImageKHR(
         context.device, context.swapchainInfo.swapchain, UINT64_MAX,
         context.imageAvailable[context.frameIndex], VK_NULL_HANDLE,
         &context.swapchainImageIndex));
+
+    if (res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR) {
+      // Swapchain is out of date, need to recreate
+      swapchainManager.MakeDirty();
+    }
+
+    CHECK_NEW_ERR(res);
   }
 
   return Error::Success();
@@ -191,10 +198,10 @@ auto SubmitCommandBuffers(Graphics::GraphicsContext &context,
                                     context.inFlight[context.frameIndex]));
     CHECK_ERR(err);
 
-    if (err.code == VK_ERROR_OUT_OF_DATE_KHR || err.code == VK_SUBOPTIMAL_KHR) {
-      // Swapchain is out of date, need to recreate
-      swapchainManager.MakeDirty();
-    }
+    // if (err.code == VK_ERROR_OUT_OF_DATE_KHR || err.code == VK_SUBOPTIMAL_KHR) {
+    //   // Swapchain is out of date, need to recreate
+    //   swapchainManager.MakeDirty();
+    // }
   }
 
   auto timelineValue =

@@ -209,12 +209,7 @@ auto FromSwapchainTexture(const GraphicsContext &context,
   texture->samplerDirty = true;
   texture->isSwapchainView = true;
 
-  VkSurfaceCapabilitiesKHR surfaceCapabilities;
-
-  CHECK_ERR(Error::Create(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
-      context.physicalDevice, context.surface, &surfaceCapabilities)));
-
-  texture->usage = surfaceCapabilities.supportedUsageFlags;
+  texture->usage = context.surfaceInfo.capabilities.supportedUsageFlags;
   texture->view = swapchainImageView;
 
   // Setup texture flags for unused swapchain textures

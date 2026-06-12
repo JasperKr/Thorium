@@ -293,15 +293,10 @@ auto SwapchainManager::RecreateSwapchain(GraphicsContext &context,
   };
 
   oldSwapchains.emplace_back(oldSwapchain);
-
   context.renderFinished.clear();
 
-  auto createResult = CreateVkSwapchain(context, wcontext);
-  if (Error::IsError(createResult)) {
-    return createResult;
-  }
+  CHECK_ERR(CreateVkSwapchain(context, wcontext));
 
-  currentSwapchain = context.swapchainInfo.swapchain;
   currentTextures = context.swapchainInfo.textures;
   isDirty = false;
 
@@ -313,8 +308,7 @@ auto SwapchainManager::CleanupOldSwapchains(GraphicsContext &context,
       oldSwapchains,
       [&context, &currentFrame](OldSwapchain &oldSwapchain) -> bool {
         auto swapchainImageCount = oldSwapchain.textures.size();
-        if (currentFrame - oldSwapchain.lastFrameUsed >
-            swapchainImageCount * 2) {
+        if (currentFrame - oldSwapchain.lastFrameUsed > swapchainImageCount) {
           for (const auto &texture : oldSwapchain.textures) {
             auto *image = texture->image;
             auto *view = texture->view;
@@ -434,7 +428,7 @@ auto SwapchainManager::CreateVkSwapchain(GraphicsContext &context,
   swapchainInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
   swapchainInfo.surface = context.surface;
 
-  swapchainInfo.minImageCount = surfaceCapabilities.minImageCount;
+  swapchainInfo.minImageCount = surfaceCapabilities.minImageCount + 1;
 
   if (surfaceCapabilities.maxImageCount > 0 &&
       swapchainInfo.minImageCount > surfaceCapabilities.maxImageCount) {
@@ -459,40 +453,33 @@ auto SwapchainManager::CreateVkSwapchain(GraphicsContext &context,
   swapchainInfo.clipped = VK_FALSE;
   swapchainInfo.oldSwapchain = currentSwapchain;
 
+  VkSwapchainKHR newSwapchain = VK_NULL_HANDLE;
+
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    Error error = Error::Create(
-        vkCreateSwapchainKHR(context.device, &swapchainInfo,
-                             GetAllocationCallbacks(), &currentSwapchain));
-
-    if (Error::IsError(error)) {
-      return error;
-    }
+    CHECK_NEW_ERR(vkCreateSwapchainKHR(context.device, &swapchainInfo,
+                                       GetAllocationCallbacks(),
+                                       &newSwapchain));
   }
+
+  currentSwapchain = newSwapchain;
 
   context.swapchainInfo.swapchain = currentSwapchain;
   context.swapchainInfo.format = swapchainInfo.imageFormat;
   context.swapchainInfo.extent = swapchainInfo.imageExtent;
+  context.swapchainInfo.images.resize(MAX_SWAPCHAIN_IMAGES);
 
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    vkGetSwapchainImagesKHR(context.device, currentSwapchain,
-                            &context.swapchainInfo.imageCount, nullptr);
+    CHECK_NEW_ERR(vkGetSwapchainImagesKHR(context.device, currentSwapchain,
+                                          &context.swapchainInfo.imageCount,
+                                          nullptr));
+    CHECK_NEW_ERR(vkGetSwapchainImagesKHR(context.device, currentSwapchain,
+                                          &context.swapchainInfo.imageCount,
+                                          context.swapchainInfo.images.data()));
   }
 
   context.swapchainInfo.images.resize(context.swapchainInfo.imageCount);
-
-  {
-    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    Error error = Error::Create(vkGetSwapchainImagesKHR(
-        context.device, currentSwapchain, &context.swapchainInfo.imageCount,
-        context.swapchainInfo.images.data()));
-
-    if (Error::IsError(error)) {
-      return error;
-    }
-  }
-
   context.swapchainInfo.imageViews.resize(context.swapchainInfo.imageCount);
 
   {
@@ -515,9 +502,8 @@ auto SwapchainManager::CreateVkSwapchain(GraphicsContext &context,
       imageViewInfo.subresourceRange.layerCount = 1;
 
       VkImageView imageView = VK_NULL_HANDLE;
-      Error error = Error::Create(
-          vkCreateImageView(context.device, &imageViewInfo,
-                            GetAllocationCallbacks(), &imageView));
+      CHECK_NEW_ERR(vkCreateImageView(context.device, &imageViewInfo,
+                                      GetAllocationCallbacks(), &imageView));
 
       context.swapchainInfo.imageViews[i] = imageView;
     }
