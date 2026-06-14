@@ -309,10 +309,6 @@ auto SwapchainManager::CleanupOldSwapchains(GraphicsContext &context,
       [&context, &currentFrame](OldSwapchain &oldSwapchain) -> bool {
         auto swapchainImageCount = oldSwapchain.textures.size();
         if (currentFrame - oldSwapchain.lastFrameUsed > swapchainImageCount) {
-          PrintAlways("Cleaning up old swapchain last used at frame {}. "
-                      "Current frame is {}.",
-                      oldSwapchain.lastFrameUsed, currentFrame);
-
           for (const auto &texture : oldSwapchain.textures) {
             auto *image = texture->image;
             auto *view = texture->view;

@@ -35,8 +35,6 @@ static const std::vector<luaL_Reg> MeshLib = {
 };
 
 extern "C" inline auto luaopen_mesh(lua_State *state) -> int {
-  PrintDebug("Registering Mesh Lua type.");
-
   LuaWrap::RegisterLuaType(state, ::Graphics::Mesh::GetType(),
                            MeshLib); // NOLINT
 

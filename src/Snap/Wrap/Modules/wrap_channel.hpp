@@ -22,8 +22,6 @@ static const std::vector<luaL_Reg> ChannelLib = {
 };
 
 extern "C" inline auto luaopen_channel(lua_State *state) -> int {
-  PrintDebug("Registering Channel Lua type.");
-
   LuaWrap::RegisterLuaType(state, ::Threading::Channel::GetType(),
                            ChannelLib); // NOLINT
 

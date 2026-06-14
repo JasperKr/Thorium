@@ -47,8 +47,6 @@ static const std::vector<luaL_Reg> ImagedataLib = {
 };
 
 extern "C" inline auto luaopen_imagedata(lua_State *state) -> int {
-  PrintDebug("Registering Imagedata Lua type.");
-
   LuaWrap::RegisterLuaType(state, ::Image::ImageData::GetType(),
                            ImagedataLib); // NOLINT
 

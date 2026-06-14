@@ -30,8 +30,6 @@ static const std::vector<luaL_Reg> ThreadLib = {
 };
 
 extern "C" inline auto luaopen_thread(lua_State *state) -> int {
-  PrintDebug("Registering Thread Lua type.");
-
   LuaWrap::RegisterLuaType(state, ::Threading::Thread::GetType(),
                            ThreadLib); // NOLINT
 

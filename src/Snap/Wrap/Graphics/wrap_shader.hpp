@@ -27,8 +27,6 @@ static const std::vector<luaL_Reg> ShaderLib = {
 };
 
 extern "C" inline auto luaopen_shader(lua_State *state) -> int {
-  PrintDebug("Registering Shader Lua type.");
-
   LuaWrap::RegisterLuaType(state, ::Graphics::Shader::ShaderModule::GetType(),
                            ShaderLib); // NOLINT
 

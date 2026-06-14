@@ -16,8 +16,6 @@ static const std::vector<luaL_Reg> SnapshotLib = {
 };
 
 extern "C" inline auto luaopen_snapshot(lua_State *state) -> int {
-  PrintDebug("Registering Snapshot Lua type.");
-
   LuaWrap::RegisterLuaType(state,
                            ::Graphics::Snapshot::ThreadSnapshot::GetType(),
                            SnapshotLib); // NOLINT

@@ -49,8 +49,6 @@ static const std::vector<luaL_Reg> BytedataLib = {
 };
 
 extern "C" inline auto luaopen_bytedata(lua_State *state) -> int {
-  PrintDebug("Registering Bytedata Lua type.");
-
   LuaWrap::RegisterLuaType(state, ::Data::ByteData::GetType(),
                            BytedataLib); // NOLINT
 

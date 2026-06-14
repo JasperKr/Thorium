@@ -52,8 +52,6 @@ static const std::vector<luaL_Reg> TextureLib = {
 };
 
 extern "C" inline auto luaopen_texture(lua_State *state) -> int {
-  PrintDebug("Registering Texture Lua type.");
-
   LuaWrap::RegisterLuaType(state, ::Graphics::Texture::GetType(),
                            TextureLib); // NOLINT
 

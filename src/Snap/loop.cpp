@@ -224,16 +224,10 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
   Window::WindowContext wcontext = {};
   Window::SetWindowContext(wcontext);
 
-  PrintDebug("Initializing Lua state...");
-
   lua_State *state = luaL_newstate();
   luaL_openlibs(state);
 
-  PrintDebug("Registering Lua modules...");
-
   RegisterAllLuaModules(state);
-
-  PrintDebug("Lua modules registered.");
 
   if (arguments.size() == 0) {
     return Error::Create("No Lua script specified to run.");

@@ -18,7 +18,6 @@ inline auto SetIdentity(lua_State *state) -> int {
     return luaL_error(state, "Expected string for Identity");
   }
   globalConfig.Identity = lua_tostring(state, 1);
-  PrintInfo("Identity set to {}", globalConfig.Identity);
   return 0;
 }
 
@@ -207,9 +206,6 @@ auto Configure(lua_State *state, const std::string &sourceDirectory)
     if (type(snap.config) == "function") then
       -- Call user-defined configuration function, not a pcall, this needs to run without errors
       snap.config(config)
-      print("Configuration loaded successfully.")
-    else
-      print("snap.config function not found, using default configuration")
     end
 
     snap._setIdentity(config.filesystem.identity)

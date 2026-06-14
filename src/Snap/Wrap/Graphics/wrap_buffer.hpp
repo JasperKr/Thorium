@@ -60,8 +60,6 @@ static const LuaWrap::LuaClass BufferClass{
 };
 
 extern "C" inline auto luaopen_buffer(lua_State *state) -> int {
-  PrintDebug("Registering Buffer Lua type.");
-
   LuaWrap::RegisterLuaType(state, BufferClass);
 
   return 1;
