@@ -211,19 +211,7 @@ auto FromSwapchainTexture(const GraphicsContext &context,
 
   texture->usage = context.surfaceInfo.capabilities.supportedUsageFlags;
   texture->view = swapchainImageView;
-
-  // Setup texture flags for unused swapchain textures
-  texture->lastUsedAccess = 0;
-  texture->lastUsedStages = 0;
-  texture->currentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-  texture->lastUsage = TextureUsage::Unknown;
-  texture->lastPipelineStage = VK_PIPELINE_STAGE_NONE_KHR;
-
-  Barrier::UpdateUsage(context, *texture,
-                       Barrier::ResourceState{
-                           .stages = VK_PIPELINE_STAGE_2_NONE_KHR,
-                           .access = 0,
-                       });
+  texture->lastUsage = TextureUsage::Swapchain;
 
   return texture;
 }
@@ -957,7 +945,7 @@ auto Texture::SetPixels(const GraphicsContext &context,
 }
 
 auto Texture::MarkUse() -> void {
-  lastUsedTimestamp = Graphics::semaphoreManager.GetSemaphoreValue();
+  lastUsedTimestamp = Graphics::SemaphoreManager::GetSemaphoreValue();
 }
 
 struct VkFormatTextureTypeHash {
@@ -1045,25 +1033,45 @@ auto GetDefaultTexture(const GraphicsContext &context, VkFormat format,
   return texture;
 }
 
-auto GetAccessFlagsForUsage(TextureUsage usage, VkFormat format)
-    -> VkAccessFlags2 {
+auto GetAccessFlagsForUsage(TextureUsage usage, VkFormat format,
+                            VkAttachmentLoadOp loadOp,
+                            VkAttachmentStoreOp storeOp) -> VkAccessFlags2 {
   switch (usage) {
   case TextureUsage::Sampler:
     return VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
   case TextureUsage::Storage:
     return VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT;
-  case TextureUsage::Attachment:
-    if (Image::IsDepthTexture(format) || Image::IsStencilTexture(format)) {
-      return VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+  case TextureUsage::Attachment: {
+    bool isDepthStencil = Image::IsDepthOrStencilTexture(format);
+    VkAccessFlagBits2 accessFlags = VK_ACCESS_2_NONE;
+
+    if (isDepthStencil) {
+      if (loadOp == VK_ATTACHMENT_LOAD_OP_LOAD) {
+        accessFlags |= VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+      }
+
+      if (storeOp == VK_ATTACHMENT_STORE_OP_STORE) {
+        accessFlags |= VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+      }
     } else {
-      return VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
+      if (loadOp == VK_ATTACHMENT_LOAD_OP_LOAD) {
+        accessFlags |= VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT;
+      }
+
+      if (storeOp == VK_ATTACHMENT_STORE_OP_STORE) {
+        accessFlags |= VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
+      }
     }
+
+    return accessFlags;
+  }
   case TextureUsage::TransferSrc:
     return VK_ACCESS_2_TRANSFER_READ_BIT;
   case TextureUsage::TransferDst:
     return VK_ACCESS_2_TRANSFER_WRITE_BIT;
   case TextureUsage::PresentSrc:
   case TextureUsage::Unknown:
+  case TextureUsage::Swapchain:
     return VK_ACCESS_2_NONE;
   default:
     PrintError("GetAccessFlagsForUsage: Unknown texture usage: {}",
@@ -1087,7 +1095,7 @@ constexpr auto GetRequiredTextureLayout(TextureUsage usage, VkFormat format)
   case TextureUsage::Storage:
     return VK_IMAGE_LAYOUT_GENERAL;
   case TextureUsage::Attachment:
-    if (Image::IsDepthTexture(format) || Image::IsStencilTexture(format)) {
+    if (Image::IsDepthOrStencilTexture(format)) {
       return VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
     } else {
       return VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
@@ -1097,6 +1105,7 @@ constexpr auto GetRequiredTextureLayout(TextureUsage usage, VkFormat format)
   case TextureUsage::TransferDst:
     return VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
   case TextureUsage::Unknown:
+  case TextureUsage::Swapchain:
     return VK_IMAGE_LAYOUT_UNDEFINED;
   case TextureUsage::PresentSrc:
     return VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
@@ -1108,10 +1117,12 @@ constexpr auto GetRequiredTextureLayout(TextureUsage usage, VkFormat format)
 }
 
 auto Texture::UseAs(const GraphicsContext &context, TextureUsage newUsage,
-                    VkPipelineStageFlags2 stage) -> Error {
+                    VkPipelineStageFlags2 stage, VkAttachmentLoadOp loadOp,
+                    VkAttachmentStoreOp storeOp) -> Error {
 
-  if (newUsage == TextureUsage::Unknown) {
-    return Error::Create("UseAs: TextureUsage::Unknown is not a valid usage.");
+  if (newUsage == TextureUsage::Unknown ||
+      newUsage == TextureUsage::Swapchain) {
+    return Error::Create("UseAs: Unknown or Swapchain is not a valid usage.");
   }
 
   if (stage == VK_PIPELINE_STAGE_2_NONE) {
@@ -1128,6 +1139,10 @@ auto Texture::UseAs(const GraphicsContext &context, TextureUsage newUsage,
     // First time usage, so we can skip the transition from UNDEFINED
     currentAccess = 0;
     lastPipelineStage = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT;
+  } else if (lastUsage == TextureUsage::Swapchain) {
+    currentAccess = VK_ACCESS_2_NONE;
+    lastPipelineStage = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+    currentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
   }
 
   auto range = VkImageSubresourceRange{
@@ -1146,16 +1161,20 @@ auto Texture::UseAs(const GraphicsContext &context, TextureUsage newUsage,
   return result;
 }
 
-auto Texture::UseAsAttachment(const GraphicsContext &context) -> Error {
+auto Texture::UseAsAttachment(const GraphicsContext &context,
+                              VkAttachmentLoadOp loadOp,
+                              VkAttachmentStoreOp storeOp) -> Error {
   // Depth/stencil attachments require both early and late fragment test stages
-  if (Image::IsDepthTexture(format) || Image::IsStencilTexture(format)) {
+  if (Image::IsDepthOrStencilTexture(format)) {
     auto newPipelineStage = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT |
                             VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
-    return UseAs(context, TextureUsage::Attachment, newPipelineStage);
+    return UseAs(context, TextureUsage::Attachment, newPipelineStage, loadOp,
+                 storeOp);
   }
 
   auto newPipelineStage = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
-  return UseAs(context, TextureUsage::Attachment, newPipelineStage);
+  return UseAs(context, TextureUsage::Attachment, newPipelineStage, loadOp,
+               storeOp);
 }
 
 auto Texture::UseAsSampler(const GraphicsContext &context,
@@ -1311,8 +1330,6 @@ Texture::~Texture() {
   if (isSwapchainView) { // Not owned, don't destroy
     return;
   }
-
-  PrintError("Destroying texture: {}", debugName);
 
   ScheduleDestruction(TextureMemory{.allocation = memory,
                                     .image = image,

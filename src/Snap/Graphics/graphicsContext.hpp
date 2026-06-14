@@ -55,7 +55,7 @@ struct GraphicsContext {
   // Frame resources & image are ready for reuse
   std::vector<VkSemaphore> imageAvailable;
 
-  // Render finished and ready for presentation
+  // Render finished and ready for presentation, signalled by presentation engine
   std::vector<VkSemaphore> renderFinished;
 
   // Fences to ensure that command buffers have finished executing before being reused

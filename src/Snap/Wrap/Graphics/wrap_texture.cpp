@@ -411,7 +411,7 @@ static inline auto TextureUsageToVkImageUsage(VkFormat format,
   }
   if ((static_cast<uint8_t>(usage) &
        static_cast<uint8_t>(LuaTextureUsage::RenderTarget)) != 0) {
-    if (Image::IsDepthTexture(format) || Image::IsStencilTexture(format)) {
+    if (Image::IsDepthOrStencilTexture(format)) {
       flags |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
     } else {
       flags |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;

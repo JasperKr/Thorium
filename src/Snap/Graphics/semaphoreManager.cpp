@@ -1,5 +1,6 @@
 #include "Graphics/semaphoreManager.hpp"
 #include "Graphics/allocations.hpp"
+#include "Graphics/graphics.hpp"
 #include "Graphics/graphicsContext.hpp"
 
 #include "Modules/Helpers/utils.hpp"
@@ -16,17 +17,19 @@
 namespace Graphics {
 
 auto SemaphoreManager::GetSemaphoreValue() -> uint64_t {
-  return currentCPUTimelineValue.load();
+  auto value = GetThreadContext().timelineValue;
+  assert(value != 0);
+  return value;
 }
 
 auto SemaphoreManager::GetCompletedSemaphoreValue() const -> uint64_t {
   return gpuCompletedTimelineValue;
 }
 
-auto SemaphoreManager::NewSemaphoreValue(VkCommandBuffer cmdBuffer)
-    -> uint64_t {
-  // Does not have to be an increasing value, just unique
+auto SemaphoreManager::NewSemaphoreValue() -> uint64_t {
+  // Add 1 to allow for easy invalid value check
   auto value = currentCPUTimelineValue.fetch_add(1) + 1;
+
   {
     std::unique_lock lock(timelineSetsMutex);
     uncompletedTimelineValues.emplace(value);
@@ -57,15 +60,6 @@ auto SemaphoreManager::UpdateSemaphoreValues(const GraphicsContext &context)
   // currentFrame starts at 0, but vulkan complains when signalling a timeline semaphore with value 0, so we start at 1
   uint64_t frameIdx = context.currentFrame + 1;
   uint64_t maxValue = GetSemaphoreValue();
-
-  // No commands.
-  if (sortedUncompletedTimelineValues.empty()) {
-    return maxValue;
-  }
-
-  for (const auto &value : sortedUncompletedTimelineValues) {
-    uncompletedTimelineValues.insert(value);
-  }
 
   uncompletedFrames.emplace_back(frameIdx, sortedUncompletedTimelineValues);
   sortedUncompletedTimelineValues.clear();
@@ -120,7 +114,7 @@ auto SemaphoreManager::Initialize(GraphicsContext &context) -> Error {
   return Error::Success();
 }
 
-auto SemaphoreManager::DeInitialize(GraphicsContext &context) -> void {
+auto SemaphoreManager::Deinitialize(GraphicsContext &context) -> void {
   if (semaphore != VK_NULL_HANDLE) {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
     vkDestroySemaphore(context.device, semaphore, GetAllocationCallbacks());

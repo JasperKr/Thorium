@@ -851,15 +851,13 @@ auto Reset(const GraphicsContext &context) -> Error {
   return Error::Success();
 }
 
-auto Shutdown(const GraphicsContext &context) -> Error {
+void Shutdown(const GraphicsContext &context) {
   StateStack.clear();
   CurrentStats.Reset();
   LastState = nullptr;
   TopOfStack = nullptr;
   PipelineCache.clear();
   LastStateStorage = State();
-
-  return Error::Success();
 }
 
 auto FlushCompute(const GraphicsContext &context) -> Result<bool> {
@@ -1042,7 +1040,8 @@ inline auto BeginRendering(const GraphicsContext &context) -> Error {
 
   for (int i = 0; i < TopOfStack->colorAttachmentCount; i++) {
     const auto &rendertarget = TopOfStack->colorAttachments.at(i);
-    CHECK_ERR(rendertarget.texture->UseAsAttachment(context));
+    CHECK_ERR(
+        rendertarget.texture->UseAsAttachment(context, rendertarget.loadOp));
 
     VkRenderingAttachmentInfo attachmentInfo = {};
     attachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
@@ -1066,7 +1065,8 @@ inline auto BeginRendering(const GraphicsContext &context) -> Error {
 
   if (TopOfStack->hasDepthStencilAttachment) {
     auto &rendertarget = TopOfStack->depthStencilAttachment;
-    CHECK_ERR(rendertarget.texture->UseAsAttachment(context));
+    CHECK_ERR(
+        rendertarget.texture->UseAsAttachment(context, rendertarget.loadOp));
 
     VkRenderingAttachmentInfo attachmentInfo = {};
     attachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
@@ -1355,6 +1355,7 @@ inline auto BindTextureDescriptors(const GraphicsContext &context,
       result = texture->UseAsPresentSrc(context);
       break;
     case TextureUsage::Unknown:
+    case TextureUsage::Swapchain:
       result = Error::Create(
           "Cannot transition image with unknown usage in shader flush.");
       break;

@@ -25,7 +25,7 @@ auto Present(GraphicsContext &context,
     -> Error;
 auto InitializeRendering(GraphicsContext &context,
                          Window::WindowContext &windowContext) -> Error;
-auto DeinitilizeRendering(GraphicsContext &context) -> void;
+auto DeinitializeRendering(GraphicsContext &context) -> void;
 auto UseCommands(uint64_t key) -> void;
 auto UseCommands(const std::string &name) -> void;
 

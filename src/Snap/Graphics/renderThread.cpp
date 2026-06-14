@@ -110,23 +110,16 @@ inline auto GetDescriptorPool(ThreadContext &tcontext) -> Error {
             descriptorPoolInfo.lastUsedTimestamp)) {
       pool = descriptorPoolInfo.descriptorPool;
       descriptorPoolInfo.lastUsedTimestamp =
-          Graphics::semaphoreManager.GetSemaphoreValue();
+          Graphics::SemaphoreManager::GetSemaphoreValue();
       break;
     }
   }
 
   if (pool == VK_NULL_HANDLE) {
-    auto createResult = CreateDescriptorPool(tcontext);
-
-    if (Error::IsError(createResult)) {
-      return createResult.error();
-    }
-
-    pool = createResult.value();
+    pool = CHECK_RES(CreateDescriptorPool(tcontext));
 
     tcontext.descriptorPools.push_back(
-        {pool, Graphics::semaphoreManager
-                   .GetSemaphoreValue()}); // Add new pool to the list
+        {pool, Graphics::SemaphoreManager::GetSemaphoreValue()});
 
     tcontext.descriptorPool = pool;
   } else {
@@ -188,20 +181,15 @@ auto AquireCommandBuffer(Graphics::GraphicsContext &context,
     threadInfo->threadData.commandBuffer = cachedCmdBuffer.value();
   }
 
-  threadInfo->threadData.cmdBufferTimelineValue =
-      Graphics::semaphoreManager.NewSemaphoreValue(
-          threadInfo->threadData.commandBuffer);
+  tcontext.timelineValue = Graphics::semaphoreManager.NewSemaphoreValue();
+  threadInfo->threadData.cmdBufferTimelineValue = tcontext.timelineValue;
 
   // Reset old command buffer
   VkCommandBufferResetFlags resetFlags{};
   CHECK_ERR(Error::Create(
       vkResetCommandBuffer(threadInfo->threadData.commandBuffer, resetFlags)));
 
-  auto getDescriptorPoolResult = GetDescriptorPool(tcontext);
-
-  if (Error::IsError(getDescriptorPoolResult)) {
-    return getDescriptorPoolResult;
-  }
+  CHECK_ERR(GetDescriptorPool(tcontext));
 
   VkCommandBufferBeginInfo beginInfo = {};
   beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -321,7 +309,7 @@ auto Initialize(Graphics::GraphicsContext &context) -> Error {
 auto Deinitialize(Graphics::GraphicsContext &context) -> Error {
   DeInitializeUniformBufferModule(context);
 
-  CHECK_ERR(DynamicRendering::Shutdown(context));
+  DynamicRendering::Shutdown(context);
 
   Wrap::Graphics::ShutdownWrapGraphics();
 

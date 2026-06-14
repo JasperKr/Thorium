@@ -176,6 +176,9 @@ auto Buffer::UploadLarge(const GraphicsContext &context,
   copyRegion.size = uploadSize;
   vkCmdCopyBuffer(commandBuffer, stagingBuffer->handle, handle, 1, &copyRegion);
 
+  stagingBuffer->MarkUse();
+  MarkUse();
+
   return Error::Success();
 }
 
@@ -253,6 +256,9 @@ auto Buffer::UploadRing(const GraphicsContext &context,
   DynamicRendering::EndRendering(context);
   vkCmdCopyBuffer(commandBuffer, uploadBuffer->handle, handle, 1, &copyRegion);
   uploadOffset += uploadSize;
+
+  uploadBuffer->MarkUse();
+  MarkUse();
 
   auto alignment =
       context.deviceProperties.limits.minUniformBufferOffsetAlignment;
@@ -394,7 +400,7 @@ auto Buffer::Create(const GraphicsContext &context,
   }
 
   PrintDebug("Buffer size in bytes: {}", buffer->sizeInBytes);
-  buffer->lastUsedTimestamp = Graphics::semaphoreManager.GetSemaphoreValue();
+  buffer->lastUsedTimestamp = 0;
 
   return buffer;
 }
@@ -480,7 +486,7 @@ auto Buffer::CopyTo(const GraphicsContext &context,
 }
 
 auto Buffer::CopyTo(const GraphicsContext &context, Texture &dstTexture,
-                    VkBufferImageCopy region) -> Error {
+                    VkBufferImageCopy region) const -> Error {
   if (((dstTexture.usage) & VK_IMAGE_USAGE_TRANSFER_DST_BIT) == 0) {
     return Error::Create("Destination texture was not created with "
                          "TRANSFER_DST usage flag for copy.");
@@ -548,8 +554,9 @@ auto Buffer::Grow(const GraphicsContext &context, size_t newSize)
   return newBuffer;
 }
 
-auto Buffer::MarkUse() -> void {
-  lastUsedTimestamp = Graphics::semaphoreManager.GetSemaphoreValue();
+auto Buffer::MarkUse() const -> void {
+  lastUsedTimestamp = std::max(lastUsedTimestamp,
+                               Graphics::SemaphoreManager::GetSemaphoreValue());
 }
 
 // NOLINTNEXTLINE
@@ -642,7 +649,7 @@ auto Buffer::Readback(const GraphicsContext &context,
   vkCmdCopyBuffer(commandBuffer, handle, stagingBuffer, 1, &copyRegion);
 
   MarkUse();
-  auto timelineValue = Graphics::semaphoreManager.GetSemaphoreValue();
+  auto timelineValue = Graphics::SemaphoreManager::GetSemaphoreValue();
 
   auto bufferReadback = Ref<BufferReadback>::Make();
   if (output.isValid()) {
@@ -706,9 +713,6 @@ auto Buffer::Readback(const GraphicsContext &context,
 
 Buffer::~Buffer() {
   auto *context = GetCurrentGraphicsContext();
-
-  PrintAlways("Destroying buffer: {}",
-              debugName.empty() ? "(unnamed)" : debugName);
 
   ScheduleDestruction(BufferMemory{.allocation = memory,
                                    .buffer = handle,

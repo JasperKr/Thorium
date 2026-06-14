@@ -5,7 +5,6 @@
 #include "Graphics/dynamicRendering.hpp"
 #include "Graphics/graphics.hpp"
 #include "Graphics/render.hpp"
-#include "Graphics/resource.hpp"
 #include "Graphics/shader.hpp"
 #include "Graphics/texture.hpp"
 #include "Modules/config.hpp"
@@ -18,7 +17,6 @@
 #include "Wrap/wrap_engine.hpp"
 #include <filesystem>
 #include <lua.hpp>
-#include <mutex>
 #include <public/tracy/Tracy.hpp>
 #include <string>
 #include <vector>
@@ -308,6 +306,7 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
       Event::ExitCode = 1;
 
       mainLoopResult = Error::Create(luaErrorMessage);
+      PrintError("Lua error in main loop: {}", luaErrorMessage);
     }
     FrameMarkEnd("Frame");
 
@@ -335,8 +334,6 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
 
   Wrap::Graphics::ShutdownWrapGraphics();
 
-  Graphics::DeinitilizeRendering(context);
-
   Graphics::UnloadModule();
 
   Graphics::DeInitializeUniformBufferModule(context);
@@ -348,21 +345,7 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
 
   Threading::UnloadModule();
 
-  PrintInfo("Deinitializing global timeline semaphore...");
-
-  Graphics::semaphoreManager.DeInitialize(context);
-
   PrintInfo("Unloading shader modules...");
-
-  Graphics::Shader::UnloadModule(context);
-
-  PrintInfo("Destroying rendertargets...");
-  CHECK_ERR(Graphics::DynamicRendering::Shutdown(context));
-  Graphics::DynamicRendering::Destroy(context);
-
-  PrintInfo("Destroying samplers...");
-
-  Graphics::DestroySamplers(context);
 
   PrintInfo("Destroying graphics context...");
 

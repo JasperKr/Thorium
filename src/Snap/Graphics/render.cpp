@@ -171,37 +171,42 @@ auto SubmitCommandBuffers(Graphics::GraphicsContext &context,
                           const std::vector<VkCommandBuffer> &buffers,
                           size_t count) -> Error {
   ZoneScoped;
+  assert(count <= buffers.size());
 
-  VkSubmitInfo submitInfo = {};
-  submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+  std::vector<VkCommandBufferSubmitInfo> commandBufferInfos(count);
+  for (size_t i = 0; i < count; i++) {
+    commandBufferInfos.at(i).sType =
+        VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
+    commandBufferInfos.at(i).commandBuffer = buffers.at(i);
+  }
 
-  // Wait for the swapchain image ready semaphore
-  VkPipelineStageFlags waitStage =
-      VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-  submitInfo.waitSemaphoreCount = 1;
-  submitInfo.pWaitSemaphores = &context.imageAvailable[context.frameIndex];
-  submitInfo.pWaitDstStageMask = &waitStage;
+  VkSemaphoreSubmitInfo waitInfo = {};
+  waitInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
+  waitInfo.semaphore = context.imageAvailable[context.frameIndex];
+  waitInfo.stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
 
-  submitInfo.commandBufferCount = count;
-  submitInfo.pCommandBuffers = buffers.data();
+  VkSemaphoreSubmitInfo signalInfo = {};
+  signalInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
 
-  // Signal the swapchain finished semaphore
-  submitInfo.signalSemaphoreCount = 1;
-  submitInfo.pSignalSemaphores =
-      &context.renderFinished.at(context.swapchainImageIndex);
+  assert(context.renderFinished.size() > context.swapchainImageIndex);
+
+  signalInfo.semaphore = context.renderFinished.at(context.swapchainImageIndex);
+  signalInfo.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+
+  VkSubmitInfo2 submitInfo = {};
+  submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2;
+  submitInfo.waitSemaphoreInfoCount = 1;
+  submitInfo.pWaitSemaphoreInfos = &waitInfo;
+  submitInfo.commandBufferInfoCount =
+      static_cast<uint32_t>(commandBufferInfos.size());
+  submitInfo.pCommandBufferInfos = commandBufferInfos.data();
+  submitInfo.signalSemaphoreInfoCount = 1;
+  submitInfo.pSignalSemaphoreInfos = &signalInfo;
 
   {
     ZoneScopedN("Submit command buffer to queue");
-    // Submit
-    auto err =
-        Error::Create(vkQueueSubmit(context.graphicsQueue, 1, &submitInfo,
-                                    context.inFlight[context.frameIndex]));
-    CHECK_ERR(err);
-
-    // if (err.code == VK_ERROR_OUT_OF_DATE_KHR || err.code == VK_SUBOPTIMAL_KHR) {
-    //   // Swapchain is out of date, need to recreate
-    //   swapchainManager.MakeDirty();
-    // }
+    CHECK_NEW_ERR(vkQueueSubmit2(context.graphicsQueue, 1, &submitInfo,
+                                 context.inFlight[context.frameIndex]));
   }
 
   auto timelineValue =
@@ -212,21 +217,19 @@ auto SubmitCommandBuffers(Graphics::GraphicsContext &context,
 
     VkSemaphore globalTimelineSemaphore = Graphics::semaphoreManager.semaphore;
     if (globalTimelineSemaphore != VK_NULL_HANDLE) {
-      VkTimelineSemaphoreSubmitInfo timelineInfo{};
-      timelineInfo.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO;
-      timelineInfo.signalSemaphoreValueCount = 1;
-      timelineInfo.pSignalSemaphoreValues = &timelineValue;
+      VkSemaphoreSubmitInfo timelineSignalInfo = {};
+      timelineSignalInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
+      timelineSignalInfo.semaphore = globalTimelineSemaphore;
+      timelineSignalInfo.value = timelineValue;
+      timelineSignalInfo.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
 
-      VkSubmitInfo submitTimeline{};
-      submitTimeline.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-      submitTimeline.pNext = &timelineInfo;
-      submitTimeline.commandBufferCount = 0; // no commands needed
-      submitTimeline.pCommandBuffers = nullptr;
-      submitTimeline.signalSemaphoreCount = 1;
-      submitTimeline.pSignalSemaphores = &globalTimelineSemaphore;
+      VkSubmitInfo2 submitTimeline = {};
+      submitTimeline.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2;
+      submitTimeline.signalSemaphoreInfoCount = 1;
+      submitTimeline.pSignalSemaphoreInfos = &timelineSignalInfo;
 
-      CHECK_NEW_ERR(vkQueueSubmit(context.graphicsQueue, 1, &submitTimeline,
-                                  VK_NULL_HANDLE));
+      CHECK_NEW_ERR(vkQueueSubmit2(context.graphicsQueue, 1, &submitTimeline,
+                                   VK_NULL_HANDLE));
     }
   }
 
@@ -275,7 +278,7 @@ auto InitializeRendering(Graphics::GraphicsContext &context,
   return Error::Success();
 }
 
-auto DeinitilizeRendering(GraphicsContext &context) -> void {
+auto DeinitializeRendering(GraphicsContext &context) -> void {
   swapchainManager.Deinitialize(context);
 }
 
@@ -504,7 +507,7 @@ auto Present(Graphics::GraphicsContext &context,
     for (const auto &command : commands) {
       if (command->threadData.commandBuffer != nullptr) {
         Threading::CommandBufferCache.emplace_back(
-            Graphics::semaphoreManager.GetSemaphoreValue(),
+            Graphics::SemaphoreManager::GetSemaphoreValue(),
             command->threadData.commandBuffer);
         command->threadData.commandBuffer = nullptr;
       }

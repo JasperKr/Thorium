@@ -185,13 +185,7 @@ auto Mesh::SetIndices(GraphicsContext &context,
     iboCreationInfo.size = indexData.size();
     iboCreationInfo.debugName = DebugName + " Index Buffer";
 
-    auto bufferResult = Buffer::Create(context, iboCreationInfo);
-
-    if (Error::IsError(bufferResult)) {
-      return bufferResult.error();
-    }
-
-    IndexBuffer = bufferResult.value();
+    IndexBuffer = CHECK_RES(Buffer::Create(context, iboCreationInfo));
     IndexCount = newCount;
 
     DrawRange.Count = IndexCount;
@@ -217,6 +211,14 @@ auto Mesh::SetIndexBuffer(const Ref<Buffer> &buffer, VkIndexType format)
 
   IndexBuffer = buffer;
   IndicesFormat = format;
+
+  auto newCount =
+      static_cast<uint32_t>(buffer->size / GetIndexFormatSize(format));
+
+  IndexCount = newCount;
+  DrawRange.Count = IndexCount;
+  DrawRange.Offset =
+      (std::min)(DrawRange.Offset, static_cast<uint32_t>(IndexCount - 1));
 
   return Error::Success();
 }

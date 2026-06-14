@@ -1,9 +1,12 @@
 #include "graphics.hpp"
 #include "Graphics/allocations.hpp"
 #include "Graphics/deviceSettings.hpp"
+#include "Graphics/dynamicRendering.hpp"
 #include "Graphics/graphicsContext.hpp"
 #include "Graphics/graphicsState.hpp"
+#include "Graphics/render.hpp"
 #include "Graphics/resource.hpp"
+#include "Graphics/shader.hpp"
 #include "Libraries/vma.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
@@ -16,6 +19,7 @@
 #include <cstdint>
 #include <mutex>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -524,9 +528,20 @@ void Deinitialize(GraphicsContext &context) {
 
   Graphics::Barrier::ResetModule();
 
-  PrintInfo("Processing released resources...");
   // (BEFORE device, allocator lock)
   Graphics::ProcessReleasedResources(context);
+
+  Graphics::DeinitializeRendering(context);
+
+  Graphics::semaphoreManager.Deinitialize(context);
+
+  Graphics::DestroySamplers(context);
+
+  Graphics::Shader::UnloadModule(context);
+
+  Graphics::DynamicRendering::Shutdown(context);
+
+  Graphics::DynamicRendering::Destroy(context);
 
   std::scoped_lock<std::mutex, std::mutex> lock(
       Graphics::GraphicsContext::mutexes.device,

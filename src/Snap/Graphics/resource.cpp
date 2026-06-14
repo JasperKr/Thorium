@@ -113,8 +113,6 @@ auto ProcessReleasedResources(GraphicsContext &context) -> void {
 
     Utils::UnorderedErase(ReleasedTextures, [&](TextureMemory &res) -> auto {
       if (CanBeDestroyed(res.timelineValue)) {
-        PrintWarning("Destroying texture resource with handle: {}",
-                     (void *)res.image);
         res.Destroy();
 
         return true;
@@ -128,8 +126,6 @@ auto ProcessReleasedResources(GraphicsContext &context) -> void {
 
     Utils::UnorderedErase(ReleasedBuffers, [&](BufferMemory &res) -> auto {
       if (CanBeDestroyed(res.timelineValue)) {
-        PrintWarning("Destroying buffer resource with handle: {}",
-                     (void *)res.buffer);
         res.Destroy();
         return true;
       }

@@ -1,6 +1,6 @@
 local i = 0
-snap.threaderror = error
-print("Starting thread 1")
+snap.threaderror = print
+print("Starting main thread")
 require("init")
 
 local thread = snap.thread.newThread("src/Scripting/thread.lua", "Render thread 1")
@@ -9,13 +9,13 @@ local startThreadChannel = snap.thread.newChannel()
 local events = snap.thread.newChannel()
 local scene = snap.scene.newScene("Main")
 
-
 snap.graphics.aquireGraphics("load")
 snap.renderer.initialize()
 
 local qx, qy, qz, qw = snap.math.eulerToQuaternion(0.3, -math.pi / 1.5, 0);
 scene:newDirectionalLight("Test directional light", qx, qy, qz, qw, 1, 1, 1, 5)
 
+print("Starting render thread")
 thread:start(commandsChannel, startThreadChannel, scene, events)
 
 function snap.any(...)
@@ -92,6 +92,7 @@ function snap.draw()
 
   while not gotBuffer do
     if thread:getStatus() ~= "running" then
+      print("Render thread has stopped running. Exiting the application.")
       return
     end
 

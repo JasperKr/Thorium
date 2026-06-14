@@ -523,10 +523,10 @@ auto FlushGraphics(const GraphicsContext &context) -> Result<bool>;
 auto Load(const GraphicsContext &context) -> Error;
 
 // Destroys all created pipelines and layouts
-auto Destroy(const GraphicsContext &context) -> void;
+void Destroy(const GraphicsContext &context);
 
 // Shuts down the local dynamic rendering module
-auto Shutdown(const GraphicsContext &context) -> Error;
+void Shutdown(const GraphicsContext &context);
 
 auto PrepareRendering(const GraphicsContext &context) -> Error;
 

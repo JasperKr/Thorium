@@ -67,7 +67,7 @@ struct Buffer : Object, Barrier::BarrierSynced {
   uint64_t sizeInBytes = 0;
   mutable void *mappedData = nullptr;
 
-  uint64_t lastUsedTimestamp{};
+  mutable uint64_t lastUsedTimestamp{};
 
   VkMemoryPropertyFlags properties = 0;
   VkBufferUsageFlags usage = 0;
@@ -87,7 +87,7 @@ struct Buffer : Object, Barrier::BarrierSynced {
   bool isDestroyed = false;
 
   auto GetTimestamp() const -> uint64_t { return lastUsedTimestamp; }
-  auto MarkUse() -> void;
+  auto MarkUse() const -> void;
 
   static auto Create(const Graphics::GraphicsContext &context,
                      const Graphics::BufferCreationInfo &info)
@@ -114,7 +114,7 @@ struct Buffer : Object, Barrier::BarrierSynced {
               size_t srcIndex, size_t dstIndex, size_t size) -> Error;
 
   auto CopyTo(const GraphicsContext &context, Texture &dstTexture,
-              VkBufferImageCopy region) -> Error;
+              VkBufferImageCopy region) const -> Error;
 
   auto Grow(const GraphicsContext &context, size_t newSize)
       -> Result<Ref<Buffer>>;

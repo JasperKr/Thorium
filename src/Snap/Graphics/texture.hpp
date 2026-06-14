@@ -46,6 +46,7 @@ enum class TextureUsage : uint8_t {
   TransferSrc,
   TransferDst,
   PresentSrc,
+  Swapchain, // Just aquired from the swapchain
   Unknown,
 };
 
@@ -123,9 +124,16 @@ struct Texture : Object, Barrier::BarrierSynced {
   bool isSwapchainView = false;
 
   auto UseAs(const GraphicsContext &context, TextureUsage newUsage,
-             VkPipelineStageFlags2 stage) -> Error;
+             VkPipelineStageFlags2 stage,
+             VkAttachmentLoadOp loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+             VkAttachmentStoreOp storeOp = VK_ATTACHMENT_STORE_OP_STORE)
+      -> Error;
 
-  auto UseAsAttachment(const GraphicsContext &context) -> Error;
+  auto
+  UseAsAttachment(const GraphicsContext &context,
+                  VkAttachmentLoadOp loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+                  VkAttachmentStoreOp storeOp = VK_ATTACHMENT_STORE_OP_STORE)
+      -> Error;
   auto UseAsSampler(const GraphicsContext &context, VkPipelineStageFlags2 stage)
       -> Error;
   auto UseAsTransferSrc(const GraphicsContext &context) -> Error;
@@ -307,7 +315,10 @@ auto GetDefaultTexture(const GraphicsContext &context, VkFormat format,
                        Graphics::TextureType textureType)
     -> Result<Ref<Graphics::Texture>>;
 
-auto GetAccessFlagsForUsage(TextureUsage usage, VkFormat format)
+auto GetAccessFlagsForUsage(
+    TextureUsage usage, VkFormat format,
+    VkAttachmentLoadOp loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+    VkAttachmentStoreOp storeOp = VK_ATTACHMENT_STORE_OP_STORE)
     -> VkAccessFlags2;
 
 } // namespace Graphics

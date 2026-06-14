@@ -21,5 +21,7 @@ struct ThreadContext {
 
   std::vector<DescriptorPoolInfo> descriptorPools;  // Descriptor pool info
   VkDescriptorPool descriptorPool = VK_NULL_HANDLE; // Current descriptor pool
+
+  uint64_t timelineValue = 0;
 };
 } // namespace Graphics

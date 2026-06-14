@@ -16,16 +16,23 @@ struct VertexStageOutput {
 
 struct VertexInput {
   float3 Position : POSITION;
+  float2 TexCoords : TEXCOORD;
+  uint Normal : NORMAL;
+  uint Tangent : TANGENT;
+  float4 Color : COLOR;
 };
 
 [shader("vertex")]
 VertexStageOutput vertexMain(VertexInput input) {
-  Transform transform = GetModelTransform(PushConstants.ModelTransformIndex);
+  float4x4 transform = GetModelMatrix(PushConstants.ModelTransformIndex);
 
   VertexStageOutput out;
 
-  float4 worldPos = mul(float4(input.Position, 1.0), transform.ModelMatrix);
+  float4 worldPos = mul(float4(input.Position, 1.0), transform);
   out.sv_position = mul(camera.ViewProjectionMatrix, worldPos);
 
   return out;
 }
+
+[shader("fragment")]
+void fragmentMain() {}

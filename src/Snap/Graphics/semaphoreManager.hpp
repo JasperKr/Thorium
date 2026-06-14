@@ -43,9 +43,9 @@ struct SemaphoreManager {
   // [completed frame value] -> [original values that were remapped to this value]
   std::vector<std::pair<uint64_t, std::vector<uint64_t>>> uncompletedFrames;
 
-  auto GetSemaphoreValue() -> uint64_t;
+  static auto GetSemaphoreValue() -> uint64_t;
   auto GetCompletedSemaphoreValue() const -> uint64_t;
-  auto NewSemaphoreValue(VkCommandBuffer cmdBuffer) -> uint64_t;
+  auto NewSemaphoreValue() -> uint64_t;
 
   auto IsInUse(uint64_t value) -> bool;
 
@@ -57,7 +57,7 @@ struct SemaphoreManager {
   auto UpdateSemaphoreValues(const struct GraphicsContext &context)
       -> Result<uint64_t>;
   auto Initialize(struct GraphicsContext &context) -> Error;
-  auto DeInitialize(struct GraphicsContext &context) -> void;
+  auto Deinitialize(struct GraphicsContext &context) -> void;
 };
 
 } // namespace Graphics

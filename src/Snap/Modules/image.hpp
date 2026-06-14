@@ -25,6 +25,8 @@ auto IsDepthTexture(VkFormat format) -> bool;
 
 auto IsStencilTexture(VkFormat format) -> bool;
 
+auto IsDepthOrStencilTexture(VkFormat format) -> bool;
+
 auto GetTextureAspectFlags(VkFormat format) -> VkImageAspectFlags;
 
 auto GetDimensions(const VkExtent3D &extent, uint32_t mipLevel) -> VkExtent3D;

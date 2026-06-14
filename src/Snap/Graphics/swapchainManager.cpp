@@ -309,6 +309,10 @@ auto SwapchainManager::CleanupOldSwapchains(GraphicsContext &context,
       [&context, &currentFrame](OldSwapchain &oldSwapchain) -> bool {
         auto swapchainImageCount = oldSwapchain.textures.size();
         if (currentFrame - oldSwapchain.lastFrameUsed > swapchainImageCount) {
+          PrintAlways("Cleaning up old swapchain last used at frame {}. "
+                      "Current frame is {}.",
+                      oldSwapchain.lastFrameUsed, currentFrame);
+
           for (const auto &texture : oldSwapchain.textures) {
             auto *image = texture->image;
             auto *view = texture->view;
@@ -390,19 +394,18 @@ inline auto CreateFences(GraphicsContext &context) -> Error {
   VkSemaphoreCreateInfo semaphoreInfo = {};
   semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
-  context.renderFinished.resize(FRAMES_IN_FLIGHT);
+  if (context.swapchainInfo.imageCount <= 0) {
+    return Error::Create("Swapchain image count is zero.");
+  }
 
+  context.renderFinished.resize(context.swapchainInfo.imageCount);
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    for (int i = 0; i < FRAMES_IN_FLIGHT; i++) {
+    for (int i = 0; i < context.swapchainInfo.imageCount; i++) {
       CHECK_NEW_ERR(vkCreateSemaphore(context.device, &semaphoreInfo,
                                       GetAllocationCallbacks(),
                                       &context.renderFinished.at(i)));
     }
-  }
-
-  if (context.swapchainInfo.imageCount <= 0) {
-    return Error::Create("Swapchain image count is zero.");
   }
 
   return Error::Success();
@@ -511,10 +514,7 @@ auto SwapchainManager::CreateVkSwapchain(GraphicsContext &context,
 
   CHECK_ERR(GetSwapchainTextures(context));
 
-  if (context.renderFinished.empty() ||
-      context.renderFinished.at(0) == VK_NULL_HANDLE) {
-    CHECK_ERR(CreateFences(context));
-  }
+  CHECK_ERR(CreateFences(context));
 
   return Error::Success();
 }
