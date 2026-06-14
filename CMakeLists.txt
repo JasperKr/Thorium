@@ -82,12 +82,14 @@ target_link_libraries(snap
         snap_core
         SnapEngine
         TBB::tbb
+        OpenMP::OpenMP_CXX
 )
 else()
 target_link_libraries(snap
     PRIVATE
         snap_core
         TBB::tbb
+        OpenMP::OpenMP_CXX
 )
 endif()
 

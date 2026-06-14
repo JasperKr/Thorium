@@ -204,6 +204,7 @@ auto Vec4::operator[](uint32_t index) -> Scalar & {
   default:
     assert(false && "Vec4 index out of range");
   }
+  return x; // Return x as a fallback to silence compiler warning
 }
 
 // Vec4

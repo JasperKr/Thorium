@@ -55,5 +55,6 @@ add_subdirectory(
 target_link_libraries(SnapEngine
   PUBLIC snap_core
   PRIVATE TBB::tbb
+  OpenMP::OpenMP_CXX
   meshoptimizer
 )

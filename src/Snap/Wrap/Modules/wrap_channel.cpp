@@ -1,6 +1,5 @@
 #include "wrap_channel.hpp"
 #include "Modules/channel.hpp"
-#include "Modules/console.hpp"
 #include "Wrap/lua_data.hpp"
 #include "Wrap/wrap.hpp"
 #include <lua.hpp>
@@ -106,16 +105,18 @@ auto wrap_Demand(lua_State *state) -> int {
     return luaL_error(state, "Invalid Channel object.");
   }
 
-  lua_Number timeout = INFINITY;
+  std::optional<LuaWrap::Data::LuaType> messageResult;
   if (lua_gettop(state) >= 2) {
     if (lua_isnumber(state, 2) == 0) {
       return luaL_error(state, "Timeout argument must be a number.");
     }
 
-    timeout = lua_tonumber(state, 2);
-  }
+    auto timeout = lua_tonumber(state, 2);
 
-  auto messageResult = channel->Demand(timeout);
+    messageResult = channel->Demand(timeout);
+  } else {
+    messageResult = channel->Demand();
+  }
 
   if (!messageResult.has_value()) {
     lua_pushnil(state);

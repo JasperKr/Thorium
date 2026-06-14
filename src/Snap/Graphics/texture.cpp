@@ -17,6 +17,7 @@
 #include "Modules/image.hpp"
 #include "Modules/imageData.hpp"
 #include "Modules/object.hpp"
+#include "Modules/timer.hpp"
 #include "sampler.hpp"
 #include "stb/stb_image.h"
 #include <cassert>

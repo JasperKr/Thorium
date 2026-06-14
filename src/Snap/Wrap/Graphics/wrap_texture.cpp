@@ -612,8 +612,7 @@ static inline auto TextureFromFilepath(lua_State *state)
   auto *ctx = ::Graphics::GetCurrentGraphicsContext();
   const char *filepath = luaL_checkstring(state, 1);
 
-  return CHECK_RES(
-      ::Graphics::LoadFromFile(*ctx, filepath, VK_IMAGE_USAGE_SAMPLED_BIT));
+  return ::Graphics::LoadFromFile(*ctx, filepath, VK_IMAGE_USAGE_SAMPLED_BIT);
 }
 
 static inline auto TextureFromImagedataAndOptions(lua_State *state)
@@ -629,29 +628,18 @@ static inline auto TextureFromImagedataAndOptions(lua_State *state)
   LuaOptions options = optionsResult.value();
 
   auto usage = TextureUsageToVkImageUsage(options.format, options.usage);
-  return CHECK_RES(::Graphics::LoadFromMemory(*ctx, *imageData, usage));
+  return ::Graphics::LoadFromMemory(*ctx, *imageData, usage);
 }
 
 static inline auto TextureFromFilepathAndOptions(lua_State *state)
     -> Result<Ref<::Graphics::Texture>> {
   auto *ctx = ::Graphics::GetCurrentGraphicsContext();
   const char *filepath = luaL_checkstring(state, 1);
-  auto optionsResult = LuaOptions::Create(state, 2);
-
-  if (Error::IsError(optionsResult)) {
-    return optionsResult.error();
-  }
-
-  LuaOptions options = optionsResult.value();
+  auto options = CHECK_RES(LuaOptions::Create(state, 2));
 
   auto usage = TextureUsageToVkImageUsage(options.format, options.usage);
 
-  auto result =
-      ::Graphics::LoadFromFile(*ctx, filepath, usage, options.mipmaps);
-  if (Error::IsError(result)) {
-    return result.error();
-  }
-  return result.value();
+  return ::Graphics::LoadFromFile(*ctx, filepath, usage, options.mipmaps);
 }
 
 static inline auto TextureFromImagedataArrayAndOptions(lua_State *state)
@@ -675,7 +663,7 @@ static inline auto TextureFromImagedataArrayAndOptions(lua_State *state)
 
   auto *ctx = ::Graphics::GetCurrentGraphicsContext();
 
-  return CHECK_RES(::Graphics::LoadFromMemory(*ctx, slices, options.type));
+  return ::Graphics::LoadFromMemory(*ctx, slices, options.type);
 }
 
 static inline auto TextureFromWidthAndHeight(lua_State *state)
@@ -684,19 +672,15 @@ static inline auto TextureFromWidthAndHeight(lua_State *state)
   auto width = static_cast<uint32_t>(luaL_checkinteger(state, 1));
   auto height = static_cast<uint32_t>(luaL_checkinteger(state, 2));
 
-  auto result =
-      ::Graphics::Create(*ctx, ::Graphics::TextureCreationInfo{
-                                   .size = {width, height},
-                                   .format = ::Graphics::DefaultPixelFormat,
-                                   .usage = VK_IMAGE_USAGE_SAMPLED_BIT |
-                                            VK_IMAGE_USAGE_TRANSFER_DST_BIT,
-                                   .mipmapCount = 1,
-                                   .debugName = "LuaTexture FromWidthAndHeight",
-                               });
-  if (Error::IsError(result)) {
-    return result.error();
-  }
-  return result.value();
+  return ::Graphics::Create(
+      *ctx,
+      ::Graphics::TextureCreationInfo{
+          .size = {width, height},
+          .format = ::Graphics::DefaultPixelFormat,
+          .usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+          .mipmapCount = 1,
+          .debugName = "LuaTexture FromWidthAndHeight",
+      });
 }
 
 static inline auto TextureFromWidthHeightAndOptions(lua_State *state)
@@ -704,13 +688,7 @@ static inline auto TextureFromWidthHeightAndOptions(lua_State *state)
   auto *ctx = ::Graphics::GetCurrentGraphicsContext();
   auto width = static_cast<uint32_t>(luaL_checkinteger(state, 1));
   auto height = static_cast<uint32_t>(luaL_checkinteger(state, 2));
-  auto optionsResult = LuaOptions::Create(state, 3);
-
-  if (Error::IsError(optionsResult)) {
-    return optionsResult.error();
-  }
-
-  LuaOptions options = optionsResult.value();
+  auto options = CHECK_RES(LuaOptions::Create(state, 3));
 
   auto usage = TextureUsageToVkImageUsage(options.format, options.usage);
 

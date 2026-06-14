@@ -29,11 +29,10 @@ Sampler2D AlbedoTexture;
 
 [shader("vertex")]
 VertexStageOutput vertexMain(VertexInput input) {
+  float4x4 transform = GetModelMatrix(PushConstants.ModelTransformIndex);
+  float4 worldPos = mul(float4(input.Position, 1.0), transform);
+
   VertexStageOutput out;
-
-  Transform transform = GetModelTransform(PushConstants.ModelTransformIndex);
-
-  float4 worldPos = mul(float4(input.Position, 1.0), transform.ModelMatrix);
   out.sv_position = mul(camera.ViewProjectionMatrix, worldPos);
   out.tex_coord = input.TexCoords;
 

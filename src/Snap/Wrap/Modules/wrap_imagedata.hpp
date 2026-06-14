@@ -1,6 +1,5 @@
 #pragma once
 
-#include "Modules/console.hpp"
 #include "Modules/imageData.hpp"
 #include "Wrap/Modules/wrap_bytedata.hpp"
 #include "Wrap/wrap.hpp"

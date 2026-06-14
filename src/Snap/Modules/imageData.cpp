@@ -347,19 +347,16 @@ auto ImageData::Create(const std::span<uint8_t> &data)
         VK_FORMAT_B10G11R11_UFLOAT_PACK32));
     auto *ptr = reinterpret_cast<uint32_t *>(imageData->GetDataPtr()); // NOLINT
 
-// Parallel for-loop to convert from RGB float to B10G11R11
-#pragma omp parallel for
-    for (int i = 0; i < texWidth * texHeight; i++) {
-      int idx = i * 3;               // 3 channels (RGB)
-      float red = pixels[idx];       // NOLINT
-      float green = pixels[idx + 1]; // NOLINT
-      float blue = pixels[idx + 2];  // NOLINT
+    size_t iterCount =
+        static_cast<size_t>(texWidth) * static_cast<size_t>(texHeight);
+    size_t readIdx = 0;
 
-      uint32_t lowp_red = Math::Float11::fromFloat(red).bits;
-      uint32_t lowp_green = Math::Float11::fromFloat(green).bits;
-      uint32_t lowp_blue = Math::Float10::fromFloat(blue).bits;
+    for (int i = 0; i < iterCount; i++) {
+      uint32_t lowp_red = Math::Float11::fromFloat(pixels[readIdx++]).bits;
+      uint32_t lowp_green = Math::Float11::fromFloat(pixels[readIdx++]).bits;
+      uint32_t lowp_blue = Math::Float10::fromFloat(pixels[readIdx++]).bits;
 
-      ptr[i] = (lowp_blue << 22U) | (lowp_green << 11U) | (lowp_red << 0U);
+      ptr[i] = (lowp_blue << 22U) | (lowp_green << 11U) | lowp_red;
     }
 
     stbi_image_free(pixels);

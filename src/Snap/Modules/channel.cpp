@@ -95,16 +95,27 @@ auto Channel::GetCount() const -> size_t {
 
 auto Channel::Demand(double timeout) -> std::optional<LuaWrap::Data::LuaType> {
   std::unique_lock<std::mutex> lock(mutex);
-  if (timeout == INFINITY) {
-    condition.wait(
-        lock, [this]() -> bool { return !messages.empty() || IsDestroyed(); });
-  } else {
-    if (!condition.wait_for(
-            lock, std::chrono::duration<double>(timeout),
-            [this]() -> bool { return !messages.empty() || IsDestroyed(); })) {
-      return LuaWrap::Data::LuaType{std::monostate{}};
-    }
+
+  if (!condition.wait_for(
+          lock, std::chrono::duration<double>(timeout),
+          [this]() -> bool { return !messages.empty() || IsDestroyed(); })) {
+    return LuaWrap::Data::LuaType{std::monostate{}};
   }
+
+  if (IsDestroyed()) {
+    return LuaWrap::Data::LuaType{std::monostate{}};
+  }
+
+  LuaWrap::Data::LuaType message = messages.front();
+  messages.pop();
+  return message;
+}
+
+auto Channel::Demand() -> std::optional<LuaWrap::Data::LuaType> {
+  std::unique_lock<std::mutex> lock(mutex);
+
+  condition.wait(
+      lock, [this]() -> bool { return !messages.empty() || IsDestroyed(); });
 
   if (IsDestroyed()) {
     return LuaWrap::Data::LuaType{std::monostate{}};

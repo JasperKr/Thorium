@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Graphics/snapshot.hpp"
-#include "Modules/console.hpp"
 #include "Wrap/wrap.hpp"
 #include "lua.hpp"
 

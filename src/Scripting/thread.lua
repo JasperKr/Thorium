@@ -10,11 +10,8 @@ do
 
   local commandBufferChannel, canStartChannel, scene, events = ...
 
-  local cameraWidth = snap.graphics.getWidth() * 3 / 4
-  local cameraHeight = snap.graphics.getHeight() * 3 / 4
-
   -- scene:newCamera(name, verticalFOV, width, height, near, far)
-  local camera = scene:newCamera("main camera", 90, cameraWidth, cameraHeight, 0.01, 1000)
+  local camera = scene:newCamera("main camera", 90, 1, 1, 0.01, 1000)
 
   local snapshot
 
@@ -134,7 +131,6 @@ do
 
   while true do
     if not (canStartChannel:demand(1)) then
-      print("Received shutdown signal, exiting thread.")
       break
     end
 
@@ -189,10 +185,11 @@ do
     if firstFrame then
       snap.graphics.setDefaultFilter("linear", "linear", 16)
       -- snap.scene.loadModel(scene, "Assets/Terrain/Bistro/bistro.gltf")
-      -- snap.scene.loadModel(scene, "Assets/Terrain/sponza.glb")
+      snap.scene.loadModel(scene, "Assets/Terrain/sponza.glb")
       -- snap.scene.loadModel(scene, "Assets/Objects/OrientationTest/OrientationTest.gltf")
 
       texture = snap.graphics.newTexture("src/Assets/skybox.hdr", { sampler = true, mipmaps = "init" })
+
       -- texture = snap.graphics.newTexture("src/Assets/skybox.hdr")
       -- Checkerboard = snap.data.newImagedata(4, 4, 1)
       -- for x = 0, Checkerboard:getWidth() - 1 do
@@ -207,8 +204,6 @@ do
 
       local env = scene:newEnvironment("Test environment", texture)
       scene:setEnvironment(env)
-
-      firstFrame = false
     end
 
     local dt = snap.timer.getTime() - t
@@ -223,6 +218,7 @@ do
       snapshot = newSnapshot
     end
 
+    firstFrame = false
     commandBufferChannel:push(commands)
   end
 

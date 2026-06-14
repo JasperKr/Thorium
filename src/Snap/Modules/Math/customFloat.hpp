@@ -24,7 +24,12 @@ struct CustomFloat {
   static auto fromFloat(float float_value) -> value {
     auto ufloat = std::bit_cast<uint32_t>(float_value);
 
-    uint32_t sign = SIGNED ? (ufloat >> 31U) & 1U : 0U;
+    // uint32_t sign = SIGNED ? (ufloat >> 31U) & 1U : 0U;
+    uint32_t sign{};
+    if constexpr (SIGNED) {
+      sign = (ufloat >> 31U) & 1U;
+    }
+
     int32_t exp = static_cast<int32_t>((ufloat >> 23U) & 0xFFU) - 127;
     uint32_t mant = ufloat & 0x7FFFFFU;
 
@@ -33,19 +38,19 @@ struct CustomFloat {
     // normalize exponent into new range
     int32_t newExp = exp + exp_bias;
 
-    if (newExp <= 0) {
-      // underflow -> zero
-      newExp = 0;
-      mant = 0;
-    } else {
-      [[unlikely]] if (newExp >= (1U << exp_bits) - 1U) {
+    if (newExp > 0) {
+      if (newExp < (1U << exp_bits) - 1U) {
+        // shrink mantissa
+        mant >>= (23U - mant_bits);
+      } else {
         // overflow -> max (inf)
         newExp = (1U << exp_bits) - 1U;
         mant = 0;
-      } else {
-        // shrink mantissa
-        mant >>= (23U - mant_bits);
       }
+    } else {
+      // underflow -> zero
+      newExp = 0;
+      mant = 0;
     }
 
     out |= mant;
@@ -71,7 +76,7 @@ struct CustomFloat {
       // zero / subnormal -> zero
       out = 0U;
     } else {
-      [[unlikely]] if (exp == (1U << exp_bits) - 1) {
+      if (exp == (1U << exp_bits) - 1) {
         // inf
         out = (sign << 31U) | (0xFFU << 23U);
       } else {

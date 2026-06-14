@@ -84,7 +84,6 @@ function snap.draw()
   table.clear(commandBuffers)
 
   if firstFrame then
-    firstFrame = false
     table.insert(commandBuffers, snap.graphics.submitGraphics())
   end
 
@@ -92,11 +91,10 @@ function snap.draw()
 
   while not gotBuffer do
     if thread:getStatus() ~= "running" then
-      print("Render thread has stopped running. Exiting the application.")
+      error("Render thread has stopped unexpectedly.")
       return
     end
-
-    local buffer = commandsChannel:demand(0.01)
+    local buffer = commandsChannel:demand(0.5)
     while buffer do
       table.insert(commandBuffers, buffer)
       buffer = commandsChannel:pop()
@@ -104,5 +102,6 @@ function snap.draw()
     end
   end
 
+  firstFrame = false
   return commandBuffers
 end

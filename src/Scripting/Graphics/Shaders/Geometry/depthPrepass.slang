@@ -25,12 +25,10 @@ struct VertexInput {
 [shader("vertex")]
 VertexStageOutput vertexMain(VertexInput input) {
   float4x4 transform = GetModelMatrix(PushConstants.ModelTransformIndex);
+  float4 worldPos = mul(float4(input.Position, 1.0), transform);
 
   VertexStageOutput out;
-
-  float4 worldPos = mul(float4(input.Position, 1.0), transform);
   out.sv_position = mul(camera.ViewProjectionMatrix, worldPos);
-
   return out;
 }
 

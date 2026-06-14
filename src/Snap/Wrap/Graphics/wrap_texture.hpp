@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Graphics/texture.hpp"
-#include "Modules/console.hpp"
 #include "Wrap/wrap.hpp"
 #include "lua.hpp"
 namespace Wrap::Graphics::Texture {

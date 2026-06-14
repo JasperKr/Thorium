@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Modules/console.hpp"
-#include <cmath>
 #include <condition_variable>
 #include <optional>
 #include <queue>
@@ -48,8 +47,8 @@ public:
   auto GetCount() const -> size_t;
 
   // Demand a message, blocking until one is available
-  auto Demand(double timeout = INFINITY)
-      -> std::optional<LuaWrap::Data::LuaType>;
+  auto Demand(double timeout) -> std::optional<LuaWrap::Data::LuaType>;
+  auto Demand() -> std::optional<LuaWrap::Data::LuaType>;
 
   // Clear all messages from the channel
   auto Clear() -> void;

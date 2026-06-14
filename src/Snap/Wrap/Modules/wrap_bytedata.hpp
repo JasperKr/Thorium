@@ -2,7 +2,6 @@
 
 #include "Modules/bindings.hpp"
 #include "Modules/bytedata.hpp"
-#include "Modules/console.hpp"
 #include "Modules/reflectBindings.hpp"
 #include "Wrap/wrap.hpp"
 #include "lua.hpp"
