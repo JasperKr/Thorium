@@ -91,7 +91,7 @@ function snap.draw()
 
   while not gotBuffer do
     if thread:getStatus() ~= "running" then
-      error("Render thread has stopped unexpectedly.")
+      error(thread:getError())
       return
     end
     local buffer = commandsChannel:demand(0.5)

@@ -33,8 +33,8 @@ cmake -G Ninja -B build \
   -DCMAKE_CXX_FLAGS="-Wc23-extensions $FLAGS" \
   -DCMAKE_C_FLAGS="-Wc23-extensions $FLAGS" \
   -DCMAKE_EXE_LINKER_FLAGS="-rdynamic" \
-  -DENABLE_RTTI=OFF \
-  -DENABLE_EXCEPTIONS=OFF
+  -DENABLE_RTTI=ON \
+  -DENABLE_EXCEPTIONS=ON
 
 cmake --build build
 

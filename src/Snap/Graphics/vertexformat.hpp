@@ -2,7 +2,6 @@
 
 #include "Graphics/format.hpp"
 #include "Graphics/graphics.hpp"
-#include "Graphics/graphicsContext.hpp"
 #include "Modules/Helpers/hasher.hpp"
 #include <algorithm>
 #include <cassert>
@@ -26,22 +25,35 @@ struct VertexComponent {
 };
 
 struct VertexFormat {
+  constexpr static size_t MaxBindings = 8;
+
   explicit VertexFormat(std::vector<VertexComponent> attributes)
       : Attributes(std::move(attributes)) {
     ConstructBindings();
   }
 
   VertexFormat() = default;
-  VertexFormat(const VertexFormat &other) = default;
   VertexFormat(VertexFormat &&other) noexcept = default;
-  auto operator=(const VertexFormat &other) -> VertexFormat & = default;
   auto operator=(VertexFormat &&other) noexcept -> VertexFormat & = default;
   ~VertexFormat() = default;
 
 public:
+  // Trivial copy, but not very cheap. So explicitly use Copy when needed.
+  [[nodiscard]] auto Copy() const -> VertexFormat { return *this; }
+
   [[nodiscard]] auto GetAttributes() const
       -> const std::vector<VertexComponent> & {
     return Attributes;
+  }
+
+  [[nodiscard]] auto GetAttribute(std::string_view name) const
+      -> const VertexComponent * {
+    for (const auto &attribute : Attributes) {
+      if (attribute.name == name) {
+        return &attribute;
+      }
+    }
+    return nullptr;
   }
 
   [[nodiscard]] auto GetVkAttributes()
@@ -54,12 +66,12 @@ public:
     return VkAttributes2;
   }
 
-  [[nodiscard]] auto GetBindings()
-      -> const std::vector<VkVertexInputBindingDescription> & {
+  [[nodiscard]] auto GetBindings() const
+      -> const std::vector<VkVertexInputBindingDescription2EXT> & {
     return Bindings;
   }
 
-  [[nodiscard]] auto GetStride(uint32_t binding) -> uint32_t {
+  [[nodiscard]] auto GetStride(uint32_t binding) const -> uint32_t {
     assert(binding < Bindings.size());
     return Bindings[binding].stride;
   }
@@ -78,25 +90,31 @@ public:
   auto BindDynamicInputState(VkCommandBuffer commandBuffer) -> void {
     auto currentHash = GetHash();
     auto &threadContext = GetThreadContext();
+
     if (threadContext.currentVertexFormatHash == currentHash) {
       return; // Already bound this format, skip
     }
     threadContext.currentVertexFormatHash = currentHash;
 
-    thread_local VkVertexInputBindingDescription2EXT vertexInputInfo = {};
     const auto &bindings = GetBindings();
-    auto &attributes = GetVkAttributes2();
+    const auto &attributes = GetVkAttributes2();
 
-    vertexInputInfo.sType =
-        VK_STRUCTURE_TYPE_VERTEX_INPUT_BINDING_DESCRIPTION_2_EXT;
-    vertexInputInfo.binding = 0;
-    vertexInputInfo.stride = bindings.at(0).stride;
-    vertexInputInfo.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-    vertexInputInfo.divisor = 1;
+    vkCmdSetVertexInputEXT(commandBuffer, bindings.size(), bindings.data(),
+                           attributes.size(), attributes.data());
+  }
 
-    vkCmdSetVertexInputEXT(commandBuffer, 1, &vertexInputInfo,
-                           static_cast<uint32_t>(attributes.size()),
-                           attributes.data());
+  [[nodiscard]] auto GetBindingCount() const -> size_t {
+    return BindingIndices.size();
+  }
+  [[nodiscard]] auto GetAttributeCount() const -> size_t {
+    return Attributes.size();
+  }
+
+  // Returns an array mapping, for example,
+  // [0, 1, 2] -> [0, 2, 5] if the vertex format has 3 bindings at indices 0, 2, and 5.
+  [[nodiscard]] auto GetBindingMapping() const
+      -> const std::vector<uint32_t> & {
+    return BindingIndices;
   }
 
   auto operator==(const VertexFormat &other) const -> bool {
@@ -134,6 +152,10 @@ public:
   }
 
 private:
+  // Private copy
+  VertexFormat(const VertexFormat &other) = default;
+  auto operator=(const VertexFormat &other) -> VertexFormat & = default;
+
   bool constructedBindings = false;
   std::vector<VertexComponent> Attributes;
 
@@ -148,18 +170,51 @@ private:
                       });
 
     for (auto &component : Attributes) {
-      // Sanity check for invalid binding numbers
-      // real max is higher but i expect to use like 2 anyways
-      assert(component.binding <= 255 &&
-             "Vertex attribute binding exceeds maximum of 255");
-      Bindings.resize((std::max)(Bindings.size(),
-                                 static_cast<size_t>(component.binding + 1)));
+      assert(component.binding < MaxBindings &&
+             "Vertex attribute binding exceeds maximum of 8");
+    }
 
-      Bindings[component.binding] = VkVertexInputBindingDescription{
-          .binding = component.binding,
+    VkAttributes.reserve(Attributes.size());
+    for (const auto &component : Attributes) {
+      VkAttributes.emplace_back(
+          VkVertexInputAttributeDescription{.location = component.location,
+                                            .binding = component.binding,
+                                            .format = component.format,
+                                            .offset = component.offset});
+    }
+
+    VkAttributes2.reserve(Attributes.size());
+    BindingIndices.reserve(MaxBindings);
+
+    auto lastBinding = 0UL;
+    for (const auto &component : Attributes) {
+      // Attributes are sorted by binding, so we can just check the last used binding to avoid duplicates.
+      if (BindingIndices.empty() ||
+          BindingIndices.back() != component.binding) {
+        BindingIndices.emplace_back(component.binding);
+      }
+
+      assert(lastBinding <= component.binding &&
+             "Bindings must be processed in ascending order");
+
+      lastBinding = component.binding;
+    }
+
+    Bindings.reserve(BindingIndices.size());
+    std::vector<uint32_t> bindingToBindingIndex{};
+    bindingToBindingIndex.resize(MaxBindings);
+
+    for (auto binding : BindingIndices) {
+      bindingToBindingIndex.at(binding) = Bindings.size();
+
+      Bindings.emplace_back(VkVertexInputBindingDescription2EXT{
+          .sType = VK_STRUCTURE_TYPE_VERTEX_INPUT_BINDING_DESCRIPTION_2_EXT,
+          .pNext = nullptr,
+          .binding = binding,
           .stride = 0,
           .inputRate = VK_VERTEX_INPUT_RATE_VERTEX,
-      };
+          .divisor = 1,
+      });
     }
 
     for (auto &component : Attributes) {
@@ -173,21 +228,11 @@ private:
       assert(formatSize > 0 &&
              "Vertex attribute has unsupported or unknown format: ");
 
-      component.offset = Bindings[component.binding].stride;
-      Bindings[component.binding].stride += formatSize;
-    }
+      auto idx = bindingToBindingIndex.at(component.binding);
 
-    VkAttributes.reserve(Attributes.size());
-    for (const auto &component : Attributes) {
-      VkAttributes.emplace_back(
-          VkVertexInputAttributeDescription{.location = component.location,
-                                            .binding = component.binding,
-                                            .format = component.format,
-                                            .offset = component.offset});
-    }
+      component.offset = Bindings[idx].stride;
+      Bindings[idx].stride += formatSize;
 
-    VkAttributes2.reserve(Attributes.size());
-    for (const auto &component : Attributes) {
       VkAttributes2.emplace_back(VkVertexInputAttributeDescription2EXT{
           .sType = VK_STRUCTURE_TYPE_VERTEX_INPUT_ATTRIBUTE_DESCRIPTION_2_EXT,
           .location = component.location,
@@ -200,9 +245,12 @@ private:
     constructedBindings = true;
   }
 
-  std::vector<VkVertexInputBindingDescription> Bindings;
+  std::vector<VkVertexInputBindingDescription2EXT> Bindings;
   std::vector<VkVertexInputAttributeDescription> VkAttributes;
   std::vector<VkVertexInputAttributeDescription2EXT> VkAttributes2;
+
+  // Mapping of [0 - binding count] -> binding index
+  std::vector<uint32_t> BindingIndices;
 };
 
 struct VertexFormatHash {

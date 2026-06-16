@@ -17,9 +17,9 @@ struct VertexStageOutput {
 struct VertexInput {
   float3 Position : POSITION;
   float2 TexCoords : TEXCOORD;
-  uint Normal : NORMAL;
-  uint Tangent : TANGENT;
-  float4 Color : COLOR;
+  // uint Normal : NORMAL;
+  // uint Tangent : TANGENT;
+  // float4 Color : COLOR;
 };
 
 [shader("vertex")]

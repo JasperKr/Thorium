@@ -23,7 +23,7 @@
 
 // Enable if encountering C++ exceptions
 // Requires the Enable RTTI and Enable Exceptions options to be enabled in CMakeLists.txt
-// #define DEBUG_CPP_EXCEPTION
+#define DEBUG_CPP_EXCEPTION
 
 namespace LuaWrap {
 

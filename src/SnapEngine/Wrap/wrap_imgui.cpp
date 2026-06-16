@@ -263,7 +263,7 @@ inline auto SetupTemporaryCommandLists(ImDrawData *drawData,
         vertexSpan.size_bytes());
 
     auto setResult =
-        temporaryCommandList.Mesh->SetVertices(ctx, rawVertexSpan, 0);
+        temporaryCommandList.Mesh->SetVertices(ctx, 0, rawVertexSpan, 0);
     if (Error::IsError(setResult)) {
       return setResult;
     }

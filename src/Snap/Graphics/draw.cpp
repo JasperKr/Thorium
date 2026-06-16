@@ -12,7 +12,6 @@
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include <cassert>
-#include <cstddef>
 #include <cstdint>
 #include <public/tracy/Tracy.hpp>
 
@@ -82,29 +81,27 @@ auto BindMesh(const GraphicsContext &context, VkCommandBuffer cmdBuffer,
                              .access = VK_ACCESS_2_INDEX_READ_BIT,
                          });
 
-    if (threadContext.currentIndexBuffer != indexBuffer->handle) {
-      std::lock_guard<std::mutex> lock(indexBuffer->mutex);
+    std::lock_guard<std::mutex> lock(indexBuffer->mutex);
 
-      if (indexBuffer->handle == VK_NULL_HANDLE) {
-        return Error::Create("Index buffer handle is null.");
-      }
+    if (indexBuffer->handle == VK_NULL_HANDLE) {
+      return Error::Create("Index buffer handle is null.");
+    }
 
+    if (threadContext.currentMesh != mesh.getID()) {
       vkCmdBindIndexBuffer(cmdBuffer, indexBuffer->handle, 0,
                            mesh.GetIndexFormat());
-      threadContext.currentIndexBuffer = indexBuffer->handle;
     }
   }
 
-  if (threadContext.currentVertexBuffer != vertexBuffer->handle) {
-    std::lock_guard<std::mutex> lock(vertexBuffer->mutex);
-    VkDeviceSize offset = 0;
-
-    if (vertexBuffer->handle == VK_NULL_HANDLE) {
-      return Error::Create("Vertex buffer handle is null.");
+  if (threadContext.currentMesh != mesh.getID()) {
+    auto bindings = mesh.GetBindingRanges();
+    for (const auto &binding : bindings) {
+      vkCmdBindVertexBuffers(cmdBuffer, binding.firstBinding,
+                             binding.bindingCount, binding.bindings,
+                             binding.offsets);
     }
 
-    vkCmdBindVertexBuffers(cmdBuffer, 0, 1, &vertexBuffer->handle, &offset);
-    threadContext.currentVertexBuffer = vertexBuffer->handle;
+    threadContext.currentMesh = mesh.getID();
   }
 
   return Error::Success();
@@ -348,7 +345,7 @@ auto DrawIndirect(const GraphicsContext &context, Mesh &mesh,
   CHECK_ERR(BindMesh(context, commandBuffer, mesh));
 
   DynamicRendering::SetBindPoint(VK_PIPELINE_BIND_POINT_GRAPHICS);
-  auto vertexFormat = mesh.GetVertexFormat();
+  auto &vertexFormat = mesh.GetVertexFormat();
   vertexFormat.BindDynamicInputState(commandBuffer);
   DynamicRendering::SetTopology(mesh.GetTopology());
 

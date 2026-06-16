@@ -7,6 +7,7 @@
 
 #include "Graphics/barrier.hpp"
 #include "Graphics/graphicsContext.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "buffer.hpp"
@@ -20,25 +21,25 @@
 
 namespace Graphics {
 
-static auto VertexFormatSize(VertexFormat &format, uint32_t binding)
+static auto VertexFormatSize(const VertexFormat &format, uint32_t binding)
     -> uint32_t {
   return format.GetBindings().at(binding).stride;
 }
 
-auto Mesh::UploadVertices(GraphicsContext &context,
+auto Mesh::UploadVertices(GraphicsContext &context, uint32_t binding,
                           const std::span<const uint8_t> &vertices,
                           uint64_t offset) -> Error {
   ZoneScoped;
 
-  Barrier::UpdateUsage(context, *VertexBuffer,
+  Barrier::UpdateUsage(context, *VertexBuffers.at(binding),
                        Barrier::ResourceState{
                            .stages = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
                            .access = VK_ACCESS_2_TRANSFER_WRITE_BIT,
                        });
 
-  std::lock_guard<std::mutex> lock(VertexBuffer->mutex);
+  std::lock_guard<std::mutex> lock(VertexBuffers.at(binding)->mutex);
 
-  return VertexBuffer->SetData(context, vertices, offset);
+  return VertexBuffers.at(binding)->SetData(context, vertices, offset);
 }
 
 auto Mesh::UploadIndices(GraphicsContext &context,
@@ -56,17 +57,30 @@ auto Mesh::UploadIndices(GraphicsContext &context,
   return IndexBuffer->SetData(context, indices, offset);
 }
 
-auto Mesh::Create(GraphicsContext &context, VertexFormat vertexFormat,
-                  const std::span<uint8_t> &vertexData,
+auto Mesh::Create(GraphicsContext &context, const VertexFormat &vertexFormat,
+                  const std::vector<std::span<uint8_t>> &vertexDatas,
                   const std::string &debugName) -> Result<Ref<Mesh>> {
 
   auto mesh = Ref<Mesh>::Make();
 
-  assert(vertexData.size() % VertexFormatSize(vertexFormat, 0) == 0);
+  auto firstVtxCount =
+      vertexDatas.at(0).size() / VertexFormatSize(vertexFormat, 0);
 
-  mesh->VertexCount = vertexData.size() / VertexFormatSize(vertexFormat, 0);
+  for (size_t i = 1; i < vertexDatas.size(); ++i) {
+    auto vtxCount =
+        vertexDatas.at(i).size() / VertexFormatSize(vertexFormat, i);
+    if (vtxCount != firstVtxCount) {
+      return Error::Createf(
+          "Vertex data for binding {} has a different vertex count than "
+          "binding 0.",
+          i);
+    }
+  }
+
+  mesh->VertexCount =
+      vertexDatas.at(0).size() / VertexFormatSize(vertexFormat, 0);
   mesh->IndexCount = 0;
-  mesh->Format = vertexFormat;
+  mesh->Format = vertexFormat.Copy();
 
   VkMemoryPropertyFlags properties =
       static_cast<uint32_t>(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) |
@@ -78,70 +92,81 @@ auto Mesh::Create(GraphicsContext &context, VertexFormat vertexFormat,
       static_cast<uint32_t>(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT) |
       static_cast<uint32_t>(VK_BUFFER_USAGE_TRANSFER_DST_BIT);
 
-  vboCreationInfo.properties = properties;
-  vboCreationInfo.size = vertexData.size();
-  vboCreationInfo.debugName = debugName + " Vertex Buffer";
-  mesh->DebugName = debugName;
+  for (size_t i = 0; i < vertexFormat.GetBindingCount(); i++) {
+    const auto &vertexData = vertexDatas.at(i);
+    assert(vertexData.size() % VertexFormatSize(vertexFormat, i) == 0);
 
-  mesh->VertexBuffer = CHECK_RES(Buffer::Create(context, vboCreationInfo));
+    vboCreationInfo.properties = properties;
+    vboCreationInfo.size = vertexData.size();
+    vboCreationInfo.debugName = debugName + " Vertex Buffer";
+    mesh->DebugName = debugName;
+
+    mesh->VertexBuffers.at(i) =
+        CHECK_RES(Buffer::Create(context, vboCreationInfo));
+
+    CHECK_ERR(mesh->UploadVertices(context, i, vertexData, 0));
+  }
 
   mesh->DrawRange.Offset = 0;
   mesh->DrawRange.Count = mesh->VertexCount;
-
-  CHECK_ERR(mesh->UploadVertices(context, vertexData, 0));
+  mesh->ConstructBindingRanges();
 
   return mesh;
 }
 
-auto Mesh::Create(GraphicsContext &context, VertexFormat vertexFormat,
+auto Mesh::Create(GraphicsContext &context, const VertexFormat &vertexFormat,
                   uint64_t vertexCount,
                   const std::string &debugName) // NOLINT
     -> Result<Ref<Mesh>> {
-  auto size = VertexFormatSize(vertexFormat, 0);
-
-  if (size == 0) {
-    return Error::Create("Vertex format has zero size for binding 0.");
-  }
-
-  auto vertexDataSize = vertexCount * size;
-
   std::vector<uint32_t> indexData;
 
   auto mesh = Ref<Mesh>::Make();
 
   mesh->VertexCount = vertexCount;
-  mesh->Format = vertexFormat;
+  mesh->Format = vertexFormat.Copy();
 
   VkMemoryPropertyFlags properties =
       static_cast<uint32_t>(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) |
       static_cast<uint32_t>(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) |
       static_cast<uint32_t>(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
+  uint32_t bindingCount = vertexFormat.GetBindingCount();
+
   Graphics::BufferCreationInfo vboCreationInfo = {};
   vboCreationInfo.usage =
       static_cast<uint32_t>(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT) |
       static_cast<uint32_t>(VK_BUFFER_USAGE_TRANSFER_DST_BIT);
 
-  vboCreationInfo.properties = properties;
-  vboCreationInfo.size = vertexDataSize;
-  vboCreationInfo.debugName = debugName + " Vertex Buffer";
-  mesh->DebugName = debugName;
+  for (uint32_t i = 0; i < bindingCount; ++i) {
+    auto vertexDataSize = vertexCount * VertexFormatSize(vertexFormat, i);
 
-  mesh->VertexBuffer = CHECK_RES(Buffer::Create(context, vboCreationInfo));
+    vboCreationInfo.properties = properties;
+    vboCreationInfo.size = vertexDataSize;
+    vboCreationInfo.debugName = debugName + " Vertex Buffer";
+    mesh->DebugName = debugName;
+
+    auto buffer = CHECK_RES(Buffer::Create(context, vboCreationInfo));
+
+    mesh->VertexBuffers.emplace_back(buffer);
+  }
 
   mesh->DrawRange.Offset = 0;
   mesh->DrawRange.Count = mesh->VertexCount;
+  mesh->ConstructBindingRanges();
 
   return mesh;
 }
 
 [[nodiscard]] auto Mesh::GetVertexFormat() -> VertexFormat & { return Format; }
+
 [[nodiscard]] auto Mesh::GetVertexCount() const -> uint32_t {
   return VertexCount;
 }
+
 [[nodiscard]] auto Mesh::GetIndexCount() const -> uint32_t {
   return IndexCount;
 }
+
 void Mesh::SetDrawRange(MeshDrawRange range) {
   auto maxCount = IndexCount == 0 ? VertexCount : IndexCount;
 
@@ -150,15 +175,17 @@ void Mesh::SetDrawRange(MeshDrawRange range) {
   DrawRange.Offset = range.Offset;
   DrawRange.Count = range.Count;
 }
+
 [[nodiscard]] auto Mesh::GetDrawRange() const -> MeshDrawRange {
   return DrawRange;
 }
 
-auto Mesh::SetVertices(GraphicsContext &context,
+auto Mesh::SetVertices(GraphicsContext &context, uint32_t binding,
                        const std::span<const uint8_t> &vertexData,
                        uint64_t offset) -> Error {
-  return UploadVertices(context, vertexData, offset);
+  return UploadVertices(context, binding, vertexData, offset);
 }
+
 auto Mesh::SetIndices(GraphicsContext &context,
                       const std::span<uint8_t> &indexData, VkIndexType format)
     -> Error {
@@ -198,9 +225,12 @@ auto Mesh::SetIndices(GraphicsContext &context,
   return UploadIndices(context, indexData, 0, format);
 }
 
-auto Mesh::SetVertexBuffer(const Ref<Buffer> &buffer) -> void {
-  VertexBuffer = buffer;
+auto Mesh::SetVertexBuffer(const Ref<Buffer> &buffer, uint32_t binding)
+    -> void {
+  VertexBuffers.at(binding) = buffer;
+  ConstructBindingRanges();
 }
+
 auto Mesh::SetIndexBuffer(const Ref<Buffer> &buffer, VkIndexType format)
     -> Error {
 
@@ -225,7 +255,10 @@ auto Mesh::SetIndexBuffer(const Ref<Buffer> &buffer, VkIndexType format)
 
 auto Mesh::GetIndexFormat() const -> VkIndexType { return IndicesFormat; }
 
-auto Mesh::GetVertexBuffer() const -> Ref<Buffer> { return VertexBuffer; }
+auto Mesh::GetVertexBuffer(uint32_t binding) const -> Ref<Buffer> {
+  return VertexBuffers.at(binding);
+}
+
 auto Mesh::GetIndexBuffer() const -> Ref<Buffer> { return IndexBuffer; }
 
 // Disallow: Fan, Geometry, Patch
@@ -252,6 +285,52 @@ auto Mesh::SetTopology(VkPrimitiveTopology topology) -> Error {
 
   return Error::Success();
 }
+
 auto Mesh::GetTopology() const -> VkPrimitiveTopology { return Topology; }
+
+auto Mesh::ConstructBindingRanges() -> void {
+  size_t index = 0;
+  for (auto &buffer : VertexBuffers) {
+    assert(buffer.isValid());
+
+    BindingOffsets.at(index) = 0;
+    Bindings.at(index++) = buffer->handle;
+  }
+
+  auto mapping = Format.GetBindingMapping();
+  auto count = Format.GetBindingCount();
+
+  // buffers =  [a, b, c, d, e] size = 5
+  // bindings = [a, a, a, _, _, b, _, c] size = 5
+  // mapping = [0, 1, 2, 5, 7]
+  // i = 0, start = 0
+  // 1 < 8 && 0 + 1 == 1 -> i = 1
+  // 2 < 8 && 1 + 1 == 2 -> i = 2
+  // 3 < 8 && 2 + 1 == 5 -> stop
+  // BindingRanges[0] = { .firstBinding = 0, .bindingCount = (2 - 0 + 1) = 3, ... }
+  // i++ from for-loop -> i = 3, start = 3
+  // 4 < 8 && 5 + 1 == 7 -> stop
+  // BindingRanges[1] = { .firstBinding = 5, .bindingCount = (3 - 3 + 1) = 1, ... }
+  // i++ from for-loop -> i = 4, start = 4
+  // 5 < 8 && 7 + 1 == 8 -> stop
+  // BindingRanges[2] = { .firstBinding = 7, .bindingCount = (4 - 4 + 1) = 1, ... }
+
+  BindingRangeCount = 0;
+  for (size_t i = 0; i < count; ++i) {
+    size_t start = i;
+
+    // While the next binding is consecutive, keep going.
+    while (i + 1 < count && mapping.at(i) + 1 == mapping.at(i + 1)) {
+      i++;
+    }
+
+    BindingRanges.at(BindingRangeCount++) = {
+        .firstBinding = static_cast<uint32_t>(mapping.at(start)),
+        .bindingCount = static_cast<uint32_t>(i - start + 1),
+        .bindings = &Bindings.at(start),
+        .offsets = &BindingOffsets.at(start),
+    };
+  }
+}
 
 } // namespace Graphics

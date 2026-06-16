@@ -243,8 +243,7 @@ auto SubmitCommands(Graphics::GraphicsContext &context)
 
   threadContext.commandBuffer = VK_NULL_HANDLE;
   threadContext.currentVertexFormatHash = 0;
-  threadContext.currentVertexBuffer = nullptr;
-  threadContext.currentIndexBuffer = nullptr;
+  threadContext.currentMesh = 0;
 
   auto threadInfo = CurrentRenderThreadInfo;
 

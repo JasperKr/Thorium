@@ -487,7 +487,7 @@ inline auto GetQuadMesh(::Graphics::GraphicsContext &context,
   assert(sizeof(FormatDefault2D) == vertexFormat.GetBindings()[0].stride);
 
   if (QuadMeshCache.get() == nullptr) {
-    auto meshResult = ::Graphics::Mesh::Create(context, vertexFormat, span);
+    auto meshResult = ::Graphics::Mesh::Create(context, vertexFormat, {span});
 
     if (Error::IsError(meshResult)) {
       return meshResult.error();
@@ -498,7 +498,7 @@ inline auto GetQuadMesh(::Graphics::GraphicsContext &context,
 
   auto mesh = QuadMeshCache;
 
-  auto setDataError = mesh->SetVertices(context, span);
+  auto setDataError = mesh->SetVertices(context, 0, span);
   if (Error::IsError(setDataError)) {
     return setDataError;
   }

@@ -59,7 +59,7 @@ auto wrap_SetVertices(lua_State *state) -> int {
   std::span<uint8_t> vertexData = // NOLINTNEXTLINE, pointer arithmetic
       std::span<uint8_t>(data->GetData() + offset, static_cast<size_t>(count));
 
-  auto result = mesh->SetVertices(*::Graphics::GetCurrentGraphicsContext(),
+  auto result = mesh->SetVertices(*::Graphics::GetCurrentGraphicsContext(), 0,
                                   vertexData, static_cast<uint64_t>(offset));
 
   if (Error::IsError(result)) {
@@ -570,7 +570,7 @@ auto wrap_NewMesh(lua_State *state) -> int {
   PrintDebug("Creating mesh with {} bytes of vertex data.\n",
              vertexData.size());
 
-  auto meshResult = ::Graphics::Mesh::Create(*ctx, vertexFormat, vertexData);
+  auto meshResult = ::Graphics::Mesh::Create(*ctx, vertexFormat, {vertexData});
 
   if (Error::IsError(meshResult)) {
     return luaL_error(state, "%s", meshResult.error().message.c_str());

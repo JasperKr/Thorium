@@ -994,6 +994,61 @@ void OptimizeMesh(std::span<IndexT> indices, std::span<uint8_t> vertices,
                               vertices.data(), vertexCount, vertexStride);
 }
 
+auto GetInterleavedStride(const Graphics::VertexFormat &format) -> size_t {
+  size_t stride = 0;
+  for (int i = 0; i < format.GetBindingCount(); i++) {
+    stride += format.GetStride(i);
+  }
+  return stride;
+}
+
+auto DeinterleaveVertexData(const std::vector<uint8_t> &interleavedData)
+    -> std::vector<std::vector<uint8_t>> {
+
+  struct VertexData {
+    float position[3]; // NOLINT
+    float texcoord[2]; // NOLINT
+    uint32_t normal;
+    uint32_t tangent;
+    uint32_t color;
+  };
+
+  size_t vertexCount = interleavedData.size() / sizeof(VertexData);
+
+  const auto *vertexArray = // NOLINTNEXTLINE
+      reinterpret_cast<const VertexData *>(interleavedData.data());
+
+  auto positionStride = sizeof(float) * 3;
+  auto texcoordStride = sizeof(float) * 2;
+  auto normalTangentStride = sizeof(uint32_t) * 2;
+  auto colorStride = sizeof(uint32_t);
+
+  auto positionData = std::vector<uint8_t>(vertexCount * positionStride);
+  auto texcoordData = std::vector<uint8_t>(vertexCount * texcoordStride);
+  auto normalTangentData =
+      std::vector<uint8_t>(vertexCount * normalTangentStride);
+  auto colorData = std::vector<uint8_t>(vertexCount * colorStride);
+
+  for (int vertex = 0; vertex < vertexCount; ++vertex) {
+    const auto &srcVertex = vertexArray[vertex]; // NOLINT
+
+    // NOLINTNEXTLINE
+    memcpy(positionData.data() + (vertex * positionStride), &srcVertex.position,
+           positionStride);
+    // NOLINTNEXTLINE
+    memcpy(texcoordData.data() + (vertex * texcoordStride), &srcVertex.texcoord,
+           texcoordStride);
+    // NOLINTNEXTLINE
+    memcpy(normalTangentData.data() + (vertex * normalTangentStride),
+           &srcVertex.normal, normalTangentStride);
+    // NOLINTNEXTLINE
+    memcpy(colorData.data() + (vertex * colorStride), &srcVertex.color,
+           colorStride);
+  }
+
+  return {positionData, texcoordData, normalTangentData, colorData};
+}
+
 // NOLINTNEXTLINE
 inline auto LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
                      const fastgltf::Asset &asset,
@@ -1086,7 +1141,7 @@ inline auto LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
 
       using Comp = Graphics::VertexComponent;
 
-      static std::vector<Comp> DefaultVertexComponents = {
+      static std::vector<Comp> InitialVertexComponents = {
           Comp{.name = "POSITION",
                .location = 0,
                .binding = 0,
@@ -1108,6 +1163,15 @@ inline auto LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
                .binding = 0,
                .format = VK_FORMAT_R8G8B8A8_UNORM}};
 
+      static std::vector<Comp> SeparateVertexComponents =
+          InitialVertexComponents;
+
+      SeparateVertexComponents.at(0).binding = 0; // POSITION
+      SeparateVertexComponents.at(1).binding = 1; // TEXCOORD_0
+      SeparateVertexComponents.at(2).binding = 2; // NORMAL + TANGENT
+      SeparateVertexComponents.at(3).binding = 2; // NORMAL + TANGENT
+      SeparateVertexComponents.at(4).binding = 3; // COLOR_0
+
       struct VertexData {
         float position[3]; // NOLINT
         float texcoord[2]; // NOLINT
@@ -1116,9 +1180,9 @@ inline auto LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
         uint32_t color;
       };
 
-      Graphics::VertexFormat DefaultVertexFormat(DefaultVertexComponents);
+      Graphics::VertexFormat InitialVertexFormat(InitialVertexComponents);
 
-      auto vertexFormat = DefaultVertexFormat;
+      auto &vertexFormat = InitialVertexFormat;
       auto vertexData = CHECK_RES(
           LoadVertexData(vertexFormat, asset, primitive, indexData, indexType));
 
@@ -1149,13 +1213,25 @@ inline auto LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
         break;
       }
 
-      auto mesh = CHECK_RES(Graphics::Mesh::Create(
-          context, vertexFormat, vertexCount, std::string(gltfMesh.name)));
+      static Graphics::VertexFormat SeparateVertexFormat(
+          SeparateVertexComponents);
+
+      auto mesh = CHECK_RES(
+          Graphics::Mesh::Create(context, SeparateVertexFormat, vertexCount,
+                                 std::string(gltfMesh.name)));
 
       if (!indexData.empty()) {
         CHECK_ERR(mesh->SetIndices(context, indexData, indexType));
       }
-      CHECK_ERR(mesh->SetVertices(context, vertexData));
+
+      auto deinterleavedData = DeinterleaveVertexData(vertexData);
+
+      // clang-format off
+      CHECK_ERR(mesh->SetVertices(context, 0, deinterleavedData[0])); // POSITION
+      CHECK_ERR(mesh->SetVertices(context, 1, deinterleavedData[1])); // TEXCOORD_0
+      CHECK_ERR(mesh->SetVertices(context, 2, deinterleavedData[2])); // NORMAL + TANGENT
+      CHECK_ERR(mesh->SetVertices(context, 3, deinterleavedData[3])); // COLOR
+      // clang-format on
 
       auto geometry = world->entity(
           GetUniqueName(std::string(gltfMesh.name) + " Geometry").c_str());
