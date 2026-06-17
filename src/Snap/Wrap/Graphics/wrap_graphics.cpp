@@ -1039,6 +1039,8 @@ auto wrap_SetDefaultFilter(lua_State *state) -> int {
   config.defaultSamplerDescription.magFilter = magFilter;
   config.defaultSamplerDescription.maxAnisotropy = static_cast<float>(
       luaL_optnumber(state, 3, config.defaultSamplerDescription.maxAnisotropy));
+  config.defaultSamplerDescription.anisotropyEnable =
+      config.defaultSamplerDescription.maxAnisotropy > 1.0F;
 
   return 0;
 }

@@ -784,28 +784,6 @@ auto Scene::DrawModels(flecs::entity &cameraEntity,
     CHECK_ERR(RenderDrawItem(item, forward, ctx, forwardConfig));
   }
 
-  // if (Keyboard::IsDown(SDLK_L)) {
-  //   auto logTextureRefInfo = [](const Ref<Graphics::Texture> &texture) -> void {
-  //     auto refCount = texture->getReferenceCount();
-
-  //     PrintAlways("-----------------------------------------------");
-  //     PrintAlways("Texture {} has {} references", texture->GetDebugName(),
-  //                 refCount);
-
-  //     for (const auto &pair : texture->backtraceStrings) {
-  //       PrintAlways("{}", pair.second);
-  //     }
-  //   };
-
-  //   logTextureRefInfo(textures.Depth);
-  //   logTextureRefInfo(textures.Albedo);
-  //   logTextureRefInfo(textures.Normal);
-  //   logTextureRefInfo(textures.Material);
-  //   logTextureRefInfo(textures.Emissive);
-  //   logTextureRefInfo(textures.Motion);
-  //   logTextureRefInfo(textures.IncomingLight);
-  // }
-
   // Otherwise meshes won't be destroyed due to living in these vectors
   OpaqueDrawItems.clear();
   MaskedDrawItems.clear();

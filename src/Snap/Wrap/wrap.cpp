@@ -118,12 +118,9 @@ static auto wrap_release(lua_State *state) -> int {
     LoadStorageTable(state, "SnapObjectStorage"); // [storage]
 
     // NOLINTNEXTLINE
-    auto key = (uintptr_t)(object);
-
-    // NOLINTNEXTLINE
-    lua_pushlightuserdata(state, (void *)key); // [storage, key]
-    lua_pushnil(state);                        // [storage, key, nil]
-    lua_settable(state, -3);                   // storage[key] = nil  [storage]
+    lua_pushlightuserdata(state, (void *)object); // [storage, key]
+    lua_pushnil(state);                           // [storage, key, nil]
+    lua_settable(state, -3); // storage[key] = nil  [storage]
 
     lua_pop(state, 1); // []
   }
@@ -404,12 +401,12 @@ auto PushObject(lua_State *state, const Type *type, Object *object) -> void {
   }
 
   // Check if object already has a userdata
-  auto key = (uintptr_t)(object);            // NOLINT
-  lua_pushlightuserdata(state, (void *)key); // [storage, key] NOLINT
-  lua_gettable(state, -2);                   // [storage, value]
+  lua_pushlightuserdata(state, (void *)object); // [storage, key]
+  lua_gettable(state, -2);                      // [storage, value]
 
   if (lua_type(state, -1) != LUA_TLIGHTUSERDATA &&
       lua_type(state, -1) != LUA_TUSERDATA) {
+
     // No existing userdata
     lua_pop(state, 1); // Remove nil [storage]
 
@@ -417,10 +414,9 @@ auto PushObject(lua_State *state, const Type *type, Object *object) -> void {
     SetupLuaType(state, type, object); // [storage, userdata]
 
     // Store in storage table
-    lua_pushlightuserdata(state,
-                          (void *)key); // [storage, userdata, key] NOLINT
-    lua_pushvalue(state, -2);           // [storage, userdata, key, userdata]
-    lua_settable(state, -4); // storage[key] = userdata [storage, userdata]
+    lua_pushlightuserdata(state, (void *)object); // [storage, userdata, key]
+    lua_pushvalue(state, -2); // [storage, userdata, key, userdata]
+    lua_settable(state, -4);  // storage[key] = userdata [storage, userdata]
   }
 
   lua_remove(state, -2); // Remove storage table [userdata]
@@ -445,9 +441,8 @@ auto PushObject(lua_State *state, Object *object) -> void {
   }
 
   // Check if object already has a userdata
-  auto key = (uintptr_t)(object);            // NOLINT
-  lua_pushlightuserdata(state, (void *)key); // [storage, key] NOLINT
-  lua_gettable(state, -2);                   // [storage, value]
+  lua_pushlightuserdata(state, (void *)object); // [storage, key] NOLINT
+  lua_gettable(state, -2);                      // [storage, value]
 
   if (lua_type(state, -1) != LUA_TUSERDATA) {
     // No existing userdata
@@ -458,10 +453,9 @@ auto PushObject(lua_State *state, Object *object) -> void {
                  object); // [storage, userdata]
 
     // Store in storage table
-    lua_pushlightuserdata(state,
-                          (void *)key); // [storage, userdata, key] NOLINT
-    lua_pushvalue(state, -2);           // [storage, userdata, key, userdata]
-    lua_settable(state, -4); // storage[key] = userdata [storage, userdata]
+    lua_pushlightuserdata(state, (void *)object); // [storage, userdata, key]
+    lua_pushvalue(state, -2); // [storage, userdata, key, userdata]
+    lua_settable(state, -4);  // storage[key] = userdata [storage, userdata]
   }
 
   lua_remove(state, -2); // Remove storage table [userdata]

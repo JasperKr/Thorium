@@ -535,12 +535,17 @@ auto LuaCamera::GetRendertarget(lua_State *state) -> int {
 
   const auto *name = luaL_checkstring(state, 2);
 
-  static const std::unordered_map<
-      std::string_view, Ref<Graphics::Texture> Camera::AllocatedTextures::*>
+  const std::unordered_map<std::string_view,
+                           Ref<Graphics::Texture> Camera::AllocatedTextures::*>
       map = {
           {"IncomingLight", &Camera::AllocatedTextures::IncomingLight},
           {"Depth", &Camera::AllocatedTextures::Depth},
           {"PostProcessed", &Camera::AllocatedTextures::PostProcessed},
+          {"Normal", &Camera::AllocatedTextures::Normal},
+          {"Albedo", &Camera::AllocatedTextures::Albedo},
+          {"Material", &Camera::AllocatedTextures::Material},
+          {"Emissive", &Camera::AllocatedTextures::Emissive},
+          {"Motion", &Camera::AllocatedTextures::Motion},
       };
 
   auto iter = map.find(name);
@@ -548,7 +553,7 @@ auto LuaCamera::GetRendertarget(lua_State *state) -> int {
     return luaL_error(state, "Invalid rendertarget name: %s", name);
   }
 
-  auto texture = camera->OwnedTextures.*(iter->second);
+  auto &texture = camera->OwnedTextures.*(iter->second);
 
   ::LuaWrap::PushObject(state, Graphics::Texture::GetType(), texture.get());
   return 1;

@@ -47,7 +47,9 @@ do
     if Imgui.Begin("Viewport", nil, flags) then
       local windowSize = Imgui.GetWindowSize()
       Imgui.SetCursorPos(ffi.new("ImVec2", 0, 0))
-      Imgui.Image(camera:getRendertarget("PostProcessed"), windowSize)
+      local rt = camera:getRendertarget("PostProcessed")
+      Imgui.Image(rt, windowSize)
+      rt:release()
 
       camera:setDimensions(windowSize.x, windowSize.y)
     end
