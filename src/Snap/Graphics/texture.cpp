@@ -151,7 +151,7 @@ auto Create(const GraphicsContext &context, const TextureCreationInfo &info)
   }
 
   VmaAllocationCreateInfo allocInfo = {};
-  allocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+  allocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
   allocInfo.requiredFlags = 0;
   allocInfo.preferredFlags = 0;
 

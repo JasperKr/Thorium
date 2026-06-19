@@ -155,8 +155,6 @@ void computeMain(uint3 invocationID: SV_DispatchThreadID) {
 
   getTexelInfo(id, level, uv);
 
-  // SetSGPR( level );
-
   // determine dir / pos for the texel
   float3 dir, adir, frameZ;
   {

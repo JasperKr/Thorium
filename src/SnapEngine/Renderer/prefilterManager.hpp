@@ -12,8 +12,16 @@
 #include <vulkan/vulkan_core.h>
 namespace SnapEngine::Renderer {
 struct LightprobePrefilterManager {
-  constexpr static uint32_t PrefilteredRadianceMapSize = 128;
-  constexpr static uint32_t MaxCubemaps = 64;
+  // cubemap size
+  constexpr static uint32_t PrefilteredRadianceCubeMapSize = 128;
+
+  // Octahedral size
+  constexpr static uint32_t PrefilteredRadianceMapsSize = 512;
+  constexpr static uint32_t PrefilteredIrradianceMapsSize = 32;
+
+  constexpr static uint32_t MaxEnvMaps = 512;
+  constexpr static uint32_t EnvMapReallocationStep = 64;
+
   constexpr static uint32_t IblRoughnessOneLevel = 6;
   constexpr static uint32_t ProbeReflectionMipLevels = 7;
 
@@ -24,7 +32,8 @@ struct LightprobePrefilterManager {
     SceneCubemap = CHECK_RES(Graphics::Create(
         context,
         {
-            .size = {PrefilteredRadianceMapSize, PrefilteredRadianceMapSize, 1},
+            .size = {PrefilteredRadianceCubeMapSize,
+                     PrefilteredRadianceCubeMapSize, 1},
             .arrayLayers = 6,
             .format = VK_FORMAT_B10G11R11_UFLOAT_PACK32,
             .usage = static_cast<uint32_t>(VK_IMAGE_USAGE_SAMPLED_BIT) |
@@ -37,7 +46,7 @@ struct LightprobePrefilterManager {
     constexpr static float EnvironmentMapLevel1PB = 0.0F;
 
     for (uint32_t level = 0; level < ProbeReflectionMipLevels; level++) {
-      uint32_t levelSize = PrefilteredRadianceMapSize >> level;
+      uint32_t levelSize = PrefilteredRadianceCubeMapSize >> level;
 
       float glossiness = (EnvironmentMapLevel0PB - static_cast<float>(level)) /
                          (EnvironmentMapLevel0PB - EnvironmentMapLevel1PB);
@@ -52,6 +61,7 @@ struct LightprobePrefilterManager {
 
     return {};
   }
+
   auto Deinitialize() -> void;
 
 private:
@@ -64,6 +74,10 @@ private:
 
   std::array<LevelParameters, ProbeReflectionMipLevels> levelParameters{};
   Ref<Graphics::Texture> SceneCubemap;
+
+  Ref<Graphics::Texture> RadianceMaps;
+  Ref<Graphics::Texture> IrradianceMaps;
+
   std::vector<uint8_t> PrefilteredRadianceCoeffs;
 
   static auto GlossinessToRoughness(float glossiness) -> float {
@@ -74,6 +88,33 @@ private:
 
     return std::pow(2.0F / (1.0F + exponent), 0.25F);
     // NOLINTEND
+  }
+
+  auto CreateStorageTextures(const Graphics::GraphicsContext &context,
+                             uint32_t arrayLayers) -> Error {
+    RadianceMaps = CHECK_RES(Graphics::Create(
+        context,
+        {
+            .size = {PrefilteredRadianceMapsSize, PrefilteredRadianceMapsSize,
+                     1},
+            .arrayLayers = arrayLayers,
+            .format = VK_FORMAT_B10G11R11_UFLOAT_PACK32,
+            .usage = static_cast<uint32_t>(VK_IMAGE_USAGE_SAMPLED_BIT) |
+                     VK_IMAGE_USAGE_STORAGE_BIT,
+            .mipmapCount = ProbeReflectionMipLevels,
+        }));
+
+    IrradianceMaps = CHECK_RES(Graphics::Create(
+        context,
+        {
+            .size = {PrefilteredIrradianceMapsSize,
+                     PrefilteredIrradianceMapsSize, 1},
+            .arrayLayers = arrayLayers,
+            .format = VK_FORMAT_B10G11R11_UFLOAT_PACK32,
+            .usage = static_cast<uint32_t>(VK_IMAGE_USAGE_SAMPLED_BIT) |
+                     VK_IMAGE_USAGE_STORAGE_BIT,
+            .mipmapCount = 1,
+        }));
   }
 };
 } // namespace SnapEngine::Renderer
