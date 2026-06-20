@@ -110,8 +110,7 @@ struct TextureCreationInfo {
 struct Texture : Object, Barrier::BarrierSynced {
   static auto Create(const GraphicsContext &context,
                      const TextureCreationInfo &info) -> Result<Ref<Texture>>;
-  static auto Create(const GraphicsContext &context,
-                     const Texture *parentTexture,
+  static auto Create(const GraphicsContext &context, Texture *parentTexture,
                      VkImageSubresourceRange range) -> Result<Ref<Texture>>;
 
   static auto FromSwapchain(const GraphicsContext &context,

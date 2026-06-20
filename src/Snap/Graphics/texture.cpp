@@ -66,18 +66,30 @@ inline auto SetDebugName(const std::string &debugName, Texture *texture,
       Graphics::GraphicsContext::mutexes.device,
       Graphics::GraphicsContext::mutexes.vmaAllocator);
 
-  VkDebugUtilsObjectNameInfoEXT nameInfo = {};
-  nameInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
-  nameInfo.objectType = VK_OBJECT_TYPE_IMAGE;
-  nameInfo.objectHandle = static_cast<uint64_t>(
-      reinterpret_cast<uintptr_t>(texture->image)), // NOLINT
-      nameInfo.pObjectName = debugName.c_str();
+  if (!texture->isView) {
+    VkDebugUtilsObjectNameInfoEXT nameInfo = {};
+    nameInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
+    nameInfo.objectType = VK_OBJECT_TYPE_IMAGE;
+    nameInfo.objectHandle = static_cast<uint64_t>(
+        reinterpret_cast<uintptr_t>(texture->image)), // NOLINT
+        nameInfo.pObjectName = debugName.c_str();
 
-  CHECK_ERR(
-      Error::Create(vkSetDebugUtilsObjectNameEXT(context.device, &nameInfo)));
+    CHECK_ERR(
+        Error::Create(vkSetDebugUtilsObjectNameEXT(context.device, &nameInfo)));
 
-  vmaSetAllocationName(context.vmaAllocator, texture->memory,
-                       debugName.c_str());
+    vmaSetAllocationName(context.vmaAllocator, texture->memory,
+                         debugName.c_str());
+  } else {
+    VkDebugUtilsObjectNameInfoEXT nameInfo = {};
+    nameInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
+    nameInfo.objectType = VK_OBJECT_TYPE_IMAGE_VIEW;
+    nameInfo.objectHandle = static_cast<uint64_t>(
+        reinterpret_cast<uintptr_t>(texture->view)), // NOLINT
+        nameInfo.pObjectName = debugName.c_str();
+
+    CHECK_ERR(
+        Error::Create(vkSetDebugUtilsObjectNameEXT(context.device, &nameInfo)));
+  }
 
   return Error::Success();
 }
@@ -166,9 +178,6 @@ auto Texture::Create(const GraphicsContext &context,
                                  &memRequirements));
   }
 
-  // ignore set debug name error, since it's not critical
-  auto err = SetDebugName(info.debugName, texture.get(), context);
-
   VkImageViewCreateInfo viewInfo = {};
   viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
   viewInfo.image = texture->image;
@@ -186,13 +195,16 @@ auto Texture::Create(const GraphicsContext &context,
                                     GetAllocationCallbacks(), &texture->view));
   }
 
+  // ignore set debug name error, since it's not critical
+  auto err = SetDebugName(info.debugName, texture.get(), context);
+
   texture->sizeInBytes = memRequirements.size;
   Texture::TotalAllocatedMemory += texture->sizeInBytes;
 
   return texture;
 }
 
-auto Texture::Create(const GraphicsContext &context, const Texture *texture,
+auto Texture::Create(const GraphicsContext &context, Texture *texture,
                      VkImageSubresourceRange range) -> Result<Ref<Texture>> {
   ZoneScoped;
 
@@ -229,9 +241,7 @@ auto Texture::Create(const GraphicsContext &context, const Texture *texture,
   textureView->currentLayout = texture->currentLayout;
   textureView->sizeInBytes = texture->sizeInBytes;
   textureView->isSwapchainView = texture->isSwapchainView;
-
-  // ignore set debug name error, since it's not critical
-  auto err = SetDebugName(textureView->debugName, textureView.get(), context);
+  textureView->parentTexture = texture;
 
   VkImageViewCreateInfo viewInfo = {};
   viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -246,6 +256,9 @@ auto Texture::Create(const GraphicsContext &context, const Texture *texture,
                                     GetAllocationCallbacks(),
                                     &textureView->view));
   }
+
+  // ignore set debug name error, since it's not critical
+  auto err = SetDebugName(textureView->debugName, textureView.get(), context);
 
   texture->retain();
 
