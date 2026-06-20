@@ -97,7 +97,7 @@ auto LoadModule() -> Error {
   return Error::Success();
 }
 
-void UnloadModule(Graphics::GraphicsContext &context) {
+void UnloadModule(const Graphics::GraphicsContext &context) {
   DefaultShaderModule.reset();
 
   if (GlobalSlangSession != nullptr) {
@@ -266,7 +266,7 @@ auto SlangStageToString(SlangStage stage) -> std::string_view {
   }
 }
 
-static inline auto LoadSlang(GraphicsContext &context,
+static inline auto LoadSlang(const GraphicsContext &context,
                              Ref<ShaderModule> &shader) -> Error {
   slang::SessionDesc sessionDesc = {};
   sessionDesc.allowGLSLSyntax = false;
@@ -499,7 +499,7 @@ static inline auto LoadSlang(GraphicsContext &context,
 }
 
 auto ShaderModule::Create(
-    Graphics::GraphicsContext &context, const std::string &modulename,
+    const Graphics::GraphicsContext &context, const std::string &modulename,
     const std::string &name,
     const std::vector<slang::PreprocessorMacroDesc> *preprocessorMacros)
     -> Result<Ref<ShaderModule>> {

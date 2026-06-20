@@ -594,7 +594,7 @@ auto SetupFromType(slang::VariableLayoutReflection *variableLayout,
   return resourceInfo;
 }
 
-auto ReflectShader(Graphics::GraphicsContext &context,
+auto ReflectShader(const Graphics::GraphicsContext &context,
                    slang::ProgramLayout *programLayout,
                    ShaderReflection &outReflection) -> Error {
 

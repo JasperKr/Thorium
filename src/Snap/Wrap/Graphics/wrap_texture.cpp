@@ -603,8 +603,8 @@ static inline auto TextureFromImagedata(lua_State *state)
   auto *ctx = ::Graphics::GetCurrentGraphicsContext();
   auto *imageData = LuaWrap::ObjectFromLua<Image::ImageData>(state, 1);
 
-  return CHECK_RES(
-      ::Graphics::LoadFromMemory(*ctx, *imageData, VK_IMAGE_USAGE_SAMPLED_BIT));
+  return CHECK_RES(::Graphics::Texture::FromMemory(*ctx, *imageData,
+                                                   VK_IMAGE_USAGE_SAMPLED_BIT));
 }
 
 static inline auto TextureFromFilepath(lua_State *state)
@@ -612,7 +612,8 @@ static inline auto TextureFromFilepath(lua_State *state)
   auto *ctx = ::Graphics::GetCurrentGraphicsContext();
   const char *filepath = luaL_checkstring(state, 1);
 
-  return ::Graphics::LoadFromFile(*ctx, filepath, VK_IMAGE_USAGE_SAMPLED_BIT);
+  return ::Graphics::Texture::FromFile(*ctx, filepath,
+                                       VK_IMAGE_USAGE_SAMPLED_BIT);
 }
 
 static inline auto TextureFromImagedataAndOptions(lua_State *state)
@@ -628,7 +629,7 @@ static inline auto TextureFromImagedataAndOptions(lua_State *state)
   LuaOptions options = optionsResult.value();
 
   auto usage = TextureUsageToVkImageUsage(options.format, options.usage);
-  return ::Graphics::LoadFromMemory(*ctx, *imageData, usage);
+  return ::Graphics::Texture::FromMemory(*ctx, *imageData, usage);
 }
 
 static inline auto TextureFromFilepathAndOptions(lua_State *state)
@@ -639,7 +640,7 @@ static inline auto TextureFromFilepathAndOptions(lua_State *state)
 
   auto usage = TextureUsageToVkImageUsage(options.format, options.usage);
 
-  return ::Graphics::LoadFromFile(*ctx, filepath, usage, options.mipmaps);
+  return ::Graphics::Texture::FromFile(*ctx, filepath, usage, options.mipmaps);
 }
 
 static inline auto TextureFromImagedataArrayAndOptions(lua_State *state)
@@ -663,7 +664,7 @@ static inline auto TextureFromImagedataArrayAndOptions(lua_State *state)
 
   auto *ctx = ::Graphics::GetCurrentGraphicsContext();
 
-  return ::Graphics::LoadFromMemory(*ctx, slices, options.type);
+  return ::Graphics::Texture::FromMemory(*ctx, slices, options.type);
 }
 
 static inline auto TextureFromWidthAndHeight(lua_State *state)
@@ -672,7 +673,7 @@ static inline auto TextureFromWidthAndHeight(lua_State *state)
   auto width = static_cast<uint32_t>(luaL_checkinteger(state, 1));
   auto height = static_cast<uint32_t>(luaL_checkinteger(state, 2));
 
-  return ::Graphics::Create(
+  return ::Graphics::Texture::Create(
       *ctx,
       ::Graphics::TextureCreationInfo{
           .size = {width, height},
@@ -706,7 +707,7 @@ static inline auto TextureFromWidthHeightAndOptions(lua_State *state)
     return Error::Unexpected("mipmapstart is not yet implemented.");
   }
 
-  auto result = ::Graphics::Create(
+  auto result = CHECK_RES(::Graphics::Texture::Create(
       *ctx, ::Graphics::TextureCreationInfo{
                 .size = {width, height},
                 .format = options.format,
@@ -714,16 +715,13 @@ static inline auto TextureFromWidthHeightAndOptions(lua_State *state)
                 .mipmapCount = mipmapCount,
                 .debugName = "Lua texture from width, height and options",
                 .textureType = options.type,
-            });
-  if (Error::IsError(result)) {
-    return result.error();
-  }
+            }));
 
   if (options.mipmaps == ::Graphics::TextureMipmapOption::Init) {
-    CHECK_ERR(::Graphics::GenerateMipmaps(*ctx, result.value().get()));
+    CHECK_ERR(result->GenerateMipmaps(*ctx));
   }
 
-  return result.value();
+  return result;
 }
 
 static inline auto
@@ -743,7 +741,6 @@ TextureFromWidthHeightDepthOrLayersAndOptions(lua_State *state)
 
   auto usage = TextureUsageToVkImageUsage(options.format, options.usage);
 
-  Result<Ref<::Graphics::Texture>> result;
   int mipmapCount = 1;
   if (options.mipmaps != ::Graphics::TextureMipmapOption::None) {
     mipmapCount =
@@ -764,7 +761,7 @@ TextureFromWidthHeightDepthOrLayersAndOptions(lua_State *state)
   auto layers =
       (options.type == ::Graphics::TextureType::ARRAY) ? depthOrLayers : 1;
 
-  result = ::Graphics::Create(
+  auto result = CHECK_RES(::Graphics::Texture::Create(
       *ctx, ::Graphics::TextureCreationInfo{
                 .size = {width, height, depth},
                 .arrayLayers = layers,
@@ -774,17 +771,13 @@ TextureFromWidthHeightDepthOrLayersAndOptions(lua_State *state)
                 .debugName =
                     "Lua texture from width, height, depth/layers and options",
                 .textureType = options.type,
-            });
-
-  if (Error::IsError(result)) {
-    return result.error();
-  }
+            }));
 
   if (options.mipmaps == ::Graphics::TextureMipmapOption::Init) {
-    CHECK_ERR(::Graphics::GenerateMipmaps(*ctx, result.value().get()));
+    CHECK_ERR(result->GenerateMipmaps(*ctx));
   }
 
-  return result.value();
+  return result;
 }
 
 // Variants:

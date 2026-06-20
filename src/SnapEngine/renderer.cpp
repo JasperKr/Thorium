@@ -46,7 +46,7 @@ auto Renderer::InitializeDefaultMaterial(Graphics::GraphicsContext &context)
     }
   }
 
-  auto defaultTextureResult = Graphics::LoadFromMemory(
+  auto defaultTextureResult = Graphics::Texture::FromMemory(
       context, defaultTextureData, VK_IMAGE_USAGE_SAMPLED_BIT);
 
   if (Error::IsError(defaultTextureResult)) {
@@ -59,7 +59,7 @@ auto Renderer::InitializeDefaultMaterial(Graphics::GraphicsContext &context)
   const Color pixelColor = {0.5F, 0.5F, 1.0F, 1.0F};
   CHECK_ERR(defaultNormalTextureData.SetColor({}, pixelColor));
 
-  auto defaultNormalTextureResult = Graphics::LoadFromMemory(
+  auto defaultNormalTextureResult = Graphics::Texture::FromMemory(
       context, defaultNormalTextureData, VK_IMAGE_USAGE_SAMPLED_BIT);
 
   if (Error::IsError(defaultNormalTextureResult)) {
@@ -71,14 +71,14 @@ auto Renderer::InitializeDefaultMaterial(Graphics::GraphicsContext &context)
   const Color blackColor = {0.0F, 0.0F, 0.0F, 1.0F};
   CHECK_ERR(defaultBlackTextureData.SetColor({}, blackColor));
 
-  auto defaultBlackTextureResult = Graphics::LoadFromMemory(
+  auto defaultBlackTextureResult = Graphics::Texture::FromMemory(
       context, defaultBlackTextureData, VK_IMAGE_USAGE_SAMPLED_BIT);
   if (Error::IsError(defaultBlackTextureResult)) {
     return defaultBlackTextureResult.error();
   }
   auto defaultBlackTexture = defaultBlackTextureResult.value();
 
-  auto defaultWhiteTexture = CHECK_RES(Graphics::GetDefaultTexture(
+  auto defaultWhiteTexture = CHECK_RES(Graphics::Texture::GetDefault(
       context, VK_FORMAT_R8G8B8A8_UNORM, Graphics::TextureType::DEFAULT));
 
   auto material = Material();

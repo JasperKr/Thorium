@@ -350,7 +350,8 @@ auto BindDefaultTextures(const GraphicsContext &context,
         type = TextureType::ARRAY;
       }
 
-      auto defaultTexture = CHECK_RES(GetDefaultTexture(context, format, type));
+      auto defaultTexture =
+          CHECK_RES(Texture::GetDefault(context, format, type));
       state.userBoundTextures[key] = {defaultTexture, &samplerInfo};
     }
   }

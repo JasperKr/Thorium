@@ -187,13 +187,11 @@ static auto CreateDevice(GraphicsContext &context,
   queueCreateInfo.queueCount = 1;
   queueCreateInfo.pQueuePriorities = &queuePriority;
 
-  VkPhysicalDeviceFeatures deviceFeatures{};
-
   VkDeviceCreateInfo createInfo{};
   createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
   createInfo.pQueueCreateInfos = &queueCreateInfo;
   createInfo.queueCreateInfoCount = 1;
-  createInfo.pEnabledFeatures = &deviceFeatures;
+  createInfo.pEnabledFeatures = nullptr;
 
   VkPhysicalDeviceExtendedDynamicState3FeaturesEXT dyn3{};
   dyn3.sType =
@@ -244,15 +242,20 @@ static auto CreateDevice(GraphicsContext &context,
       .shaderDrawParameters = VK_TRUE,
   };
 
+  // --- Vulkan 1.0 features ---
+  VkPhysicalDeviceFeatures features10{};
+  features10.samplerAnisotropy = VK_TRUE;
+  features10.textureCompressionBC = VK_TRUE;
+
   // --- Features2 root ---
   VkPhysicalDeviceFeatures2 features2{
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
       .pNext = &features11,
+      .features = features10,
   };
 
   // Device create info
   createInfo.pNext = &features2;
-  createInfo.pEnabledFeatures = nullptr;
 
   std::vector<const char *> deviceExtensions = {
       VK_KHR_SWAPCHAIN_EXTENSION_NAME,

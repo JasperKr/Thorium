@@ -183,7 +183,7 @@ auto RenderTargetManager::GetRendertarget(
                       std::to_string(descriptor.size.y), Rendertargets.size()),
   };
 
-  auto texture = CHECK_RES(::Graphics::Create(context, info));
+  auto texture = CHECK_RES(::Graphics::Texture::Create(context, info));
 
   Rendertargets.push_back(
       {.descriptor = descriptor,

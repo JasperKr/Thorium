@@ -245,12 +245,12 @@ inline auto LoadTexture(Graphics::GraphicsContext &context,
   const auto &image = ImageCache[texture.imageIndex.value()];
 
   if (std::holds_alternative<Ref<Image::ImageData>>(image)) {
-    textureRef = CHECK_RES(Graphics::LoadFromMemory(
+    textureRef = CHECK_RES(Graphics::Texture::FromMemory(
         context, *std::get<Ref<Image::ImageData>>(image).get(),
         VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
         Graphics::TextureMipmapOption::Init));
   } else if (std::holds_alternative<Ref<Image::CompressedImageData>>(image)) {
-    textureRef = CHECK_RES(Graphics::LoadFromMemory(
+    textureRef = CHECK_RES(Graphics::Texture::FromMemory(
         context, *std::get<Ref<Image::CompressedImageData>>(image).get(),
         VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
         Graphics::TextureMipmapOption::Manual));

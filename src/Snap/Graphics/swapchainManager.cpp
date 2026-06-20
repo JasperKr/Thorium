@@ -216,7 +216,7 @@ inline auto GetSwapchainTextures(GraphicsContext &context) -> Error {
   context.swapchainInfo.textures.resize(context.swapchainInfo.imageCount);
 
   for (uint32_t i = 0; i < context.swapchainInfo.imageCount; i++) {
-    auto texture = CHECK_RES(Graphics::FromSwapchainTexture(
+    auto texture = CHECK_RES(Graphics::Texture::FromSwapchain(
         context, context.swapchainInfo.images[i],
         context.swapchainInfo.imageViews[i], context.swapchainInfo.format,
         context.swapchainInfo.extent.width,

@@ -477,7 +477,7 @@ struct ShaderReflection {
   auto ConstructUBOStruct(uint32_t set, uint32_t binding) -> Error;
 };
 
-auto ReflectShader(Graphics::GraphicsContext &context,
+auto ReflectShader(const Graphics::GraphicsContext &context,
                    slang::ProgramLayout *programLayout,
                    ShaderReflection &outReflection) -> Error;
 

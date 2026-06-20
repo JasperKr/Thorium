@@ -110,7 +110,7 @@ inline auto HandleImguiCreateTextureEvent(Graphics::GraphicsContext &context,
       .debugName = "Imgui Texture",
   };
 
-  auto textureCreationResult = Graphics::Create(context, createInfo);
+  auto textureCreationResult = Graphics::Texture::Create(context, createInfo);
 
   if (Error::IsError(textureCreationResult)) {
     return textureCreationResult.error();

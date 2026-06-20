@@ -146,7 +146,7 @@ struct ShaderModule : Object {
   }
 
   static auto
-  Create(Graphics::GraphicsContext &context, const std::string &modulename,
+  Create(const GraphicsContext &context, const std::string &modulename,
          const std::string &name,
          const std::vector<slang::PreprocessorMacroDesc> *preprocessorMacros =
              nullptr) -> Result<Ref<ShaderModule>>;
@@ -203,7 +203,7 @@ auto SlangStageToString(SlangStage stage) -> std::string_view;
 auto SlangStageToVkStage(SlangStage stage) -> VkShaderStageFlagBits;
 
 auto LoadModule() -> Error;
-void UnloadModule(GraphicsContext &context);
+void UnloadModule(const GraphicsContext &context);
 
 auto AddGlobalShaderExtern(const ShaderExtern &externVar) -> void;
 

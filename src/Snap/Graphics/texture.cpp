@@ -17,7 +17,6 @@
 #include "Modules/image.hpp"
 #include "Modules/imageData.hpp"
 #include "Modules/object.hpp"
-#include "Modules/timer.hpp"
 #include "sampler.hpp"
 #include "stb/stb_image.h"
 #include <cassert>
@@ -83,8 +82,8 @@ inline auto SetDebugName(const std::string &debugName, Texture *texture,
   return Error::Success();
 }
 
-auto Create(const GraphicsContext &context, const TextureCreationInfo &info)
-    -> Result<Ref<Texture>> {
+auto Texture::Create(const GraphicsContext &context,
+                     const TextureCreationInfo &info) -> Result<Ref<Texture>> {
   ZoneScoped;
 
   if (((info.usage & VK_IMAGE_USAGE_STORAGE_BIT) != 0U) &&
@@ -120,7 +119,7 @@ auto Create(const GraphicsContext &context, const TextureCreationInfo &info)
 
   texture->size = info.size;
   texture->format = info.format;
-  texture->textureType = TextureType::DEFAULT;
+  texture->textureType = info.textureType;
   texture->mipmapcount = info.mipmapCount;
   texture->usage = info.usage;
   texture->arrayLayers = info.arrayLayers;
@@ -193,10 +192,10 @@ auto Create(const GraphicsContext &context, const TextureCreationInfo &info)
   return texture;
 }
 
-auto FromSwapchainTexture(const GraphicsContext &context,
-                          VkImage swapchainImage,
-                          VkImageView swapchainImageView, VkFormat format,
-                          uint32_t width, uint32_t height)
+auto Texture::FromSwapchain(const GraphicsContext &context,
+                            VkImage swapchainImage,
+                            VkImageView swapchainImageView, VkFormat format,
+                            uint32_t width, uint32_t height)
     -> Result<Ref<Texture>> {
 
   Ref<Texture> texture = Ref<Texture>::Make();
@@ -217,8 +216,8 @@ auto FromSwapchainTexture(const GraphicsContext &context,
   return texture;
 }
 
-auto LoadFromFile(GraphicsContext &context, const char *path,
-                  VkImageUsageFlags usage, TextureMipmapOption mipmaps)
+auto Texture::FromFile(GraphicsContext &context, const char *path,
+                       VkImageUsageFlags usage, TextureMipmapOption mipmaps)
     -> Result<Ref<Texture>> {
   auto filedata = CHECK_RES(Filesystem::ReadFile(path));
 
@@ -249,15 +248,15 @@ auto LoadFromFile(GraphicsContext &context, const char *path,
 
   if (mipmaps == TextureMipmapOption::Init &&
       !Image::IsCompressedTexture(imageData->GetFormat())) {
-    CHECK_ERR(GenerateMipmaps(context, texture.get()));
+    CHECK_ERR(texture->GenerateMipmaps(context));
   }
 
   return texture;
 }
 
 // texture 2D From ImageData
-auto LoadFromMemory(GraphicsContext &context, Image::ImageData &imageData,
-                    VkImageUsageFlags usage, TextureMipmapOption mipmaps)
+auto Texture::FromMemory(GraphicsContext &context, Image::ImageData &imageData,
+                         VkImageUsageFlags usage, TextureMipmapOption mipmaps)
     -> Result<Ref<Texture>> {
 
   if (Image::IsCompressedTexture(imageData.GetFormat()) &&
@@ -285,15 +284,15 @@ auto LoadFromMemory(GraphicsContext &context, Image::ImageData &imageData,
   CHECK_ERR(texture->SetPixels(context, imageData, 0, 0));
 
   if (mipmaps == TextureMipmapOption::Init) {
-    CHECK_ERR(GenerateMipmaps(context, texture.get()));
+    CHECK_ERR(texture->GenerateMipmaps(context));
   }
 
   return texture;
 }
 
-auto LoadFromMemory(GraphicsContext &context,
-                    const Image::CompressedImageData &compressedData,
-                    VkImageUsageFlags usage, TextureMipmapOption mipmaps)
+auto Texture::FromMemory(GraphicsContext &context,
+                         const Image::CompressedImageData &compressedData,
+                         VkImageUsageFlags usage, TextureMipmapOption mipmaps)
     -> Result<Ref<Texture>> {
   if (mipmaps == TextureMipmapOption::Init) {
     return Error::Unexpected(
@@ -430,10 +429,10 @@ auto LoadFromMemory(GraphicsContext &context,
 }
 
 // texture 3D/Array/Cubemap From array of ImageData slices
-auto LoadFromMemory(GraphicsContext &context,
-                    const std::vector<Image::ImageData *> &slices,
-                    TextureType type, VkImageUsageFlags usage,
-                    TextureMipmapOption mipmaps) -> Result<Ref<Texture>> {
+auto Texture::FromMemory(GraphicsContext &context,
+                         const std::vector<Image::ImageData *> &slices,
+                         TextureType type, VkImageUsageFlags usage,
+                         TextureMipmapOption mipmaps) -> Result<Ref<Texture>> {
   if (slices.empty()) {
     return Error::Unexpected("No image slices provided.");
   }
@@ -963,8 +962,8 @@ std::unordered_map<std::pair<VkFormat, TextureType>, Ref<struct Texture>,
 
 auto UnloadModule() -> void { DefaultTextureCache.clear(); }
 
-auto GetDefaultTexture(const GraphicsContext &context, VkFormat format,
-                       Graphics::TextureType textureType)
+auto Texture::GetDefault(const GraphicsContext &context, VkFormat format,
+                         Graphics::TextureType textureType)
     -> Result<Ref<Graphics::Texture>> {
 
   auto key = std::make_pair(format, textureType);
@@ -1034,9 +1033,11 @@ auto GetDefaultTexture(const GraphicsContext &context, VkFormat format,
   return texture;
 }
 
-auto GetAccessFlagsForUsage(TextureUsage usage, VkFormat format,
-                            VkAttachmentLoadOp loadOp,
-                            VkAttachmentStoreOp storeOp) -> VkAccessFlags2 {
+inline auto GetAccessFlagsForUsage(
+    TextureUsage usage, VkFormat format,
+    VkAttachmentLoadOp loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+    VkAttachmentStoreOp storeOp = VK_ATTACHMENT_STORE_OP_STORE)
+    -> VkAccessFlags2 {
   switch (usage) {
   case TextureUsage::Sampler:
     return VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
@@ -1346,8 +1347,8 @@ Texture::~Texture() {
 
 std::atomic<VkDeviceSize> Texture::TotalAllocatedMemory{};
 
-auto GenerateMipmaps(GraphicsContext &context, Texture *texture) -> Error {
-  if (texture->mipmapcount <= 1) {
+auto Texture::GenerateMipmaps(GraphicsContext &context) -> Error {
+  if (mipmapcount <= 1) {
     return Error::Create("Texture does not have multiple mip levels for "
                          "mipmap generation.");
   }
@@ -1357,43 +1358,38 @@ auto GenerateMipmaps(GraphicsContext &context, Texture *texture) -> Error {
     return Error::Create("Failed to get command buffer for mipmap generation.");
   }
 
-  if (Image::IsCompressedTexture(texture->format)) {
+  if (Image::IsCompressedTexture(format)) {
     return Error::Create("Automatic mipmap generation is not supported for "
                          "compressed texture formats.");
   }
 
   DynamicRendering::EndRendering(context);
 
-  auto mipWidth = static_cast<int32_t>(texture->size.width);
-  auto mipHeight = static_cast<int32_t>(texture->size.height);
+  auto mipWidth = static_cast<int32_t>(size.width);
+  auto mipHeight = static_cast<int32_t>(size.height);
 
   VkImageMemoryBarrier2 barrier = {};
   barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-  barrier.srcAccessMask =
-      GetAccessFlagsForUsage(texture->lastUsage, texture->format);
+  barrier.srcAccessMask = GetAccessFlagsForUsage(lastUsage, format);
   barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
   barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-  barrier.image = texture->image;
-  barrier.subresourceRange.aspectMask =
-      GetAspectFlagsForFormat(texture->format);
+  barrier.image = image;
+  barrier.subresourceRange.aspectMask = GetAspectFlagsForFormat(format);
   barrier.subresourceRange.baseMipLevel = 0;
-  barrier.subresourceRange.levelCount = texture->mipmapcount;
+  barrier.subresourceRange.levelCount = mipmapcount;
   barrier.subresourceRange.baseArrayLayer = 0;
-  barrier.subresourceRange.layerCount =
-      static_cast<uint32_t>(texture->arrayLayers);
+  barrier.subresourceRange.layerCount = static_cast<uint32_t>(arrayLayers);
 
   VkDependencyInfo dep = {};
   dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
   dep.imageMemoryBarrierCount = 1;
   dep.pImageMemoryBarriers = &barrier;
 
-  barrier.srcStageMask = texture->lastPipelineStage;
-  barrier.srcAccessMask =
-      GetAccessFlagsForUsage(texture->lastUsage, texture->format);
+  barrier.srcStageMask = lastPipelineStage;
+  barrier.srcAccessMask = GetAccessFlagsForUsage(lastUsage, format);
   barrier.dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
   barrier.dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
-  barrier.oldLayout =
-      GetRequiredTextureLayout(texture->lastUsage, texture->format);
+  barrier.oldLayout = GetRequiredTextureLayout(lastUsage, format);
   barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
 
   vkCmdPipelineBarrier2(commandBuffer, &dep);
@@ -1402,9 +1398,9 @@ auto GenerateMipmaps(GraphicsContext &context, Texture *texture) -> Error {
 
   // [dst, dst, dst, ...]
 
-  for (uint32_t i = 1; i < texture->mipmapcount; ++i) {
-    auto baseExtent = Image::GetDimensions(texture->size, i - 1);
-    auto mipExtent = Image::GetDimensions(texture->size, i);
+  for (uint32_t i = 1; i < mipmapcount; ++i) {
+    auto baseExtent = Image::GetDimensions(size, i - 1);
+    auto mipExtent = Image::GetDimensions(size, i);
 
     // mip - 1 is transfer write
     // Now needs transfer read
@@ -1423,26 +1419,25 @@ auto GenerateMipmaps(GraphicsContext &context, Texture *texture) -> Error {
     vkCmdPipelineBarrier2(commandBuffer, &dep);
 
     VkImageBlit blit = {};
-    blit.srcSubresource.aspectMask = GetAspectFlagsForFormat(texture->format);
+    blit.srcSubresource.aspectMask = GetAspectFlagsForFormat(format);
     blit.srcSubresource.mipLevel = i - 1;
     blit.srcSubresource.baseArrayLayer = 0;
-    blit.srcSubresource.layerCount = texture->arrayLayers;
+    blit.srcSubresource.layerCount = arrayLayers;
     blit.srcOffsets[0] = {.x = 0, .y = 0, .z = 0};
     blit.srcOffsets[1] = {.x = static_cast<int32_t>(baseExtent.width),
                           .y = static_cast<int32_t>(baseExtent.height),
                           .z = static_cast<int32_t>(baseExtent.depth)};
-    blit.dstSubresource.aspectMask = GetAspectFlagsForFormat(texture->format);
+    blit.dstSubresource.aspectMask = GetAspectFlagsForFormat(format);
     blit.dstSubresource.mipLevel = i;
     blit.dstSubresource.baseArrayLayer = 0;
-    blit.dstSubresource.layerCount = texture->arrayLayers;
+    blit.dstSubresource.layerCount = arrayLayers;
     blit.dstOffsets[0] = {.x = 0, .y = 0, .z = 0};
     blit.dstOffsets[1] = {.x = static_cast<int32_t>(mipExtent.width),
                           .y = static_cast<int32_t>(mipExtent.height),
                           .z = static_cast<int32_t>(mipExtent.depth)};
 
-    vkCmdBlitImage(commandBuffer, texture->image,
-                   VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, texture->image,
-                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit,
+    vkCmdBlitImage(commandBuffer, image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                   image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit,
                    VK_FILTER_LINEAR);
   }
 
@@ -1456,13 +1451,13 @@ auto GenerateMipmaps(GraphicsContext &context, Texture *texture) -> Error {
   barrier.dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT;
   barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
   barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-  barrier.subresourceRange.baseMipLevel = texture->mipmapcount - 1;
+  barrier.subresourceRange.baseMipLevel = mipmapcount - 1;
 
   vkCmdPipelineBarrier2(commandBuffer, &dep);
 
-  texture->lastUsage = TextureUsage::TransferSrc;
-  texture->lastPipelineStage = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
-  texture->currentLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+  lastUsage = TextureUsage::TransferSrc;
+  lastPipelineStage = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+  currentLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
 
   return {};
 }

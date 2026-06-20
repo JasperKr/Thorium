@@ -84,7 +84,67 @@ struct ToBufferCopyRegion {
   VkDeviceSize dstOffset = 0;
 };
 
+struct TextureCreationInfo {
+  // Dimensions in texels
+  VkExtent3D size{};
+
+  // Amount of array layers
+  uint32_t arrayLayers{1};
+
+  // Texture format
+  VkFormat format = VK_FORMAT_UNDEFINED;
+
+  // Vulkan usage flags
+  VkImageUsageFlags usage{};
+
+  // Number of mipmap levels to allocate.
+  int mipmapCount = 1;
+
+  // Debug name
+  std::string debugName;
+
+  // Type of the texture (2D, Cubemap, etc.)
+  TextureType textureType = TextureType::DEFAULT;
+};
+
 struct Texture : Object, Barrier::BarrierSynced {
+  static auto Create(const GraphicsContext &context,
+                     const TextureCreationInfo &info) -> Result<Ref<Texture>>;
+  static auto FromSwapchain(const GraphicsContext &context,
+                            VkImage swapchainImage,
+                            VkImageView swapchainImageView, VkFormat format,
+                            uint32_t width, uint32_t height)
+      -> Result<Ref<Texture>>;
+
+  auto CopyTo(GraphicsContext &context, Texture *texture, VkBuffer buffer)
+      -> Error;
+  auto GenerateMipmaps(GraphicsContext &context) -> Error;
+  static auto FromFile(GraphicsContext &context, const char *path,
+                       VkImageUsageFlags usage = 0,
+                       TextureMipmapOption mipmaps = {})
+      -> Result<Ref<Texture>>;
+
+  static auto FromMemory(GraphicsContext &context, Image::ImageData &imageData,
+                         VkImageUsageFlags usage = 0,
+                         TextureMipmapOption mipmaps = {})
+      -> Result<Ref<Texture>>;
+
+  static auto FromMemory(GraphicsContext &context,
+                         const std::vector<Image::ImageData *> &slices,
+                         TextureType type, VkImageUsageFlags usage = 0,
+                         TextureMipmapOption mipmaps = {})
+      -> Result<Ref<Texture>>;
+
+  static auto FromMemory(GraphicsContext &context,
+                         const Image::CompressedImageData &compressedData,
+                         VkImageUsageFlags usage = 0,
+                         TextureMipmapOption mipmaps = {})
+      -> Result<Ref<Texture>>;
+
+  static auto GetDefault(const GraphicsContext &context, VkFormat format,
+                         Graphics::TextureType textureType)
+      -> Result<Ref<Graphics::Texture>>;
+
   std::mutex mutex;
 
   static std::atomic<VkDeviceSize> TotalAllocatedMemory;
@@ -222,8 +282,6 @@ struct Texture : Object, Barrier::BarrierSynced {
     return Image::IsStencilTexture(format);
   }
 
-  static auto GetType() -> Type const * { return &LuaTextureType; }
-
   /// WARNING: Subresource ranges are not tracked. Make sure the range matches the global config of the texture after the transition.
   auto TransitionLayout(
       const GraphicsContext &context, VkImageLayout layout,
@@ -236,6 +294,8 @@ struct Texture : Object, Barrier::BarrierSynced {
       VkAccessFlags2 dstAccessMask = VK_ACCESS_NONE,
       VkImageSubresourceRange range = {.levelCount = 1, .layerCount = 1})
       -> Error;
+
+  static auto GetType() -> Type const * { return &LuaTextureType; }
 
   [[nodiscard]] auto GetInstanceType() const -> Type const * override {
     return GetType();
@@ -258,67 +318,5 @@ struct Texture : Object, Barrier::BarrierSynced {
     return !(*this == other);
   }
 };
-
-struct TextureCreationInfo {
-  // Dimensions in texels
-  VkExtent3D size{};
-
-  // Amount of array layers
-  uint32_t arrayLayers{1};
-
-  // Texture format
-  VkFormat format = VK_FORMAT_UNDEFINED;
-
-  // Vulkan usage flags
-  VkImageUsageFlags usage{};
-
-  // Number of mipmap levels to allocate.
-  int mipmapCount = 1;
-
-  // Debug name
-  std::string debugName;
-
-  // Type of the texture (2D, Cubemap, etc.)
-  TextureType textureType = TextureType::DEFAULT;
-};
-
-auto Create(const GraphicsContext &context, const TextureCreationInfo &info)
-    -> Result<Ref<Texture>>;
-auto FromSwapchainTexture(const GraphicsContext &context,
-                          VkImage swapchainImage,
-                          VkImageView swapchainImageView, VkFormat format,
-                          uint32_t width, uint32_t height)
-    -> Result<Ref<Texture>>;
-
-auto CopyImageToBuffer(GraphicsContext &context, Texture *texture,
-                       VkBuffer buffer) -> Error;
-auto GenerateMipmaps(GraphicsContext &context, Texture *texture) -> Error;
-auto LoadFromFile(GraphicsContext &context, const char *path,
-                  VkImageUsageFlags usage = 0, TextureMipmapOption mipmaps = {})
-    -> Result<Ref<Texture>>;
-
-auto LoadFromMemory(GraphicsContext &context, Image::ImageData &imageData,
-                    VkImageUsageFlags usage = 0,
-                    TextureMipmapOption mipmaps = {}) -> Result<Ref<Texture>>;
-
-auto LoadFromMemory(GraphicsContext &context,
-                    const std::vector<Image::ImageData *> &slices,
-                    TextureType type, VkImageUsageFlags usage = 0,
-                    TextureMipmapOption mipmaps = {}) -> Result<Ref<Texture>>;
-
-auto LoadFromMemory(GraphicsContext &context,
-                    const Image::CompressedImageData &compressedData,
-                    VkImageUsageFlags usage = 0,
-                    TextureMipmapOption mipmaps = {}) -> Result<Ref<Texture>>;
-
-auto GetDefaultTexture(const GraphicsContext &context, VkFormat format,
-                       Graphics::TextureType textureType)
-    -> Result<Ref<Graphics::Texture>>;
-
-auto GetAccessFlagsForUsage(
-    TextureUsage usage, VkFormat format,
-    VkAttachmentLoadOp loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
-    VkAttachmentStoreOp storeOp = VK_ATTACHMENT_STORE_OP_STORE)
-    -> VkAccessFlags2;
 
 } // namespace Graphics
