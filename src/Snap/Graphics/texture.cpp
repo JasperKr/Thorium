@@ -192,6 +192,66 @@ auto Texture::Create(const GraphicsContext &context,
   return texture;
 }
 
+auto Texture::Create(const GraphicsContext &context, const Texture *texture,
+                     VkImageSubresourceRange range) -> Result<Ref<Texture>> {
+  ZoneScoped;
+
+  // Check vadility of the provided range against the parent texture
+
+  if (range.baseMipLevel + range.levelCount >= texture->mipmapcount) {
+    return Error::Unexpected(
+        "Base mip level is out of range of the parent texture.");
+  }
+
+  if (range.baseArrayLayer + range.layerCount >= texture->arrayLayers) {
+    return Error::Unexpected(
+        "Base array layer is out of range of the parent texture.");
+  }
+  range.aspectMask = GetAspectFlagsForFormat(texture->format);
+
+  Ref<Texture> textureView = Ref<Texture>::Make();
+
+  textureView->size = texture->size;
+  textureView->format = texture->format;
+  textureView->textureType = texture->textureType;
+  textureView->mipmapcount = range.levelCount;
+  textureView->usage = texture->usage;
+  textureView->arrayLayers = range.layerCount;
+  textureView->samplerDirty = true;
+  textureView->debugName = texture->debugName + "_view";
+  textureView->isView = true;
+
+  const auto &config = Threading::GetGraphicsConfiguration();
+
+  textureView->samplerDescription = config.defaultSamplerDescription;
+  textureView->image = texture->image;
+  textureView->memory = texture->memory;
+  textureView->currentLayout = texture->currentLayout;
+  textureView->sizeInBytes = texture->sizeInBytes;
+  textureView->isSwapchainView = texture->isSwapchainView;
+
+  // ignore set debug name error, since it's not critical
+  auto err = SetDebugName(textureView->debugName, textureView.get(), context);
+
+  VkImageViewCreateInfo viewInfo = {};
+  viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+  viewInfo.image = textureView->image;
+  viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+  viewInfo.format = textureView->format;
+  viewInfo.subresourceRange = range;
+
+  {
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+    CHECK_NEW_ERR(vkCreateImageView(context.device, &viewInfo,
+                                    GetAllocationCallbacks(),
+                                    &textureView->view));
+  }
+
+  texture->retain();
+
+  return textureView;
+}
+
 auto Texture::FromSwapchain(const GraphicsContext &context,
                             VkImage swapchainImage,
                             VkImageView swapchainImageView, VkFormat format,
@@ -1333,16 +1393,21 @@ Texture::~Texture() {
     return;
   }
 
+  if (isView) { // Not owned, don't destroy
+    parentTexture->release();
+
+    ScheduleDestruction(TextureViewMemory{.imageView = view,
+                                          .timelineValue = lastUsedTimestamp});
+
+    return;
+  }
+
   ScheduleDestruction(TextureMemory{.allocation = memory,
                                     .image = image,
                                     .imageView = view,
                                     .timelineValue = lastUsedTimestamp});
 
   Texture::TotalAllocatedMemory -= sizeInBytes;
-
-  memory = VK_NULL_HANDLE;
-  image = VK_NULL_HANDLE;
-  view = VK_NULL_HANDLE;
 }
 
 std::atomic<VkDeviceSize> Texture::TotalAllocatedMemory{};

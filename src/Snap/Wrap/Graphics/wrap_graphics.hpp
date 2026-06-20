@@ -92,6 +92,7 @@ static const std::vector<luaL_Reg> GraphicsLib = {
     {"getRenderTargets", wrap_GetRenderTargets},
     {"getWindingOrder", wrap_GetWindingOrder},
     {"newTexture", Texture::wrap_NewTexture},
+    {"newTextureView", Texture::wrap_NewTextureView},
     {"newMesh", Mesh::wrap_NewMesh},
     {"newShader", Shader::wrap_NewShader},
     {"newBuffer", Buffer::wrap_NewBuffer},

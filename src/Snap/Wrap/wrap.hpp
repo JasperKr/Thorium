@@ -254,5 +254,5 @@ auto luaL_optscalar(lua_State *state, int index, Math::Scalar defaultValue)
     if (Error::IsError(_result)) {                                             \
       return luaL_error(state, "%s", _result.error().ToString().c_str());      \
     }                                                                          \
-    std::move(_result);                                                        \
+    std::move(_result.value());                                                \
   })

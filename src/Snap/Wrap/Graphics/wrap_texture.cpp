@@ -1,3 +1,4 @@
+#include "Wrap/Graphics/wrap_texture.hpp"
 #include "Graphics/format.hpp"
 #include "Graphics/graphics.hpp"
 #include "Graphics/graphicsState.hpp"
@@ -8,6 +9,7 @@
 #include "Wrap/Helpers/lua_enum.hpp"
 #include "Wrap/wrap.hpp"
 #include <imgui.h>
+#include <lua.h>
 #include <string>
 #include <unordered_set>
 
@@ -836,12 +838,68 @@ auto wrap_NewTexture(lua_State *state) -> int {
   return 1;
 }
 
-auto wrap_GetID(lua_State *state) -> int {
-  auto *texture = LuaWrap::ObjectFromLua<::Graphics::Texture>(state, 1);
+inline auto subresourceRangeFromLua(lua_State *state, int index)
+    -> VkImageSubresourceRange {
+  VkImageSubresourceRange range{};
 
-  if (texture == nullptr) {
-    return luaL_error(state, "Expected Texture as first argument");
+  luaL_checktype(state, index, LUA_TTABLE);
+
+  // layerstart
+  lua_getfield(state, index, "layerstart");
+  range.baseArrayLayer = static_cast<uint32_t>(luaL_optinteger(state, -1, 0));
+  lua_pop(state, 1);
+
+  // layercount
+  lua_getfield(state, index, "layercount");
+  range.layerCount = static_cast<uint32_t>(
+      luaL_optinteger(state, -1, VK_REMAINING_ARRAY_LAYERS));
+  lua_pop(state, 1);
+
+  // mipmapstart
+  lua_getfield(state, index, "mipmapstart");
+  range.baseMipLevel = static_cast<uint32_t>(luaL_optinteger(state, -1, 0));
+  lua_pop(state, 1);
+
+  // mipmapcount
+  lua_getfield(state, index, "mipmapcount");
+  range.levelCount = static_cast<uint32_t>(
+      luaL_optinteger(state, -1, VK_REMAINING_MIP_LEVELS));
+  lua_pop(state, 1);
+
+  return range;
+}
+
+// variants
+// texture
+// texture, options
+//
+// options: { mipmapstart = n, mipmapcount = n, layerstart = n, layercount = n}
+auto wrap_NewTextureView(lua_State *state) -> int {
+  auto *texture =
+      LUA_CK_NULL(LuaWrap::ObjectFromLua<::Graphics::Texture>(state, 1));
+
+  VkImageSubresourceRange range{};
+  range.baseArrayLayer = 0;
+  range.layerCount = VK_REMAINING_ARRAY_LAYERS;
+  range.baseMipLevel = 0;
+  range.levelCount = VK_REMAINING_MIP_LEVELS;
+
+  if (lua_gettop(state) > 1) {
+    range = subresourceRangeFromLua(state, 2);
   }
+
+  auto *ctx = ::Graphics::GetCurrentGraphicsContext();
+
+  auto view = LUA_CK_RES(::Graphics::Texture::Create(*ctx, texture, range));
+
+  LuaWrap::PushObject(state, ::Graphics::Texture::GetType(), view.get());
+
+  return 1;
+}
+
+auto wrap_GetID(lua_State *state) -> int {
+  auto *texture =
+      LUA_CK_NULL(LuaWrap::ObjectFromLua<::Graphics::Texture>(state, 1));
 
   LuaWrap::PushPointer(state, texture);
   return 1;

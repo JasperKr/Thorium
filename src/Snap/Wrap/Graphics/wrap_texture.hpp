@@ -24,6 +24,7 @@ auto wrap_GetMipmapCount(lua_State *state) -> int;
 auto wrap_GetFormat(lua_State *state) -> int;
 auto wrap_GetID(lua_State *state) -> int; // ImGui texture Identifier
 auto wrap_NewTexture(lua_State *state) -> int;
+auto wrap_NewTextureView(lua_State *state) -> int;
 auto wrap_Release(lua_State *state) -> int;
 
 // NOLINTNEXTLINE
@@ -47,7 +48,6 @@ static const std::vector<luaL_Reg> TextureLib = {
     {"getMipmapCount", wrap_GetMipmapCount},
     {"getFormat", wrap_GetFormat},
     {"getID", wrap_GetID},
-
 };
 
 extern "C" inline auto luaopen_texture(lua_State *state) -> int {

@@ -110,6 +110,10 @@ struct TextureCreationInfo {
 struct Texture : Object, Barrier::BarrierSynced {
   static auto Create(const GraphicsContext &context,
                      const TextureCreationInfo &info) -> Result<Ref<Texture>>;
+  static auto Create(const GraphicsContext &context,
+                     const Texture *parentTexture,
+                     VkImageSubresourceRange range) -> Result<Ref<Texture>>;
+
   static auto FromSwapchain(const GraphicsContext &context,
                             VkImage swapchainImage,
                             VkImageView swapchainImageView, VkFormat format,
@@ -183,6 +187,10 @@ struct Texture : Object, Barrier::BarrierSynced {
   // Indicates if this texture is a swapchain view, which should not be destroyed
   bool isSwapchainView = false;
 
+  bool isView = false;
+
+  struct Texture *parentTexture = nullptr;
+
   auto UseAs(const GraphicsContext &context, TextureUsage newUsage,
              VkPipelineStageFlags2 stage,
              VkAttachmentLoadOp loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
@@ -243,10 +251,10 @@ struct Texture : Object, Barrier::BarrierSynced {
   [[nodiscard]] auto GetDepthCompare() const -> std::tuple<bool, VkCompareOp>;
   [[nodiscard]] auto GetWidth() const -> uint32_t { return size.width; };
   [[nodiscard]] auto GetHeight() const -> uint32_t { return size.height; };
+  [[nodiscard]] auto GetDepth() const -> uint32_t { return size.depth; };
   [[nodiscard]] auto GetDimensions() const -> VkExtent2D {
     return {size.width, size.height};
   };
-  [[nodiscard]] auto GetDepth() const -> uint32_t { return size.depth; };
   auto GetSampler(const GraphicsContext &context) -> VkSampler;
   // Copies data from a 1D/2D/3D region from the provided data to the texture
   // sourceSize is the dimensions of the underlying data

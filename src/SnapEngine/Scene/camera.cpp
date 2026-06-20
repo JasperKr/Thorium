@@ -400,7 +400,7 @@ auto LuaCamera::Create(lua_State *state) -> int {
       far));
 
   auto entity = scene->world.entity();
-  entity.set<Camera>(cameraResult.value());
+  entity.set<Camera>(cameraResult);
   entity.add<CameraMatrices>();
   entity.add<Frustum>();
   entity.add<Transform>();
