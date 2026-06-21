@@ -1,17 +1,35 @@
 #pragma once
 
-#include "Modules/Math/vector.hpp"
 #include "Modules/error.hpp"
-namespace SnapEngine::Renderer {
+#include "Scene/scene.hpp"
+#include "Scene/transform.hpp"
+#include "Wrap/wrap_engine.hpp"
+namespace Engine::Renderer {
 
 struct LightProbe {
-  Math::Vec3 Position;
-  float Radius;
-  float InnerRadius;
+  float Radius{};
+  float InnerRadius{};
 
-  int32_t EnvironmentMapIndex;
+  int32_t EnvironmentMapIndex = -1;
+  Scene *scene = nullptr;
 
-  auto Render() -> Error;
+  auto Render(const Transform &transform) -> Error;
 };
 
-} // namespace SnapEngine::Renderer
+static const Type LightProbeType = Type("LightProbe");
+
+struct LuaLightProbe : Engine::LuaWrap::LuaECSObject {
+  explicit LuaLightProbe(flecs::entity entity) : LuaECSObject(entity) {}
+
+  static auto Create(lua_State *state) -> int;
+  static auto GetType() -> const Type * { return &LightProbeType; }
+  auto GetInstanceType() const -> const Type * override {
+    return &LightProbeType;
+  }
+
+  static auto Render(lua_State *state) -> int;
+};
+
+auto GetLuaLightProbeClass() -> ::LuaWrap::LuaClass;
+
+} // namespace Engine::Renderer

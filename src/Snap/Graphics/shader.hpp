@@ -151,15 +151,14 @@ struct ShaderModule : Object {
          const std::vector<slang::PreprocessorMacroDesc> *preprocessorMacros =
              nullptr) -> Result<Ref<ShaderModule>>;
 
-  auto Send(const GraphicsContext &context, const ResourceKey &key,
-            const std::span<const uint8_t> &data) -> Error;
+  auto Send(const ResourceKey &key, const std::span<const uint8_t> &data)
+      -> Error;
 
-  auto Send(const GraphicsContext &context, const ResourceKey &key,
-            const Ref<Buffer> &buffer) -> Error;
+  auto Send(const ResourceKey &key, const Ref<Buffer> &buffer) -> Error;
 
-  auto Send(const GraphicsContext &context, const ResourceKey &key,
-            const Ref<Graphics::Texture> &texture) -> Error;
-  auto Send(const GraphicsContext &context, const ResourceKey &key,
+  auto Send(const ResourceKey &key, const Ref<Graphics::Texture> &texture)
+      -> Error;
+  auto Send(const ResourceKey &key,
             const Ref<::Graphics::StructuredBuffer> &buffer) -> Error;
 
   auto GetUniform(const ResourceKey &key) const

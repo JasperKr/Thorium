@@ -116,4 +116,14 @@ template <class T> struct BitMaskRange {
 
 auto GetMemoryUsage() -> size_t;
 
+// Fast ceil division, returns the smallest integer greater than or equal to value/divisor
+template <typename T> constexpr auto CeilDivFast(T value, T divisor) -> T {
+  return (value + divisor - 1) / divisor;
+}
+
+// Overflow-safe ceil division, returns the smallest integer greater than or equal to value/divisor
+template <typename T> constexpr auto CeilDiv(T value, T divisor) -> T {
+  return (value / divisor) + (value % divisor != 0);
+}
+
 } // namespace Utils

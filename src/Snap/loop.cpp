@@ -13,7 +13,6 @@
 #include "Modules/filesystem.hpp"
 #include "Modules/thread.hpp"
 #include "Modules/window.hpp"
-#include "Wrap/Graphics/wrap_graphics.hpp"
 #include "Wrap/wrap_engine.hpp"
 #include <filesystem>
 #include <lua.hpp>
@@ -325,8 +324,6 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
 #ifdef BUNDLE_ENGINE
   Engine::Renderer::RendererInstance.Deinitialize();
 #endif
-
-  Wrap::Graphics::ShutdownWrapGraphics();
 
   Graphics::UnloadModule();
 

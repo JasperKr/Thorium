@@ -8,6 +8,7 @@
 #include "Graphics/reflect.hpp"
 #include "Graphics/shader.hpp"
 #include "Graphics/snapshot.hpp"
+#include "Modules/Helpers/utils.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
@@ -18,6 +19,85 @@
 #include <vulkan/vulkan_core.h>
 
 namespace Graphics {
+
+// NOLINTNEXTLINE
+thread_local Ref<Mesh> QuadMesh;
+
+struct FormatDefault2D {
+  float position[2]; // NOLINT
+  float texCoord[2]; // NOLINT
+  uint32_t color;
+};
+
+auto CreateQuad01Mesh(const Graphics::GraphicsContext &context)
+    -> Result<Ref<Graphics::Mesh>> {
+  std::vector<FormatDefault2D> vertices{4};
+  std::vector<uint32_t> indices = {0, 1, 2, 2, 3, 0};
+
+  vertices[0].position[0] = 0.0F;
+  vertices[0].position[1] = 0.0F;
+  vertices[0].texCoord[0] = 0.0F;
+  vertices[0].texCoord[1] = 0.0F;
+  vertices[0].color = ~0U;
+
+  vertices[1].position[0] = 1.0F;
+  vertices[1].position[1] = 0.0F;
+  vertices[1].texCoord[0] = 1.0F;
+  vertices[1].texCoord[1] = 0.0F;
+  vertices[1].color = ~0U;
+
+  vertices[2].position[0] = 1.0F;
+  vertices[2].position[1] = 1.0F;
+  vertices[2].texCoord[0] = 1.0F;
+  vertices[2].texCoord[1] = 1.0F;
+  vertices[2].color = ~0U;
+
+  vertices[3].position[0] = 0.0F;
+  vertices[3].position[1] = 1.0F;
+  vertices[3].texCoord[0] = 0.0F;
+  vertices[3].texCoord[1] = 1.0F;
+  vertices[3].color = ~0U;
+
+  static Graphics::VertexFormat vertexFormat({
+      Graphics::VertexComponent{
+          .name = "Position",
+          .location = 0,
+          .binding = 0,
+          .format = VK_FORMAT_R32G32_SFLOAT,
+      },
+      Graphics::VertexComponent{
+          .name = "TexCoord",
+          .location = 1,
+          .binding = 0,
+          .format = VK_FORMAT_R32G32_SFLOAT,
+      },
+      Graphics::VertexComponent{
+          .name = "Color",
+          .location = 2,
+          .binding = 0,
+          .format = VK_FORMAT_R8G8B8A8_UNORM,
+      },
+  });
+
+  // NOLINTNEXTLINE; Reinterpret cast is necessary here
+  auto span = std::span<uint8_t>(reinterpret_cast<uint8_t *>(vertices.data()),
+                                 vertexFormat.GetBindings()[0].stride *
+                                     vertices.size());
+
+  assert(sizeof(FormatDefault2D) == vertexFormat.GetBindings()[0].stride);
+
+  auto mesh = CHECK_RES(Graphics::Mesh::Create(context, vertexFormat, {span}));
+
+  CHECK_ERR(mesh->SetVertices(context, 0, span));
+
+  auto indexSpan = std::span<uint8_t>( // NOLINTNEXTLINE
+      reinterpret_cast<uint8_t *>(indices.data()),
+      indices.size() * Graphics::GetIndexFormatSize(VK_INDEX_TYPE_UINT32));
+
+  CHECK_ERR(mesh->SetIndices(context, indexSpan, VK_INDEX_TYPE_UINT32));
+
+  return mesh;
+}
 
 using namespace Snapshot;
 
@@ -276,6 +356,25 @@ auto Draw(const GraphicsContext &context, Mesh &mesh, uint32_t instanceCount)
   return Error::Success();
 }
 
+auto Draw(const GraphicsContext &context, Texture &texture,
+          uint32_t instanceCount) -> Error {
+  ZoneScoped;
+
+  if (!QuadMesh.isValid()) {
+    QuadMesh = CHECK_RES(CreateQuad01Mesh(context));
+  }
+
+  auto shader = DynamicRendering::GetShader();
+
+  if (shader == nullptr) {
+    shader = Shader::DefaultShaderModule;
+  }
+
+  CHECK_ERR(shader->Send({"MainTexture"}, Ref<Texture>(&texture)));
+
+  return Draw(context, *QuadMesh, instanceCount);
+}
+
 auto Dispatch(const GraphicsContext &context, const Math::Uvec3 &threadgroups)
     -> Error {
   ZoneScoped;
@@ -301,6 +400,31 @@ auto Dispatch(const GraphicsContext &context, const Math::Uvec3 &threadgroups)
 #endif
 
   return Error::Success();
+}
+
+auto DispatchWithin(const GraphicsContext &context, Math::Uvec3 dimensions)
+    -> Error {
+  ZoneScoped;
+
+  const auto &shader = DynamicRendering::GetShader();
+  if (shader == nullptr) {
+    return Error::Create("No shader bound for dispatch call.");
+  }
+
+  const auto &threadgroupSize = CHECK_RES(shader->GetThreadgroupSize());
+
+  // Allow passing in 0.
+  dimensions.x = std::max(dimensions.x, 1U);
+  dimensions.y = std::max(dimensions.y, 1U);
+  dimensions.z = std::max(dimensions.z, 1U);
+
+  Math::Uvec3 threadgroups{
+      Utils::CeilDiv(dimensions.x, threadgroupSize.x),
+      Utils::CeilDiv(dimensions.y, threadgroupSize.y),
+      Utils::CeilDiv(dimensions.z, threadgroupSize.z),
+  };
+
+  return Dispatch(context, threadgroups);
 }
 
 auto DispatchIndirect(const GraphicsContext &context,

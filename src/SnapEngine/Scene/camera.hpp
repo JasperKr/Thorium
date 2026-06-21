@@ -9,13 +9,24 @@
 #include "Modules/object.hpp"
 #include "Modules/type.hpp"
 #include "Renderer/rendertargetManager.hpp"
+#include "Scene/cameraMatrices.hpp"
 #include "Scene/scene.hpp"
+#include "Scene/transform.hpp"
 #include "Wrap/wrap.hpp"
 #include "Wrap/wrap_engine.hpp"
 namespace Engine {
 
+struct DrawData {
+  Transform Transform;
+  CameraMatrices Matrices;
+};
+
 struct Camera {
   friend struct LuaCamera;
+
+  struct Settings {
+    bool DoPostProcessing = true;
+  };
 
   void SetVerticalFOV(Math::Scalar fovDeg) {
     verticalFOVDeg = fovDeg;
@@ -37,6 +48,8 @@ struct Camera {
     FarPlane = farPlane;
     projectionDirty = true;
   }
+
+  void SetSettings(const Settings &newSettings) { settings = newSettings; }
 
   [[nodiscard]] auto GetAspectRatio() const -> Math::Scalar {
     return AspectRatio;
@@ -74,7 +87,8 @@ struct Camera {
                      Math::Scalar verticalFOVDeg, Math::Uvec2 Dimensions,
                      Math::Scalar near, Math::Scalar far) -> Result<Camera>;
 
-  auto WriteToBuffer(flecs::entity entity) const -> Error;
+  auto WriteToBuffer(const CameraMatrices &cameraMatrices,
+                     const Transform &transform) const -> Error;
 
   auto Resize(Math::Uvec2 newDimensions) -> void {
     Dimensions = newDimensions;
@@ -82,7 +96,7 @@ struct Camera {
   }
 
   auto Render(const Graphics::GraphicsContext &context,
-              flecs::entity thisEntity, Scene *scene) -> Error;
+              const DrawData &drawData, Scene *scene) -> Error;
 
   // Descriptors for the textures we'd like to own.
   struct CameraRendertargets {
@@ -121,6 +135,28 @@ struct Camera {
     Ref<Graphics::Texture> Material;
     Ref<Graphics::Texture> Emissive;
     Ref<Graphics::Texture> Motion;
+
+    void Reset() {
+      Depth = nullptr;
+      IncomingLight = nullptr;
+      PostProcessed = nullptr;
+      Normal = nullptr;
+      Albedo = nullptr;
+      Material = nullptr;
+      Emissive = nullptr;
+      Motion = nullptr;
+    }
+  };
+
+  struct PersistentTextureSettings {
+    bool Depth = false;
+    bool IncomingLight = false;
+    bool PostProcessed = false;
+    bool Normal = false;
+    bool Albedo = false;
+    bool Material = false;
+    bool Emissive = false;
+    bool Motion = false;
   };
 
   struct PostProcessingConfig {
@@ -135,6 +171,11 @@ struct Camera {
 
   auto SetPostProcessingConfig(const PostProcessingConfig &config) -> void {
     postProcessingConfig = config;
+  }
+
+  void
+  SetPersistentTextureSettings(const PersistentTextureSettings &newSettings) {
+    persistentTextureSettings = newSettings;
   }
 
   [[nodiscard]] auto GetPostProcessingConfig() const -> PostProcessingConfig {
@@ -153,7 +194,17 @@ struct Camera {
     return Rendertargets;
   }
 
+  [[nodiscard]] auto GetSettings() const -> Settings { return settings; }
+
+  [[nodiscard]] auto GetPersistentTextureSettings() const
+      -> PersistentTextureSettings {
+    return persistentTextureSettings;
+  }
+
 private:
+  Settings settings;
+  PersistentTextureSettings persistentTextureSettings;
+
   Math::Scalar verticalFOVDeg{};
   Math::Scalar VerticalFOVRad{};
   Math::Uvec2 Dimensions;
@@ -168,6 +219,9 @@ private:
   PostProcessingConfig postProcessingConfig;
 
   bool projectionDirty = true;
+
+  auto ReleasePersistentTextures() -> Error;
+  auto ReleaseTransientTextures() const -> Error;
 
   auto ConfigureRendertargets() -> void;
 
@@ -213,6 +267,9 @@ struct LuaCamera : LuaWrap::LuaECSObject {
 
   static auto GetDimensions(lua_State *state) -> int;
   static auto SetDimensions(lua_State *state) -> int;
+
+  static auto GetPersistentTextureSettings(lua_State *state) -> int;
+  static auto SetPersistentTextureSettings(lua_State *state) -> int;
 };
 
 auto GetLuaCameraClass() -> ::LuaWrap::LuaClass;

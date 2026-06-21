@@ -6,6 +6,7 @@
 #include "Graphics/shader.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
+#include "Renderer/prefilterManager.hpp"
 #include "material.hpp"
 #include <cstddef>
 #include <cstdint>
@@ -130,6 +131,7 @@ struct Renderer {
                                               InitialModelTransformBufferSize));
 
     CHECK_ERR(InitializeLightBuffers(context));
+    CHECK_ERR(PrefilterManager.Initialize(context));
 
     initialized = true;
     return {};
@@ -163,6 +165,13 @@ struct Renderer {
     return SceneLightBuffers;
   }
 
+  auto GetPrefilterManager() -> LightprobePrefilterManager & {
+    return PrefilterManager;
+  }
+  auto GetPrefilterManager() const -> const LightprobePrefilterManager & {
+    return PrefilterManager;
+  }
+
   auto NewFrame() -> void { ModelTransformBufferElementCount = 0; }
 
 private:
@@ -178,6 +187,8 @@ private:
   size_t ModelTransformBufferElementCount = 0;
 
   Lights SceneLightBuffers;
+  LightprobePrefilterManager PrefilterManager;
+
   bool initialized = false;
 
   auto InitializeMaterialBuffer(Graphics::GraphicsContext &context,

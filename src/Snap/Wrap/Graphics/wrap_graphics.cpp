@@ -3,18 +3,16 @@
 #include "Graphics/draw.hpp"
 #include "Graphics/dynamicRendering.hpp"
 #include "Graphics/graphics.hpp"
+#include "Graphics/graphicsContext.hpp"
 #include "Graphics/mesh.hpp"
 #include "Graphics/render.hpp"
 #include "Graphics/renderThread.hpp"
 #include "Graphics/shader.hpp"
 #include "Graphics/snapshot.hpp"
 #include "Graphics/texture.hpp"
-#include "Graphics/vertexformat.hpp"
-#include "Modules/color.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Wrap/Graphics/wrap_color.hpp"
-#include "Wrap/Graphics/wrap_texture.hpp"
 #include "Wrap/wrap.hpp"
 #include <cassert>
 
@@ -411,110 +409,6 @@ auto wrap_GetWindingOrder(lua_State *state) -> int {
   return 1;
 }
 
-struct FormatDefault2D {
-  float position[2]; // NOLINT
-  float texCoord[2]; // NOLINT
-  uint32_t color;
-};
-
-// NOLINTNEXTLINE; Cache quad mesh to avoid recreating it every frame
-thread_local Ref<::Graphics::Mesh> QuadMeshCache;
-
-auto ShutdownWrapGraphics() -> void { QuadMeshCache.reset(); };
-
-inline auto GetQuadMesh(::Graphics::GraphicsContext &context,
-                        const VkRect2D size, Color color)
-    -> Result<Ref<::Graphics::Mesh>> {
-  ZoneScoped;
-  // Create a quad mesh covering the given size NOLINTNEXTLINE
-  thread_local std::vector<FormatDefault2D> vertices{4};
-  thread_local std::vector<uint32_t> indices = {0, 1, 2, 2, 3, 0};
-
-  vertices[0].position[0] = static_cast<float>(size.offset.x);
-  vertices[0].position[1] = static_cast<float>(size.offset.y);
-  vertices[0].texCoord[0] = 0.0F;
-  vertices[0].texCoord[1] = 0.0F;
-  vertices[0].color = color.Pack();
-
-  vertices[1].position[0] =
-      static_cast<float>(size.offset.x + size.extent.width);
-  vertices[1].position[1] = static_cast<float>(size.offset.y);
-  vertices[1].texCoord[0] = 1.0F;
-  vertices[1].texCoord[1] = 0.0F;
-  vertices[1].color = color.Pack();
-
-  vertices[2].position[0] =
-      static_cast<float>(size.offset.x + size.extent.width);
-  vertices[2].position[1] =
-      static_cast<float>(size.offset.y + size.extent.height);
-  vertices[2].texCoord[0] = 1.0F;
-  vertices[2].texCoord[1] = 1.0F;
-  vertices[2].color = color.Pack();
-
-  vertices[3].position[0] = static_cast<float>(size.offset.x);
-  vertices[3].position[1] =
-      static_cast<float>(size.offset.y + size.extent.height);
-  vertices[3].texCoord[0] = 0.0F;
-  vertices[3].texCoord[1] = 1.0F;
-  vertices[3].color = color.Pack();
-
-  static ::Graphics::VertexFormat vertexFormat({
-      ::Graphics::VertexComponent{
-          .name = "Position",
-          .location = 0,
-          .binding = 0,
-          .format = VK_FORMAT_R32G32_SFLOAT,
-      },
-      ::Graphics::VertexComponent{
-          .name = "TexCoord",
-          .location = 1,
-          .binding = 0,
-          .format = VK_FORMAT_R32G32_SFLOAT,
-      },
-      ::Graphics::VertexComponent{
-          .name = "Color",
-          .location = 2,
-          .binding = 0,
-          .format = VK_FORMAT_R8G8B8A8_UNORM,
-      },
-  });
-
-  // NOLINTNEXTLINE; Reinterpret cast is necessary here
-  auto span = std::span<uint8_t>(reinterpret_cast<uint8_t *>(vertices.data()),
-                                 vertexFormat.GetBindings()[0].stride *
-                                     vertices.size());
-
-  assert(sizeof(FormatDefault2D) == vertexFormat.GetBindings()[0].stride);
-
-  if (QuadMeshCache.get() == nullptr) {
-    auto meshResult = ::Graphics::Mesh::Create(context, vertexFormat, {span});
-
-    if (Error::IsError(meshResult)) {
-      return meshResult.error();
-    }
-
-    QuadMeshCache = meshResult.value();
-  }
-
-  auto mesh = QuadMeshCache;
-
-  auto setDataError = mesh->SetVertices(context, 0, span);
-  if (Error::IsError(setDataError)) {
-    return setDataError;
-  }
-
-  auto indexSpan = std::span<uint8_t>( // NOLINTNEXTLINE
-      reinterpret_cast<uint8_t *>(indices.data()),
-      indices.size() * ::Graphics::GetIndexFormatSize(VK_INDEX_TYPE_UINT32));
-
-  setDataError = mesh->SetIndices(context, indexSpan, VK_INDEX_TYPE_UINT32);
-  if (Error::IsError(setDataError)) {
-    return setDataError;
-  }
-
-  return mesh;
-}
-
 // texture | mesh
 auto wrap_Draw(lua_State *state) -> int {
   ZoneScoped;
@@ -524,16 +418,6 @@ auto wrap_Draw(lua_State *state) -> int {
 
   if (LuaWrap::IsType<::Graphics::Texture>(state, 1)) {
     auto *texture = LuaWrap::ObjectFromLua<::Graphics::Texture>(state, 1);
-    auto result =
-        GetQuadMesh(*ctx,
-                    VkRect2D{
-                        .offset = {0, 0},
-                        .extent = {texture->GetWidth(), texture->GetHeight()},
-                    },
-                    Color(1.0F, 1.0F, 1.0F, 1.0F));
-    if (Error::IsError(result)) {
-      return luaL_error(state, "%s", result.error().ToString().c_str());
-    }
 
     if (texture != nullptr) {
       auto shader = ::Graphics::DynamicRendering::GetShader();
@@ -542,15 +426,12 @@ auto wrap_Draw(lua_State *state) -> int {
       }
 
       auto texRef = Ref<::Graphics::Texture>(texture);
-      auto sendResult = shader->Send(*ctx, {"MainTexture"}, texRef);
-      if (Error::IsError(sendResult)) {
-        return luaL_error(state, "%s", sendResult.ToString().c_str());
-      }
+      LUA_CK_ERR(shader->Send({"MainTexture"}, texRef));
     } else {
       return luaL_error(state, "Texture is null.");
     }
 
-    mesh = result.value();
+    LUA_CK_ERR(::Graphics::Draw(*ctx, *texture, 1));
   } else if (LuaWrap::IsType<::Graphics::Mesh>(state, 1)) {
     mesh = Ref<::Graphics::Mesh>(
         LuaWrap::ObjectFromLua<::Graphics::Mesh>(state, 1));

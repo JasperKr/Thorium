@@ -12,6 +12,7 @@
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Modules/reflectBindings.hpp"
+#include "Renderer/lightProbe.hpp"
 #include "Renderer/rendertargetManager.hpp"
 #include "Scene/Geometry/boundingBox.hpp"
 #include "Scene/Geometry/geometry.hpp"
@@ -335,14 +336,13 @@ inline auto BindMaterial(const Ref<Graphics::Shader::ShaderModule> &shader,
   // NOLINTBEGIN
   if ((flags & 1U) != 0U) {
     static auto albedoKey = Graphics::ResourceKey{"AlbedoTexture"};
-    CHECK_ERR(shader->Send(ctx, albedoKey, albedoTexture));
+    CHECK_ERR(shader->Send(albedoKey, albedoTexture));
   }
 
   if ((flags & 2U) != 0U) {
     static auto metallicRoughnessKey =
         Graphics::ResourceKey{"MetallicRoughnessTexture"};
-    CHECK_ERR(
-        shader->Send(ctx, metallicRoughnessKey, metallicRoughnessTexture));
+    CHECK_ERR(shader->Send(metallicRoughnessKey, metallicRoughnessTexture));
   }
 
   // if ((flags & 4U) != 0U) {
@@ -350,23 +350,23 @@ inline auto BindMaterial(const Ref<Graphics::Shader::ShaderModule> &shader,
   //       Graphics::ResourceKey{"AmbientOcclusionTexture"};
 
   //   CHECK_ERR(
-  //       shader->Send(ctx, ambientOcclusionTextureKey, ambientOcclusionTexture));
+  //       shader->Send(ambientOcclusionTextureKey, ambientOcclusionTexture));
   // }
 
   if ((flags & 8U) != 0U) {
     static auto normalTextureKey = Graphics::ResourceKey{"NormalTexture"};
-    CHECK_ERR(shader->Send(ctx, normalTextureKey, normalTexture));
+    CHECK_ERR(shader->Send(normalTextureKey, normalTexture));
   }
 
   if ((flags & 16U) != 0U) {
     static auto emissiveTextureKey = Graphics::ResourceKey{"EmissiveTexture"};
-    CHECK_ERR(shader->Send(ctx, emissiveTextureKey, emissiveTexture));
+    CHECK_ERR(shader->Send(emissiveTextureKey, emissiveTexture));
   }
 
   if ((flags & 32U) != 0U) {
     static auto reflectanceTextureKey =
         Graphics::ResourceKey{"ReflectanceTexture"};
-    CHECK_ERR(shader->Send(ctx, reflectanceTextureKey, reflectanceTexture));
+    CHECK_ERR(shader->Send(reflectanceTextureKey, reflectanceTexture));
   }
   // NOLINTEND
 
@@ -399,13 +399,13 @@ inline auto RenderDrawItem(const DrawItem &item,
     static auto materialBufferIndexKey =
         Graphics::ResourceKey{"PushConstants", "MaterialBufferIndex"};
     CHECK_ERR(Graphics::Shader::UniformWriter::Send(
-        shader, ctx, materialBufferIndexKey, item.material->materialSSBOIndex));
+        shader, materialBufferIndexKey, item.material->materialSSBOIndex));
   }
 
   static auto modelTransformIndexKey =
       Graphics::ResourceKey{"PushConstants", "ModelTransformIndex"};
   CHECK_ERR(Graphics::Shader::UniformWriter::Send(
-      shader, ctx, modelTransformIndexKey, item.transformIndex));
+      shader, modelTransformIndexKey, item.transformIndex));
 
   if (item.geometry.mesh.get() == nullptr) {
     return Error::Create("Invalid geometry mesh");
@@ -458,12 +458,9 @@ inline auto AddDrawItem(std::vector<DrawItem> &OpaqueDrawItems,
 }
 
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
-auto Scene::DrawModels(flecs::entity &cameraEntity,
+auto Scene::DrawModels(Camera &camera, Frustum &frustum,
                        const Graphics::GraphicsContext &context) -> Error {
   // Pre-frame setup
-
-  auto &camera = cameraEntity.get_mut<Camera>();
-  const auto &frustum = cameraEntity.get<Frustum>();
 
   Renderer::RendererInstance.NewFrame();
 
@@ -489,13 +486,13 @@ auto Scene::DrawModels(flecs::entity &cameraEntity,
   static auto cameraBufferKey = Graphics::ResourceKey{"CameraData"};
   auto cameraBuffer = camera.GetBuffer()->GetBuffer();
 
-  CHECK_ERR(Graphics::Shader::UniformWriter::Send(
-      depthOpaque, ctx, cameraBufferKey, cameraBuffer));
-  CHECK_ERR(Graphics::Shader::UniformWriter::Send(
-      depthMasked, ctx, cameraBufferKey, cameraBuffer));
-  CHECK_ERR(Graphics::Shader::UniformWriter::Send(
-      deferred, ctx, cameraBufferKey, cameraBuffer));
-  CHECK_ERR(Graphics::Shader::UniformWriter::Send(forward, ctx, cameraBufferKey,
+  CHECK_ERR(Graphics::Shader::UniformWriter::Send(depthOpaque, cameraBufferKey,
+                                                  cameraBuffer));
+  CHECK_ERR(Graphics::Shader::UniformWriter::Send(depthMasked, cameraBufferKey,
+                                                  cameraBuffer));
+  CHECK_ERR(Graphics::Shader::UniformWriter::Send(deferred, cameraBufferKey,
+                                                  cameraBuffer));
+  CHECK_ERR(Graphics::Shader::UniformWriter::Send(forward, cameraBufferKey,
                                                   cameraBuffer));
 
   static auto modelTransformsBufferKey =
@@ -504,20 +501,20 @@ auto Scene::DrawModels(flecs::entity &cameraEntity,
   auto modelTransformsBuffer =
       Renderer::RendererInstance.GetModelTransformsBuffer()->GetBuffer();
   CHECK_ERR(Graphics::Shader::UniformWriter::Send(
-      depthOpaque, ctx, modelTransformsBufferKey, modelTransformsBuffer));
+      depthOpaque, modelTransformsBufferKey, modelTransformsBuffer));
   CHECK_ERR(Graphics::Shader::UniformWriter::Send(
-      depthMasked, ctx, modelTransformsBufferKey, modelTransformsBuffer));
+      depthMasked, modelTransformsBufferKey, modelTransformsBuffer));
   CHECK_ERR(Graphics::Shader::UniformWriter::Send(
-      deferred, ctx, modelTransformsBufferKey, modelTransformsBuffer));
+      deferred, modelTransformsBufferKey, modelTransformsBuffer));
   CHECK_ERR(Graphics::Shader::UniformWriter::Send(
-      forward, ctx, modelTransformsBufferKey, modelTransformsBuffer));
+      forward, modelTransformsBufferKey, modelTransformsBuffer));
 
   static auto materialBufferKey = Graphics::ResourceKey{"MaterialBuffer"};
   auto materialBuffer =
       Renderer::RendererInstance.GetMaterialsBuffer()->GetBuffer();
-  CHECK_ERR(depthMasked->Send(ctx, materialBufferKey, materialBuffer));
-  CHECK_ERR(deferred->Send(ctx, materialBufferKey, materialBuffer));
-  CHECK_ERR(forward->Send(ctx, materialBufferKey, materialBuffer));
+  CHECK_ERR(depthMasked->Send(materialBufferKey, materialBuffer));
+  CHECK_ERR(deferred->Send(materialBufferKey, materialBuffer));
+  CHECK_ERR(forward->Send(materialBufferKey, materialBuffer));
 
   // Draw sorting
 
@@ -713,25 +710,25 @@ auto Scene::DrawModels(flecs::entity &cameraEntity,
   auto shader = CHECK_RES(Renderer::RendererInstance.GetShader(
       Renderer::ShaderKey::SimpleLighting));
   Graphics::DynamicRendering::SetShader(shader);
-  CHECK_ERR(shader->Send(ctx, cameraBufferKey, cameraBuffer));
+  CHECK_ERR(shader->Send(cameraBufferKey, cameraBuffer));
   static auto albedoTextureKey = Graphics::ResourceKey{"AlbedoTexture"};
   static auto normalTextureKey = Graphics::ResourceKey{"NormalTexture"};
   static auto materialTextureKey = Graphics::ResourceKey{"MaterialTexture"};
   static auto emissiveTextureKey = Graphics::ResourceKey{"EmissiveTexture"};
   static auto depthBufferKey = Graphics::ResourceKey{"DepthTexture"};
 
-  CHECK_ERR(shader->Send(ctx, albedoTextureKey, textures.Albedo));
-  CHECK_ERR(shader->Send(ctx, normalTextureKey, textures.Normal));
-  CHECK_ERR(shader->Send(ctx, materialTextureKey, textures.Material));
-  CHECK_ERR(shader->Send(ctx, emissiveTextureKey, textures.Emissive));
-  CHECK_ERR(shader->Send(ctx, depthBufferKey, textures.Depth));
+  CHECK_ERR(shader->Send(albedoTextureKey, textures.Albedo));
+  CHECK_ERR(shader->Send(normalTextureKey, textures.Normal));
+  CHECK_ERR(shader->Send(materialTextureKey, textures.Material));
+  CHECK_ERR(shader->Send(emissiveTextureKey, textures.Emissive));
+  CHECK_ERR(shader->Send(depthBufferKey, textures.Depth));
 
   auto countKey = Graphics::ResourceKey{"DirectionalLightCount"};
   CHECK_ERR(Graphics::Shader::UniformWriter::Send(
-      shader, ctx, countKey,
+      shader, countKey,
       Renderer::RendererInstance.GetSceneLightBuffers().DirectionalLightCount));
   CHECK_ERR(Graphics::Shader::UniformWriter::Send(
-      forward, ctx, countKey,
+      forward, countKey,
       Renderer::RendererInstance.GetSceneLightBuffers().DirectionalLightCount));
 
   CHECK_ERR(Renderer::RendererInstance.BindLightBuffers(ctx, shader));
@@ -911,7 +908,10 @@ Scene::Scene(std::string name) : name(std::move(name)) {
           return;
         }
 
-        lastUpdateResult = camera.WriteToBuffer(entity);
+        auto &transform = entity.get_mut<Transform>();
+        auto &cameraMatrices = entity.get_mut<CameraMatrices>();
+
+        lastUpdateResult = camera.WriteToBuffer(cameraMatrices, transform);
       }));
 
   finalizePreRenderUploads =
@@ -1041,6 +1041,7 @@ const ::LuaWrap::LuaClass SceneLuaClass{
             {"newCamera", LuaCamera::Create},
             {"setEnvironment", LuaScene::SetEnvironment},
             {"newEnvironment", LuaEnvironment::Create},
+            {"newLightProbe", Renderer::LuaLightProbe::Create},
         },
     .Children = {},
 };

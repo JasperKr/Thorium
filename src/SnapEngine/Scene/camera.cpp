@@ -24,6 +24,7 @@
 #include "renderer.hpp"
 #include <flecs.h>
 #include <lauxlib.h>
+#include <lua.h>
 #include <span>
 #include <vector>
 #include <vulkan/vulkan_core.h>
@@ -94,8 +95,6 @@ void Camera::RegisterCameraSystems(Scene &scene) {
                    Transform &transform) -> void {
             const auto &worldMatrix = transform.GetWorldMatrix();
 
-            // Note that the view matrix is the inverse of the world matrix
-            // Since moving the camera in one direction should move the world in the opposite direction
             matrices.ViewMatrix = worldMatrix.InverseTranspose();
             matrices.InverseViewMatrix = worldMatrix;
             matrices.RotationMatrix = matrices.ViewMatrix.AsMatrix3x3();
@@ -168,8 +167,7 @@ auto Camera::ApplyPostProcessing(const Graphics::GraphicsContext &context)
                }}));
 
   static auto incomingLightKey = Graphics::ResourceKey{"IncomingLight"};
-  CHECK_ERR(
-      shader->Send(context, incomingLightKey, OwnedTextures.IncomingLight));
+  CHECK_ERR(shader->Send(incomingLightKey, OwnedTextures.IncomingLight));
 
   auto temperatureKey = Graphics::ResourceKey{"Temperature"};
   auto tintKey = Graphics::ResourceKey{"Tint"};
@@ -181,19 +179,19 @@ auto Camera::ApplyPostProcessing(const Graphics::GraphicsContext &context)
 
   auto postProcessingConfig = GetPostProcessingConfig();
   CHECK_ERR(Graphics::Shader::UniformWriter::Send(
-      shader, context, temperatureKey, postProcessingConfig.Temperature));
-  CHECK_ERR(Graphics::Shader::UniformWriter::Send(shader, context, tintKey,
+      shader, temperatureKey, postProcessingConfig.Temperature));
+  CHECK_ERR(Graphics::Shader::UniformWriter::Send(shader, tintKey,
                                                   postProcessingConfig.Tint));
   CHECK_ERR(Graphics::Shader::UniformWriter::Send(
-      shader, context, applyAGXKey, postProcessingConfig.ApplyAGX));
+      shader, applyAGXKey, postProcessingConfig.ApplyAGX));
   CHECK_ERR(Graphics::Shader::UniformWriter::Send(
-      shader, context, contrastKey, postProcessingConfig.Contrast));
+      shader, contrastKey, postProcessingConfig.Contrast));
   CHECK_ERR(Graphics::Shader::UniformWriter::Send(
-      shader, context, saturationKey, postProcessingConfig.Saturation));
+      shader, saturationKey, postProcessingConfig.Saturation));
   CHECK_ERR(Graphics::Shader::UniformWriter::Send(
-      shader, context, vignetteKey, postProcessingConfig.Vignette));
+      shader, vignetteKey, postProcessingConfig.Vignette));
   CHECK_ERR(Graphics::Shader::UniformWriter::Send(
-      shader, context, exposureKey, postProcessingConfig.Exposure));
+      shader, exposureKey, postProcessingConfig.Exposure));
 
   CHECK_ERR(Renderer::DrawFullScreen(context));
   return {};
@@ -216,12 +214,12 @@ auto Camera::FillSkybox(const Graphics::GraphicsContext &context, Scene *scene)
     auto environment = scene->currentEnvironment.get<Environment>();
 
     static auto depthBufferKey = Graphics::ResourceKey{"DepthTexture"};
-    CHECK_ERR(shader->Send(context, depthBufferKey, OwnedTextures.Depth));
+    CHECK_ERR(shader->Send(depthBufferKey, OwnedTextures.Depth));
 
-    CHECK_ERR(shader->Send(context, cameraBufferKey, CameraBuffer));
+    CHECK_ERR(shader->Send(cameraBufferKey, CameraBuffer));
 
     static auto skyboxKey = Graphics::ResourceKey{"SkyboxTexture"};
-    CHECK_ERR(shader->Send(context, skyboxKey, environment.SkyboxTexture));
+    CHECK_ERR(shader->Send(skyboxKey, environment.SkyboxTexture));
 
     Graphics::DynamicRendering::SetShader(shader);
 
@@ -231,24 +229,55 @@ auto Camera::FillSkybox(const Graphics::GraphicsContext &context, Scene *scene)
   return {};
 }
 
+auto Camera::ReleasePersistentTextures() -> Error {
+  CHECK_ERR(Renderer::GlobalRenderTargetManager.ReleaseRendertargets({
+      OwnedTextures.Depth,
+      OwnedTextures.IncomingLight,
+      OwnedTextures.PostProcessed,
+      OwnedTextures.Normal,
+      OwnedTextures.Albedo,
+      OwnedTextures.Material,
+      OwnedTextures.Emissive,
+      OwnedTextures.Motion,
+  }));
+
+  OwnedTextures.Reset();
+  return {};
+}
+
+auto Camera::ReleaseTransientTextures() const -> Error {
+  const auto &conf = GetPersistentTextureSettings();
+  using TRef = Ref<Graphics::Texture>;
+
+  CHECK_ERR(Renderer::GlobalRenderTargetManager.ReleaseRendertargets({
+      conf.Depth ? TRef() : OwnedTextures.Depth,
+      conf.IncomingLight ? TRef() : OwnedTextures.IncomingLight,
+      conf.PostProcessed ? TRef() : OwnedTextures.PostProcessed,
+      conf.Normal ? TRef() : OwnedTextures.Normal,
+      conf.Albedo ? TRef() : OwnedTextures.Albedo,
+      conf.Material ? TRef() : OwnedTextures.Material,
+      conf.Emissive ? TRef() : OwnedTextures.Emissive,
+      conf.Motion ? TRef() : OwnedTextures.Motion,
+  }));
+
+  return {};
+}
+
 auto Camera::Render(const Graphics::GraphicsContext &context,
-                    flecs::entity thisEntity, Scene *scene) -> Error {
+                    const DrawData &drawData, Scene *scene) -> Error {
 
-  // Release last frame's post-processed texture if it exists
-  CHECK_ERR(Renderer::GlobalRenderTargetManager.ReleaseRendertarget(
-      OwnedTextures.PostProcessed));
-  OwnedTextures.PostProcessed = nullptr;
+  CHECK_ERR(ReleasePersistentTextures());
+  auto frustum = drawData.Matrices.GetFrustum();
 
-  CHECK_ERR(scene->DrawModels(thisEntity, context));
+  CHECK_ERR(scene->DrawModels(*this, frustum, context));
 
   CHECK_ERR(FillSkybox(context, scene));
 
-  CHECK_ERR(ApplyPostProcessing(context));
+  if (settings.DoPostProcessing) {
+    CHECK_ERR(ApplyPostProcessing(context));
+  }
 
-  CHECK_ERR(Renderer::GlobalRenderTargetManager.ReleaseRendertargets({
-      OwnedTextures.IncomingLight,
-      OwnedTextures.Depth,
-  }));
+  CHECK_ERR(ReleaseTransientTextures());
 
   return {};
 }
@@ -331,7 +360,8 @@ auto Camera::ConfigureRendertargets() -> void {
   };
 }
 
-auto Camera::WriteToBuffer(flecs::entity entity) const -> Error {
+auto Camera::WriteToBuffer(const CameraMatrices &cameraMatrices,
+                           const Transform &transform) const -> Error {
   auto context = *Graphics::GetCurrentGraphicsContext();
 
   assert(sizeof(CameraBufferStruct) == CameraBuffer->GetStride());
@@ -340,28 +370,17 @@ auto Camera::WriteToBuffer(flecs::entity entity) const -> Error {
       context, *CameraBuffer->GetBuffer(), 0, sizeof(CameraBufferStruct),
       sizeof(CameraBufferStruct)));
 
-  const auto *cameraMatrices = entity.try_get<CameraMatrices>();
-  if (cameraMatrices == nullptr) {
-    return Error::Create("CameraMatrices component not found on entity");
-  }
-
-  const auto *transform = entity.try_get<Transform>();
-  if (transform == nullptr) {
-    return Error::Create("Transform component not found on entity");
-  }
-
   auto data = CameraBufferStruct{
-      .ViewMatrix = cameraMatrices->ViewMatrix,
-      .InverseViewMatrix = cameraMatrices->InverseViewMatrix,
-      .ProjectionMatrix = cameraMatrices->ProjectionMatrix,
-      .InverseProjectionMatrix = cameraMatrices->InverseProjectionMatrix,
-      .ViewProjectionMatrix = cameraMatrices->ViewProjectionMatrix,
-      .InverseViewProjectionMatrix =
-          cameraMatrices->InverseViewProjectionMatrix,
-      .RotationProjectionMatrix = cameraMatrices->RotationProjectionMatrix,
+      .ViewMatrix = cameraMatrices.ViewMatrix,
+      .InverseViewMatrix = cameraMatrices.InverseViewMatrix,
+      .ProjectionMatrix = cameraMatrices.ProjectionMatrix,
+      .InverseProjectionMatrix = cameraMatrices.InverseProjectionMatrix,
+      .ViewProjectionMatrix = cameraMatrices.ViewProjectionMatrix,
+      .InverseViewProjectionMatrix = cameraMatrices.InverseViewProjectionMatrix,
+      .RotationProjectionMatrix = cameraMatrices.RotationProjectionMatrix,
       .InverseRotationProjectionMatrix =
-          cameraMatrices->InverseRotationProjectionMatrix,
-      .Position = transform->GetPosition(),
+          cameraMatrices.InverseRotationProjectionMatrix,
+      .Position = transform.GetPosition(),
       .Near = NearPlane,
       .Far = FarPlane,
       .NearMulFar = NearPlane * FarPlane,
@@ -404,38 +423,13 @@ auto LuaCamera::Create(lua_State *state) -> int {
   entity.add<CameraMatrices>();
   entity.add<Frustum>();
   entity.add<Transform>();
+  entity.add<Userdata>();
   entity.set<DisplayName>({luaL_optstring(state, 2, "Camera")});
 
   auto camera = Ref<LuaCamera>::Make(entity);
 
   ::LuaWrap::PushObject(state, LuaCamera::GetType(), camera.get());
   return 1;
-}
-
-auto LuaCamera::GetName(lua_State *state) -> int {
-  auto *obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
-
-  const auto *displayName = obj->entity.try_get<DisplayName>();
-  if (displayName == nullptr) {
-    lua_pushnil(state);
-    return 1;
-  }
-
-  lua_pushstring(state, displayName->Name.c_str());
-  return 1;
-}
-
-auto LuaCamera::SetName(lua_State *state) -> int {
-  auto *obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
-
-  auto *displayName = obj->entity.try_get_mut<DisplayName>();
-  if (displayName == nullptr) {
-    obj->entity.set<DisplayName>({luaL_checkstring(state, 2)});
-  } else {
-    displayName->Name = luaL_checkstring(state, 2);
-  }
-
-  return 0;
 }
 
 auto LuaCamera::SetAspectRatio(lua_State *state) -> int {
@@ -522,7 +516,12 @@ auto LuaCamera::Render(lua_State *state) -> int {
   auto *scene = LUA_CK_NULL(::LuaWrap::ObjectFromLua<Scene>(state, 2));
   auto context = *Graphics::GetCurrentGraphicsContext();
 
-  LUA_CK_ERR(camera->Render(context, obj->entity, scene));
+  DrawData drawData{
+      .Transform = *obj->entity.try_get<Transform>(),
+      .Matrices = *obj->entity.try_get<CameraMatrices>(),
+  };
+
+  LUA_CK_ERR(camera->Render(context, drawData, scene));
 
   return 0;
 }
@@ -537,7 +536,7 @@ auto LuaCamera::GetRendertarget(lua_State *state) -> int {
 
   const std::unordered_map<std::string_view,
                            Ref<Graphics::Texture> Camera::AllocatedTextures::*>
-      map = {
+      allocatedTextureMap = {
           {"IncomingLight", &Camera::AllocatedTextures::IncomingLight},
           {"Depth", &Camera::AllocatedTextures::Depth},
           {"PostProcessed", &Camera::AllocatedTextures::PostProcessed},
@@ -548,8 +547,8 @@ auto LuaCamera::GetRendertarget(lua_State *state) -> int {
           {"Motion", &Camera::AllocatedTextures::Motion},
       };
 
-  auto iter = map.find(name);
-  if (iter == map.end()) {
+  auto iter = allocatedTextureMap.find(name);
+  if (iter == allocatedTextureMap.end()) {
     return luaL_error(state, "Invalid rendertarget name: %s", name);
   }
 
@@ -583,14 +582,64 @@ auto LuaCamera::SetDimensions(lua_State *state) -> int {
   return 0;
 }
 
+const std::unordered_map<std::string_view,
+                         bool Camera::PersistentTextureSettings::*>
+    persistentTextureMap = {
+        {"IncomingLight", &Camera::PersistentTextureSettings::IncomingLight},
+        {"Depth", &Camera::PersistentTextureSettings::Depth},
+        {"PostProcessed", &Camera::PersistentTextureSettings::PostProcessed},
+        {"Normal", &Camera::PersistentTextureSettings::Normal},
+        {"Albedo", &Camera::PersistentTextureSettings::Albedo},
+        {"Material", &Camera::PersistentTextureSettings::Material},
+        {"Emissive", &Camera::PersistentTextureSettings::Emissive},
+        {"Motion", &Camera::PersistentTextureSettings::Motion},
+};
+
+auto LuaCamera::GetPersistentTextureSettings(lua_State *state) -> int {
+  auto *obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
+  const auto *camera = LUA_CK_NULL(obj->entity.try_get<Camera>());
+
+  const auto &settings = camera->GetPersistentTextureSettings();
+
+  lua_newtable(state);
+
+  for (const auto &[name, ptr] : persistentTextureMap) {
+    lua_pushstring(state, name.data());
+    lua_pushboolean(state, static_cast<int>(settings.*ptr));
+    lua_settable(state, -3);
+  }
+
+  return 1;
+}
+
+auto LuaCamera::SetPersistentTextureSettings(lua_State *state) -> int {
+  auto *obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
+  auto *camera = LUA_CK_NULL(obj->entity.try_get_mut<Camera>());
+
+  Camera::PersistentTextureSettings newSettings;
+
+  luaL_checktype(state, 2, LUA_TTABLE);
+
+  for (const auto &[name, ptr] : persistentTextureMap) {
+    lua_pushstring(state, name.data());
+    lua_gettable(state, 2);
+    if (lua_isboolean(state, -1)) {
+      newSettings.*ptr = static_cast<bool>(lua_toboolean(state, -1));
+    }
+    lua_pop(state, 1);
+  }
+
+  camera->SetPersistentTextureSettings(newSettings);
+
+  return 0;
+}
+
 auto GetLuaCameraClass() -> ::LuaWrap::LuaClass {
   const ::LuaWrap::LuaClass LuaCameraClass = {
       .Name = "Camera",
       .Type = LuaCamera::GetType(),
       .Methods =
           {
-              {"getName", LuaCamera::GetName},
-              {"setName", LuaCamera::SetName},
               {"getAspectRatio", LuaCamera::GetAspectRatio},
               {"setAspectRatio", LuaCamera::SetAspectRatio},
               {"getVerticalFOV", LuaCamera::GetVerticalFOV},
@@ -604,12 +653,17 @@ auto GetLuaCameraClass() -> ::LuaWrap::LuaClass {
               {"getRendertarget", LuaCamera::GetRendertarget},
               {"getDimensions", LuaCamera::GetDimensions},
               {"setDimensions", LuaCamera::SetDimensions},
+              {"getPersistentTextureSettings",
+               LuaCamera::GetPersistentTextureSettings},
+              {"setPersistentTextureSettings",
+               LuaCamera::SetPersistentTextureSettings},
           },
       .Components = {
           TransformComponent,
           CameraMatricesComponent,
           FrustumComponent,
           DisplayNameComponent,
+          UserdataComponent,
       }};
 
   return LuaCameraClass;

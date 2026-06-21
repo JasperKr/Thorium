@@ -1,4 +1,5 @@
 #include "directionalLight.hpp"
+#include "Modules/object.hpp"
 #include "Scene/Lights/light.hpp"
 #include "Scene/frustum.hpp"
 #include "Scene/scene.hpp"
@@ -139,7 +140,7 @@ auto LuaDirectionalLight::Create(lua_State *state) -> int {
 
   Renderer::RendererInstance.GetSceneLightBuffers().DirectionalLightCount++;
 
-  auto luaDirectionalLight = LuaDirectionalLight::FromEntity(entity);
+  auto luaDirectionalLight = Ref<LuaDirectionalLight>::Make(entity);
   ::LuaWrap::PushObject(state, LuaDirectionalLight::GetType(),
                         luaDirectionalLight.get());
 

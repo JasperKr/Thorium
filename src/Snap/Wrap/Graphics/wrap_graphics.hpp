@@ -11,9 +11,6 @@
 #include "lua.hpp"
 namespace Wrap::Graphics {
 
-// NOLINTNEXTLINE; Cache quad mesh to avoid recreating it every frame
-extern thread_local Ref<::Graphics::Mesh> QuadMeshCache;
-
 auto wrap_Present(lua_State *state) -> int;
 
 // RenderTarget functions
@@ -65,8 +62,6 @@ auto wrap_SetDefaultWrapMode(lua_State *state) -> int;
 auto wrap_GetDefaultWrapMode(lua_State *state) -> int;
 
 auto wrap_GetStats(lua_State *state) -> int;
-
-auto ShutdownWrapGraphics() -> void;
 
 // NOLINTNEXTLINE
 static const std::vector<luaL_Reg> GraphicsLib = {

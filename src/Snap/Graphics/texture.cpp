@@ -143,9 +143,24 @@ auto Texture::Create(const GraphicsContext &context,
 
   texture->samplerDescription = config.defaultSamplerDescription;
 
+  auto imageType = VK_IMAGE_TYPE_MAX_ENUM;
+
+  switch (info.textureType) {
+  case TextureType::DEFAULT:
+  case TextureType::CUBEMAP:
+  case TextureType::ARRAY:
+    imageType = VK_IMAGE_TYPE_2D;
+    break;
+  case TextureType::VOLUME:
+    imageType = VK_IMAGE_TYPE_3D;
+    break;
+  default:
+    return Error::Unexpected("Invalid texture type.");
+  }
+
   VkImageCreateInfo imageInfo = {};
   imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-  imageInfo.imageType = VK_IMAGE_TYPE_2D;
+  imageInfo.imageType = imageType;
   imageInfo.extent = info.size;
   imageInfo.mipLevels = info.mipmapCount;
   imageInfo.arrayLayers = info.arrayLayers;
@@ -155,6 +170,9 @@ auto Texture::Create(const GraphicsContext &context,
   imageInfo.usage = info.usage;
   imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
   imageInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+  imageInfo.flags = (info.textureType == TextureType::CUBEMAP)
+                        ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT
+                        : 0;
 
   if (imageInfo.mipLevels > 1) {
     imageInfo.usage |= static_cast<uint32_t>(VK_IMAGE_USAGE_TRANSFER_SRC_BIT) |
@@ -178,16 +196,39 @@ auto Texture::Create(const GraphicsContext &context,
                                  &memRequirements));
   }
 
+  auto textureViewType = VK_IMAGE_VIEW_TYPE_MAX_ENUM;
+
+  switch (info.textureType) {
+  case TextureType::DEFAULT:
+    textureViewType = VK_IMAGE_VIEW_TYPE_2D;
+    break;
+  case TextureType::CUBEMAP:
+    textureViewType = VK_IMAGE_VIEW_TYPE_CUBE;
+    break;
+  case TextureType::ARRAY:
+    textureViewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+    break;
+  case TextureType::VOLUME:
+    textureViewType = VK_IMAGE_VIEW_TYPE_3D;
+    break;
+  default:
+    return Error::Unexpected("Invalid texture type.");
+  }
+
   VkImageViewCreateInfo viewInfo = {};
   viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
   viewInfo.image = texture->image;
-  viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+  viewInfo.viewType = textureViewType;
   viewInfo.format = info.format;
   viewInfo.subresourceRange.aspectMask = GetAspectFlagsForFormat(info.format);
   viewInfo.subresourceRange.baseMipLevel = 0;
   viewInfo.subresourceRange.levelCount = info.mipmapCount;
   viewInfo.subresourceRange.baseArrayLayer = 0;
   viewInfo.subresourceRange.layerCount = info.arrayLayers;
+
+  if (info.textureType == TextureType::CUBEMAP) {
+    viewInfo.subresourceRange.layerCount = 6; // NOLINT
+  }
 
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
@@ -210,14 +251,18 @@ auto Texture::Create(const GraphicsContext &context, Texture *texture,
 
   // Check vadility of the provided range against the parent texture
 
-  if (range.baseMipLevel + range.levelCount >= texture->mipmapcount) {
-    return Error::Unexpected(
-        "Base mip level is out of range of the parent texture.");
+  if (range.baseMipLevel + range.levelCount > texture->mipmapcount) {
+    return Error::Unexpectedf("Mip level range base: {} + count: {} is out of "
+                              "range of the parent texture. [0 - {}]",
+                              range.baseMipLevel, range.levelCount,
+                              texture->mipmapcount);
   }
 
-  if (range.baseArrayLayer + range.layerCount >= texture->arrayLayers) {
-    return Error::Unexpected(
-        "Base array layer is out of range of the parent texture.");
+  if (range.baseArrayLayer + range.layerCount > texture->arrayLayers) {
+    return Error::Unexpectedf("Array layer range base: {} + count: {} is out "
+                              "of range of the parent texture. [0 - {}]",
+                              range.baseArrayLayer, range.layerCount,
+                              texture->arrayLayers);
   }
   range.aspectMask = GetAspectFlagsForFormat(texture->format);
 
@@ -243,12 +288,35 @@ auto Texture::Create(const GraphicsContext &context, Texture *texture,
   textureView->isSwapchainView = texture->isSwapchainView;
   textureView->parentTexture = texture;
 
+  auto textureViewType = VK_IMAGE_VIEW_TYPE_MAX_ENUM;
+
+  switch (texture->textureType) {
+  case TextureType::DEFAULT:
+    textureViewType = VK_IMAGE_VIEW_TYPE_2D;
+    break;
+  case TextureType::CUBEMAP:
+    textureViewType = VK_IMAGE_VIEW_TYPE_CUBE;
+    break;
+  case TextureType::ARRAY:
+    textureViewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
+    break;
+  case TextureType::VOLUME:
+    textureViewType = VK_IMAGE_VIEW_TYPE_3D;
+    break;
+  default:
+    return Error::Unexpected("Invalid texture type.");
+  }
+
   VkImageViewCreateInfo viewInfo = {};
   viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
   viewInfo.image = textureView->image;
-  viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+  viewInfo.viewType = textureViewType;
   viewInfo.format = textureView->format;
   viewInfo.subresourceRange = range;
+
+  if (textureView->textureType == TextureType::CUBEMAP) {
+    viewInfo.subresourceRange.layerCount = 6; // NOLINT
+  }
 
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);

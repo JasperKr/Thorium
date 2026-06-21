@@ -69,8 +69,7 @@ auto wrap_Send(lua_State *state) -> int {
     auto *texture =
         LuaWrap::ObjectFromLua<::Graphics::Texture>(state, valueOffset);
     auto texRef = Ref<::Graphics::Texture>(texture);
-    auto result =
-        shader->Send(*::Graphics::GetCurrentGraphicsContext(), key, texRef);
+    auto result = shader->Send(key, texRef);
     if (Error::IsError(result)) {
       return luaL_error(state, "%s", result.message.c_str());
     }
@@ -78,8 +77,7 @@ auto wrap_Send(lua_State *state) -> int {
                                                            valueOffset)) {
     auto *buffer = LuaWrap::ObjectFromLua<::Graphics::StructuredBuffer>(
         state, valueOffset);
-    auto result = shader->Send(*::Graphics::GetCurrentGraphicsContext(), key,
-                               buffer->GetBuffer());
+    auto result = shader->Send(key, buffer->GetBuffer());
     if (Error::IsError(result)) {
       return luaL_error(state, "%s", result.message.c_str());
     }
@@ -132,8 +130,7 @@ auto wrap_Send(lua_State *state) -> int {
         reinterpret_cast<uint8_t *>(data.data()),
         sizeof(uint32_t) * static_cast<size_t>(varargsCount));
 
-    auto result =
-        shader->Send(*::Graphics::GetCurrentGraphicsContext(), key, span);
+    auto result = shader->Send(key, span);
     if (Error::IsError(result)) {
       return luaL_error(state, "%s", result.message.c_str());
     }
@@ -192,8 +189,7 @@ auto wrap_Send(lua_State *state) -> int {
         reinterpret_cast<uint8_t *>(data.data()),
         sizeof(uint32_t) * static_cast<size_t>(tableLength));
 
-    auto result =
-        shader->Send(*::Graphics::GetCurrentGraphicsContext(), key, span);
+    auto result = shader->Send(key, span);
     if (Error::IsError(result)) {
       return luaL_error(state, "%s", result.message.c_str());
     }
@@ -201,8 +197,7 @@ auto wrap_Send(lua_State *state) -> int {
     auto *byteData = LuaWrap::ObjectFromLua<Data::ByteData>(state, valueOffset);
     auto span = byteData->GetDataSpan();
 
-    auto result =
-        shader->Send(*::Graphics::GetCurrentGraphicsContext(), key, span);
+    auto result = shader->Send(key, span);
     if (Error::IsError(result)) {
       return luaL_error(state, "%s", result.message.c_str());
     }

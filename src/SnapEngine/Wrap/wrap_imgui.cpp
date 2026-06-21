@@ -320,7 +320,7 @@ inline auto DrawTemporaryCommandLists(Graphics::GraphicsContext &ctx,
 
         auto texRef = Ref<Graphics::Texture>(texture);
         static auto key = Graphics::ResourceKey{"MainTexture"};
-        auto sendResult = ::Gui::ImGuiShaderRGBA8->Send(ctx, key, texRef);
+        auto sendResult = ::Gui::ImGuiShaderRGBA8->Send(key, texRef);
         if (Error::IsError(sendResult)) {
           return sendResult;
         }

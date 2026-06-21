@@ -1,4 +1,5 @@
 #include "sphereLight.hpp"
+#include "Modules/object.hpp"
 #include "Scene/scene.hpp"
 #include "Scene/transform.hpp"
 #include "Scene/userdata.hpp"
@@ -66,7 +67,7 @@ auto LuaSphereLight::Create(lua_State *state) -> int {
   entity.add<Transform>();
   entity.add<Userdata>();
 
-  auto luaSphereLight = LuaSphereLight::FromEntity(entity);
+  auto luaSphereLight = Ref<LuaSphereLight>::Make(entity);
   ::LuaWrap::PushObject(state, LuaSphereLight::GetType(), luaSphereLight.get());
 
   return 1;

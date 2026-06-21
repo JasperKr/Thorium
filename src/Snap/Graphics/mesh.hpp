@@ -39,13 +39,14 @@ struct Mesh : Object {
   // Vertex data must be laid out as tightly packed arrays;
   // for example, 2 triangles with 2 bindings: [0, 1, 2, 0, 1, 2], [0, 1, 2, 0, 1, 2]
   // where the first array is for binding 0 and the second array is for binding 1.
-  static auto Create(GraphicsContext &context, const VertexFormat &vertexFormat,
+  static auto Create(const GraphicsContext &context,
+                     const VertexFormat &vertexFormat,
                      const std::vector<std::span<uint8_t>> &vertexData,
                      const std::string &debugName = "Mesh")
       -> Result<Ref<Mesh>>;
 
-  static auto Create(GraphicsContext &context, const VertexFormat &vertexFormat,
-                     uint64_t vertexCount,
+  static auto Create(const GraphicsContext &context,
+                     const VertexFormat &vertexFormat, uint64_t vertexCount,
                      const std::string &debugName = "Mesh")
       -> Result<Ref<Mesh>>;
 
@@ -64,11 +65,12 @@ struct Mesh : Object {
   auto SetTopology(VkPrimitiveTopology topology) -> Error;
   [[nodiscard]] auto GetTopology() const -> VkPrimitiveTopology;
 
-  auto SetVertices(GraphicsContext &context, uint32_t binding,
+  auto SetVertices(const GraphicsContext &context, uint32_t binding,
                    const std::span<const uint8_t> &vertexData,
                    uint64_t offset = 0) -> Error;
-  auto SetIndices(GraphicsContext &context, const std::span<uint8_t> &indexData,
-                  VkIndexType format) -> Error;
+  auto SetIndices(const GraphicsContext &context,
+                  const std::span<uint8_t> &indexData, VkIndexType format)
+      -> Error;
 
   auto SetVertexBuffer(const Ref<Buffer> &buffer, uint32_t binding = 0) -> void;
   auto SetIndexBuffer(const Ref<Buffer> &buffer, VkIndexType format) -> Error;
@@ -115,10 +117,10 @@ struct Mesh : Object {
   }
 
 private:
-  auto UploadVertices(GraphicsContext &context, uint32_t binding,
+  auto UploadVertices(const GraphicsContext &context, uint32_t binding,
                       const std::span<const uint8_t> &vertices, uint64_t offset)
       -> Error;
-  auto UploadIndices(GraphicsContext &context,
+  auto UploadIndices(const GraphicsContext &context,
                      const std::span<uint8_t> &indices, uint64_t offset,
                      VkIndexType format) -> Error;
   auto ConstructBindingRanges() -> void;

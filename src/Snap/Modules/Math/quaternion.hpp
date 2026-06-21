@@ -10,10 +10,10 @@ struct Quaternion {
   Scalar z{};
   Scalar w{};
 
-  Quaternion(Scalar x_val, Scalar y_val, Scalar z_val, Scalar w_val)
+  constexpr Quaternion(Scalar x_val, Scalar y_val, Scalar z_val, Scalar w_val)
       : x(x_val), y(y_val), z(z_val), w(w_val) {}
 
-  Quaternion() : w(1.0F) {}
+  constexpr Quaternion() : w(1.0F) {}
 
   [[nodiscard]] auto Normalize() const -> Quaternion;
   [[nodiscard]] auto Conjugate() const -> Quaternion;

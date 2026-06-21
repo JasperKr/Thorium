@@ -69,9 +69,10 @@ public:
   auto UpdateLocalMatrix() -> void;
   auto UpdateWorldMatrix(const Transform *parent) -> void;
 
-  explicit Transform(Math::Vec3 position = {},
-                     Math::Quaternion rotation = {0.0F, 0.0F, 0.0F, 1.0F},
-                     Math::Vec3 scale = {1.0F, 1.0F, 1.0F})
+  constexpr explicit Transform(Math::Vec3 position = {},
+                               Math::Quaternion rotation = {0.0F, 0.0F, 0.0F,
+                                                            1.0F},
+                               Math::Vec3 scale = {1.0F, 1.0F, 1.0F})
       : Position(position), Rotation(rotation), Scale(scale) {}
 
   auto DrawGUI() -> void;

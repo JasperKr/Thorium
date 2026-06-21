@@ -1,4 +1,5 @@
 #include "spotLight.hpp"
+#include "Modules/object.hpp"
 #include "Scene/scene.hpp"
 #include "Scene/transform.hpp"
 #include "Scene/userdata.hpp"
@@ -71,7 +72,7 @@ auto LuaSpotLight::Create(lua_State *state) -> int {
   entity.add<Transform>();
   entity.add<Userdata>();
 
-  auto luaSpotLight = LuaSpotLight::FromEntity(entity);
+  auto luaSpotLight = Ref<LuaSpotLight>::Make(entity);
   ::LuaWrap::PushObject(state, LuaSpotLight::GetType(), luaSpotLight.get());
 
   return 1;

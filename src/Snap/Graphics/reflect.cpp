@@ -584,6 +584,9 @@ auto SetupFromType(slang::VariableLayoutReflection *variableLayout,
 
     break;
   }
+  case slang::TypeReflection::Kind::SamplerState: {
+    break; // Nothing
+  }
   default: {
     auto kindInt = static_cast<int>(typeLayout->getKind());
     return Error::Unexpectedf(

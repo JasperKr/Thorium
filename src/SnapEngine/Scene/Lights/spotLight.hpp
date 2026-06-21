@@ -1,9 +1,9 @@
 #pragma once
 
 #include "Graphics/bufferformat.hpp"
-#include "Modules/object.hpp"
 #include "Modules/type.hpp"
 #include "Wrap/wrap.hpp"
+#include "Wrap/wrap_engine.hpp"
 #include <cstdint>
 #include <flecs.h>
 #include <lua.hpp>
@@ -38,19 +38,13 @@ struct SpotLight {
   }
 };
 
-struct LuaSpotLight : Object {
-  explicit LuaSpotLight(const flecs::entity &entity) : entity(entity) {}
-
-  flecs::entity entity;
+struct LuaSpotLight : LuaWrap::LuaECSObject {
+  explicit LuaSpotLight(flecs::entity entity) : LuaECSObject(entity) {}
 
   static auto Create(lua_State *state) -> int;
   static auto GetType() -> const Type * { return &spotLightType; }
   auto GetInstanceType() const -> const Type * override {
     return &spotLightType;
-  }
-
-  static auto FromEntity(const flecs::entity &entity) -> Ref<LuaSpotLight> {
-    return Ref<LuaSpotLight>::Make(entity);
   }
 };
 

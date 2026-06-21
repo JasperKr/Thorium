@@ -7,7 +7,6 @@
 
 #include "Graphics/barrier.hpp"
 #include "Graphics/graphicsContext.hpp"
-#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "buffer.hpp"
@@ -26,7 +25,7 @@ static auto VertexFormatSize(const VertexFormat &format, uint32_t binding)
   return format.GetBindings().at(binding).stride;
 }
 
-auto Mesh::UploadVertices(GraphicsContext &context, uint32_t binding,
+auto Mesh::UploadVertices(const GraphicsContext &context, uint32_t binding,
                           const std::span<const uint8_t> &vertices,
                           uint64_t offset) -> Error {
   ZoneScoped;
@@ -42,7 +41,7 @@ auto Mesh::UploadVertices(GraphicsContext &context, uint32_t binding,
   return VertexBuffers.at(binding)->SetData(context, vertices, offset);
 }
 
-auto Mesh::UploadIndices(GraphicsContext &context,
+auto Mesh::UploadIndices(const GraphicsContext &context,
                          const std::span<uint8_t> &indices, uint64_t offset,
                          VkIndexType format) -> Error {
   ZoneScoped;
@@ -57,7 +56,8 @@ auto Mesh::UploadIndices(GraphicsContext &context,
   return IndexBuffer->SetData(context, indices, offset);
 }
 
-auto Mesh::Create(GraphicsContext &context, const VertexFormat &vertexFormat,
+auto Mesh::Create(const GraphicsContext &context,
+                  const VertexFormat &vertexFormat,
                   const std::vector<std::span<uint8_t>> &vertexDatas,
                   const std::string &debugName) -> Result<Ref<Mesh>> {
 
@@ -92,6 +92,8 @@ auto Mesh::Create(GraphicsContext &context, const VertexFormat &vertexFormat,
       static_cast<uint32_t>(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT) |
       static_cast<uint32_t>(VK_BUFFER_USAGE_TRANSFER_DST_BIT);
 
+  mesh->VertexBuffers.resize(vertexFormat.GetBindingCount());
+
   for (size_t i = 0; i < vertexFormat.GetBindingCount(); i++) {
     const auto &vertexData = vertexDatas.at(i);
     assert(vertexData.size() % VertexFormatSize(vertexFormat, i) == 0);
@@ -114,8 +116,8 @@ auto Mesh::Create(GraphicsContext &context, const VertexFormat &vertexFormat,
   return mesh;
 }
 
-auto Mesh::Create(GraphicsContext &context, const VertexFormat &vertexFormat,
-                  uint64_t vertexCount,
+auto Mesh::Create(const GraphicsContext &context,
+                  const VertexFormat &vertexFormat, uint64_t vertexCount,
                   const std::string &debugName) // NOLINT
     -> Result<Ref<Mesh>> {
   std::vector<uint32_t> indexData;
@@ -180,13 +182,13 @@ void Mesh::SetDrawRange(MeshDrawRange range) {
   return DrawRange;
 }
 
-auto Mesh::SetVertices(GraphicsContext &context, uint32_t binding,
+auto Mesh::SetVertices(const GraphicsContext &context, uint32_t binding,
                        const std::span<const uint8_t> &vertexData,
                        uint64_t offset) -> Error {
   return UploadVertices(context, binding, vertexData, offset);
 }
 
-auto Mesh::SetIndices(GraphicsContext &context,
+auto Mesh::SetIndices(const GraphicsContext &context,
                       const std::span<uint8_t> &indexData, VkIndexType format)
     -> Error {
 

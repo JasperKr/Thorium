@@ -2,9 +2,9 @@
 
 #include "Graphics/bufferformat.hpp"
 #include "Modules/Math/vector.hpp"
-#include "Modules/object.hpp"
 #include "Modules/type.hpp"
 #include "Wrap/wrap.hpp"
+#include "Wrap/wrap_engine.hpp"
 #include <cstdint>
 #include <flecs.h>
 #include <lua.hpp>
@@ -38,20 +38,13 @@ struct RectangleLight {
   }
 };
 
-struct LuaRectangleLight : Object {
-  explicit LuaRectangleLight(const flecs::entity &entity) : entity(entity) {}
-
-  flecs::entity entity;
+struct LuaRectangleLight : LuaWrap::LuaECSObject {
+  explicit LuaRectangleLight(flecs::entity entity) : LuaECSObject(entity) {}
 
   static auto Create(lua_State *state) -> int;
   static auto GetType() -> const Type * { return &rectangleLightType; }
   auto GetInstanceType() const -> const Type * override {
     return &rectangleLightType;
-  }
-
-  static auto FromEntity(const flecs::entity &entity)
-      -> Ref<LuaRectangleLight> {
-    return Ref<LuaRectangleLight>::Make(entity);
   }
 };
 

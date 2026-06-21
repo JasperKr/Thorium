@@ -141,13 +141,13 @@ struct Matrix3x3 {
   [[nodiscard]] auto At(size_t index) const -> Scalar;
 
   Matrix3x3();
-  Matrix3x3(std::initializer_list<Scalar> init) {
+  constexpr Matrix3x3(std::initializer_list<Scalar> init) {
     size_t index = 0;
     for (const auto &value : init) {
       elements.at(index++) = value;
     }
   }
-  explicit Matrix3x3(const Matrix4x4 &matrix4x4) {
+  constexpr explicit Matrix3x3(const Matrix4x4 &matrix4x4) {
     for (size_t row = 0; row < Rows; ++row) {
       for (size_t col = 0; col < Cols; ++col) {
         At(row, col) = matrix4x4.At(row, col);

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Renderer/lightProbe.hpp"
 #include "Scene/Geometry/boundingBox.hpp"
 #include "Scene/Geometry/geometry.hpp"
 #include "Scene/Geometry/levelOfDetail.hpp"
@@ -55,6 +56,7 @@ extern "C" inline auto luaopen_scene(lua_State *state) -> int {
   LuaWrap::RegisterLuaType(state, ::Engine::GetEnvironmentLuaClass());
 
   LuaWrap::RegisterLuaType(state, ::Engine::GetLuaCameraClass());
+  LuaWrap::RegisterLuaType(state, ::Engine::Renderer::GetLuaLightProbeClass());
 
   return 1;
 }

@@ -7,13 +7,26 @@
 #include <cstdint>
 
 namespace Graphics {
+
+// NOLINTNEXTLINE
+extern thread_local Ref<Mesh> QuadMesh;
+
+auto CreateQuad01Mesh(const Graphics::GraphicsContext &context)
+    -> Result<Ref<Graphics::Mesh>>;
+
 auto BindMesh(const GraphicsContext &context, VkCommandBuffer cmdBuffer,
               const Mesh &mesh) -> Error;
 
 auto Draw(const GraphicsContext &context, Mesh &mesh,
           uint32_t instanceCount = 1) -> Error;
 
+auto Draw(const GraphicsContext &context, Texture &texture,
+          uint32_t instanceCount = 1) -> Error;
+
 auto Dispatch(const GraphicsContext &context, const Math::Uvec3 &threadgroups)
+    -> Error;
+
+auto DispatchWithin(const GraphicsContext &context, Math::Uvec3 dimensions)
     -> Error;
 
 auto DispatchIndirect(const GraphicsContext &context,

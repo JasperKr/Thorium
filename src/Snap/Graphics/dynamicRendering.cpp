@@ -2,6 +2,7 @@
 #include "Graphics/Buffers/uniform.hpp"
 #include "Graphics/allocations.hpp"
 #include "Graphics/barrier.hpp"
+#include "Graphics/draw.hpp"
 #include "Graphics/graphics.hpp"
 #include "Graphics/graphicsContext.hpp"
 #include "Graphics/graphicsState.hpp"
@@ -859,6 +860,7 @@ void Shutdown(const GraphicsContext &context) {
   TopOfStack = nullptr;
   PipelineCache.clear();
   LastStateStorage = State();
+  QuadMesh.reset();
 }
 
 auto FlushCompute(const GraphicsContext &context) -> Result<bool> {
@@ -936,7 +938,7 @@ auto FlushGraphics(const GraphicsContext &context) -> Result<bool> {
 
   if (TopOfStack->shader->GetUniform(projectionMatrixKey) != nullptr) {
     auto sendErr = Shader::UniformWriter::Send(
-        TopOfStack->shader, context, projectionMatrixKey, viewProjectionMatrix);
+        TopOfStack->shader, projectionMatrixKey, viewProjectionMatrix);
 
     if (Error::IsError(sendErr)) {
       PrintError("Failed to send projection matrix to shader: {}",

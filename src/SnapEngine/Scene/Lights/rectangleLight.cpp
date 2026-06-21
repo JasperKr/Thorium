@@ -1,4 +1,5 @@
 #include "rectangleLight.hpp"
+#include "Modules/object.hpp"
 #include "Scene/Lights/light.hpp"
 #include "Scene/scene.hpp"
 #include "Scene/transform.hpp"
@@ -65,7 +66,7 @@ auto LuaRectangleLight::Create(lua_State *state) -> int {
   entity.add<Transform>();
   entity.add<Userdata>();
 
-  auto luaRectangleLight = LuaRectangleLight::FromEntity(entity);
+  auto luaRectangleLight = Ref<LuaRectangleLight>::Make(entity);
   ::LuaWrap::PushObject(state, LuaRectangleLight::GetType(),
                         luaRectangleLight.get());
 

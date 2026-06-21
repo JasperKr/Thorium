@@ -1,4 +1,5 @@
 #include "pointLight.hpp"
+#include "Modules/object.hpp"
 #include "Scene/Lights/light.hpp"
 #include "Scene/scene.hpp"
 #include "Scene/transform.hpp"
@@ -60,7 +61,7 @@ auto LuaPointLight::Create(lua_State *state) -> int {
   entity.add<Transform>();
   entity.add<Userdata>();
 
-  auto luaPointLight = LuaPointLight::FromEntity(entity);
+  auto luaPointLight = Ref<LuaPointLight>::Make(entity);
   ::LuaWrap::PushObject(state, LuaPointLight::GetType(), luaPointLight.get());
 
   return 1;

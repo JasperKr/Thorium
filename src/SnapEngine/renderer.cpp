@@ -234,32 +234,31 @@ auto Renderer::BindLightBuffers(
   using Key = Graphics::ResourceKey;
 
   static auto key = Key{"PointLights"};
-  // auto error = shader->Send(context, key, SceneLightBuffers.PointLightsBuffer);
+  // auto error = shader->Send(key, SceneLightBuffers.PointLightsBuffer);
   // if (Error::IsError(error)) {
   //   return error;
   // }
 
   // key = Key{"SpotLights"};
-  // error = shader->Send(context, key, SceneLightBuffers.SpotLightsBuffer);
+  // error = shader->Send(key, SceneLightBuffers.SpotLightsBuffer);
   // if (Error::IsError(error)) {
   //   return error;
   // }
 
   // key = Key{"RectangleLights"};
-  // error = shader->Send(context, key, SceneLightBuffers.RectangleLightsBuffer);
+  // error = shader->Send(key, SceneLightBuffers.RectangleLightsBuffer);
   // if (Error::IsError(error)) {
   //   return error;
   // }
 
   // key = Key{"SphereLights"};
-  // error = shader->Send(context, key, SceneLightBuffers.SphereLightsBuffer);
+  // error = shader->Send(key, SceneLightBuffers.SphereLightsBuffer);
   // if (Error::IsError(error)) {
   //   return error;
   // }
 
   key = Key{"DirectionalLights"};
-  auto error =
-      shader->Send(context, key, SceneLightBuffers.DirectionalLightsBuffer);
+  auto error = shader->Send(key, SceneLightBuffers.DirectionalLightsBuffer);
   if (Error::IsError(error)) {
     return error;
   }

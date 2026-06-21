@@ -633,7 +633,7 @@ auto ShaderModule::GetUniform(const ResourceKey &key) const
   return nullptr;
 }
 
-auto ShaderModule::Send(const GraphicsContext &context, const ResourceKey &key,
+auto ShaderModule::Send(const ResourceKey &key,
                         const std::span<const uint8_t> &data) -> Error {
   ZoneScopedN("ShaderModule::Send data span");
 
@@ -666,8 +666,8 @@ auto ShaderModule::Send(const GraphicsContext &context, const ResourceKey &key,
   return Error::Success();
 }
 
-auto ShaderModule::Send(const GraphicsContext &context, const ResourceKey &key,
-                        const Ref<Buffer> &buffer) -> Error {
+auto ShaderModule::Send(const ResourceKey &key, const Ref<Buffer> &buffer)
+    -> Error {
   ZoneScopedN("ShaderModule::Send structured buffer");
 
   if (!buffer.isValid()) {
@@ -697,14 +697,14 @@ auto ShaderModule::Send(const GraphicsContext &context, const ResourceKey &key,
                         name);
 }
 
-auto ShaderModule::Send(const GraphicsContext &context, const ResourceKey &key,
+auto ShaderModule::Send(const ResourceKey &key,
                         const Ref<::Graphics::StructuredBuffer> &buffer)
     -> Error {
   ZoneScopedN("ShaderModule::Send structured buffer");
-  return Send(context, key, buffer->GetBuffer());
+  return Send(key, buffer->GetBuffer());
 }
 
-auto ShaderModule::Send(const GraphicsContext &context, const ResourceKey &key,
+auto ShaderModule::Send(const ResourceKey &key,
                         const Ref<Graphics::Texture> &texture) -> Error {
   ZoneScopedN("ShaderModule::Send texture");
 

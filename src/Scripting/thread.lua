@@ -12,10 +12,17 @@ do
 
   -- scene:newCamera(name, verticalFOV, width, height, near, far)
   local camera = scene:newCamera("main camera", 90, 1, 1, 0.01, 1000)
+  camera:setPersistentTextureSettings({
+    PostProcessed = true,
+  })
+
+  local probe = scene:newLightProbe()
 
   local snapshot
 
   local function draw()
+    probe:render()
+
     snap.graphics.setCullMode("none")
     snap.graphics.setDepthMode("greater", true)
 
