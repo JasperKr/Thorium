@@ -21,7 +21,7 @@ do
   local snapshot
 
   local function draw()
-    probe:render()
+    -- probe:render()
 
     snap.graphics.setCullMode("none")
     snap.graphics.setDepthMode("greater", true)
@@ -198,6 +198,9 @@ do
       -- snap.scene.loadModel(scene, "Assets/Objects/OrientationTest/OrientationTest.gltf")
 
       texture = snap.graphics.newTexture("src/Assets/skybox.hdr", { sampler = true, mipmaps = "init" })
+      texture:setFilter("linear", "linear", "linear")
+      -- texture:setAnisotropy(0)
+      texture:setWrap("repeat", "repeat", "repeat")
 
       -- texture = snap.graphics.newTexture("src/Assets/skybox.hdr")
       -- Checkerboard = snap.data.newImagedata(4, 4, 1)

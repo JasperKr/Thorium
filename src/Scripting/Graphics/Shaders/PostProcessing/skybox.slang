@@ -26,7 +26,7 @@ float2 GetERPUvs(float3 rayDirection) {
 
 [shader("fragment")]
 float4 fragmentMain(FragmentInput input) {
-  float depth = DepthTexture.SampleLevel(input.tex_coord, 0.0).r;
+  float depth = DepthTexture.SampleLevelZero(input.tex_coord).r;
   // Reverse z, so 0 = far plane and 1 = near plane
   if (depth != 0.0) {
     discard;
@@ -39,7 +39,17 @@ float4 fragmentMain(FragmentInput input) {
   return SkyboxTexture.Sample(rayDirection);
 #elif defined(ERP)
   float2 uv = GetERPUvs(rayDirection);
-  return SkyboxTexture.Sample(uv);
+
+  float2 duvdx = ddx(uv);
+  float2 duvdy = ddy(uv);
+
+  // fix seam discontinuity
+  if (abs(duvdx.x) > 0.5)
+    duvdx.x = -sign(duvdx.x) * (1.0 - abs(duvdx.x));
+  if (abs(duvdy.x) > 0.5)
+    duvdy.x = -sign(duvdy.x) * (1.0 - abs(duvdy.x));
+
+  return SkyboxTexture.SampleGrad(uv, duvdx, duvdy);
 #endif
 
   // return float4(saturate(rayDirection * 0.5 + 0.5), 1.0);

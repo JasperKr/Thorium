@@ -246,9 +246,9 @@ auto Texture::Create(const GraphicsContext &context,
   viewInfo.format = info.format;
   viewInfo.subresourceRange.aspectMask = GetAspectFlagsForFormat(info.format);
   viewInfo.subresourceRange.baseMipLevel = 0;
-  viewInfo.subresourceRange.levelCount = info.mipmapCount;
+  viewInfo.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
   viewInfo.subresourceRange.baseArrayLayer = 0;
-  viewInfo.subresourceRange.layerCount = info.arrayLayers;
+  viewInfo.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
 
   if (info.textureType == TextureType::CUBEMAP) {
     viewInfo.subresourceRange.layerCount = 6; // NOLINT
