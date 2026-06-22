@@ -24,11 +24,14 @@
 #include <cstdint>
 #include <cstring>
 #include <format>
+#include <memory>
 #include <mutex>
 #include <public/tracy/Tracy.hpp>
 #include <span>
 #include <string>
 #include <string_view>
+#include <unordered_set>
+#include <utility>
 #include <vector>
 
 #define VMA_VULKAN_VERSION 1004000
@@ -36,6 +39,19 @@
 #include "vulkan/vulkan_core.h"
 
 namespace Graphics {
+
+ImageMemory::~ImageMemory() {
+  if (isSwapchainMemory) {
+    // Swapchain images are managed by the swapchain, so we don't destroy them
+    return;
+  }
+
+  ScheduleDestruction(TextureMemory{.allocation = memory,
+                                    .image = image,
+                                    .timelineValue = lastUsedTimestamp});
+
+  Texture::TotalAllocatedMemory -= sizeInBytes;
+}
 
 auto GetAspectFlagsForFormat(VkFormat format) -> VkImageAspectFlagBits {
   switch (format) {
@@ -71,13 +87,13 @@ inline auto SetDebugName(const std::string &debugName, Texture *texture,
     nameInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
     nameInfo.objectType = VK_OBJECT_TYPE_IMAGE;
     nameInfo.objectHandle = static_cast<uint64_t>(
-        reinterpret_cast<uintptr_t>(texture->image)), // NOLINT
+        reinterpret_cast<uintptr_t>(texture->imageMemory->image)), // NOLINT
         nameInfo.pObjectName = debugName.c_str();
 
     CHECK_ERR(
         Error::Create(vkSetDebugUtilsObjectNameEXT(context.device, &nameInfo)));
 
-    vmaSetAllocationName(context.vmaAllocator, texture->memory,
+    vmaSetAllocationName(context.vmaAllocator, texture->imageMemory->memory,
                          debugName.c_str());
   } else {
     VkDebugUtilsObjectNameInfoEXT nameInfo = {};
@@ -128,16 +144,23 @@ auto Texture::Create(const GraphicsContext &context,
   }
 
   Ref<Texture> texture = Ref<Texture>::Make();
+  auto imageMemory = std::make_shared<ImageMemory>();
 
-  texture->size = info.size;
-  texture->format = info.format;
-  texture->textureType = info.textureType;
-  texture->mipmapcount = info.mipmapCount;
-  texture->usage = info.usage;
-  texture->arrayLayers = info.arrayLayers;
-  texture->samplerDirty = true;
-  texture->debugName =
+  imageMemory->size = info.size;
+  imageMemory->format = info.format;
+  imageMemory->textureType = info.textureType;
+  imageMemory->mipmapcount = info.mipmapCount;
+  imageMemory->arrayLayers = info.arrayLayers;
+
+  texture->levelCount = info.mipmapCount;
+  texture->layerCount = info.arrayLayers;
+
+  imageMemory->usage = info.usage;
+  imageMemory->debugName =
       info.debugName.empty() ? "Unnamed Texture" : info.debugName;
+
+  texture->samplerDirty = true;
+  texture->debugName = imageMemory->debugName;
 
   const auto &config = Threading::GetGraphicsConfiguration();
 
@@ -192,7 +215,7 @@ auto Texture::Create(const GraphicsContext &context,
         Graphics::GraphicsContext::mutexes.vmaAllocator);
 
     CHECK_NEW_ERR(vmaCreateImage(context.vmaAllocator, &imageInfo, &allocInfo,
-                                 &texture->image, &texture->memory,
+                                 &imageMemory->image, &imageMemory->memory,
                                  &memRequirements));
   }
 
@@ -217,7 +240,7 @@ auto Texture::Create(const GraphicsContext &context,
 
   VkImageViewCreateInfo viewInfo = {};
   viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-  viewInfo.image = texture->image;
+  viewInfo.image = imageMemory->image;
   viewInfo.viewType = textureViewType;
   viewInfo.format = info.format;
   viewInfo.subresourceRange.aspectMask = GetAspectFlagsForFormat(info.format);
@@ -236,85 +259,74 @@ auto Texture::Create(const GraphicsContext &context,
                                     GetAllocationCallbacks(), &texture->view));
   }
 
+  texture->imageMemory = imageMemory;
+
   // ignore set debug name error, since it's not critical
   auto err = SetDebugName(info.debugName, texture.get(), context);
 
-  texture->sizeInBytes = memRequirements.size;
-  Texture::TotalAllocatedMemory += texture->sizeInBytes;
+  imageMemory->sizeInBytes = memRequirements.size;
+  Texture::TotalAllocatedMemory += imageMemory->sizeInBytes;
 
   return texture;
 }
 
-auto Texture::Create(const GraphicsContext &context, Texture *texture,
-                     VkImageSubresourceRange range) -> Result<Ref<Texture>> {
+auto Texture::Create(const GraphicsContext &context, Texture *parentTexture,
+                     VkImageViewType viewType, VkImageSubresourceRange range)
+    -> Result<Ref<Texture>> {
   ZoneScoped;
 
   // Check vadility of the provided range against the parent texture
 
-  if (range.baseMipLevel + range.levelCount > texture->mipmapcount) {
+  if (range.layerCount == 0) {
+    return Error::Unexpected(
+        "Texture view layer count must be greater than 0.");
+  }
+
+  if (range.levelCount == 0) {
+    return Error::Unexpected(
+        "Texture view mip level count must be greater than 0.");
+  }
+
+  if (range.baseMipLevel + range.levelCount > parentTexture->levelCount) {
     return Error::Unexpectedf("Mip level range base: {} + count: {} is out of "
                               "range of the parent texture. [0 - {}]",
                               range.baseMipLevel, range.levelCount,
-                              texture->mipmapcount);
+                              parentTexture->levelCount);
   }
 
-  if (range.baseArrayLayer + range.layerCount > texture->arrayLayers) {
+  if (range.baseArrayLayer + range.layerCount > parentTexture->layerCount) {
     return Error::Unexpectedf("Array layer range base: {} + count: {} is out "
                               "of range of the parent texture. [0 - {}]",
                               range.baseArrayLayer, range.layerCount,
-                              texture->arrayLayers);
+                              parentTexture->layerCount);
   }
-  range.aspectMask = GetAspectFlagsForFormat(texture->format);
+  range.aspectMask =
+      GetAspectFlagsForFormat(parentTexture->imageMemory->format);
 
   Ref<Texture> textureView = Ref<Texture>::Make();
 
-  textureView->size = texture->size;
-  textureView->format = texture->format;
-  textureView->textureType = texture->textureType;
-  textureView->mipmapcount = range.levelCount;
-  textureView->usage = texture->usage;
-  textureView->arrayLayers = range.layerCount;
   textureView->samplerDirty = true;
-  textureView->debugName = texture->debugName + "_view";
+  textureView->debugName = parentTexture->debugName + "_view";
   textureView->isView = true;
+
+  textureView->baseMipLevel = range.baseMipLevel;
+  textureView->baseArrayLayer = range.baseArrayLayer;
+  textureView->levelCount = range.levelCount;
+  textureView->layerCount = range.layerCount;
 
   const auto &config = Threading::GetGraphicsConfiguration();
 
   textureView->samplerDescription = config.defaultSamplerDescription;
-  textureView->image = texture->image;
-  textureView->memory = texture->memory;
-  textureView->currentLayout = texture->currentLayout;
-  textureView->sizeInBytes = texture->sizeInBytes;
-  textureView->isSwapchainView = texture->isSwapchainView;
-  textureView->parentTexture = texture;
-
-  auto textureViewType = VK_IMAGE_VIEW_TYPE_MAX_ENUM;
-
-  switch (texture->textureType) {
-  case TextureType::DEFAULT:
-    textureViewType = VK_IMAGE_VIEW_TYPE_2D;
-    break;
-  case TextureType::CUBEMAP:
-    textureViewType = VK_IMAGE_VIEW_TYPE_CUBE;
-    break;
-  case TextureType::ARRAY:
-    textureViewType = VK_IMAGE_VIEW_TYPE_2D_ARRAY;
-    break;
-  case TextureType::VOLUME:
-    textureViewType = VK_IMAGE_VIEW_TYPE_3D;
-    break;
-  default:
-    return Error::Unexpected("Invalid texture type.");
-  }
+  textureView->imageMemory = parentTexture->imageMemory;
 
   VkImageViewCreateInfo viewInfo = {};
   viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-  viewInfo.image = textureView->image;
-  viewInfo.viewType = textureViewType;
-  viewInfo.format = textureView->format;
+  viewInfo.image = textureView->imageMemory->image;
+  viewInfo.viewType = viewType;
+  viewInfo.format = textureView->imageMemory->format;
   viewInfo.subresourceRange = range;
 
-  if (textureView->textureType == TextureType::CUBEMAP) {
+  if (textureView->imageMemory->textureType == TextureType::CUBEMAP) {
     viewInfo.subresourceRange.layerCount = 6; // NOLINT
   }
 
@@ -328,8 +340,6 @@ auto Texture::Create(const GraphicsContext &context, Texture *texture,
   // ignore set debug name error, since it's not critical
   auto err = SetDebugName(textureView->debugName, textureView.get(), context);
 
-  texture->retain();
-
   return textureView;
 }
 
@@ -340,19 +350,27 @@ auto Texture::FromSwapchain(const GraphicsContext &context,
     -> Result<Ref<Texture>> {
 
   Ref<Texture> texture = Ref<Texture>::Make();
+  auto imageMemory = std::make_shared<ImageMemory>();
 
-  texture->image = swapchainImage;
-  texture->format = format;
-  texture->size = VkExtent3D{width, height, 1};
-  texture->textureType = TextureType::DEFAULT;
-  texture->mipmapcount = 1;
-  texture->arrayLayers = 1;
+  imageMemory->image = swapchainImage;
+  imageMemory->format = format;
+  imageMemory->size = VkExtent3D{width, height, 1};
+  imageMemory->textureType = TextureType::DEFAULT;
+  imageMemory->mipmapcount = 1;
+  imageMemory->arrayLayers = 1;
+  imageMemory->isSwapchainMemory = true;
+
+  texture->levelCount = 1;
+  texture->layerCount = 1;
+
   texture->samplerDirty = true;
-  texture->isSwapchainView = true;
-
-  texture->usage = context.surfaceInfo.capabilities.supportedUsageFlags;
   texture->view = swapchainImageView;
-  texture->lastUsage = TextureUsage::Swapchain;
+
+  imageMemory->usage = context.surfaceInfo.capabilities.supportedUsageFlags;
+  imageMemory->lastUsage = TextureUsage::Swapchain;
+
+  texture->debugName = "Swapchain Image";
+  texture->imageMemory = imageMemory;
 
   return texture;
 }
@@ -420,6 +438,7 @@ auto Texture::FromMemory(GraphicsContext &context, Image::ImageData &imageData,
                                                VK_IMAGE_USAGE_TRANSFER_DST_BIT),
                           .mipmapCount = mipmapCount,
                           .debugName = "Image_ImageData",
+                          .textureType = ::Graphics::TextureType::DEFAULT,
                       }));
 
   CHECK_ERR(texture->SetPixels(context, imageData, 0, 0));
@@ -557,10 +576,10 @@ auto Texture::FromMemory(GraphicsContext &context,
 
   DynamicRendering::EndRendering(context);
 
-  vkCmdCopyBufferToImage(commandBuffer, buffer->handle, texture->image,
-                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                         static_cast<uint32_t>(copyRegions.size()),
-                         copyRegions.data());
+  vkCmdCopyBufferToImage(
+      commandBuffer, buffer->handle, texture->imageMemory->image,
+      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+      static_cast<uint32_t>(copyRegions.size()), copyRegions.data());
 
   // TODO: Check lifetime
   buffer->MarkUse();
@@ -717,6 +736,7 @@ auto GetAccessMask(VkImageLayout layout) -> VkAccessFlags {
     return VK_ACCESS_TRANSFER_READ_BIT;
   case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
     return VK_ACCESS_TRANSFER_WRITE_BIT;
+  case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR:
   case VK_IMAGE_LAYOUT_UNDEFINED:
     return 0;
   default:
@@ -726,17 +746,27 @@ auto GetAccessMask(VkImageLayout layout) -> VkAccessFlags {
   }
 }
 
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
 auto Texture::TransitionLayout(const GraphicsContext &context,
                                VkImageLayout layout,
                                VkPipelineStageFlags2 sourceStage, // NOLINT
                                VkPipelineStageFlags2 destinationStage,
                                VkAccessFlags2 srcAccessMask, // NOLINT
                                VkAccessFlags2 dstAccessMask,
-                               VkImageSubresourceRange range) -> Error {
+                               VkImageSubresourceRange range) const -> Error {
+
+  if (range.layerCount == 0 || range.levelCount == 0) {
+    return Error::Create(
+        "Layer count and level count in subresource range must "
+        "be greater than 0.");
+  }
 
   if (layout == VK_IMAGE_LAYOUT_UNDEFINED) {
     return Error::Create("Cannot transition to UNDEFINED layout.");
   }
+
+  auto currentLayout = imageMemory->currentLayout;
+  auto currentAccessMask = GetAccessMask(currentLayout);
 
   if (currentLayout == layout && sourceStage == destinationStage &&
       srcAccessMask == dstAccessMask) {
@@ -755,9 +785,10 @@ auto Texture::TransitionLayout(const GraphicsContext &context,
   barrier.newLayout = layout;
   barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
   barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-  barrier.image = image;
+  barrier.image = imageMemory->image;
   barrier.subresourceRange = range;
-  barrier.subresourceRange.aspectMask = GetAspectFlagsForFormat(format);
+  barrier.subresourceRange.aspectMask =
+      GetAspectFlagsForFormat(imageMemory->format);
 
   barrier.srcAccessMask = srcAccessMask;
   barrier.dstAccessMask = dstAccessMask;
@@ -772,7 +803,7 @@ auto Texture::TransitionLayout(const GraphicsContext &context,
   DynamicRendering::EndRendering(context);
   vkCmdPipelineBarrier2(commandBuffer, &dep);
 
-  currentLayout = layout;
+  imageMemory->currentLayout = layout;
 
   return Error::Success();
 }
@@ -899,12 +930,13 @@ inline auto WriteSimplifiedPixelData(const Ref<Texture> &texture,
   region.bufferOffset = 0;
   region.bufferRowLength = 0;
   region.bufferImageHeight = 0;
-  region.imageSubresource.aspectMask = GetAspectFlagsForFormat(texture->format);
+  region.imageSubresource.aspectMask =
+      GetAspectFlagsForFormat(texture->imageMemory->format);
   region.imageSubresource.mipLevel = mipLevel;
   region.imageSubresource.baseArrayLayer = arrayLayer;
   region.imageSubresource.layerCount = 1;
   region.imageOffset = {.x = 0, .y = 0, .z = 0};
-  region.imageExtent = texture->size;
+  region.imageExtent = texture->imageMemory->size;
 
   CHECK_ERR(texture->UseAsTransferDst(context));
 
@@ -916,7 +948,8 @@ inline auto WriteSimplifiedPixelData(const Ref<Texture> &texture,
 
   DynamicRendering::EndRendering(context);
 
-  vkCmdCopyBufferToImage(commandBuffer, buffer->handle, texture->image,
+  vkCmdCopyBufferToImage(commandBuffer, buffer->handle,
+                         texture->imageMemory->image,
                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
   CHECK_ERR(
@@ -942,14 +975,15 @@ auto Texture::SetPixels(const GraphicsContext &context,
                         VkOffset3D target, VkExtent3D targetSize) -> Error {
   ZoneScoped;
 
-  if (targetSize.width == size.width && targetSize.height == size.height &&
-      targetSize.depth == size.depth) {
+  if (targetSize.width == imageMemory->size.width &&
+      targetSize.height == imageMemory->size.height &&
+      targetSize.depth == imageMemory->size.depth) {
     // Fast path for full texture updates
     return WriteSimplifiedPixelData(Ref<Texture>(this), context, data, mipLevel,
                                     arrayLayer);
   }
 
-  if (Image::IsCompressedTexture(format)) {
+  if (Image::IsCompressedTexture(imageMemory->format)) {
     return Error::Create("SetPixels with region copy is not supported for "
                          "compressed texture formats.");
   }
@@ -968,9 +1002,9 @@ auto Texture::SetPixels(const GraphicsContext &context,
                          "size in SetPixels.");
   }
 
-  if (target.x + targetSize.width > size.width ||
-      target.y + targetSize.height > size.height ||
-      target.z + targetSize.depth > size.depth) {
+  if (target.x + targetSize.width > imageMemory->size.width ||
+      target.y + targetSize.height > imageMemory->size.height ||
+      target.z + targetSize.depth > imageMemory->size.depth) {
     return Error::Create(
         "Target dimensions exceed texture dimensions in SetPixels.");
   }
@@ -991,7 +1025,7 @@ auto Texture::SetPixels(const GraphicsContext &context,
 #endif
 
   auto uploadSize = targetSize.width * targetSize.height * targetSize.depth *
-                    Format::GetSize(format);
+                    Format::GetSize(imageMemory->format);
 
   if (uploadSize > data.size()) {
     return Error::Create("Provided data size is smaller than expected for "
@@ -1017,7 +1051,7 @@ auto Texture::SetPixels(const GraphicsContext &context,
                                  });
 
   std::vector<uint8_t> tempBuffer(uploadSize);
-  auto formatSize = Format::GetSize(format);
+  auto formatSize = Format::GetSize(imageMemory->format);
   auto *dstPtr = tempBuffer.data();
   const auto *srcPtr = data.data();
 
@@ -1049,7 +1083,8 @@ auto Texture::SetPixels(const GraphicsContext &context,
   region.bufferOffset = 0;
   region.bufferRowLength = targetSize.width;
   region.bufferImageHeight = targetSize.height;
-  region.imageSubresource.aspectMask = GetAspectFlagsForFormat(format);
+  region.imageSubresource.aspectMask =
+      GetAspectFlagsForFormat(imageMemory->format);
   region.imageSubresource.mipLevel = mipLevel;
   region.imageSubresource.baseArrayLayer = arrayLayer;
   region.imageSubresource.layerCount = 1;
@@ -1066,7 +1101,7 @@ auto Texture::SetPixels(const GraphicsContext &context,
 
   DynamicRendering::EndRendering(context);
 
-  vkCmdCopyBufferToImage(commandBuffer, buffer->handle, image,
+  vkCmdCopyBufferToImage(commandBuffer, buffer->handle, imageMemory->image,
                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
   // TODO: Check lifetime
@@ -1085,8 +1120,9 @@ auto Texture::SetPixels(const GraphicsContext &context,
                    imageData.GetDimensions());
 }
 
-auto Texture::MarkUse() -> void {
-  lastUsedTimestamp = Graphics::SemaphoreManager::GetSemaphoreValue();
+auto Texture::MarkUse() const -> void {
+  imageMemory->lastUsedTimestamp =
+      Graphics::SemaphoreManager::GetSemaphoreValue();
 }
 
 struct VkFormatTextureTypeHash {
@@ -1119,6 +1155,7 @@ auto Texture::GetDefault(const GraphicsContext &context, VkFormat format,
   texInfo.usage = static_cast<uint32_t>(VK_IMAGE_USAGE_SAMPLED_BIT) |
                   static_cast<uint32_t>(VK_IMAGE_USAGE_TRANSFER_DST_BIT) |
                   static_cast<uint32_t>(VK_IMAGE_USAGE_STORAGE_BIT);
+  texInfo.textureType = textureType;
 
   std::string_view textureTypeName;
 
@@ -1149,7 +1186,8 @@ auto Texture::GetDefault(const GraphicsContext &context, VkFormat format,
 
   auto texture = CHECK_RES(Create(context, texInfo));
 
-  auto imageDataResult = Image::ImageData::Create(texture->size, format);
+  auto imageDataResult =
+      Image::ImageData::Create(texture->imageMemory->size, format);
 
   if (Error::IsError(imageDataResult)) {
     return imageDataResult.error();
@@ -1273,34 +1311,43 @@ auto Texture::UseAs(const GraphicsContext &context, TextureUsage newUsage,
         "UseAs: stage must be known when transitioning layouts.");
   }
 
-  auto layout = GetRequiredTextureLayout(newUsage, format);
+  auto layout = GetRequiredTextureLayout(newUsage, imageMemory->format);
 
-  VkAccessFlags2 currentAccess = GetAccessFlagsForUsage(lastUsage, format);
-  VkAccessFlags2 newAccess = GetAccessFlagsForUsage(newUsage, format);
+  VkAccessFlags2 currentAccess =
+      GetAccessFlagsForUsage(imageMemory->lastUsage, imageMemory->format);
+  VkAccessFlags2 newAccess =
+      GetAccessFlagsForUsage(newUsage, imageMemory->format);
 
-  if (lastUsage == TextureUsage::Unknown) {
+  if (imageMemory->lastUsage == TextureUsage::Unknown) {
     // First time usage, so we can skip the transition from UNDEFINED
     currentAccess = 0;
-    lastPipelineStage = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT;
-  } else if (lastUsage == TextureUsage::Swapchain) {
+    imageMemory->lastPipelineStage = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT;
+  } else if (imageMemory->lastUsage == TextureUsage::Swapchain) {
     currentAccess = VK_ACCESS_2_NONE;
-    lastPipelineStage = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
-    currentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    imageMemory->lastPipelineStage =
+        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+    imageMemory->currentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+  }
+
+  if (layerCount == 0 || levelCount == 0) {
+    return Error::Create(
+        "Invalid texture with zero mip levels or array layers.");
   }
 
   auto range = VkImageSubresourceRange{
-      .aspectMask = GetAspectFlagsForFormat(format),
-      .baseMipLevel = 0,
-      .levelCount = static_cast<uint32_t>(mipmapcount),
-      .baseArrayLayer = 0,
-      .layerCount = static_cast<uint32_t>(arrayLayers),
+      .aspectMask = GetAspectFlagsForFormat(imageMemory->format),
+      .baseMipLevel = baseMipLevel,
+      .levelCount = levelCount,
+      .baseArrayLayer = baseArrayLayer,
+      .layerCount = layerCount,
   };
 
-  auto result = TransitionLayout(context, layout, lastPipelineStage, stage,
-                                 currentAccess, newAccess, range);
+  auto result =
+      TransitionLayout(context, layout, imageMemory->lastPipelineStage, stage,
+                       currentAccess, newAccess, range);
 
-  lastUsage = newUsage;
-  lastPipelineStage = stage;
+  imageMemory->lastUsage = newUsage;
+  imageMemory->lastPipelineStage = stage;
   return result;
 }
 
@@ -1308,7 +1355,7 @@ auto Texture::UseAsAttachment(const GraphicsContext &context,
                               VkAttachmentLoadOp loadOp,
                               VkAttachmentStoreOp storeOp) -> Error {
   // Depth/stencil attachments require both early and late fragment test stages
-  if (Image::IsDepthOrStencilTexture(format)) {
+  if (Image::IsDepthOrStencilTexture(imageMemory->format)) {
     auto newPipelineStage = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT |
                             VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
     return UseAs(context, TextureUsage::Attachment, newPipelineStage, loadOp,
@@ -1343,7 +1390,7 @@ auto Texture::UseAsPresentSrc(const GraphicsContext &context) -> Error {
 
 auto Texture::CopyTo(const GraphicsContext &context, Texture &dstTexture,
                      CopyRegion region) -> Error {
-  if (format != dstTexture.format) {
+  if (imageMemory->format != dstTexture.imageMemory->format) {
     return Error::Create(
         "CopyTo: Source and destination textures must have the "
         "same format for copying.");
@@ -1352,14 +1399,14 @@ auto Texture::CopyTo(const GraphicsContext &context, Texture &dstTexture,
       region.extent.depth == 0) {
     return Error::Create("CopyTo: Copy extent must be greater than zero.");
   }
-  if (region.srcBaseMipLevel >= mipmapcount ||
-      region.dstBaseMipLevel >= dstTexture.mipmapcount) {
+  if (region.srcBaseMipLevel >= levelCount ||
+      region.dstBaseMipLevel >= dstTexture.levelCount) {
     return Error::Create(
         "CopyTo: Source and destination mip levels must be within bounds.");
   }
 
-  if (region.srcBaseArrayLayer >= arrayLayers ||
-      region.dstBaseArrayLayer >= dstTexture.arrayLayers) {
+  if (region.srcBaseArrayLayer >= layerCount ||
+      region.dstBaseArrayLayer >= dstTexture.layerCount) {
     return Error::Create(
         "CopyTo: Source and destination array layers must be within bounds.");
   }
@@ -1371,16 +1418,19 @@ auto Texture::CopyTo(const GraphicsContext &context, Texture &dstTexture,
         "CopyTo: Source and destination offsets cannot be negative.");
   }
 
-  if (region.srcOffset.x + region.extent.width > size.width ||
-      region.srcOffset.y + region.extent.height > size.height ||
-      region.srcOffset.z + region.extent.depth > size.depth) {
+  if (region.srcOffset.x + region.extent.width > imageMemory->size.width ||
+      region.srcOffset.y + region.extent.height > imageMemory->size.height ||
+      region.srcOffset.z + region.extent.depth > imageMemory->size.depth) {
     return Error::Create(
         "CopyTo: Source offset and extent exceed source texture dimensions.");
   }
 
-  if (region.dstOffset.x + region.extent.width > dstTexture.size.width ||
-      region.dstOffset.y + region.extent.height > dstTexture.size.height ||
-      region.dstOffset.z + region.extent.depth > dstTexture.size.depth) {
+  if (region.dstOffset.x + region.extent.width >
+          dstTexture.imageMemory->size.width ||
+      region.dstOffset.y + region.extent.height >
+          dstTexture.imageMemory->size.height ||
+      region.dstOffset.z + region.extent.depth >
+          dstTexture.imageMemory->size.depth) {
     return Error::Create(
         "CopyTo: Destination offset and extent exceed destination texture "
         "dimensions.");
@@ -1395,13 +1445,14 @@ auto Texture::CopyTo(const GraphicsContext &context, Texture &dstTexture,
   CHECK_ERR(dstTexture.UseAsTransferDst(context));
 
   VkImageCopy copyRegion = {};
-  copyRegion.srcSubresource.aspectMask = GetAspectFlagsForFormat(format);
+  copyRegion.srcSubresource.aspectMask =
+      GetAspectFlagsForFormat(imageMemory->format);
   copyRegion.srcSubresource.mipLevel = region.srcBaseMipLevel;
   copyRegion.srcSubresource.baseArrayLayer = region.srcBaseArrayLayer;
   copyRegion.srcSubresource.layerCount = region.layerCount;
   copyRegion.srcOffset = region.srcOffset;
   copyRegion.dstSubresource.aspectMask =
-      GetAspectFlagsForFormat(dstTexture.format);
+      GetAspectFlagsForFormat(dstTexture.imageMemory->format);
   copyRegion.dstSubresource.mipLevel = region.dstBaseMipLevel;
   copyRegion.dstSubresource.baseArrayLayer = region.dstBaseArrayLayer;
   copyRegion.dstSubresource.layerCount = region.layerCount;
@@ -1420,9 +1471,10 @@ auto Texture::CopyTo(const GraphicsContext &context, Texture &dstTexture,
   //                          .access = VK_ACCESS_2_TRANSFER_WRITE_BIT,
   //                      });
 
-  vkCmdCopyImage(commandBuffer, image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                 dstTexture.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1,
-                 &copyRegion);
+  vkCmdCopyImage(commandBuffer, imageMemory->image,
+                 VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                 dstTexture.imageMemory->image,
+                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
 
   MarkUse();
   dstTexture.MarkUse();
@@ -1436,7 +1488,8 @@ auto Texture::CopyTo(const GraphicsContext &context, Buffer &dstBuffer,
   copyRegion.bufferOffset = region.dstOffset;
   copyRegion.bufferRowLength = region.extent.width;
   copyRegion.bufferImageHeight = region.extent.height;
-  copyRegion.imageSubresource.aspectMask = GetAspectFlagsForFormat(format);
+  copyRegion.imageSubresource.aspectMask =
+      GetAspectFlagsForFormat(imageMemory->format);
   copyRegion.imageSubresource.mipLevel = region.srcBaseMipLevel;
   copyRegion.imageSubresource.baseArrayLayer = region.srcBaseArrayLayer;
   copyRegion.imageSubresource.layerCount = region.layerCount;
@@ -1461,7 +1514,7 @@ auto Texture::CopyTo(const GraphicsContext &context, Buffer &dstBuffer,
                            .stages = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
                            .access = VK_ACCESS_2_TRANSFER_WRITE_BIT,
                        });
-  vkCmdCopyImageToBuffer(commandBuffer, image,
+  vkCmdCopyImageToBuffer(commandBuffer, imageMemory->image,
                          VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dstBuffer.handle,
                          1, &copyRegion);
   dstBuffer.MarkUse();
@@ -1470,31 +1523,19 @@ auto Texture::CopyTo(const GraphicsContext &context, Buffer &dstBuffer,
 }
 
 Texture::~Texture() {
-  if (isSwapchainView) { // Not owned, don't destroy
+  if (view == VK_NULL_HANDLE) {
+    // Safegaurd against destruction of a texture that was never fully created
     return;
   }
 
-  if (isView) { // Not owned, don't destroy
-    parentTexture->release();
-
-    ScheduleDestruction(TextureViewMemory{.imageView = view,
-                                          .timelineValue = lastUsedTimestamp});
-
-    return;
-  }
-
-  ScheduleDestruction(TextureMemory{.allocation = memory,
-                                    .image = image,
-                                    .imageView = view,
-                                    .timelineValue = lastUsedTimestamp});
-
-  Texture::TotalAllocatedMemory -= sizeInBytes;
+  ScheduleDestruction(TextureViewMemory{
+      .imageView = view, .timelineValue = imageMemory->lastUsedTimestamp});
 }
 
 std::atomic<VkDeviceSize> Texture::TotalAllocatedMemory{};
 
-auto Texture::GenerateMipmaps(GraphicsContext &context) -> Error {
-  if (mipmapcount <= 1) {
+auto Texture::GenerateMipmaps(GraphicsContext &context) const -> Error {
+  if (levelCount <= 1) {
     return Error::Create("Texture does not have multiple mip levels for "
                          "mipmap generation.");
   }
@@ -1504,38 +1545,42 @@ auto Texture::GenerateMipmaps(GraphicsContext &context) -> Error {
     return Error::Create("Failed to get command buffer for mipmap generation.");
   }
 
-  if (Image::IsCompressedTexture(format)) {
+  if (Image::IsCompressedTexture(imageMemory->format)) {
     return Error::Create("Automatic mipmap generation is not supported for "
                          "compressed texture formats.");
   }
 
   DynamicRendering::EndRendering(context);
 
-  auto mipWidth = static_cast<int32_t>(size.width);
-  auto mipHeight = static_cast<int32_t>(size.height);
+  auto mipWidth = static_cast<int32_t>(imageMemory->size.width);
+  auto mipHeight = static_cast<int32_t>(imageMemory->size.height);
 
   VkImageMemoryBarrier2 barrier = {};
   barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-  barrier.srcAccessMask = GetAccessFlagsForUsage(lastUsage, format);
+  barrier.srcAccessMask =
+      GetAccessFlagsForUsage(imageMemory->lastUsage, imageMemory->format);
   barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
   barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-  barrier.image = image;
-  barrier.subresourceRange.aspectMask = GetAspectFlagsForFormat(format);
+  barrier.image = imageMemory->image;
+  barrier.subresourceRange.aspectMask =
+      GetAspectFlagsForFormat(imageMemory->format);
   barrier.subresourceRange.baseMipLevel = 0;
-  barrier.subresourceRange.levelCount = mipmapcount;
-  barrier.subresourceRange.baseArrayLayer = 0;
-  barrier.subresourceRange.layerCount = static_cast<uint32_t>(arrayLayers);
+  barrier.subresourceRange.levelCount = imageMemory->mipmapcount;
+  barrier.subresourceRange.baseArrayLayer = baseArrayLayer;
+  barrier.subresourceRange.layerCount = layerCount;
 
   VkDependencyInfo dep = {};
   dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
   dep.imageMemoryBarrierCount = 1;
   dep.pImageMemoryBarriers = &barrier;
 
-  barrier.srcStageMask = lastPipelineStage;
-  barrier.srcAccessMask = GetAccessFlagsForUsage(lastUsage, format);
+  barrier.srcStageMask = imageMemory->lastPipelineStage;
+  barrier.srcAccessMask =
+      GetAccessFlagsForUsage(imageMemory->lastUsage, imageMemory->format);
   barrier.dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
   barrier.dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
-  barrier.oldLayout = GetRequiredTextureLayout(lastUsage, format);
+  barrier.oldLayout =
+      GetRequiredTextureLayout(imageMemory->lastUsage, imageMemory->format);
   barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
 
   vkCmdPipelineBarrier2(commandBuffer, &dep);
@@ -1544,9 +1589,9 @@ auto Texture::GenerateMipmaps(GraphicsContext &context) -> Error {
 
   // [dst, dst, dst, ...]
 
-  for (uint32_t i = 1; i < mipmapcount; ++i) {
-    auto baseExtent = Image::GetDimensions(size, i - 1);
-    auto mipExtent = Image::GetDimensions(size, i);
+  for (uint32_t i = 1; i < imageMemory->mipmapcount; ++i) {
+    auto baseExtent = Image::GetDimensions(imageMemory->size, i - 1);
+    auto mipExtent = Image::GetDimensions(imageMemory->size, i);
 
     // mip - 1 is transfer write
     // Now needs transfer read
@@ -1565,25 +1610,28 @@ auto Texture::GenerateMipmaps(GraphicsContext &context) -> Error {
     vkCmdPipelineBarrier2(commandBuffer, &dep);
 
     VkImageBlit blit = {};
-    blit.srcSubresource.aspectMask = GetAspectFlagsForFormat(format);
+    blit.srcSubresource.aspectMask =
+        GetAspectFlagsForFormat(imageMemory->format);
     blit.srcSubresource.mipLevel = i - 1;
-    blit.srcSubresource.baseArrayLayer = 0;
-    blit.srcSubresource.layerCount = arrayLayers;
+    blit.srcSubresource.baseArrayLayer = baseArrayLayer;
+    blit.srcSubresource.layerCount = layerCount;
     blit.srcOffsets[0] = {.x = 0, .y = 0, .z = 0};
     blit.srcOffsets[1] = {.x = static_cast<int32_t>(baseExtent.width),
                           .y = static_cast<int32_t>(baseExtent.height),
                           .z = static_cast<int32_t>(baseExtent.depth)};
-    blit.dstSubresource.aspectMask = GetAspectFlagsForFormat(format);
+    blit.dstSubresource.aspectMask =
+        GetAspectFlagsForFormat(imageMemory->format);
     blit.dstSubresource.mipLevel = i;
-    blit.dstSubresource.baseArrayLayer = 0;
-    blit.dstSubresource.layerCount = arrayLayers;
+    blit.dstSubresource.baseArrayLayer = baseArrayLayer;
+    blit.dstSubresource.layerCount = layerCount;
     blit.dstOffsets[0] = {.x = 0, .y = 0, .z = 0};
     blit.dstOffsets[1] = {.x = static_cast<int32_t>(mipExtent.width),
                           .y = static_cast<int32_t>(mipExtent.height),
                           .z = static_cast<int32_t>(mipExtent.depth)};
 
-    vkCmdBlitImage(commandBuffer, image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                   image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit,
+    vkCmdBlitImage(commandBuffer, imageMemory->image,
+                   VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, imageMemory->image,
+                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit,
                    VK_FILTER_LINEAR);
   }
 
@@ -1597,13 +1645,13 @@ auto Texture::GenerateMipmaps(GraphicsContext &context) -> Error {
   barrier.dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT;
   barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
   barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-  barrier.subresourceRange.baseMipLevel = mipmapcount - 1;
+  barrier.subresourceRange.baseMipLevel = imageMemory->mipmapcount - 1;
 
   vkCmdPipelineBarrier2(commandBuffer, &dep);
 
-  lastUsage = TextureUsage::TransferSrc;
-  lastPipelineStage = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
-  currentLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+  imageMemory->lastUsage = TextureUsage::TransferSrc;
+  imageMemory->lastPipelineStage = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+  imageMemory->currentLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
 
   return {};
 }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Graphics/texture.hpp"
+#include "Wrap/Helpers/lua_enum.hpp"
 #include "Wrap/wrap.hpp"
 #include "lua.hpp"
 namespace Wrap::Graphics::Texture {
@@ -26,6 +27,18 @@ auto wrap_GetID(lua_State *state) -> int; // ImGui texture Identifier
 auto wrap_NewTexture(lua_State *state) -> int;
 auto wrap_NewTextureView(lua_State *state) -> int;
 auto wrap_Release(lua_State *state) -> int;
+
+static const LuaWrap::LuaEnum<VkImageViewType> ImageViewTypeEnum{
+    "ImageView",
+    {
+        {"1D", VK_IMAGE_VIEW_TYPE_1D},
+        {"2D", VK_IMAGE_VIEW_TYPE_2D},
+        {"Volume", VK_IMAGE_VIEW_TYPE_3D},
+        {"cubemap", VK_IMAGE_VIEW_TYPE_CUBE},
+        {"array1D", VK_IMAGE_VIEW_TYPE_1D_ARRAY},
+        {"array2D", VK_IMAGE_VIEW_TYPE_2D_ARRAY},
+        {"arrayCube", VK_IMAGE_VIEW_TYPE_CUBE_ARRAY},
+    }};
 
 // NOLINTNEXTLINE
 static const std::vector<luaL_Reg> TextureLib = {

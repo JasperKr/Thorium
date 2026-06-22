@@ -108,6 +108,7 @@ inline auto HandleImguiCreateTextureEvent(Graphics::GraphicsContext &context,
                static_cast<uint32_t>(VK_IMAGE_USAGE_TRANSFER_DST_BIT),
       .mipmapCount = 1,
       .debugName = "Imgui Texture",
+      .textureType = ::Graphics::TextureType::DEFAULT,
   };
 
   auto textureCreationResult = Graphics::Texture::Create(context, createInfo);

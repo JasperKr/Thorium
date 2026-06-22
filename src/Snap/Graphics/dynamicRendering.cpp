@@ -84,15 +84,15 @@ inline auto GetRenderExtent(const GraphicsContext &context, const State &state)
 
   if (state.colorAttachmentCount > 0) {
     return VkExtent2D{
-        .width = state.colorAttachments.at(0).texture->size.width,
-        .height = state.colorAttachments.at(0).texture->size.height,
+        .width = state.colorAttachments.at(0).texture->GetWidth(),
+        .height = state.colorAttachments.at(0).texture->GetHeight(),
     };
   }
 
   if (state.hasDepthStencilAttachment) {
     return VkExtent2D{
-        .width = state.depthStencilAttachment.texture->size.width,
-        .height = state.depthStencilAttachment.texture->size.height,
+        .width = state.depthStencilAttachment.texture->GetWidth(),
+        .height = state.depthStencilAttachment.texture->GetHeight(),
     };
   }
 
@@ -343,11 +343,11 @@ auto BindDefaultTextures(const GraphicsContext &context,
       VkFormat format = VK_FORMAT_R8G8B8A8_UNORM;
       TextureType type = TextureType::DEFAULT;
 
-      if (samplerInfo.shape == SLANG_TEXTURE_3D) {
+      if ((samplerInfo.shape & SLANG_TEXTURE_3D) != 0) {
         type = TextureType::VOLUME;
-      } else if (samplerInfo.shape == SLANG_TEXTURE_CUBE) {
+      } else if ((samplerInfo.shape & SLANG_TEXTURE_CUBE) != 0) {
         type = TextureType::CUBEMAP;
-      } else if (samplerInfo.shape == SLANG_TEXTURE_2D_ARRAY) {
+      } else if ((samplerInfo.shape & SLANG_TEXTURE_2D_ARRAY) != 0) {
         type = TextureType::ARRAY;
       }
 
@@ -596,10 +596,10 @@ inline auto CreateGraphicsPipeline(const GraphicsContext &context, State &state)
     auto &rendertarget = state.depthStencilAttachment;
 
     if (rendertarget.texture->IsDepthTexture()) {
-      depthFormat = rendertarget.texture->format;
+      depthFormat = rendertarget.texture->GetFormat();
     }
     if (rendertarget.texture->IsStencilTexture()) {
-      stencilFormat = rendertarget.texture->format;
+      stencilFormat = rendertarget.texture->GetFormat();
     }
   }
 
@@ -617,7 +617,7 @@ inline auto CreateGraphicsPipeline(const GraphicsContext &context, State &state)
       hasExplicitLocation = true;
     }
 
-    formats.at(location) = rendertarget.texture->format;
+    formats.at(location) = rendertarget.texture->GetFormat();
   }
 
   if (hasImplicitLocation && hasExplicitLocation) {
@@ -1103,17 +1103,17 @@ inline auto BeginRendering(const GraphicsContext &context) -> Error {
 
   for (int i = 0; i < TopOfStack->colorAttachmentCount; i++) {
     const auto &rendertarget = TopOfStack->colorAttachments.at(i);
-    if (rendertarget.texture->size.width != expectedExtent.width ||
-        rendertarget.texture->size.height != expectedExtent.height) {
+    if (rendertarget.texture->GetWidth() != expectedExtent.width ||
+        rendertarget.texture->GetHeight() != expectedExtent.height) {
       return Error::Create(
           "Color attachment extent does not match render area extent.");
     }
   }
 
   if (hasDepth || hasStencil) {
-    if (TopOfStack->depthStencilAttachment.texture->size.width !=
+    if (TopOfStack->depthStencilAttachment.texture->GetWidth() !=
             expectedExtent.width ||
-        TopOfStack->depthStencilAttachment.texture->size.height !=
+        TopOfStack->depthStencilAttachment.texture->GetHeight() !=
             expectedExtent.height) {
       return Error::Create(
           "Depth/stencil attachment extent does not match render area extent.");
@@ -1377,7 +1377,7 @@ inline auto BindTextureDescriptors(const GraphicsContext &context,
             VkDescriptorImageInfo{
                 .sampler = texture->GetSampler(context),
                 .imageView = texture->view,
-                .imageLayout = texture->currentLayout,
+                .imageLayout = texture->imageMemory->currentLayout,
             },
     });
   }
@@ -1980,15 +1980,15 @@ auto SetRenderTargets(const GraphicsContext &context,
   bool topHadDepthStencil = TopOfStack->hasDepthStencilAttachment;
   TopOfStack->hasDepthStencilAttachment = false;
 
-  VkExtent2D expectedExtent = {renderTargets.at(0).texture->size.width,
-                               renderTargets.at(0).texture->size.height};
+  VkExtent2D expectedExtent = {renderTargets.at(0).texture->GetWidth(),
+                               renderTargets.at(0).texture->GetHeight()};
 
   int colorIdx = 0;
 
   for (const auto &target : renderTargets) {
 
-    if (target.texture->size.width != expectedExtent.width ||
-        target.texture->size.height != expectedExtent.height) {
+    if (target.texture->GetWidth() != expectedExtent.width ||
+        target.texture->GetHeight() != expectedExtent.height) {
       return Error::Create("All render targets must have the same dimensions.");
     }
 
@@ -2080,15 +2080,15 @@ auto GetPolygonMode() -> VkPolygonMode { return TopOfStack->polygonMode; }
 auto GetTargetSize() -> VkExtent2D {
   if (TopOfStack->colorAttachmentCount > 0) {
     return {
-        TopOfStack->colorAttachments.at(0).texture->size.width,
-        TopOfStack->colorAttachments.at(0).texture->size.height,
+        TopOfStack->colorAttachments.at(0).texture->GetWidth(),
+        TopOfStack->colorAttachments.at(0).texture->GetHeight(),
     };
   }
 
   if (TopOfStack->hasDepthStencilAttachment) {
     return {
-        TopOfStack->depthStencilAttachment.texture->size.width,
-        TopOfStack->depthStencilAttachment.texture->size.height,
+        TopOfStack->depthStencilAttachment.texture->GetWidth(),
+        TopOfStack->depthStencilAttachment.texture->GetHeight(),
     };
   }
 

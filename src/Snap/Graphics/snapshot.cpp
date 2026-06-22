@@ -224,8 +224,9 @@ inline auto DrawRendertargetImGui(const DynamicRendering::RenderTarget &target,
   auto name = target.texture->GetDebugName();
 
   if (ImGui::TreeNode("Rendertarget", "%s", name.data())) {
-    ImGui::Text("Format: %s",
-                Format::ImageFormatToString(target.texture->format).data());
+    ImGui::Text(
+        "Format: %s",
+        Format::ImageFormatToString(target.texture->GetFormat()).data());
 
     auto blend = target.blendMode;
     BooleanFlag("Blend Mode:", blend.blendEnable != 0U);

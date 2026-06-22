@@ -244,21 +244,6 @@ auto SwapchainManager::Initialize(GraphicsContext &context,
 }
 
 auto SwapchainManager::Deinitialize(GraphicsContext &context) -> void {
-  for (auto &texture : currentTextures) {
-    auto *image = texture->image;
-    auto *view = texture->view;
-
-    {
-      std::lock_guard<std::mutex> lock(
-          Graphics::GraphicsContext::mutexes.device);
-      vkDestroyImageView(context.device, view, GetAllocationCallbacks());
-      // We do not destroy the image here because it is owned by the swapchain.
-    }
-
-    texture->image = nullptr;
-    texture->view = VK_NULL_HANDLE;
-  }
-
   currentTextures.clear();
 
   {
@@ -309,21 +294,6 @@ auto SwapchainManager::CleanupOldSwapchains(GraphicsContext &context,
       [&context, &currentFrame](OldSwapchain &oldSwapchain) -> bool {
         auto swapchainImageCount = oldSwapchain.textures.size();
         if (currentFrame - oldSwapchain.lastFrameUsed > swapchainImageCount) {
-          for (const auto &texture : oldSwapchain.textures) {
-            auto *image = texture->image;
-            auto *view = texture->view;
-
-            {
-              std::lock_guard<std::mutex> lock(
-                  Graphics::GraphicsContext::mutexes.device);
-              vkDestroyImageView(context.device, view,
-                                 GetAllocationCallbacks());
-            }
-
-            texture->image = nullptr;
-            texture->view = VK_NULL_HANDLE;
-          }
-
           oldSwapchain.textures.clear();
 
           std::lock_guard<std::mutex> lock(

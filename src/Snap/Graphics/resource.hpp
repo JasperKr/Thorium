@@ -18,7 +18,6 @@ struct BufferMemory {
 struct TextureMemory {
   VmaAllocation allocation;
   VkImage image;
-  VkImageView imageView;
 
   uint64_t timelineValue;
 

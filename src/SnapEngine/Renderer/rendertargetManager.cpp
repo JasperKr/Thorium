@@ -181,6 +181,7 @@ auto RenderTargetManager::GetRendertarget(
                       Graphics::Format::ImageFormatToString(descriptor.format),
                       std::to_string(descriptor.size.x),
                       std::to_string(descriptor.size.y), Rendertargets.size()),
+      .textureType = ::Graphics::TextureType::DEFAULT,
   };
 
   auto texture = CHECK_RES(::Graphics::Texture::Create(context, info));

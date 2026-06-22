@@ -20,6 +20,7 @@
 #include "Scene/transform.hpp"
 #include <array>
 #include <cstdint>
+#include <vulkan/vulkan_core.h>
 
 namespace Engine::Renderer {
 
@@ -52,6 +53,7 @@ auto LightprobePrefilterManager::Initialize(
                             VK_IMAGE_USAGE_STORAGE_BIT |
                             VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
                    .mipmapCount = ProbeReflectionMipLevels,
+                   .debugName = "Scene Cubemap",
                    .textureType = Graphics::TextureType::CUBEMAP,
                }));
 
@@ -65,6 +67,7 @@ auto LightprobePrefilterManager::Initialize(
                             VK_IMAGE_USAGE_STORAGE_BIT |
                             VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
                    .mipmapCount = ProbeReflectionMipLevels,
+                   .debugName = "Temporary Radiance Map",
                    .textureType = Graphics::TextureType::CUBEMAP,
                }));
 
@@ -129,19 +132,20 @@ auto LightprobePrefilterManager::CreateStorageTextures(
           .usage = static_cast<uint32_t>(VK_IMAGE_USAGE_SAMPLED_BIT) |
                    VK_IMAGE_USAGE_STORAGE_BIT,
           .mipmapCount = ProbeReflectionMipLevels,
+          .debugName = "Radiance Maps",
           .textureType = Graphics::TextureType::ARRAY,
       }));
 
   for (uint32_t level = 0; level < RadianceMaps->GetMipmapCount(); level++) {
-    auto view = CHECK_RES(
-        Graphics::Texture::Create(context, RadianceMaps.get(),
-                                  VkImageSubresourceRange{
-                                      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                                      .baseMipLevel = level,
-                                      .levelCount = 1,
-                                      .baseArrayLayer = 0,
-                                      .layerCount = arrayLayers,
-                                  }));
+    auto view = CHECK_RES(Graphics::Texture::Create(
+        context, RadianceMaps.get(), VK_IMAGE_VIEW_TYPE_2D_ARRAY,
+        VkImageSubresourceRange{
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .baseMipLevel = level,
+            .levelCount = 1,
+            .baseArrayLayer = 0,
+            .layerCount = arrayLayers,
+        }));
     RadianceMapViews.emplace_back(view);
   }
 
@@ -154,19 +158,20 @@ auto LightprobePrefilterManager::CreateStorageTextures(
                    .usage = static_cast<uint32_t>(VK_IMAGE_USAGE_SAMPLED_BIT) |
                             VK_IMAGE_USAGE_STORAGE_BIT,
                    .mipmapCount = 1,
+                   .debugName = "Irradiance Maps",
                    .textureType = Graphics::TextureType::ARRAY,
                }));
 
   for (uint32_t level = 0; level < IrradianceMaps->GetMipmapCount(); level++) {
-    auto view = CHECK_RES(
-        Graphics::Texture::Create(context, IrradianceMaps.get(),
-                                  VkImageSubresourceRange{
-                                      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                                      .baseMipLevel = level,
-                                      .levelCount = 1,
-                                      .baseArrayLayer = 0,
-                                      .layerCount = arrayLayers,
-                                  }));
+    auto view = CHECK_RES(Graphics::Texture::Create(
+        context, IrradianceMaps.get(), VK_IMAGE_VIEW_TYPE_2D_ARRAY,
+        VkImageSubresourceRange{
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .baseMipLevel = level,
+            .levelCount = 1,
+            .baseArrayLayer = 0,
+            .layerCount = arrayLayers,
+        }));
     IrradianceMapViews.emplace_back(view);
   }
 
@@ -209,26 +214,26 @@ auto LightprobePrefilterManager::PrefilterRadianceMap(
   std::vector<Ref<Graphics::Texture>> outputViews;
 
   for (uint32_t level = 0; level < ProbeReflectionMipLevels; level++) {
-    auto inputView = CHECK_RES(
-        Graphics::Texture::Create(context, envMap.get(),
-                                  VkImageSubresourceRange{
-                                      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                                      .baseMipLevel = level,
-                                      .levelCount = 1,
-                                      .baseArrayLayer = 0,
-                                      .layerCount = 1,
-                                  }));
+    auto inputView = CHECK_RES(Graphics::Texture::Create(
+        context, envMap.get(), VK_IMAGE_VIEW_TYPE_2D_ARRAY,
+        VkImageSubresourceRange{
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .baseMipLevel = level,
+            .levelCount = 1,
+            .baseArrayLayer = 0,
+            .layerCount = 1,
+        }));
     inputViews.emplace_back(inputView);
 
-    auto outputView = CHECK_RES(
-        Graphics::Texture::Create(context, output.get(),
-                                  VkImageSubresourceRange{
-                                      .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                                      .baseMipLevel = level,
-                                      .levelCount = 1,
-                                      .baseArrayLayer = 0,
-                                      .layerCount = 1,
-                                  }));
+    auto outputView = CHECK_RES(Graphics::Texture::Create(
+        context, output.get(), VK_IMAGE_VIEW_TYPE_2D_ARRAY,
+        VkImageSubresourceRange{
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .baseMipLevel = level,
+            .levelCount = 1,
+            .baseArrayLayer = 0,
+            .layerCount = 1,
+        }));
     outputViews.emplace_back(outputView);
   }
 
@@ -438,6 +443,9 @@ auto LightprobePrefilterManager::Deinitialize() -> void {
 
   IrradianceMaps.reset();
   IrradianceMapViews.clear();
+
+  SceneCubemap.reset();
+  Camera = Engine::Camera();
 
   TemporaryRadianceMap.reset();
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Graphics/barrier.hpp"
+#include "Graphics/graphicsState.hpp"
 #include "Libraries/vma.hpp"
 #include "Modules/bytedata.hpp"
 #include "Modules/error.hpp"
@@ -152,4 +153,10 @@ struct Buffer : Object, Barrier::BarrierSynced {
 
   std::string debugName;
 };
+
+// NOLINTBEGIN
+extern thread_local std::vector<Ref<Buffer>> UploadBuffers;
+extern thread_local std::array<size_t, FRAMES_IN_FLIGHT> UploadBufferOffsets;
+// NOLINTEND
+
 } // namespace Graphics

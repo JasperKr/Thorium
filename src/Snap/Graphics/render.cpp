@@ -74,7 +74,6 @@ static auto EndRecording(Graphics::GraphicsContext &context,
 }
 
 void TransitionColorToPresent(VkCommandBuffer cmd, Ref<Texture> &texture) {
-
   VkImageMemoryBarrier2 barrier2 = {};
   barrier2.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
   barrier2.srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
@@ -85,7 +84,7 @@ void TransitionColorToPresent(VkCommandBuffer cmd, Ref<Texture> &texture) {
   barrier2.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
   barrier2.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
   barrier2.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-  barrier2.image = texture->image;
+  barrier2.image = texture->imageMemory->image;
   barrier2.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
   barrier2.subresourceRange.baseMipLevel = 0;
   barrier2.subresourceRange.levelCount = 1;

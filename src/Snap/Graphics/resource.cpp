@@ -78,11 +78,9 @@ auto TextureMemory::Destroy() -> void {
          context->vmaAllocator != VK_NULL_HANDLE &&
          "Invalid graphics context during texture destruction.");
 
-  vkDestroyImageView(context->device, imageView, GetAllocationCallbacks());
   vmaDestroyImage(context->vmaAllocator, image, allocation);
 
   image = VK_NULL_HANDLE;
-  imageView = VK_NULL_HANDLE;
   allocation = VK_NULL_HANDLE;
 }
 

@@ -235,7 +235,6 @@ add_library(snap_core OBJECT
     Graphics/buffer.cpp
     Graphics/render.cpp
     Graphics/shader.cpp
-    Graphics/rendergraph.cpp
     Graphics/sampler.cpp
     Graphics/dynamicRendering.cpp
     Graphics/reflect.cpp

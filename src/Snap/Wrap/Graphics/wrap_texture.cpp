@@ -683,6 +683,7 @@ static inline auto TextureFromWidthAndHeight(lua_State *state)
           .usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
           .mipmapCount = 1,
           .debugName = "LuaTexture FromWidthAndHeight",
+          .textureType = ::Graphics::TextureType::DEFAULT,
       });
 }
 
@@ -890,7 +891,11 @@ auto wrap_NewTextureView(lua_State *state) -> int {
 
   auto *ctx = ::Graphics::GetCurrentGraphicsContext();
 
-  auto view = LUA_CK_RES(::Graphics::Texture::Create(*ctx, texture, range));
+  auto imageViewType =
+      ImageViewTypeEnum.FromLua(state, 3, VK_IMAGE_VIEW_TYPE_2D);
+
+  auto view = LUA_CK_RES(
+      ::Graphics::Texture::Create(*ctx, texture, imageViewType, range));
 
   LuaWrap::PushObject(state, ::Graphics::Texture::GetType(), view.get());
 

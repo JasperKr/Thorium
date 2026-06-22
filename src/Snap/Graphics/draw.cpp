@@ -196,7 +196,17 @@ inline auto UpdateShaderResourceLayouts(const GraphicsContext &context,
   const auto &boundTextures = shader->GetState().userBoundTextures;
 
   for (const auto &resource : boundTextures) {
-    CHECK_ERR(resource.second.first->UseAsSampler(context, stage));
+    switch (resource.second.second->access) {
+    case SLANG_RESOURCE_ACCESS_READ:
+      CHECK_ERR(resource.second.first->UseAsSampler(context, stage));
+      break;
+    case SLANG_RESOURCE_ACCESS_READ_WRITE:
+    case SLANG_RESOURCE_ACCESS_WRITE:
+      CHECK_ERR(resource.second.first->UseAsStorage(context, stage));
+      break;
+    default:
+      break;
+    }
   }
 
   return Error::Success();

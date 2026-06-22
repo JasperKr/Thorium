@@ -306,6 +306,7 @@ auto Initialize(Graphics::GraphicsContext &context) -> Error {
 
 auto Deinitialize(Graphics::GraphicsContext &context) -> Error {
   DeInitializeUniformBufferModule(context);
+  Graphics::UploadBuffers.clear();
 
   DynamicRendering::Shutdown(context);
 

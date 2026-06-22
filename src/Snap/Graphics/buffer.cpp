@@ -31,8 +31,8 @@ constexpr size_t LargeUploadThreshold = static_cast<size_t>(128L * 1024L);
 
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
 
-thread_local inline std::vector<Ref<Buffer>> UploadBuffers{FRAMES_IN_FLIGHT};
-thread_local inline std::array<size_t, FRAMES_IN_FLIGHT> UploadBufferOffsets;
+thread_local std::vector<Ref<Buffer>> UploadBuffers{FRAMES_IN_FLIGHT};
+thread_local std::array<size_t, FRAMES_IN_FLIGHT> UploadBufferOffsets;
 
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
@@ -487,7 +487,8 @@ auto Buffer::CopyTo(const GraphicsContext &context,
 
 auto Buffer::CopyTo(const GraphicsContext &context, Texture &dstTexture,
                     VkBufferImageCopy region) const -> Error {
-  if (((dstTexture.usage) & VK_IMAGE_USAGE_TRANSFER_DST_BIT) == 0) {
+  if (((dstTexture.imageMemory->usage) & VK_IMAGE_USAGE_TRANSFER_DST_BIT) ==
+      0) {
     return Error::Create("Destination texture was not created with "
                          "TRANSFER_DST usage flag for copy.");
   }
@@ -507,7 +508,7 @@ auto Buffer::CopyTo(const GraphicsContext &context, Texture &dstTexture,
 
   CHECK_ERR(dstTexture.UseAsTransferDst(context));
 
-  vkCmdCopyBufferToImage(commandBuffer, handle, dstTexture.image,
+  vkCmdCopyBufferToImage(commandBuffer, handle, dstTexture.imageMemory->image,
                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
   MarkUse();

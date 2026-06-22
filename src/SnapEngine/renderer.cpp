@@ -304,6 +304,7 @@ auto DrawFullScreen(const Graphics::GraphicsContext &context) -> Error {
 
 void Renderer::Deinitialize() {
   GlobalRenderTargetManager.Deinitialize();
+  PrefilterManager.Deinitialize();
 
   if (!initialized) {
     return;

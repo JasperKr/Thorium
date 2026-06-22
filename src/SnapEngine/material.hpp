@@ -90,15 +90,13 @@ struct Material {
     Hash::Hasher hasher;
 
     hasher.Add(shader ? shader->hash() : 0);
-    hasher.Add(albedoTexture ? (void *)albedoTexture->image : nullptr);
-    hasher.Add(metallicRoughnessTexture
-                   ? (void *)metallicRoughnessTexture->image
-                   : nullptr);
-    hasher.Add(ambientOcclusionTexture ? (void *)ambientOcclusionTexture->image
+    hasher.Add(albedoTexture ? (void *)albedoTexture->view : nullptr);
+    hasher.Add(metallicRoughnessTexture ? (void *)metallicRoughnessTexture->view
+                                        : nullptr);
+    hasher.Add(ambientOcclusionTexture ? (void *)ambientOcclusionTexture->view
                                        : nullptr);
-    hasher.Add(reflectanceTexture ? (void *)reflectanceTexture->image
-                                  : nullptr);
-    hasher.Add(emissiveTexture ? (void *)emissiveTexture->image : nullptr);
+    hasher.Add(reflectanceTexture ? (void *)reflectanceTexture->view : nullptr);
+    hasher.Add(emissiveTexture ? (void *)emissiveTexture->view : nullptr);
 
     return hasher.Get();
   }

@@ -272,6 +272,7 @@ static auto CreateDevice(GraphicsContext &context,
       {VK_EXT_VERTEX_INPUT_DYNAMIC_STATE_EXTENSION_NAME, extRequired},
       {VK_EXT_COLOR_WRITE_ENABLE_EXTENSION_NAME, extRequired},
       {VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME, extRequired},
+      {VK_KHR_UNIFIED_IMAGE_LAYOUTS_EXTENSION_NAME, extRequired},
 
       {VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
        settings.hardwareRaytracing},
@@ -528,6 +529,8 @@ void Deinitialize(GraphicsContext &context) {
   PrintInfo("Deinitializing graphics context...");
 
   vkDeviceWaitIdle(context.device);
+
+  Graphics::UploadBuffers.clear();
 
   Graphics::Barrier::ResetModule();
 
