@@ -94,13 +94,18 @@ auto LightprobePrefilterManager::Initialize(
       context, "Scripting/Graphics/Shaders/IBL/downsample.slang",
       "Environment map downsample"));
 
-  StoreEnvironmentMapShader = CHECK_RES(Graphics::Shader::ShaderModule::Create(
-      context, "Scripting/Graphics/Shaders/IBL/envToOct.slang",
-      "Store environment map"));
+  EnvironmentMapToOctahedralShader =
+      CHECK_RES(Graphics::Shader::ShaderModule::Create(
+          context, "Scripting/Graphics/Shaders/IBL/envToOct.slang",
+          "Store environment map"));
 
   PrefilterRadianceShader = CHECK_RES(Graphics::Shader::ShaderModule::Create(
       context, "Scripting/Graphics/Shaders/IBL/filterRadiance.slang",
       "Prefilter radiance"));
+
+  PrefilterIrradianceShader = CHECK_RES(Graphics::Shader::ShaderModule::Create(
+      context, "Scripting/Graphics/Shaders/IBL/filterIrradiance.slang",
+      "Prefilter irradiance"));
 
   StoreEnvironmentMapShader = CHECK_RES(Graphics::Shader::ShaderModule::Create(
       context, "Scripting/Graphics/Shaders/IBL/storeEnvMap.slang",
@@ -113,6 +118,9 @@ auto LightprobePrefilterManager::Initialize(
       100.0F));
   Camera.SetPersistentTextureSettings({
       .IncomingLight = true,
+  });
+  Camera.SetSettings(Camera::Settings{
+      .DoPostProcessing = false,
   });
 
   return {};
@@ -210,12 +218,13 @@ auto LightprobePrefilterManager::PrefilterRadianceMap(
 
   /// Prepare texture views ///
 
-  std::vector<Ref<Graphics::Texture>> inputViews;
+  std::vector<Ref<Graphics::Texture>> envMapCubeViews;
+  std::vector<Ref<Graphics::Texture>> envMapArrayViews;
   std::vector<Ref<Graphics::Texture>> outputViews;
 
   for (uint32_t level = 0; level < ProbeReflectionMipLevels; level++) {
-    auto inputView = CHECK_RES(Graphics::Texture::Create(
-        context, envMap.get(), VK_IMAGE_VIEW_TYPE_2D_ARRAY,
+    auto inputCubeView = CHECK_RES(Graphics::Texture::Create(
+        context, envMap.get(), VK_IMAGE_VIEW_TYPE_CUBE,
         VkImageSubresourceRange{
             .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
             .baseMipLevel = level,
@@ -223,7 +232,18 @@ auto LightprobePrefilterManager::PrefilterRadianceMap(
             .baseArrayLayer = 0,
             .layerCount = 1,
         }));
-    inputViews.emplace_back(inputView);
+    envMapCubeViews.emplace_back(inputCubeView);
+
+    auto inputArrayView = CHECK_RES(Graphics::Texture::Create(
+        context, envMap.get(), VK_IMAGE_VIEW_TYPE_2D_ARRAY,
+        VkImageSubresourceRange{
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .baseMipLevel = level,
+            .levelCount = 1,
+            .baseArrayLayer = 0,
+            .layerCount = 6,
+        }));
+    envMapArrayViews.emplace_back(inputArrayView);
 
     auto outputView = CHECK_RES(Graphics::Texture::Create(
         context, output.get(), VK_IMAGE_VIEW_TYPE_2D_ARRAY,
@@ -244,8 +264,10 @@ auto LightprobePrefilterManager::PrefilterRadianceMap(
   for (uint32_t level = 0; level < ProbeReflectionMipLevels - 1; level++) {
     auto &params = levelParameters.at(level);
 
-    CHECK_ERR(DownsampleShader->Send({"tex_hi_res"}, inputViews.at(level)));
-    CHECK_ERR(DownsampleShader->Send({"tex_lo_res"}, inputViews.at(level + 1)));
+    CHECK_ERR(
+        DownsampleShader->Send({"tex_hi_res"}, envMapCubeViews.at(level)));
+    CHECK_ERR(
+        DownsampleShader->Send({"tex_lo_res"}, envMapArrayViews.at(level + 1)));
 
     CHECK_ERR(Graphics::DispatchWithin(
         context, {params.Resolution, params.Resolution, 6}));
@@ -291,7 +313,14 @@ auto LightprobePrefilterManager::PrefilterRadianceMap(
 
   Graphics::DynamicRendering::SetShader(StoreEnvironmentMapShader);
 
-  CHECK_ERR(Graphics::DispatchWithin(context, {PixelCount, 1, 1}));
+  constexpr static uint64_t FullPixelCount = Image::GetTexelCount(
+      VkExtent2D{
+          .width = PrefilteredRadianceMapsSize,
+          .height = PrefilteredRadianceMapsSize,
+      },
+      ProbeReflectionMipLevels);
+
+  CHECK_ERR(Graphics::DispatchWithin(context, {FullPixelCount, 1, 1}));
 
   return {};
 }
@@ -348,24 +377,24 @@ auto LightprobePrefilterManager::PrefilterEnvironmentMap(
 }
 
 const static std::array<Engine::Transform, 6> Transforms = {
+    Engine::Transform(Math::Vec3{0.0F, 0.0F, 0.0F}, // X+
+                      Math::Conversions::ToQuaternion(
+                          Math::EulerAngle(90.0F, 0.0F, 0.0F).ToRadians())),
+    Engine::Transform(Math::Vec3{0.0F, 0.0F, 0.0F}, // X-
+                      Math::Conversions::ToQuaternion(
+                          Math::EulerAngle(-90.0F, 0.0F, 0.0F).ToRadians())),
+    Engine::Transform(Math::Vec3{0.0F, 0.0F, 0.0F}, // Y+
+                      Math::Conversions::ToQuaternion(
+                          Math::EulerAngle(0.0F, 90.0F, 0.0F).ToRadians())),
+    Engine::Transform(Math::Vec3{0.0F, 0.0F, 0.0F}, // Y-
+                      Math::Conversions::ToQuaternion(
+                          Math::EulerAngle(0.0F, -90.0F, 0.0F).ToRadians())),
     Engine::Transform(Math::Vec3{0.0F, 0.0F, 0.0F}, // Z+
                       Math::Conversions::ToQuaternion(
                           Math::EulerAngle(0.0F, 0.0F, 0.0F).ToRadians())),
     Engine::Transform(Math::Vec3{0.0F, 0.0F, 0.0F}, // Z-
                       Math::Conversions::ToQuaternion(
                           Math::EulerAngle(0.0F, 180.0F, 0.0F).ToRadians())),
-    Engine::Transform(Math::Vec3{0.0F, 0.0F, 0.0F}, // X+
-                      Math::Conversions::ToQuaternion(
-                          Math::EulerAngle(0.0F, 90.0F, 0.0F).ToRadians())),
-    Engine::Transform(Math::Vec3{0.0F, 0.0F, 0.0F}, // X-
-                      Math::Conversions::ToQuaternion(
-                          Math::EulerAngle(0.0F, -90.0F, 0.0F).ToRadians())),
-    Engine::Transform(Math::Vec3{0.0F, 0.0F, 0.0F}, // Y+
-                      Math::Conversions::ToQuaternion(
-                          Math::EulerAngle(90.0F, 0.0F, 0.0F).ToRadians())),
-    Engine::Transform(Math::Vec3{0.0F, 0.0F, 0.0F}, // Y-
-                      Math::Conversions::ToQuaternion(
-                          Math::EulerAngle(-90.0F, 0.0F, 0.0F).ToRadians())),
 };
 
 const static Math::Matrix4x4 ProjectionMatrix =
@@ -392,9 +421,26 @@ auto LightprobePrefilterManager::PrefilterLightProbe(
                 lightProbe.EnvironmentMapIndex);
   }
 
+  std::vector<Ref<Graphics::Texture>> envMapArrayViews;
+
+  for (uint32_t layer = 0; layer < 6; layer++) { // NOLINT
+    auto inputArrayView = CHECK_RES(Graphics::Texture::Create(
+        context, SceneCubemap.get(), VK_IMAGE_VIEW_TYPE_2D_ARRAY,
+        VkImageSubresourceRange{
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .baseMipLevel = 0,
+            .levelCount = 1,
+            .baseArrayLayer = layer,
+            .layerCount = 1,
+        }));
+    envMapArrayViews.emplace_back(inputArrayView);
+  }
+
   for (int i = 0; i < Transforms.size(); i++) {
     auto cubemapTransfrom = Transforms.at(i);
     cubemapTransfrom.SetPosition(transform.GetPosition());
+    cubemapTransfrom.UpdateLocalMatrix();
+    cubemapTransfrom.UpdateWorldMatrix(nullptr);
 
     Engine::CameraMatrices drawMatrices = CameraMatrices;
 
@@ -422,8 +468,7 @@ auto LightprobePrefilterManager::PrefilterLightProbe(
         context, {
                      Graphics::DynamicRendering::RenderTarget{
                          .blendMode = Graphics::BlendmodeNone,
-                         .texture = SceneCubemap,
-                         .layer = i,
+                         .texture = envMapArrayViews.at(i),
                          .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
                      },
                  }));
@@ -458,6 +503,7 @@ auto LightprobePrefilterManager::Deinitialize() -> void {
   PrefilterRadianceShader.reset();
   PrefilterIrradianceShader.reset();
   StoreEnvironmentMapShader.reset();
+  EnvironmentMapToOctahedralShader.reset();
 }
 
 } // namespace Engine::Renderer

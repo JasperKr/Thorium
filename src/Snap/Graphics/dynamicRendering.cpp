@@ -1049,7 +1049,7 @@ inline auto BeginRendering(const GraphicsContext &context) -> Error {
     VkRenderingAttachmentInfo attachmentInfo = {};
     attachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
     attachmentInfo.imageView = rendertarget.texture->view;
-    attachmentInfo.imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    attachmentInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
     attachmentInfo.loadOp = rendertarget.loadOp;
     attachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     attachmentInfo.clearValue = rendertarget.clearValue;
@@ -1074,8 +1074,7 @@ inline auto BeginRendering(const GraphicsContext &context) -> Error {
     VkRenderingAttachmentInfo attachmentInfo = {};
     attachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
     attachmentInfo.imageView = rendertarget.texture->view;
-    attachmentInfo.imageLayout =
-        VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    attachmentInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
     attachmentInfo.loadOp = rendertarget.loadOp;
     attachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     attachmentInfo.clearValue = rendertarget.clearValue;
@@ -1377,7 +1376,7 @@ inline auto BindTextureDescriptors(const GraphicsContext &context,
             VkDescriptorImageInfo{
                 .sampler = texture->GetSampler(context),
                 .imageView = texture->view,
-                .imageLayout = texture->imageMemory->currentLayout,
+                .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
             },
     });
   }

@@ -726,6 +726,8 @@ auto ShaderModule::Send(const ResourceKey &key,
     }
 
     const auto &samplerInfo = std::get<Reflect::SamplerInfo>(resource.info);
+    assert(resource.name != nullptr);
+
     if (strcmp(resource.name, *key.begin()) == 0) {
       auto key = Utils::SetBindingToSlot(samplerInfo.set, samplerInfo.binding);
 

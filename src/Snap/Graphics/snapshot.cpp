@@ -265,7 +265,7 @@ inline auto DrawRendertargetImGui(const DynamicRendering::RenderTarget &target,
     }
 
     ImGui::Text("Location: %d", location);
-    ImGui::Text("Layer: %d", target.layer);
+    // ImGui::Text("Layer: %d", target.layer);
 
     ImGui::TreePop();
   }

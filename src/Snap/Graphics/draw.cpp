@@ -212,15 +212,39 @@ inline auto UpdateShaderResourceLayouts(const GraphicsContext &context,
   return Error::Success();
 }
 
-inline auto InsertResourceBarriers(const GraphicsContext &context) -> Error {
-  auto shader = DynamicRendering::GetShader();
-  if (shader == nullptr) {
-    return Error::Success(); // No shader, so nothing to update
+inline auto IsHazard(const Ref<Graphics::Texture> &first,
+                     const Ref<Graphics::Texture> &second) {
+  if (first->imageMemory->image != second->imageMemory->image) {
+    return false;
   }
+
+  // Check if the two textures overlap in mip levels or array layers
+  auto firstMipRange = std::make_pair(first->baseMipLevel,
+                                      first->baseMipLevel + first->levelCount);
+  auto secondMipRange = std::make_pair(
+      second->baseMipLevel, second->baseMipLevel + second->levelCount);
+
+  auto firstLayerRange = std::make_pair(
+      first->baseArrayLayer, first->baseArrayLayer + first->layerCount);
+  auto secondLayerRange = std::make_pair(
+      second->baseArrayLayer, second->baseArrayLayer + second->layerCount);
+
+  bool mipOverlap = firstMipRange.second > secondMipRange.first &&
+                    secondMipRange.second > firstMipRange.first;
+  bool layerOverlap = firstLayerRange.second > secondLayerRange.first &&
+                      secondLayerRange.second > firstLayerRange.first;
+
+  return mipOverlap && layerOverlap;
+}
+
+inline auto InsertTextureBarriers(const GraphicsContext &context) -> Error {
+  auto shader = DynamicRendering::GetShader();
 
   for (auto &texturePair : shader->GetState().userBoundTextures) {
     auto &texture = texturePair.second;
     auto key = texturePair.first;
+
+    texture.first->MarkUse();
 
     const auto *infoResult = shader->GetSlotDescription(key);
     if (infoResult == nullptr) {
@@ -272,16 +296,18 @@ inline auto InsertResourceBarriers(const GraphicsContext &context) -> Error {
     }
 
 #ifndef NDEBUG
-    const auto &targets = DynamicRendering::GetRenderTargets();
-    for (const auto &target : targets) {
-      if (target.texture == texture.first) {
-        auto debugname = texture.first->GetDebugName();
-        return Error::Createf(
-            "Texture {} is bound as a render target, but is also used as a "
-            "shader "
-            "resource. This is not supported and may indicate a bug in the "
-            "application.",
-            debugname);
+    if (DynamicRendering::GetBindPoint() == VK_PIPELINE_BIND_POINT_GRAPHICS) {
+      const auto &targets = DynamicRendering::GetRenderTargets();
+      for (const auto &target : targets) {
+        if (IsHazard(texture.first, target.texture)) {
+          auto debugname = texture.first->GetDebugName();
+          return Error::Createf(
+              "Texture {} is bound as a render target, but is also used as a "
+              "shader "
+              "resource. This is not supported and may indicate a bug in the "
+              "application.",
+              debugname);
+        }
       }
     }
 #endif
@@ -292,6 +318,89 @@ inline auto InsertResourceBarriers(const GraphicsContext &context) -> Error {
                              .access = access,
                          });
   }
+
+  return {};
+}
+
+inline auto InsertBufferBarriers(const GraphicsContext &context) -> Error {
+  auto shader = DynamicRendering::GetShader();
+
+  for (auto &bufferPair : shader->GetState().userBoundBuffers) {
+    auto &buffer = bufferPair.second;
+    auto key = bufferPair.first;
+
+    buffer.first->MarkUse();
+
+    const auto *slotInfo = shader->GetSlotDescription(key);
+    if (slotInfo == nullptr) {
+      return Error::Create(
+          "Failed to get slot description for bound buffer slot.");
+    }
+    if (!slotInfo->Is<Reflect::BufferInfo>()) {
+      return Error::Create("Expected buffer info for bound buffer slot.");
+    }
+
+    const auto &info = slotInfo->GetInfo<Reflect::BufferInfo>();
+
+    VkAccessFlags2 access = 0;
+
+    switch (info.access) {
+    case SLANG_RESOURCE_ACCESS_READ:
+      access = VK_ACCESS_2_SHADER_READ_BIT;
+      break;
+    case SLANG_RESOURCE_ACCESS_READ_WRITE:
+      access = VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT;
+      break;
+    case SLANG_RESOURCE_ACCESS_WRITE:
+      access = VK_ACCESS_2_SHADER_WRITE_BIT;
+      break;
+    default:
+      break;
+    }
+
+    if (access == 0 && info.access != SLANG_RESOURCE_ACCESS_NONE) {
+      PrintWarning("Buffer access type is Unknown for slang access: {}, "
+                   "skipping barrier.",
+                   static_cast<uint32_t>(info.access));
+      continue;
+    }
+
+    auto stages = VK_PIPELINE_STAGE_2_NONE;
+
+    for (const auto &stage : shader->entryPoints) {
+      switch (stage.second) {
+      case VK_SHADER_STAGE_VERTEX_BIT:
+        stages |= VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT;
+        break;
+      case VK_SHADER_STAGE_FRAGMENT_BIT:
+        stages |= VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+        break;
+      case VK_SHADER_STAGE_COMPUTE_BIT:
+        stages |= VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+        break;
+      default:
+        break;
+      }
+    }
+
+    Barrier::UpdateUsage(context, *buffer.first,
+                         {
+                             .stages = stages,
+                             .access = access,
+                         });
+  }
+
+  return {};
+}
+
+inline auto InsertResourceBarriers(const GraphicsContext &context) -> Error {
+  auto shader = DynamicRendering::GetShader();
+  if (shader == nullptr) {
+    return Error::Success(); // No shader, so nothing to update
+  }
+
+  CHECK_ERR(InsertTextureBarriers(context));
+  CHECK_ERR(InsertBufferBarriers(context));
 
   return Error::Success();
 }

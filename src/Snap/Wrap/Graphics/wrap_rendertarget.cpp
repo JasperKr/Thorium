@@ -303,7 +303,7 @@ auto RenderTargetsFromOptions(lua_State *state, int index)
   // layer
   lua_getfield(state, index, "layer");
   if (lua_isnumber(state, -1) != 0) {
-    rendertarget.layer = static_cast<int>(lua_tointeger(state, -1));
+    // rendertarget.layer = static_cast<int>(lua_tointeger(state, -1));
   }
   lua_pop(state, 1);
 
@@ -440,7 +440,6 @@ auto wrap_SetRenderTargets(lua_State *state) -> int {
     rendertarget.texture =
         ctx->swapchainInfo.textures[ctx->swapchainImageIndex];
     rendertarget.location = 0;
-    rendertarget.layer = 0;
     rendertarget.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
 
     auto setResult =

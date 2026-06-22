@@ -120,7 +120,7 @@ int2 OctWrap(int2 size, int2 uv) {
   return uv;
 }
 
-float2 Oct3To2(float3 n) {
+public float2 Oct3To2(float3 n) {
   float tx, ty;
   bool neg;
   tx = abs(n.x) + abs(n.y);

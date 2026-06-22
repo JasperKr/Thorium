@@ -65,6 +65,7 @@ private:
   Ref<Graphics::Shader::ShaderModule> PrefilterRadianceShader;
   Ref<Graphics::Shader::ShaderModule> PrefilterIrradianceShader;
   Ref<Graphics::Shader::ShaderModule> StoreEnvironmentMapShader;
+  Ref<Graphics::Shader::ShaderModule> EnvironmentMapToOctahedralShader;
 
   Engine::Camera Camera;
 

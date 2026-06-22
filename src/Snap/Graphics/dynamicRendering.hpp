@@ -269,7 +269,6 @@ struct RenderTarget {
   VkClearValue clearValue = {};
   Ref<Texture> texture;
   int location = -1; // Default to index in the render target array
-  int layer = 0;
   mutable bool dirty = true;
 
   VkAttachmentLoadOp loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
@@ -282,7 +281,7 @@ struct RenderTarget {
       return false;
     }
 
-    return location == other.location && layer == other.layer;
+    return location == other.location;
   }
 };
 
@@ -406,14 +405,13 @@ struct StateKey {
         primitiveTopology(state.primitiveTopology) {
 
     colorAttachments.fill({0, -1, -1});
-    depthStencilTextureID = {.textureID = 0, .location = -1, .layer = -1};
+    depthStencilTextureID = {.textureID = 0, .location = -1};
 
     for (int i = 0; i < state.colorAttachmentCount; i++) {
       const auto &attachment = state.colorAttachments.at(i);
       colorAttachments.at(i) = RendertargetKey{
           .textureID = attachment.texture->getID(),
           .location = attachment.location,
-          .layer = attachment.layer,
       };
     }
 
@@ -421,7 +419,6 @@ struct StateKey {
       depthStencilTextureID = RendertargetKey{
           .textureID = state.depthStencilAttachment.texture->getID(),
           .location = 0,
-          .layer = 0,
       };
     }
   }
@@ -466,7 +463,6 @@ inline auto HashRenderTarget(const RenderTarget &renderTarget) -> size_t {
 
   hasher.Add(renderTarget.texture->getID());
   hasher.Add(renderTarget.location);
-  hasher.Add(renderTarget.layer);
 
   return hasher.Get();
 }

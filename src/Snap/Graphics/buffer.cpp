@@ -509,7 +509,7 @@ auto Buffer::CopyTo(const GraphicsContext &context, Texture &dstTexture,
   CHECK_ERR(dstTexture.UseAsTransferDst(context));
 
   vkCmdCopyBufferToImage(commandBuffer, handle, dstTexture.imageMemory->image,
-                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+                         VK_IMAGE_LAYOUT_GENERAL, 1, &region);
 
   MarkUse();
   dstTexture.MarkUse();

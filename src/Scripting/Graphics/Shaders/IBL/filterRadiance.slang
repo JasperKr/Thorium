@@ -29,7 +29,6 @@
 // layout(r11f_g11f_b10f) uniform restrict writeonly imageCube tex_out6;
 
 SamplerCube InputTexture;
-SamplerState trilinear;
 
 RWTexture2DArray<float4> OutputTexture0;
 RWTexture2DArray<float4> OutputTexture1;
@@ -47,7 +46,6 @@ RWTexture2DArray<float4> OutputTexture6;
 StructuredBuffer<float4> Coefficients;
 
 #define NUM_TAPS 32
-#define BASE 128
 
 import helpers;
 import cubemapHelpers;
@@ -70,7 +68,10 @@ void computeMain(uint3 invocationID: SV_DispatchThreadID) {
   int level;
   float2 uv;
 
-  getTexelInfo(id, level, uv, BASE);
+  getTexelInfo(id, level, uv, 128);
+
+  if (level < 0)
+    return;
 
   // determine dir / pos for the texel
   float3 dir, adir, frameZ;

@@ -22,7 +22,6 @@ float3 DecodeOctahedron(float2 e) {
   return normalize(v);
 }
 
-#define BASE 512
 import cubemapHelpers;
 
 uniform int Slice;
@@ -33,7 +32,10 @@ void computeMain(uint3 id: SV_DispatchThreadID) {
   int level;
   float2 uv;
 
-  getTexelInfo(id, level, uv, BASE);
+  getTexelInfo(id, level, uv, 512);
+
+  if (level < 0)
+    return;
 
   uv.y = -uv.y;
   float3 direction = DecodeOctahedron(uv * 0.5 + 0.5);

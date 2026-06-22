@@ -19,6 +19,7 @@
 #include "Modules/object.hpp"
 #include "sampler.hpp"
 #include "stb/stb_image.h"
+#include <algorithm>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -340,6 +341,8 @@ auto Texture::Create(const GraphicsContext &context, Texture *parentTexture,
   // ignore set debug name error, since it's not critical
   auto err = SetDebugName(textureView->debugName, textureView.get(), context);
 
+  textureView->MarkUse();
+
   return textureView;
 }
 
@@ -576,10 +579,10 @@ auto Texture::FromMemory(GraphicsContext &context,
 
   DynamicRendering::EndRendering(context);
 
-  vkCmdCopyBufferToImage(
-      commandBuffer, buffer->handle, texture->imageMemory->image,
-      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-      static_cast<uint32_t>(copyRegions.size()), copyRegions.data());
+  vkCmdCopyBufferToImage(commandBuffer, buffer->handle,
+                         texture->imageMemory->image, VK_IMAGE_LAYOUT_GENERAL,
+                         static_cast<uint32_t>(copyRegions.size()),
+                         copyRegions.data());
 
   // TODO: Check lifetime
   buffer->MarkUse();
@@ -695,57 +698,6 @@ auto Texture::FromMemory(GraphicsContext &context,
   return texture;
 }
 
-auto ImageLayoutToString(VkImageLayout layout) -> const char * {
-  switch (layout) {
-  case VK_IMAGE_LAYOUT_UNDEFINED:
-    return "UNDEFINED";
-  case VK_IMAGE_LAYOUT_GENERAL:
-    return "GENERAL";
-  case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
-    return "COLOR_ATTACHMENT_OPTIMAL";
-  case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:
-    return "DEPTH_STENCIL_ATTACHMENT_OPTIMAL";
-  case VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL:
-    return "DEPTH_STENCIL_READ_ONLY_OPTIMAL";
-  case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
-    return "SHADER_READ_ONLY_OPTIMAL";
-  case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:
-    return "TRANSFER_SRC_OPTIMAL";
-  case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
-    return "TRANSFER_DST_OPTIMAL";
-  case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR:
-    return "PRESENT_SRC_KHR";
-  default:
-    return "UNKNOWN_LAYOUT";
-  }
-}
-
-auto GetAccessMask(VkImageLayout layout) -> VkAccessFlags {
-  switch (layout) {
-  case VK_IMAGE_LAYOUT_GENERAL:
-    return VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-  case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL:
-    return VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-  case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL:
-    return VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-  case VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL:
-    return VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
-  case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
-    return VK_ACCESS_SHADER_READ_BIT;
-  case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL:
-    return VK_ACCESS_TRANSFER_READ_BIT;
-  case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
-    return VK_ACCESS_TRANSFER_WRITE_BIT;
-  case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR:
-  case VK_IMAGE_LAYOUT_UNDEFINED:
-    return 0;
-  default:
-    PrintWarning("GetAccessMask: Unsupported layout {}",
-                 ImageLayoutToString(layout));
-    return 0;
-  }
-}
-
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 auto Texture::TransitionLayout(const GraphicsContext &context,
                                VkImageLayout layout,
@@ -761,15 +713,8 @@ auto Texture::TransitionLayout(const GraphicsContext &context,
         "be greater than 0.");
   }
 
-  if (layout == VK_IMAGE_LAYOUT_UNDEFINED) {
-    return Error::Create("Cannot transition to UNDEFINED layout.");
-  }
-
-  auto currentLayout = imageMemory->currentLayout;
-  auto currentAccessMask = GetAccessMask(currentLayout);
-
-  if (currentLayout == layout && sourceStage == destinationStage &&
-      srcAccessMask == dstAccessMask) {
+  if (sourceStage == destinationStage && srcAccessMask == dstAccessMask &&
+      imageMemory->currentLayout == layout) {
     return Error::Success();
   }
 
@@ -781,7 +726,7 @@ auto Texture::TransitionLayout(const GraphicsContext &context,
 
   VkImageMemoryBarrier2 barrier = {};
   barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-  barrier.oldLayout = currentLayout;
+  barrier.oldLayout = imageMemory->currentLayout;
   barrier.newLayout = layout;
   barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
   barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
@@ -949,8 +894,8 @@ inline auto WriteSimplifiedPixelData(const Ref<Texture> &texture,
   DynamicRendering::EndRendering(context);
 
   vkCmdCopyBufferToImage(commandBuffer, buffer->handle,
-                         texture->imageMemory->image,
-                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+                         texture->imageMemory->image, VK_IMAGE_LAYOUT_GENERAL,
+                         1, &region);
 
   CHECK_ERR(
       texture->UseAsSampler(context, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT));
@@ -1102,7 +1047,7 @@ auto Texture::SetPixels(const GraphicsContext &context,
   DynamicRendering::EndRendering(context);
 
   vkCmdCopyBufferToImage(commandBuffer, buffer->handle, imageMemory->image,
-                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+                         VK_IMAGE_LAYOUT_GENERAL, 1, &region);
 
   // TODO: Check lifetime
   buffer->MarkUse();
@@ -1122,7 +1067,8 @@ auto Texture::SetPixels(const GraphicsContext &context,
 
 auto Texture::MarkUse() const -> void {
   imageMemory->lastUsedTimestamp =
-      Graphics::SemaphoreManager::GetSemaphoreValue();
+      std::max(imageMemory->lastUsedTimestamp,
+               Graphics::SemaphoreManager::GetSemaphoreValue());
 }
 
 struct VkFormatTextureTypeHash {
@@ -1261,42 +1207,6 @@ inline auto GetAccessFlagsForUsage(
   }
 }
 
-constexpr auto GetRequiredTextureLayout(TextureUsage usage, VkFormat format)
-    -> VkImageLayout {
-
-#ifndef NDEBUG
-  assert(usage != TextureUsage::Unknown &&
-         "GetRequiredTextureLayout: TextureUsage::Unknown is not a valid "
-         "usage.");
-#endif
-
-  switch (usage) {
-  case TextureUsage::Sampler:
-    return VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-  case TextureUsage::Storage:
-    return VK_IMAGE_LAYOUT_GENERAL;
-  case TextureUsage::Attachment:
-    if (Image::IsDepthOrStencilTexture(format)) {
-      return VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-    } else {
-      return VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    }
-  case TextureUsage::TransferSrc:
-    return VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-  case TextureUsage::TransferDst:
-    return VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-  case TextureUsage::Unknown:
-  case TextureUsage::Swapchain:
-    return VK_IMAGE_LAYOUT_UNDEFINED;
-  case TextureUsage::PresentSrc:
-    return VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-  default:
-    PrintError("GetRequiredTextureLayout: Unknown texture usage: {}",
-               static_cast<int>(usage));
-    return VK_IMAGE_LAYOUT_UNDEFINED;
-  }
-}
-
 auto Texture::UseAs(const GraphicsContext &context, TextureUsage newUsage,
                     VkPipelineStageFlags2 stage, VkAttachmentLoadOp loadOp,
                     VkAttachmentStoreOp storeOp) -> Error {
@@ -1311,8 +1221,6 @@ auto Texture::UseAs(const GraphicsContext &context, TextureUsage newUsage,
         "UseAs: stage must be known when transitioning layouts.");
   }
 
-  auto layout = GetRequiredTextureLayout(newUsage, imageMemory->format);
-
   VkAccessFlags2 currentAccess =
       GetAccessFlagsForUsage(imageMemory->lastUsage, imageMemory->format);
   VkAccessFlags2 newAccess =
@@ -1326,7 +1234,6 @@ auto Texture::UseAs(const GraphicsContext &context, TextureUsage newUsage,
     currentAccess = VK_ACCESS_2_NONE;
     imageMemory->lastPipelineStage =
         VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
-    imageMemory->currentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
   }
 
   if (layerCount == 0 || levelCount == 0) {
@@ -1341,6 +1248,11 @@ auto Texture::UseAs(const GraphicsContext &context, TextureUsage newUsage,
       .baseArrayLayer = baseArrayLayer,
       .layerCount = layerCount,
   };
+
+  auto layout = VK_IMAGE_LAYOUT_GENERAL;
+  if (newUsage == TextureUsage::PresentSrc) {
+    layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+  }
 
   auto result =
       TransitionLayout(context, layout, imageMemory->lastPipelineStage, stage,
@@ -1471,10 +1383,9 @@ auto Texture::CopyTo(const GraphicsContext &context, Texture &dstTexture,
   //                          .access = VK_ACCESS_2_TRANSFER_WRITE_BIT,
   //                      });
 
-  vkCmdCopyImage(commandBuffer, imageMemory->image,
-                 VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                 dstTexture.imageMemory->image,
-                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
+  vkCmdCopyImage(commandBuffer, imageMemory->image, VK_IMAGE_LAYOUT_GENERAL,
+                 dstTexture.imageMemory->image, VK_IMAGE_LAYOUT_GENERAL, 1,
+                 &copyRegion);
 
   MarkUse();
   dstTexture.MarkUse();
@@ -1515,8 +1426,8 @@ auto Texture::CopyTo(const GraphicsContext &context, Buffer &dstBuffer,
                            .access = VK_ACCESS_2_TRANSFER_WRITE_BIT,
                        });
   vkCmdCopyImageToBuffer(commandBuffer, imageMemory->image,
-                         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dstBuffer.handle,
-                         1, &copyRegion);
+                         VK_IMAGE_LAYOUT_GENERAL, dstBuffer.handle, 1,
+                         &copyRegion);
   dstBuffer.MarkUse();
   MarkUse();
   return Error::Success();
@@ -1579,9 +1490,8 @@ auto Texture::GenerateMipmaps(GraphicsContext &context) const -> Error {
       GetAccessFlagsForUsage(imageMemory->lastUsage, imageMemory->format);
   barrier.dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
   barrier.dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
-  barrier.oldLayout =
-      GetRequiredTextureLayout(imageMemory->lastUsage, imageMemory->format);
-  barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+  barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+  barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
 
   vkCmdPipelineBarrier2(commandBuffer, &dep);
 
@@ -1602,8 +1512,8 @@ auto Texture::GenerateMipmaps(GraphicsContext &context) const -> Error {
     barrier.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
     barrier.dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
     barrier.dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT;
-    barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+    barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
     barrier.subresourceRange.baseMipLevel = i - 1;
     // [src, dst, dst, dst, ...]
 
@@ -1629,9 +1539,8 @@ auto Texture::GenerateMipmaps(GraphicsContext &context) const -> Error {
                           .y = static_cast<int32_t>(mipExtent.height),
                           .z = static_cast<int32_t>(mipExtent.depth)};
 
-    vkCmdBlitImage(commandBuffer, imageMemory->image,
-                   VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, imageMemory->image,
-                   VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blit,
+    vkCmdBlitImage(commandBuffer, imageMemory->image, VK_IMAGE_LAYOUT_GENERAL,
+                   imageMemory->image, VK_IMAGE_LAYOUT_GENERAL, 1, &blit,
                    VK_FILTER_LINEAR);
   }
 
@@ -1643,15 +1552,14 @@ auto Texture::GenerateMipmaps(GraphicsContext &context) const -> Error {
   barrier.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
   barrier.dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
   barrier.dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT;
-  barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-  barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+  barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
+  barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
   barrier.subresourceRange.baseMipLevel = imageMemory->mipmapcount - 1;
 
   vkCmdPipelineBarrier2(commandBuffer, &dep);
 
   imageMemory->lastUsage = TextureUsage::TransferSrc;
   imageMemory->lastPipelineStage = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
-  imageMemory->currentLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
 
   return {};
 }
