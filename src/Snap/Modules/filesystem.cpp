@@ -11,6 +11,17 @@
 namespace Filesystem {
 constexpr int PHYSFS_ERR_ERROR = 0;
 
+inline auto GetErrorString() -> const char * {
+  return PHYSFS_getErrorByCode(PHYSFS_getLastErrorCode());
+}
+inline auto GetErrorCode() -> uint32_t { return PHYSFS_getLastErrorCode(); }
+
+inline auto GetError() -> Error {
+  return Error::Create(
+      std::format("Filesystem error occurred: {}", GetErrorString()),
+      static_cast<ErrorCode>(GetErrorCode()));
+}
+
 auto GetConfig() -> Config & {
   static Config config = {};
   return config;
@@ -18,22 +29,35 @@ auto GetConfig() -> Config & {
 
 auto Init(const std::string &orgDir) -> Error {
   if (PHYSFS_isInit() != 0) {
-    return Error::Create("Filesystem already initialized");
+    return Error::Createf("Filesystem already initialized: {}",
+                          GetErrorString());
   }
 
   if (PHYSFS_init(orgDir.c_str()) == 0) {
-    return Error::Create("Failed to initialize PhysFS");
+    return Error::Createf("Failed to initialize PhysFS: {}", GetErrorString());
   }
 
   PHYSFS_permitSymbolicLinks(0);
-  PHYSFS_setWriteDir(GetSaveDirectory().c_str());
+
+  return Error::Success();
+}
+
+auto SetWriteDirectory(const std::string &path) -> Error {
+  if (PHYSFS_isInit() == 0) {
+    return Error::Createf("Filesystem not initialized: {}", GetErrorString());
+  }
+
+  if (PHYSFS_setWriteDir(path.c_str()) == 0) {
+    return Error::Createf("Failed to set write directory: {}",
+                          GetErrorString());
+  }
 
   return Error::Success();
 }
 
 auto Deinit() -> Error {
   if (PHYSFS_isInit() == 0) {
-    return Error::Create("Filesystem not initialized");
+    return Error::Createf("Filesystem not initialized: {}", GetErrorString());
   }
 
   PHYSFS_deinit();
@@ -185,18 +209,20 @@ auto AppendFile(const std::string &path, std::span<const uint8_t> data)
     -> Error {
   PHYSFS_File *file = PHYSFS_openAppend(path.c_str());
   if (file == nullptr) {
-    return Error::Create("Failed to open file for appending");
+    return Error::Createf("Failed to open file for appending: {}",
+                          GetErrorString());
   }
 
   PHYSFS_sint64 written = PHYSFS_writeBytes(file, data.data(), data.size());
   int error = PHYSFS_close(file);
 
   if (error == PHYSFS_ERR_ERROR) {
-    return Error::Create("Failed to close file");
+    return Error::Createf("Failed to close file: {}", GetErrorString());
   }
 
   if (written < 0 || written != data.size()) {
-    return Error::Create("Failed to write all data to file");
+    return Error::Createf("Failed to write all data to file: {}",
+                          GetErrorString());
   }
 
   return Error::Success();
@@ -205,18 +231,20 @@ auto AppendFile(const std::string &path, std::span<const uint8_t> data)
 auto AppendFile(const std::string &path, std::string_view data) -> Error {
   PHYSFS_File *file = PHYSFS_openAppend(path.c_str());
   if (file == nullptr) {
-    return Error::Create("Failed to open file for appending");
+    return Error::Createf("Failed to open file for appending: {}",
+                          GetErrorString());
   }
 
   PHYSFS_sint64 written = PHYSFS_writeBytes(file, data.data(), data.size());
   int error = PHYSFS_close(file);
 
   if (error == PHYSFS_ERR_ERROR) {
-    return Error::Create("Failed to close file");
+    return Error::Createf("Failed to close file: {}", GetErrorString());
   }
 
   if (written < 0 || written != data.size()) {
-    return Error::Create("Failed to write all data to file");
+    return Error::Createf("Failed to write all data to file: {}",
+                          GetErrorString());
   }
 
   return Error::Success();
@@ -226,18 +254,20 @@ auto WriteFile(const std::string &path, std::span<const uint8_t> data)
     -> Error {
   PHYSFS_File *file = PHYSFS_openWrite(path.c_str());
   if (file == nullptr) {
-    return Error::Create("Failed to open file for writing");
+    return Error::Createf("Failed to open file '{}' for writing: {}", path,
+                          GetErrorString());
   }
 
   PHYSFS_sint64 written = PHYSFS_writeBytes(file, data.data(), data.size());
   int error = PHYSFS_close(file);
 
   if (error == PHYSFS_ERR_ERROR) {
-    return Error::Create("Failed to close file");
+    return Error::Createf("Failed to close file: {}", GetErrorString());
   }
 
   if (written < 0 || written != data.size()) {
-    return Error::Create("Failed to write all data to file");
+    return Error::Createf("Failed to write all data to file: {}",
+                          GetErrorString());
   }
 
   return Error::Success();
@@ -247,18 +277,20 @@ auto WriteFile(const std::string &path, std::string_view data) -> Error {
 
   PHYSFS_File *file = PHYSFS_openWrite(path.c_str());
   if (file == nullptr) {
-    return Error::Create("Failed to open file for writing");
+    return Error::Createf("Failed to open file for writing: {}",
+                          GetErrorString());
   }
 
   PHYSFS_sint64 written = PHYSFS_writeBytes(file, data.data(), data.size());
   int error = PHYSFS_close(file);
 
   if (error == PHYSFS_ERR_ERROR) {
-    return Error::Create("Failed to close file");
+    return Error::Createf("Failed to close file: {}", GetErrorString());
   }
 
   if (written < 0 || written != data.size()) {
-    return Error::Create("Failed to write all data to file");
+    return Error::Createf("Failed to write all data to file: {}",
+                          GetErrorString());
   }
 
   return Error::Success();
@@ -277,7 +309,8 @@ auto AddToSearchPath(const std::string &path, bool appendToPath) -> Error {
 
 auto RemoveFromSearchPath(const std::string &path) -> Error {
   if (PHYSFS_unmount(path.c_str()) == 0) {
-    return Error::Create("Failed to remove path from search path");
+    return Error::Createf("Failed to remove path from search path: {}",
+                          GetErrorString());
   }
   return Error::Success();
 }
@@ -317,14 +350,14 @@ auto Mount(const std::string &path, const std::string &mountPoint,
            bool appendToPath) -> Error {
   if (PHYSFS_mount(path.c_str(), mountPoint.c_str(), appendToPath ? 1 : 0) ==
       0) {
-    return Error::Create("Failed to mount path");
+    return Error::Createf("Failed to mount path: {}", GetErrorString());
   }
   return Error::Success();
 }
 
 auto Unmount(const std::string &path) -> Error {
   if (PHYSFS_unmount(path.c_str()) == 0) {
-    return Error::Create("Failed to unmount path");
+    return Error::Createf("Failed to unmount path: {}", GetErrorString());
   }
   return Error::Success();
 }
@@ -335,17 +368,6 @@ auto GetFileInfo(const std::string &path) -> PHYSFS_Stat {
     return {};
   }
   return stat;
-}
-
-auto GetErrorString() -> const char * {
-  return PHYSFS_getErrorByCode(PHYSFS_getLastErrorCode());
-}
-auto GetErrorCode() -> uint32_t { return PHYSFS_getLastErrorCode(); }
-
-auto GetError() -> Error {
-  return Error::Create("Filesystem error occurred: " +
-                           std::string(GetErrorString()),
-                       static_cast<ErrorCode>(GetErrorCode()));
 }
 
 inline auto GetSourceDirectoryStorage() -> std::string & {
@@ -359,11 +381,11 @@ auto SetSourceDirectory(const std::string &path) -> Error {
     return Error::Success();
   }
 
-  return Error::Create("Source directory already set");
+  return Error::Createf("Source directory already set: {}", GetErrorString());
 }
 
 auto GetSaveDirectory() -> std::string {
-  static const auto *identity =
+  const auto *identity =
       PHYSFS_getPrefDir("snap", GetConfig().identity.c_str());
 
   return identity != nullptr ? std::string(identity) : std::string();
@@ -372,7 +394,7 @@ auto GetSaveDirectory() -> std::string {
 auto GetSourceDirectory() -> std::string { return GetSourceDirectoryStorage(); }
 
 auto GetSourceBaseDirectory() -> std::string {
-  static const auto *sourceDir = PHYSFS_getBaseDir();
+  const auto *sourceDir = PHYSFS_getBaseDir();
 
   return sourceDir != nullptr ? std::string(sourceDir) : std::string();
 }
@@ -383,7 +405,8 @@ auto GetSourceBaseDirectory() -> std::string {
 
 auto CreateDirectory(const std::string &path) -> Error {
   if (PHYSFS_mkdir(path.c_str()) == 0) {
-    return Error::Create("Failed to create directory: " + path);
+    return Error::Createf("Failed to create directory '{}': {}", path,
+                          GetErrorString());
   }
   return Error::Success();
 }

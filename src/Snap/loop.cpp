@@ -238,14 +238,18 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
       Path::Sanitize(currentPath.string() + "/" + arguments[0]);
   sourceDirectory = Path::Directory(sourceDirectory);
 
-  CHECK_ERR(Filesystem::Init("."));
+  CHECK_ERR(Filesystem::Init("snap"));
   CHECK_ERR(Filesystem::SetSourceDirectory(sourceDirectory));
   CHECK_ERR(Filesystem::Mount(".", "/", true));
   CHECK_ERR(Filesystem::Mount(sourceDirectory, "/", true));
 
   auto config = CHECK_RES(Config::Configure(state, sourceDirectory));
-
   Filesystem::GetConfig().identity = config.Identity;
+
+  PrintAlways("Source directory: {}", Filesystem::GetSourceDirectory());
+  PrintAlways("Save directory: {}", Filesystem::GetSaveDirectory());
+  // CHECK_ERR(Filesystem::Mount(Filesystem::GetSaveDirectory(), "/", true));
+  CHECK_ERR(Filesystem::SetWriteDirectory(Filesystem::GetSaveDirectory()));
 
   Graphics::GraphicsContext context = {};
 

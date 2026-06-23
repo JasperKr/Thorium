@@ -56,6 +56,8 @@ auto LightprobePrefilterManager::Initialize(
                    .debugName = "Scene Cubemap",
                    .textureType = Graphics::TextureType::CUBEMAP,
                }));
+  SceneCubemap->SetFilter(VK_FILTER_LINEAR, VK_FILTER_LINEAR,
+                          VK_SAMPLER_MIPMAP_MODE_LINEAR);
 
   TemporaryRadianceMap = CHECK_RES(Graphics::Texture::Create(
       context, {
@@ -70,6 +72,9 @@ auto LightprobePrefilterManager::Initialize(
                    .debugName = "Temporary Radiance Map",
                    .textureType = Graphics::TextureType::CUBEMAP,
                }));
+
+  TemporaryRadianceMap->SetFilter(VK_FILTER_LINEAR, VK_FILTER_LINEAR,
+                                  VK_SAMPLER_MIPMAP_MODE_LINEAR);
 
   constexpr static float EnvironmentMapLevel0PB = 6.0F;
   constexpr static float EnvironmentMapLevel1PB = 0.0F;
@@ -211,10 +216,10 @@ auto LightprobePrefilterManager::PrefilterRadianceMap(
 
   envMap->SetFilter(VK_FILTER_LINEAR, VK_FILTER_LINEAR,
                     VK_SAMPLER_MIPMAP_MODE_LINEAR);
-  envMap->SetAnisotropy(8.0F); // NOLINT
+  envMap->SetAnisotropy(0.0F); // NOLINT
   output->SetFilter(VK_FILTER_LINEAR, VK_FILTER_LINEAR,
                     VK_SAMPLER_MIPMAP_MODE_LINEAR);
-  output->SetAnisotropy(8.0F); // NOLINT
+  output->SetAnisotropy(0.0F); // NOLINT
 
   /// Prepare texture views ///
 

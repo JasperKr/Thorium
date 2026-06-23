@@ -15,6 +15,7 @@ struct Config {
 auto GetConfig() -> Config &;
 
 auto Init(const std::string &orgDir) -> Error;
+auto SetWriteDirectory(const std::string &path) -> Error;
 auto Deinit() -> Error;
 auto ReadFile(const std::string &path, int64_t readLength = INT64_MAX)
     -> Result<std::vector<unsigned char>>;

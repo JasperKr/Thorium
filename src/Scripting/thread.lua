@@ -21,7 +21,7 @@ do
   local snapshot
 
   local function draw()
-    -- probe:render()
+    probe:render()
 
     snap.graphics.setCullMode("none")
     snap.graphics.setDepthMode("greater", true)
