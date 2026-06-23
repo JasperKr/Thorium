@@ -51,8 +51,11 @@ struct Vec2 {
   auto operator[](uint32_t index) const -> Scalar;
 
   [[nodiscard]] auto Length() const -> Scalar;
+  [[nodiscard]] auto LengthSqr() const -> Scalar;
   [[nodiscard]] auto Inverse() const -> Vec2;
   [[nodiscard]] auto Normalize() const -> Vec2;
+  [[nodiscard]] auto Distance(const Vec2 &other) const -> Scalar;
+  [[nodiscard]] auto DistanceSqr(const Vec2 &other) const -> Scalar;
   [[nodiscard]] auto Dot(const Vec2 &other) const -> Scalar;
   [[nodiscard]] auto Cross(const Vec2 &other) const -> Vec2;
 
@@ -115,8 +118,11 @@ struct Vec3 {
   auto operator[](uint32_t index) const -> Scalar;
 
   [[nodiscard]] auto Length() const -> Scalar;
+  [[nodiscard]] auto LengthSqr() const -> Scalar;
   [[nodiscard]] auto Inverse() const -> Vec3;
   [[nodiscard]] auto Normalize() const -> Vec3;
+  [[nodiscard]] auto Distance(const Vec3 &other) const -> Scalar;
+  [[nodiscard]] auto DistanceSqr(const Vec3 &other) const -> Scalar;
   [[nodiscard]] auto Dot(const Vec3 &other) const -> Scalar;
   [[nodiscard]] auto Cross(const Vec3 &other) const -> Vec3;
 
@@ -183,8 +189,11 @@ struct Vec4 {
   auto operator[](uint32_t index) const -> Scalar;
 
   [[nodiscard]] auto Length() const -> Scalar;
+  [[nodiscard]] auto LengthSqr() const -> Scalar;
   [[nodiscard]] auto Inverse() const -> Vec4;
   [[nodiscard]] auto Normalize() const -> Vec4;
+  [[nodiscard]] auto Distance(const Vec4 &other) const -> Scalar;
+  [[nodiscard]] auto DistanceSqr(const Vec4 &other) const -> Scalar;
   [[nodiscard]] auto Dot(const Vec4 &other) const -> Scalar;
   [[nodiscard]] auto Dot(const Vec3 &other) const -> Scalar;
   [[nodiscard]] auto Cross(const Vec4 &other) const -> Vec3;

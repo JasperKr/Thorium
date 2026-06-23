@@ -22,6 +22,7 @@
 #include "Scene/transform.hpp"
 #include "Wrap/wrap.hpp"
 #include "renderer.hpp"
+#include <algorithm>
 #include <flecs.h>
 #include <lauxlib.h>
 #include <lua.h>
@@ -261,6 +262,35 @@ auto Camera::ReleaseTransientTextures() const -> Error {
   }));
 
   return {};
+}
+
+auto Camera::GetClosestLightProbes(int max, const DrawData &drawData,
+                                   Scene *scene) -> void {
+  ClosestLightProbes.clear();
+
+  if (max <= 0) {
+    return;
+  }
+
+  auto context = *Graphics::GetCurrentGraphicsContext();
+
+  std::vector<std::pair<Math::Scalar, Renderer::LightProbe>> probes;
+
+  scene->world.each([&](flecs::entity entity, const Transform &transform,
+                        const Renderer::LightProbe &lightProbe) -> void {
+    auto distanceSqr = (transform.GetPosition() -
+                        drawData.Transform.GetWorldMatrix().GetTranslation())
+                           .LengthSqr();
+    probes.emplace_back(distanceSqr, lightProbe);
+  });
+
+  std::ranges::sort(probes, [](const auto &first, const auto &second) -> bool {
+    return first.first < second.first;
+  });
+
+  for (int i = 0; i < std::min(max, static_cast<int>(probes.size())); ++i) {
+    ClosestLightProbes.emplace_back(probes[i].second);
+  }
 }
 
 auto Camera::Render(const Graphics::GraphicsContext &context,

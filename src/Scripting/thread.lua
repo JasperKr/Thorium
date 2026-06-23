@@ -21,8 +21,6 @@ do
   local snapshot
 
   local function draw()
-    probe:render()
-
     snap.graphics.setCullMode("none")
     snap.graphics.setDepthMode("greater", true)
 
@@ -216,6 +214,8 @@ do
 
       local env = scene:newEnvironment("Test environment", texture)
       scene:setEnvironment(env)
+
+      probe:render()
     end
 
     local dt = snap.timer.getTime() - t

@@ -14,6 +14,7 @@ struct LightProbe {
   Scene *scene = nullptr;
 
   auto Render(const Transform &transform) -> Error;
+  auto DrawGui(flecs::entity entity) -> Error;
 };
 
 static const Type LightProbeType = Type("LightProbe");

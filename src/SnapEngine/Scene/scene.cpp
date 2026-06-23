@@ -268,6 +268,12 @@ auto Scene::DrawUiElement() const -> Error {
         auto material = SelectedEntity.get_ref<Renderer::Material>();
         material->DrawGUI();
       }
+
+      if (SelectedEntity.has<Renderer::LightProbe>() &&
+          SelectedEntity.get_ref<Renderer::LightProbe>().get() != nullptr) {
+        auto lightProbe = SelectedEntity.get_ref<Renderer::LightProbe>();
+        CHECK_ERR(lightProbe->DrawGui(SelectedEntity));
+      }
     }
   }
   ImGui::EndChild();

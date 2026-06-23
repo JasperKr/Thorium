@@ -227,6 +227,10 @@ auto Matrix4x4::InverseTranspose() const -> Matrix4x4 {
   return Inverse().Transpose();
 }
 
+auto Matrix4x4::GetTranslation() const -> Vec3 {
+  return {At(3, 0), At(3, 1), At(3, 2)};
+}
+
 auto Matrix4x4::operator!=(const Matrix4x4 &other) const -> bool {
   return !(*this == other);
 }

@@ -481,6 +481,14 @@ auto Vec2::operator!=(const Vec2 &other) const -> bool {
   return !(*this == other);
 }
 auto Vec2::Length() const -> Scalar { return std::sqrt((x * x) + (y * y)); }
+auto Vec2::LengthSqr() const -> Scalar { return (x * x) + (y * y); }
+auto Vec2::Distance(const Vec2 &other) const -> Scalar {
+  return std::sqrt(((x - other.x) * (x - other.x)) +
+                   ((y - other.y) * (y - other.y)));
+}
+auto Vec2::DistanceSqr(const Vec2 &other) const -> Scalar {
+  return ((x - other.x) * (x - other.x)) + ((y - other.y) * (y - other.y));
+}
 auto Vec2::Inverse() const -> Vec2 { return {1.0F / x, 1.0F / y}; }
 auto Vec2::Normalize() const -> Vec2 {
   Scalar len = Length();
@@ -612,6 +620,16 @@ auto Vec3::operator!=(const Vec3 &other) const -> bool {
 }
 auto Vec3::Length() const -> Scalar {
   return std::sqrt((x * x) + (y * y) + (z * z));
+}
+auto Vec3::LengthSqr() const -> Scalar { return (x * x) + (y * y) + (z * z); }
+auto Vec3::Distance(const Vec3 &other) const -> Scalar {
+  return std::sqrt(((x - other.x) * (x - other.x)) +
+                   ((y - other.y) * (y - other.y)) +
+                   ((z - other.z) * (z - other.z)));
+}
+auto Vec3::DistanceSqr(const Vec3 &other) const -> Scalar {
+  return ((x - other.x) * (x - other.x)) + ((y - other.y) * (y - other.y)) +
+         ((z - other.z) * (z - other.z));
 }
 auto Vec3::Inverse() const -> Vec3 { return {1.0F / x, 1.0F / y, 1.0F / z}; }
 auto Vec3::Normalize() const -> Vec3 {
@@ -761,6 +779,19 @@ auto Vec4::operator!=(const Vec4 &other) const -> bool {
 auto Vec4::Length() const -> Scalar {
   return std::sqrt((x * x) + (y * y) + (z * z) + (w * w));
 }
+auto Vec4::LengthSqr() const -> Scalar {
+  return (x * x) + (y * y) + (z * z) + (w * w);
+}
+auto Vec4::Distance(const Vec4 &other) const -> Scalar {
+  return std::sqrt(
+      ((x - other.x) * (x - other.x)) + ((y - other.y) * (y - other.y)) +
+      ((z - other.z) * (z - other.z)) + ((w - other.w) * (w - other.w)));
+}
+auto Vec4::DistanceSqr(const Vec4 &other) const -> Scalar {
+  return ((x - other.x) * (x - other.x)) + ((y - other.y) * (y - other.y)) +
+         ((z - other.z) * (z - other.z)) + ((w - other.w) * (w - other.w));
+}
+
 auto Vec4::Inverse() const -> Vec4 {
   return {1.0F / x, 1.0F / y, 1.0F / z, 1.0F / w};
 }

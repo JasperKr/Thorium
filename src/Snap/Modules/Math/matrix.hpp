@@ -68,6 +68,8 @@ struct Matrix4x4 {
   [[nodiscard]] auto InverseTranspose() const -> Matrix4x4;
   [[nodiscard]] auto AsMatrix3x3() const -> Matrix4x4;
   [[nodiscard]] auto ToLua(lua_State *state) const -> int;
+  [[nodiscard]] auto GetTranslation() const -> Vec3;
+
   static auto FromLua(lua_State *state, int index) -> Matrix4x4;
 
   static auto Perspective(Scalar left, Scalar right, Scalar bottom, Scalar top,

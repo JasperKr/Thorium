@@ -102,7 +102,7 @@ LightProbeSampleInfo SampleLightProbes(float3 worldPosition, float3 normal,
 }
 
 [shader("fragment")]
-FragmentOutput fragmentMain(FragmentInput input) {
+float4 fragmentMain(FragmentInput input) {
   float depth = DepthTexture.Sample(input.VertexCoords).r;
 
   float3 worldPosition = camera.GetWorldPosition(input.VertexCoords, depth);
@@ -163,8 +163,8 @@ FragmentOutput fragmentMain(FragmentInput input) {
 
   // Radiance = probeInfo.radiance;
   // Irradiance = probeInfo.irradiance;
-  FragmentOutput output;
-  output.Radiance = probeInfo.radiance;
-  output.Irradiance = probeInfo.irradiance;
-  return output;
+  // FragmentOutput output;
+  // output.Radiance = probeInfo.radiance;
+  // output.Irradiance = probeInfo.irradiance;
+  return float4(probeInfo.radiance + probeInfo.irradiance, 0.0);
 }

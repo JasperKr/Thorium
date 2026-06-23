@@ -8,12 +8,14 @@
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Modules/type.hpp"
+#include "Renderer/lightProbe.hpp"
 #include "Renderer/rendertargetManager.hpp"
 #include "Scene/cameraMatrices.hpp"
 #include "Scene/scene.hpp"
 #include "Scene/transform.hpp"
 #include "Wrap/wrap.hpp"
 #include "Wrap/wrap_engine.hpp"
+#include <vector>
 namespace Engine {
 
 struct DrawData {
@@ -211,6 +213,7 @@ private:
   Math::Scalar AspectRatio{};
   Math::Scalar NearPlane{};
   Math::Scalar FarPlane{};
+  std::vector<Renderer::LightProbe> ClosestLightProbes;
 
   Ref<struct Graphics::StructuredBuffer> CameraBuffer;
 
@@ -229,6 +232,9 @@ private:
 
   auto FillSkybox(const Graphics::GraphicsContext &context, Scene *scene)
       -> Error;
+
+  auto GetClosestLightProbes(int max, const DrawData &drawData, Scene *scene)
+      -> void;
 };
 
 extern const Graphics::BufferFormat CameraBufferFormat;

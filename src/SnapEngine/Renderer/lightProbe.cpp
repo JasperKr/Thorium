@@ -5,7 +5,9 @@
 #include "Scene/transform.hpp"
 #include "Scene/userdata.hpp"
 #include "Wrap/wrap.hpp"
+#include "flecs.h"
 #include "renderer.hpp"
+#include <imgui.h>
 
 namespace Engine::Renderer {
 
@@ -14,6 +16,22 @@ auto LightProbe::Render(const Transform &transform) -> Error {
 
   CHECK_ERR(RendererInstance.GetPrefilterManager().PrefilterLightProbe(
       *ctx, *this, scene, transform));
+
+  return {};
+}
+
+auto LightProbe::DrawGui(flecs::entity entity) -> Error {
+  ImGui::Text("Light Probe");
+  ImGui::Separator();
+  ImGui::DragFloat("Radius", &Radius, 0.1F, 0.0F, 100.0F);            // NOLINT
+  ImGui::DragFloat("Inner Radius", &InnerRadius, 0.1F, 0.0F, 100.0F); // NOLINT
+  ImGui::Separator();
+  InnerRadius = std::min(InnerRadius, Radius);
+  ImGui::Text("Environment Map Index: %d", EnvironmentMapIndex);
+  if (ImGui::Button("Render Light Probe")) {
+    auto *ctx = Graphics::GetCurrentGraphicsContext();
+    CHECK_ERR(Render(entity.get<Transform>()));
+  }
 
   return {};
 }
