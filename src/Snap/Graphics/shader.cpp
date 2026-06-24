@@ -624,8 +624,7 @@ auto ShaderModule::GetUniform(const ResourceKey &key) const
   }
 
   for (const auto &resource : reflection.resources) {
-    // if (resource.name == *key.begin()) {
-    if (strcmp(resource.name, *key.begin()) == 0) {
+    if (key.begin()->Matches(resource.name)) {
       return &resource;
     }
   }
@@ -680,8 +679,7 @@ auto ShaderModule::Send(const ResourceKey &key, const Ref<Buffer> &buffer)
     }
 
     const auto &bufferInfo = std::get<Reflect::BufferInfo>(resource.info);
-    // if (bufferInfo.name == *key.begin()) {
-    if (strcmp(bufferInfo.name, *key.begin()) == 0) {
+    if (key.begin()->Matches(resource.name)) {
       auto locationKey =
           Utils::SetBindingToSlot(bufferInfo.set, bufferInfo.binding);
 
@@ -728,7 +726,7 @@ auto ShaderModule::Send(const ResourceKey &key,
     const auto &samplerInfo = std::get<Reflect::SamplerInfo>(resource.info);
     assert(resource.name != nullptr);
 
-    if (strcmp(resource.name, *key.begin()) == 0) {
+    if (key.begin()->Matches(resource.name)) {
       auto key = Utils::SetBindingToSlot(samplerInfo.set, samplerInfo.binding);
 
       if ((samplerInfo.access == SLANG_RESOURCE_ACCESS_WRITE ||

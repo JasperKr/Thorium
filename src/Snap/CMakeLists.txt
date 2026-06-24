@@ -108,8 +108,6 @@ endif()
 include(ExternalProject)
 
 set(LUAJIT_SRC "${CMAKE_SOURCE_DIR}/external/luajit/")
-make_directory(${CMAKE_SOURCE_DIR}/thirdparty/luajit)
-file(COPY ${CMAKE_SOURCE_DIR}/thirdparty/luajit DESTINATION ${LUAJIT_SRC})
 
 if (WIN32)
     ExternalProject_Add(luajit
@@ -130,20 +128,24 @@ if (WIN32)
         INTERFACE_INCLUDE_DIRECTORIES "${LUAJIT_SRC}/src"
     )
 elseif(UNIX)
+    set(LUAJIT_LIB "${LUAJIT_SRC}/src/libluajit-5.1.so.2")
+
     ExternalProject_Add(luajit
         SOURCE_DIR ${LUAJIT_SRC}
         CONFIGURE_COMMAND ""
         BUILD_COMMAND
-            make -C ${LUAJIT_SRC}/src
+            make
+        COMMAND
+            ${CMAKE_COMMAND} -E create_symlink libluajit.so ${LUAJIT_LIB}
         INSTALL_COMMAND ""
         BUILD_IN_SOURCE 1
-        BUILD_BYPRODUCTS ${LUAJIT_SRC}/src/libluajit.so
+        BUILD_BYPRODUCTS ${LUAJIT_SRC}/src/libluajit.so ${LUAJIT_LIB}
     )
 
     add_library(LuaJIT::LuaJIT SHARED IMPORTED)
 
     set_target_properties(LuaJIT::LuaJIT PROPERTIES
-        IMPORTED_LOCATION "${LUAJIT_SRC}/src/libluajit.so"
+        IMPORTED_LOCATION "${LUAJIT_LIB}"
         INTERFACE_INCLUDE_DIRECTORIES "${LUAJIT_SRC}/src"
     )
 endif()

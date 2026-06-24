@@ -79,11 +79,10 @@ auto BufferFormat::FindComponent(ResourceKey::const_iterator iterator,
     return nullptr;
   }
 
-  const auto &name = *iterator;
+  const auto &key = *iterator;
 
   for (const auto &Component : Components) {
-    // if (Component.name == name) {
-    if (strcmp(Component.name.c_str(), name) == 0) {
+    if (key.Matches(Component.name)) {
       if (std::holds_alternative<BufferFormat>(Component.format)) {
         const auto &format = std::get<BufferFormat>(Component.format);
         return format.FindComponent(std::next(iterator), end);

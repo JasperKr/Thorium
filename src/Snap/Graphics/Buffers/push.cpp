@@ -62,11 +62,10 @@ auto PushBuffer::ContainsUniform(ResourceKey::const_iterator iterator,
     -> bool {
 
   if (std::next(iterator) == end) {
-    // return *iterator == layout.name;
-    return strcmp(*iterator, layout.name) == 0;
+    return iterator->Matches(layout.name);
   }
 
-  if (strcmp(*iterator, layout.name) != 0) {
+  if (!iterator->Matches(layout.name)) {
     return false;
   }
 
@@ -79,8 +78,7 @@ auto PushBuffer::GetUniform(ResourceKey::const_iterator iterator,
                             ResourceKey::const_iterator end) const
     -> const Reflect::ResourceInfo * {
   if (std::next(iterator) == end) {
-    // if (*iterator == layout.name) {
-    if (strcmp(*iterator, layout.name) == 0) {
+    if (iterator->Matches(layout.name)) {
       return &layout;
     }
 

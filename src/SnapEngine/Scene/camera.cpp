@@ -264,8 +264,8 @@ auto Camera::ReleaseTransientTextures() const -> Error {
   return {};
 }
 
-auto Camera::GetClosestLightProbes(int max, const DrawData &drawData,
-                                   Scene *scene) -> void {
+auto Camera::UpdateClosestLightProbes(int max, const DrawData &drawData,
+                                      Scene *scene) -> void {
   ClosestLightProbes.clear();
 
   if (max <= 0) {
@@ -291,6 +291,15 @@ auto Camera::GetClosestLightProbes(int max, const DrawData &drawData,
   for (int i = 0; i < std::min(max, static_cast<int>(probes.size())); ++i) {
     ClosestLightProbes.emplace_back(probes[i].second);
   }
+}
+
+auto Camera::ApplyLightProbes(const Graphics::GraphicsContext &context,
+                              const DrawData &drawData, Scene *scene) -> Error {
+  constexpr int MaxLightProbes = 64;
+
+  UpdateClosestLightProbes(MaxLightProbes, drawData, scene);
+
+  return {};
 }
 
 auto Camera::Render(const Graphics::GraphicsContext &context,
@@ -326,63 +335,81 @@ auto Camera::ConfigureRendertargets() -> void {
                VK_IMAGE_USAGE_SAMPLED_BIT,
   };
 
-  Rendertargets.IncomingLight = Renderer::RendertargetDescriptor{
-      .size = Dimensions,
-      .format = VK_FORMAT_B10G11R11_UFLOAT_PACK32,
-      .minFilter = VK_FILTER_LINEAR,
-      .magFilter = VK_FILTER_LINEAR,
-      .mipFilter = VK_SAMPLER_MIPMAP_MODE_LINEAR,
-      .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-  };
-
-  Rendertargets.PostProcessed = Renderer::RendertargetDescriptor{
-      .size = Dimensions,
-      .format = VK_FORMAT_A2R10G10B10_UNORM_PACK32,
-      .minFilter = VK_FILTER_LINEAR,
-      .magFilter = VK_FILTER_LINEAR,
-      .mipFilter = VK_SAMPLER_MIPMAP_MODE_LINEAR,
-      .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-  };
-
   Rendertargets.Normal = Renderer::RendertargetDescriptor{
       .size = Dimensions,
       .format = VK_FORMAT_A2R10G10B10_UNORM_PACK32,
-      .minFilter = VK_FILTER_LINEAR,
-      .magFilter = VK_FILTER_LINEAR,
-      .mipFilter = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+      .minFilter = VK_FILTER_NEAREST,
+      .magFilter = VK_FILTER_NEAREST,
+      .mipFilter = VK_SAMPLER_MIPMAP_MODE_NEAREST,
       .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
   };
 
   Rendertargets.Albedo = Renderer::RendertargetDescriptor{
       .size = Dimensions,
       .format = VK_FORMAT_A2R10G10B10_UNORM_PACK32,
-      .minFilter = VK_FILTER_LINEAR,
-      .magFilter = VK_FILTER_LINEAR,
-      .mipFilter = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+      .minFilter = VK_FILTER_NEAREST,
+      .magFilter = VK_FILTER_NEAREST,
+      .mipFilter = VK_SAMPLER_MIPMAP_MODE_NEAREST,
       .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
   };
 
   Rendertargets.Material = Renderer::RendertargetDescriptor{
       .size = Dimensions,
       .format = VK_FORMAT_R8G8B8A8_UNORM,
-      .minFilter = VK_FILTER_LINEAR,
-      .magFilter = VK_FILTER_LINEAR,
-      .mipFilter = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+      .minFilter = VK_FILTER_NEAREST,
+      .magFilter = VK_FILTER_NEAREST,
+      .mipFilter = VK_SAMPLER_MIPMAP_MODE_NEAREST,
       .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
   };
 
   Rendertargets.Emissive = Renderer::RendertargetDescriptor{
       .size = Dimensions,
       .format = VK_FORMAT_B10G11R11_UFLOAT_PACK32,
-      .minFilter = VK_FILTER_LINEAR,
-      .magFilter = VK_FILTER_LINEAR,
-      .mipFilter = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+      .minFilter = VK_FILTER_NEAREST,
+      .magFilter = VK_FILTER_NEAREST,
+      .mipFilter = VK_SAMPLER_MIPMAP_MODE_NEAREST,
       .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
   };
 
   Rendertargets.Motion = Renderer::RendertargetDescriptor{
       .size = Dimensions,
       .format = VK_FORMAT_R16G16_SNORM,
+      .minFilter = VK_FILTER_LINEAR,
+      .magFilter = VK_FILTER_LINEAR,
+      .mipFilter = VK_SAMPLER_MIPMAP_MODE_NEAREST,
+      .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+  };
+
+  Rendertargets.IncomingLight = Renderer::RendertargetDescriptor{
+      .size = Dimensions,
+      .format = VK_FORMAT_B10G11R11_UFLOAT_PACK32,
+      .minFilter = VK_FILTER_NEAREST,
+      .magFilter = VK_FILTER_NEAREST,
+      .mipFilter = VK_SAMPLER_MIPMAP_MODE_NEAREST,
+      .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+  };
+
+  Rendertargets.DirectLighting = Renderer::RendertargetDescriptor{
+      .size = Dimensions,
+      .format = VK_FORMAT_B10G11R11_UFLOAT_PACK32,
+      .minFilter = VK_FILTER_NEAREST,
+      .magFilter = VK_FILTER_NEAREST,
+      .mipFilter = VK_SAMPLER_MIPMAP_MODE_NEAREST,
+      .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+  };
+
+  Rendertargets.Irradiance = Renderer::RendertargetDescriptor{
+      .size = Dimensions,
+      .format = VK_FORMAT_B10G11R11_UFLOAT_PACK32,
+      .minFilter = VK_FILTER_NEAREST,
+      .magFilter = VK_FILTER_NEAREST,
+      .mipFilter = VK_SAMPLER_MIPMAP_MODE_NEAREST,
+      .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+  };
+
+  Rendertargets.PostProcessed = Renderer::RendertargetDescriptor{
+      .size = Dimensions,
+      .format = VK_FORMAT_A2R10G10B10_UNORM_PACK32,
       .minFilter = VK_FILTER_LINEAR,
       .magFilter = VK_FILTER_LINEAR,
       .mipFilter = VK_SAMPLER_MIPMAP_MODE_LINEAR,
@@ -567,14 +594,16 @@ auto LuaCamera::GetRendertarget(lua_State *state) -> int {
   const std::unordered_map<std::string_view,
                            Ref<Graphics::Texture> Camera::AllocatedTextures::*>
       allocatedTextureMap = {
-          {"IncomingLight", &Camera::AllocatedTextures::IncomingLight},
           {"Depth", &Camera::AllocatedTextures::Depth},
-          {"PostProcessed", &Camera::AllocatedTextures::PostProcessed},
           {"Normal", &Camera::AllocatedTextures::Normal},
           {"Albedo", &Camera::AllocatedTextures::Albedo},
           {"Material", &Camera::AllocatedTextures::Material},
           {"Emissive", &Camera::AllocatedTextures::Emissive},
           {"Motion", &Camera::AllocatedTextures::Motion},
+          {"IncomingLight", &Camera::AllocatedTextures::IncomingLight},
+          {"DirectLighting", &Camera::AllocatedTextures::DirectLighting},
+          {"Irradiance", &Camera::AllocatedTextures::Irradiance},
+          {"PostProcessed", &Camera::AllocatedTextures::PostProcessed},
       };
 
   auto iter = allocatedTextureMap.find(name);
@@ -615,14 +644,16 @@ auto LuaCamera::SetDimensions(lua_State *state) -> int {
 const std::unordered_map<std::string_view,
                          bool Camera::PersistentTextureSettings::*>
     persistentTextureMap = {
-        {"IncomingLight", &Camera::PersistentTextureSettings::IncomingLight},
         {"Depth", &Camera::PersistentTextureSettings::Depth},
-        {"PostProcessed", &Camera::PersistentTextureSettings::PostProcessed},
         {"Normal", &Camera::PersistentTextureSettings::Normal},
         {"Albedo", &Camera::PersistentTextureSettings::Albedo},
         {"Material", &Camera::PersistentTextureSettings::Material},
         {"Emissive", &Camera::PersistentTextureSettings::Emissive},
         {"Motion", &Camera::PersistentTextureSettings::Motion},
+        {"IncomingLight", &Camera::PersistentTextureSettings::IncomingLight},
+        {"DirectLighting", &Camera::PersistentTextureSettings::DirectLighting},
+        {"Irradiance", &Camera::PersistentTextureSettings::Irradiance},
+        {"PostProcessed", &Camera::PersistentTextureSettings::PostProcessed},
 };
 
 auto LuaCamera::GetPersistentTextureSettings(lua_State *state) -> int {

@@ -1,6 +1,9 @@
 #pragma once
 
 #include <forward_list>
+#include <optional>
+#include <string>
+#include <string_view>
 #include <vulkan/vulkan_core.h>
 namespace Graphics {
 
@@ -53,6 +56,43 @@ constexpr VkPipelineColorBlendAttachmentState BlendmodeNone = {
 constexpr uint32_t FRAMES_IN_FLIGHT = 3;
 constexpr uint32_t MAX_SWAPCHAIN_IMAGES = 8;
 
-using ResourceKey = std::forward_list<const char *>;
+struct KeyElement {
+  KeyElement() = default;
+  KeyElement(const char *key) : Key(key) {} // NOLINT
+  explicit KeyElement(uint64_t index) : Index(index), IsIndex(true) {}
+  explicit KeyElement(std::string_view key) : Key(key.data()) {}
+
+  union {
+    const char *Key;
+    uint64_t Index{};
+  };
+
+  bool IsIndex = false;
+
+  [[nodiscard]] auto Matches(std::string_view key) const -> bool {
+    return !IsIndex && Key == key;
+  }
+
+  [[nodiscard]] auto Matches(const char *key) const -> bool {
+    return Matches(std::string_view{key});
+  }
+
+  [[nodiscard]] auto GetIndex() const -> std::optional<uint64_t> {
+    if (!IsIndex) {
+      return std::nullopt;
+    }
+
+    return Index;
+  }
+
+  [[nodiscard]] auto ToString() const -> std::string {
+    if (IsIndex) {
+      return std::to_string(Index);
+    }
+    return Key;
+  }
+};
+
+using ResourceKey = std::forward_list<KeyElement>;
 
 } // namespace Graphics

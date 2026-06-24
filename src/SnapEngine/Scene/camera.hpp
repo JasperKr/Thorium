@@ -123,6 +123,12 @@ struct Camera {
     // Final Incoming light, encoded as b10g11r11_ufloat
     Renderer::RendertargetDescriptor IncomingLight;
 
+    // Direct illumination, encoded as b10g11r11_ufloat
+    Renderer::RendertargetDescriptor DirectLighting;
+
+    // Diffuse irradiance, encoded as b10g11r11_ufloat
+    Renderer::RendertargetDescriptor Irradiance;
+
     // Post-processed output, encoded as a2r10g10b10_unorm
     Renderer::RendertargetDescriptor PostProcessed;
   };
@@ -130,35 +136,41 @@ struct Camera {
   // References to the textures we currently own. Dynamic
   struct AllocatedTextures {
     Ref<Graphics::Texture> Depth;
-    Ref<Graphics::Texture> IncomingLight;
-    Ref<Graphics::Texture> PostProcessed;
     Ref<Graphics::Texture> Normal;
     Ref<Graphics::Texture> Albedo;
     Ref<Graphics::Texture> Material;
     Ref<Graphics::Texture> Emissive;
     Ref<Graphics::Texture> Motion;
+    Ref<Graphics::Texture> IncomingLight;
+    Ref<Graphics::Texture> DirectLighting;
+    Ref<Graphics::Texture> Irradiance;
+    Ref<Graphics::Texture> PostProcessed;
 
     void Reset() {
       Depth = nullptr;
-      IncomingLight = nullptr;
-      PostProcessed = nullptr;
       Normal = nullptr;
       Albedo = nullptr;
       Material = nullptr;
       Emissive = nullptr;
       Motion = nullptr;
+      IncomingLight = nullptr;
+      DirectLighting = nullptr;
+      Irradiance = nullptr;
+      PostProcessed = nullptr;
     }
   };
 
   struct PersistentTextureSettings {
     bool Depth = false;
-    bool IncomingLight = false;
-    bool PostProcessed = false;
     bool Normal = false;
     bool Albedo = false;
     bool Material = false;
     bool Emissive = false;
     bool Motion = false;
+    bool IncomingLight = false;
+    bool DirectLighting = false;
+    bool Irradiance = false;
+    bool PostProcessed = false;
   };
 
   struct PostProcessingConfig {
@@ -233,7 +245,10 @@ private:
   auto FillSkybox(const Graphics::GraphicsContext &context, Scene *scene)
       -> Error;
 
-  auto GetClosestLightProbes(int max, const DrawData &drawData, Scene *scene)
+  auto ApplyLightProbes(const Graphics::GraphicsContext &context,
+                        const DrawData &drawData, Scene *scene) -> Error;
+
+  auto UpdateClosestLightProbes(int max, const DrawData &drawData, Scene *scene)
       -> void;
 };
 

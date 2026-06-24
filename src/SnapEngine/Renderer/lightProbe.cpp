@@ -7,6 +7,7 @@
 #include "Wrap/wrap.hpp"
 #include "flecs.h"
 #include "renderer.hpp"
+#include <array>
 #include <imgui.h>
 
 namespace Engine::Renderer {
@@ -34,6 +35,38 @@ auto LightProbe::DrawGui(flecs::entity entity) -> Error {
   }
 
   return {};
+}
+
+/*
+struct LightProbe {
+  float3 position;
+  int index;
+
+  float radius;
+  float innerRadius;
+};
+*/
+
+auto LightProbe::WriteToBuffer(std::vector<uint8_t> &buffer, size_t offset,
+                               const Transform &transform) const -> void {
+  // NOLINTBEGIN
+  auto *ptr = buffer.data() + offset;
+
+  auto translation = transform.GetWorldMatrix().GetTranslation();
+  std::array<float, 3> position = {translation.x, translation.y, translation.z};
+
+  std::memcpy(ptr, position.data(), sizeof(float) * 3);
+  ptr += sizeof(float) * 3;
+
+  std::memcpy(ptr, &EnvironmentMapIndex, sizeof(int32_t));
+  ptr += sizeof(int32_t);
+
+  std::memcpy(ptr, &Radius, sizeof(float));
+  ptr += sizeof(float);
+
+  std::memcpy(ptr, &InnerRadius, sizeof(float));
+
+  // NOLINTEND
 }
 
 auto LuaLightProbe::Create(lua_State *state) -> int {

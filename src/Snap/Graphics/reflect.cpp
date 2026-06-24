@@ -8,7 +8,6 @@
 
 #include "vulkan/vulkan_core.h"
 #include <cassert>
-#include <cstring>
 #include <format>
 #include <iterator>
 
@@ -29,7 +28,7 @@ auto StructInfo::ResolvePath(Graphics::ResourceKey::const_iterator iterator,
 
   for (const auto &currentField : fields) {
     // if (currentField.name == *iterator) {
-    if (strcmp(currentField.name, *iterator) == 0) {
+    if (iterator->Matches(currentField.name)) {
       field = &currentField;
       break;
     }
@@ -55,7 +54,7 @@ auto ResourceInfo::ResolvePath(Graphics::ResourceKey::const_iterator iterator,
                                Graphics::ResourceKey::const_iterator end) const
     -> const ResourceInfo * {
   // Last element and name does not match, return nullptr
-  if (iterator == end || strcmp(name, *iterator) != 0) {
+  if (iterator == end || !iterator->Matches(name)) {
     return nullptr;
   }
 
@@ -85,8 +84,7 @@ auto BufferInfo::ResolvePath(Graphics::ResourceKey::const_iterator iterator,
   }
 
   const auto &structInfo = std::get<StructInfo>(info);
-  // if (structInfo.name == *iterator) {
-  if (strcmp(structInfo.name, *iterator) == 0) {
+  if (iterator->Matches(name)) {
     return structInfo.ResolvePath(std::next(iterator), end);
   }
 

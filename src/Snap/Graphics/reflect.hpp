@@ -156,7 +156,7 @@ static inline auto ResourceKeyToString(const Graphics::ResourceKey &key)
     if (!result.empty()) {
       result += ".";
     }
-    result += part;
+    result += part.ToString();
   }
   return result;
 }

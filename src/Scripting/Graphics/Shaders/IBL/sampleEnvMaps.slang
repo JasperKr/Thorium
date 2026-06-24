@@ -28,10 +28,8 @@ struct LightProbe {
   float3 position;
   int index;
 
-  // Sphere
-  // same as above, but in a sphere
-  mediump float radius;
-  mediump float innerRadius;
+  float radius;
+  float innerRadius;
 };
 
 float sdSphere(float3 center, float radius, float3 point) {
@@ -47,7 +45,7 @@ struct LightProbeSampleInfo {
 // TODO: Volume texture for the world, storing an index and count into
 // a list of indices for probes that influence that cell, and then sample the probes in the shader
 uniform int LightProbeCount;
-uniform LightProbe Probes[16];
+StructuredBuffer<LightProbe> Probes;
 
 Sampler2DArray SpecularTextures;
 Sampler2DArray IrradianceTextures;

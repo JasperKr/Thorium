@@ -15,6 +15,9 @@ struct LightProbe {
 
   auto Render(const Transform &transform) -> Error;
   auto DrawGui(flecs::entity entity) -> Error;
+
+  auto WriteToBuffer(std::vector<uint8_t> &buffer, size_t offset,
+                     const Transform &transform) const -> void;
 };
 
 static const Type LightProbeType = Type("LightProbe");

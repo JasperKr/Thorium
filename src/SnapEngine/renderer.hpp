@@ -99,6 +99,37 @@ const std::vector<Graphics::BufferComponent> ModelTransformBufferComponents = {
     },
 };
 
+/*
+struct LightProbe {
+  float3 position;
+  int index;
+
+  // Sphere
+  // same as above, but in a sphere
+  float radius;
+  float innerRadius;
+};
+*/
+
+const std::vector<Graphics::BufferComponent> LightProbeBufferComponents = {
+    Graphics::BufferComponent{
+        .name = "Position",
+        .format = VK_FORMAT_R32G32B32_SFLOAT,
+    },
+    Graphics::BufferComponent{
+        .name = "Index",
+        .format = VK_FORMAT_R32_UINT,
+    },
+    Graphics::BufferComponent{
+        .name = "Radius",
+        .format = VK_FORMAT_R32_SFLOAT,
+    },
+    Graphics::BufferComponent{
+        .name = "InnerRadius",
+        .format = VK_FORMAT_R32_SFLOAT,
+    },
+};
+
 struct Renderer {
   struct Lights {
     Ref<Graphics::StructuredBuffer> PointLightsBuffer;
@@ -185,6 +216,8 @@ private:
 
   Ref<Graphics::StructuredBuffer> ModelTransformsBuffer;
   size_t ModelTransformBufferElementCount = 0;
+
+  Ref<Graphics::StructuredBuffer> LightProbeBuffer;
 
   Lights SceneLightBuffers;
   LightprobePrefilterManager PrefilterManager;
