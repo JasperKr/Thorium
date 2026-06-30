@@ -63,19 +63,11 @@ BufferFormat::BufferFormat(
   FlattenComponentTree();
 }
 
-auto BufferFormat::GetComponentOffset(size_t componentIndex) const -> size_t {
-  if (componentIndex >= Components.size()) {
-    return 0;
-  }
-
-  return Components[componentIndex].offset;
-}
-
 auto BufferFormat::FindComponent(ResourceKey::const_iterator iterator,
-                                 ResourceKey::const_iterator end) const
+                                 ResourceKey::const_iterator end,
+                                 uint64_t &arrayOffset) const
     -> BufferComponent const * {
-
-  if (std::next(iterator) == end) {
+  if (iterator == end) {
     return nullptr;
   }
 
@@ -83,29 +75,36 @@ auto BufferFormat::FindComponent(ResourceKey::const_iterator iterator,
 
   for (const auto &Component : Components) {
     if (key.Matches(Component.name)) {
-      if (std::holds_alternative<BufferFormat>(Component.format)) {
-        const auto &format = std::get<BufferFormat>(Component.format);
-        return format.FindComponent(std::next(iterator), end);
+      // End of key
+      if (std::next(iterator) == end) {
+        return &Component;
       }
 
-      return &Component;
+      // Array in Struct
+      if (Component.arraySize > 1 && !Component.isMatrix) {
+        auto indexOpt = key.GetIndex();
+        if (!indexOpt.has_value()) {
+          return nullptr;
+        }
+
+        size_t index = indexOpt.value();
+        if (index >= Component.arraySize) {
+          return nullptr;
+        }
+
+        arrayOffset += Component.InternalOffsetAt(index);
+
+        if (std::holds_alternative<BufferFormat>(Component.format)) {
+          const auto &format = std::get<BufferFormat>(Component.format);
+          return format.FindComponent(std::next(iterator), end, arrayOffset);
+        }
+
+        return &Component;
+      }
     }
   }
 
   return nullptr;
-}
-
-auto BufferFormat::GetComponentOffset(const ResourceKey &name) const
-    -> Result<size_t> {
-  const auto *component = FindComponent(name.begin(), name.end());
-
-  if (component != nullptr) {
-    return component->offset;
-  }
-
-  return Error::Unexpected(
-      "Buffer format does not contain component with name: " +
-      Reflect::ResourceKeyToString(name));
 }
 
 auto BufferFormat::operator==(const BufferFormat &other) const -> bool {

@@ -1,6 +1,5 @@
 build/
 include/
-external/
 .cache/
 .VSCodeCounter/
 bin/

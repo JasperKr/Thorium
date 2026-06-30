@@ -146,12 +146,6 @@ function Buffer:clear(value, offset, size) end
 --- @param size integer The number of elements to copy
 function Buffer:copyTo(dstBuffer, srcIndex, dstIndex, size) end
 
---- Gets the offset of a component in the buffer format
---- @overload fun(index: integer): integer
---- @param name string The name of the component to get the offset of
---- @return integer offset The offset of the component in bytes, or nil if the component does not exist in the buffer format
-function Buffer:getComponentOffset(name) end
-
 --- Gets the debug name of the buffer
 --- @return string debugName
 function Buffer:getDebugName() end

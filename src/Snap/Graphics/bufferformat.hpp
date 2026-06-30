@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Graphics/format.hpp"
 #include "Graphics/graphicsState.hpp"
 #include "Modules/error.hpp"
 #include <cassert>
@@ -55,8 +56,8 @@ private:
 
   [[nodiscard]] auto
   FindComponent(Graphics::ResourceKey::const_iterator iterator,
-                Graphics::ResourceKey::const_iterator end) const
-      -> BufferComponent const *;
+                Graphics::ResourceKey::const_iterator end,
+                uint64_t &arrayOffset) const -> BufferComponent const *;
 
 public:
   [[nodiscard]] auto GetVkComponents() const -> const std::vector<VkFormat> & {
@@ -80,13 +81,6 @@ public:
 
     return stride;
   }
-
-  // Get the offset of a component by name
-  [[nodiscard]] auto GetComponentOffset(const ResourceKey &name) const
-      -> Result<size_t>;
-
-  // Get the offset of a component by index
-  [[nodiscard]] auto GetComponentOffset(size_t index) const -> size_t;
 
   auto operator==(const BufferFormat &other) const -> bool;
 
@@ -138,6 +132,20 @@ struct BufferComponent {
 
   // Vertex format only
   uint32_t location;
+
+  [[nodiscard]] auto InternalOffsetAt(size_t index) const -> size_t {
+    if (index >= arraySize || isMatrix) {
+      return 0;
+    }
+
+    if (std::holds_alternative<VkFormat>(format)) {
+      auto vulkanFormat = std::get<VkFormat>(format);
+      return Graphics::Format::GetSize(vulkanFormat) * index;
+    }
+
+    auto bufferFormat = std::get<BufferFormat>(format);
+    return bufferFormat.GetStride() * index;
+  }
 };
 
 struct BufferFormatHash {

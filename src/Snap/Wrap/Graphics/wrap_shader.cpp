@@ -57,13 +57,10 @@ auto wrap_Send(lua_State *state) -> int {
     return 1;
   }
 
-  auto [key, keyCount] = ResourceKeyFromLua(state, 2);
-  if (keyCount == 0) {
-    return luaL_error(state, "Invalid uniform name.");
-  }
+  auto key = LUA_CK_RES(ResourceKeyFromSingleLuaObject(state, 2));
 
-  // Base index of 1; + 1 for shader object; + keyCount for key parts
-  auto valueOffset = 2 + keyCount;
+  // Base index of 1; + 1 for shader object; + 1 for key part
+  auto valueOffset = 3;
 
   if (LuaWrap::IsType<::Graphics::Texture>(state, valueOffset)) {
     auto *texture =

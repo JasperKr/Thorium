@@ -612,13 +612,43 @@ auto ShaderModule::GetUniform(const ResourceKey &key) const
   }
 
   // check global ubo
-  thread_local ResourceKey globalsKey;
-  globalsKey.clear();
-  globalsKey.emplace_front("Globals");
+  ResourceKey globalsKey{"Globals"};
   append(globalsKey, key);
 
-  const auto *info =
-      reflection.globals.ResolvePath(globalsKey.begin(), globalsKey.end());
+  uint64_t arrayOffset = 0;
+
+  const auto *info = reflection.globals.ResolvePath(
+      globalsKey.begin(), globalsKey.end(), arrayOffset);
+  if (info != nullptr) {
+    return info;
+  }
+
+  for (const auto &resource : reflection.resources) {
+    if (key.begin()->Matches(resource.name)) {
+      return &resource;
+    }
+  }
+
+  return nullptr;
+}
+
+auto ShaderModule::GetUniform(const ResourceKey &key,
+                              uint64_t &arrayOffset) const
+    -> const Reflect::ResourceInfo * {
+  for (const auto &pushBuffer : pushBuffers) {
+    const auto *info = pushBuffer.GetUniform(key.begin(), key.end());
+    if (info == nullptr) {
+      continue;
+    }
+    return info;
+  }
+
+  // check global ubo
+  ResourceKey globalsKey{"Globals"};
+  append(globalsKey, key);
+
+  const auto *info = reflection.globals.ResolvePath(
+      globalsKey.begin(), globalsKey.end(), arrayOffset);
   if (info != nullptr) {
     return info;
   }
@@ -648,14 +678,16 @@ auto ShaderModule::Send(const ResourceKey &key,
   globalsKey.emplace_front("Globals");
   append(globalsKey, key);
 
-  const auto *info =
-      reflection.globals.ResolvePath(globalsKey.begin(), globalsKey.end());
+  uint64_t arrayOffset = 0;
+
+  const auto *info = reflection.globals.ResolvePath(
+      globalsKey.begin(), globalsKey.end(), arrayOffset);
   if (info == nullptr) {
     return Error::Create("Uniform `" + Reflect::ResourceKeyToString(key) +
                          "` not found.");
   }
 
-  size_t offset = info->GetOffset();
+  size_t offset = info->GetOffset() + arrayOffset;
   assert(offset + data.size() <= globalUniforms.size() &&
          "Data exceeds global uniform buffer size.");
 

@@ -32,7 +32,6 @@ static const std::vector<luaL_Reg> BufferLib = {
     {"getFormat", wrap_GetFormat},
     {"setData", wrap_SetData},
     {"clear", wrap_ClearBuffer},
-    {"getComponentOffset", wrap_GetComponentOffset},
     {"getDebugName", wrap_GetDebugName},
     {"hasPadding", wrap_BufferHasPadding},
 

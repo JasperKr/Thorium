@@ -16,15 +16,15 @@ namespace Graphics::Reflect {
 // Resolve path for struct fields is exclusive to the struct resource info
 // Since structs are nameless and their name is only described by the parent resource info
 auto StructInfo::ResolvePath(Graphics::ResourceKey::const_iterator iterator,
-                             Graphics::ResourceKey::const_iterator end) const
+                             Graphics::ResourceKey::const_iterator end,
+                             uint64_t &arrayOffset) const
     -> const ResourceInfo * {
 
   if (iterator == end) {
     return nullptr;
   }
 
-  thread_local const ResourceInfo *field;
-  field = nullptr;
+  ResourceInfo const *field = nullptr;
 
   for (const auto &currentField : fields) {
     // if (currentField.name == *iterator) {
@@ -38,20 +38,37 @@ auto StructInfo::ResolvePath(Graphics::ResourceKey::const_iterator iterator,
     return nullptr;
   }
 
+  if (iterator->IsIndexingKey()) {
+    auto indexOpt = iterator->GetIndex();
+    if (!indexOpt.has_value()) {
+      return nullptr;
+    }
+
+    size_t index = indexOpt.value();
+    auto arraySize = field->GetArraySize();
+
+    if (arraySize <= 1 || index >= arraySize) {
+      return nullptr;
+    }
+
+    arrayOffset += field->GetSize() * index;
+  }
+
   if (std::next(iterator) != end) {
     if (!std::holds_alternative<StructInfo>(field->info)) {
       return field;
     }
 
     const auto &structInfo = std::get<StructInfo>(field->info);
-    return structInfo.ResolvePath(std::next(iterator), end);
+    return structInfo.ResolvePath(std::next(iterator), end, arrayOffset);
   }
 
   return field;
 }
 
 auto ResourceInfo::ResolvePath(Graphics::ResourceKey::const_iterator iterator,
-                               Graphics::ResourceKey::const_iterator end) const
+                               Graphics::ResourceKey::const_iterator end,
+                               uint64_t &arrayOffset) const
     -> const ResourceInfo * {
   // Last element and name does not match, return nullptr
   if (iterator == end || !iterator->Matches(name)) {
@@ -68,12 +85,29 @@ auto ResourceInfo::ResolvePath(Graphics::ResourceKey::const_iterator iterator,
     return nullptr;
   }
 
+  if (iterator->IsIndexingKey()) {
+    auto indexOpt = iterator->GetIndex();
+    if (!indexOpt.has_value()) {
+      return nullptr;
+    }
+
+    size_t index = indexOpt.value();
+    auto arraySize = GetArraySize();
+
+    if (arraySize <= 1 || index >= arraySize) {
+      return nullptr;
+    }
+
+    arrayOffset += GetSize() * index;
+  }
+
   const auto &structInfo = std::get<StructInfo>(info);
-  return structInfo.ResolvePath(std::next(iterator), end);
+  return structInfo.ResolvePath(std::next(iterator), end, arrayOffset);
 }
 
 auto BufferInfo::ResolvePath(Graphics::ResourceKey::const_iterator iterator,
-                             Graphics::ResourceKey::const_iterator end) const
+                             Graphics::ResourceKey::const_iterator end,
+                             uint64_t &arrayOffset) const
     -> const ResourceInfo * {
   if (std::next(iterator) == end) {
     return nullptr;
@@ -83,9 +117,23 @@ auto BufferInfo::ResolvePath(Graphics::ResourceKey::const_iterator iterator,
     return nullptr;
   }
 
+  if (iterator->IsIndexingKey()) {
+    auto indexOpt = iterator->GetIndex();
+    if (!indexOpt.has_value()) {
+      return nullptr;
+    }
+
+    size_t index = indexOpt.value();
+    if (arraySize <= 1 || index >= arraySize) {
+      return nullptr;
+    }
+
+    arrayOffset += size * index;
+  }
+
   const auto &structInfo = std::get<StructInfo>(info);
   if (iterator->Matches(name)) {
-    return structInfo.ResolvePath(std::next(iterator), end);
+    return structInfo.ResolvePath(std::next(iterator), end, arrayOffset);
   }
 
   return nullptr;

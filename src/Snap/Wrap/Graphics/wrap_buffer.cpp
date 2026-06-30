@@ -278,35 +278,6 @@ auto wrap_SetData(lua_State *state) -> int {
   return 0;
 }
 
-auto wrap_GetComponentOffset(lua_State *state) -> int {
-  auto *buffer = LuaWrap::ObjectFromLua<::Graphics::StructuredBuffer>(state, 1);
-
-  if (buffer == nullptr) {
-    return luaL_error(state, "Expected Buffer as first argument");
-  }
-
-  if (lua_type(state, 2) == LUA_TSTRING) {
-    auto [name, keyCount] = ResourceKeyFromLua(state, 2);
-    auto offsetResult = buffer->GetFormat().GetComponentOffset(name);
-    if (Error::IsError(offsetResult)) {
-      return luaL_error(state, "Failed to get component offset: %s",
-                        offsetResult.error().message.c_str());
-    }
-
-    lua_pushinteger(state, static_cast<lua_Integer>(offsetResult.value()));
-    return 1;
-  }
-
-  if (lua_type(state, 2) == LUA_TNUMBER) {
-    auto index = static_cast<size_t>(luaL_checkinteger(state, 2));
-    auto offset = buffer->GetFormat().GetComponentOffset(index);
-    lua_pushinteger(state, static_cast<lua_Integer>(offset));
-    return 1;
-  }
-
-  return luaL_error(state, "Expected string or integer as second argument");
-}
-
 auto wrap_GetDebugName(lua_State *state) -> int {
   auto *buffer = LuaWrap::ObjectFromLua<::Graphics::StructuredBuffer>(state, 1);
 

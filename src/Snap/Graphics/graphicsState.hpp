@@ -59,18 +59,15 @@ constexpr uint32_t MAX_SWAPCHAIN_IMAGES = 8;
 struct KeyElement {
   KeyElement() = default;
   KeyElement(const char *key) : Key(key) {} // NOLINT
-  explicit KeyElement(uint64_t index) : Index(index), IsIndex(true) {}
   explicit KeyElement(std::string_view key) : Key(key.data()) {}
+  explicit KeyElement(std::string_view key, uint64_t index)
+      : Key(key.data()), Index(index) {}
 
-  union {
-    const char *Key;
-    uint64_t Index{};
-  };
-
-  bool IsIndex = false;
+  const char *Key = nullptr;
+  uint64_t Index = UINT64_MAX;
 
   [[nodiscard]] auto Matches(std::string_view key) const -> bool {
-    return !IsIndex && Key == key;
+    return Key == key;
   }
 
   [[nodiscard]] auto Matches(const char *key) const -> bool {
@@ -78,17 +75,18 @@ struct KeyElement {
   }
 
   [[nodiscard]] auto GetIndex() const -> std::optional<uint64_t> {
-    if (!IsIndex) {
-      return std::nullopt;
-    }
+    return Index == UINT64_MAX ? std::nullopt : std::optional<uint64_t>{Index};
+  }
 
-    return Index;
+  [[nodiscard]] auto IsIndexingKey() const -> bool {
+    return Index != UINT64_MAX;
   }
 
   [[nodiscard]] auto ToString() const -> std::string {
-    if (IsIndex) {
-      return std::to_string(Index);
+    if (Index != UINT64_MAX) {
+      return std::string(Key) + "[" + std::to_string(Index) + "]";
     }
+
     return Key;
   }
 };

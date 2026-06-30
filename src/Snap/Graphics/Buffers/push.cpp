@@ -71,7 +71,9 @@ auto PushBuffer::ContainsUniform(ResourceKey::const_iterator iterator,
 
   const auto &bufferInfo = std::get<Reflect::BufferInfo>(layout.info);
 
-  return bufferInfo.ResolvePath(iterator, end) != nullptr;
+  uint64_t arrayOffset = 0;
+
+  return bufferInfo.ResolvePath(iterator, end, arrayOffset) != nullptr;
 }
 
 auto PushBuffer::GetUniform(ResourceKey::const_iterator iterator,
@@ -87,7 +89,9 @@ auto PushBuffer::GetUniform(ResourceKey::const_iterator iterator,
 
   const auto &bufferInfo = std::get<Reflect::BufferInfo>(layout.info);
 
-  return bufferInfo.ResolvePath(iterator, end);
+  uint64_t arrayOffset = 0;
+
+  return bufferInfo.ResolvePath(iterator, end, arrayOffset);
 }
 
 auto PushBuffer::GetStageFlags() const -> VkShaderStageFlags {

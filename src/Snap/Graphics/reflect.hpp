@@ -161,7 +161,18 @@ static inline auto ResourceKeyToString(const Graphics::ResourceKey &key)
   return result;
 }
 
-struct SamplerInfo {
+struct ResourceBase {
+  // Element size in bytes, not accounting for array size but accounting for alignment
+  uint32_t size;
+
+  // Offset in parent structure, if applicable
+  uint32_t offset;
+
+  // yeah
+  uint32_t arraySize;
+};
+
+struct SamplerInfo : ResourceBase {
   uint32_t set;
   uint32_t binding;
 
@@ -170,25 +181,16 @@ struct SamplerInfo {
   VkFormat format;
 };
 
-struct ScalarInfo {
-  uint32_t size;
-  uint32_t offset;
-
+struct ScalarInfo : ResourceBase {
   ScalarType type;
 };
 
-struct VectorInfo {
-  uint32_t size;
-  uint32_t offset;
-
+struct VectorInfo : ResourceBase {
   ScalarType scalarType;
   VectorType vectorType;
 };
 
-struct MatrixInfo {
-  uint32_t size;
-  uint32_t offset;
-
+struct MatrixInfo : ResourceBase {
   MatrixType matrixType;
 };
 
@@ -202,17 +204,16 @@ enum class StructFieldVariant : uint8_t {
 
 struct ResourceInfo;
 
-struct StructInfo {
+struct StructInfo : ResourceBase {
   const char *name;
   std::vector<ResourceInfo> fields;
   std::vector<uint32_t> fieldOffsets;
 
-  uint32_t size;
   uint32_t alignment;
 
-  [[nodiscard]] auto
-  ResolvePath(Graphics::ResourceKey::const_iterator iterator,
-              Graphics::ResourceKey::const_iterator end) const
+  [[nodiscard]] auto ResolvePath(Graphics::ResourceKey::const_iterator iterator,
+                                 Graphics::ResourceKey::const_iterator end,
+                                 uint64_t &arrayOffset) const
       -> const ResourceInfo *;
 };
 
@@ -223,11 +224,8 @@ enum class BufferType : uint8_t {
   PushConstant,
 };
 
-struct BufferInfo {
+struct BufferInfo : ResourceBase {
   const char *name;
-
-  uint32_t size;
-  uint32_t offset; // For push constants
 
   uint32_t set;
   uint32_t binding;
@@ -262,9 +260,9 @@ struct BufferInfo {
 
   std::variant<StructInfo, ScalarInfo, VectorInfo, MatrixInfo> info;
 
-  [[nodiscard]] auto
-  ResolvePath(Graphics::ResourceKey::const_iterator iterator,
-              Graphics::ResourceKey::const_iterator end) const
+  [[nodiscard]] auto ResolvePath(Graphics::ResourceKey::const_iterator iterator,
+                                 Graphics::ResourceKey::const_iterator end,
+                                 uint64_t &arrayOffset) const
       -> const ResourceInfo *;
 
   [[nodiscard]] auto ToString() const -> std::string;
@@ -342,59 +340,20 @@ struct ResourceInfo {
     return std::holds_alternative<T>(info);
   }
   [[nodiscard]] auto GetOffset() const -> uint32_t {
-    if (IsBuffer()) {
-      const auto &bufferInfo = std::get<BufferInfo>(info);
-      return bufferInfo.offset;
-    }
-    if (IsStruct()) {
-      const auto &structInfo = std::get<StructInfo>(info);
-      if (structInfo.fields.size() > 0) {
-        return structInfo.fields[0].GetOffset(); // First field offset
-      }
-      return 0;
-    }
-    if (IsScalar()) {
-      const auto &scalarInfo = std::get<ScalarInfo>(info);
-      return scalarInfo.offset;
-    }
-    if (IsVector()) {
-      const auto &vectorInfo = std::get<VectorInfo>(info);
-      return vectorInfo.offset;
-    }
-    if (IsMatrix()) {
-      const auto &matrixInfo = std::get<MatrixInfo>(info);
-      return matrixInfo.offset;
-    }
-
-    return offset;
+    return std::visit([](const auto &data) -> uint32_t { return data.offset; },
+                      info);
+  }
+  [[nodiscard]] auto GetArraySize() const -> uint32_t {
+    return std::visit(
+        [](const auto &data) -> uint32_t { return data.arraySize; }, info);
   }
   [[nodiscard]] constexpr auto GetSize() const -> uint32_t {
-    if (IsBuffer()) {
-      const auto &bufferInfo = std::get<BufferInfo>(info);
-      return bufferInfo.size;
-    }
-    if (IsStruct()) {
-      const auto &structInfo = std::get<StructInfo>(info);
-      return structInfo.size;
-    }
-    if (IsScalar()) {
-      const auto &scalarInfo = std::get<ScalarInfo>(info);
-      return scalarInfo.size;
-    }
-    if (IsVector()) {
-      const auto &vectorInfo = std::get<VectorInfo>(info);
-      return vectorInfo.size;
-    }
-    if (IsMatrix()) {
-      const auto &matrixInfo = std::get<MatrixInfo>(info);
-      return matrixInfo.size;
-    }
-
-    return 0;
+    return std::visit([](const auto &data) -> uint32_t { return data.size; },
+                      info);
   }
-  [[nodiscard]] auto
-  ResolvePath(Graphics::ResourceKey::const_iterator iterator,
-              Graphics::ResourceKey::const_iterator end) const
+  [[nodiscard]] auto ResolvePath(Graphics::ResourceKey::const_iterator iterator,
+                                 Graphics::ResourceKey::const_iterator end,
+                                 uint64_t &arrayOffset) const
       -> const ResourceInfo *;
 
   std::variant<SamplerInfo, ScalarInfo, VectorInfo, MatrixInfo, BufferInfo,
@@ -424,8 +383,9 @@ struct ResourceInfo {
   }
 
   [[nodiscard]] auto ToString() const -> std::string {
-    auto result = std::format("Resource Name: {} Type: {} Offset: {}\n", name,
-                              GetTypename(), GetOffset());
+    auto result = std::format(
+        "Resource Name: {} Type: {} Offset: {}, Size: {}, Array Size: {}\n",
+        name, GetTypename(), GetOffset(), GetSize(), GetArraySize());
 
     if (IsBuffer()) {
       const auto &bufferInfo = std::get<BufferInfo>(info);
@@ -444,7 +404,6 @@ struct ResourceInfo {
         result += "Unknown\n";
         break;
       }
-      result += "  Size: " + std::to_string(bufferInfo.size) + "\n";
       result += "  Set: " + std::to_string(bufferInfo.set) + "\n";
       result += "  Binding: " + std::to_string(bufferInfo.binding) + "\n";
     } else if (IsSampler()) {
@@ -453,7 +412,6 @@ struct ResourceInfo {
       result += "  Binding: " + std::to_string(samplerInfo.binding) + "\n";
     } else if (IsStruct()) {
       const auto &structInfo = std::get<StructInfo>(info);
-      result += "  Struct Size: " + std::to_string(structInfo.size) + "\n";
       result += "  Fields:\n";
       for (const auto &field : structInfo.fields) {
         result += "    - " + field.ToString();
