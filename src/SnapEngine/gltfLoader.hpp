@@ -4,6 +4,7 @@
 #include "Modules/error.hpp"
 #include "Modules/imageData.hpp"
 #include "Modules/object.hpp"
+#include "fastgltf/core.hpp"
 #include <cstdint>
 #include <flecs.h>
 #include <mutex>

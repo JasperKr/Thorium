@@ -19,6 +19,7 @@
 #include "Scene/transform.hpp"
 #include "Scene/userdata.hpp"
 #include "material.hpp"
+#include "simdjson/simdjson.h" // <-- Do not remove; Forces the use of project simdjson instead of system simdjson
 #include <algorithm>
 #include <cassert>
 #include <cstddef>
@@ -26,6 +27,7 @@
 #include <cstring>
 #include <execution>
 #include <flecs.h>
+#include <memory>
 #include <mutex>
 #include <numeric>
 #include <public/tracy/Tracy.hpp>
@@ -56,6 +58,10 @@ std::vector<
 std::vector<Ref<Graphics::Texture>> TextureCache;
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
+constexpr fastgltf::Extensions Extensions =
+    fastgltf::Extensions::KHR_lights_punctual |
+    fastgltf::Extensions::MSFT_texture_dds;
+
 inline auto GetUniqueName(const std::string &baseName) -> std::string {
   auto countIter = NameDuplicateCount.find(baseName);
   uint16_t count = 0;
@@ -80,8 +86,7 @@ inline auto GetUniqueName(const char *baseName) -> std::string {
 using DataIndex = size_t;
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
-static fastgltf::Parser Parser =
-    fastgltf::Parser(fastgltf::Extensions::KHR_lights_punctual);
+static fastgltf::Parser Parser = fastgltf::Parser(Extensions);
 
 inline auto LoadDataSource(const fastgltf::Asset &asset,
                            const std::string_view &basePath,
@@ -1300,7 +1305,7 @@ auto LoadGltfModel(Graphics::GraphicsContext &context, const std::string &path,
 
   auto bytes = CHECK_RES(Filesystem::ReadFile(path));
   // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
-  auto *bytedata = reinterpret_cast<std::byte *>(bytes.data());
+  const auto *bytedata = reinterpret_cast<const std::byte *>(bytes.data());
 
   /// Create a glTF data buffer from the loaded file data.
   auto data = fastgltf::GltfDataBuffer::FromBytes(bytedata, bytes.size());
@@ -1309,9 +1314,10 @@ auto LoadGltfModel(Graphics::GraphicsContext &context, const std::string &path,
     return Error::Create("Failed to load glTF data buffer.");
   }
 
-  /// Parse the glTF asset from the data buffer.
-  auto asset = Parser.loadGltf(data.get(), Path::Directory(path),
-                               fastgltf::Options::DecomposeNodeMatrices);
+  auto asset =
+      Parser.loadGltf(data.get(), Path::Directory(path),
+                      fastgltf::Options::DecomposeNodeMatrices |
+                          fastgltf::Options::DontRequireValidAssetMember);
   if (auto error = asset.error(); error != fastgltf::Error::None) {
     // Some error occurred while reading the buffer, parsing the JSON, or validating the data.
     return Error::Create(fastgltf::getErrorName(error));

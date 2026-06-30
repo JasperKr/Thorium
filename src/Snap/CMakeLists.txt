@@ -176,7 +176,7 @@ add_library(simdjson STATIC
 )
 
 target_include_directories(simdjson
-    PUBLIC include
+    PUBLIC ${INCLUDE_DIR}/simdjson
 )
 
 target_link_libraries(fastgltf

@@ -2262,12 +2262,12 @@ auto Clear(const GraphicsContext &context, const ClearInfo &clearInfo)
   }
 
   // TODO: Cache this step and only flush on state changes
-  CHECK_ERR(PrepareRendering(context));
+  // CHECK_ERR(PrepareRendering(context));
 
-  vkCmdClearAttachments(
-      commandBuffer, static_cast<uint32_t>(clearAttachments.size()),
-      clearAttachments.data(), static_cast<uint32_t>(clearRects.size()),
-      clearRects.data());
+  // vkCmdClearAttachments(
+  //     commandBuffer, static_cast<uint32_t>(clearAttachments.size()),
+  //     clearAttachments.data(), static_cast<uint32_t>(clearRects.size()),
+  //     clearRects.data());
 
   return Error::Success();
 }
