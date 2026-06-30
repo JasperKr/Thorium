@@ -15,8 +15,7 @@ vgcore.*
 *.glb
 *.gltf
 Assets/
-*.so.*
-# external/
+*.so*
 *.log
 *.tmp
 imgui.ini
@@ -25,3 +24,4 @@ generated/
 -.json
 massif.*
 massif_printed.*
+**/*.so*
