@@ -6,16 +6,27 @@
 #include "Modules/Helpers/utils.hpp"
 #include "Modules/console.hpp"
 #include <mutex>
+#include <vector>
+#include <vulkan/vulkan_core.h>
 
 namespace Graphics {
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
+
+// Destruction order is:
+// Shaders: Can hold buffers and texture views, so they must be destroyed first.
+// Texture views: Can hold textures, so they must be destroyed second.
+// Textures
+// Buffers
+
 std::vector<TextureMemory> ReleasedTextures{};
 std::vector<BufferMemory> ReleasedBuffers{};
 std::vector<TextureViewMemory> ReleasedTextureViews{};
+std::vector<ShaderModuleMemory> ReleasedShaderModules{};
 
 std::mutex ReleasedTexturesMutex{};
 std::mutex ReleasedBuffersMutex{};
 std::mutex ReleasedTextureViewsMutex{};
+std::mutex ReleasedShaderModulesMutex{};
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
 auto ScheduleDestruction(const TextureMemory &texture) -> void {
@@ -67,6 +78,22 @@ auto ScheduleDestruction(const TextureViewMemory &textureView) -> void {
   ReleasedTextureViews.emplace_back(textureView);
 }
 
+auto ScheduleDestruction(const ShaderModuleMemory &shaderModule) -> void {
+  std::lock_guard<std::mutex> lock(ReleasedShaderModulesMutex);
+
+#ifndef NDEBUG
+  // Debug check to ensure we are not double-releasing a shader module
+  for (const auto &releasedShaderModule : ReleasedShaderModules) {
+    if (releasedShaderModule.shaderModule == shaderModule.shaderModule) {
+      PrintError("ShaderModule resource double release detected! Handle: {}",
+                 (void *)shaderModule.shaderModule);
+      assert(false && "ShaderModule resource double release detected!");
+    }
+  }
+#endif
+  ReleasedShaderModules.emplace_back(shaderModule);
+}
+
 auto TextureMemory::Destroy() -> void {
   std::scoped_lock<std::mutex, std::mutex> lock(
       Graphics::GraphicsContext::mutexes.device,
@@ -107,6 +134,17 @@ auto TextureViewMemory::Destroy() -> void {
   imageView = VK_NULL_HANDLE;
 }
 
+auto ShaderModuleMemory::Destroy() -> void {
+  std::unique_lock<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+
+  auto *context = GetCurrentGraphicsContext();
+
+  vkDestroyShaderModule(context->device, shaderModule,
+                        GetAllocationCallbacks());
+
+  shaderModule = VK_NULL_HANDLE;
+}
+
 inline auto CanBeDestroyed( // NOLINTNEXTLINE
     const uint64_t &resourceTimelineValue) -> bool {
 
@@ -119,8 +157,9 @@ inline auto CanBeDestroyed( // NOLINTNEXTLINE
 
 auto ProcessReleasedResources(GraphicsContext &context) -> void {
   if (!GetDeferredDestructionAllowed()) {
-    std::scoped_lock<std::mutex, std::mutex> lock(ReleasedTexturesMutex,
-                                                  ReleasedBuffersMutex);
+    std::scoped_lock<std::mutex, std::mutex, std::mutex, std::mutex> lock(
+        ReleasedTexturesMutex, ReleasedBuffersMutex, ReleasedTextureViewsMutex,
+        ReleasedShaderModulesMutex);
 
     for (auto &res : ReleasedTextureViews) {
       res.Destroy();
@@ -137,7 +176,25 @@ auto ProcessReleasedResources(GraphicsContext &context) -> void {
     }
     ReleasedBuffers.clear();
 
+    for (auto &res : ReleasedShaderModules) {
+      res.Destroy();
+    }
+    ReleasedShaderModules.clear();
+
     return;
+  }
+
+  {
+    std::lock_guard<std::mutex> lock(ReleasedShaderModulesMutex);
+
+    Utils::UnorderedErase(ReleasedShaderModules,
+                          [&](ShaderModuleMemory &res) -> auto {
+                            if (CanBeDestroyed(res.timelineValue)) {
+                              res.Destroy();
+                              return true;
+                            }
+                            return false;
+                          });
   }
 
   {

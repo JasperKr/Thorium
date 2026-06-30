@@ -31,6 +31,13 @@ struct TextureViewMemory {
   auto Destroy() -> void;
 };
 
+struct ShaderModuleMemory {
+  VkShaderModule shaderModule;
+  uint64_t timelineValue;
+
+  auto Destroy() -> void;
+};
+
 struct GraphicsResource {
   GraphicsResource(const GraphicsResource &) = delete;
   GraphicsResource(GraphicsResource &&) = delete;
@@ -63,10 +70,12 @@ private:
 extern std::vector<TextureMemory> ReleasedTextures;
 extern std::vector<BufferMemory> ReleasedBuffers;
 extern std::vector<TextureViewMemory> ReleasedTextureViews;
+extern std::vector<ShaderModuleMemory> ReleasedShaderModules;
 
 extern std::mutex ReleasedTexturesMutex;
 extern std::mutex ReleasedBuffersMutex;
 extern std::mutex ReleasedTextureViewsMutex;
+extern std::mutex ReleasedShaderModulesMutex;
 
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
@@ -75,5 +84,6 @@ auto ProcessReleasedResources(GraphicsContext &context) -> void;
 auto ScheduleDestruction(const TextureMemory &texture) -> void;
 auto ScheduleDestruction(const BufferMemory &buffer) -> void;
 auto ScheduleDestruction(const TextureViewMemory &textureView) -> void;
+auto ScheduleDestruction(const ShaderModuleMemory &shaderModule) -> void;
 
 } // namespace Graphics

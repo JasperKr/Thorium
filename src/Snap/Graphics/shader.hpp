@@ -3,6 +3,7 @@
 #include "Graphics/Buffers/push.hpp"
 #include "Graphics/allocations.hpp"
 #include "Graphics/buffer.hpp"
+#include "Graphics/resource.hpp"
 #include "Graphics/texture.hpp"
 #include "Modules/Math/vector.hpp"
 #include "Modules/error.hpp"
@@ -132,17 +133,14 @@ struct ShaderModule : Object {
   ~ShaderModule() override {
     auto *ctx = GetCurrentGraphicsContext();
 
-    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-
-    if (module != VK_NULL_HANDLE) {
-      vkDestroyShaderModule(ctx->device, module, GetAllocationCallbacks());
-      module = VK_NULL_HANDLE;
-    }
-
     auto &state = GetState();
     state.userBoundBuffers.clear();
     state.userBoundTextures.clear();
     BoundStates.erase(module);
+
+    ScheduleDestruction(ShaderModuleMemory{
+        .shaderModule = module,
+        .timelineValue = Graphics::SemaphoreManager::GetSemaphoreValue()});
   }
 
   static auto
