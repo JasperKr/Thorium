@@ -2,7 +2,7 @@
 
 #include "Graphics/graphicsState.hpp"
 #include "Graphics/texture.hpp"
-#include "Modules/Helpers/LRU-Cache.hpp"
+#include "Modules/Helpers/LRUCache.hpp"
 #include "Modules/Helpers/hasher.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"

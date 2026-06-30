@@ -288,7 +288,7 @@ auto Matrix4x4::Perspective(Scalar fov, Scalar aspect, Scalar near, Scalar far)
   Matrix4x4 result = Matrix4x4::FromRows(
     {
       ithf / aspect, 0.0F, 0.0F, 0.0F,
-      0.0F, ithf,    0.0F, 0.0F,
+      0.0F, -ithf,    0.0F, 0.0F,
       0.0F, 0.0F, near / (far - near), (far * near) / (far - near),
       0.0F, 0.0F, 1.0F, 0.0F
     });

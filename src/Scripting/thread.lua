@@ -128,7 +128,7 @@ do
       return
     end
 
-    local quat = quaternion(snap.math.eulerToQuaternion(-dx * 0.0015, dy * 0.0015, 0))
+    local quat = quaternion(snap.math.eulerToQuaternion(-dx * 0.0015, -dy * 0.0015, 0))
     local currentQuat = quaternion(camera:getRotation())
     local newQuat = quat * currentQuat
     camera:setRotation(newQuat.x, newQuat.y, newQuat.z, newQuat.w)
@@ -189,7 +189,20 @@ do
       camera:setPosition(x + backX * speed, y + backY * speed, z + backZ * speed)
     end
 
-    snap.graphics.setWindingOrder("ccw")
+    if (isDown["space"]) then
+      local upX, upY, upZ = camera:getUp()
+      local x, y, z = camera:getPosition()
+      camera:setPosition(x + upX * speed, y + upY * speed, z + upZ * speed)
+    end
+
+    if (isDown["lctrl"]) then
+      local downX, downY, downZ = camera:getUp()
+      downX, downY, downZ = -downX, -downY, -downZ
+      local x, y, z = camera:getPosition()
+      camera:setPosition(x + downX * speed, y + downY * speed, z + downZ * speed)
+    end
+
+    snap.graphics.setWindingOrder("cw")
     createSnapshot = false
     if firstFrame then
       snap.graphics.setDefaultFilter("linear", "linear", 16)
