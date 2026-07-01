@@ -1,6 +1,6 @@
 #include "userdata.hpp"
 #include "Wrap/wrap.hpp"
-#include "entity.hpp"
+#include "Wrap/wrap_engine.hpp"
 #include <imgui.h>
 #include <lua.hpp>
 
@@ -12,7 +12,7 @@ thread_local std::vector<int32_t> FreedUserdataIndices{};
 auto Userdata::SetUserdata(lua_State *state) -> int {
   // Stack: [entity, userdata]
 
-  auto *entity = LuaWrap::ObjectFromLua<Entity>(state, 1);
+  auto *entity = ::LuaWrap::EntityFromLua(state, 1);
 
   if (entity == nullptr) {
     return luaL_error(state, "Invalid Entity object");
@@ -32,7 +32,7 @@ auto Userdata::SetUserdata(lua_State *state) -> int {
     userdata->userdataIndex = GetFreeUserdataIndex();
   }
 
-  LuaWrap::SetStackToRegistry(state, "Userdata");
+  ::LuaWrap::SetStackToRegistry(state, "Userdata");
   // Stack: [entity, userdata, "Userdata"]
   lua_pushvalue(state, 2);
   // Stack: [entity, userdata, "Userdata", userdata]
@@ -40,13 +40,18 @@ auto Userdata::SetUserdata(lua_State *state) -> int {
   lua_rawseti(state, -2, static_cast<int>(userdata->userdataIndex));
   // raw set integer -> Userdata[userdata->userdataIndex] = userdata
   // Stack: [entity, userdata, "Userdata"]
-  return 0;
+
+  // Return the userdata the user provided for convenience
+  lua_pop(state, 1); // Pop "Userdata" table
+  // Stack: [entity, userdata]
+
+  return 1;
 }
 
 auto Userdata::GetUserdata(lua_State *state) -> int {
   // Stack: [entity]
 
-  auto *entity = LuaWrap::ObjectFromLua<Entity>(state, 1);
+  auto *entity = ::LuaWrap::EntityFromLua(state, 1);
 
   if (entity == nullptr) {
     return luaL_error(state, "Invalid Entity object");
@@ -58,7 +63,7 @@ auto Userdata::GetUserdata(lua_State *state) -> int {
     return 1;
   }
 
-  LuaWrap::SetStackToRegistry(state, "Userdata");
+  ::LuaWrap::SetStackToRegistry(state, "Userdata");
   // Stack: [entity, "Userdata"]
   lua_rawgeti(state, -1, static_cast<int>(userdata->userdataIndex));
   // Stack: [entity, "Userdata", userdata]
@@ -98,7 +103,7 @@ auto Userdata::DrawGUI(lua_State *state) const -> void {
     return;
   }
 
-  LuaWrap::SetStackToRegistry(state, "Userdata");
+  ::LuaWrap::SetStackToRegistry(state, "Userdata");
   lua_rawgeti(state, -1, static_cast<int>(userdataIndex));
 
   if (lua_isnil(state, -1)) {
@@ -114,7 +119,7 @@ auto Userdata::DrawGUI(lua_State *state) const -> void {
   }
 }
 
-const LuaWrap::LuaComponent UserdataComponent{{
+const ::LuaWrap::LuaComponent UserdataComponent{{
     {"setUserdata", Userdata::SetUserdata},
     {"getUserdata", Userdata::GetUserdata},
 }};

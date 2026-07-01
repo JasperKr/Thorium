@@ -2,7 +2,6 @@
 
 #include "Graphics/mesh.hpp"
 #include "Wrap/wrap.hpp"
-#include "lua.hpp"
 #include <imgui.h>
 #include <lua.hpp>
 

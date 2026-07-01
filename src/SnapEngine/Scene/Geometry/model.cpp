@@ -75,7 +75,7 @@ auto LuaModel::Create(lua_State *state) -> int {
     luaL_checktype(state, 6, LUA_TTABLE);
     lua_pushnil(state);
     while (lua_next(state, 6) != 0) {
-      auto *shapeEntity = ::LuaWrap::EntityFromLua<LuaShape>(state, -1);
+      auto *shapeEntity = ::LuaWrap::EntityFromLua(state, -1);
       if (shapeEntity != nullptr) {
         shapeEntity->child_of(entity);
       } else {
@@ -86,8 +86,7 @@ auto LuaModel::Create(lua_State *state) -> int {
   }
 
   if (lua_gettop(state) >= 7) {
-    auto *materialEntity =
-        ::LuaWrap::EntityFromLua<Renderer::LuaMaterial>(state, 7);
+    auto *materialEntity = ::LuaWrap::EntityFromLua(state, 7);
     if (materialEntity != nullptr) {
       materialEntity->child_of(entity);
     }
@@ -100,7 +99,7 @@ auto LuaModel::Create(lua_State *state) -> int {
 }
 
 auto LuaModel::GetShapes(lua_State *state) -> int {
-  auto *entity = ::LuaWrap::EntityFromLua<LuaModel>(state, 1);
+  auto *entity = ::LuaWrap::EntityFromLua(state, 1);
   if (entity == nullptr) {
     return luaL_error(state, "Expected a Model object");
   }

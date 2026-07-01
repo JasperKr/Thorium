@@ -1,5 +1,7 @@
+#include <functional>
 #include <list>
 #include <mutex>
+#include <type_traits>
 #include <unordered_map>
 #include <utility>
 
@@ -8,7 +10,10 @@
 template <typename Key, typename Value, typename Hash = std::hash<Key>>
 class LRUCache {
 public:
-  explicit LRUCache(size_t capacity) : m_capacity(capacity) {}
+  using EvictionCallback = std::function<void(const Key &, Value &)>;
+
+  explicit LRUCache(size_t capacity, EvictionCallback onEvict = {})
+      : m_capacity(capacity), m_onEvict(std::move(onEvict)) {}
 
   struct Entry {
     Key key;
@@ -21,6 +26,11 @@ private:
   using ListIt = typename std::list<Entry>::iterator;
 
 public:
+  void setEvictionCallback(EvictionCallback onEvict) {
+    std::lock_guard lock(m_mutex);
+    m_onEvict = std::move(onEvict);
+  }
+
   auto contains(const Key &key) const -> bool {
     std::lock_guard lock(m_mutex);
     return m_map.find(key) != m_map.end();
@@ -152,6 +162,9 @@ private:
 
   void evict() {
     auto &back = m_list.back();
+    if (m_onEvict) {
+      m_onEvict(back.key, back.value);
+    }
     m_map.erase(back.key);
     m_list.pop_back();
   }
@@ -159,5 +172,6 @@ private:
   size_t m_capacity;
   std::list<Entry> m_list; // MRU front, LRU back
   std::unordered_map<Key, ListIt, Hash> m_map;
+  EvictionCallback m_onEvict;
   mutable std::mutex m_mutex;
 };

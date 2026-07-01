@@ -235,7 +235,7 @@ auto LightprobePrefilterManager::PrefilterRadianceMap(
             .baseMipLevel = level,
             .levelCount = 1,
             .baseArrayLayer = 0,
-            .layerCount = 1,
+            .layerCount = 6,
         }));
     envMapCubeViews.emplace_back(inputCubeView);
 

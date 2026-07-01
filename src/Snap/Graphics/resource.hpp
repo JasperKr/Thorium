@@ -2,40 +2,56 @@
 
 #include "Graphics/graphics.hpp"
 #include <cassert>
+#include <cstdint>
+#include <memory>
 #include <mutex>
+#include <vector>
 
 namespace Graphics {
 
+struct GraphicsMemory {
+  uint64_t timelineValue{};
+
+  void (*destroy)(const GraphicsContext &context,
+                  void *resourceHandle) = nullptr;
+
+  // Generic handle to the resource-specific data
+  // NOLINTNEXTLINE
+  std::unique_ptr<std::byte[]> resourceHandle;
+};
+
 struct BufferMemory {
-  VmaAllocation allocation;
-  VkBuffer buffer;
+  VmaAllocation allocation{};
+  VkBuffer buffer{};
 
-  uint64_t timelineValue;
-
-  auto Destroy() -> void;
+  static auto Destroy(const GraphicsContext &context, void *data) -> void;
 };
 
 struct TextureMemory {
   VmaAllocation allocation;
   VkImage image;
 
-  uint64_t timelineValue;
-
-  auto Destroy() -> void;
+  static auto Destroy(const GraphicsContext &context, void *data) -> void;
 };
 
 struct TextureViewMemory {
   VkImageView imageView;
-  uint64_t timelineValue;
 
-  auto Destroy() -> void;
+  static auto Destroy(const GraphicsContext &context, void *data) -> void;
 };
 
 struct ShaderModuleMemory {
   VkShaderModule shaderModule;
-  uint64_t timelineValue;
 
-  auto Destroy() -> void;
+  static auto Destroy(const GraphicsContext &context, void *data) -> void;
+};
+
+struct PipelineMemory {
+  VkPipeline pipeline;
+  // VkPipelineLayout layout;
+  // std::vector<VkDescriptorSetLayout> descriptorSetLayouts;
+
+  static auto Destroy(const GraphicsContext &context, void *data) -> void;
 };
 
 struct GraphicsResource {
@@ -67,23 +83,21 @@ private:
 };
 
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
-extern std::vector<TextureMemory> ReleasedTextures;
-extern std::vector<BufferMemory> ReleasedBuffers;
-extern std::vector<TextureViewMemory> ReleasedTextureViews;
-extern std::vector<ShaderModuleMemory> ReleasedShaderModules;
-
-extern std::mutex ReleasedTexturesMutex;
-extern std::mutex ReleasedBuffersMutex;
-extern std::mutex ReleasedTextureViewsMutex;
-extern std::mutex ReleasedShaderModulesMutex;
-
+extern std::vector<GraphicsMemory> ReleasedGraphicsMemory;
+extern std::mutex ReleasedGraphicsMemoryMutex;
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
 auto ProcessReleasedResources(GraphicsContext &context) -> void;
 
-auto ScheduleDestruction(const TextureMemory &texture) -> void;
-auto ScheduleDestruction(const BufferMemory &buffer) -> void;
-auto ScheduleDestruction(const TextureViewMemory &textureView) -> void;
-auto ScheduleDestruction(const ShaderModuleMemory &shaderModule) -> void;
+auto ScheduleDestruction(const TextureMemory &texture, uint64_t timelineValue)
+    -> void;
+auto ScheduleDestruction(const BufferMemory &buffer, uint64_t timelineValue)
+    -> void;
+auto ScheduleDestruction(const TextureViewMemory &textureView,
+                         uint64_t timelineValue) -> void;
+auto ScheduleDestruction(const ShaderModuleMemory &shaderModule,
+                         uint64_t timelineValue) -> void;
+auto ScheduleDestruction(const PipelineMemory &pipeline, uint64_t timelineValue)
+    -> void;
 
 } // namespace Graphics

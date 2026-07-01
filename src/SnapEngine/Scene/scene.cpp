@@ -1018,7 +1018,7 @@ auto LuaScene::SetEnvironment(lua_State *state) -> int {
     return luaL_error(state, "Expected a Scene object");
   }
 
-  auto *environment = ::LuaWrap::EntityFromLua<LuaEnvironment>(state, 2);
+  auto *environment = ::LuaWrap::EntityFromLua(state, 2);
   if (environment == nullptr) {
     return luaL_error(state, "Expected an Environment object");
   }

@@ -131,7 +131,8 @@ struct ImageMemory {
   size_t arrayLayers{1};
   VkImageUsageFlags usage{};
 
-  VkPipelineStageFlagBits2 lastPipelineStage = VK_PIPELINE_STAGE_NONE_KHR;
+  VkPipelineStageFlagBits2 lastPipelineStage =
+      VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT;
   VkImageLayout currentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
   TextureUsage lastUsage = TextureUsage::Unknown;
 
@@ -338,8 +339,9 @@ struct Texture : Object, Barrier::BarrierSynced {
           VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
       VkAccessFlags2 srcAccessMask = VK_ACCESS_NONE, // NOLINT
       VkAccessFlags2 dstAccessMask = VK_ACCESS_NONE,
-      VkImageSubresourceRange range = {.levelCount = 1, .layerCount = 1}) const
-      -> Error;
+      VkImageSubresourceRange range = {
+          .levelCount = VK_REMAINING_MIP_LEVELS,
+          .layerCount = VK_REMAINING_ARRAY_LAYERS}) const -> Error;
 
   static auto GetType() -> Type const * { return &LuaTextureType; }
 

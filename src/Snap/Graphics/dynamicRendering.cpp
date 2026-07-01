@@ -7,6 +7,7 @@
 #include "Graphics/graphicsContext.hpp"
 #include "Graphics/graphicsState.hpp"
 #include "Graphics/reflect.hpp"
+#include "Graphics/resource.hpp"
 #include "Graphics/shader.hpp"
 #include "Graphics/snapshot.hpp"
 #include "Graphics/texture.hpp"
@@ -45,7 +46,18 @@ namespace Graphics::DynamicRendering {
 constexpr size_t PipelineCacheSize = 512UL;
 
 LRUCache<StateKey, std::pair<VkPipeline, PipelineLayout>, StateKeyHash>
-    PipelineCache(PipelineCacheSize);
+PipelineCache(
+    PipelineCacheSize,
+    [](const StateKey &key,
+       std::pair<VkPipeline, PipelineLayout> &value) -> void {
+      PipelineMemory pipelineMemory{
+          .pipeline = value.first,
+          // .layout = value.second.layout,
+          // .descriptorSetLayouts = value.second.descriptorSetLayouts,
+      };
+      ScheduleDestruction(pipelineMemory,
+                          Graphics::SemaphoreManager::GetSemaphoreValue());
+    });
 
 thread_local PipelineLayout CurrentPipelineLayout; // NOLINT
 
@@ -701,6 +713,12 @@ inline auto CreateComputePipeline(const GraphicsContext &context, State &state)
   pipelineInfo.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
   pipelineInfo.stage.module = state.shader->module;
 
+  if ((state.shader->combinedShaderStages & VK_SHADER_STAGE_COMPUTE_BIT) == 0) {
+    return Error::Unexpectedf(
+        "Shader module {} does not have a compute shader stage.",
+        state.shader->name);
+  }
+
   // If we get a validation error / crash about this not existing; rename to "main"
   pipelineInfo.stage.pName = "computeMain";
 
@@ -751,13 +769,7 @@ inline auto GetPipeline(const GraphicsContext &context, State &state)
     return *pipeline;
   }
 
-  auto result = CreatePipeline(context, state);
-
-  if (Error::IsError(result)) {
-    return result.error();
-  }
-
-  return result.value();
+  return CreatePipeline(context, state);
 }
 
 // All commands queued to swapchain must happen while the swapchain is bound
@@ -1964,6 +1976,13 @@ auto SetShader(const Ref<Shader::ShaderModule> &shader) -> void {
   } else {
     TopOfStack->shader = shader;
   }
+
+  if ((TopOfStack->shader->combinedShaderStages &
+       VK_SHADER_STAGE_COMPUTE_BIT) != 0) {
+    DynamicRendering::SetBindPoint(VK_PIPELINE_BIND_POINT_COMPUTE);
+  } else {
+    DynamicRendering::SetBindPoint(VK_PIPELINE_BIND_POINT_GRAPHICS);
+  }
 }
 
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
@@ -2261,13 +2280,12 @@ auto Clear(const GraphicsContext &context, const ClearInfo &clearInfo)
     clearRects.emplace_back(clearRect);
   }
 
-  // TODO: Cache this step and only flush on state changes
-  // CHECK_ERR(PrepareRendering(context));
+  CHECK_ERR(PrepareRendering(context));
 
-  // vkCmdClearAttachments(
-  //     commandBuffer, static_cast<uint32_t>(clearAttachments.size()),
-  //     clearAttachments.data(), static_cast<uint32_t>(clearRects.size()),
-  //     clearRects.data());
+  vkCmdClearAttachments(
+      commandBuffer, static_cast<uint32_t>(clearAttachments.size()),
+      clearAttachments.data(), static_cast<uint32_t>(clearRects.size()),
+      clearRects.data());
 
   return Error::Success();
 }

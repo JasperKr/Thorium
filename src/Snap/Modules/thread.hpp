@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Modules/type.hpp"
 #include "Wrap/lua_data.hpp"
@@ -67,7 +68,7 @@ private:
   static auto Run(Thread *thread,
                   const std::vector<LuaWrap::Data::LuaType> &launchArguments,
                   int count, ThreadID identifier) -> void;
-  auto Close(ThreadStatus status, const std::string &message) -> void;
+  auto Close(ThreadStatus status, const std::string &message) -> Error;
 
   std::string script;
   lua_State *luaState = nullptr;

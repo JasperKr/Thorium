@@ -534,20 +534,20 @@ void Deinitialize(GraphicsContext &context) {
 
   Graphics::Barrier::ResetModule();
 
-  // (BEFORE device, allocator lock)
-  Graphics::ProcessReleasedResources(context);
+  Graphics::Shader::UnloadModule(context);
 
   Graphics::DeinitializeRendering(context);
+
+  Graphics::DynamicRendering::Shutdown(context);
 
   Graphics::semaphoreManager.Deinitialize(context);
 
   Graphics::DestroySamplers(context);
 
-  Graphics::Shader::UnloadModule(context);
-
-  Graphics::DynamicRendering::Shutdown(context);
-
   Graphics::DynamicRendering::Destroy(context);
+
+  // (BEFORE device, allocator lock)
+  Graphics::ProcessReleasedResources(context);
 
   std::scoped_lock<std::mutex, std::mutex> lock(
       Graphics::GraphicsContext::mutexes.device,

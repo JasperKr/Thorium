@@ -715,13 +715,12 @@ auto Buffer::Readback(const GraphicsContext &context,
 Buffer::~Buffer() {
   auto *context = GetCurrentGraphicsContext();
 
-  ScheduleDestruction(BufferMemory{.allocation = memory,
-                                   .buffer = handle,
-                                   .timelineValue = lastUsedTimestamp});
-
-  std::scoped_lock<std::mutex, std::mutex> lock(
-      Graphics::GraphicsContext::mutexes.device,
-      Graphics::GraphicsContext::mutexes.vmaAllocator);
+  ScheduleDestruction(
+      BufferMemory{
+          .allocation = memory,
+          .buffer = handle,
+      },
+      lastUsedTimestamp);
 
   if (persistentMapping && mappedData != nullptr) {
     vmaUnmapMemory(context->vmaAllocator, memory);

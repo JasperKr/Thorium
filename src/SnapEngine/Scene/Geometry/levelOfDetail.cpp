@@ -14,7 +14,7 @@ auto LevelOfDetail::DrawGUI() const -> void {
 }
 
 auto LuaLevelOfDetail::GetTransitionThreshold(lua_State *state) -> int {
-  auto *entity = ::LuaWrap::EntityFromLua<LuaLevelOfDetail>(state, 1);
+  auto *entity = ::LuaWrap::EntityFromLua(state, 1);
 
   if (entity == nullptr) {
     return luaL_error(state, "Expected a LevelOfDetail object");
@@ -29,7 +29,7 @@ auto LuaLevelOfDetail::GetTransitionThreshold(lua_State *state) -> int {
   return 1;
 }
 auto LuaLevelOfDetail::SetTransitionThreshold(lua_State *state) -> int {
-  auto *entity = ::LuaWrap::EntityFromLua<LuaLevelOfDetail>(state, 1);
+  auto *entity = ::LuaWrap::EntityFromLua(state, 1);
 
   if (entity == nullptr) {
     return luaL_error(state, "Expected a LevelOfDetail object");
@@ -46,7 +46,7 @@ auto LuaLevelOfDetail::SetTransitionThreshold(lua_State *state) -> int {
 }
 
 auto LuaLevelOfDetail::GetMeshes(lua_State *state) -> int {
-  auto *entity = ::LuaWrap::EntityFromLua<LuaLevelOfDetail>(state, 1);
+  auto *entity = ::LuaWrap::EntityFromLua(state, 1);
 
   if (entity == nullptr) {
     return luaL_error(state, "Expected a LevelOfDetail object");
@@ -76,7 +76,7 @@ auto LuaLevelOfDetail::GetMeshes(lua_State *state) -> int {
 }
 
 auto LuaLevelOfDetail::AddGeometry(lua_State *state) -> int {
-  auto *entity = ::LuaWrap::EntityFromLua<LuaLevelOfDetail>(state, 1);
+  auto *entity = ::LuaWrap::EntityFromLua(state, 1);
 
   if (entity == nullptr) {
     return luaL_error(state, "Expected a LevelOfDetail object");
@@ -116,7 +116,7 @@ auto LuaLevelOfDetail::Create(lua_State *state) -> int {
 }
 
 auto LuaLevelOfDetail::RemoveGeometry(lua_State *state) -> int {
-  auto *entity = ::LuaWrap::EntityFromLua<LuaLevelOfDetail>(state, 1);
+  auto *entity = ::LuaWrap::EntityFromLua(state, 1);
 
   if (entity == nullptr) {
     return luaL_error(state, "Expected a LevelOfDetail object");
@@ -138,7 +138,7 @@ auto LuaLevelOfDetail::RemoveGeometry(lua_State *state) -> int {
 }
 
 auto LuaLevelOfDetail::GetBoundingBox(lua_State *state) -> int {
-  auto *entity = ::LuaWrap::EntityFromLua<LuaLevelOfDetail>(state, 1);
+  auto *entity = ::LuaWrap::EntityFromLua(state, 1);
 
   if (entity == nullptr) {
     return luaL_error(state, "Expected a LevelOfDetail object");

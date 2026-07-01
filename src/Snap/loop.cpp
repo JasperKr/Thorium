@@ -36,12 +36,15 @@ function snap.run()
   if snap.load then
     snap.load()
   end
+  local events = {}
 
   return function()
     snap.event.pull()
 
-    local name, a, b, c, d, e, f = snap.event.pop()
-    while name do
+    local _, count = snap.event.pop(events)
+    while count do
+      local name = events[1]
+
       if name == "quit" then
         if snap.quit then
           return snap.quit() or 0
@@ -50,13 +53,13 @@ function snap.run()
       end
 
       if snap[name] then
-        snap[name](a, b, c, d, e, f)
+        snap[name](unpack(events, 2, count))
       end
       if snap.any then
-        snap.any(name, a, b, c, d, e, f)
+        snap.any(unpack(events, 1, count))
       end
 
-      name, a, b, c, d, e, f = snap.event.pop()
+      _, count = snap.event.pop(events)
     end
 
     snap.timer.step()
@@ -303,7 +306,6 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
       Event::ExitCode = 1;
 
       mainLoopResult = Error::Create(luaErrorMessage);
-      PrintError("Lua error in main loop: {}", luaErrorMessage);
     }
     FrameMarkEnd("Frame");
 

@@ -84,7 +84,7 @@ auto BoundingBox::Grow(const Math::Vec3 &point) -> void {
 }
 
 auto LuaBoundingBox::GetMin(lua_State *state) -> int {
-  auto *luaBoundingBox = ::LuaWrap::EntityFromLua<LuaBoundingBox>(state, 1);
+  auto *luaBoundingBox = ::LuaWrap::EntityFromLua(state, 1);
 
   if (luaBoundingBox == nullptr) {
     return luaL_error(state, "Expected a BoundingBox object");
@@ -103,7 +103,7 @@ auto LuaBoundingBox::GetMin(lua_State *state) -> int {
 }
 
 auto LuaBoundingBox::SetMin(lua_State *state) -> int {
-  auto *luaBoundingBox = ::LuaWrap::EntityFromLua<LuaBoundingBox>(state, 1);
+  auto *luaBoundingBox = ::LuaWrap::EntityFromLua(state, 1);
 
   if (luaBoundingBox == nullptr) {
     return luaL_error(state, "Expected a BoundingBox object");
@@ -122,7 +122,7 @@ auto LuaBoundingBox::SetMin(lua_State *state) -> int {
 }
 
 auto LuaBoundingBox::GetMax(lua_State *state) -> int {
-  auto *luaBoundingBox = ::LuaWrap::EntityFromLua<LuaBoundingBox>(state, 1);
+  auto *luaBoundingBox = ::LuaWrap::EntityFromLua(state, 1);
 
   if (luaBoundingBox == nullptr) {
     return luaL_error(state, "Expected a BoundingBox object");
@@ -141,7 +141,7 @@ auto LuaBoundingBox::GetMax(lua_State *state) -> int {
 }
 
 auto LuaBoundingBox::SetMax(lua_State *state) -> int {
-  auto *luaBoundingBox = ::LuaWrap::EntityFromLua<LuaBoundingBox>(state, 1);
+  auto *luaBoundingBox = ::LuaWrap::EntityFromLua(state, 1);
 
   if (luaBoundingBox == nullptr) {
     return luaL_error(state, "Expected a BoundingBox object");
@@ -160,7 +160,7 @@ auto LuaBoundingBox::SetMax(lua_State *state) -> int {
 }
 
 auto LuaBoundingBox::GetCenter(lua_State *state) -> int {
-  auto *luaBoundingBox = ::LuaWrap::EntityFromLua<LuaBoundingBox>(state, 1);
+  auto *luaBoundingBox = ::LuaWrap::EntityFromLua(state, 1);
 
   if (luaBoundingBox == nullptr) {
     return luaL_error(state, "Expected a BoundingBox object");
@@ -180,7 +180,7 @@ auto LuaBoundingBox::GetCenter(lua_State *state) -> int {
 }
 
 auto LuaBoundingBox::GetSize(lua_State *state) -> int {
-  auto *luaBoundingBox = ::LuaWrap::EntityFromLua<LuaBoundingBox>(state, 1);
+  auto *luaBoundingBox = ::LuaWrap::EntityFromLua(state, 1);
 
   if (luaBoundingBox == nullptr) {
     return luaL_error(state, "Expected a BoundingBox object");
@@ -200,8 +200,8 @@ auto LuaBoundingBox::GetSize(lua_State *state) -> int {
 }
 
 auto LuaBoundingBox::Union(lua_State *state) -> int {
-  auto *luaBoundingBox1 = ::LuaWrap::EntityFromLua<LuaBoundingBox>(state, 1);
-  auto *luaBoundingBox2 = ::LuaWrap::EntityFromLua<LuaBoundingBox>(state, 2);
+  auto *luaBoundingBox1 = ::LuaWrap::EntityFromLua(state, 1);
+  auto *luaBoundingBox2 = ::LuaWrap::EntityFromLua(state, 2);
 
   if (luaBoundingBox1 == nullptr || luaBoundingBox2 == nullptr) {
     return luaL_error(state, "Expected two BoundingBox objects");
@@ -242,8 +242,8 @@ auto LuaBoundingBox::Union(lua_State *state) -> int {
 }
 
 auto LuaBoundingBox::Intersect(lua_State *state) -> int {
-  auto *luaBoundingBox1 = ::LuaWrap::EntityFromLua<LuaBoundingBox>(state, 1);
-  auto *luaBoundingBox2 = ::LuaWrap::EntityFromLua<LuaBoundingBox>(state, 2);
+  auto *luaBoundingBox1 = ::LuaWrap::EntityFromLua(state, 1);
+  auto *luaBoundingBox2 = ::LuaWrap::EntityFromLua(state, 2);
 
   if (luaBoundingBox1 == nullptr || luaBoundingBox2 == nullptr) {
     return luaL_error(state, "Expected two BoundingBox objects");
@@ -284,8 +284,8 @@ auto LuaBoundingBox::Intersect(lua_State *state) -> int {
 }
 
 auto LuaBoundingBox::UnionInPlace(lua_State *state) -> int {
-  auto *luaBoundingBox1 = ::LuaWrap::EntityFromLua<LuaBoundingBox>(state, 1);
-  auto *luaBoundingBox2 = ::LuaWrap::EntityFromLua<LuaBoundingBox>(state, 2);
+  auto *luaBoundingBox1 = ::LuaWrap::EntityFromLua(state, 1);
+  auto *luaBoundingBox2 = ::LuaWrap::EntityFromLua(state, 2);
 
   if (luaBoundingBox1 == nullptr || luaBoundingBox2 == nullptr) {
     return luaL_error(state, "Expected two BoundingBox objects");
@@ -304,8 +304,8 @@ auto LuaBoundingBox::UnionInPlace(lua_State *state) -> int {
 }
 
 auto LuaBoundingBox::IntersectInPlace(lua_State *state) -> int {
-  auto *luaBoundingBox1 = ::LuaWrap::EntityFromLua<LuaBoundingBox>(state, 1);
-  auto *luaBoundingBox2 = ::LuaWrap::EntityFromLua<LuaBoundingBox>(state, 2);
+  auto *luaBoundingBox1 = ::LuaWrap::EntityFromLua(state, 1);
+  auto *luaBoundingBox2 = ::LuaWrap::EntityFromLua(state, 2);
 
   if (luaBoundingBox1 == nullptr || luaBoundingBox2 == nullptr) {
     return luaL_error(state, "Expected two BoundingBox objects");

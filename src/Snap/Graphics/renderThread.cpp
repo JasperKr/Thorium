@@ -218,14 +218,11 @@ auto AquireCommandBuffer(Graphics::GraphicsContext &context,
 
 auto SubmitCommands(Graphics::GraphicsContext &context)
     -> Result<Ref<RenderThreadInfo>> {
-  auto validateResult = DynamicRendering::FinalizeFrame(context);
-  if (Error::IsError(validateResult)) {
-    return validateResult;
-  }
-
-  auto flushResult = FlushBufferUploads(context);
-  if (Error::IsError(flushResult)) {
-    return flushResult;
+  CHECK_ERR(DynamicRendering::FinalizeFrame(context));
+  CHECK_ERR(FlushBufferUploads(context));
+  if (!CurrentRenderThreadInfo.isValid() ||
+      CurrentRenderThreadInfo->threadData.commandBuffer == VK_NULL_HANDLE) {
+    return Error::Unexpected("No command buffer to submit.");
   }
 
   CHECK_NEW_ERR(

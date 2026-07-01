@@ -2,13 +2,18 @@
 #include "Modules/Peripherals/keyboard.hpp"
 #include "Modules/console.hpp"
 #include "Modules/event.hpp"
+#include "Wrap/wrap.hpp"
 
+#include <lua.h>
 #include <lua.hpp>
 #include <string>
 
 namespace Wrap::Event {
 auto wrap_Quit(lua_State *state) -> int {
-  ::Event::MainLoopRunning = false;
+  ::Event::Push(::Event::Event{
+      .Name = "quit",
+      .Values = {},
+  });
 
   PrintInfo("Quit event received, stopping main loop.");
 
@@ -28,9 +33,18 @@ auto wrap_Pop(lua_State *state) -> int {
     return 0;
   }
 
+  // take table from stack and fill it with event data or create a new table if none exists
+  if (lua_isnoneornil(state, 1)) {
+    lua_newtable(state);
+  }
+
+  LUA_ASSERT(lua_gettop(state) == 1);
+
   ::Event::Event &event = eventResult.value();
+  int index = 1;
 
   lua_pushstring(state, event.Name.c_str());
+  lua_rawseti(state, 1, index++);
 
   for (auto &value : event.Values) {
     if (auto *intValue = std::get_if<int32_t>(&value)) {
@@ -48,9 +62,14 @@ auto wrap_Pop(lua_State *state) -> int {
     } else {
       lua_pushnil(state); // Unknown type
     }
+    lua_rawseti(state, 1, index++);
   }
 
-  return static_cast<int>(event.Values.size() + 1); // Number of return values
+  lua_pushinteger(state, index - 1);
+
+  assert(lua_gettop(state) == 2);
+
+  return 2; // Number of return values (the table, table size + name)
 }
 
 } // namespace Wrap::Event

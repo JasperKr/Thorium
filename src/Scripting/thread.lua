@@ -21,7 +21,7 @@ do
   local snapshot
 
   local function draw()
-    probe:render()
+    -- probe:render()
 
     snap.graphics.setCullMode("none")
     snap.graphics.setDepthMode("greater", true)
@@ -128,10 +128,21 @@ do
       return
     end
 
-    local quat = quaternion(snap.math.eulerToQuaternion(-dx * 0.0015, -dy * 0.0015, 0))
-    local currentQuat = quaternion(camera:getRotation())
-    local newQuat = quat * currentQuat
-    camera:setRotation(newQuat.x, newQuat.y, newQuat.z, newQuat.w)
+    local userdata = camera:getUserdata()
+
+    if not userdata then
+      userdata = camera:setUserdata({
+        rotation = vec3()
+      })
+    end
+
+    local rotation = userdata.rotation
+
+    rotation.x -= dx * 0.0015
+    rotation.y -= dy * 0.0015
+
+    rotation.y = math.max(math.min(rotation.y, math.pi / 2), -math.pi / 2)
+    camera:setRotation(snap.math.eulerToQuaternion(rotation:get()))
   end
 
   local t = snap.timer.getTime()

@@ -18,7 +18,7 @@ auto Geometry::DrawGUI() const -> void {
 }
 
 auto LuaGeometry::GetMesh(lua_State *state) -> int {
-  auto *entity = ::LuaWrap::EntityFromLua<LuaGeometry>(state, 1);
+  auto *entity = ::LuaWrap::EntityFromLua(state, 1);
   if (entity == nullptr) {
     return luaL_error(state, "Expected a Geometry object");
   }

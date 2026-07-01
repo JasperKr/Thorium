@@ -2,6 +2,7 @@
 #include "Graphics/graphics.hpp"
 #include "Graphics/renderThread.hpp"
 #include "Modules/console.hpp"
+#include "Modules/error.hpp"
 #include "Modules/filesystem.hpp"
 #include "Modules/object.hpp"
 #include "Wrap/lua_data.hpp"
@@ -35,12 +36,9 @@ auto Thread::Create(const std::string &script) -> Ref<Thread> {
   return thread;
 }
 
-auto Thread::Close(ThreadStatus status, const std::string &message) -> void {
-  auto err =
-      Graphics::Threading::Deinitialize(*Graphics::GetCurrentGraphicsContext());
-  if (Error::IsError(err)) {
-    PrintError("Error deinitializing graphics thread module: {}", err.message);
-  }
+auto Thread::Close(ThreadStatus status, const std::string &message) -> Error {
+  CHECK_ERR(Graphics::Threading::Deinitialize(
+      *Graphics::GetCurrentGraphicsContext()));
 
   if (state != nullptr) {
     lua_close(state);
@@ -63,6 +61,8 @@ auto Thread::Close(ThreadStatus status, const std::string &message) -> void {
   statusCV.notify_all();
 
   this->release(); // Releases self-ownership
+
+  return {};
 }
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
@@ -101,7 +101,7 @@ auto Thread::Run(Thread *thread,
       Graphics::Threading::Initialize(*Graphics::GetCurrentGraphicsContext());
 
   if (Error::IsError(err)) {
-    thread->Close(ThreadStatus::Error, err.message);
+    err = thread->Close(ThreadStatus::Error, err.message);
     return;
   }
 
@@ -121,7 +121,7 @@ auto Thread::Run(Thread *thread,
     auto error = LuaWrap::PushVarargs(state, launchArguments, count);
 
     if (Error::IsError(error)) {
-      thread->Close(ThreadStatus::Error, error.message);
+      err = thread->Close(ThreadStatus::Error, error.message);
       return;
     }
 
@@ -137,17 +137,14 @@ auto Thread::Run(Thread *thread,
     const auto *luaErrorMessage = lua_tostring(state, -1);
     lua_pop(state, 1);
 
-    // PrintError("Lua error in thread: {}", luaErrorMessage != nullptr
-    //                                           ? std::string(luaErrorMessage)
-    //                                           : "Unknown Lua error occurred.");
-
-    thread->Close(ThreadStatus::Error, luaErrorMessage != nullptr
-                                           ? std::string(luaErrorMessage)
-                                           : "Unknown Lua error occurred.");
+    err =
+        thread->Close(ThreadStatus::Error, luaErrorMessage != nullptr
+                                               ? std::string(luaErrorMessage)
+                                               : "Unknown Lua error occurred.");
     return;
   }
 
-  thread->Close(ThreadStatus::Stopped, "");
+  err = thread->Close(ThreadStatus::Stopped, "");
 }
 
 auto Thread::Start(const std::vector<LuaWrap::Data::LuaType> &launchArguments,

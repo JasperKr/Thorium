@@ -1,6 +1,6 @@
 #pragma once
 
-// #define LOG_ERRORS 1
+#define LOG_ERRORS
 
 #include "slang/slang-com-ptr.h"
 #include "slang/slang.h"
@@ -145,3 +145,10 @@ template <class T> struct Result : tl::expected<T, Error> {
     auto _res = std::move(_result.value());                                    \
     _res;                                                                      \
   })
+
+#define ERR_ASSERT(expr)                                                       \
+  {                                                                            \
+    if (!(expr)) {                                                             \
+      return Error::Createf("Assertion failed: {}", #expr);                    \
+    }                                                                          \
+  }

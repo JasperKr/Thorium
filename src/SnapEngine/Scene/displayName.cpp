@@ -6,7 +6,7 @@
 namespace Engine {
 
 auto LuaDisplayName::GetName(lua_State *state) -> int {
-  auto *entity = ::LuaWrap::EntityFromLua<LuaDisplayName>(state, 1);
+  auto *entity = ::LuaWrap::EntityFromLua(state, 1);
 
   if (entity == nullptr) {
     return luaL_error(state, "Invalid Entity object");
@@ -23,7 +23,7 @@ auto LuaDisplayName::GetName(lua_State *state) -> int {
 }
 
 auto LuaDisplayName::SetName(lua_State *state) -> int {
-  auto *entity = ::LuaWrap::EntityFromLua<LuaDisplayName>(state, 1);
+  auto *entity = ::LuaWrap::EntityFromLua(state, 1);
 
   if (entity == nullptr) {
     return luaL_error(state, "Invalid Entity object");

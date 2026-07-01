@@ -244,8 +244,6 @@ auto SwapchainManager::Initialize(GraphicsContext &context,
 }
 
 auto SwapchainManager::Deinitialize(GraphicsContext &context) -> void {
-  currentTextures.clear();
-
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
     vkDestroySwapchainKHR(context.device, currentSwapchain,
@@ -264,6 +262,10 @@ auto SwapchainManager::Deinitialize(GraphicsContext &context) -> void {
   currentSwapchain = VK_NULL_HANDLE;
 
   CleanupOldSwapchains(context, UINT64_MAX);
+
+  oldSwapchains.clear();
+  currentTextures.clear();
+  context.swapchainInfo.textures.clear();
 }
 auto SwapchainManager::RecreateSwapchain(GraphicsContext &context,
                                          Window::WindowContext &wcontext)

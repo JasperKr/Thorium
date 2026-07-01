@@ -1,7 +1,6 @@
 #include "material.hpp"
 #include "Graphics/Buffers/structured.hpp"
 #include "Modules/Math/vector.hpp"
-#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Wrap/Helpers/lua_enum.hpp"
 #include "Wrap/wrap_engine.hpp"
@@ -28,7 +27,7 @@ const static ::LuaWrap::LuaEnum<VkCullModeFlags>
                                 });
 
 auto LuaMaterial::wrap_setTextureUVIndex(lua_State *state) -> int {
-  auto *entity = ::LuaWrap::EntityFromLua<LuaMaterial>(state, 1);
+  auto *entity = ::LuaWrap::EntityFromLua(state, 1);
   if (entity == nullptr) {
     return luaL_error(state, "Invalid Entity");
   }
@@ -54,7 +53,7 @@ auto LuaMaterial::wrap_setTextureUVIndex(lua_State *state) -> int {
 }
 
 auto LuaMaterial::wrap_getTextureUVIndex(lua_State *state) -> int {
-  auto *entity = ::LuaWrap::EntityFromLua<LuaMaterial>(state, 1);
+  auto *entity = ::LuaWrap::EntityFromLua(state, 1);
   if (entity == nullptr) {
     return luaL_error(state, "Invalid Entity");
   }
@@ -75,7 +74,7 @@ auto LuaMaterial::wrap_getTextureUVIndex(lua_State *state) -> int {
 }
 
 auto LuaMaterial::wrap_setCullMode(lua_State *state) -> int {
-  auto *entity = ::LuaWrap::EntityFromLua<LuaMaterial>(state, 1);
+  auto *entity = ::LuaWrap::EntityFromLua(state, 1);
   if (entity == nullptr) {
     return luaL_error(state, "Invalid Entity");
   }
@@ -95,7 +94,7 @@ auto LuaMaterial::wrap_setCullMode(lua_State *state) -> int {
 }
 
 auto LuaMaterial::wrap_getCullMode(lua_State *state) -> int {
-  auto *entity = ::LuaWrap::EntityFromLua<LuaMaterial>(state, 1);
+  auto *entity = ::LuaWrap::EntityFromLua(state, 1);
   if (entity == nullptr) {
     return luaL_error(state, "Invalid Entity");
   }
@@ -114,7 +113,7 @@ auto LuaMaterial::wrap_getCullMode(lua_State *state) -> int {
 }
 
 auto LuaMaterial::wrap_setAlphaMode(lua_State *state) -> int {
-  auto *entity = ::LuaWrap::EntityFromLua<LuaMaterial>(state, 1);
+  auto *entity = ::LuaWrap::EntityFromLua(state, 1);
   if (entity == nullptr) {
     return luaL_error(state, "Invalid Entity");
   }
@@ -134,7 +133,7 @@ auto LuaMaterial::wrap_setAlphaMode(lua_State *state) -> int {
 }
 
 auto LuaMaterial::wrap_getAlphaMode(lua_State *state) -> int {
-  auto *entity = ::LuaWrap::EntityFromLua<LuaMaterial>(state, 1);
+  auto *entity = ::LuaWrap::EntityFromLua(state, 1);
   if (entity == nullptr) {
     return luaL_error(state, "Invalid Entity");
   }

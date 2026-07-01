@@ -90,7 +90,7 @@ auto Frustum::FromMatrices(const Math::Matrix4x4 &viewProjectionMatrix,
 }
 
 auto LuaFrustum::GetNearPlane(lua_State *state) -> int {
-  auto *entity = ::LuaWrap::EntityFromLua<LuaFrustum>(state, 1);
+  auto *entity = ::LuaWrap::EntityFromLua(state, 1);
   if (entity == nullptr) {
     return luaL_error(state, "Invalid Entity");
   }
@@ -109,7 +109,7 @@ auto LuaFrustum::GetNearPlane(lua_State *state) -> int {
 };
 
 auto LuaFrustum::GetFarPlane(lua_State *state) -> int {
-  auto *entity = ::LuaWrap::EntityFromLua<LuaFrustum>(state, 1);
+  auto *entity = ::LuaWrap::EntityFromLua(state, 1);
   if (entity == nullptr) {
     return luaL_error(state, "Invalid Entity");
   }
@@ -128,7 +128,7 @@ auto LuaFrustum::GetFarPlane(lua_State *state) -> int {
 };
 
 auto LuaFrustum::GetLeftPlane(lua_State *state) -> int {
-  auto *entity = ::LuaWrap::EntityFromLua<LuaFrustum>(state, 1);
+  auto *entity = ::LuaWrap::EntityFromLua(state, 1);
   if (entity == nullptr) {
     return luaL_error(state, "Invalid Entity");
   }
@@ -147,7 +147,7 @@ auto LuaFrustum::GetLeftPlane(lua_State *state) -> int {
 };
 
 auto LuaFrustum::GetRightPlane(lua_State *state) -> int {
-  auto *entity = ::LuaWrap::EntityFromLua<LuaFrustum>(state, 1);
+  auto *entity = ::LuaWrap::EntityFromLua(state, 1);
   if (entity == nullptr) {
     return luaL_error(state, "Invalid Entity");
   }
@@ -166,7 +166,7 @@ auto LuaFrustum::GetRightPlane(lua_State *state) -> int {
 };
 
 auto LuaFrustum::GetTopPlane(lua_State *state) -> int {
-  auto *entity = ::LuaWrap::EntityFromLua<LuaFrustum>(state, 1);
+  auto *entity = ::LuaWrap::EntityFromLua(state, 1);
   if (entity == nullptr) {
     return luaL_error(state, "Invalid Entity");
   }
@@ -185,7 +185,7 @@ auto LuaFrustum::GetTopPlane(lua_State *state) -> int {
 };
 
 auto LuaFrustum::GetBottomPlane(lua_State *state) -> int {
-  auto *entity = ::LuaWrap::EntityFromLua<LuaFrustum>(state, 1);
+  auto *entity = ::LuaWrap::EntityFromLua(state, 1);
   if (entity == nullptr) {
     return luaL_error(state, "Invalid Entity");
   }
@@ -204,7 +204,7 @@ auto LuaFrustum::GetBottomPlane(lua_State *state) -> int {
 };
 
 auto LuaFrustum::GetCorner(lua_State *state) -> int {
-  auto *entity = ::LuaWrap::EntityFromLua<LuaFrustum>(state, 1);
+  auto *entity = ::LuaWrap::EntityFromLua(state, 1);
   if (entity == nullptr) {
     return luaL_error(state, "Invalid Entity");
   }

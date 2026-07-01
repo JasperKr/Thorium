@@ -31,7 +31,6 @@
 #include <span>
 #include <string>
 #include <string_view>
-#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -47,9 +46,12 @@ ImageMemory::~ImageMemory() {
     return;
   }
 
-  ScheduleDestruction(TextureMemory{.allocation = memory,
-                                    .image = image,
-                                    .timelineValue = lastUsedTimestamp});
+  ScheduleDestruction(
+      TextureMemory{
+          .allocation = memory,
+          .image = image,
+      },
+      lastUsedTimestamp);
 
   Texture::TotalAllocatedMemory -= sizeInBytes;
 }
@@ -326,10 +328,6 @@ auto Texture::Create(const GraphicsContext &context, Texture *parentTexture,
   viewInfo.viewType = viewType;
   viewInfo.format = textureView->imageMemory->format;
   viewInfo.subresourceRange = range;
-
-  if (textureView->imageMemory->textureType == TextureType::CUBEMAP) {
-    viewInfo.subresourceRange.layerCount = 6; // NOLINT
-  }
 
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
@@ -1226,11 +1224,7 @@ auto Texture::UseAs(const GraphicsContext &context, TextureUsage newUsage,
   VkAccessFlags2 newAccess =
       GetAccessFlagsForUsage(newUsage, imageMemory->format);
 
-  if (imageMemory->lastUsage == TextureUsage::Unknown) {
-    // First time usage, so we can skip the transition from UNDEFINED
-    currentAccess = 0;
-    imageMemory->lastPipelineStage = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT;
-  } else if (imageMemory->lastUsage == TextureUsage::Swapchain) {
+  if (imageMemory->lastUsage == TextureUsage::Swapchain) {
     currentAccess = VK_ACCESS_2_NONE;
     imageMemory->lastPipelineStage =
         VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
@@ -1243,11 +1237,10 @@ auto Texture::UseAs(const GraphicsContext &context, TextureUsage newUsage,
 
   auto range = VkImageSubresourceRange{
       .aspectMask = GetAspectFlagsForFormat(imageMemory->format),
-      .baseMipLevel = baseMipLevel,
-      .levelCount = levelCount,
-      .baseArrayLayer = baseArrayLayer,
-      .layerCount = layerCount,
-  };
+      .baseMipLevel = 0,
+      .levelCount = VK_REMAINING_MIP_LEVELS,
+      .baseArrayLayer = 0,
+      .layerCount = VK_REMAINING_ARRAY_LAYERS};
 
   auto layout = VK_IMAGE_LAYOUT_GENERAL;
   if (newUsage == TextureUsage::PresentSrc) {
@@ -1439,8 +1432,11 @@ Texture::~Texture() {
     return;
   }
 
-  ScheduleDestruction(TextureViewMemory{
-      .imageView = view, .timelineValue = imageMemory->lastUsedTimestamp});
+  ScheduleDestruction(
+      TextureViewMemory{
+          .imageView = view,
+      },
+      imageMemory->lastUsedTimestamp);
 }
 
 std::atomic<VkDeviceSize> Texture::TotalAllocatedMemory{};

@@ -1,16 +1,17 @@
 #include "error.hpp"
 
+#include "Modules/console.hpp"
+#include "Modules/filesystem.hpp"
 #include "slang/slang-com-ptr.h"
 #include "slang/slang.h"
+#include <array>
 #include <cstring>
+#include <filesystem>
 #include <iostream>
 #include <print>
 #include <sstream>
 #include <unordered_map>
 
-#if defined(LOG_ERRORS)
-#include "Modules/console.hpp"
-#endif
 #include <string>
 
 #include "tl/expected.hpp"
@@ -92,6 +93,15 @@ inline auto CleanupTracebackLine(const std::string &line) -> std::string {
                           .append(":")
                           .append(lineNumber)
                           .append(stringAfterLineNumber);
+    }
+  }
+
+  auto source = Filesystem::GetSourceDirectory();
+  if (!source.empty()) {
+    size_t sourcePos = sanitizedLine.find(source);
+    if (sourcePos != std::string::npos) {
+      sanitizedLine = sanitizedLine.substr(0, sourcePos) +
+                      sanitizedLine.substr(sourcePos + source.length());
     }
   }
 
@@ -193,12 +203,44 @@ auto GetStackTrace(ErrorLevel level) -> std::string {
 
           std::string demangledFunction =
               Demangle(function == nullptr ? "??" : function);
+
+          // May be namespace::namespace::struct::function(namespace::namespace param)
+          // We want to remove the parameters and just keep the function name
+          size_t parenPos = demangledFunction.find('(');
+          if (parenPos != std::string::npos) {
+            demangledFunction = demangledFunction.substr(0, parenPos);
+          }
+
           std::string line =
-              "\t" + std::string(filename == nullptr ? "??" : filename) + ":" +
-              std::to_string(lineno) + " in function " + demangledFunction +
-              "\n";
+              "\t" +
+              ColorText(std::string(filename == nullptr ? "??" : filename) +
+                            ":" + std::to_string(lineno),
+                        ConsoleColor::Cyan) +
+              " in function " +
+              ColorText(demangledFunction, ConsoleColor::Green) + "\n";
 
           auto *ctx = static_cast<TraceCtx *>(data);
+
+          auto source = std::filesystem::current_path().string() + "/";
+          if (!source.empty()) {
+            size_t sourcePos = line.find(source);
+            if (sourcePos != std::string::npos) {
+              line = line.substr(0, sourcePos) +
+                     line.substr(sourcePos + source.length());
+            }
+          }
+
+          constexpr std::array<const char *, 11> blacklisted = {
+              "expected.hpp", "error.hpp", "error.cpp", "thread.cpp",
+              "thread.hpp",   "loop.cpp",  "loop.hpp",  "wrap.cpp",
+              "wrap.hpp",     "main.cpp",  "main.hpp"};
+
+          for (const auto &blacklistedFile : blacklisted) {
+            size_t blacklistedPos = line.find(blacklistedFile);
+            if (blacklistedPos != std::string::npos) {
+              return 0; // Skip blacklisted files
+            }
+          }
 
           ctx->out->append(line);
 

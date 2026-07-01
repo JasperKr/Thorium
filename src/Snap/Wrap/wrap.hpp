@@ -256,3 +256,10 @@ auto luaL_optscalar(lua_State *state, int index, Math::Scalar defaultValue)
     }                                                                          \
     std::move(_result.value());                                                \
   })
+
+#define LUA_ASSERT(expr)                                                       \
+  {                                                                            \
+    if (!(expr)) {                                                             \
+      return luaL_error(state, "Assertion failed: " #expr);                    \
+    }                                                                          \
+  }

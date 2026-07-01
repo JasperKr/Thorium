@@ -244,14 +244,8 @@ inline auto SetupTemporaryCommandLists(ImDrawData *drawData,
     if (vertexCount > temporaryCommandList.MaxVertexCount) {
       temporaryCommandList.MaxVertexCount = vertexCount;
 
-      auto meshCreationResult =
-          Graphics::Mesh::Create(ctx, format, vertexCount, "Imgui UI Mesh");
-
-      if (Error::IsError(meshCreationResult)) {
-        return meshCreationResult.error();
-      }
-
-      temporaryCommandList.Mesh = meshCreationResult.value();
+      temporaryCommandList.Mesh = CHECK_RES(
+          Graphics::Mesh::Create(ctx, format, vertexCount, "Imgui UI Mesh"));
     }
 
     auto vertexSpan =
@@ -538,10 +532,6 @@ auto Shutdown(lua_State *state) -> int {
                       shutdownResult.message.c_str());
   }
 
-  // TemporaryCommandLists.clear();
-  for (auto &temporaryCommandList : TemporaryCommandLists) {
-    temporaryCommandList.Mesh.reset();
-  }
   TemporaryCommandLists.clear();
 
   return 0;

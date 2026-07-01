@@ -60,7 +60,11 @@ auto inline GetColorCode(ConsoleColor color) -> std::string_view {
 
 auto inline ColorText(const std::string &text, ConsoleColor color)
     -> std::string {
-  // return GetColorCode(color) + text + GetColorCode(ConsoleColor::Reset);
+  return std::format("{}{}{}", GetColorCode(color), text,
+                     GetColorCode(ConsoleColor::Reset));
+}
+
+auto inline ColorText(const char *text, ConsoleColor color) -> std::string {
   return std::format("{}{}{}", GetColorCode(color), text,
                      GetColorCode(ConsoleColor::Reset));
 }

@@ -22,8 +22,6 @@ template <typename T>
 concept IsLuaECSObject =
     std::is_base_of_v<Engine::LuaWrap::LuaECSObject, std::remove_cvref_t<T>>;
 
-template <typename T>
-  requires IsLuaECSObject<T>
 inline auto EntityFromLua(lua_State *state, int index) -> flecs::entity * {
   // Check if userdata
   if (lua_isuserdata(state, index) == 0) {
@@ -46,7 +44,8 @@ inline auto EntityFromLua(lua_State *state, int index) -> flecs::entity * {
   //   return nullptr;
   // }
 
-  auto *obj = static_cast<T *>(proxy->object);
+  // NOLINTNEXTLINE
+  auto *obj = static_cast<Engine::LuaWrap::LuaECSObject *>(proxy->object);
   return &obj->entity;
 }
 

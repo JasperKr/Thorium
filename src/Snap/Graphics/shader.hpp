@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Graphics/Buffers/push.hpp"
-#include "Graphics/allocations.hpp"
 #include "Graphics/buffer.hpp"
 #include "Graphics/resource.hpp"
 #include "Graphics/texture.hpp"
@@ -138,9 +137,11 @@ struct ShaderModule : Object {
     state.userBoundTextures.clear();
     BoundStates.erase(module);
 
-    ScheduleDestruction(ShaderModuleMemory{
-        .shaderModule = module,
-        .timelineValue = Graphics::SemaphoreManager::GetSemaphoreValue()});
+    ScheduleDestruction(
+        ShaderModuleMemory{
+            .shaderModule = module,
+        },
+        Graphics::SemaphoreManager::GetSemaphoreValue());
   }
 
   static auto

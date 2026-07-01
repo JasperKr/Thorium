@@ -3,7 +3,6 @@ snap.threaderror = print
 print("Starting main thread")
 require("init")
 
-local thread = snap.thread.newThread("src/Scripting/thread.lua", "Render thread 1")
 local commandsChannel = snap.thread.newChannel()
 local startThreadChannel = snap.thread.newChannel()
 local events = snap.thread.newChannel()
@@ -11,6 +10,8 @@ local scene = snap.scene.newScene("Main")
 
 snap.graphics.aquireGraphics("load")
 snap.renderer.initialize()
+
+local thread = snap.thread.newThread("src/Scripting/thread.lua", "Render thread 1")
 
 local qx, qy, qz, qw = snap.math.eulerToQuaternion(0.3, -math.pi / 1.5, 0);
 scene:newDirectionalLight("Test directional light", qx, qy, qz, qw, 1, 1, 1, 5)
@@ -85,13 +86,14 @@ function snap.draw()
 
   if firstFrame then
     table.insert(commandBuffers, snap.graphics.submitGraphics())
+    firstFrame = false
   end
 
   local gotBuffer = false
 
   while not gotBuffer do
     if thread:getStatus() ~= "running" then
-      error(thread:getError())
+      snap.event.quit()
       return
     end
     local buffer = commandsChannel:demand(0.5)
@@ -102,6 +104,5 @@ function snap.draw()
     end
   end
 
-  firstFrame = false
   return commandBuffers
 end
