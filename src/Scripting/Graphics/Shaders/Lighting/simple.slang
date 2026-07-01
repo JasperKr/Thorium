@@ -74,7 +74,7 @@ FragmentOutput fragmentMain(FragmentInput input) {
   float3 E = prefilteredDFG(pixel.PerceptualRoughness, pixel.Fresnel0, NoV);
   float3 diffuse = ComputeDiffuseColor(pixel.Albedo, pixel.Metallic);
 
-  float3 irradiance = float3(0.5, 0.5, 0.5); // Some ambient lighting
+  float3 irradiance = float3(0.0, 0.0, 0.0); // Some ambient lighting
   irradiance *= INV_PI;
   float3 radiance = irradiance; // Specular IBL contribution
   irradiance *= (1.0f.xxx - E) * diffuse;

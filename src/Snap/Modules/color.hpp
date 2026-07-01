@@ -30,6 +30,9 @@ struct Color {
         b(static_cast<float>(blue) / uint8_max_as_float),
         a(static_cast<float>(alpha) / uint8_max_as_float) {}
 
+  auto Ptr() -> float * { return &r; }
+  [[nodiscard]] auto Ptr() const -> float const * { return &r; }
+
   static constexpr uint32_t RedShift = 24U;
   static constexpr uint32_t GreenShift = 16U;
   static constexpr uint32_t BlueShift = 8U;

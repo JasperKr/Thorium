@@ -7,6 +7,7 @@ do
   local lastShownTime = 0
   local lastShownImDrawTime = 0
   local count = 0
+  local frameIdx = 0
 
   local commandBufferChannel, canStartChannel, scene, events = ...
 
@@ -21,7 +22,10 @@ do
   local snapshot
 
   local function draw()
-    -- probe:render()
+    if frameIdx > 5 then
+      -- probe:render()
+    end
+    frameIdx = frameIdx + 1
 
     snap.graphics.setCullMode("none")
     snap.graphics.setDepthMode("greater", true)
@@ -138,8 +142,8 @@ do
 
     local rotation = userdata.rotation
 
-    rotation.x -= dx * 0.0015
-    rotation.y -= dy * 0.0015
+    rotation.x = rotation.x - dx * 0.0015
+    rotation.y = rotation.y - dy * 0.0015
 
     rotation.y = math.max(math.min(rotation.y, math.pi / 2), -math.pi / 2)
     camera:setRotation(snap.math.eulerToQuaternion(rotation:get()))

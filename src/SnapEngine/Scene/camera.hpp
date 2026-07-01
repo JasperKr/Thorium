@@ -225,13 +225,14 @@ private:
   Math::Scalar AspectRatio{};
   Math::Scalar NearPlane{};
   Math::Scalar FarPlane{};
-  std::vector<Renderer::LightProbe> ClosestLightProbes;
 
   Ref<struct Graphics::StructuredBuffer> CameraBuffer;
 
   CameraRendertargets Rendertargets;
   AllocatedTextures OwnedTextures;
   PostProcessingConfig postProcessingConfig;
+
+  int VisibleProbeCount = 0;
 
   bool projectionDirty = true;
 
@@ -248,8 +249,8 @@ private:
   auto ApplyLightProbes(const Graphics::GraphicsContext &context,
                         const DrawData &drawData, Scene *scene) -> Error;
 
-  auto UpdateClosestLightProbes(int max, const DrawData &drawData, Scene *scene)
-      -> void;
+  auto UpdateClosestLightProbes(int max, std::vector<uint8_t> &data,
+                                const DrawData &drawData, Scene *scene) -> void;
 };
 
 extern const Graphics::BufferFormat CameraBufferFormat;

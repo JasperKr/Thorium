@@ -20,6 +20,7 @@
 #include "Scene/Geometry/model.hpp"
 #include "Scene/Geometry/shape.hpp"
 #include "Scene/Lights/directionalLight.hpp"
+#include "Scene/Lights/light.hpp"
 #include "Scene/Lights/pointLight.hpp"
 #include "Scene/Lights/rectangleLight.hpp"
 #include "Scene/Lights/sphereLight.hpp"
@@ -273,6 +274,12 @@ auto Scene::DrawUiElement() const -> Error {
           SelectedEntity.get_ref<Renderer::LightProbe>().get() != nullptr) {
         auto lightProbe = SelectedEntity.get_ref<Renderer::LightProbe>();
         CHECK_ERR(lightProbe->DrawGui(SelectedEntity));
+      }
+
+      if (SelectedEntity.has<Engine::Light>() &&
+          SelectedEntity.get_ref<Engine::Light>().get() != nullptr) {
+        auto light = SelectedEntity.get_ref<Engine::Light>();
+        light->DrawGUI();
       }
     }
   }
@@ -740,13 +747,13 @@ auto Scene::DrawModels(Camera &camera, Frustum &frustum,
   CHECK_ERR(Renderer::RendererInstance.BindLightBuffers(ctx, shader));
   CHECK_ERR(Renderer::RendererInstance.BindLightBuffers(ctx, forward));
 
-  textures.IncomingLight =
+  textures.DirectLighting =
       CHECK_RES(Renderer::GlobalRenderTargetManager.GetRendertarget(
-          context, rendertargets.IncomingLight));
+          context, rendertargets.DirectLighting));
 
   CHECK_ERR(Graphics::DynamicRendering::SetRenderTargets(
       context, {{
-                   .texture = textures.IncomingLight,
+                   .texture = textures.DirectLighting,
                    .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
                }}));
 
@@ -770,7 +777,7 @@ auto Scene::DrawModels(Camera &camera, Frustum &frustum,
             },
             {
                 .blendMode = Graphics::DefaultBlendMode,
-                .texture = textures.IncomingLight,
+                .texture = textures.DirectLighting,
                 .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
             }}));
 

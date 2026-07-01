@@ -474,7 +474,8 @@ auto inline GetColorBlendAttachmentState(const GraphicsContext &context,
   for (uint32_t i = 0;
        i < outputVariableLayout->getTypeLayout()->getFieldCount(); ++i) {
     auto *outVar = outputVariableLayout->getTypeLayout()->getFieldByIndex(i);
-    if (strcmp(outVar->getSemanticName(), "SV_Target") == 0) {
+    if (outVar->getSemanticName() != nullptr &&
+        strcmp(outVar->getSemanticName(), "SV_Target") == 0) {
       expectedAttachments.insert(outVar->getSemanticIndex());
     }
   }
@@ -1992,6 +1993,10 @@ auto SetRenderTargets(const GraphicsContext &context,
 
   if (renderTargets.empty()) {
     return Error::Create("No render targets provided.");
+  }
+
+  if (renderTargets.at(0).texture == nullptr) {
+    return Error::Create("First render target has no texture.");
   }
 
   bool differentFromCurrent = false;

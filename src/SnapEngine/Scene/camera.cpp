@@ -1,6 +1,7 @@
 #include "camera.hpp"
 #include "Graphics/Buffers/structured.hpp"
 #include "Graphics/bufferformat.hpp"
+#include "Graphics/draw.hpp"
 #include "Graphics/dynamicRendering.hpp"
 #include "Graphics/graphics.hpp"
 #include "Graphics/graphicsContext.hpp"
@@ -23,6 +24,7 @@
 #include "Wrap/wrap.hpp"
 #include "renderer.hpp"
 #include <algorithm>
+#include <cstdint>
 #include <flecs.h>
 #include <lauxlib.h>
 #include <lua.h>
@@ -259,29 +261,37 @@ auto Camera::ReleaseTransientTextures() const -> Error {
       conf.Material ? TRef() : OwnedTextures.Material,
       conf.Emissive ? TRef() : OwnedTextures.Emissive,
       conf.Motion ? TRef() : OwnedTextures.Motion,
+      conf.Irradiance ? TRef() : OwnedTextures.Irradiance,
+      conf.DirectLighting ? TRef() : OwnedTextures.DirectLighting,
   }));
 
   return {};
 }
 
-auto Camera::UpdateClosestLightProbes(int max, const DrawData &drawData,
-                                      Scene *scene) -> void {
-  ClosestLightProbes.clear();
+auto Camera::UpdateClosestLightProbes(int max, std::vector<uint8_t> &data,
+                                      const DrawData &drawData, Scene *scene)
+    -> void {
 
   if (max <= 0) {
     return;
   }
 
+  struct ProbeData {
+    Renderer::LightProbe probe;
+    Transform transform;
+  };
+
   auto context = *Graphics::GetCurrentGraphicsContext();
 
-  std::vector<std::pair<Math::Scalar, Renderer::LightProbe>> probes;
+  std::vector<std::pair<Math::Scalar, ProbeData>> probes;
 
   scene->world.each([&](flecs::entity entity, const Transform &transform,
                         const Renderer::LightProbe &lightProbe) -> void {
     auto distanceSqr = (transform.GetPosition() -
                         drawData.Transform.GetWorldMatrix().GetTranslation())
                            .LengthSqr();
-    probes.emplace_back(distanceSqr, lightProbe);
+    probes.emplace_back(distanceSqr,
+                        ProbeData{.probe = lightProbe, .transform = transform});
   });
 
   std::ranges::sort(probes, [](const auto &first, const auto &second) -> bool {
@@ -289,15 +299,88 @@ auto Camera::UpdateClosestLightProbes(int max, const DrawData &drawData,
   });
 
   for (int i = 0; i < std::min(max, static_cast<int>(probes.size())); ++i) {
-    ClosestLightProbes.emplace_back(probes[i].second);
+    const auto &probeData = probes[i].second;
+    probeData.probe.WriteToBuffer(
+        data, i * Renderer::LightProbeBufferFormat.GetStride(),
+        probeData.transform);
   }
+
+  VisibleProbeCount = std::min(max, static_cast<int>(probes.size()));
 }
 
 auto Camera::ApplyLightProbes(const Graphics::GraphicsContext &context,
                               const DrawData &drawData, Scene *scene) -> Error {
   constexpr int MaxLightProbes = 64;
 
-  UpdateClosestLightProbes(MaxLightProbes, drawData, scene);
+  auto probeData = std::vector<uint8_t>(
+      MaxLightProbes * Renderer::LightProbeBufferFormat.GetStride());
+
+  UpdateClosestLightProbes(MaxLightProbes, probeData, drawData, scene);
+
+  CHECK_ERR(
+      Renderer::RendererInstance.GetLightProbeBuffer()->GetBuffer()->SetData(
+          context, probeData));
+
+  auto &textures = GetOwnedTextures();
+  const auto &rendertargets = GetRendertargets();
+
+  textures.Irradiance =
+      CHECK_RES(Renderer::GlobalRenderTargetManager.GetRendertarget(
+          context, rendertargets.Irradiance));
+
+  CHECK_ERR(Graphics::DynamicRendering::SetRenderTargets(
+      context, {{
+                    .blendMode = Graphics::BlendmodeAdditive,
+                    .texture = textures.DirectLighting,
+                    .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+                },
+                {
+                    .blendMode = Graphics::BlendmodeNone,
+                    .texture = textures.Irradiance,
+                    .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                }}));
+
+  auto shader = CHECK_RES(Renderer::RendererInstance.GetShader(
+      Renderer::ShaderKey::ApplyEnvironmentMap));
+  Graphics::DynamicRendering::SetShader(shader);
+  Graphics::DynamicRendering::SetDepthMode(false, false, VK_COMPARE_OP_ALWAYS);
+  Graphics::DynamicRendering::SetCullMode(VK_CULL_MODE_NONE);
+
+  static auto cameraBufferKey = Graphics::ResourceKey{"CameraData"};
+  CHECK_ERR(shader->Send(cameraBufferKey, CameraBuffer));
+
+  static auto irradianceTextureKey =
+      Graphics::ResourceKey{"IrradianceTextures"};
+  CHECK_ERR(shader->Send(
+      irradianceTextureKey,
+      Renderer::RendererInstance.GetPrefilterManager().GetIrradianceMaps()));
+  static auto radianceTextureKey = Graphics::ResourceKey{"SpecularTextures"};
+  CHECK_ERR(shader->Send(
+      radianceTextureKey,
+      Renderer::RendererInstance.GetPrefilterManager().GetRadianceMaps()));
+
+  static auto lightProbeBufferKey = Graphics::ResourceKey{"Probes"};
+  CHECK_ERR(shader->Send(
+      lightProbeBufferKey,
+      Renderer::RendererInstance.GetLightProbeBuffer()->GetBuffer()));
+
+  static auto lightProbeCountKey = Graphics::ResourceKey{"LightProbeCount"};
+  CHECK_ERR(Graphics::Shader::UniformWriter::Send(
+      shader, lightProbeCountKey, static_cast<uint32_t>(VisibleProbeCount)));
+
+  static auto albedoTextureKey = Graphics::ResourceKey{"AlbedoTexture"};
+  static auto normalTextureKey = Graphics::ResourceKey{"NormalTexture"};
+  static auto materialTextureKey = Graphics::ResourceKey{"MaterialTexture"};
+  static auto depthBufferKey = Graphics::ResourceKey{"DepthTexture"};
+
+  CHECK_ERR(shader->Send(albedoTextureKey, textures.Albedo));
+  CHECK_ERR(shader->Send(normalTextureKey, textures.Normal));
+  CHECK_ERR(shader->Send(materialTextureKey, textures.Material));
+  CHECK_ERR(shader->Send(depthBufferKey, textures.Depth));
+  CHECK_ERR(
+      Graphics::Shader::UniformWriter::Send(shader, {"SpecularEnabled"}, 1));
+
+  CHECK_ERR(Renderer::DrawFullScreen(context));
 
   return {};
 }
@@ -310,7 +393,35 @@ auto Camera::Render(const Graphics::GraphicsContext &context,
 
   CHECK_ERR(scene->DrawModels(*this, frustum, context));
 
+  OwnedTextures.IncomingLight =
+      CHECK_RES(Renderer::GlobalRenderTargetManager.GetRendertarget(
+          context, Rendertargets.IncomingLight));
+
   CHECK_ERR(FillSkybox(context, scene));
+
+  CHECK_ERR(ApplyLightProbes(context, drawData, scene));
+
+  Graphics::DynamicRendering::SetShader({});
+  Graphics::DynamicRendering::SetDepthMode(false, false, VK_COMPARE_OP_ALWAYS);
+  Graphics::DynamicRendering::SetCullMode(VK_CULL_MODE_NONE);
+
+  CHECK_ERR(Graphics::DynamicRendering::SetRenderTargets(
+      context, {Graphics::DynamicRendering::RenderTarget{
+                   .blendMode = Graphics::BlendmodeNone,
+                   .texture = OwnedTextures.IncomingLight,
+                   .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+               }}));
+
+  CHECK_ERR(Graphics::Draw(context, *OwnedTextures.DirectLighting));
+
+  CHECK_ERR(Graphics::DynamicRendering::SetRenderTargets(
+      context, {Graphics::DynamicRendering::RenderTarget{
+                   .blendMode = Graphics::BlendmodeAdditive,
+                   .texture = OwnedTextures.IncomingLight,
+                   .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+               }}));
+
+  CHECK_ERR(Graphics::Draw(context, *OwnedTextures.Irradiance));
 
   if (settings.DoPostProcessing) {
     CHECK_ERR(ApplyPostProcessing(context));

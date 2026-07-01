@@ -37,6 +37,9 @@ struct LightprobePrefilterManager {
                            LightProbe &lightProbe, Engine::Scene *scene,
                            const Transform &transform) -> Error;
 
+  auto GetIrradianceMaps() -> Ref<Graphics::Texture> { return IrradianceMaps; }
+  auto GetRadianceMaps() -> Ref<Graphics::Texture> { return RadianceMaps; }
+
 private:
   struct LevelParameters {
     uint32_t Level;

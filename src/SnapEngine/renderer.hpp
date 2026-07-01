@@ -25,6 +25,7 @@ enum class ShaderKey : uint8_t {
   PostProcessing,
   Skybox,
   TransparencyForward,
+  ApplyEnvironmentMap,
 };
 
 struct ShaderConfiguration {
@@ -51,6 +52,8 @@ const std::unordered_map<ShaderKey, ShaderConfiguration> ShaderConfigurations =
         {ShaderKey::TransparencyForward,
          {.path =
               "Scripting/Graphics/Shaders/Geometry/transparencyForward.slang"}},
+        {ShaderKey::ApplyEnvironmentMap,
+         {.path = "Scripting/Graphics/Shaders/IBL/sampleEnvMaps.slang"}},
 };
 
 const std::vector<Graphics::BufferComponent> MaterialBufferComponents = {
@@ -130,6 +133,8 @@ const std::vector<Graphics::BufferComponent> LightProbeBufferComponents = {
     },
 };
 
+const Graphics::BufferFormat LightProbeBufferFormat{LightProbeBufferComponents};
+
 struct Renderer {
   struct Lights {
     Ref<Graphics::StructuredBuffer> PointLightsBuffer;
@@ -163,6 +168,17 @@ struct Renderer {
 
     CHECK_ERR(InitializeLightBuffers(context));
     CHECK_ERR(PrefilterManager.Initialize(context));
+
+    LightProbeBuffer = CHECK_RES(Graphics::StructuredBuffer::Create(
+        context, LightProbeBufferFormat, 64UL,
+        Graphics::StructuredBufferCreationInfo{
+            .memoryFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+            .usageFlags =
+                static_cast<uint32_t>(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT) |
+                static_cast<uint32_t>(VK_BUFFER_USAGE_TRANSFER_DST_BIT) |
+                static_cast<uint32_t>(VK_BUFFER_USAGE_TRANSFER_SRC_BIT),
+            .debugName = "Light Probe Buffer",
+        }));
 
     initialized = true;
     return {};
@@ -204,6 +220,10 @@ struct Renderer {
   }
 
   auto NewFrame() -> void { ModelTransformBufferElementCount = 0; }
+
+  auto GetLightProbeBuffer() -> Ref<Graphics::StructuredBuffer> {
+    return LightProbeBuffer;
+  }
 
 private:
   std::unordered_map<ShaderKey, Ref<Graphics::Shader::ShaderModule>>

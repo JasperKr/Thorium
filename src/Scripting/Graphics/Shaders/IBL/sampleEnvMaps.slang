@@ -8,9 +8,7 @@ Sampler2D DepthTexture;
 Sampler2D NormalTexture;
 Sampler2D AlbedoTexture;
 Sampler2D MaterialTexture;
-Sampler2D EmissiveTexture;
 
-uniform float3 SkyboxBrightness;
 uniform bool SpecularEnabled;
 
 #include "fullscreen.slang"
@@ -100,7 +98,7 @@ LightProbeSampleInfo SampleLightProbes(float3 worldPosition, float3 normal,
 }
 
 [shader("fragment")]
-float4 fragmentMain(FragmentInput input) {
+FragmentOutput fragmentMain(FragmentInput input) {
   float depth = DepthTexture.Sample(input.VertexCoords).r;
 
   float3 worldPosition = camera.GetWorldPosition(input.VertexCoords, depth);
@@ -130,39 +128,34 @@ float4 fragmentMain(FragmentInput input) {
   {
     float skyboxInfluence = 1.0 - probeInfo.influence;
 
-    float3 reflected =
-        prefilteredRadiance(SpecularTextures, float4(reflectedRay, 0.0),
-                            material.r)
-            .rgb *
-        SkyboxBrightness;
+    float3 reflected = prefilteredRadiance(
+        SpecularTextures, float4(reflectedRay, 0.0), material.r);
     probeInfo.radiance = reflected * skyboxInfluence + probeInfo.radiance;
 
     float3 irradiance =
-        prefilteredIrradiance(IrradianceTextures, float4(normal, 0.0)).rgb *
-        SkyboxBrightness;
+        prefilteredIrradiance(IrradianceTextures, float4(normal, 0.0));
 
     probeInfo.irradiance = irradiance * skyboxInfluence + probeInfo.irradiance;
   }
 
   probeInfo.irradiance *= INV_PI;
 
-  float occlusion = EmissiveTexture.Sample(input.VertexCoords).r;
-
   if (!SpecularEnabled) {
     probeInfo.radiance *= 0.0;
     probeInfo.irradiance *=
-        occlusion * (1.0 - E) *
+        (1.0 - E) *
         albedo; // since we turn off specular, fully metallic objects will be black
     // to solve this, we multiply by albedo instead of diffuse, solving the issue
   } else {
-    probeInfo.radiance *= occlusion * E;
-    probeInfo.irradiance *= occlusion * (1.0 - E) * diffuse;
+    probeInfo.radiance *= E;
+    probeInfo.irradiance *= (1.0 - E) * diffuse;
   }
 
   // Radiance = probeInfo.radiance;
   // Irradiance = probeInfo.irradiance;
-  // FragmentOutput output;
-  // output.Radiance = probeInfo.radiance;
-  // output.Irradiance = probeInfo.irradiance;
-  return float4(probeInfo.radiance + probeInfo.irradiance, 0.0);
+  FragmentOutput output;
+  output.Radiance = probeInfo.radiance;
+  output.Irradiance = probeInfo.irradiance;
+
+  return output;
 }
