@@ -93,7 +93,7 @@ struct FragmentOutput {
 [shader("fragment")]
 FragmentOutput fragmentMain(FragmentInput input) {
   float3 normal = normalize(input.normal);
-  float4 tangent = float4(normalize(input.tangent.xyz), input.tangent.w);
+  float4 tangent = float4(normalize(-input.tangent.xyz), input.tangent.w);
 
   if (!input.isFrontFace) {
     normal = -normal;

@@ -8,9 +8,9 @@
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Modules/type.hpp"
-#include "Renderer/lightProbe.hpp"
 #include "Renderer/rendertargetManager.hpp"
 #include "Scene/cameraMatrices.hpp"
+#include "Scene/environment.hpp"
 #include "Scene/scene.hpp"
 #include "Scene/transform.hpp"
 #include "Wrap/wrap.hpp"
@@ -99,6 +99,9 @@ struct Camera {
 
   auto Render(const Graphics::GraphicsContext &context,
               const DrawData &drawData, Scene *scene) -> Error;
+
+  auto RenderSkyboxOnly(const Graphics::GraphicsContext &context,
+                        const Environment &environment) -> Error;
 
   // Descriptors for the textures we'd like to own.
   struct CameraRendertargets {
@@ -243,8 +246,11 @@ private:
 
   auto ApplyPostProcessing(const Graphics::GraphicsContext &context) -> Error;
 
-  auto FillSkybox(const Graphics::GraphicsContext &context, Scene *scene)
-      -> Error;
+  auto RenderSkybox(const Graphics::GraphicsContext &context,
+                    const Environment &environment) -> Error;
+
+  auto FillSkybox(const Graphics::GraphicsContext &context,
+                  const Environment &environment) -> Error;
 
   auto ApplyLightProbes(const Graphics::GraphicsContext &context,
                         const DrawData &drawData, Scene *scene) -> Error;

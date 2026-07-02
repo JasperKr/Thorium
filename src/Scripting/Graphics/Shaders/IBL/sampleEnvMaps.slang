@@ -18,8 +18,8 @@ struct FragmentInput {
 };
 
 struct FragmentOutput {
-  float3 Radiance;
-  float3 Irradiance;
+  float4 Radiance : SV_Target0;
+  float4 Irradiance : SV_Target1;
 };
 
 struct LightProbe {
@@ -106,20 +106,20 @@ FragmentOutput fragmentMain(FragmentInput input) {
   float3 normal =
       normalize(NormalTexture.Sample(input.VertexCoords).xyz * 2.0 - 1.0);
 
-  // perceptual roughness, metallic, reflectance, stencil
+  // metallic, perceptual roughness, reflectance, stencil
   float4 material = MaterialTexture.Sample(input.VertexCoords);
   float3 albedo = AlbedoTexture.Sample(input.VertexCoords).rgb;
 
   float3 viewDir = normalize(worldPosition - camera.Position);
-  float3 f0 = ComputeFresnel0(albedo, material.g, material.b);
-  float3 diffuse = ComputeDiffuseColor(albedo, material.g);
+  float3 f0 = ComputeFresnel0(albedo, material.r, material.b);
+  float3 diffuse = ComputeDiffuseColor(albedo, material.r);
   float NoV = ClampNoV(dot(normal, -viewDir));
-  float3 E = prefilteredDFG(material.r, f0, NoV);
+  float3 E = prefilteredDFG(material.g, f0, NoV);
 
   float3 reflectedRay = reflect(viewDir, normal);
 
   LightProbeSampleInfo probeInfo =
-      SampleLightProbes(worldPosition, normal, reflectedRay, material.r);
+      SampleLightProbes(worldPosition, normal, reflectedRay, material.g);
 
   if (probeInfo.influence >= 1.0) {
     probeInfo.radiance /= probeInfo.influence;
@@ -129,7 +129,7 @@ FragmentOutput fragmentMain(FragmentInput input) {
     float skyboxInfluence = 1.0 - probeInfo.influence;
 
     float3 reflected = prefilteredRadiance(
-        SpecularTextures, float4(reflectedRay, 0.0), material.r);
+        SpecularTextures, float4(reflectedRay, 0.0), material.g);
     probeInfo.radiance = reflected * skyboxInfluence + probeInfo.radiance;
 
     float3 irradiance =
@@ -145,7 +145,7 @@ FragmentOutput fragmentMain(FragmentInput input) {
     probeInfo.irradiance *=
         (1.0 - E) *
         albedo; // since we turn off specular, fully metallic objects will be black
-    // to solve this, we multiply by albedo instead of diffuse, solving the issue
+    // to solve this, we multiply by albedo instead of diffuse
   } else {
     probeInfo.radiance *= E;
     probeInfo.irradiance *= (1.0 - E) * diffuse;
@@ -154,8 +154,8 @@ FragmentOutput fragmentMain(FragmentInput input) {
   // Radiance = probeInfo.radiance;
   // Irradiance = probeInfo.irradiance;
   FragmentOutput output;
-  output.Radiance = probeInfo.radiance;
-  output.Irradiance = probeInfo.irradiance;
+  output.Radiance = float4(probeInfo.radiance, 1.0f);
+  output.Irradiance = float4(probeInfo.irradiance, 1.0f);
 
   return output;
 }

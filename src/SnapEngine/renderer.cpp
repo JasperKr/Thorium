@@ -317,6 +317,7 @@ void Renderer::Deinitialize() {
   LoadedShaders.clear();
 
   SceneLightBuffers = Lights();
+  LightProbeBuffer = nullptr;
 }
 
 } // namespace Engine::Renderer

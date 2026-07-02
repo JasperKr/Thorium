@@ -24,7 +24,7 @@
 
 namespace Engine::Renderer {
 
-auto LightprobePrefilterManager::Initialize(
+auto LightprobePrefilterManager::Initialize( // NOLINT
     const Graphics::GraphicsContext &context) -> Error {
   PrefilteredRadianceCoeffs =
       CHECK_RES(Filesystem::ReadFile("Graphics/Assets/coeffs_quad_32.bin"));
@@ -58,6 +58,19 @@ auto LightprobePrefilterManager::Initialize(
                }));
   SceneCubemap->SetFilter(VK_FILTER_LINEAR, VK_FILTER_LINEAR,
                           VK_SAMPLER_MIPMAP_MODE_LINEAR);
+
+  for (uint32_t layer = 0; layer < 6; layer++) { // NOLINT
+    auto inputArrayView = CHECK_RES(Graphics::Texture::Create(
+        context, SceneCubemap.get(), VK_IMAGE_VIEW_TYPE_2D_ARRAY,
+        VkImageSubresourceRange{
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .baseMipLevel = 0,
+            .levelCount = 1,
+            .baseArrayLayer = layer,
+            .layerCount = 1,
+        }));
+    EnvMapArrayViews.emplace_back(inputArrayView);
+  }
 
   TemporaryRadianceMap = CHECK_RES(Graphics::Texture::Create(
       context, {
@@ -369,7 +382,8 @@ auto LightprobePrefilterManager::PrefilterEnvironmentMap(
     return Error::Create("Environment map index out of bounds");
   }
 
-  if (!EnvMapUsed.at(lightProbe.EnvironmentMapIndex)) {
+  if (!EnvMapUsed.at(lightProbe.EnvironmentMapIndex) &&
+      lightProbe.EnvironmentMapIndex != 0) {
     return Error::Create("Environment map index not in use");
   }
 
@@ -390,16 +404,16 @@ const static std::array<Engine::Transform, 6> Transforms = {
                           Math::EulerAngle(-90.0F, 0.0F, 0.0F).ToRadians())),
     Engine::Transform(Math::Vec3{0.0F, 0.0F, 0.0F}, // Y+
                       Math::Conversions::ToQuaternion(
-                          Math::EulerAngle(0.0F, 90.0F, 0.0F).ToRadians())),
+                          Math::EulerAngle(0.0F, -90.0F, 0.0F).ToRadians())),
     Engine::Transform(Math::Vec3{0.0F, 0.0F, 0.0F}, // Y-
                       Math::Conversions::ToQuaternion(
-                          Math::EulerAngle(0.0F, -90.0F, 0.0F).ToRadians())),
+                          Math::EulerAngle(0.0F, 90.0F, 0.0F).ToRadians())),
     Engine::Transform(Math::Vec3{0.0F, 0.0F, 0.0F}, // Z+
                       Math::Conversions::ToQuaternion(
                           Math::EulerAngle(0.0F, 0.0F, 0.0F).ToRadians())),
     Engine::Transform(Math::Vec3{0.0F, 0.0F, 0.0F}, // Z-
                       Math::Conversions::ToQuaternion(
-                          Math::EulerAngle(0.0F, 180.0F, 0.0F).ToRadians())),
+                          Math::EulerAngle(180.0F, 0.0F, 0.0F).ToRadians())),
 };
 
 const static Math::Matrix4x4 ProjectionMatrix =
@@ -424,21 +438,6 @@ auto LightprobePrefilterManager::PrefilterLightProbe(
     lightProbe.EnvironmentMapIndex = GetFreeEnvMapIndex().value_or(-1);
     PrintAlways("Allocated environment map index {} for light probe.",
                 lightProbe.EnvironmentMapIndex);
-  }
-
-  std::vector<Ref<Graphics::Texture>> envMapArrayViews;
-
-  for (uint32_t layer = 0; layer < 6; layer++) { // NOLINT
-    auto inputArrayView = CHECK_RES(Graphics::Texture::Create(
-        context, SceneCubemap.get(), VK_IMAGE_VIEW_TYPE_2D_ARRAY,
-        VkImageSubresourceRange{
-            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-            .baseMipLevel = 0,
-            .levelCount = 1,
-            .baseArrayLayer = layer,
-            .layerCount = 1,
-        }));
-    envMapArrayViews.emplace_back(inputArrayView);
   }
 
   for (int i = 0; i < Transforms.size(); i++) {
@@ -473,7 +472,62 @@ auto LightprobePrefilterManager::PrefilterLightProbe(
         context, {
                      Graphics::DynamicRendering::RenderTarget{
                          .blendMode = Graphics::BlendmodeNone,
-                         .texture = envMapArrayViews.at(i),
+                         .texture = EnvMapArrayViews.at(i),
+                         .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+                     },
+                 }));
+
+    CHECK_ERR(Graphics::Draw(context,
+                             *Camera.GetOwnedTextures().IncomingLight.get()));
+  }
+
+  CHECK_ERR(PrefilterEnvironmentMap(context, SceneCubemap, lightProbe));
+
+  return {};
+}
+
+auto LightprobePrefilterManager::PrefilterEnvironment(
+    const Graphics::GraphicsContext &context,
+    const Ref<Graphics::Texture> &skyboxTexture) -> Error {
+  auto lightProbe = LightProbe{};
+  lightProbe.EnvironmentMapIndex = 0; // Skybox is always 0
+
+  for (int i = 0; i < Transforms.size(); i++) {
+    auto cubemapTransfrom = Transforms.at(i);
+    cubemapTransfrom.UpdateLocalMatrix();
+    cubemapTransfrom.UpdateWorldMatrix(nullptr);
+
+    Engine::CameraMatrices drawMatrices = CameraMatrices;
+
+    const auto &worldMatrix = cubemapTransfrom.GetWorldMatrix();
+
+    drawMatrices.ViewMatrix = worldMatrix.InverseTranspose();
+    drawMatrices.InverseViewMatrix = worldMatrix;
+    drawMatrices.RotationMatrix = drawMatrices.ViewMatrix.AsMatrix3x3();
+    drawMatrices.InverseRotationMatrix =
+        drawMatrices.RotationMatrix.Transpose();
+    drawMatrices.Update();
+
+    CHECK_ERR(Camera.WriteToBuffer(drawMatrices, cubemapTransfrom));
+
+    Camera.GetOwnedTextures().IncomingLight =
+        CHECK_RES(Renderer::GlobalRenderTargetManager.GetRendertarget(
+            context, Camera.GetRendertargets().IncomingLight));
+
+    Camera.GetOwnedTextures().Depth =
+        CHECK_RES(Renderer::GlobalRenderTargetManager.GetRendertarget(
+            context, Camera.GetRendertargets().Depth));
+
+    CHECK_ERR(Camera.RenderSkyboxOnly(
+        context, Environment{.SkyboxTexture = skyboxTexture}));
+
+    Graphics::DynamicRendering::SetShader({});
+
+    CHECK_ERR(Graphics::DynamicRendering::SetRenderTargets(
+        context, {
+                     Graphics::DynamicRendering::RenderTarget{
+                         .blendMode = Graphics::BlendmodeNone,
+                         .texture = EnvMapArrayViews.at(i),
                          .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
                      },
                  }));
@@ -495,6 +549,7 @@ auto LightprobePrefilterManager::Deinitialize() -> void {
   IrradianceMapViews.clear();
 
   SceneCubemap.reset();
+  EnvMapArrayViews.clear();
   Camera = Engine::Camera();
 
   TemporaryRadianceMap.reset();

@@ -8,8 +8,6 @@
 namespace Engine {
 
 struct Environment {
-  // Ref<Graphics::Texture> IrradianceMap;
-  // Ref<Graphics::Texture> RadianceMap;
   Ref<Graphics::Texture> SkyboxTexture;
 };
 

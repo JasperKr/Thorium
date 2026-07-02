@@ -1,11 +1,14 @@
 #include "environment.hpp"
 #include "Graphics/texture.hpp"
 #include "Modules/bindings.hpp"
+#include "Modules/error.hpp"
 #include "Modules/object.hpp"
+#include "Renderer/prefilterManager.hpp"
 #include "Scene/displayName.hpp"
 #include "Scene/scene.hpp"
 #include "Scene/userdata.hpp"
 #include "Wrap/wrap.hpp"
+#include "renderer.hpp"
 
 namespace Engine {
 
@@ -58,6 +61,11 @@ auto LuaEnvironment::Create(lua_State *state) -> int {
   Environment newEnvironment{};
   newEnvironment.SkyboxTexture = Ref<Graphics::Texture>(texture);
 
+  LUA_CK_ERR(
+      Renderer::RendererInstance.GetPrefilterManager().PrefilterEnvironment(
+          *Graphics::GetCurrentGraphicsContext(),
+          newEnvironment.SkyboxTexture));
+
   auto environmentEntity = scene->world.entity();
   environmentEntity.set<Environment>(newEnvironment);
   environmentEntity.add<Userdata>();
@@ -76,7 +84,6 @@ auto GetEnvironmentLuaClass() -> const ::LuaWrap::LuaClass & {
                                        .Components = {
                                            DisplayNameComponent,
                                            UserdataComponent,
-
                                        }};
 
   return lclass;

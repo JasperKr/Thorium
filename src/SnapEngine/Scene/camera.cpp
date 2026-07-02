@@ -200,34 +200,54 @@ auto Camera::ApplyPostProcessing(const Graphics::GraphicsContext &context)
   return {};
 }
 
-auto Camera::FillSkybox(const Graphics::GraphicsContext &context, Scene *scene)
-    -> Error {
+auto Camera::RenderSkybox(const Graphics::GraphicsContext &context,
+                          const Environment &environment) -> Error {
   Graphics::DynamicRendering::SetDepthMode(false, false, VK_COMPARE_OP_ALWAYS);
   static auto cameraBufferKey = Graphics::ResourceKey{"CameraData"};
 
-  if (scene->currentEnvironment) {
-    CHECK_ERR(Graphics::DynamicRendering::SetRenderTargets(
-        context, {{
-                     .texture = OwnedTextures.IncomingLight,
-                     .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
-                 }}));
+  CHECK_ERR(Graphics::DynamicRendering::SetRenderTargets(
+      context, {{
+                   .texture = OwnedTextures.IncomingLight,
+                   .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+               }}));
 
-    auto shader = CHECK_RES(
-        Renderer::RendererInstance.GetShader(Renderer::ShaderKey::Skybox));
-    auto environment = scene->currentEnvironment.get<Environment>();
+  auto shader = CHECK_RES(
+      Renderer::RendererInstance.GetShader(Renderer::ShaderKey::Skybox));
 
-    static auto depthBufferKey = Graphics::ResourceKey{"DepthTexture"};
-    CHECK_ERR(shader->Send(depthBufferKey, OwnedTextures.Depth));
+  static auto depthBufferKey = Graphics::ResourceKey{"DepthTexture"};
+  CHECK_ERR(shader->Send(depthBufferKey, OwnedTextures.Depth));
+  CHECK_ERR(shader->Send(cameraBufferKey, CameraBuffer));
 
-    CHECK_ERR(shader->Send(cameraBufferKey, CameraBuffer));
+  static auto skyboxKey = Graphics::ResourceKey{"SkyboxTexture"};
+  CHECK_ERR(shader->Send(skyboxKey, environment.SkyboxTexture));
 
-    static auto skyboxKey = Graphics::ResourceKey{"SkyboxTexture"};
-    CHECK_ERR(shader->Send(skyboxKey, environment.SkyboxTexture));
+  Graphics::DynamicRendering::SetShader(shader);
+  CHECK_ERR(Renderer::DrawFullScreen(context));
 
-    Graphics::DynamicRendering::SetShader(shader);
+  return {};
+}
 
-    CHECK_ERR(Renderer::DrawFullScreen(context));
-  }
+auto Camera::FillSkybox(const Graphics::GraphicsContext &context,
+                        const Environment &environment) -> Error {
+  Graphics::DynamicRendering::SetDepthMode(false, false, VK_COMPARE_OP_ALWAYS);
+  static auto cameraBufferKey = Graphics::ResourceKey{"CameraData"};
+
+  CHECK_ERR(Graphics::DynamicRendering::SetRenderTargets(
+      context, {{
+                   .texture = OwnedTextures.IncomingLight,
+                   .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+               }}));
+
+  auto shader = CHECK_RES(
+      Renderer::RendererInstance.GetShader(Renderer::ShaderKey::FillSkybox));
+
+  CHECK_ERR(shader->Send(cameraBufferKey, CameraBuffer));
+
+  static auto skyboxKey = Graphics::ResourceKey{"SkyboxTexture"};
+  CHECK_ERR(shader->Send(skyboxKey, environment.SkyboxTexture));
+
+  Graphics::DynamicRendering::SetShader(shader);
+  CHECK_ERR(Renderer::DrawFullScreen(context));
 
   return {};
 }
@@ -397,7 +417,12 @@ auto Camera::Render(const Graphics::GraphicsContext &context,
       CHECK_RES(Renderer::GlobalRenderTargetManager.GetRendertarget(
           context, Rendertargets.IncomingLight));
 
-  CHECK_ERR(FillSkybox(context, scene));
+  const auto &entity = scene->currentEnvironment;
+  const auto *environment = entity.try_get<Environment>();
+
+  if (environment != nullptr) {
+    CHECK_ERR(RenderSkybox(context, *environment));
+  }
 
   CHECK_ERR(ApplyLightProbes(context, drawData, scene));
 
@@ -429,6 +454,20 @@ auto Camera::Render(const Graphics::GraphicsContext &context,
 
   CHECK_ERR(ReleaseTransientTextures());
 
+  return {};
+}
+
+auto Camera::RenderSkyboxOnly(const Graphics::GraphicsContext &context,
+                              const Environment &environment) -> Error {
+  CHECK_ERR(ReleasePersistentTextures());
+
+  OwnedTextures.IncomingLight =
+      CHECK_RES(Renderer::GlobalRenderTargetManager.GetRendertarget(
+          context, Rendertargets.IncomingLight));
+
+  CHECK_ERR(FillSkybox(context, environment));
+
+  CHECK_ERR(ReleaseTransientTextures());
   return {};
 }
 

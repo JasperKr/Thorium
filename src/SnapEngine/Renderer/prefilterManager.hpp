@@ -37,6 +37,10 @@ struct LightprobePrefilterManager {
                            LightProbe &lightProbe, Engine::Scene *scene,
                            const Transform &transform) -> Error;
 
+  auto PrefilterEnvironment(const Graphics::GraphicsContext &context,
+                            const Ref<Graphics::Texture> &skyboxTexture)
+      -> Error;
+
   auto GetIrradianceMaps() -> Ref<Graphics::Texture> { return IrradianceMaps; }
   auto GetRadianceMaps() -> Ref<Graphics::Texture> { return RadianceMaps; }
 
@@ -72,6 +76,8 @@ private:
 
   Engine::Camera Camera;
 
+  std::vector<Ref<Graphics::Texture>> EnvMapArrayViews;
+
   static auto GlossinessToRoughness(float glossiness) -> float {
     constexpr float GGX_MAX_SPECULAR_POWER = 18.0F;
 
@@ -86,7 +92,9 @@ private:
                              uint32_t arrayLayers) -> Error;
 
   auto GetFreeEnvMapIndex() -> std::optional<int32_t> {
-    for (int32_t i = 0; i < MaxEnvMaps; i++) {
+    // Zero is reserved for the default environment map, so we start searching from 1
+
+    for (int32_t i = 1; i < MaxEnvMaps; i++) {
       if (!EnvMapUsed.at(i)) {
         EnvMapUsed.at(i) = true;
         return i;
@@ -97,7 +105,9 @@ private:
   }
 
   auto FreeEnvMapIndex(int32_t index) -> void {
-    if (index >= MaxEnvMaps) {
+    // Zero is reserved for the default environment map, so we don't free it
+
+    if (index >= MaxEnvMaps || index <= 0) {
       return;
     }
 
