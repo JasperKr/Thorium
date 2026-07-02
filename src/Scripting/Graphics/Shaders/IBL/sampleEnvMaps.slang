@@ -101,6 +101,14 @@ LightProbeSampleInfo SampleLightProbes(float3 worldPosition, float3 normal,
 FragmentOutput fragmentMain(FragmentInput input) {
   float depth = DepthTexture.Sample(input.VertexCoords).r;
 
+  if (depth == DepthFarPlane) {
+    // TODO: Or discard?
+    FragmentOutput output;
+    output.Radiance = float4(0.0, 0.0, 0.0, 1.0);
+    output.Irradiance = float4(0.0, 0.0, 0.0, 1.0);
+    return output;
+  }
+
   float3 worldPosition = camera.GetWorldPosition(input.VertexCoords, depth);
 
   float3 normal =

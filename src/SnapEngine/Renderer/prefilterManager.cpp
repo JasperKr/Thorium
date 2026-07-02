@@ -510,14 +510,6 @@ auto LightprobePrefilterManager::PrefilterEnvironment(
 
     CHECK_ERR(Camera.WriteToBuffer(drawMatrices, cubemapTransfrom));
 
-    Camera.GetOwnedTextures().IncomingLight =
-        CHECK_RES(Renderer::GlobalRenderTargetManager.GetRendertarget(
-            context, Camera.GetRendertargets().IncomingLight));
-
-    Camera.GetOwnedTextures().Depth =
-        CHECK_RES(Renderer::GlobalRenderTargetManager.GetRendertarget(
-            context, Camera.GetRendertargets().Depth));
-
     CHECK_ERR(Camera.RenderSkyboxOnly(
         context, Environment{.SkyboxTexture = skyboxTexture}));
 
@@ -533,7 +525,7 @@ auto LightprobePrefilterManager::PrefilterEnvironment(
                  }));
 
     CHECK_ERR(Graphics::Draw(context,
-                             *Camera.GetOwnedTextures().IncomingLight.get()));
+                             *Camera.GetOwnedTextures().DirectLighting.get()));
   }
 
   CHECK_ERR(PrefilterEnvironmentMap(context, SceneCubemap, lightProbe));

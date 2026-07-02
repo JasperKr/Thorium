@@ -207,7 +207,7 @@ auto Camera::RenderSkybox(const Graphics::GraphicsContext &context,
 
   CHECK_ERR(Graphics::DynamicRendering::SetRenderTargets(
       context, {{
-                   .texture = OwnedTextures.IncomingLight,
+                   .texture = OwnedTextures.DirectLighting,
                    .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
                }}));
 
@@ -234,7 +234,7 @@ auto Camera::FillSkybox(const Graphics::GraphicsContext &context,
 
   CHECK_ERR(Graphics::DynamicRendering::SetRenderTargets(
       context, {{
-                   .texture = OwnedTextures.IncomingLight,
+                   .texture = OwnedTextures.DirectLighting,
                    .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
                }}));
 
@@ -262,6 +262,8 @@ auto Camera::ReleasePersistentTextures() -> Error {
       OwnedTextures.Material,
       OwnedTextures.Emissive,
       OwnedTextures.Motion,
+      OwnedTextures.Irradiance,
+      OwnedTextures.DirectLighting,
   }));
 
   OwnedTextures.Reset();
@@ -461,9 +463,9 @@ auto Camera::RenderSkyboxOnly(const Graphics::GraphicsContext &context,
                               const Environment &environment) -> Error {
   CHECK_ERR(ReleasePersistentTextures());
 
-  OwnedTextures.IncomingLight =
+  OwnedTextures.DirectLighting =
       CHECK_RES(Renderer::GlobalRenderTargetManager.GetRendertarget(
-          context, Rendertargets.IncomingLight));
+          context, Rendertargets.DirectLighting));
 
   CHECK_ERR(FillSkybox(context, environment));
 
