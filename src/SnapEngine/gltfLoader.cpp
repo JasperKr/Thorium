@@ -42,6 +42,7 @@
 
 #include <string_view>
 #include <unordered_map>
+#include <unordered_set>
 #include <variant>
 #include <vector>
 
@@ -1054,11 +1055,11 @@ auto DeinterleaveVertexData(const std::vector<uint8_t> &interleavedData)
   return {positionData, texcoordData, normalTangentData, colorData};
 }
 
-// NOLINTNEXTLINE
-inline auto LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
-                     const fastgltf::Asset &asset,
-                     const std::string_view &basePath,
-                     const fastgltf::Node &gltfNode)
+inline auto // NOLINTNEXTLINE
+LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
+         const fastgltf::Asset &asset, const std::string_view &basePath,
+         const fastgltf::Node &gltfNode,
+         std::unordered_set<size_t> &parentIndices)
     -> Result<std::vector<flecs::entity>> {
   bool isMesh = gltfNode.meshIndex.has_value();
   bool isSkin = gltfNode.skinIndex.has_value();
@@ -1095,9 +1096,18 @@ inline auto LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
     node.add<Engine::WorldBounds>();
 
     for (const auto &childIndex : gltfNode.children) {
+      if (parentIndices.contains(childIndex)) {
+        return Error::Unexpectedf(
+            "Detected cyclic reference in node hierarchy at index {}.",
+            childIndex);
+      }
+
       const auto &childGltfNode = asset.nodes[childIndex];
-      auto childNode =
-          CHECK_RES(LoadNode(world, context, asset, basePath, childGltfNode));
+
+      parentIndices.emplace(childIndex);
+
+      auto childNode = CHECK_RES(LoadNode(world, context, asset, basePath,
+                                          childGltfNode, parentIndices));
 
       for (auto &childObject : childNode) {
         childObject.child_of(node);
@@ -1381,13 +1391,17 @@ auto LoadGltfModel(Graphics::GraphicsContext &context, const std::string &path,
     return imageLoadError;
   }
 
-  PrintWarning("Loaded {} images for glTF asset.", ImageCache.size());
+  std::unordered_set<size_t> parentIndices;
 
   // loop through scenes
   for (const auto &glTFScene : asset->scenes) {
     for (const auto &nodeIndex : glTFScene.nodeIndices) {
       const auto &gltfNode = asset->nodes[nodeIndex];
-      CHECK_RES(LoadNode(world, context, asset.get(), view, gltfNode));
+
+      parentIndices.emplace(nodeIndex);
+
+      CHECK_RES(
+          LoadNode(world, context, asset.get(), view, gltfNode, parentIndices));
     }
   }
 

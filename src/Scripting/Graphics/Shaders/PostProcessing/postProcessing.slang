@@ -142,23 +142,16 @@ uniform float Saturation;
 uniform float Vignette;
 uniform float Exposure;
 
+import utils;
+
 #include "fullscreen.slang"
 
 [shader("fragment")]
 float4 fragmentMain(FragmentInput input) {
-  const float BigNumber = 3.402823466e+20;
+  const float BigNumber = 1000.0f;
 
-  float3 incomingLight = IncomingLight.Sample(input.tex_coord).rgb;
+  float3 incomingLight = Sanitise(IncomingLight.Sample(input.tex_coord).rgb);
   incomingLight *= Exposure;
-  if (isinf(incomingLight.r)) {
-    incomingLight.r = BigNumber;
-  }
-  if (isinf(incomingLight.g)) {
-    incomingLight.g = BigNumber;
-  }
-  if (isinf(incomingLight.b)) {
-    incomingLight.b = BigNumber;
-  }
 
   float3 color = whiteBalance(incomingLight, Temperature, Tint);
 
