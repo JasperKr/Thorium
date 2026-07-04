@@ -7,6 +7,7 @@
 #include "Graphics/resource.hpp"
 #include "Graphics/semaphoreManager.hpp"
 #include "Graphics/snapshot.hpp"
+#include "Modules/Helpers/utils.hpp"
 #include "Modules/bytedata.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
@@ -264,7 +265,7 @@ auto Buffer::UploadRing(const GraphicsContext &context,
       context.deviceProperties.limits.minUniformBufferOffsetAlignment;
 
   // Align to minUniformBufferOffsetAlignment
-  uploadOffset = (uploadOffset + alignment - 1) & ~(alignment - 1);
+  uploadOffset = Utils::AlignUp(uploadOffset, alignment);
 
   return Error::Success();
 }

@@ -8,6 +8,7 @@
 #include "Wrap/wrap.hpp"
 #include "Wrap/wrap_engine.hpp"
 #include <flecs.h>
+#include <imgui.h>
 #include <lua.hpp>
 namespace Engine {
 struct BoundingBox {
@@ -66,12 +67,18 @@ struct LuaBoundingBox : LuaWrap::LuaECSObject {
 struct LocalBounds {
   BoundingBox Bounds;
 
-  auto DrawGUI() const -> void { Bounds.DrawGUI(); }
+  auto DrawGUI() const -> void {
+    ImGui::TextDisabled("Local Bounds");
+    Bounds.DrawGUI();
+  }
 };
 struct WorldBounds {
   BoundingBox Bounds;
 
-  auto DrawGUI() const -> void { Bounds.DrawGUI(); }
+  auto DrawGUI() const -> void {
+    ImGui::TextDisabled("World Bounds");
+    Bounds.DrawGUI();
+  }
 };
 
 extern const ::LuaWrap::LuaClass BoundingBoxClass;

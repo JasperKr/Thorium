@@ -817,7 +817,7 @@ Scene::Scene(std::string name) : name(std::move(name)) {
   auto transformSystem =
       world.system<Engine::Transform, Engine::Transform *>()
           .term_at(1)
-          .parent()
+          .up()
           .cascade()
           .each([](Transform &transform, Transform *parentTransform) -> auto {
             transform.UpdateLocalMatrix();
@@ -842,8 +842,9 @@ Scene::Scene(std::string name) : name(std::move(name)) {
   auto postBoundingboxSystem =
       world.system<Engine::WorldBounds, Engine::WorldBounds *>()
           .term_at(1)
-          .parent()
-          .cascade()
+          .up()      // Start at parents
+          .cascade() // Breadth-first
+          .desc()    // Reverse order, so children are processed before parents
           .each([](Engine::WorldBounds &bbox,
                    Engine::WorldBounds *parentBbox) -> auto {
             if (parentBbox != nullptr) {

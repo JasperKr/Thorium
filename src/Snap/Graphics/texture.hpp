@@ -110,7 +110,7 @@ struct TextureCreationInfo {
   TextureType textureType = TextureType::ENUM_MAX;
 };
 
-struct ImageMemory {
+struct ImageMemory : Barrier::BarrierSynced {
   ImageMemory() = default;
   ImageMemory(const ImageMemory &) = delete;
   auto operator=(const ImageMemory &) -> ImageMemory & = delete;
@@ -144,7 +144,7 @@ struct ImageMemory {
   enum TextureType textureType = TextureType::ENUM_MAX;
 };
 
-struct Texture : Object, Barrier::BarrierSynced {
+struct Texture : Object {
   static auto Create(const GraphicsContext &context,
                      const TextureCreationInfo &info) -> Result<Ref<Texture>>;
   static auto Create(const GraphicsContext &context, Texture *parentTexture,

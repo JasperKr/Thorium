@@ -26,6 +26,8 @@ RWTexture2DArray<float4> tex_lo_res;
 
 // SamplerState bilinear : register( s0 );
 
+import utils;
+
 void get_dir_0(out float3 dir, in float u, in float v) {
   dir[0] = 1;
   dir[1] = v;
@@ -85,6 +87,10 @@ float calcWeight(float u, float v) {
   return val * sqrt(val);
 }
 
+float3 Sample(float3 dir) {
+  return Sanitise(tex_hi_res.SampleLevelZero(dir).xyz);
+}
+
 [shader("compute")]
 [numthreads(8, 8, 1)]
 void computeMain(uint3 id: SV_DispatchThreadID) {
@@ -116,101 +122,118 @@ void computeMain(uint3 id: SV_DispatchThreadID) {
 
 #if 1
     float3 dir;
-    float4 color;
+    float3 color;
     switch (id.z) {
     case 0:
       get_dir_0(dir, u0, v0);
-      color = tex_hi_res.SampleLevelZero(dir) * weights.x;
+      color = Sample(dir) * weights.x;
 
       get_dir_0(dir, u1, v0);
-      color += tex_hi_res.SampleLevelZero(dir) * weights.y;
+      color += Sample(dir) * weights.y;
 
       get_dir_0(dir, u0, v1);
-      color += tex_hi_res.SampleLevelZero(dir) * weights.z;
+      color += Sample(dir) * weights.z;
 
       get_dir_0(dir, u1, v1);
-      color += tex_hi_res.SampleLevelZero(dir) * weights.w;
+      color += Sample(dir) * weights.w;
       break;
     case 1:
       get_dir_1(dir, u0, v0);
-      color = tex_hi_res.SampleLevelZero(dir) * weights.x;
+      color = Sample(dir) * weights.x;
 
       get_dir_1(dir, u1, v0);
-      color += tex_hi_res.SampleLevelZero(dir) * weights.y;
+      color += Sample(dir) * weights.y;
 
       get_dir_1(dir, u0, v1);
-      color += tex_hi_res.SampleLevelZero(dir) * weights.z;
+      color += Sample(dir) * weights.z;
 
       get_dir_1(dir, u1, v1);
-      color += tex_hi_res.SampleLevelZero(dir) * weights.w;
+      color += Sample(dir) * weights.w;
       break;
     case 2:
       get_dir_2(dir, u0, v0);
-      color = tex_hi_res.SampleLevelZero(dir) * weights.x;
+      color = Sample(dir) * weights.x;
 
       get_dir_2(dir, u1, v0);
-      color += tex_hi_res.SampleLevelZero(dir) * weights.y;
+      color += Sample(dir) * weights.y;
 
       get_dir_2(dir, u0, v1);
-      color += tex_hi_res.SampleLevelZero(dir) * weights.z;
+      color += Sample(dir) * weights.z;
 
       get_dir_2(dir, u1, v1);
-      color += tex_hi_res.SampleLevelZero(dir) * weights.w;
+      color += Sample(dir) * weights.w;
       break;
     case 3:
       get_dir_3(dir, u0, v0);
-      color = tex_hi_res.SampleLevelZero(dir) * weights.x;
+      color = Sample(dir) * weights.x;
 
       get_dir_3(dir, u1, v0);
-      color += tex_hi_res.SampleLevelZero(dir) * weights.y;
+      color += Sample(dir) * weights.y;
 
       get_dir_3(dir, u0, v1);
-      color += tex_hi_res.SampleLevelZero(dir) * weights.z;
+      color += Sample(dir) * weights.z;
 
       get_dir_3(dir, u1, v1);
-      color += tex_hi_res.SampleLevelZero(dir) * weights.w;
+      color += Sample(dir) * weights.w;
       break;
     case 4:
       get_dir_4(dir, u0, v0);
-      color = tex_hi_res.SampleLevelZero(dir) * weights.x;
+      color = Sample(dir) * weights.x;
 
       get_dir_4(dir, u1, v0);
-      color += tex_hi_res.SampleLevelZero(dir) * weights.y;
+      color += Sample(dir) * weights.y;
 
       get_dir_4(dir, u0, v1);
-      color += tex_hi_res.SampleLevelZero(dir) * weights.z;
+      color += Sample(dir) * weights.z;
 
       get_dir_4(dir, u1, v1);
-      color += tex_hi_res.SampleLevelZero(dir) * weights.w;
+      color += Sample(dir) * weights.w;
       break;
     default:
       get_dir_5(dir, u0, v0);
-      color = tex_hi_res.SampleLevelZero(dir) * weights.x;
+      color = Sample(dir) * weights.x;
 
       get_dir_5(dir, u1, v0);
-      color += tex_hi_res.SampleLevelZero(dir) * weights.y;
+      color += Sample(dir) * weights.y;
 
       get_dir_5(dir, u0, v1);
-      color += tex_hi_res.SampleLevelZero(dir) * weights.z;
+      color += Sample(dir) * weights.z;
 
       get_dir_5(dir, u1, v1);
-      color += tex_hi_res.SampleLevelZero(dir) * weights.w;
+      color += Sample(dir) * weights.w;
       break;
     }
 #else
     float3 dir;
     get_dir(dir, u0, v0, id.z);
-    float4 color = tex_hi_res.SampleLevelZero(dir) * weights.x;
+    float4 color = Sample(dir) * weights.x;
 
     get_dir(dir, u1, v0, id.z);
-    color += tex_hi_res.SampleLevelZero(dir) * weights.y;
+    color += Sample(dir) * weights.y;
 
     get_dir(dir, u0, v1, id.z);
-    color += tex_hi_res.SampleLevelZero(dir) * weights.z;
+    color += Sample(dir) * weights.z;
 
     get_dir(dir, u1, v1, id.z);
-    color += tex_hi_res.SampleLevelZero(dir) * weights.w;
+    color += Sample(dir) * weights.w;
 #endif
+
+    constexpr float Clamped = 100.0;
+
+    if (isinf(color.r)) {
+      color.r = Clamped;
+    }
+    if (isinf(color.g)) {
+      color.g = Clamped;
+    }
+    if (isinf(color.b)) {
+      color.b = Clamped;
+    }
+
+    float luma = Luminance(color.rgb);
+    if (luma > Clamped) {
+      color.rgb *= Clamped / luma;
+    }
 
     tex_lo_res.Store(int3(id), float4(color.rgb, 1.0));
   }

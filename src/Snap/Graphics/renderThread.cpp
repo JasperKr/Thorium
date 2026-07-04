@@ -104,13 +104,17 @@ inline auto GetDescriptorPool(ThreadContext &tcontext) -> Error {
 
   VkDescriptorPool pool = VK_NULL_HANDLE;
 
-  for (auto &descriptorPoolInfo : tcontext.descriptorPools) {
-    if (!Graphics::semaphoreManager.IsInUse(
-            descriptorPoolInfo.lastUsedTimestamp)) {
-      pool = descriptorPoolInfo.descriptorPool;
-      descriptorPoolInfo.lastUsedTimestamp =
-          Graphics::SemaphoreManager::GetSemaphoreValue();
-      break;
+  {
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+
+    for (auto &descriptorPoolInfo : tcontext.descriptorPools) {
+      if (!Graphics::semaphoreManager.IsInUse(
+              descriptorPoolInfo.lastUsedTimestamp)) {
+        pool = descriptorPoolInfo.descriptorPool;
+        descriptorPoolInfo.lastUsedTimestamp =
+            Graphics::SemaphoreManager::GetSemaphoreValue();
+        break;
+      }
     }
   }
 
@@ -121,17 +125,15 @@ inline auto GetDescriptorPool(ThreadContext &tcontext) -> Error {
         {pool, Graphics::SemaphoreManager::GetSemaphoreValue()});
 
     tcontext.descriptorPool = pool;
+    DynamicRendering::DescriptorSetCache.clear();
   } else {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
 
     tcontext.descriptorPool = pool;
-    auto resetResult = Error::Create(
-        vkResetDescriptorPool(context.device, tcontext.descriptorPool, 0));
-    DynamicRendering::DescriptorSetCache.clear();
 
-    if (Error::IsError(resetResult)) {
-      return resetResult;
-    }
+    CHECK_ERR(Error::Create(
+        vkResetDescriptorPool(context.device, tcontext.descriptorPool, 0)));
+    DynamicRendering::DescriptorSetCache.clear();
   }
 
   return Error::Success();
@@ -236,6 +238,13 @@ auto SubmitCommands(Graphics::GraphicsContext &context)
       Graphics::DynamicRendering::DrawnToSwapchain;
 
   auto &threadContext = GetThreadContext();
+
+  for (auto &pool : threadContext.descriptorPools) {
+    if (pool.descriptorPool == threadContext.descriptorPool) {
+      pool.lastUsedTimestamp = Graphics::SemaphoreManager::GetSemaphoreValue();
+      break;
+    }
+  }
 
   threadContext.commandBuffer = VK_NULL_HANDLE;
   threadContext.currentVertexFormatHash = 0;

@@ -66,6 +66,22 @@ static const std::vector<slang::CompilerOptionEntry> CompilerOptions = {
                 .kind = slang::CompilerOptionValueKind::Int,
                 .intValue0 = 1,
             }},
+    slang::CompilerOptionEntry{
+        .name = slang::CompilerOptionName::DebugInformation,
+        .value =
+            slang::CompilerOptionValue{
+                .kind = slang::CompilerOptionValueKind::Int,
+                .intValue0 =
+                    SlangDebugInfoLevel::SLANG_DEBUG_INFO_LEVEL_MAXIMAL,
+            }},
+    slang::CompilerOptionEntry{
+        .name = slang::CompilerOptionName::FloatingPointMode,
+        .value =
+            slang::CompilerOptionValue{
+                .kind = slang::CompilerOptionValueKind::Int,
+                .intValue0 =
+                    SlangFloatingPointMode::SLANG_FLOATING_POINT_MODE_FAST,
+            }},
 };
 
 // NOLINTNEXTLINE

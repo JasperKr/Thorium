@@ -193,12 +193,18 @@ static auto CreateDevice(GraphicsContext &context,
   createInfo.queueCreateInfoCount = 1;
   createInfo.pEnabledFeatures = nullptr;
 
+  VkPhysicalDeviceIndexTypeUint8FeaturesEXT indexTypeUint8Features{};
+  indexTypeUint8Features.sType =
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_INDEX_TYPE_UINT8_FEATURES_EXT;
+  indexTypeUint8Features.indexTypeUint8 = VK_TRUE;
+
   VkPhysicalDeviceExtendedDynamicState3FeaturesEXT dyn3{};
   dyn3.sType =
       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_3_FEATURES_EXT;
   dyn3.extendedDynamicState3ColorBlendEquation = VK_TRUE;
   dyn3.extendedDynamicState3ColorWriteMask = VK_TRUE;
   dyn3.extendedDynamicState3ColorBlendEnable = VK_TRUE;
+  dyn3.pNext = &indexTypeUint8Features;
 
   VkPhysicalDeviceVertexInputDynamicStateFeaturesEXT feature{};
   feature.sType =
@@ -273,6 +279,8 @@ static auto CreateDevice(GraphicsContext &context,
       {VK_EXT_COLOR_WRITE_ENABLE_EXTENSION_NAME, extRequired},
       {VK_EXT_EXTENDED_DYNAMIC_STATE_3_EXTENSION_NAME, extRequired},
       {VK_KHR_UNIFIED_IMAGE_LAYOUTS_EXTENSION_NAME, extRequired},
+      {VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME, extOptional},
+      {VK_EXT_INDEX_TYPE_UINT8_EXTENSION_NAME, extOptional},
 
       {VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
        settings.hardwareRaytracing},

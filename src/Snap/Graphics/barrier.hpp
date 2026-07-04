@@ -116,7 +116,13 @@ extern thread_local std::vector<BarrierSynced> GraphicsResources;
 auto UpdateUsage(const GraphicsContext &context, const BarrierSynced &resource,
                  const ResourceState &usage) -> void;
 
+auto UpdateUsage(const GraphicsContext &context, const Texture &texture,
+                 const ResourceState &usage) -> void;
+
 auto UpdateUsageVirtual(BarrierSynced &resource, const ResourceState &usage)
+    -> std::optional<ResourceSync>;
+
+auto UpdateUsageVirtual(const Texture &texture, const ResourceState &usage)
     -> std::optional<ResourceSync>;
 
 auto InsertBarrier(ResourceSync &barrier) -> void;

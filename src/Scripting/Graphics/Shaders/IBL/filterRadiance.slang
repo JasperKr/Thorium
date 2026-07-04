@@ -43,6 +43,8 @@ RWTexture2DArray<float4> OutputTexture6;
 // 	float4 Coefficients[];
 // };
 
+import utils;
+
 StructuredBuffer<float4> Coefficients;
 
 #define NUM_TAPS 32
@@ -197,14 +199,16 @@ void computeMain(uint3 invocationID: SV_DispatchThreadID) {
           sample_level += 0.75 * log2(dot(sample_dir, sample_dir));
 
           // sample cubemap
-          color.xyz += InputTexture.SampleLevel(sample_dir, sample_level).xyz *
-                       sample_weight;
+          color.xyz +=
+              Sanitise(InputTexture.SampleLevel(sample_dir, sample_level).xyz) *
+              sample_weight;
           color.w += sample_weight;
         }
       }
     }
   }
-  color /= color.w;
+
+  color /= max(color.w, 0.0001);
 
   // write color
   color = max(color, float4(0.0));

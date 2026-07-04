@@ -257,8 +257,9 @@ inline auto InsertTextureBarriers(const GraphicsContext &context) -> Error {
     VkAccessFlags2 access = 0;
 
     switch (info.access) {
+    case SLANG_RESOURCE_ACCESS_NONE:
     case SLANG_RESOURCE_ACCESS_READ:
-      access = VK_ACCESS_2_SHADER_READ_BIT;
+      access = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
       break;
     case SLANG_RESOURCE_ACCESS_READ_WRITE:
       access = VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT;
@@ -345,8 +346,14 @@ inline auto InsertBufferBarriers(const GraphicsContext &context) -> Error {
     VkAccessFlags2 access = 0;
 
     switch (info.access) {
+    case SLANG_RESOURCE_ACCESS_NONE:
+      // Shaders with ubo buffers show access of NONE for some reason
+      access = VK_ACCESS_2_UNIFORM_READ_BIT;
+      break;
     case SLANG_RESOURCE_ACCESS_READ:
-      access = VK_ACCESS_2_SHADER_READ_BIT;
+      access = info.bufferType == Reflect::BufferType::Uniform
+                   ? VK_ACCESS_2_UNIFORM_READ_BIT
+                   : VK_ACCESS_2_SHADER_READ_BIT;
       break;
     case SLANG_RESOURCE_ACCESS_READ_WRITE:
       access = VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT;
@@ -355,6 +362,9 @@ inline auto InsertBufferBarriers(const GraphicsContext &context) -> Error {
       access = VK_ACCESS_2_SHADER_WRITE_BIT;
       break;
     default:
+      PrintWarning("Buffer access type is Unknown for slang access: {}, "
+                   "skipping barrier.",
+                   static_cast<uint32_t>(info.access));
       break;
     }
 

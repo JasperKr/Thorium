@@ -38,7 +38,8 @@ inline auto IsHazard(const ResourceState &oldState,
   return ((oldState.access | newState.access) &
           (VK_ACCESS_2_SHADER_WRITE_BIT | VK_ACCESS_2_TRANSFER_WRITE_BIT |
            VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT |
-           VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT)) != 0U;
+           VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT |
+           VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT)) != 0U;
 }
 
 /*
@@ -184,6 +185,11 @@ inline auto TimelineLookback(uint64_t currentTimelineIndex,
   return false; // All bits satisfied, no barrier needed
 }
 
+auto UpdateUsage(const GraphicsContext &context, const Texture &texture,
+                 const ResourceState &usage) -> void {
+  UpdateUsage(context, *texture.imageMemory, usage);
+}
+
 auto UpdateUsage(const GraphicsContext &context, const BarrierSynced &resource,
                  const ResourceState &usage) -> void {
   ZoneScoped;
@@ -196,10 +202,13 @@ auto UpdateUsage(const GraphicsContext &context, const BarrierSynced &resource,
     GlobalResourceStateUpdates.emplace_back(resource, usage);
   }
 
+  resource.firstAsyncUsage = false;
+
   if (!resource.firstAsyncUsage &&
       TimelineLookback(resource.lastUsedTimelineIndex, // NOLINT
                        {.stages = previousStages, .access = previousAccess},
                        usage)) {
+
     ZoneScopedN("Inserting barrier");
     // Insert barrier
     VkMemoryBarrier2 barrier = {};
@@ -253,6 +262,11 @@ auto UpdateUsage(const GraphicsContext &context, const BarrierSynced &resource,
   }
 
   resource.firstAsyncUsage = false;
+}
+
+auto UpdateUsageVirtual(const Texture &texture, const ResourceState &usage)
+    -> std::optional<ResourceSync> {
+  return UpdateUsageVirtual(*texture.imageMemory, usage);
 }
 
 // The same as Update Usage but doesn't insert any barriers

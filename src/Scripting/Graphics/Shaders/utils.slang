@@ -37,3 +37,31 @@ public float3 GetRayDirection(float2 uv, float4x4 inverseRotationProjection) {
   float4 worldSpacePos = mul(clipSpacePos, inverseRotationProjection);
   return normalize(worldSpacePos.xyz);
 }
+
+public float Luminance(float3 color) {
+  return dot(color, float3(0.2126, 0.7152, 0.0722));
+}
+
+// we should default to float.maxValue, however that causes issues when storing in non-float32
+// textures which will always be the case since that would be dumb, so we clamp to 1000.0f
+// TODO: See if this a good default
+
+public float3 Sanitise(float3 color) {
+  if (any(isnan(color)))
+    return float3(0.0, 0.0, 0.0);
+
+  if (any(isinf(color)))
+    return float3(1000.0);
+
+  return color;
+}
+
+public float4 Sanitise(float4 color) {
+  if (any(isnan(color)))
+    return float4(0.0, 0.0, 0.0, 1.0);
+
+  if (any(isinf(color)))
+    return float4(float3(1000.0), 1.0);
+
+  return color;
+}

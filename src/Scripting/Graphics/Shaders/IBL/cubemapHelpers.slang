@@ -16,7 +16,6 @@ public void getTexelInfo(inout int3 id, out int level, out float2 uv,
   constexpr int MIP6 = MIP5 + (BASE >> 6) * (BASE >> 6);
 
   // determine which texel this is
-  level = 0;
   if (id.x < MIP0)
     level = 0;
   else if (id.x < MIP1) {
