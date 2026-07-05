@@ -5,6 +5,7 @@
 #include "buffer.hpp"
 #include <array>
 #include <cstdint>
+#include <memory>
 #include <span>
 #include <string>
 #include <vector>
@@ -131,7 +132,7 @@ private:
   std::array<VertexBindingRange, VertexFormat::MaxBindings> BindingRanges;
   size_t BindingRangeCount = 0;
 
-  VertexFormat Format;
+  std::unique_ptr<VertexFormat> Format;
 
   std::vector<Ref<Buffer>> VertexBuffers;
   Ref<Buffer> IndexBuffer;

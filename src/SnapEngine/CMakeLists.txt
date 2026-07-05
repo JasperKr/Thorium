@@ -5,6 +5,7 @@ add_library(SnapEngine
   style.cpp
 
   Editor/gui.cpp
+  Editor/lineDrawer.cpp
 
   Scene/scene.cpp
   Scene/project.cpp

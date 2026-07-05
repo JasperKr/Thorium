@@ -180,6 +180,20 @@ auto Scene::DrawUiElement() const -> Error {
   // Draw an imgui hierarchy of the scene's entities and components
   // This is just a placeholder for now
 
+  // Debug draw 3 Lines X+ red, Y+ green, Z+ blue with a thinkness of 3
+  constexpr float axisLength = 1.0F;
+  constexpr float axisThickness = 4.0F;
+
+  const Math::Vec3 origin{0.0F, 0.0F, 0.0F};
+  auto &lineDrawer = Renderer::RendererInstance.GetLineDrawer();
+
+  lineDrawer.OverlayLine(origin, Math::Vec3{axisLength, 0.0F, 0.0F},
+                         Math::Vec4{1.0F, 0.0F, 0.0F, 1.0F}, axisThickness);
+  lineDrawer.OverlayLine(origin, Math::Vec3{0.0F, axisLength, 0.0F},
+                         Math::Vec4{0.0F, 1.0F, 0.0F, 1.0F}, axisThickness);
+  lineDrawer.OverlayLine(origin, Math::Vec3{0.0F, 0.0F, axisLength},
+                         Math::Vec4{0.0F, 0.0F, 1.0F, 1.0F}, axisThickness);
+
   ImGui::Begin(name.c_str());
   auto availableHeight = ImGui::GetContentRegionAvail().y;
   if (ImGui::BeginChild("Entity Hierarchy",

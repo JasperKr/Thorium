@@ -198,13 +198,20 @@ static auto CreateDevice(GraphicsContext &context,
       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_INDEX_TYPE_UINT8_FEATURES_EXT;
   indexTypeUint8Features.indexTypeUint8 = VK_TRUE;
 
+  VkPhysicalDeviceVertexAttributeDivisorFeaturesKHR
+      vertexAttributeDivisorProperties{};
+  vertexAttributeDivisorProperties.sType =
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VERTEX_ATTRIBUTE_DIVISOR_FEATURES_KHR;
+  vertexAttributeDivisorProperties.vertexAttributeInstanceRateDivisor = VK_TRUE;
+  vertexAttributeDivisorProperties.pNext = &indexTypeUint8Features;
+
   VkPhysicalDeviceExtendedDynamicState3FeaturesEXT dyn3{};
   dyn3.sType =
       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_DYNAMIC_STATE_3_FEATURES_EXT;
   dyn3.extendedDynamicState3ColorBlendEquation = VK_TRUE;
   dyn3.extendedDynamicState3ColorWriteMask = VK_TRUE;
   dyn3.extendedDynamicState3ColorBlendEnable = VK_TRUE;
-  dyn3.pNext = &indexTypeUint8Features;
+  dyn3.pNext = &vertexAttributeDivisorProperties;
 
   VkPhysicalDeviceVertexInputDynamicStateFeaturesEXT feature{};
   feature.sType =
@@ -281,6 +288,7 @@ static auto CreateDevice(GraphicsContext &context,
       {VK_KHR_UNIFIED_IMAGE_LAYOUTS_EXTENSION_NAME, extRequired},
       {VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME, extOptional},
       {VK_EXT_INDEX_TYPE_UINT8_EXTENSION_NAME, extOptional},
+      {VK_EXT_VERTEX_ATTRIBUTE_DIVISOR_EXTENSION_NAME, extOptional},
 
       {VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
        settings.hardwareRaytracing},

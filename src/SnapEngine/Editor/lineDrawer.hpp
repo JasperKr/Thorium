@@ -14,25 +14,35 @@ namespace Engine::Renderer {
 
 const std::vector<Graphics::VertexComponent> LineVertexComponents = {
     Graphics::VertexComponent{
-        .name = "Position",
-        .format = VK_FORMAT_R32G32_SFLOAT,
+        .name = "Start",
+        .location = 0,
+        .format = VK_FORMAT_R32G32B32_SFLOAT,
+    },
+    Graphics::VertexComponent{
+        .name = "End",
+        .location = 1,
+        .format = VK_FORMAT_R32G32B32_SFLOAT,
     },
     Graphics::VertexComponent{
         .name = "Color",
+        .location = 2,
         .format = VK_FORMAT_R8G8B8A8_UNORM,
     },
     Graphics::VertexComponent{
         .name = "Thickness",
+        .location = 3,
         .format = VK_FORMAT_R32_SFLOAT,
     },
 };
 
-const Graphics::VertexFormat LineVertexFormat{LineVertexComponents, {6}};
+const Graphics::VertexFormat LineVertexFormat = [] -> Graphics::VertexFormat {
+  auto vtxFormat = Graphics::VertexFormat{LineVertexComponents};
+  vtxFormat.SetInputRate(0, VK_VERTEX_INPUT_RATE_INSTANCE);
+
+  return vtxFormat;
+}();
 
 struct LineDrawer {
-  Ref<Graphics::Mesh> Mesh;
-  Ref<Graphics::Shader> Shader;
-
   struct LineData {
     Math::Vec3 Start;
     Math::Vec3 End;
@@ -50,17 +60,27 @@ struct LineDrawer {
   static constexpr size_t MaxLineCount = 1e5;
   static constexpr size_t MaxVertexCount = MaxLineCount * 6;
 
-  std::vector<LineData> Lines;
-
   void DrawLine(const Math::Vec3 &start, const Math::Vec3 &end,
                 const Math::Vec4 &color, float thickness);
 
-  auto Initialize(const Graphics::GraphicsContext &context) -> Error;
-  auto DeInitialize() -> Error;
+  void OverlayLine(const Math::Vec3 &start, const Math::Vec3 &end,
+                   const Math::Vec4 &color, float thickness);
 
-  auto GenerateMesh(const Graphics::GraphicsContext &context) -> Error;
+  auto Initialize(const Graphics::GraphicsContext &context) -> Error;
+  auto Deinitialize() -> void;
+
   auto Render(const Graphics::GraphicsContext &context, Camera &camera)
       -> Error;
+
+private:
+  auto GenerateMesh(const Graphics::GraphicsContext &context,
+                    const std::vector<LineData> &lines) -> Error;
+
+  std::vector<LineData> OverlayLines;
+  std::vector<LineData> Lines;
+
+  Ref<Graphics::Mesh> Mesh;
+  Ref<Graphics::Shader> Shader;
 };
 
 } // namespace Engine::Renderer

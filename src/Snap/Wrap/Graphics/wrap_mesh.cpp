@@ -212,8 +212,8 @@ auto wrap_GetDrawRange(lua_State *state) -> int {
   { name = "name", format = "uint32", location = 1 },
 }
 */
-inline auto VertexFormatFromLua(lua_State *state, int index,
-                                ::Graphics::VertexFormat &format) -> int {
+inline auto VertexFormatFromLua(lua_State *state, int index)
+    -> Result<std::vector<::Graphics::VertexComponent>> {
   luaL_checktype(state, index, LUA_TTABLE);
 
   std::vector<::Graphics::VertexComponent> attributes;
@@ -230,7 +230,7 @@ inline auto VertexFormatFromLua(lua_State *state, int index,
     // Name
     lua_getfield(state, -1, "name");
     if (lua_isstring(state, -1) == 0) {
-      return luaL_error(state, "Vertex attribute missing name field.");
+      return Error::Create("Vertex attribute missing name field.");
     }
     const char *name = luaL_checkstring(state, -1);
     lua_pop(state, 1); // pop name
@@ -238,7 +238,7 @@ inline auto VertexFormatFromLua(lua_State *state, int index,
     // Format
     lua_getfield(state, -1, "format");
     if (lua_isstring(state, -1) == 0) {
-      return luaL_error(state, "Vertex attribute missing format field.");
+      return Error::Create("Vertex attribute missing format field.");
     }
     const char *formatStr = luaL_checkstring(state, -1);
     auto dataFormat = ::Graphics::Format::FromString(formatStr);
@@ -247,7 +247,7 @@ inline auto VertexFormatFromLua(lua_State *state, int index,
     // Location
     lua_getfield(state, -1, "location");
     if (lua_isnumber(state, -1) == 0) {
-      return luaL_error(state, "Vertex attribute missing location field.");
+      return Error::Create("Vertex attribute missing location field.");
     }
     int location = static_cast<int>(luaL_checkinteger(state, -1));
     lua_pop(state, 1); // pop location
@@ -264,9 +264,7 @@ inline auto VertexFormatFromLua(lua_State *state, int index,
   }
   lua_pop(state, 1); // pop key and table copy
 
-  format = ::Graphics::VertexFormat(attributes);
-
-  return 0;
+  return attributes;
 }
 
 struct ReadInfo {
@@ -518,11 +516,8 @@ auto wrap_NewMesh(lua_State *state) -> int {
     return luaL_error(state, "No current GraphicsContext.");
   }
 
-  ::Graphics::VertexFormat vertexFormat;
-  auto result = VertexFormatFromLua(state, 1, vertexFormat);
-  if (result != 0) {
-    return result;
-  }
+  auto attributes = LUA_CK_RES(VertexFormatFromLua(state, 1));
+  auto vertexFormat = ::Graphics::VertexFormat(attributes);
 
   std::span<uint8_t> vertexData;
   std::vector<uint8_t> vertexStorage;

@@ -21,6 +21,9 @@ struct UniformWriter {
                    const Ref<Buffer> &buffer) -> Error;
 
   static auto Send(const Ref<Shader> &shader, const ResourceKey &key,
+                   const Ref<Graphics::StructuredBuffer> &buffer) -> Error;
+
+  static auto Send(const Ref<Shader> &shader, const ResourceKey &key,
                    const Ref<Graphics::Texture> &texture) -> Error;
 
   static auto Send(const Ref<Shader> &shader, const ResourceKey &key,

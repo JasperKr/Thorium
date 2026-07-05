@@ -449,6 +449,20 @@ auto Camera::Render(const Graphics::GraphicsContext &context,
 
   CHECK_ERR(Graphics::Draw(context, *OwnedTextures.Irradiance));
 
+  CHECK_ERR(Graphics::DynamicRendering::SetRenderTargets(
+      context, {Graphics::DynamicRendering::RenderTarget{
+                    .blendMode = Graphics::DefaultBlendMode,
+                    .texture = OwnedTextures.IncomingLight,
+                    .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+                },
+                Graphics::DynamicRendering::RenderTarget{
+                    .blendMode = Graphics::DefaultBlendMode,
+                    .texture = OwnedTextures.Depth,
+                    .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+                }}));
+
+  CHECK_ERR(Renderer::RendererInstance.GetLineDrawer().Render(context, *this));
+
   if (settings.DoPostProcessing) {
     CHECK_ERR(ApplyPostProcessing(context));
   }

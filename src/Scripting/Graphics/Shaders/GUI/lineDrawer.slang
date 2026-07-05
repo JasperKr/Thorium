@@ -17,7 +17,7 @@ import utils;
 import camera;
 
 struct PushConstantsBuffer {
-  float2 viewportSize;
+  uint2 viewportSize;
 };
 
 [[vk::push_constant]]
@@ -30,27 +30,29 @@ static const float2 corners[6] = { { 0, 1 }, { 1, 1 }, { 1, 0 },
 VertexOutput vertexMain(VertexInput input, uint vertexID: SV_VertexID) {
   VertexOutput output;
 
-  float4 clip = mul(camera.ViewProjectionMatrix, float4(input.start, 1.0));
-  float3 ndcStart = clip.xyz / clip.w;
+  float4 clipStart = mul(camera.ViewProjectionMatrix, float4(input.start, 1.0));
+  float4 clipEnd = mul(camera.ViewProjectionMatrix, float4(input.end, 1.0));
 
-  clip = mul(camera.ViewProjectionMatrix, float4(input.end, 1.0));
-  float3 ndcEnd = clip.xyz / clip.w;
+  // Only use NDC for screen-space calculations.
+  float3 ndcStart = clipStart.xyz / clipStart.w;
+  float3 ndcEnd = clipEnd.xyz / clipEnd.w;
 
-  float2 dir = normalize(ndcEnd.xy - ndcStart.xy);
+  float2 dir = normalize(ndcStart.xy - ndcEnd.xy);
 
-  output.color = input.color;
-
-  // Triangle list layout for 6 vertices per instance:
-  // 0:(0,1), 1:(1,1), 2:(1,0), 3:(0,1), 4:(1,0), 5:(0,0)
   float2 texCoord = corners[vertexID % 6];
 
-  float2 offset = float2(-dir.y, dir.x) * input.thickness * 0.5 /
-                  PushConstants.viewportSize;
-  float2 ndcPos = lerp(ndcStart.xy, ndcEnd.xy, texCoord.x) +
-                  offset * (1.0 - 2.0 * texCoord.y);
+  // Offset in NDC.
+  float2 offset = float2(-dir.y, dir.x) * (input.thickness) /
+                  float2(PushConstants.viewportSize);
 
-  output.position = float4(ndcPos, 0.0, 1.0);
+  // Interpolate in clip space.
+  float4 clipPos = lerp(clipStart, clipEnd, texCoord.x);
 
+  // Convert NDC offset back to clip space.
+  clipPos.xy += offset * (1.0 - 2.0 * texCoord.y) * clipPos.w;
+
+  output.position = clipPos;
+  output.color = input.color;
   output.tex_coord = texCoord;
 
   return output;
@@ -59,6 +61,10 @@ VertexOutput vertexMain(VertexInput input, uint vertexID: SV_VertexID) {
 [shader("fragment")]
 float4 fragmentMain(VertexOutput input) {
   float4 color = input.color;
-  color.w *= input.tex_coord.y;
+
+  float dist = (0.5 - input.tex_coord.y) * 2.0;
+  float alpha = smoothstep(1.0, 0.0, abs(dist));
+
+  color.w *= alpha;
   return color;
 }

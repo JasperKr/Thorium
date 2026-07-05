@@ -42,7 +42,6 @@ struct VertexFormat {
     }
   }
 
-  VertexFormat() = default;
   VertexFormat(VertexFormat &&other) noexcept = default;
   auto operator=(VertexFormat &&other) noexcept -> VertexFormat & = default;
   ~VertexFormat() = default;
@@ -76,9 +75,14 @@ public:
     PrintError("Binding {} not found in vertex format.", binding);
   }
 
-  [[nodiscard]] auto GetVkAttributes()
-      -> std::vector<VkVertexInputAttributeDescription> & {
-    return VkAttributes;
+  auto SetInputRate(uint32_t binding, VkVertexInputRate inputRate) -> void {
+    for (auto &bindingDesc : Bindings) {
+      if (bindingDesc.binding == binding) {
+        bindingDesc.inputRate = inputRate;
+        return;
+      }
+    }
+    PrintError("Binding {} not found in vertex format.", binding);
   }
 
   [[nodiscard]] auto GetVkAttributes2()
@@ -197,16 +201,7 @@ private:
 
     for (auto &component : Attributes) {
       assert(component.binding < MaxBindings &&
-             "Vertex attribute binding exceeds maximum of 8");
-    }
-
-    VkAttributes.reserve(Attributes.size());
-    for (const auto &component : Attributes) {
-      VkAttributes.emplace_back(
-          VkVertexInputAttributeDescription{.location = component.location,
-                                            .binding = component.binding,
-                                            .format = component.format,
-                                            .offset = component.offset});
+             "Vertex attribute binding exceeds maximum");
     }
 
     VkAttributes2.reserve(Attributes.size());
@@ -272,7 +267,6 @@ private:
   }
 
   std::vector<VkVertexInputBindingDescription2EXT> Bindings;
-  std::vector<VkVertexInputAttributeDescription> VkAttributes;
   std::vector<VkVertexInputAttributeDescription2EXT> VkAttributes2;
 
   // Mapping of [0 - binding count] -> binding index

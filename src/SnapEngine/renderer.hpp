@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Editor/lineDrawer.hpp"
 #include "Graphics/Buffers/structured.hpp"
 #include "Graphics/bufferformat.hpp"
 #include "Graphics/graphicsContext.hpp"
@@ -184,6 +185,8 @@ struct Renderer {
             .debugName = "Light Probe Buffer",
         }));
 
+    CHECK_ERR(LineDrawer.Initialize(context));
+
     initialized = true;
     return {};
   }
@@ -227,6 +230,8 @@ struct Renderer {
     return LightProbeBuffer;
   }
 
+  auto GetLineDrawer() -> LineDrawer & { return LineDrawer; }
+
 private:
   std::unordered_map<ShaderKey, Ref<Graphics::Shader>> LoadedShaders;
   Material NoMaterial;
@@ -242,6 +247,8 @@ private:
 
   Lights SceneLightBuffers;
   LightprobePrefilterManager PrefilterManager;
+
+  LineDrawer LineDrawer;
 
   bool initialized = false;
 

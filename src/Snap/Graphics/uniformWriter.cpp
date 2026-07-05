@@ -1,4 +1,5 @@
 #include "uniformWriter.hpp"
+#include "Graphics/Buffers/structured.hpp"
 #include "Graphics/buffer.hpp"
 #include "Graphics/shader.hpp"
 #include "Modules/Math/matrix.hpp"
@@ -11,6 +12,12 @@
 namespace Graphics {
 auto UniformWriter::Send(const Ref<Shader> &shader, const ResourceKey &key,
                          const Ref<Buffer> &buffer) -> Error {
+  return shader->Send(key, buffer);
+}
+
+auto UniformWriter::Send(const Ref<Shader> &shader, const ResourceKey &key,
+                         const Ref<Graphics::StructuredBuffer> &buffer)
+    -> Error {
   return shader->Send(key, buffer);
 }
 

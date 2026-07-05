@@ -1,5 +1,6 @@
 #include "mesh.hpp"
 #include <algorithm>
+#include <memory>
 #include <mutex>
 #include <public/tracy/Tracy.hpp>
 #include <string>
@@ -80,7 +81,7 @@ auto Mesh::Create(const GraphicsContext &context,
   mesh->VertexCount =
       vertexDatas.at(0).size() / VertexFormatSize(vertexFormat, 0);
   mesh->IndexCount = 0;
-  mesh->Format = vertexFormat.Copy();
+  mesh->Format = std::make_unique<VertexFormat>(vertexFormat.Copy());
 
   VkMemoryPropertyFlags properties =
       static_cast<uint32_t>(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) |
@@ -125,7 +126,7 @@ auto Mesh::Create(const GraphicsContext &context,
   auto mesh = Ref<Mesh>::Make();
 
   mesh->VertexCount = vertexCount;
-  mesh->Format = vertexFormat.Copy();
+  mesh->Format = std::make_unique<VertexFormat>(vertexFormat.Copy());
 
   VkMemoryPropertyFlags properties =
       static_cast<uint32_t>(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) |
@@ -159,7 +160,7 @@ auto Mesh::Create(const GraphicsContext &context,
   return mesh;
 }
 
-[[nodiscard]] auto Mesh::GetVertexFormat() -> VertexFormat & { return Format; }
+[[nodiscard]] auto Mesh::GetVertexFormat() -> VertexFormat & { return *Format; }
 
 [[nodiscard]] auto Mesh::GetVertexCount() const -> uint32_t {
   return VertexCount;
@@ -299,8 +300,8 @@ auto Mesh::ConstructBindingRanges() -> void {
     Bindings.at(index++) = buffer->handle;
   }
 
-  auto mapping = Format.GetBindingMapping();
-  auto count = Format.GetBindingCount();
+  auto mapping = Format->GetBindingMapping();
+  auto count = Format->GetBindingCount();
 
   // buffers =  [a, b, c, d, e] size = 5
   // bindings = [a, a, a, _, _, b, _, c] size = 5
