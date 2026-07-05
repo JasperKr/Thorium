@@ -34,8 +34,8 @@ using TexRef = Ref<Graphics::Texture>;
 const Type materialType = Type("Material");
 
 struct Material {
-  Material(std::string name, Ref<Graphics::Shader::ShaderModule> shader,
-           TexRef preview, TexRef albedoTexture, TexRef normalTexture,
+  Material(std::string name, Ref<Graphics::Shader> shader, TexRef preview,
+           TexRef albedoTexture, TexRef normalTexture,
            TexRef metallicRoughnessTexture, TexRef ambientOcclusionTexture,
            TexRef reflectanceTexture, TexRef emissiveTexture)
       : name(std::move(name)), shader(std::move(shader)),
@@ -54,7 +54,7 @@ struct Material {
   VkCullModeFlags cullMode = VK_CULL_MODE_BACK_BIT;
   AlphaMode alphaMode = AlphaMode::Opaque;
   float alphaCutoff = 0.5F; // NOLINT
-  Ref<Graphics::Shader::ShaderModule> shader;
+  Ref<Graphics::Shader> shader;
 
   TexRef preview;
 

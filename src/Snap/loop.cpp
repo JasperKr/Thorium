@@ -266,7 +266,7 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
 
   CHECK_ERR(Graphics::semaphoreManager.Initialize(context));
 
-  CHECK_ERR(Graphics::Shader::LoadModule());
+  CHECK_ERR(Graphics::LoadShaderModule());
 
   CHECK_ERR(Graphics::InitializeRendering(context, wcontext));
   CHECK_ERR(Graphics::DynamicRendering::Load(context));

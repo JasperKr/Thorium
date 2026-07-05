@@ -217,10 +217,9 @@ auto wrap_ClipScissor(lua_State *state) -> int {
 
 auto wrap_SetShader(lua_State *state) -> int {
   auto *ctx = ::Graphics::GetCurrentGraphicsContext();
-  auto *shaderHandle =
-      LuaWrap::ObjectFromLua<::Graphics::Shader::ShaderModule>(state, 1);
+  auto *shaderHandle = LuaWrap::ObjectFromLua<::Graphics::Shader>(state, 1);
   ::Graphics::DynamicRendering::SetShader(
-      Ref<::Graphics::Shader::ShaderModule>(shaderHandle));
+      Ref<::Graphics::Shader>(shaderHandle));
   return 0;
 }
 
@@ -370,7 +369,7 @@ auto wrap_GetShader(lua_State *state) -> int {
   auto *ctx = ::Graphics::GetCurrentGraphicsContext();
   auto ref = ::Graphics::DynamicRendering::GetShader();
 
-  const auto *type = ::Graphics::Shader::ShaderModule::GetType();
+  const auto *type = ::Graphics::Shader::GetType();
 
   LuaWrap::PushObject(state, type, ref.get());
 
@@ -422,7 +421,7 @@ auto wrap_Draw(lua_State *state) -> int {
     if (texture != nullptr) {
       auto shader = ::Graphics::DynamicRendering::GetShader();
       if (shader.get() == nullptr) {
-        shader = ::Graphics::Shader::DefaultShaderModule;
+        shader = ::Graphics::DefaultShaderModule;
       }
 
       auto texRef = Ref<::Graphics::Texture>(texture);

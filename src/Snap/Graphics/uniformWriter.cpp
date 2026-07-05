@@ -8,110 +8,96 @@
 #include <cstdint>
 #include <span>
 
-namespace Graphics::Shader {
-auto UniformWriter::Send(const Ref<ShaderModule> &shader,
-                         const ResourceKey &key, const Ref<Buffer> &buffer)
-    -> Error {
+namespace Graphics {
+auto UniformWriter::Send(const Ref<Shader> &shader, const ResourceKey &key,
+                         const Ref<Buffer> &buffer) -> Error {
   return shader->Send(key, buffer);
 }
 
-auto UniformWriter::Send(const Ref<ShaderModule> &shader,
-                         const ResourceKey &key,
+auto UniformWriter::Send(const Ref<Shader> &shader, const ResourceKey &key,
                          const Ref<Graphics::Texture> &texture) -> Error {
   return shader->Send(key, texture);
 }
 
-auto UniformWriter::Send(const Ref<ShaderModule> &shader,
-                         const ResourceKey &key,
+auto UniformWriter::Send(const Ref<Shader> &shader, const ResourceKey &key,
                          const std::span<const uint8_t> &data) -> Error {
   return shader->Send(key, data);
 }
 
-auto UniformWriter::Send(const Ref<ShaderModule> &shader,
-                         const ResourceKey &key, float value) -> Error {
+auto UniformWriter::Send(const Ref<Shader> &shader, const ResourceKey &key,
+                         float value) -> Error {
   return shader->Send(key, SpanGenericType<float>::GetSpan(value));
 }
 
-auto UniformWriter::Send(const Ref<ShaderModule> &shader,
-                         const ResourceKey &key, int value) -> Error {
+auto UniformWriter::Send(const Ref<Shader> &shader, const ResourceKey &key,
+                         int value) -> Error {
   return shader->Send(key, SpanGenericType<int>::GetSpan(value));
 }
 
-auto UniformWriter::Send(const Ref<ShaderModule> &shader,
-                         const ResourceKey &key, uint32_t value) -> Error {
+auto UniformWriter::Send(const Ref<Shader> &shader, const ResourceKey &key,
+                         uint32_t value) -> Error {
   return shader->Send(key, SpanGenericType<uint32_t>::GetSpan(value));
 }
 
-auto UniformWriter::Send(const Ref<ShaderModule> &shader,
-                         const ResourceKey &key, bool value) -> Error {
+auto UniformWriter::Send(const Ref<Shader> &shader, const ResourceKey &key,
+                         bool value) -> Error {
   return shader->Send(key, SpanGenericType<uint32_t>::GetSpan(
                                static_cast<const unsigned int>(value)));
 }
 
-auto UniformWriter::Send(const Ref<ShaderModule> &shader,
-                         const ResourceKey &key, const Math::Vec2 &value)
-    -> Error {
+auto UniformWriter::Send(const Ref<Shader> &shader, const ResourceKey &key,
+                         const Math::Vec2 &value) -> Error {
   return shader->Send(key, SpanGenericType<Math::Vec2>::GetSpan(value));
 }
 
-auto UniformWriter::Send(const Ref<ShaderModule> &shader,
-                         const ResourceKey &key, const Math::Vec3 &value)
-    -> Error {
+auto UniformWriter::Send(const Ref<Shader> &shader, const ResourceKey &key,
+                         const Math::Vec3 &value) -> Error {
   return shader->Send(key, SpanGenericType<Math::Vec3>::GetSpan(value));
 }
 
-auto UniformWriter::Send(const Ref<ShaderModule> &shader,
-                         const ResourceKey &key, const Math::Vec4 &value)
-    -> Error {
+auto UniformWriter::Send(const Ref<Shader> &shader, const ResourceKey &key,
+                         const Math::Vec4 &value) -> Error {
   return shader->Send(key, SpanGenericType<Math::Vec4>::GetSpan(value));
 }
 
-auto UniformWriter::Send(const Ref<ShaderModule> &shader,
-                         const ResourceKey &key, const Math::Uvec2 &value)
-    -> Error {
+auto UniformWriter::Send(const Ref<Shader> &shader, const ResourceKey &key,
+                         const Math::Uvec2 &value) -> Error {
   return shader->Send(key, SpanGenericType<Math::Uvec2>::GetSpan(value));
 }
 
-auto UniformWriter::Send(const Ref<ShaderModule> &shader,
-                         const ResourceKey &key, const Math::Uvec3 &value)
-    -> Error {
+auto UniformWriter::Send(const Ref<Shader> &shader, const ResourceKey &key,
+                         const Math::Uvec3 &value) -> Error {
   return shader->Send(key, SpanGenericType<Math::Uvec3>::GetSpan(value));
 }
 
-auto UniformWriter::Send(const Ref<ShaderModule> &shader,
-                         const ResourceKey &key, const Math::Uvec4 &value)
-    -> Error {
+auto UniformWriter::Send(const Ref<Shader> &shader, const ResourceKey &key,
+                         const Math::Uvec4 &value) -> Error {
   return shader->Send(key, SpanGenericType<Math::Uvec4>::GetSpan(value));
 }
 
-auto UniformWriter::Send(const Ref<ShaderModule> &shader,
-                         const ResourceKey &key, const Math::Ivec2 &value)
-    -> Error {
+auto UniformWriter::Send(const Ref<Shader> &shader, const ResourceKey &key,
+                         const Math::Ivec2 &value) -> Error {
   return shader->Send(key, SpanGenericType<Math::Ivec2>::GetSpan(value));
 }
 
-auto UniformWriter::Send(const Ref<ShaderModule> &shader,
-                         const ResourceKey &key, const Math::Ivec3 &value)
-    -> Error {
+auto UniformWriter::Send(const Ref<Shader> &shader, const ResourceKey &key,
+                         const Math::Ivec3 &value) -> Error {
   return shader->Send(key, SpanGenericType<Math::Ivec3>::GetSpan(value));
 }
 
-auto UniformWriter::Send(const Ref<ShaderModule> &shader,
-                         const ResourceKey &key, const Math::Ivec4 &value)
-    -> Error {
+auto UniformWriter::Send(const Ref<Shader> &shader, const ResourceKey &key,
+                         const Math::Ivec4 &value) -> Error {
   return shader->Send(key, SpanGenericType<Math::Ivec4>::GetSpan(value));
 }
 
-auto UniformWriter::Send(const Ref<ShaderModule> &shader,
-                         const ResourceKey &key, const Math::Matrix4x4 &value)
-    -> Error {
+auto UniformWriter::Send(const Ref<Shader> &shader, const ResourceKey &key,
+                         const Math::Matrix4x4 &value) -> Error {
   const auto &span = value.byteSpan();
   return shader->Send(key, span);
 };
 
-auto UniformWriter::Send(const Ref<ShaderModule> &shader,
-                         const ResourceKey &key, const Math::Matrix3x3 &value)
-    -> Error {
+auto UniformWriter::Send(const Ref<Shader> &shader, const ResourceKey &key,
+                         const Math::Matrix3x3 &value) -> Error {
   // Matrix4x3 since uniforms are std140 aligned
   thread_local std::array<float, 12> matrix3x3Data; // NOLINT
   thread_local std::span<uint8_t> matrix3x3Span(
@@ -129,4 +115,4 @@ auto UniformWriter::Send(const Ref<ShaderModule> &shader,
   return shader->Send(key,
                       matrix3x3Span); // NOLINT
 };
-} // namespace Graphics::Shader
+} // namespace Graphics

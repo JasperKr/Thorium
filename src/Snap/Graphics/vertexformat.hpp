@@ -32,6 +32,16 @@ struct VertexFormat {
     ConstructBindings();
   }
 
+  explicit VertexFormat(std::vector<VertexComponent> attributes,
+                        std::vector<uint32_t> divisors)
+      : Attributes(std::move(attributes)) {
+    ConstructBindings();
+
+    for (size_t i = 0; i < divisors.size(); ++i) {
+      SetDivisor(static_cast<uint32_t>(i), divisors[i]);
+    }
+  }
+
   VertexFormat() = default;
   VertexFormat(VertexFormat &&other) noexcept = default;
   auto operator=(VertexFormat &&other) noexcept -> VertexFormat & = default;
@@ -56,6 +66,16 @@ public:
     return nullptr;
   }
 
+  auto SetDivisor(uint32_t binding, uint32_t divisor) -> void {
+    for (auto &bindingDesc : Bindings) {
+      if (bindingDesc.binding == binding) {
+        bindingDesc.divisor = divisor;
+        return;
+      }
+    }
+    PrintError("Binding {} not found in vertex format.", binding);
+  }
+
   [[nodiscard]] auto GetVkAttributes()
       -> std::vector<VkVertexInputAttributeDescription> & {
     return VkAttributes;
@@ -73,7 +93,13 @@ public:
 
   [[nodiscard]] auto GetStride(uint32_t binding) const -> uint32_t {
     assert(binding < Bindings.size());
-    return Bindings[binding].stride;
+    for (const auto &bindingDesc : Bindings) {
+      if (bindingDesc.binding == binding) {
+        return bindingDesc.stride;
+      }
+    }
+    PrintError("Binding {} not found in vertex format.", binding);
+    return 0;
   }
 
   [[nodiscard]] auto ToString() const -> std::string {

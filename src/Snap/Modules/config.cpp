@@ -134,7 +134,7 @@ inline auto SetShaderIncludePaths(lua_State *state) -> int {
   for (int i = 1; i <= count; ++i) {
     lua_rawgeti(state, 1, i);
     const auto *str = luaL_checkstring(state, -1);
-    Graphics::Shader::ShaderSearchPaths.emplace_back(strdup(str));
+    Graphics::ShaderSearchPaths.emplace_back(strdup(str));
     lua_pop(state, 1);
   }
 

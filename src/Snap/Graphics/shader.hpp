@@ -25,7 +25,7 @@ namespace Graphics {
 struct StructuredBuffer;
 }
 
-namespace Graphics::Shader {
+namespace Graphics {
 
 struct ShaderExtern {
   std::string name;
@@ -34,13 +34,6 @@ struct ShaderExtern {
   auto operator==(const ShaderExtern &other) const -> bool {
     return name == other.name && value == other.value;
   }
-};
-
-struct ImageTransitionInfo {
-  Texture *texture{};
-  TextureUsage newUsage = TextureUsage::Unknown;
-  // Unused for: Attachments, TransferSrc, TransferDst
-  VkPipelineStageFlags2 newStage = VK_PIPELINE_STAGE_2_NONE;
 };
 
 static const Type LuaShaderType = Type("Shader");
@@ -88,12 +81,12 @@ struct BoundState {
 extern thread_local std::unordered_map<VkShaderModule, BoundState> BoundStates;
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
-struct ShaderModule : Object {
-  ShaderModule() = default;
-  ShaderModule(const ShaderModule &) = delete;
-  ShaderModule(ShaderModule &&) = delete;
-  auto operator=(const ShaderModule &) -> ShaderModule & = delete;
-  auto operator=(ShaderModule &&) -> ShaderModule & = delete;
+struct Shader : Object {
+  Shader() = default;
+  Shader(const Shader &) = delete;
+  Shader(Shader &&) = delete;
+  auto operator=(const Shader &) -> Shader & = delete;
+  auto operator=(Shader &&) -> Shader & = delete;
   std::string moduleName;
 
   VkShaderModule module{};
@@ -129,7 +122,7 @@ struct ShaderModule : Object {
   Math::Uvec3 threadgroupSize{1, 1, 1};
   uint32_t waveSize = 0;
 
-  ~ShaderModule() override {
+  ~Shader() override {
     auto *ctx = GetCurrentGraphicsContext();
 
     auto &state = GetState();
@@ -144,11 +137,10 @@ struct ShaderModule : Object {
         Graphics::SemaphoreManager::GetSemaphoreValue());
   }
 
-  static auto
-  Create(const GraphicsContext &context, const std::string &modulename,
-         const std::string &name,
-         const std::vector<slang::PreprocessorMacroDesc> *preprocessorMacros =
-             nullptr) -> Result<Ref<ShaderModule>>;
+  static auto Create(const GraphicsContext &context,
+                     const std::string &modulename, const std::string &name,
+                     const std::vector<slang::PreprocessorMacroDesc>
+                         *preprocessorMacros = nullptr) -> Result<Ref<Shader>>;
 
   auto Send(const ResourceKey &key, const std::span<const uint8_t> &data)
       -> Error;
@@ -176,7 +168,7 @@ struct ShaderModule : Object {
   auto GetThreadgroupSize() const -> Result<Math::Uvec3>;
   auto GetWaveSize() const -> uint32_t;
 
-  auto operator==(const ShaderModule &other) const -> bool {
+  auto operator==(const Shader &other) const -> bool {
     if (module != other.module) {
       return false;
     }
@@ -197,19 +189,18 @@ struct ShaderModule : Object {
   static auto GetType() -> Type const * { return &LuaShaderType; }
 
   [[nodiscard]] auto GetInstanceType() const -> Type const * override {
-    return ShaderModule::GetType();
+    return Shader::GetType();
   }
 };
 
-extern Ref<ShaderModule> DefaultShaderModule;       // NOLINT
+extern Ref<Shader> DefaultShaderModule;             // NOLINT
 extern std::vector<const char *> ShaderSearchPaths; // NOLINT
 
-auto SlangStageToString(SlangStage stage) -> std::string_view;
 auto SlangStageToVkStage(SlangStage stage) -> VkShaderStageFlagBits;
 
-auto LoadModule() -> Error;
-void UnloadModule(const GraphicsContext &context);
+auto LoadShaderModule() -> Error;
+void UnloadShaderModule(const GraphicsContext &context);
 
 auto AddGlobalShaderExtern(const ShaderExtern &externVar) -> void;
 
-} // namespace Graphics::Shader
+} // namespace Graphics

@@ -228,9 +228,9 @@ auto Renderer::InitializeModelTransformsBuffer(
   return {};
 }
 
-auto Renderer::BindLightBuffers(
-    const Graphics::GraphicsContext &context,
-    const Ref<Graphics::Shader::ShaderModule> &shader) const -> Error {
+auto Renderer::BindLightBuffers(const Graphics::GraphicsContext &context,
+                                const Ref<Graphics::Shader> &shader) const
+    -> Error {
   using Key = Graphics::ResourceKey;
 
   static auto key = Key{"PointLights"};
@@ -266,8 +266,7 @@ auto Renderer::BindLightBuffers(
   return {};
 }
 
-auto Renderer::GetShader(ShaderKey shaderKey)
-    -> Result<Ref<Graphics::Shader::ShaderModule>> {
+auto Renderer::GetShader(ShaderKey shaderKey) -> Result<Ref<Graphics::Shader>> {
   auto iterator = LoadedShaders.find(shaderKey);
   if (iterator != LoadedShaders.end()) {
     return iterator->second;
@@ -283,8 +282,8 @@ auto Renderer::GetShader(ShaderKey shaderKey)
 
   auto context = *Graphics::GetCurrentGraphicsContext();
 
-  auto moduleResult = Graphics::Shader::ShaderModule::Create(
-      context, configuration.path, configuration.name);
+  auto moduleResult =
+      Graphics::Shader::Create(context, configuration.path, configuration.name);
 
   if (Error::IsError(moduleResult)) {
     return moduleResult.error();

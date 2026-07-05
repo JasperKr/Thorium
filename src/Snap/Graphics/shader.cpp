@@ -35,7 +35,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace Graphics::Shader {
+namespace Graphics {
 
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
 thread_local std::unordered_map<VkShaderModule, BoundState> BoundStates;
@@ -92,17 +92,17 @@ static slang::TargetDesc SpvTargetDesc = {
     .compilerOptionEntryCount = static_cast<uint32_t>(CompilerOptions.size()),
 };
 
-Ref<ShaderModule> DefaultShaderModule = {}; // NOLINT
+Ref<Shader> DefaultShaderModule = {}; // NOLINT
 
-auto LoadModule() -> Error {
+auto LoadShaderModule() -> Error {
   auto result = slang::createGlobalSession(&GlobalSlangSession);
   if (Error::IsError(result)) {
     return Error::Create(result);
   }
   SpvTargetDesc.profile = GlobalSlangSession->findProfile("spirv_1_5");
 
-  auto shaderCreationResult = ShaderModule::Create(
-      *GetCurrentGraphicsContext(), "default2D", "Default shader");
+  auto shaderCreationResult = Shader::Create(*GetCurrentGraphicsContext(),
+                                             "default2D", "Default shader");
 
   if (Error::IsError(shaderCreationResult)) {
     return shaderCreationResult.error();
@@ -113,7 +113,7 @@ auto LoadModule() -> Error {
   return Error::Success();
 }
 
-void UnloadModule(const Graphics::GraphicsContext &context) {
+void UnloadShaderModule(const Graphics::GraphicsContext &context) {
   DefaultShaderModule.reset();
 
   if (GlobalSlangSession != nullptr) {
@@ -249,7 +249,7 @@ const std::vector<SlangStage> SlangStages = {
     SLANG_STAGE_CALLABLE,
 };
 
-auto SlangStageToString(SlangStage stage) -> std::string_view {
+inline auto SlangStageToString(SlangStage stage) -> std::string_view {
   switch (stage) {
   case SLANG_STAGE_VERTEX:
     return "vertex";
@@ -283,7 +283,7 @@ auto SlangStageToString(SlangStage stage) -> std::string_view {
 }
 
 static inline auto LoadSlang(const GraphicsContext &context,
-                             Ref<ShaderModule> &shader) -> Error {
+                             Ref<Shader> &shader) -> Error {
   slang::SessionDesc sessionDesc = {};
   sessionDesc.allowGLSLSyntax = false;
   sessionDesc.defaultMatrixLayoutMode =
@@ -514,12 +514,12 @@ static inline auto LoadSlang(const GraphicsContext &context,
   return Error::Success();
 }
 
-auto ShaderModule::Create(
+auto Shader::Create(
     const Graphics::GraphicsContext &context, const std::string &modulename,
     const std::string &name,
     const std::vector<slang::PreprocessorMacroDesc> *preprocessorMacros)
-    -> Result<Ref<ShaderModule>> {
-  Ref<ShaderModule> shader = Ref<ShaderModule>::Make();
+    -> Result<Ref<Shader>> {
+  Ref<Shader> shader = Ref<Shader>::Make();
   shader->name = name;
   shader->moduleName = modulename;
 
@@ -579,7 +579,7 @@ auto ShaderModule::Create(
   return shader;
 }
 
-inline auto ValidateBuffers(const ShaderModule *shader) -> Error {
+inline auto ValidateBuffers(const Shader *shader) -> Error {
   ZoneScoped;
   // Loop over shader->reflection.resources, and check if all buffers are
   // set up in shader->buffers,
@@ -617,7 +617,7 @@ void append(ResourceKey &dest, const ResourceKey &src) {
   dest.insert_after(iterator, src.begin(), src.end());
 }
 
-auto ShaderModule::GetUniform(const ResourceKey &key) const
+auto Shader::GetUniform(const ResourceKey &key) const
     -> const Reflect::ResourceInfo * {
   for (const auto &pushBuffer : pushBuffers) {
     const auto *info = pushBuffer.GetUniform(key.begin(), key.end());
@@ -648,8 +648,7 @@ auto ShaderModule::GetUniform(const ResourceKey &key) const
   return nullptr;
 }
 
-auto ShaderModule::GetUniform(const ResourceKey &key,
-                              uint64_t &arrayOffset) const
+auto Shader::GetUniform(const ResourceKey &key, uint64_t &arrayOffset) const
     -> const Reflect::ResourceInfo * {
   for (const auto &pushBuffer : pushBuffers) {
     const auto *info = pushBuffer.GetUniform(key.begin(), key.end());
@@ -678,9 +677,9 @@ auto ShaderModule::GetUniform(const ResourceKey &key,
   return nullptr;
 }
 
-auto ShaderModule::Send(const ResourceKey &key,
-                        const std::span<const uint8_t> &data) -> Error {
-  ZoneScopedN("ShaderModule::Send data span");
+auto Shader::Send(const ResourceKey &key, const std::span<const uint8_t> &data)
+    -> Error {
+  ZoneScopedN("Shader::Send data span");
 
   for (auto &pushBuffer : pushBuffers) {
     if (pushBuffer.ContainsUniform(key.begin(), key.end())) {
@@ -713,9 +712,8 @@ auto ShaderModule::Send(const ResourceKey &key,
   return Error::Success();
 }
 
-auto ShaderModule::Send(const ResourceKey &key, const Ref<Buffer> &buffer)
-    -> Error {
-  ZoneScopedN("ShaderModule::Send structured buffer");
+auto Shader::Send(const ResourceKey &key, const Ref<Buffer> &buffer) -> Error {
+  ZoneScopedN("Shader::Send structured buffer");
 
   if (!buffer.isValid()) {
     return Error::Create("Buffer is null.");
@@ -743,16 +741,15 @@ auto ShaderModule::Send(const ResourceKey &key, const Ref<Buffer> &buffer)
                         name);
 }
 
-auto ShaderModule::Send(const ResourceKey &key,
-                        const Ref<::Graphics::StructuredBuffer> &buffer)
-    -> Error {
-  ZoneScopedN("ShaderModule::Send structured buffer");
+auto Shader::Send(const ResourceKey &key,
+                  const Ref<::Graphics::StructuredBuffer> &buffer) -> Error {
+  ZoneScopedN("Shader::Send structured buffer");
   return Send(key, buffer->GetBuffer());
 }
 
-auto ShaderModule::Send(const ResourceKey &key,
-                        const Ref<Graphics::Texture> &texture) -> Error {
-  ZoneScopedN("ShaderModule::Send texture");
+auto Shader::Send(const ResourceKey &key, const Ref<Graphics::Texture> &texture)
+    -> Error {
+  ZoneScopedN("Shader::Send texture");
 
   [[unlikely]]
   if (!texture.isValid()) {
@@ -795,11 +792,11 @@ auto ShaderModule::Send(const ResourceKey &key,
                         keyname, name);
 }
 
-auto ShaderModule::hash() const -> size_t {
+auto Shader::hash() const -> size_t {
   return reinterpret_cast<size_t>(module); // NOLINT
 }
 
-auto ShaderModule::GetThreadgroupSize() const -> Result<Math::Uvec3> {
+auto Shader::GetThreadgroupSize() const -> Result<Math::Uvec3> {
   [[unlikely]]
   if (threadgroupSize.x == 0 || threadgroupSize.y == 0 ||
       threadgroupSize.z == 0) {
@@ -809,9 +806,9 @@ auto ShaderModule::GetThreadgroupSize() const -> Result<Math::Uvec3> {
   return threadgroupSize;
 }
 
-auto ShaderModule::GetWaveSize() const -> uint32_t { return waveSize; }
+auto Shader::GetWaveSize() const -> uint32_t { return waveSize; }
 
-auto ShaderModule::GetSlotDescription(uint32_t set, uint32_t binding) // NOLINT
+auto Shader::GetSlotDescription(uint32_t set, uint32_t binding) // NOLINT
     -> const Reflect::ResourceInfo * {
 
   auto key = Utils::SetBindingToSlot(set, binding);
@@ -824,7 +821,7 @@ auto ShaderModule::GetSlotDescription(uint32_t set, uint32_t binding) // NOLINT
   return &iter->second;
 }
 
-auto ShaderModule::GetSlotDescription(uint64_t slot)
+auto Shader::GetSlotDescription(uint64_t slot)
     -> const Reflect::ResourceInfo * {
 
   auto iter = reflection.slotToInfo.find(slot);
@@ -836,4 +833,4 @@ auto ShaderModule::GetSlotDescription(uint64_t slot)
   return &iter->second;
 }
 
-} // namespace Graphics::Shader
+} // namespace Graphics

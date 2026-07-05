@@ -19,7 +19,7 @@ using namespace ::Graphics::Reflect;
 auto wrap_NewShader(lua_State *state) -> int {
   auto *ctx = ::Graphics::GetCurrentGraphicsContext();
 
-  const auto *type = ::Graphics::Shader::ShaderModule::GetType();
+  const auto *type = ::Graphics::Shader::GetType();
   int args = lua_gettop(state);
 
   const char *name = luaL_checkstring(state, 1); // module name
@@ -36,8 +36,8 @@ auto wrap_NewShader(lua_State *state) -> int {
     }
   }
 
-  auto result = ::Graphics::Shader::ShaderModule::Create(
-      *ctx, std::string(name), shaderDebugName);
+  auto result =
+      ::Graphics::Shader::Create(*ctx, std::string(name), shaderDebugName);
 
   if (Error::IsError(result)) {
     return luaL_error(state, "%s", result.error().message.c_str());
@@ -50,8 +50,7 @@ auto wrap_NewShader(lua_State *state) -> int {
 
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 auto wrap_Send(lua_State *state) -> int {
-  auto *shader =
-      LuaWrap::ObjectFromLua<::Graphics::Shader::ShaderModule>(state, 1);
+  auto *shader = LuaWrap::ObjectFromLua<::Graphics::Shader>(state, 1);
   if (shader == nullptr) {
     lua_pushboolean(state, 0);
     return 1;
@@ -215,8 +214,7 @@ auto wrap_Send(lua_State *state) -> int {
 }
 
 auto wrap_HasUniform(lua_State *state) -> int {
-  auto *shader =
-      LuaWrap::ObjectFromLua<::Graphics::Shader::ShaderModule>(state, 1);
+  auto *shader = LuaWrap::ObjectFromLua<::Graphics::Shader>(state, 1);
 
   if (shader == nullptr) {
     lua_pushboolean(state, 0);
@@ -229,8 +227,7 @@ auto wrap_HasUniform(lua_State *state) -> int {
   return 1;
 }
 auto wrap_GetUniforms(lua_State *state) -> int {
-  auto *shader =
-      LuaWrap::ObjectFromLua<::Graphics::Shader::ShaderModule>(state, 1);
+  auto *shader = LuaWrap::ObjectFromLua<::Graphics::Shader>(state, 1);
   if (shader == nullptr) {
     lua_pushboolean(state, 0);
     return 1;
@@ -239,8 +236,7 @@ auto wrap_GetUniforms(lua_State *state) -> int {
   return 0;
 }
 auto wrap_GetThreadgroupSize(lua_State *state) -> int {
-  auto *shader =
-      LuaWrap::ObjectFromLua<::Graphics::Shader::ShaderModule>(state, 1);
+  auto *shader = LuaWrap::ObjectFromLua<::Graphics::Shader>(state, 1);
   if (shader == nullptr) {
     lua_pushboolean(state, 0);
     return 1;
@@ -261,8 +257,7 @@ auto wrap_GetThreadgroupSize(lua_State *state) -> int {
 }
 
 auto wrap_GetWaveSize(lua_State *state) -> int {
-  auto *shader =
-      LuaWrap::ObjectFromLua<::Graphics::Shader::ShaderModule>(state, 1);
+  auto *shader = LuaWrap::ObjectFromLua<::Graphics::Shader>(state, 1);
   if (shader == nullptr) {
     lua_pushboolean(state, 0);
     return 1;

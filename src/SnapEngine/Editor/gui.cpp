@@ -13,8 +13,8 @@
 namespace Gui {
 
 // NOLINTBEGIN
-Ref<Graphics::Shader::ShaderModule> ImGuiShaderRGBA8;
-Ref<Graphics::Shader::ShaderModule> ImGuiShaderA8;
+Ref<Graphics::Shader> ImGuiShaderRGBA8;
+Ref<Graphics::Shader> ImGuiShaderA8;
 std::vector<std::vector<unsigned char>> ImGuiFonts{};
 // NOLINTEND
 
@@ -108,14 +108,14 @@ auto LoadGUIState(lua_State *state) -> Result<GuiState> {
 
   auto ctx = *Graphics::GetCurrentGraphicsContext();
 
-  auto rgba8CreationResult = Graphics::Shader::ShaderModule::Create(
+  auto rgba8CreationResult = Graphics::Shader::Create(
       ctx, "Scripting/Graphics/Shaders/GUI/ImGuiRGBA8", "Imgui rgba8 shader");
   if (Error::IsError(rgba8CreationResult)) {
     return Error::Unexpected("Failed to create ImGui RGBA8 shader: " +
                              rgba8CreationResult.error().message);
   }
 
-  auto a8CreationResult = Graphics::Shader::ShaderModule::Create(
+  auto a8CreationResult = Graphics::Shader::Create(
       ctx, "Scripting/Graphics/Shaders/GUI/ImGuiA8", "Imgui a8 shader");
   if (Error::IsError(a8CreationResult)) {
     return Error::Unexpected("Failed to create ImGui A8 shader: " +

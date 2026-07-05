@@ -495,7 +495,7 @@ auto Draw(const GraphicsContext &context, Texture &texture,
   auto shader = DynamicRendering::GetShader();
 
   if (shader == nullptr) {
-    shader = Shader::DefaultShaderModule;
+    shader = DefaultShaderModule;
   }
 
   CHECK_ERR(shader->Send({"MainTexture"}, Ref<Texture>(&texture)));

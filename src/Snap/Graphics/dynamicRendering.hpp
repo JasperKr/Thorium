@@ -20,13 +20,7 @@
 
 #include <vulkan/vulkan_core.h>
 
-namespace Graphics {
-
-namespace Shader {
-struct ShaderModule;
-}
-
-namespace DynamicRendering {
+namespace Graphics::DynamicRendering {
 
 struct PipelineLayout {
   VkPipelineLayout layout;
@@ -333,7 +327,7 @@ struct State {
   std::array<VkColorBlendEquationEXT, MAX_COLOR_ATTACHMENTS>
       colorBlendEquations = {};
 
-  Ref<Shader::ShaderModule> shader;
+  Ref<Shader> shader;
 
   VkPrimitiveTopology primitiveTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 
@@ -535,7 +529,7 @@ auto SetPolygonMode(VkPolygonMode polygonMode) -> void;
 auto SetViewport(const VkViewport *viewport) -> void;
 auto SetScissor(const VkRect2D *scissor) -> void;
 auto ClipScissor(const VkRect2D &scissor) -> void;
-auto SetShader(const Ref<Shader::ShaderModule> &shader) -> void;
+auto SetShader(const Ref<Shader> &shader) -> void;
 auto SetRenderTargets(const GraphicsContext &context,
                       const std::vector<RenderTarget> &renderTargets) -> Error;
 auto SetWindingOrder(VkFrontFace frontFace) -> void;
@@ -548,7 +542,7 @@ auto GetViewport() -> VkViewport;
 auto GetClippedViewport() -> VkViewport;
 auto GetMaximumAllowedViewport() -> VkViewport;
 auto GetScissor() -> VkRect2D;
-auto GetShader() -> Ref<Shader::ShaderModule>;
+auto GetShader() -> Ref<Shader>;
 auto GetRenderTargets() -> std::vector<RenderTarget>;
 auto GetWindingOrder() -> VkFrontFace;
 auto GetTopology() -> VkPrimitiveTopology;
@@ -565,5 +559,4 @@ struct ClearInfo {
 
 auto Clear(const GraphicsContext &context, const ClearInfo &clearInfo) -> Error;
 
-} // namespace DynamicRendering
-} // namespace Graphics
+} // namespace Graphics::DynamicRendering

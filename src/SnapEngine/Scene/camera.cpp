@@ -181,20 +181,20 @@ auto Camera::ApplyPostProcessing(const Graphics::GraphicsContext &context)
   auto exposureKey = Graphics::ResourceKey{"Exposure"};
 
   auto postProcessingConfig = GetPostProcessingConfig();
-  CHECK_ERR(Graphics::Shader::UniformWriter::Send(
-      shader, temperatureKey, postProcessingConfig.Temperature));
-  CHECK_ERR(Graphics::Shader::UniformWriter::Send(shader, tintKey,
-                                                  postProcessingConfig.Tint));
-  CHECK_ERR(Graphics::Shader::UniformWriter::Send(
-      shader, applyAGXKey, postProcessingConfig.ApplyAGX));
-  CHECK_ERR(Graphics::Shader::UniformWriter::Send(
-      shader, contrastKey, postProcessingConfig.Contrast));
-  CHECK_ERR(Graphics::Shader::UniformWriter::Send(
-      shader, saturationKey, postProcessingConfig.Saturation));
-  CHECK_ERR(Graphics::Shader::UniformWriter::Send(
-      shader, vignetteKey, postProcessingConfig.Vignette));
-  CHECK_ERR(Graphics::Shader::UniformWriter::Send(
-      shader, exposureKey, postProcessingConfig.Exposure));
+  CHECK_ERR(Graphics::UniformWriter::Send(shader, temperatureKey,
+                                          postProcessingConfig.Temperature));
+  CHECK_ERR(Graphics::UniformWriter::Send(shader, tintKey,
+                                          postProcessingConfig.Tint));
+  CHECK_ERR(Graphics::UniformWriter::Send(shader, applyAGXKey,
+                                          postProcessingConfig.ApplyAGX));
+  CHECK_ERR(Graphics::UniformWriter::Send(shader, contrastKey,
+                                          postProcessingConfig.Contrast));
+  CHECK_ERR(Graphics::UniformWriter::Send(shader, saturationKey,
+                                          postProcessingConfig.Saturation));
+  CHECK_ERR(Graphics::UniformWriter::Send(shader, vignetteKey,
+                                          postProcessingConfig.Vignette));
+  CHECK_ERR(Graphics::UniformWriter::Send(shader, exposureKey,
+                                          postProcessingConfig.Exposure));
 
   CHECK_ERR(Renderer::DrawFullScreen(context));
   return {};
@@ -387,7 +387,7 @@ auto Camera::ApplyLightProbes(const Graphics::GraphicsContext &context,
       Renderer::RendererInstance.GetLightProbeBuffer()->GetBuffer()));
 
   static auto lightProbeCountKey = Graphics::ResourceKey{"LightProbeCount"};
-  CHECK_ERR(Graphics::Shader::UniformWriter::Send(
+  CHECK_ERR(Graphics::UniformWriter::Send(
       shader, lightProbeCountKey, static_cast<uint32_t>(VisibleProbeCount)));
 
   static auto albedoTextureKey = Graphics::ResourceKey{"AlbedoTexture"};
@@ -399,8 +399,7 @@ auto Camera::ApplyLightProbes(const Graphics::GraphicsContext &context,
   CHECK_ERR(shader->Send(normalTextureKey, textures.Normal));
   CHECK_ERR(shader->Send(materialTextureKey, textures.Material));
   CHECK_ERR(shader->Send(depthBufferKey, textures.Depth));
-  CHECK_ERR(
-      Graphics::Shader::UniformWriter::Send(shader, {"SpecularEnabled"}, 1));
+  CHECK_ERR(Graphics::UniformWriter::Send(shader, {"SpecularEnabled"}, 1));
 
   CHECK_ERR(Renderer::DrawFullScreen(context));
 

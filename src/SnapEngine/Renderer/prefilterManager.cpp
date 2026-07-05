@@ -108,24 +108,23 @@ auto LightprobePrefilterManager::Initialize( // NOLINT
 
   CHECK_ERR(CreateStorageTextures(context, EnvMapReallocationStep));
 
-  DownsampleShader = CHECK_RES(Graphics::Shader::ShaderModule::Create(
+  DownsampleShader = CHECK_RES(Graphics::Shader::Create(
       context, "Scripting/Graphics/Shaders/IBL/downsample.slang",
       "Environment map downsample"));
 
-  EnvironmentMapToOctahedralShader =
-      CHECK_RES(Graphics::Shader::ShaderModule::Create(
-          context, "Scripting/Graphics/Shaders/IBL/envToOct.slang",
-          "Store environment map"));
+  EnvironmentMapToOctahedralShader = CHECK_RES(Graphics::Shader::Create(
+      context, "Scripting/Graphics/Shaders/IBL/envToOct.slang",
+      "Store environment map"));
 
-  PrefilterRadianceShader = CHECK_RES(Graphics::Shader::ShaderModule::Create(
+  PrefilterRadianceShader = CHECK_RES(Graphics::Shader::Create(
       context, "Scripting/Graphics/Shaders/IBL/filterRadiance.slang",
       "Prefilter radiance"));
 
-  PrefilterIrradianceShader = CHECK_RES(Graphics::Shader::ShaderModule::Create(
+  PrefilterIrradianceShader = CHECK_RES(Graphics::Shader::Create(
       context, "Scripting/Graphics/Shaders/IBL/filterIrradiance.slang",
       "Prefilter irradiance"));
 
-  StoreEnvironmentMapShader = CHECK_RES(Graphics::Shader::ShaderModule::Create(
+  StoreEnvironmentMapShader = CHECK_RES(Graphics::Shader::Create(
       context, "Scripting/Graphics/Shaders/IBL/storeEnvMap.slang",
       "Store environment map"));
 
@@ -326,8 +325,8 @@ auto LightprobePrefilterManager::PrefilterRadianceMap(
     CHECK_ERR(StoreEnvironmentMapShader->Send({key.c_str()}, view));
   }
 
-  CHECK_ERR(Graphics::Shader::UniformWriter::Send(
-      StoreEnvironmentMapShader, {"Slice"}, lightProbe.EnvironmentMapIndex));
+  CHECK_ERR(Graphics::UniformWriter::Send(StoreEnvironmentMapShader, {"Slice"},
+                                          lightProbe.EnvironmentMapIndex));
 
   Graphics::DynamicRendering::SetShader(StoreEnvironmentMapShader);
 
@@ -349,8 +348,8 @@ auto LightprobePrefilterManager::PrefilterIrradianceMap(
     return Error::Create("Invalid environment map index");
   }
 
-  CHECK_ERR(Graphics::Shader::UniformWriter::Send(PrefilterIrradianceShader,
-                                                  {"Slice"}, slice));
+  CHECK_ERR(Graphics::UniformWriter::Send(PrefilterIrradianceShader, {"Slice"},
+                                          slice));
   CHECK_ERR(PrefilterIrradianceShader->Send({"RadianceInput"}, RadianceMaps));
   CHECK_ERR(
       PrefilterIrradianceShader->Send({"IrradianceOutput"}, IrradianceMaps));

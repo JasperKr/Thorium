@@ -141,8 +141,7 @@ auto GetDescriptorSetLayout(const DescriptorSetLayoutKey &layoutKey,
 }
 
 auto TryCreateShaderDescriptorBindingInfo(const GraphicsContext &context,
-                                          Shader::ShaderModule *shader)
-    -> Error {
+                                          Shader *shader) -> Error {
   ZoneScoped;
 
   // No need to fill if already done
@@ -256,8 +255,8 @@ inline auto DescriptorTypeToString(VkDescriptorType type) -> std::string_view {
   }
 }
 
-auto GetPipelineLayout(const GraphicsContext &context,
-                       Shader::ShaderModule *shader) -> Result<PipelineLayout> {
+auto GetPipelineLayout(const GraphicsContext &context, Shader *shader)
+    -> Result<PipelineLayout> {
   ZoneScoped;
   auto pushConstantRanges = std::vector<VkPushConstantRange>{};
 
@@ -339,8 +338,8 @@ auto GetPipelineLayout(const GraphicsContext &context,
   };
 }
 
-auto BindDefaultTextures(const GraphicsContext &context,
-                         Shader::ShaderModule *shader) -> Error {
+auto BindDefaultTextures(const GraphicsContext &context, Shader *shader)
+    -> Error {
   ZoneScoped;
   auto &state = shader->GetState();
 
@@ -376,7 +375,7 @@ inline auto GetShaderStages(const State &state)
     -> Result<std::vector<VkPipelineShaderStageCreateInfo>> {
   ZoneScoped;
 
-  thread_local std::unordered_map<Shader::ShaderModule *,
+  thread_local std::unordered_map<Shader *,
                                   std::vector<VkPipelineShaderStageCreateInfo>>
       shaderStageCache;
 
@@ -785,7 +784,7 @@ inline auto SetupDefaultState(const GraphicsContext &context) -> Result<State> {
   defaultState.viewport = {};
   defaultState.scissor = {};
 
-  defaultState.shader = Shader::DefaultShaderModule;
+  defaultState.shader = DefaultShaderModule;
 
   auto const &texture =
       context.swapchainInfo.textures[context.swapchainImageIndex];
@@ -950,8 +949,8 @@ auto FlushGraphics(const GraphicsContext &context) -> Result<bool> {
   static auto projectionMatrixKey = ResourceKey{"DefaultProjectionMatrix"};
 
   if (TopOfStack->shader->GetUniform(projectionMatrixKey) != nullptr) {
-    auto sendErr = Shader::UniformWriter::Send(
-        TopOfStack->shader, projectionMatrixKey, viewProjectionMatrix);
+    auto sendErr = UniformWriter::Send(TopOfStack->shader, projectionMatrixKey,
+                                       viewProjectionMatrix);
 
     if (Error::IsError(sendErr)) {
       PrintError("Failed to send projection matrix to shader: {}",
@@ -1254,7 +1253,7 @@ auto InsertResourceBarriers(const GraphicsContext &context) -> Error {
 }
 
 inline auto BindBufferDesciptors(DescriptorKey &key, auto &shader,
-                                 const Shader::BoundState &state, int setIndex)
+                                 const BoundState &state, int setIndex)
     -> Error {
   ZoneScoped;
 
@@ -1330,8 +1329,7 @@ inline auto BindBufferDesciptors(DescriptorKey &key, auto &shader,
 
 inline auto BindTextureDescriptors(const GraphicsContext &context,
                                    VkPipelineStageFlags2 stage,
-                                   DescriptorKey &key,
-                                   Ref<Shader::ShaderModule> &shader,
+                                   DescriptorKey &key, Ref<Shader> &shader,
                                    int setIndex) -> Error {
   ZoneScoped;
 
@@ -1970,10 +1968,10 @@ auto ClipScissor(const VkRect2D &scissor) -> void {
   }
 }
 
-auto SetShader(const Ref<Shader::ShaderModule> &shader) -> void {
+auto SetShader(const Ref<Shader> &shader) -> void {
   TopOfStack->dirty = true;
   if (shader.get() == nullptr) {
-    TopOfStack->shader = Shader::DefaultShaderModule;
+    TopOfStack->shader = DefaultShaderModule;
   } else {
     TopOfStack->shader = shader;
   }
@@ -2203,9 +2201,9 @@ auto GetScissor() -> VkRect2D {
   };
 }
 
-auto GetShader() -> Ref<Shader::ShaderModule> {
-  if (TopOfStack->shader.get() == Shader::DefaultShaderModule.get()) {
-    return Ref<Shader::ShaderModule>(nullptr);
+auto GetShader() -> Ref<Shader> {
+  if (TopOfStack->shader.get() == DefaultShaderModule.get()) {
+    return Ref<Shader>(nullptr);
   }
   return TopOfStack->shader;
 }

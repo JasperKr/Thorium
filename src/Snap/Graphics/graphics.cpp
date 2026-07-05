@@ -542,7 +542,7 @@ void Deinitialize(GraphicsContext &context) {
 
   Graphics::Barrier::ResetModule();
 
-  Graphics::Shader::UnloadModule(context);
+  Graphics::UnloadShaderModule(context);
 
   Graphics::DeinitializeRendering(context);
 

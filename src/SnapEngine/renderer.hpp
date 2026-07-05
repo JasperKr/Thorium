@@ -32,7 +32,7 @@ enum class ShaderKey : uint8_t {
 struct ShaderConfiguration {
   std::string path;
   std::string name;
-  std::vector<Graphics::Shader::ShaderExtern> Externs;
+  std::vector<Graphics::ShaderExtern> Externs;
 };
 
 const std::unordered_map<ShaderKey, ShaderConfiguration> ShaderConfigurations =
@@ -193,11 +193,9 @@ struct Renderer {
   auto GetNewMaterialIndex() -> Result<size_t>;
 
   auto BindLightBuffers(const Graphics::GraphicsContext &context,
-                        const Ref<Graphics::Shader::ShaderModule> &shader) const
-      -> Error;
+                        const Ref<Graphics::Shader> &shader) const -> Error;
 
-  auto GetShader(ShaderKey shaderKey)
-      -> Result<Ref<Graphics::Shader::ShaderModule>>;
+  auto GetShader(ShaderKey shaderKey) -> Result<Ref<Graphics::Shader>>;
 
   auto GetDefaultMaterial() const -> const Material & {
     return DefaultMaterial;
@@ -230,8 +228,7 @@ struct Renderer {
   }
 
 private:
-  std::unordered_map<ShaderKey, Ref<Graphics::Shader::ShaderModule>>
-      LoadedShaders;
+  std::unordered_map<ShaderKey, Ref<Graphics::Shader>> LoadedShaders;
   Material NoMaterial;
   Material DefaultMaterial;
 

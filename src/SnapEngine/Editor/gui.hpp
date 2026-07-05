@@ -53,8 +53,8 @@ const auto luaStateDefinition =
 namespace Gui {
 
 // NOLINTBEGIN
-extern Ref<Graphics::Shader::ShaderModule> ImGuiShaderRGBA8;
-extern Ref<Graphics::Shader::ShaderModule> ImGuiShaderA8;
+extern Ref<Graphics::Shader> ImGuiShaderRGBA8;
+extern Ref<Graphics::Shader> ImGuiShaderA8;
 extern std::vector<std::vector<unsigned char>> ImGuiFonts;
 // NOLINTEND
 

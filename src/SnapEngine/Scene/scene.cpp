@@ -311,7 +311,7 @@ inline auto CompareDrawItems(const DrawItem &first, const DrawItem &second)
   return first.tertiaryKey < second.tertiaryKey;
 }
 
-inline auto BindMaterial(const Ref<Graphics::Shader::ShaderModule> &shader,
+inline auto BindMaterial(const Ref<Graphics::Shader> &shader,
                          Graphics::GraphicsContext &ctx,
                          const Renderer::Material *material, uint8_t flags)
     -> Error {
@@ -400,7 +400,7 @@ struct DrawConfig {
 };
 
 inline auto RenderDrawItem(const DrawItem &item,
-                           const Ref<Graphics::Shader::ShaderModule> &shader,
+                           const Ref<Graphics::Shader> &shader,
                            Graphics::GraphicsContext &ctx,
                            const DrawConfig &config) -> Error {
   if (config.bindMaterialTextures != 0) {
@@ -411,14 +411,14 @@ inline auto RenderDrawItem(const DrawItem &item,
   if (config.bindMaterialBuffer) {
     static auto materialBufferIndexKey =
         Graphics::ResourceKey{"PushConstants", "MaterialBufferIndex"};
-    CHECK_ERR(Graphics::Shader::UniformWriter::Send(
-        shader, materialBufferIndexKey, item.material->materialSSBOIndex));
+    CHECK_ERR(Graphics::UniformWriter::Send(shader, materialBufferIndexKey,
+                                            item.material->materialSSBOIndex));
   }
 
   static auto modelTransformIndexKey =
       Graphics::ResourceKey{"PushConstants", "ModelTransformIndex"};
-  CHECK_ERR(Graphics::Shader::UniformWriter::Send(
-      shader, modelTransformIndexKey, item.transformIndex));
+  CHECK_ERR(Graphics::UniformWriter::Send(shader, modelTransformIndexKey,
+                                          item.transformIndex));
 
   if (item.geometry.mesh.get() == nullptr) {
     return Error::Create("Invalid geometry mesh");
@@ -499,28 +499,28 @@ auto Scene::DrawModels(Camera &camera, Frustum &frustum,
   static auto cameraBufferKey = Graphics::ResourceKey{"CameraData"};
   auto cameraBuffer = camera.GetBuffer()->GetBuffer();
 
-  CHECK_ERR(Graphics::Shader::UniformWriter::Send(depthOpaque, cameraBufferKey,
-                                                  cameraBuffer));
-  CHECK_ERR(Graphics::Shader::UniformWriter::Send(depthMasked, cameraBufferKey,
-                                                  cameraBuffer));
-  CHECK_ERR(Graphics::Shader::UniformWriter::Send(deferred, cameraBufferKey,
-                                                  cameraBuffer));
-  CHECK_ERR(Graphics::Shader::UniformWriter::Send(forward, cameraBufferKey,
-                                                  cameraBuffer));
+  CHECK_ERR(Graphics::UniformWriter::Send(depthOpaque, cameraBufferKey,
+                                          cameraBuffer));
+  CHECK_ERR(Graphics::UniformWriter::Send(depthMasked, cameraBufferKey,
+                                          cameraBuffer));
+  CHECK_ERR(
+      Graphics::UniformWriter::Send(deferred, cameraBufferKey, cameraBuffer));
+  CHECK_ERR(
+      Graphics::UniformWriter::Send(forward, cameraBufferKey, cameraBuffer));
 
   static auto modelTransformsBufferKey =
       Graphics::ResourceKey{"ModelTransforms"};
 
   auto modelTransformsBuffer =
       Renderer::RendererInstance.GetModelTransformsBuffer()->GetBuffer();
-  CHECK_ERR(Graphics::Shader::UniformWriter::Send(
-      depthOpaque, modelTransformsBufferKey, modelTransformsBuffer));
-  CHECK_ERR(Graphics::Shader::UniformWriter::Send(
-      depthMasked, modelTransformsBufferKey, modelTransformsBuffer));
-  CHECK_ERR(Graphics::Shader::UniformWriter::Send(
-      deferred, modelTransformsBufferKey, modelTransformsBuffer));
-  CHECK_ERR(Graphics::Shader::UniformWriter::Send(
-      forward, modelTransformsBufferKey, modelTransformsBuffer));
+  CHECK_ERR(Graphics::UniformWriter::Send(depthOpaque, modelTransformsBufferKey,
+                                          modelTransformsBuffer));
+  CHECK_ERR(Graphics::UniformWriter::Send(depthMasked, modelTransformsBufferKey,
+                                          modelTransformsBuffer));
+  CHECK_ERR(Graphics::UniformWriter::Send(deferred, modelTransformsBufferKey,
+                                          modelTransformsBuffer));
+  CHECK_ERR(Graphics::UniformWriter::Send(forward, modelTransformsBufferKey,
+                                          modelTransformsBuffer));
 
   static auto materialBufferKey = Graphics::ResourceKey{"MaterialBuffer"};
   auto materialBuffer =
@@ -737,10 +737,10 @@ auto Scene::DrawModels(Camera &camera, Frustum &frustum,
   CHECK_ERR(shader->Send(depthBufferKey, textures.Depth));
 
   auto countKey = Graphics::ResourceKey{"DirectionalLightCount"};
-  CHECK_ERR(Graphics::Shader::UniformWriter::Send(
+  CHECK_ERR(Graphics::UniformWriter::Send(
       shader, countKey,
       Renderer::RendererInstance.GetSceneLightBuffers().DirectionalLightCount));
-  CHECK_ERR(Graphics::Shader::UniformWriter::Send(
+  CHECK_ERR(Graphics::UniformWriter::Send(
       forward, countKey,
       Renderer::RendererInstance.GetSceneLightBuffers().DirectionalLightCount));
 
