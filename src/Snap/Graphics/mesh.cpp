@@ -83,10 +83,7 @@ auto Mesh::Create(const GraphicsContext &context,
   mesh->IndexCount = 0;
   mesh->Format = std::make_unique<VertexFormat>(vertexFormat.Copy());
 
-  VkMemoryPropertyFlags properties =
-      static_cast<uint32_t>(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) |
-      static_cast<uint32_t>(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) |
-      static_cast<uint32_t>(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+  auto properties = static_cast<uint32_t>(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
   Graphics::BufferCreationInfo vboCreationInfo = {};
   vboCreationInfo.usage =
@@ -128,10 +125,7 @@ auto Mesh::Create(const GraphicsContext &context,
   mesh->VertexCount = vertexCount;
   mesh->Format = std::make_unique<VertexFormat>(vertexFormat.Copy());
 
-  VkMemoryPropertyFlags properties =
-      static_cast<uint32_t>(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) |
-      static_cast<uint32_t>(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) |
-      static_cast<uint32_t>(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+  auto properties = static_cast<uint32_t>(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
   uint32_t bindingCount = vertexFormat.GetBindingCount();
 
@@ -206,10 +200,8 @@ auto Mesh::SetIndices(const GraphicsContext &context,
         static_cast<uint32_t>(VK_BUFFER_USAGE_INDEX_BUFFER_BIT) |
         static_cast<uint32_t>(VK_BUFFER_USAGE_TRANSFER_DST_BIT);
 
-    VkMemoryPropertyFlags properties =
-        static_cast<uint32_t>(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) |
-        static_cast<uint32_t>(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) |
-        static_cast<uint32_t>(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    auto properties =
+        static_cast<uint32_t>(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
     iboCreationInfo.properties = properties;
     iboCreationInfo.size = indexData.size();
