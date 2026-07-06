@@ -1,5 +1,3 @@
-module Forward;
-
 import camera;
 import material;
 import utils;

@@ -67,6 +67,20 @@ constexpr VkPipelineColorBlendAttachmentState BlendmodeAdditive = {
                       static_cast<uint32_t>(VK_COLOR_COMPONENT_A_BIT),
 };
 
+constexpr VkPipelineColorBlendAttachmentState BlendmodeMultiply = {
+    .blendEnable = VK_TRUE,
+    .srcColorBlendFactor = VK_BLEND_FACTOR_DST_COLOR,
+    .dstColorBlendFactor = VK_BLEND_FACTOR_ZERO,
+    .colorBlendOp = VK_BLEND_OP_ADD,
+    .srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
+    .dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
+    .alphaBlendOp = VK_BLEND_OP_ADD,
+    .colorWriteMask = static_cast<uint32_t>(VK_COLOR_COMPONENT_R_BIT) |
+                      static_cast<uint32_t>(VK_COLOR_COMPONENT_G_BIT) |
+                      static_cast<uint32_t>(VK_COLOR_COMPONENT_B_BIT) |
+                      static_cast<uint32_t>(VK_COLOR_COMPONENT_A_BIT),
+};
+
 constexpr uint32_t FRAMES_IN_FLIGHT = 3;
 constexpr uint32_t MAX_SWAPCHAIN_IMAGES = 8;
 

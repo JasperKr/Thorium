@@ -577,8 +577,10 @@ auto SetupFromType(slang::VariableLayoutReflection *variableLayout,
     resourceInfo.stages = SlangStageToVkStage(variableLayout->getStage());
     resourceInfo.info = bufferInfo;
 
-    reflection.slotToInfo[Utils::SetBindingToSlot(
-        bufferInfo.set, bufferInfo.binding)] = resourceInfo;
+    if (!isPushConstant) {
+      reflection.slotToInfo[Utils::SetBindingToSlot(
+          bufferInfo.set, bufferInfo.binding)] = resourceInfo;
+    }
     break;
   }
   case slang::TypeReflection::Kind::Resource: {

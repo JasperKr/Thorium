@@ -252,6 +252,12 @@ inline auto InsertTextureBarriers(const GraphicsContext &context) -> Error {
           "Failed to get slot description for bound texture slot.");
     }
 
+    if (!infoResult->Is<Reflect::SamplerInfo>()) {
+      return Error::Createf(
+          "Expected sampler info for bound texture slot. Got: {}",
+          infoResult->ToString());
+    }
+
     const auto &info = infoResult->GetInfo<Reflect::SamplerInfo>();
 
     VkAccessFlags2 access = 0;

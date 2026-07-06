@@ -1,5 +1,3 @@
-module deferred;
-
 import camera;
 import material;
 import utils;

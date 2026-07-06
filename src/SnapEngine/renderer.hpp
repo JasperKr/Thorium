@@ -7,6 +7,7 @@
 #include "Graphics/shader.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
+#include "Renderer/bloomManager.hpp"
 #include "Renderer/prefilterManager.hpp"
 #include "material.hpp"
 #include <cstddef>
@@ -186,6 +187,7 @@ struct Renderer {
         }));
 
     CHECK_ERR(LineDrawer.Initialize(context));
+    CHECK_ERR(BloomManager.Initialize(context));
 
     initialized = true;
     return {};
@@ -231,6 +233,7 @@ struct Renderer {
   }
 
   auto GetLineDrawer() -> LineDrawer & { return LineDrawer; }
+  auto GetBloomManager() -> BloomManager & { return BloomManager; }
 
 private:
   std::unordered_map<ShaderKey, Ref<Graphics::Shader>> LoadedShaders;
@@ -249,6 +252,7 @@ private:
   LightprobePrefilterManager PrefilterManager;
 
   LineDrawer LineDrawer;
+  BloomManager BloomManager;
 
   bool initialized = false;
 

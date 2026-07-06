@@ -1,5 +1,3 @@
-module depthMaskPrepass;
-
 import camera;
 import material;
 

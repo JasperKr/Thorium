@@ -177,10 +177,6 @@ auto DrawEntityHierarchy(const flecs::entity &entity, std::string_view filter)
 
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 auto Scene::DrawUiElement() const -> Error {
-  // Draw an imgui hierarchy of the scene's entities and components
-  // This is just a placeholder for now
-
-  // Debug draw 3 Lines X+ red, Y+ green, Z+ blue with a thinkness of 3
   constexpr float axisLength = 1.0F;
   constexpr float axisThickness = 4.0F;
 
@@ -247,12 +243,6 @@ auto Scene::DrawUiElement() const -> Error {
         auto lod = SelectedEntity.get_ref<LevelOfDetail>();
         lod->DrawGUI();
       }
-
-      // if (SelectedEntity.has<Model>() &&
-      //     SelectedEntity.get_ref<Model>().get() != nullptr) {
-      //   auto model = SelectedEntity.get_ref<Model>();
-      //   model->DrawGUI();
-      // }
 
       if (SelectedEntity.has<Userdata>() &&
           SelectedEntity.get_ref<Userdata>().get() != nullptr) {
@@ -831,8 +821,8 @@ Scene::Scene(std::string name) : name(std::move(name)) {
   auto transformSystem =
       world.system<Engine::Transform, Engine::Transform *>()
           .term_at(1)
-          .up()
-          .cascade()
+          .up()      // Start at parents
+          .cascade() // Breadth-first
           .each([](Transform &transform, Transform *parentTransform) -> auto {
             transform.UpdateLocalMatrix();
             transform.UpdateWorldMatrix(parentTransform);

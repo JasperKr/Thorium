@@ -1,5 +1,3 @@
-module simple;
-
 // Simple deferred lighting shader that just for-loops over all lights and accumulates their contribution.
 
 import camera;

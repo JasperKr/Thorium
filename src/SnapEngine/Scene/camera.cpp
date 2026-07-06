@@ -463,6 +463,9 @@ auto Camera::Render(const Graphics::GraphicsContext &context,
 
   CHECK_ERR(Renderer::RendererInstance.GetLineDrawer().Render(context, *this));
 
+  CHECK_ERR(
+      Renderer::RendererInstance.GetBloomManager().ApplyBloom(context, *this));
+
   if (settings.DoPostProcessing) {
     CHECK_ERR(ApplyPostProcessing(context));
   }
@@ -575,6 +578,16 @@ auto Camera::ConfigureRendertargets() -> void {
   Rendertargets.PostProcessed = Renderer::RendertargetDescriptor{
       .size = Dimensions,
       .format = VK_FORMAT_A2R10G10B10_UNORM_PACK32,
+      .minFilter = VK_FILTER_LINEAR,
+      .magFilter = VK_FILTER_LINEAR,
+      .mipFilter = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+      .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+  };
+
+  Rendertargets.BloomDownsampleChain = Renderer::RendertargetDescriptor{
+      .size = Dimensions,
+      .requiresMipmaps = true,
+      .format = VK_FORMAT_B10G11R11_UFLOAT_PACK32,
       .minFilter = VK_FILTER_LINEAR,
       .magFilter = VK_FILTER_LINEAR,
       .mipFilter = VK_SAMPLER_MIPMAP_MODE_LINEAR,

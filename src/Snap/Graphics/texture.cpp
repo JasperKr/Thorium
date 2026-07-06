@@ -11,6 +11,7 @@
 #include "Modules/Helpers/utils.hpp"
 #include "Modules/Math/vector.hpp"
 #include "Modules/color.hpp"
+#include "Modules/compressedImageData.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/filesystem.hpp"
@@ -376,13 +377,19 @@ auto Texture::FromSwapchain(const GraphicsContext &context,
   return texture;
 }
 
-auto Texture::FromFile(GraphicsContext &context, const char *path,
+auto Texture::FromFile(const GraphicsContext &context, const char *path,
                        VkImageUsageFlags usage, TextureMipmapOption mipmaps)
     -> Result<Ref<Texture>> {
   auto filedata = CHECK_RES(Filesystem::ReadFile(path));
 
   auto dataSpan =
       std::span<uint8_t>(filedata.data(), static_cast<size_t>(filedata.size()));
+
+  if (Image::IsDDS(dataSpan)) {
+    auto imageData = CHECK_RES(Image::CompressedImageData::Create(dataSpan));
+
+    return FromMemory(context, *imageData, usage, mipmaps);
+  }
 
   auto imageData = CHECK_RES(Image::ImageData::Create(dataSpan));
 
@@ -415,9 +422,9 @@ auto Texture::FromFile(GraphicsContext &context, const char *path,
 }
 
 // texture 2D From ImageData
-auto Texture::FromMemory(GraphicsContext &context, Image::ImageData &imageData,
-                         VkImageUsageFlags usage, TextureMipmapOption mipmaps)
-    -> Result<Ref<Texture>> {
+auto Texture::FromMemory(const GraphicsContext &context,
+                         Image::ImageData &imageData, VkImageUsageFlags usage,
+                         TextureMipmapOption mipmaps) -> Result<Ref<Texture>> {
 
   if (Image::IsCompressedTexture(imageData.GetFormat()) &&
       mipmaps != TextureMipmapOption::None) {
@@ -451,7 +458,7 @@ auto Texture::FromMemory(GraphicsContext &context, Image::ImageData &imageData,
   return texture;
 }
 
-auto Texture::FromMemory(GraphicsContext &context,
+auto Texture::FromMemory(const GraphicsContext &context,
                          const Image::CompressedImageData &compressedData,
                          VkImageUsageFlags usage, TextureMipmapOption mipmaps)
     -> Result<Ref<Texture>> {
@@ -590,7 +597,7 @@ auto Texture::FromMemory(GraphicsContext &context,
 }
 
 // texture 3D/Array/Cubemap From array of ImageData slices
-auto Texture::FromMemory(GraphicsContext &context,
+auto Texture::FromMemory(const GraphicsContext &context,
                          const std::vector<Image::ImageData *> &slices,
                          TextureType type, VkImageUsageFlags usage,
                          TextureMipmapOption mipmaps) -> Result<Ref<Texture>> {
@@ -1441,7 +1448,7 @@ Texture::~Texture() {
 
 std::atomic<VkDeviceSize> Texture::TotalAllocatedMemory{};
 
-auto Texture::GenerateMipmaps(GraphicsContext &context) const -> Error {
+auto Texture::GenerateMipmaps(const GraphicsContext &context) const -> Error {
   if (levelCount <= 1) {
     return Error::Create("Texture does not have multiple mip levels for "
                          "mipmap generation.");

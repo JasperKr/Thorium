@@ -1,5 +1,3 @@
-module ImGuiRGBA8;
-
 struct VertexStageOutput {
   float4 sv_position : SV_Position;
   float2 tex_coord : TEXCOORD0;

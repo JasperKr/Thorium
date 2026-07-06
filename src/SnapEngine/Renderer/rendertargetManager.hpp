@@ -15,7 +15,10 @@ static constexpr size_t RendertargetLifetime = 32; // 32 frames.
 
 struct RendertargetDescriptor {
   Math::Uvec2 size{};
-  uint32_t mipmapCount = 1;
+  bool requiresMipmaps = false;
+
+  // -1 means auto-calculate based on size and requiresMipmaps
+  int32_t mipmapCount = -1;
   VkFormat format = VK_FORMAT_UNDEFINED;
   VkFilter minFilter = VK_FILTER_NEAREST;
   VkFilter magFilter = VK_FILTER_NEAREST;
@@ -28,6 +31,7 @@ struct RendertargetDescriptor {
 
   // Score using the rendertarget of this descriptor as a candidate for the other descriptor's requirements.
   [[nodiscard]] auto Score(const RendertargetDescriptor &other) const -> int;
+  [[nodiscard]] auto GetMipmapCount() const -> uint32_t;
 
   auto operator==(const RendertargetDescriptor &other) const -> bool;
   auto operator!=(const RendertargetDescriptor &other) const -> bool;

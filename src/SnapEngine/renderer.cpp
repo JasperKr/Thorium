@@ -305,6 +305,7 @@ void Renderer::Deinitialize() {
   GlobalRenderTargetManager.Deinitialize();
   PrefilterManager.Deinitialize();
   LineDrawer.Deinitialize();
+  BloomManager.Deinitialize();
 
   if (!initialized) {
     return;

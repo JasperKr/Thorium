@@ -1,5 +1,3 @@
-module lineDrawer;
-
 struct VertexInput {
   float3 start : POSITION;
   float3 end : END_POSITION;

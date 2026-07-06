@@ -6,6 +6,7 @@
 #include "Modules/Helpers/hasher.hpp"
 #include "Modules/Helpers/utils.hpp"
 #include "Modules/error.hpp"
+#include "Modules/image.hpp"
 #include "Modules/object.hpp"
 #include <algorithm>
 #include <cassert>
@@ -52,12 +53,12 @@ auto RendertargetDescriptor::Score(const RendertargetDescriptor &other) const
     return -1;
   }
 
-  if (mipmapCount < other.mipmapCount) {
+  if (GetMipmapCount() < other.GetMipmapCount()) {
     // This rendertarget doesn't have enough mip levels for the requirements.
     return -1;
   }
-  if (mipmapCount >= other.mipmapCount) {
-    auto distance = static_cast<int>(mipmapCount - other.mipmapCount);
+  if (GetMipmapCount() >= other.GetMipmapCount()) {
+    auto distance = static_cast<int>(GetMipmapCount() - other.GetMipmapCount());
     score += std::max(1, MipmapMatchScore - distance);
   }
 
@@ -70,7 +71,7 @@ auto RendertargetDescriptor::Score(const RendertargetDescriptor &other) const
 
 auto RendertargetDescriptor::operator==(
     const RendertargetDescriptor &other) const -> bool {
-  return size == other.size && mipmapCount == other.mipmapCount &&
+  return size == other.size && GetMipmapCount() == other.GetMipmapCount() &&
          format == other.format && minFilter == other.minFilter &&
          magFilter == other.magFilter && mipFilter == other.mipFilter &&
          addressModeU == other.addressModeU &&
@@ -84,12 +85,24 @@ auto RendertargetDescriptor::operator!=(
   return !(*this == other);
 }
 
+auto RendertargetDescriptor::GetMipmapCount() const -> uint32_t {
+  if (mipmapCount > 0) {
+    return mipmapCount;
+  }
+
+  if (!requiresMipmaps) {
+    return 1;
+  }
+
+  return Image::GetMipmapCount(size.x, size.y);
+}
+
 auto RendertargetDescriptorHash::operator()(
     const RendertargetDescriptor &desc) const -> size_t {
   Hash::Hasher hasher;
   hasher.Add(desc.size.x);
   hasher.Add(desc.size.y);
-  hasher.Add(desc.mipmapCount);
+  hasher.Add(desc.GetMipmapCount());
   hasher.Add(desc.format);
   hasher.Add(desc.minFilter);
   hasher.Add(desc.magFilter);
@@ -161,7 +174,7 @@ auto RenderTargetManager::GetRendertarget(
           "- {}x{}, format: {}, usage: {}, mip levels: {}, filters: {} / {}\n",
           entry.descriptor.size.x, entry.descriptor.size.y,
           Graphics::Format::ImageFormatToString(entry.descriptor.format),
-          (int)entry.descriptor.usage, entry.descriptor.mipmapCount,
+          (int)entry.descriptor.usage, entry.descriptor.GetMipmapCount(),
           (int)entry.descriptor.minFilter, (int)entry.descriptor.magFilter);
     }
 
@@ -175,7 +188,7 @@ auto RenderTargetManager::GetRendertarget(
       .size = {descriptor.size.x, descriptor.size.y, 1},
       .format = descriptor.format,
       .usage = descriptor.usage,
-      .mipmapCount = static_cast<int>(descriptor.mipmapCount),
+      .mipmapCount = static_cast<int>(descriptor.GetMipmapCount()),
       .debugName =
           std::format("Rendertarget / {} / {}x{} #{}",
                       Graphics::Format::ImageFormatToString(descriptor.format),

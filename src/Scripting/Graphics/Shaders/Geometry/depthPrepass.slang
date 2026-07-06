@@ -1,5 +1,3 @@
-module depthPrepass;
-
 import camera;
 
 import transform;

@@ -159,24 +159,24 @@ struct Texture : Object {
 
   auto CopyTo(GraphicsContext &context, Texture *texture, VkBuffer buffer)
       -> Error;
-  auto GenerateMipmaps(GraphicsContext &context) const -> Error;
-  static auto FromFile(GraphicsContext &context, const char *path,
+  auto GenerateMipmaps(const GraphicsContext &context) const -> Error;
+  static auto FromFile(const GraphicsContext &context, const char *path,
                        VkImageUsageFlags usage = 0,
                        TextureMipmapOption mipmaps = {})
       -> Result<Ref<Texture>>;
 
-  static auto FromMemory(GraphicsContext &context, Image::ImageData &imageData,
-                         VkImageUsageFlags usage = 0,
-                         TextureMipmapOption mipmaps = {})
+  static auto
+  FromMemory(const GraphicsContext &context, Image::ImageData &imageData,
+             VkImageUsageFlags usage = 0, TextureMipmapOption mipmaps = {})
       -> Result<Ref<Texture>>;
 
-  static auto FromMemory(GraphicsContext &context,
+  static auto FromMemory(const GraphicsContext &context,
                          const std::vector<Image::ImageData *> &slices,
                          TextureType type, VkImageUsageFlags usage = 0,
                          TextureMipmapOption mipmaps = {})
       -> Result<Ref<Texture>>;
 
-  static auto FromMemory(GraphicsContext &context,
+  static auto FromMemory(const GraphicsContext &context,
                          const Image::CompressedImageData &compressedData,
                          VkImageUsageFlags usage = 0,
                          TextureMipmapOption mipmaps = {})
@@ -274,19 +274,22 @@ struct Texture : Object {
   auto SetDepthCompare(bool enable, VkCompareOp compareOp) -> void;
   [[nodiscard]] auto GetDepthCompare() const -> std::tuple<bool, VkCompareOp>;
   [[nodiscard]] auto GetWidth() const -> uint32_t {
-    return imageMemory->size.width;
+    auto baseWidth = imageMemory->size.width;
+    return baseWidth >> baseMipLevel;
   };
   [[nodiscard]] auto GetHeight() const -> uint32_t {
-    return imageMemory->size.height;
+    auto baseHeight = imageMemory->size.height;
+    return baseHeight >> baseMipLevel;
   };
   [[nodiscard]] auto GetDepth() const -> uint32_t {
-    return imageMemory->size.depth;
+    auto baseDepth = imageMemory->size.depth;
+    return baseDepth >> baseMipLevel;
   };
   [[nodiscard]] auto GetDimensions() const -> VkExtent2D {
-    return {imageMemory->size.width, imageMemory->size.height};
+    return {GetWidth(), GetHeight()};
   };
   [[nodiscard]] auto GetDimensions3D() const -> VkExtent3D {
-    return imageMemory->size;
+    return {GetWidth(), GetHeight(), GetDepth()};
   };
 
   auto GetSampler(const GraphicsContext &context) -> VkSampler;

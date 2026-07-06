@@ -134,6 +134,9 @@ struct Camera {
 
     // Post-processed output, encoded as a2r10g10b10_unorm
     Renderer::RendertargetDescriptor PostProcessed;
+
+    // Bloom-Downsample Chain, encoded as b10g11r11_ufloat
+    Renderer::RendertargetDescriptor BloomDownsampleChain;
   };
 
   // References to the textures we currently own. Dynamic
@@ -148,6 +151,7 @@ struct Camera {
     Ref<Graphics::Texture> DirectLighting;
     Ref<Graphics::Texture> Irradiance;
     Ref<Graphics::Texture> PostProcessed;
+    Ref<Graphics::Texture> BloomDownsampleChain;
 
     void Reset() {
       Depth = nullptr;
@@ -160,6 +164,7 @@ struct Camera {
       DirectLighting = nullptr;
       Irradiance = nullptr;
       PostProcessed = nullptr;
+      BloomDownsampleChain = nullptr;
     }
   };
 
@@ -174,6 +179,7 @@ struct Camera {
     bool DirectLighting = false;
     bool Irradiance = false;
     bool PostProcessed = false;
+    bool BloomDownsampleChain = false;
   };
 
   struct PostProcessingConfig {

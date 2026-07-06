@@ -52,6 +52,8 @@ auto UniformWriter::Send(const Ref<Shader> &shader, const ResourceKey &key,
                                static_cast<const unsigned int>(value)));
 }
 
+// TODO: This completely breaks if we set the engine to double precision
+
 auto UniformWriter::Send(const Ref<Shader> &shader, const ResourceKey &key,
                          const Math::Vec2 &value) -> Error {
   return shader->Send(key, SpanGenericType<Math::Vec2>::GetSpan(value));
