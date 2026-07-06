@@ -632,9 +632,15 @@ auto Scene::DrawModels(Camera &camera, Frustum &frustum,
       .bindMaterialTextures = 0,
       .bindMaterialBuffer = false,
   };
+
+  Graphics::PushDebugMarker("Depth Opaque Prepass");
+
   for (const auto &item : OpaqueDrawItems) {
     CHECK_ERR(RenderDrawItem(item, depthOpaque, ctx, opaqueConfig));
   }
+
+  Graphics::PopDebugMarker();
+  Graphics::PushDebugMarker("Depth Masked Prepass");
 
   static auto maskedConfig = DrawConfig{
       .bindMaterialTextures = 1,
@@ -644,6 +650,8 @@ auto Scene::DrawModels(Camera &camera, Frustum &frustum,
   for (const auto &item : MaskedDrawItems) {
     CHECK_ERR(RenderDrawItem(item, depthMasked, ctx, maskedConfig));
   }
+
+  Graphics::PopDebugMarker();
 
   textures.Albedo =
       CHECK_RES(Renderer::GlobalRenderTargetManager.GetRendertarget(
@@ -700,13 +708,20 @@ auto Scene::DrawModels(Camera &camera, Frustum &frustum,
       .bindMaterialBuffer = true,
   };
 
+  Graphics::PushDebugMarker("Opaque Materials");
+
   for (const auto &item : OpaqueDrawItems) {
     CHECK_ERR(RenderDrawItem(item, deferred, ctx, deferredConfig));
   }
 
+  Graphics::PopDebugMarker();
+  Graphics::PushDebugMarker("Masked Materials");
+
   for (const auto &item : MaskedDrawItems) {
     CHECK_ERR(RenderDrawItem(item, deferred, ctx, deferredConfig));
   }
+
+  Graphics::PopDebugMarker();
 
   if (OpaqueDrawItems.empty() && MaskedDrawItems.empty()) {
     CHECK_ERR(Graphics::DynamicRendering::Clear(
@@ -790,6 +805,8 @@ auto Scene::DrawModels(Camera &camera, Frustum &frustum,
       .bindMaterialBuffer = true,
   };
 
+  Graphics::PushDebugMarker("Transparent Materials");
+
   // Skybox should be drawn before transparent objects, this is currently wrong.
   Graphics::DynamicRendering::SetDepthMode(true, false, VK_COMPARE_OP_GREATER);
   Graphics::DynamicRendering::SetShader(forward);
@@ -797,6 +814,8 @@ auto Scene::DrawModels(Camera &camera, Frustum &frustum,
   for (const auto &item : TransparentDrawItems) {
     CHECK_ERR(RenderDrawItem(item, forward, ctx, forwardConfig));
   }
+
+  Graphics::PopDebugMarker();
 
   // Otherwise meshes won't be destroyed due to living in these vectors
   OpaqueDrawItems.clear();

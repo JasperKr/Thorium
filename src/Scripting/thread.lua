@@ -176,7 +176,7 @@ do
       event = events:pop()
     end
 
-    local speed = delta * 10
+    local speed = (1 / 120) * 10
 
     if (isDown["a"]) then
       local leftX, leftY, leftZ = camera:getRight()

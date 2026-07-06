@@ -21,6 +21,7 @@
 #include <cstring>
 #include <lua.h>
 #include <lua.hpp>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -1037,6 +1038,37 @@ auto wrap_GetStats(lua_State *state) -> int {
   lua_setfield(state, -2, "buffermemory");
 
   return 1;
+}
+
+auto wrap_PushDebugMarker(lua_State *state) -> int {
+  const auto *name = luaL_checkstring(state, 1);
+
+  if (lua_gettop(state) >= 2) {
+    auto color = ColorFromLuaState(state, ColorFormat::VarArg, 2);
+    ::Graphics::PushDebugMarker(std::string_view(name), &color);
+  } else {
+    ::Graphics::PushDebugMarker(std::string_view(name));
+  }
+
+  return 0;
+}
+
+auto wrap_PopDebugMarker(lua_State *state) -> int {
+  ::Graphics::PopDebugMarker();
+  return 0;
+}
+
+auto wrap_PushDebugLabel(lua_State *state) -> int {
+  const auto *name = luaL_checkstring(state, 1);
+
+  if (lua_gettop(state) >= 2) {
+    auto color = ColorFromLuaState(state, ColorFormat::VarArg, 2);
+    ::Graphics::PushDebugLabel(std::string_view(name), &color);
+  } else {
+    ::Graphics::PushDebugLabel(std::string_view(name));
+  }
+
+  return 0;
 }
 
 } // namespace Wrap::Graphics

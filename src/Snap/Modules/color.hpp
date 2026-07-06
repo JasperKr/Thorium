@@ -1,7 +1,12 @@
 #pragma once
 
+#include "Modules/Math/math.hpp"
 #include "float16_t/float16_t.hpp"
+#include <algorithm>
+#include <cmath>
 #include <cstdint>
+#include <string_view>
+#include <unordered_map>
 
 static constexpr float uint8_max_as_float = 255.0F;
 
@@ -166,5 +171,176 @@ struct Color {
     b -= other.b;
     a -= other.a;
     return *this;
+  }
+
+  // Inputs RGB in the range [0, 1], outputs HSV in the range [0, 1] for S and V, and [0, 360] for H
+  [[nodiscard]] auto ToHSV() const -> Color {
+    float max = std::max({r, g, b});
+    float min = std::min({r, g, b});
+    float delta = max - min;
+
+    // NOLINTBEGIN
+
+    float hue = 0.0F;
+    if (delta > 0.0F) {
+      if (max == r) {
+        hue = 60.0F * (fmod(((g - b) / delta), 6.0F));
+      } else if (max == g) {
+        hue = 60.0F * (((b - r) / delta) + 2.0F);
+      } else if (max == b) {
+        hue = 60.0F * (((r - g) / delta) + 4.0F);
+      }
+    }
+
+    float saturation = (max == 0.0F) ? 0.0F : (delta / max);
+    float value = max;
+
+    // NOLINTEND
+
+    return {hue, saturation, value};
+  }
+
+  // Inputs RGB in the range [0, 1], outputs HSL in the range [0, 1] for S and L, and [0, 360] for H
+  [[nodiscard]] auto ToHSL() const -> Color {
+    float max = std::max({r, g, b});
+    float min = std::min({r, g, b});
+    float delta = max - min;
+
+    // NOLINTBEGIN
+
+    float lightness = (max + min) / 2.0F;
+
+    float hue = 0.0F;
+    float saturation = 0.0F;
+
+    if (delta > 0.0F) {
+      saturation = delta / (1.0F - std::fabs(2.0F * lightness - 1.0F));
+
+      if (max == r) {
+        hue = 60.0F * (fmod(((g - b) / delta), 6.0F));
+      } else if (max == g) {
+        hue = 60.0F * (((b - r) / delta) + 2.0F);
+      } else if (max == b) {
+        hue = 60.0F * (((r - g) / delta) + 4.0F);
+      }
+    }
+
+    // NOLINTEND
+
+    return {hue, saturation, lightness};
+  }
+
+  // Converts HSV to RGB. Expects H in [0, 360], S and V in [0, 1]. Returns RGB in [0, 1].
+  [[nodiscard]] static auto FromHSV(Color hsv) -> Color {
+    // NOLINTBEGIN
+    float hue = std::fmod(hsv.r, 360.0F);
+    if (hue < 0.0F) {
+      hue += 360.0F;
+    }
+
+    float saturation = std::clamp(hsv.g, 0.0F, 1.0F);
+    float value = std::clamp(hsv.b, 0.0F, 1.0F);
+
+    float chroma = value * saturation;
+    float x = chroma * (1.0F - std::fabs(std::fmod(hue / 60.0F, 2.0F) - 1.0F));
+    float m = value - chroma;
+
+    float redPrime = 0.0F;
+    float greenPrime = 0.0F;
+    float bluePrime = 0.0F;
+
+    if (hue < 60.0F) {
+      redPrime = chroma;
+      greenPrime = x;
+    } else if (hue < 120.0F) {
+      redPrime = x;
+      greenPrime = chroma;
+    } else if (hue < 180.0F) {
+      greenPrime = chroma;
+      bluePrime = x;
+    } else if (hue < 240.0F) {
+      greenPrime = x;
+      bluePrime = chroma;
+    } else if (hue < 300.0F) {
+      redPrime = x;
+      bluePrime = chroma;
+    } else {
+      redPrime = chroma;
+      bluePrime = x;
+    }
+
+    return {redPrime + m, greenPrime + m, bluePrime + m, hsv.a};
+    // NOLINTEND
+  }
+
+  // Converts HSL to RGB. Expects H in [0, 360], S and L in [0, 1]. Returns RGB in [0, 1].
+  [[nodiscard]] static auto FromHSL(Color hsl) -> Color {
+    // NOLINTBEGIN
+    float hue = std::fmod(hsl.r, 360.0F);
+    if (hue < 0.0F) {
+      hue += 360.0F;
+    }
+
+    float saturation = std::clamp(hsl.g, 0.0F, 1.0F);
+    float lightness = std::clamp(hsl.b, 0.0F, 1.0F);
+
+    float chroma = (1.0F - std::fabs((2.0F * lightness) - 1.0F)) * saturation;
+    float x = chroma * (1.0F - std::fabs(std::fmod(hue / 60.0F, 2.0F) - 1.0F));
+    float m = lightness - (chroma / 2.0F);
+
+    float redPrime = 0.0F;
+    float greenPrime = 0.0F;
+    float bluePrime = 0.0F;
+
+    if (hue < 60.0F) {
+      redPrime = chroma;
+      greenPrime = x;
+    } else if (hue < 120.0F) {
+      redPrime = x;
+      greenPrime = chroma;
+    } else if (hue < 180.0F) {
+      greenPrime = chroma;
+      bluePrime = x;
+    } else if (hue < 240.0F) {
+      greenPrime = x;
+      bluePrime = chroma;
+    } else if (hue < 300.0F) {
+      redPrime = x;
+      bluePrime = chroma;
+    } else {
+      redPrime = chroma;
+      bluePrime = x;
+    }
+
+    return {redPrime + m, greenPrime + m, bluePrime + m, hsl.a};
+    // NOLINTEND
+  }
+
+  static auto RandomColor(const std::string_view &seed) -> Color {
+    static std::unordered_map<std::string_view, Color> colorCache;
+    auto iter = colorCache.find(seed);
+    if (iter != colorCache.end()) {
+      return iter->second;
+    }
+
+    float randomHue = Math::Random(0.0F, 360.0F);        // NOLINT
+    float randomSaturation = Math::Random(0.25F, 0.75F); // NOLINT
+    float randomValue = Math::Random(0.2F, 0.75F);       // NOLINT
+
+    Color randomColor =
+        Color::FromHSV({randomHue, randomSaturation, randomValue, 1.0F});
+    colorCache[seed] = randomColor;
+
+    return randomColor;
+  }
+
+  // Ease of use for Vk colors
+  auto FillFloatArray(float *array) const -> void {
+    // NOLINTBEGIN
+    array[0] = r;
+    array[1] = g;
+    array[2] = b;
+    array[3] = a;
+    // NOLINTEND
   }
 };

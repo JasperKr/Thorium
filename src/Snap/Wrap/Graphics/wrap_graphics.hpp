@@ -63,6 +63,10 @@ auto wrap_GetDefaultWrapMode(lua_State *state) -> int;
 
 auto wrap_GetStats(lua_State *state) -> int;
 
+auto wrap_PushDebugMarker(lua_State *state) -> int;
+auto wrap_PopDebugMarker(lua_State *state) -> int;
+auto wrap_PushDebugLabel(lua_State *state) -> int;
+
 // NOLINTNEXTLINE
 static const std::vector<luaL_Reg> GraphicsLib = {
     {"present", wrap_Present},
@@ -111,6 +115,9 @@ static const std::vector<luaL_Reg> GraphicsLib = {
     {"setDefaultWrapMode", wrap_SetDefaultWrapMode},
     {"getDefaultWrapMode", wrap_GetDefaultWrapMode},
     {"getStats", wrap_GetStats},
+    {"pushDebugMarker", wrap_PushDebugMarker},
+    {"popDebugMarker", wrap_PopDebugMarker},
+    {"pushDebugLabel", wrap_PushDebugLabel},
 };
 
 const static std::vector<lua_CFunction> childrenInitFunctions = {

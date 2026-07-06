@@ -8,6 +8,7 @@
 #include "Graphics/resource.hpp"
 #include "Graphics/shader.hpp"
 #include "Libraries/vma.hpp"
+#include "Modules/color.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/window.hpp"
@@ -352,6 +353,60 @@ auto GetThreadContext() -> ThreadContext & {
 auto GetCommandBuffer() -> VkCommandBuffer {
   auto &threadContext = GetThreadContext();
   return threadContext.commandBuffer;
+}
+
+auto PushDebugMarker(const std::string_view &name, const Color *color) -> void {
+  auto *cmdBuffer = GetCommandBuffer();
+  if (cmdBuffer == nullptr) {
+    PrintWarning("PushDebugMarker called with null command buffer.");
+    return;
+  }
+
+  VkDebugUtilsLabelEXT labelInfo{};
+  labelInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT;
+  labelInfo.pLabelName = name.data();
+
+  // NOLINTBEGIN
+  if (color == nullptr) {
+    Color::RandomColor(name).FillFloatArray(labelInfo.color);
+  } else {
+    color->FillFloatArray(labelInfo.color);
+  }
+  // NOLINTEND
+
+  vkCmdBeginDebugUtilsLabelEXT(cmdBuffer, &labelInfo);
+}
+
+auto PopDebugMarker() -> void {
+  auto *cmdBuffer = GetCommandBuffer();
+  if (cmdBuffer == nullptr) {
+    PrintWarning("PopDebugMarker called with null command buffer.");
+    return;
+  }
+
+  vkCmdEndDebugUtilsLabelEXT(cmdBuffer);
+}
+
+auto PushDebugLabel(const std::string_view &name, const Color *color) -> void {
+  auto *cmdBuffer = GetCommandBuffer();
+  if (cmdBuffer == nullptr) {
+    PrintWarning("PushDebugLabel called with null command buffer.");
+    return;
+  }
+
+  VkDebugUtilsLabelEXT labelInfo{};
+  labelInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT;
+  labelInfo.pLabelName = name.data();
+
+  // NOLINTBEGIN
+  if (color == nullptr) {
+    Color::RandomColor(name).FillFloatArray(labelInfo.color);
+  } else {
+    color->FillFloatArray(labelInfo.color);
+  }
+  // NOLINTEND
+
+  vkCmdInsertDebugUtilsLabelEXT(cmdBuffer, &labelInfo);
 }
 
 static auto CreateSemaphores(GraphicsContext &context) -> Error {

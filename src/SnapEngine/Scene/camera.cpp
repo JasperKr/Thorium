@@ -412,7 +412,11 @@ auto Camera::Render(const Graphics::GraphicsContext &context,
   CHECK_ERR(ReleasePersistentTextures());
   auto frustum = drawData.Matrices.GetFrustum();
 
+  Graphics::PushDebugMarker("Draw Models");
+
   CHECK_ERR(scene->DrawModels(*this, frustum, context));
+
+  Graphics::PopDebugMarker();
 
   OwnedTextures.IncomingLight =
       CHECK_RES(Renderer::GlobalRenderTargetManager.GetRendertarget(
@@ -422,9 +426,14 @@ auto Camera::Render(const Graphics::GraphicsContext &context,
   const auto *environment = entity.try_get<Environment>();
 
   if (environment != nullptr) {
+    Graphics::PushDebugMarker("Render Skybox");
+
     CHECK_ERR(RenderSkybox(context, *environment));
+
+    Graphics::PopDebugMarker();
   }
 
+  Graphics::PushDebugMarker("Apply Light Probes");
   CHECK_ERR(ApplyLightProbes(context, drawData, scene));
 
   Graphics::DynamicRendering::SetShader({});
@@ -460,14 +469,21 @@ auto Camera::Render(const Graphics::GraphicsContext &context,
                     .texture = OwnedTextures.Depth,
                     .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
                 }}));
+  Graphics::PopDebugMarker();
 
+  Graphics::PushDebugMarker("Draw Lines");
   CHECK_ERR(Renderer::RendererInstance.GetLineDrawer().Render(context, *this));
-
-  CHECK_ERR(
-      Renderer::RendererInstance.GetBloomManager().ApplyBloom(context, *this));
+  Graphics::PopDebugMarker();
 
   if (settings.DoPostProcessing) {
+    Graphics::PushDebugMarker("Apply Bloom");
+    CHECK_ERR(Renderer::RendererInstance.GetBloomManager().ApplyBloom(context,
+                                                                      *this));
+    Graphics::PopDebugMarker();
+
+    Graphics::PushDebugMarker("Apply Post Processing");
     CHECK_ERR(ApplyPostProcessing(context));
+    Graphics::PopDebugMarker();
   }
 
   CHECK_ERR(ReleaseTransientTextures());
