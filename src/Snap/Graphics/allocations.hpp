@@ -54,7 +54,7 @@ struct Allocations {
 
   auto GetThreadStats() -> std::vector<AllocationStats> {
     std::lock_guard<std::mutex> lock(allocationsMutex);
-    static std::vector<AllocationStats> stats;
+    std::vector<AllocationStats> stats;
     stats.clear();
     stats.reserve(allocations.size());
     for (const auto &threadAlloc : allocations) {

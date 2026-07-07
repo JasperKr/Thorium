@@ -1,9 +1,9 @@
 #include "Wrap/Graphics/wrap_buffer.hpp"
 #include "Graphics/barrier.hpp"
 #include "Graphics/snapshot.hpp"
+#include "Modules/Helpers/utils.hpp"
 #include "Modules/error.hpp"
 #include "Wrap/Graphics/wrap_format.hpp"
-#include "Wrap/Graphics/wrap_reflection.hpp"
 #include "Wrap/wrap.hpp"
 #include "Wrap/wrap_utils.hpp"
 #include <cstdint>
@@ -170,20 +170,13 @@ auto wrap_GetFormat(lua_State *state) -> int {
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 auto wrap_SetData(lua_State *state) -> int {
   ZoneScoped;
-  auto *ctx = ::Graphics::GetCurrentGraphicsContext();
+  auto *ctx = LUA_CK_NULL(::Graphics::GetCurrentGraphicsContext());
 
-  if (ctx == nullptr) {
-    return luaL_error(state, "No current GraphicsContext set for this thread.");
-  }
-
-  auto *buffer = LuaWrap::ObjectFromLua<::Graphics::StructuredBuffer>(state, 1);
-
-  if (buffer == nullptr) {
-    return luaL_error(state, "Expected Buffer as first argument");
-  }
+  auto *buffer = LUA_CK_NULL(
+      LuaWrap::ObjectFromLua<::Graphics::StructuredBuffer>(state, 1));
 
   thread_local std::vector<uint8_t> data{};
-  data.clear();
+  snap_defer(data.clear());
 
   ::Graphics::Barrier::UpdateUsage(*ctx, *buffer->GetBuffer(),
                                    ::Graphics::Barrier::ResourceState{
@@ -195,6 +188,9 @@ auto wrap_SetData(lua_State *state) -> int {
   if (lua_gettop(state) >= 3) {
     offset = static_cast<VkDeviceSize>(luaL_checkinteger(state, 3));
   }
+
+  LUA_ASSERT(offset < buffer->GetSize());
+  LUA_ASSERT(offset >= 0);
 
   VkDeviceSize size = VK_WHOLE_SIZE;
   if (lua_gettop(state) >= 4) {
@@ -210,23 +206,10 @@ auto wrap_SetData(lua_State *state) -> int {
   if (lua_istable(state, 2)) {
     // table of numbers
 
-    auto sourceOffset = 1;
-
-    if (lua_isnumber(state, 3) != 0) {
-      sourceOffset = static_cast<int>(luaL_checkinteger(state, 3));
-      if (sourceOffset < 1) {
-        return luaL_error(state,
-                          "Source offset cannot be less than 1 for table data");
-      }
-      if (static_cast<size_t>(sourceOffset) > buffer->GetSize()) {
-        return luaL_error(state, "Source offset is out of bounds");
-      }
-    }
-
     size_t tableSize = lua_objlen(state, 2);
     data.resize(tableSize * sizeof(float));
     for (int i = 0; i < tableSize; ++i) {
-      lua_rawgeti(state, 2, i + sourceOffset);
+      lua_rawgeti(state, 2, i + 1);
       auto value = luaL_checknumber(state, -1);
 
       auto result = // NOLINTNEXTLINE; pointer arithmetic
@@ -248,31 +231,13 @@ auto wrap_SetData(lua_State *state) -> int {
     }
 
   } else {
-    auto sourceOffset = 0;
-
-    if (lua_isnumber(state, 3) != 0) {
-      sourceOffset = static_cast<int>(luaL_checkinteger(state, 3));
-      if (sourceOffset < 0) {
-        return luaL_error(state,
-                          "Source offset cannot be less than 0 for Bytedata");
-      }
-      if (static_cast<size_t>(sourceOffset) > buffer->GetSize()) {
-        return luaL_error(state, "Source offset is out of bounds");
-      }
-    }
-
     auto *bytedata = LuaWrap::ObjectFromLua<Data::ByteData>(state, 2);
     if (bytedata == nullptr) {
       return luaL_error(state, "Expected ByteData or table as second argument");
     }
 
-    auto result = buffer->GetBuffer()->SetData(*ctx, bytedata->GetDataSpan(),
-                                               offset, size);
-
-    if (Error::IsError(result)) {
-      return luaL_error(state, "Failed to set buffer data: %s",
-                        result.message.c_str());
-    }
+    LUA_CK_ERR(buffer->GetBuffer()->SetData(*ctx, bytedata->GetDataSpan(),
+                                            offset, size));
   }
 
   return 0;

@@ -152,3 +152,10 @@ template <class T> struct Result : tl::expected<T, Error> {
       return Error::Createf("Assertion failed: {}", #expr);                    \
     }                                                                          \
   }
+
+#define ERR_ASSERT_MSG(expr, msg)                                              \
+  {                                                                            \
+    if (!(expr)) {                                                             \
+      return Error::Createf("Assertion failed: {} - {}", #expr, msg);          \
+    }                                                                          \
+  }

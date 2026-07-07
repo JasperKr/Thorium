@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <span>
 #include <utility>
 #include <vector>
@@ -125,5 +126,28 @@ template <typename T> constexpr auto CeilDivFast(T value, T divisor) -> T {
 template <typename T> constexpr auto CeilDiv(T value, T divisor) -> T {
   return (value / divisor) + (value % divisor != 0);
 }
+
+// NOLINTBEGIN
+template <typename F> struct Defer {
+  F func;
+
+  Defer(const Defer &) = delete;
+  Defer(Defer &&) = delete;
+  auto operator=(const Defer &) -> Defer & = delete;
+  auto operator=(Defer &&) -> Defer & = delete;
+  explicit Defer(F &&func) : func(std::forward<F>(func)) {}
+  ~Defer() { func(); }
+};
+
+template <typename F> Defer(F) -> Defer<F>;
+
+#define CONCAT_IMPL(a, b) a##b
+#define CONCAT(a, b) CONCAT_IMPL(a, b)
+
+#define UNIQUE_NAME(prefix) CONCAT(prefix, __COUNTER__)
+
+#define snap_defer(...)                                                        \
+  auto UNIQUE_NAME(_defer_) = ::Utils::Defer([&] { __VA_ARGS__; })
+// NOLINTEND
 
 } // namespace Utils

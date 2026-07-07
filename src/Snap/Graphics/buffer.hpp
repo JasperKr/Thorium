@@ -84,7 +84,7 @@ struct Buffer : Object, Barrier::BarrierSynced {
   // Safety flag to prevent double releases
   bool released = false;
 
-  // Set by cleanup function otherwise we'll try to defer destruction again
+  // Set by cleanup function otherwise we'll try to snap_defer destruction again
   bool isDestroyed = false;
 
   auto GetTimestamp() const -> uint64_t { return lastUsedTimestamp; }

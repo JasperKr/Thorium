@@ -539,9 +539,9 @@ auto Scene::DrawModels(Camera &camera, Frustum &frustum,
   static std::vector<DrawItem> MaskedDrawItems;
   static std::vector<DrawItem> TransparentDrawItems;
 
-  OpaqueDrawItems.clear();
-  MaskedDrawItems.clear();
-  TransparentDrawItems.clear();
+  snap_defer(OpaqueDrawItems.clear());
+  snap_defer(MaskedDrawItems.clear());
+  snap_defer(TransparentDrawItems.clear());
 
   world.each<Geometry>(
       [&](flecs::entity entity, const Geometry &geometry) -> void {

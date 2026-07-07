@@ -48,7 +48,7 @@ auto Frustum::FromMatrices(const Math::Matrix4x4 &viewProjectionMatrix,
     -> Frustum {
   Frustum frustum;
 
-  static std::array<Math::Vec4, CornerCount> ndc_corners = {
+  thread_local std::array<Math::Vec4, CornerCount> ndc_corners = {
       Math::Vec4(-1.0F, -1.0F, -1.0F, 1.0F), // NTL
       Math::Vec4(1.0F, -1.0F, -1.0F, 1.0F),  // NTR
       Math::Vec4(1.0F, -1.0F, 1.0F, 1.0F),   // NBR

@@ -323,9 +323,7 @@ static inline auto LoadSlang(const GraphicsContext &context,
   auto result =
       GlobalSlangSession->createSession(sessionDesc, session.writeRef());
 
-  if (Error::IsError(result)) {
-    return Error::Create(result);
-  }
+  CHECK_NEW_ERR(result);
 
   Slang::ComPtr<slang::IBlob> diagnosticsBlob;
   PrintDebug("Compiling shader: " + shader->moduleName);
@@ -333,12 +331,8 @@ static inline auto LoadSlang(const GraphicsContext &context,
   shader->slangModule = session->loadModule(shader->moduleName.c_str(),
                                             diagnosticsBlob.writeRef());
 
-  if (diagnosticsBlob != nullptr) {
-    return Error::Create(diagnosticsBlob);
-  }
-  if (shader->slangModule == nullptr) {
-    return Error::Create("Failed to load shader module: " + shader->moduleName);
-  }
+  ERR_ASSERT(diagnosticsBlob == nullptr);
+  ERR_ASSERT(shader->slangModule != nullptr);
 
   auto entryPointCount = shader->slangModule->getDefinedEntryPointCount();
   std::vector<Slang::ComPtr<slang::IEntryPoint>> entryPoints;
@@ -409,14 +403,11 @@ static inline auto LoadSlang(const GraphicsContext &context,
 
   CHECK_ERR(Error::Create(result, diagnosticsBlob, shader->programLayout));
 
-  if (shader->entryPoints.empty()) {
-    return Error::Create("No valid entry points found in shader.");
-  }
+  ERR_ASSERT(!shader->entryPoints.empty());
 
   if (shader->entryPoints.at(0).second == VK_SHADER_STAGE_COMPUTE_BIT) {
-    if (entryPointCount != 1) {
-      return Error::Create("Compute shader must have exactly one entry point.");
-    }
+    ERR_ASSERT_MSG(entryPointCount == 1,
+                   "Compute shader must have exactly one entry point.");
 
     auto *entrypointReflection = shader->programLayout->getEntryPointByIndex(0);
 
@@ -442,19 +433,21 @@ static inline auto LoadSlang(const GraphicsContext &context,
         context.deviceProperties.limits.maxComputeWorkGroupSize[2],
     };
 
-    if (out_workgroupSize[0] * out_workgroupSize[1] * out_workgroupSize[2] >
-        invocationlimit) {
-      return Error::Create("Compute shader threadgroup size exceeds device "
-                           "limit of " +
-                           std::to_string(invocationlimit) + " invocations.");
-    }
+    ERR_ASSERT_MSG(
+        out_workgroupSize[0] * out_workgroupSize[1] * out_workgroupSize[2] <=
+            invocationlimit,
+        std::format(
+            "Compute shader threadgroup size exceeds device limit of {} "
+            "invocations.",
+            std::to_string(invocationlimit)));
 
     for (SlangUInt i = 0; i < 3; i++) {
-      if (shader->threadgroupSize[i] > sizelimit[i]) {
-        return Error::Create("Compute shader threadgroup size in dimension " +
-                             std::to_string(i) + " exceeds device limit of " +
-                             std::to_string(sizelimit[i]) + ".");
-      }
+      ERR_ASSERT_MSG(
+          shader->threadgroupSize[i] <= sizelimit[i],
+          std::format(
+              "Compute shader threadgroup size in dimension {} exceeds device "
+              "limit of {}.",
+              std::to_string(i), std::to_string(sizelimit[i])));
     }
   }
 
@@ -485,13 +478,9 @@ static inline auto LoadSlang(const GraphicsContext &context,
   moduleCreateInfo.pCode = data.data();
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    Error error = Error::Create(
-        vkCreateShaderModule(context.device, &moduleCreateInfo,
-                             GetAllocationCallbacks(), &shader->module));
-
-    if (Error::IsError(error)) {
-      return error;
-    }
+    CHECK_NEW_ERR(vkCreateShaderModule(context.device, &moduleCreateInfo,
+                                       GetAllocationCallbacks(),
+                                       &shader->module));
 
     VkDebugUtilsObjectNameInfoEXT nameInfo = {};
     nameInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT;
@@ -567,6 +556,9 @@ auto Shader::Create(
 
   shader->globalUniforms.resize(
       shader->reflection.globalBufferFormat.GetStride());
+
+  shader->slangModule->release();
+  shader->linkedProgram->release();
 
   return shader;
 }
@@ -680,8 +672,7 @@ auto Shader::Send(const ResourceKey &key, const std::span<const uint8_t> &data)
   }
 
   // check global ubo
-  thread_local ResourceKey globalsKey = {};
-  globalsKey.clear();
+  ResourceKey globalsKey = {};
   globalsKey.emplace_front("Globals");
   append(globalsKey, key);
 

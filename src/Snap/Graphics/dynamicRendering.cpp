@@ -130,9 +130,9 @@ auto GetDescriptorSetLayout(const DescriptorSetLayoutKey &layoutKey,
     layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
     layoutInfo.pBindings = bindings.data();
 
-    CHECK_ERR(Error::Create(vkCreateDescriptorSetLayout(
-        context.device, &layoutInfo, GetAllocationCallbacks(),
-        &descriptorSetLayout)));
+    CHECK_NEW_ERR(vkCreateDescriptorSetLayout(context.device, &layoutInfo,
+                                              GetAllocationCallbacks(),
+                                              &descriptorSetLayout));
 
     DescriptorSetLayoutCache[layoutKey] = descriptorSetLayout;
   }
@@ -1262,8 +1262,7 @@ inline auto BindBufferDesciptors(DescriptorKey &key, auto &shader,
       continue;
     }
 
-    thread_local VkDescriptorType descriptorType;
-    descriptorType = VK_DESCRIPTOR_TYPE_MAX_ENUM;
+    VkDescriptorType descriptorType = VK_DESCRIPTOR_TYPE_MAX_ENUM;
 
     const auto *info = shader->GetSlotDescription(location);
     if (info == nullptr) {
@@ -1455,9 +1454,9 @@ inline auto AllocateDescriptorSets(const GraphicsContext &context,
   thread_local std::vector<VkDescriptorBufferInfo> bufferInfos;
   thread_local std::vector<VkDescriptorImageInfo> imageInfos;
 
-  writeDescriptorSets.clear();
-  bufferInfos.clear();
-  imageInfos.clear();
+  snap_defer(writeDescriptorSets.clear());
+  snap_defer(bufferInfos.clear());
+  snap_defer(imageInfos.clear());
 
   writeDescriptorSets.reserve(key.bindings.size());
   bufferInfos.reserve(key.bindings.size());
@@ -1520,8 +1519,8 @@ auto BindDescriptorSets(const GraphicsContext &context,
 
   thread_local std::vector<std::pair<void *, std::vector<uint32_t>>>
       BoundDescriptorSets{};
-  thread_local VkCommandBuffer DescriptorsBoundAtCmdBuffer = VK_NULL_HANDLE;
-  thread_local VkPipelineLayout DescriporsBoundAtLayout = {};
+  VkCommandBuffer DescriptorsBoundAtCmdBuffer = VK_NULL_HANDLE;
+  VkPipelineLayout DescriporsBoundAtLayout = {};
 
   if (DescriptorsBoundAtCmdBuffer != Graphics::GetCommandBuffer() ||
       CurrentPipelineLayout.layout != DescriporsBoundAtLayout) {
@@ -1532,15 +1531,12 @@ auto BindDescriptorSets(const GraphicsContext &context,
 
   int setIndex = 0;
   for (const auto &layout : CurrentPipelineLayout.descriptorSetLayouts) {
-    thread_local DescriptorKey key = {
+    DescriptorKey key = {
         .layout = layout,
         .bindings = {},
     };
-    key.bindings.clear();
-    key.layout = layout;
 
-    thread_local std::vector<uint32_t> dynamicOffsets;
-    dynamicOffsets.clear();
+    std::vector<uint32_t> dynamicOffsets;
 
     CHECK_ERR(BindBufferDesciptors(key, shader, state, setIndex));
     CHECK_ERR(
@@ -1602,18 +1598,6 @@ auto BindDescriptorSets(const GraphicsContext &context,
                               dynamicOffsets.data());
 
       DescriptorSetCache[key] = descriptorSet;
-
-      for (const auto &binding : key.bindings) {
-        if (std::holds_alternative<VkDescriptorBufferInfo>(
-                binding.resourceInfo)) {
-          const auto &bufferInfo =
-              std::get<VkDescriptorBufferInfo>(binding.resourceInfo);
-        } else if (std::holds_alternative<VkDescriptorImageInfo>(
-                       binding.resourceInfo)) {
-          const auto &imageInfo =
-              std::get<VkDescriptorImageInfo>(binding.resourceInfo);
-        }
-      }
     }
 
     setIndex++;

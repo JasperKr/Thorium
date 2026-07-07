@@ -187,7 +187,7 @@ struct Matrix3x3 {
 
   [[nodiscard]] auto FloatSpan() const
       -> std::span<const float> { // NOLINT reinterpret cast
-    static std::array<float, Size> floatElements{};
+    thread_local std::array<float, Size> floatElements{};
 
 #pragma unroll
     for (size_t i = 0; i < Size; ++i) {
