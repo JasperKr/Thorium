@@ -296,8 +296,6 @@ auto GetPipelineLayout(const GraphicsContext &context, Shader *shader)
     maxSet = std::max(setCount - 1, *maxSetIter);
   }
 
-  // PrintAlways("Max descriptor set index from shader reflection: {}", maxSet);
-
   setLayouts.resize(maxSet + 1, DefaultEmptySetLayout);
 
   // For each set, build the DescriptorSetLayoutKey and get the layout
@@ -391,14 +389,12 @@ inline auto GetShaderStages(const State &state)
     return Error::Unexpected("Shader module is null in GetShaderStages.");
   }
 
-  // PrintAlways("Shader: {}", shader->name);
   for (const auto &stage : shader->entryPoints) {
     VkPipelineShaderStageCreateInfo stageInfo = {};
     stageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
     stageInfo.stage = stage.second;
     stageInfo.module = shader->module;
     stageInfo.pName = stage.first.c_str();
-    // PrintAlways("Entry Point: {}, Stage: {}", stage.first, (int)stage.second);
 
     shaderStages.emplace_back(stageInfo);
   }
@@ -1287,13 +1283,6 @@ inline auto BindBufferDesciptors(DescriptorKey &key, auto &shader,
       return Error::Create("Unknown buffer type for descriptor set binding.");
     }
 
-    // PrintAlways("Binding buffer with binding {} for shader: {}", binding,
-    //             shader->name);
-    // PrintAlways(" - Buffer Name: {} Descriptor Type: {}, Access: {}, set: {}, "
-    //             "binding: {}",
-    //             buffer.first->debugName, (int)descriptorType,
-    //             (int)bufferInfo->access, set, binding);
-
     if ((buffer.first->usage & VK_BUFFER_USAGE_2_UNIFORM_BUFFER_BIT) != 0) {
       if (descriptorType != VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER) {
         return Error::Createf("Buffer usage {} does not match expected "
@@ -1425,9 +1414,6 @@ inline auto BindGlobalsDescriptor(const GraphicsContext &context,
   CHECK_RES(buffer.Write(context, shader->globalUniforms));
   assert((buffer.GetBuffer()->usage & VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT) ==
          0);
-
-  // PrintAlways("Binding globals buffer with binding {} for shader: {}", binding,
-  //             shader->name);
 
   key.bindings.emplace_back(ResourceBinding{
       .binding = binding,
@@ -1617,24 +1603,15 @@ auto BindDescriptorSets(const GraphicsContext &context,
 
       DescriptorSetCache[key] = descriptorSet;
 
-      // PrintAlways("Updating descriptor sets for shader: {}",
-      //             TopOfStack->shader->name);
-
       for (const auto &binding : key.bindings) {
         if (std::holds_alternative<VkDescriptorBufferInfo>(
                 binding.resourceInfo)) {
           const auto &bufferInfo =
               std::get<VkDescriptorBufferInfo>(binding.resourceInfo);
-          // PrintAlways("Binding buffer: {} to set {}, binding {}",
-          // (void *)bufferInfo.buffer, setIndex, binding.binding);
         } else if (std::holds_alternative<VkDescriptorImageInfo>(
                        binding.resourceInfo)) {
           const auto &imageInfo =
               std::get<VkDescriptorImageInfo>(binding.resourceInfo);
-          // PrintAlways(
-          // "Binding image view: {} with sampler {} to set {}, binding {}",
-          // (void *)imageInfo.imageView, (void *)imageInfo.sampler, setIndex,
-          // binding.binding);
         }
       }
     }

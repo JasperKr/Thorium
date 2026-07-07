@@ -19,8 +19,10 @@ scene:newDirectionalLight("Test directional light", qx, qy, qz, qw, 1, 1, 1, 5)
 print("Starting render thread")
 thread:start(commandsChannel, startThreadChannel, scene, events)
 
+local buffer = require("string.buffer");
+
 function snap.any(...)
-  events:push({ ... })
+  events:push(buffer.encode({ ... }))
 end
 
 function snap.update(dt)
@@ -70,7 +72,7 @@ function snap.quit()
   thread:wait()
   snap.gui.shutdown()
 
-  print("Quitting the application.")
+  print("Stopping main thread.")
   return 1
 end
 

@@ -249,9 +249,6 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
   auto config = CHECK_RES(Config::Configure(state, sourceDirectory));
   Filesystem::GetConfig().identity = config.Identity;
 
-  PrintAlways("Source directory: {}", Filesystem::GetSourceDirectory());
-  PrintAlways("Save directory: {}", Filesystem::GetSaveDirectory());
-  // CHECK_ERR(Filesystem::Mount(Filesystem::GetSaveDirectory(), "/", true));
   CHECK_ERR(Filesystem::SetWriteDirectory(Filesystem::GetSaveDirectory()));
 
   Graphics::GraphicsContext context = {};

@@ -570,10 +570,6 @@ auto SetupFromType(slang::VariableLayoutReflection *variableLayout,
 
     resourceInfo.name = variableLayout->getName();
 
-    // PrintAlways("Reflected: {}, category: {}, set: {}, binding: {}",
-    //             bufferInfo.name, (int)category, bufferInfo.set,
-    //             bufferInfo.binding);
-
     resourceInfo.stages = SlangStageToVkStage(variableLayout->getStage());
     resourceInfo.info = bufferInfo;
 

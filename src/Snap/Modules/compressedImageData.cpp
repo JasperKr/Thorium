@@ -113,10 +113,6 @@ auto CompressedImageData::Create(const std::span<uint8_t> &data)
       CompressedImageData::Create(size, data.subspan(headerSize), format));
 
   imgdata->mipmapCount = static_cast<int>(header.mipMapCount);
-  PrintAlways(
-      "Loaded DDS with dimensions {}x{}, format {}, and {} mipmap levels.",
-      size.width, size.height, Graphics::Format::ImageFormatToString(format),
-      imgdata->GetMipmapCount());
 
   return imgdata;
 }

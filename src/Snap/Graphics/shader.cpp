@@ -548,17 +548,9 @@ auto Shader::Create(
 
   CHECK_ERR(ReflectShader(context, shader->programLayout, shader->reflection));
 
-  // PrintAlways("Shader {} Has globals? {}", shader->name,
-  //             shader->reflection.hasGlobals);
-
   for (auto &layout : shader->reflection.resources) {
     if (layout.IsBuffer()) {
       const auto &bufferInfo = std::get<Reflect::BufferInfo>(layout.info);
-
-      // PrintAlways("Shader {} resource: Buffer - name: {}, set: {}, binding: "
-      //             "{}, type: {}",
-      //             shader->name, bufferInfo.name, bufferInfo.set,
-      //             bufferInfo.binding, (int)bufferInfo.bufferType);
 
       if (bufferInfo.bufferType == Reflect::BufferType::PushConstant) {
         auto result = PushBuffer(layout);

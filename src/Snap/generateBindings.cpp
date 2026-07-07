@@ -12,7 +12,40 @@ auto RegisterAllLuaModules(lua_State *state) -> void {
   Engine::LuaWrap::RegisterModules(state);
 }
 
-auto main() -> int {
+auto main(int argCount, char **argValues) -> int {
+  std::vector<std::string> args;
+  args.reserve(argCount);
+
+  std::string programName = argValues[0]; // NOLINT
+
+  for (int i = 1; i < argCount; ++i) {
+    args.emplace_back(argValues[i]); // NOLINT
+  }
+
+  bool verbose = false;
+
+  // Allowed flags: -v for verbose output, -h for help
+  for (const auto &arg : args) {
+    if (arg == "-h" || arg == "--help") {
+      std::cout << "Usage: " << programName << " [options]\n";
+      std::cout << "Options:\n";
+      std::cout << "  -h, --help     Show this help message\n";
+      std::cout << "  -v, --verbose  Enable verbose output\n";
+      return 0;
+    }
+
+    if (arg == "-v" || arg == "--verbose") {
+      verbose = true;
+    } else {
+      std::cerr << "Unknown option: " << arg << "\n";
+      return 1;
+    }
+  }
+
+  if (!verbose) {
+    std::cout.setstate(std::ios_base::failbit);
+  }
+
   auto *state = luaL_newstate();
   std::cout << "Generating Lua bindings...\n";
   RegisterAllLuaModules(state);

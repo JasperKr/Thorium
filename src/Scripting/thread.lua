@@ -1,6 +1,7 @@
 do
   require("init")
   local ffi = require("ffi")
+  local buffer = require("string.buffer")
 
   local lastDrawTime = 0
   local lastImDrawTime = 0
@@ -167,13 +168,14 @@ do
 
     snap.graphics.aquireGraphics(nil, nil, createSnapshot)
 
-    local event = events:pop()
-    while event do
+    local data = events:pop()
+    while data do
+      local event = buffer.decode(data)
       if snap[event[1]] then
         snap[event[1]](unpack(event, 2))
       end
 
-      event = events:pop()
+      data = events:pop()
     end
 
     local speed = (1 / 120) * 10
@@ -265,7 +267,7 @@ do
     commandBufferChannel:push(commands)
   end
 
-  print("THREAD #1 EXITING")
+  print("Stopping render thread")
 end
 
 collectgarbage("collect")

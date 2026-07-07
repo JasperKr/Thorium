@@ -435,8 +435,6 @@ auto LightprobePrefilterManager::PrefilterLightProbe(
 
   if (lightProbe.EnvironmentMapIndex < 0) {
     lightProbe.EnvironmentMapIndex = GetFreeEnvMapIndex().value_or(-1);
-    PrintAlways("Allocated environment map index {} for light probe.",
-                lightProbe.EnvironmentMapIndex);
   }
 
   for (int i = 0; i < Transforms.size(); i++) {

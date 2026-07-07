@@ -137,7 +137,6 @@ inline auto LoadURI(const std::string_view &basePath,
   if (iter != URICache.end()) {
     return iter->second;
   }
-  PrintAlways("Loading URI: {}", path);
 
   {
     std::lock_guard<std::mutex> lock(URICacheMutex);
