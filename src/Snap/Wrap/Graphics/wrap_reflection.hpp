@@ -13,7 +13,6 @@ inline auto ResourceKeyFromLuaTable(lua_State *state, int index)
   }
 
   Graphics::ResourceKey root;
-  auto iterator = root.before_begin();
 
   luaL_checktype(state, index, LUA_TTABLE);
   size_t tableSize = lua_objlen(state, index);
@@ -23,18 +22,16 @@ inline auto ResourceKeyFromLuaTable(lua_State *state, int index)
 
     if (lua_type(state, -1) == LUA_TSTRING) {
       const char *keyPart = luaL_checkstring(state, -1);
-      iterator = root.insert_after(iterator, luaL_checkstring(state, -1));
+      root.emplace_back(luaL_checkstring(state, -1));
     } else if (lua_type(state, -1) == LUA_TNUMBER) {
       auto indexValue = luaL_checkinteger(state, -1);
-      auto lastKey = std::prev(iterator);
-
-      if (lastKey == root.before_begin()) {
+      if (root.empty()) {
         lua_pop(state, 1);
         return Error::Create(
             "Invalid resource key: indexing without a preceding key part");
       }
 
-      lastKey->Index = static_cast<uint64_t>(indexValue);
+      root.back().Index = static_cast<uint64_t>(indexValue);
     } else {
       lua_pop(state, 1);
       return Error::Create(

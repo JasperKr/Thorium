@@ -1,12 +1,14 @@
 #include "reflect.hpp"
 #include "Graphics/bufferformat.hpp"
 #include "Graphics/graphicsContext.hpp"
+#include "Graphics/graphicsState.hpp"
 #include "Modules/Helpers/utils.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "slang/slang.h"
 
 #include "vulkan/vulkan_core.h"
+#include <algorithm>
 #include <cassert>
 #include <format>
 #include <iterator>
@@ -886,6 +888,73 @@ auto ShaderReflection::ConstructUBOStruct(uint32_t set, uint32_t binding)
 
   globals.size = globalBufferFormat.GetStride();
   hasGlobals = globals.size > 0;
+
+  CHECK_ERR(FlattenReflection());
+
+  return {};
+}
+
+inline auto FlattenResource(const ResourceInfo &resource,
+                            FlattenedReflection &flattenedResources,
+                            ResourceKey &currentKey, uint32_t idx,
+                            uint32_t arraySize) -> void {
+
+  if (arraySize > 1) {
+    currentKey.emplace_back(resource.name, idx);
+  } else {
+    currentKey.emplace_back(resource.name);
+  }
+
+  for (uint32_t i = 0; i < std::max(resource.GetArraySize(), 1U); i++) {
+    if (resource.IsStruct()) {
+      const auto &structInfo = std::get<StructInfo>(resource.info);
+      for (const auto &field : structInfo.fields) {
+        FlattenResource(field, flattenedResources, currentKey, i,
+                        resource.GetArraySize());
+      }
+    } else if (resource.IsBuffer()) {
+      const auto &bufferInfo = std::get<BufferInfo>(resource.info);
+      if (bufferInfo.IsStruct()) {
+        const auto &structInfo = std::get<StructInfo>(bufferInfo.info);
+        for (const auto &field : structInfo.fields) {
+          FlattenResource(field, flattenedResources, currentKey, i,
+                          resource.GetArraySize());
+        }
+      } else {
+        flattenedResources.keyToInfo.emplace(currentKey, resource);
+      }
+    } else {
+      flattenedResources.keyToInfo.emplace(currentKey, resource);
+    }
+  }
+
+  currentKey.pop_back();
+}
+
+auto ShaderReflection::FlattenReflection() -> Error {
+  for (const auto &resource : resources) {
+    // Only flatten samplers and buffers, skip other types
+    if (!resource.IsSampler() && !resource.IsBuffer()) {
+      continue;
+    }
+
+    ResourceKey currentKey;
+    FlattenResource(resource, flattened, currentKey, 0,
+                    resource.GetArraySize());
+  }
+
+  ResourceInfo globalData{};
+  globalData.name = "Globals";
+  globalData.stages = VK_SHADER_STAGE_ALL;
+  globalData.info = globals;
+
+  ResourceKey currentKey;
+  FlattenResource(globalData, flattened, currentKey, 0, 1);
+
+  for (const auto &[key, info] : flattened.keyToInfo) {
+    PrintAlways("Flattened Resource Key: {} -> Info Name: {}",
+                ResourceKeyToString(key), info.name);
+  }
 
   return {};
 }

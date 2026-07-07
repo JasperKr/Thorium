@@ -282,6 +282,7 @@ inline auto SlangStageToString(SlangStage stage) -> std::string_view {
   }
 }
 
+// NOLINTNEXTLINE
 static inline auto LoadSlang(const GraphicsContext &context,
                              Ref<Shader> &shader) -> Error {
   slang::SessionDesc sessionDesc = {};
@@ -406,8 +407,7 @@ static inline auto LoadSlang(const GraphicsContext &context,
   ERR_ASSERT(!shader->entryPoints.empty());
 
   if (shader->entryPoints.at(0).second == VK_SHADER_STAGE_COMPUTE_BIT) {
-    ERR_ASSERT_MSG(entryPointCount == 1,
-                   "Compute shader must have exactly one entry point.");
+    ERR_ASSERT(entryPointCount == 1);
 
     auto *entrypointReflection = shader->programLayout->getEntryPointByIndex(0);
 
@@ -433,22 +433,13 @@ static inline auto LoadSlang(const GraphicsContext &context,
         context.deviceProperties.limits.maxComputeWorkGroupSize[2],
     };
 
-    ERR_ASSERT_MSG(
-        out_workgroupSize[0] * out_workgroupSize[1] * out_workgroupSize[2] <=
-            invocationlimit,
-        std::format(
-            "Compute shader threadgroup size exceeds device limit of {} "
-            "invocations.",
-            std::to_string(invocationlimit)));
+    ERR_ASSERT(out_workgroupSize[0] * out_workgroupSize[1] *
+                   out_workgroupSize[2] <=
+               invocationlimit);
 
-    for (SlangUInt i = 0; i < 3; i++) {
-      ERR_ASSERT_MSG(
-          shader->threadgroupSize[i] <= sizelimit[i],
-          std::format(
-              "Compute shader threadgroup size in dimension {} exceeds device "
-              "limit of {}.",
-              std::to_string(i), std::to_string(sizelimit[i])));
-    }
+    ERR_ASSERT(shader->threadgroupSize.x <= sizelimit.x);
+    ERR_ASSERT(shader->threadgroupSize.y <= sizelimit.y);
+    ERR_ASSERT(shader->threadgroupSize.z <= sizelimit.z);
   }
 
   Slang::ComPtr<slang::IBlob> spirvCode;
@@ -463,9 +454,8 @@ static inline auto LoadSlang(const GraphicsContext &context,
 
   PrintDebug("Creating Vulkan shader module...");
 
-  std::vector<uint32_t> data;
   size_t codeSize = spirvCode->getBufferSize();
-  data.resize(codeSize / 4);
+  std::vector<uint32_t> data(codeSize / 4);
   memcpy(data.data(), spirvCode->getBufferPointer(), codeSize);
 
   // NOLINTNEXTLINE
@@ -594,11 +584,12 @@ inline auto ValidateBuffers(const Shader *shader) -> Error {
 }
 
 void append(ResourceKey &dest, const ResourceKey &src) {
-  auto iterator = dest.before_begin();
-  for (auto &&data : dest) {
-    iterator++;
-  }
-  dest.insert_after(iterator, src.begin(), src.end());
+  // auto iterator = dest.before_begin();
+  // for (auto &&data : dest) {
+  //   iterator++;
+  // }
+  // dest.insert_after(iterator, src.begin(), src.end());
+  dest.insert(dest.end(), src.begin(), src.end());
 }
 
 auto Shader::GetUniform(const ResourceKey &key) const
@@ -672,8 +663,7 @@ auto Shader::Send(const ResourceKey &key, const std::span<const uint8_t> &data)
   }
 
   // check global ubo
-  ResourceKey globalsKey = {};
-  globalsKey.emplace_front("Globals");
+  ResourceKey globalsKey = {"Globals"};
   append(globalsKey, key);
 
   uint64_t arrayOffset = 0;

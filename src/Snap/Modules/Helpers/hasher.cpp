@@ -1,6 +1,7 @@
 #include "hasher.hpp"
 #include <cstdint>
 #include <functional>
+#include <string_view>
 
 namespace Hash {
 
@@ -13,6 +14,10 @@ auto Hasher::Add(size_t value) -> void {
 }
 
 auto Hasher::Add(void *ptr) -> void { Add(std::hash<void *>()(ptr)); }
+
+auto Hasher::Add(const char *str) -> void {
+  Add(std::hash<std::string_view>()(str));
+}
 
 auto Hasher::Get() const -> size_t { return hashedValue; }
 auto Hasher::Reset() -> void { hashedValue = 0; }

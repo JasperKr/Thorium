@@ -8,6 +8,7 @@ struct Hasher {
 
   auto Add(size_t value) -> void;
   auto Add(void *ptr) -> void;
+  auto Add(const char *str) -> void;
 
   [[nodiscard]] auto Get() const -> size_t;
   auto Reset() -> void;

@@ -1,9 +1,11 @@
 #pragma once
 
+#include "Modules/Helpers/hasher.hpp"
 #include <forward_list>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 #include <vulkan/vulkan_core.h>
 namespace Graphics {
 
@@ -117,8 +119,25 @@ struct KeyElement {
 
     return Key;
   }
+
+  auto operator==(const KeyElement &other) const -> bool {
+    return std::string_view(Key) == std::string_view(other.Key) &&
+           Index == other.Index;
+  }
 };
 
-using ResourceKey = std::forward_list<KeyElement>;
+using ResourceKey = std::vector<KeyElement>;
+
+struct ResourceKeyHash {
+  auto operator()(const ResourceKey &key) const -> size_t {
+    Hash::Hasher hasher;
+    for (const auto &element : key) {
+      hasher.Add(element.Key);
+      hasher.Add(element.Index);
+    }
+
+    return hasher.Get();
+  }
+};
 
 } // namespace Graphics

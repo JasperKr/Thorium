@@ -424,6 +424,9 @@ struct ResourceInfo {
 auto ResourceInfoToBufferFormat(const ResourceInfo &info, Standard std)
     -> Result<std::variant<Graphics::BufferFormat, Graphics::BufferComponent>>;
 
+struct FlattenedReflection {
+  std::unordered_map<ResourceKey, ResourceInfo, ResourceKeyHash> keyToInfo;
+};
 struct ShaderReflection {
   std::vector<ResourceInfo> resources;
   std::unordered_map<uint64_t, ResourceInfo> slotToInfo;
@@ -433,6 +436,9 @@ struct ShaderReflection {
 
   // NOLINTNEXTLINE
   auto ConstructUBOStruct(uint32_t set, uint32_t binding) -> Error;
+  auto FlattenReflection() -> Error;
+
+  FlattenedReflection flattened;
 };
 
 auto ReflectShader(const Graphics::GraphicsContext &context,

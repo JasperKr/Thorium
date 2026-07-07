@@ -439,42 +439,42 @@ auto inline GetColorBlendAttachmentState(const GraphicsContext &context,
 
   auto *shader = state.shader.get();
 
-#ifndef NDEBUG
-  if (!shader->entryPointToStageIndex.contains(
-          SlangStage::SLANG_STAGE_FRAGMENT)) {
-    return std::vector<VkPipelineColorBlendAttachmentState>{};
-  }
+  // #ifndef NDEBUG
+  //   if (!shader->entryPointToStageIndex.contains(
+  //           SlangStage::SLANG_STAGE_FRAGMENT)) {
+  //     return std::vector<VkPipelineColorBlendAttachmentState>{};
+  //   }
 
-  auto entryPointIndex =
-      shader->entryPointToStageIndex.at(SlangStage::SLANG_STAGE_FRAGMENT);
+  //   auto entryPointIndex =
+  //       shader->entryPointToStageIndex.at(SlangStage::SLANG_STAGE_FRAGMENT);
 
-  auto *entryPoint =
-      shader->programLayout->getEntryPointByIndex(entryPointIndex);
+  //   auto *entryPoint =
+  //       shader->programLayout->getEntryPointByIndex(entryPointIndex);
 
-  if (entryPoint == nullptr) {
-    return Error::Unexpected(
-        "Failed to get fragment entry point from shader program layout");
-  }
+  //   if (entryPoint == nullptr) {
+  //     return Error::Unexpected(
+  //         "Failed to get fragment entry point from shader program layout");
+  //   }
 
-  auto *outputVariableLayout = entryPoint->getResultVarLayout();
+  //   auto *outputVariableLayout = entryPoint->getResultVarLayout();
 
-  if (outputVariableLayout == nullptr) {
-    // No fragment outputs, so no blend attachments needed
-    return std::vector<VkPipelineColorBlendAttachmentState>{};
-  }
+  //   if (outputVariableLayout == nullptr) {
+  //     // No fragment outputs, so no blend attachments needed
+  //     return std::vector<VkPipelineColorBlendAttachmentState>{};
+  //   }
 
-  // Determine Expected Output Attachments //
+  //   // Determine Expected Output Attachments //
 
-  std::unordered_set<uint32_t> expectedAttachments = {};
-  for (uint32_t i = 0;
-       i < outputVariableLayout->getTypeLayout()->getFieldCount(); ++i) {
-    auto *outVar = outputVariableLayout->getTypeLayout()->getFieldByIndex(i);
-    if (outVar->getSemanticName() != nullptr &&
-        strcmp(outVar->getSemanticName(), "SV_Target") == 0) {
-      expectedAttachments.insert(outVar->getSemanticIndex());
-    }
-  }
-#endif
+  //   std::unordered_set<uint32_t> expectedAttachments = {};
+  //   for (uint32_t i = 0;
+  //        i < outputVariableLayout->getTypeLayout()->getFieldCount(); ++i) {
+  //     auto *outVar = outputVariableLayout->getTypeLayout()->getFieldByIndex(i);
+  //     if (outVar->getSemanticName() != nullptr &&
+  //         strcmp(outVar->getSemanticName(), "SV_Target") == 0) {
+  //       expectedAttachments.insert(outVar->getSemanticIndex());
+  //     }
+  //   }
+  // #endif
 
   // Get Actual Set Render Targets //
 
@@ -507,17 +507,17 @@ auto inline GetColorBlendAttachmentState(const GraphicsContext &context,
         "Cannot mix implicit and explicit render target locations.");
   }
 
-#ifndef NDEBUG
-  for (uint32_t i = 0; i <= blendAttachments.size(); ++i) {
-    if (expectedAttachments.contains(i)) {
-      if (i >= blendAttachments.size()) {
-        return Error::Unexpected(
-            "Missing blend attachment for expected output location " +
-            std::to_string(i));
-      }
-    }
-  }
-#endif
+  // #ifndef NDEBUG
+  //   for (uint32_t i = 0; i <= blendAttachments.size(); ++i) {
+  //     if (expectedAttachments.contains(i)) {
+  //       if (i >= blendAttachments.size()) {
+  //         return Error::Unexpected(
+  //             "Missing blend attachment for expected output location " +
+  //             std::to_string(i));
+  //       }
+  //     }
+  //   }
+  // #endif
 
   return blendAttachments;
 }
