@@ -281,10 +281,10 @@ struct ResourceInfo {
                             BufferInfo, StructInfo>
                    info)
       : name(name), stages(stages), info(std::move(info)) {}
-  ResourceInfo(const ResourceInfo &other)
-      : name(other.name), stages(other.stages), info(other.info) {}
+  ResourceInfo(const ResourceInfo &other) = default;
   ResourceInfo(ResourceInfo &&other) noexcept
-      : name(other.name), stages(other.stages), info(std::move(other.info)) {}
+      : name(other.name), stages(other.stages), info(std::move(other.info)),
+        offset(other.offset), set(other.set), binding(other.binding) {}
   auto operator=(const ResourceInfo &other) -> ResourceInfo & {
     if (this != &other) {
       name = other.name;
@@ -305,7 +305,9 @@ struct ResourceInfo {
 
   const char *name{};
   VkShaderStageFlags stages = VK_SHADER_STAGE_ALL;
-  uint32_t offset{0};
+  uint32_t offset{};
+  uint32_t set{};
+  uint32_t binding{};
 
   [[nodiscard]] constexpr auto IsBuffer() const -> bool {
     return std::holds_alternative<BufferInfo>(info);

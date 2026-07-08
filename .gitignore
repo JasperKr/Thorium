@@ -14,7 +14,7 @@ vgcore.*
 *.dylib
 *.glb
 *.gltf
-Assets/
+/Assets/
 *.so*
 *.log
 *.tmp

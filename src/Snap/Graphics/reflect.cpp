@@ -10,6 +10,7 @@
 #include "vulkan/vulkan_core.h"
 #include <algorithm>
 #include <cassert>
+#include <cstdint>
 #include <format>
 #include <iterator>
 
@@ -894,53 +895,128 @@ auto ShaderReflection::ConstructUBOStruct(uint32_t set, uint32_t binding)
   return {};
 }
 
-inline auto FlattenResource(const ResourceInfo &resource,
-                            FlattenedReflection &flattenedResources,
-                            ResourceKey &currentKey, uint32_t idx,
-                            uint32_t arraySize) -> void {
+struct FlatteningState {
+  FlattenedReflection *flattened = nullptr;
+  ResourceKey *currentKey = nullptr;
+  uint32_t idx{};
+  uint32_t arraySize{};
+  uint32_t parentSet{};
+  uint32_t parentBinding{};
+  uint32_t currentOffset{};
+  Standard std = Standard::Std140;
+};
 
-  if (arraySize > 1) {
-    currentKey.emplace_back(resource.name, idx);
+// NOLINTNEXTLINE
+inline auto FlattenResource(ResourceInfo &resource, FlatteningState &state)
+    -> Error {
+
+  if (state.arraySize > 1) {
+    state.currentKey->emplace_back(resource.name, state.idx);
   } else {
-    currentKey.emplace_back(resource.name);
+    state.currentKey->emplace_back(resource.name);
   }
 
+  if (resource.IsBuffer()) {
+    const auto &bufferInfo = std::get<BufferInfo>(resource.info);
+    resource.set = bufferInfo.set;
+    resource.binding = bufferInfo.binding;
+    resource.offset = bufferInfo.offset;
+
+    switch (bufferInfo.bufferType) {
+    case BufferType::Uniform:
+      state.std = Standard::Std140;
+      break;
+    case BufferType::Storage:
+      state.std = Standard::Std430;
+      break;
+    case BufferType::Unknown:
+    case BufferType::PushConstant:
+      state.std = Standard::Std140;
+      break;
+    }
+  } else if (resource.IsSampler()) {
+    const auto &samplerInfo = std::get<SamplerInfo>(resource.info);
+    resource.set = samplerInfo.set;
+    resource.binding = samplerInfo.binding;
+  } else {
+    resource.set = state.parentSet;
+    resource.binding = state.parentBinding;
+  }
+
+  state.parentBinding = resource.binding;
+  state.parentSet = resource.set;
+  size_t baseAlign = 0;
+
   for (uint32_t i = 0; i < std::max(resource.GetArraySize(), 1U); i++) {
+    resource.offset = resource.GetOffset() + state.currentOffset;
+
     if (resource.IsStruct()) {
-      const auto &structInfo = std::get<StructInfo>(resource.info);
-      for (const auto &field : structInfo.fields) {
-        FlattenResource(field, flattenedResources, currentKey, i,
-                        resource.GetArraySize());
-      }
-    } else if (resource.IsBuffer()) {
-      const auto &bufferInfo = std::get<BufferInfo>(resource.info);
-      if (bufferInfo.IsStruct()) {
-        const auto &structInfo = std::get<StructInfo>(bufferInfo.info);
-        for (const auto &field : structInfo.fields) {
-          FlattenResource(field, flattenedResources, currentKey, i,
-                          resource.GetArraySize());
+      state.parentSet = resource.set;
+      state.parentBinding = resource.binding;
+
+      auto &structInfo = std::get<StructInfo>(resource.info);
+      for (auto &field : structInfo.fields) {
+        FlatteningState newState = state;
+        newState.currentOffset += resource.GetOffset();
+        if (newState.currentOffset != 0) {
+          PrintWarning("Got non-zero current offset: {}");
         }
-      } else {
-        flattenedResources.keyToInfo.emplace(currentKey, resource);
+        newState.idx = i;
+        newState.arraySize = resource.GetArraySize();
+        CHECK_ERR(FlattenResource(field, newState));
       }
+
+    } else if (resource.IsBuffer()) {
+      auto &bufferInfo = std::get<BufferInfo>(resource.info);
+      FlatteningState newState = state;
+      newState.idx = i;
+      newState.arraySize = resource.GetArraySize();
+
+      ResourceInfo info;
+      if (std::holds_alternative<StructInfo>(bufferInfo.info)) {
+        info.info = std::get<StructInfo>(bufferInfo.info);
+      } else if (std::holds_alternative<ScalarInfo>(bufferInfo.info)) {
+        info.info = std::get<ScalarInfo>(bufferInfo.info);
+      } else if (std::holds_alternative<VectorInfo>(bufferInfo.info)) {
+        info.info = std::get<VectorInfo>(bufferInfo.info);
+      } else if (std::holds_alternative<MatrixInfo>(bufferInfo.info)) {
+        info.info = std::get<MatrixInfo>(bufferInfo.info);
+      } else {
+        PrintError("Unsupported buffer info type for flattening.");
+        continue;
+      }
+      info.binding = bufferInfo.binding;
+      info.set = bufferInfo.set;
+      info.stages = resource.stages;
+      info.name = resource.name;
+
+      CHECK_ERR(FlattenResource(info, newState));
     } else {
-      flattenedResources.keyToInfo.emplace(currentKey, resource);
+      state.flattened->keyToInfo.emplace(*state.currentKey, resource);
     }
   }
 
-  currentKey.pop_back();
+  state.currentKey->pop_back();
+
+  return {};
 }
 
 auto ShaderReflection::FlattenReflection() -> Error {
-  for (const auto &resource : resources) {
+  for (auto &resource : resources) {
     // Only flatten samplers and buffers, skip other types
     if (!resource.IsSampler() && !resource.IsBuffer()) {
       continue;
     }
 
     ResourceKey currentKey;
-    FlattenResource(resource, flattened, currentKey, 0,
-                    resource.GetArraySize());
+    FlatteningState state{
+        .flattened = &flattened,
+        .currentKey = &currentKey,
+        .idx = 0,
+        .arraySize = resource.GetArraySize(),
+    };
+
+    CHECK_ERR(FlattenResource(resource, state));
   }
 
   ResourceInfo globalData{};
@@ -949,11 +1025,28 @@ auto ShaderReflection::FlattenReflection() -> Error {
   globalData.info = globals;
 
   ResourceKey currentKey;
-  FlattenResource(globalData, flattened, currentKey, 0, 1);
+  FlatteningState state{
+      .flattened = &flattened,
+      .currentKey = &currentKey,
+      .idx = 0,
+      .arraySize = 1,
+      .parentSet = globals.set,
+      .parentBinding = globals.binding,
+  };
+
+  CHECK_ERR(FlattenResource(globalData, state));
 
   for (const auto &[key, info] : flattened.keyToInfo) {
-    PrintAlways("Flattened Resource Key: {} -> Info Name: {}",
-                ResourceKeyToString(key), info.name);
+    PrintAlways("Flattened Resource Key: {} -> Info Name: {}, s,b,o: {},{},{}",
+                ResourceKeyToString(key), info.name, info.set, info.binding,
+                info.offset);
+  }
+
+  static int shaderCompiledCount = 0;
+  shaderCompiledCount++;
+
+  if (shaderCompiledCount > 8) {
+    return Error::Create("Test");
   }
 
   return {};
