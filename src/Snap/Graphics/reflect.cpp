@@ -12,135 +12,9 @@
 #include <cassert>
 #include <cstdint>
 #include <format>
-#include <iterator>
+#include <variant>
 
 namespace Graphics::Reflect {
-
-// Resolve path for struct fields is exclusive to the struct resource info
-// Since structs are nameless and their name is only described by the parent resource info
-auto StructInfo::ResolvePath(Graphics::ResourceKey::const_iterator iterator,
-                             Graphics::ResourceKey::const_iterator end,
-                             uint64_t &arrayOffset) const
-    -> const ResourceInfo * {
-
-  if (iterator == end) {
-    return nullptr;
-  }
-
-  ResourceInfo const *field = nullptr;
-
-  for (const auto &currentField : fields) {
-    // if (currentField.name == *iterator) {
-    if (iterator->Matches(currentField.name)) {
-      field = &currentField;
-      break;
-    }
-  }
-
-  if (field == nullptr) {
-    return nullptr;
-  }
-
-  if (iterator->IsIndexingKey()) {
-    auto indexOpt = iterator->GetIndex();
-    if (!indexOpt.has_value()) {
-      return nullptr;
-    }
-
-    size_t index = indexOpt.value();
-    auto arraySize = field->GetArraySize();
-
-    if (arraySize <= 1 || index >= arraySize) {
-      return nullptr;
-    }
-
-    arrayOffset += field->GetSize() * index;
-  }
-
-  if (std::next(iterator) != end) {
-    if (!std::holds_alternative<StructInfo>(field->info)) {
-      return field;
-    }
-
-    const auto &structInfo = std::get<StructInfo>(field->info);
-    return structInfo.ResolvePath(std::next(iterator), end, arrayOffset);
-  }
-
-  return field;
-}
-
-auto ResourceInfo::ResolvePath(Graphics::ResourceKey::const_iterator iterator,
-                               Graphics::ResourceKey::const_iterator end,
-                               uint64_t &arrayOffset) const
-    -> const ResourceInfo * {
-  // Last element and name does not match, return nullptr
-  if (iterator == end || !iterator->Matches(name)) {
-    return nullptr;
-  }
-
-  // Last element, and name matches, return this
-  if (std::next(iterator) == end) {
-    return this;
-  }
-
-  // Not a struct, cannot resolve further
-  if (!std::holds_alternative<StructInfo>(info)) {
-    return nullptr;
-  }
-
-  if (iterator->IsIndexingKey()) {
-    auto indexOpt = iterator->GetIndex();
-    if (!indexOpt.has_value()) {
-      return nullptr;
-    }
-
-    size_t index = indexOpt.value();
-    auto arraySize = GetArraySize();
-
-    if (arraySize <= 1 || index >= arraySize) {
-      return nullptr;
-    }
-
-    arrayOffset += GetSize() * index;
-  }
-
-  const auto &structInfo = std::get<StructInfo>(info);
-  return structInfo.ResolvePath(std::next(iterator), end, arrayOffset);
-}
-
-auto BufferInfo::ResolvePath(Graphics::ResourceKey::const_iterator iterator,
-                             Graphics::ResourceKey::const_iterator end,
-                             uint64_t &arrayOffset) const
-    -> const ResourceInfo * {
-  if (std::next(iterator) == end) {
-    return nullptr;
-  }
-
-  if (!std::holds_alternative<StructInfo>(info)) {
-    return nullptr;
-  }
-
-  if (iterator->IsIndexingKey()) {
-    auto indexOpt = iterator->GetIndex();
-    if (!indexOpt.has_value()) {
-      return nullptr;
-    }
-
-    size_t index = indexOpt.value();
-    if (arraySize <= 1 || index >= arraySize) {
-      return nullptr;
-    }
-
-    arrayOffset += size * index;
-  }
-
-  const auto &structInfo = std::get<StructInfo>(info);
-  if (iterator->Matches(name)) {
-    return structInfo.ResolvePath(std::next(iterator), end, arrayOffset);
-  }
-
-  return nullptr;
-}
 
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 auto SetupVariant(slang::VariableLayoutReflection *layout)
@@ -154,6 +28,7 @@ auto SetupVariant(slang::VariableLayoutReflection *layout)
 
     structInfo.size = static_cast<uint32_t>(baseType->getSize());
     structInfo.alignment = static_cast<uint32_t>(baseType->getAlignment());
+    structInfo.offset = static_cast<uint32_t>(layout->getOffset());
 
     assert(layout != nullptr);
 
@@ -472,6 +347,7 @@ auto SetupResource(slang::VariableLayoutReflection *variableLayout,
       structInfo.alignment =
           static_cast<uint32_t>(bufferLayout->getAlignment());
       structInfo.name = "Unnamed Structured Buffer Struct";
+      structInfo.offset = static_cast<uint32_t>(elementVarLayout->getOffset());
 
       for (int i = 0; i < bufferLayout->getFieldCount(); ++i) {
         auto *fieldVariable = bufferLayout->getFieldByIndex(i);
@@ -530,6 +406,7 @@ auto SetupFromType(slang::VariableLayoutReflection *variableLayout,
     structInfo.name = typeName;
     structInfo.size = static_cast<uint32_t>(typeLayout->getSize());
     structInfo.alignment = static_cast<uint32_t>(typeLayout->getAlignment());
+    structInfo.offset = static_cast<uint32_t>(variableLayout->getOffset());
 
     for (int i = 0; i < paramCount; i++) {
       auto *param = typeLayout->getFieldByIndex(i);
@@ -904,17 +781,12 @@ struct FlatteningState {
   uint32_t parentBinding{};
   uint32_t currentOffset{};
   Standard std = Standard::Std140;
+  std::unordered_map<ResourceKey, uint64_t, ResourceKeyHash> *keyToSlot;
 };
 
 // NOLINTNEXTLINE
 inline auto FlattenResource(ResourceInfo &resource, FlatteningState &state)
     -> Error {
-
-  if (state.arraySize > 1) {
-    state.currentKey->emplace_back(resource.name, state.idx);
-  } else {
-    state.currentKey->emplace_back(resource.name);
-  }
 
   if (resource.IsBuffer()) {
     const auto &bufferInfo = std::get<BufferInfo>(resource.info);
@@ -934,6 +806,7 @@ inline auto FlattenResource(ResourceInfo &resource, FlatteningState &state)
       state.std = Standard::Std140;
       break;
     }
+
   } else if (resource.IsSampler()) {
     const auto &samplerInfo = std::get<SamplerInfo>(resource.info);
     resource.set = samplerInfo.set;
@@ -941,6 +814,18 @@ inline auto FlattenResource(ResourceInfo &resource, FlatteningState &state)
   } else {
     resource.set = state.parentSet;
     resource.binding = state.parentBinding;
+  }
+
+  if (!resource.IsBuffer() && strcmp(resource.name, "Globals") != 0) {
+    if (state.arraySize > 1) {
+      state.currentKey->emplace_back(resource.name, state.idx);
+    } else {
+      state.currentKey->emplace_back(resource.name);
+    }
+
+    state.keyToSlot->emplace(
+        *state.currentKey,
+        Utils::SetBindingToSlot(resource.set, resource.binding));
   }
 
   state.parentBinding = resource.binding;
@@ -957,10 +842,7 @@ inline auto FlattenResource(ResourceInfo &resource, FlatteningState &state)
       auto &structInfo = std::get<StructInfo>(resource.info);
       for (auto &field : structInfo.fields) {
         FlatteningState newState = state;
-        newState.currentOffset += resource.GetOffset();
-        if (newState.currentOffset != 0) {
-          PrintWarning("Got non-zero current offset: {}");
-        }
+        newState.currentOffset += resource.offset;
         newState.idx = i;
         newState.arraySize = resource.GetArraySize();
         CHECK_ERR(FlattenResource(field, newState));
@@ -996,7 +878,9 @@ inline auto FlattenResource(ResourceInfo &resource, FlatteningState &state)
     }
   }
 
-  state.currentKey->pop_back();
+  if (!resource.IsBuffer() && strcmp(resource.name, "Globals") != 0) {
+    state.currentKey->pop_back();
+  }
 
   return {};
 }
@@ -1008,45 +892,65 @@ auto ShaderReflection::FlattenReflection() -> Error {
       continue;
     }
 
+    bool isPushConstant = false;
+    isPushConstant =
+        resource.IsBuffer() &&
+        resource.GetInfo<BufferInfo>().bufferType == BufferType::PushConstant;
+
     ResourceKey currentKey;
     FlatteningState state{
-        .flattened = &flattened,
+        .flattened = isPushConstant
+                         ? &pushBuffers.emplace_back()
+                         : &flattened.try_emplace(resource.set).first->second,
         .currentKey = &currentKey,
         .idx = 0,
         .arraySize = resource.GetArraySize(),
+        .keyToSlot = &keyToSlot,
     };
 
     CHECK_ERR(FlattenResource(resource, state));
-  }
 
-  ResourceInfo globalData{};
-  globalData.name = "Globals";
-  globalData.stages = VK_SHADER_STAGE_ALL;
-  globalData.info = globals;
+    for (auto &entry : state.flattened->keyToInfo) {
+      state.flattened->size =
+          std::max(state.flattened->size,
+                   entry.second.GetOffset() + entry.second.GetSize());
+    }
+  }
 
   ResourceKey currentKey;
   FlatteningState state{
-      .flattened = &flattened,
+      .flattened = &flattened.try_emplace(globals.set).first->second,
       .currentKey = &currentKey,
       .idx = 0,
       .arraySize = 1,
       .parentSet = globals.set,
       .parentBinding = globals.binding,
+      .keyToSlot = &keyToSlot,
   };
 
-  CHECK_ERR(FlattenResource(globalData, state));
-
-  for (const auto &[key, info] : flattened.keyToInfo) {
-    PrintAlways("Flattened Resource Key: {} -> Info Name: {}, s,b,o: {},{},{}",
-                ResourceKeyToString(key), info.name, info.set, info.binding,
-                info.offset);
+  ResourceInfo info;
+  if (std::holds_alternative<StructInfo>(globals.info)) {
+    info.info = std::get<StructInfo>(globals.info);
+  } else if (std::holds_alternative<ScalarInfo>(globals.info)) {
+    info.info = std::get<ScalarInfo>(globals.info);
+  } else if (std::holds_alternative<VectorInfo>(globals.info)) {
+    info.info = std::get<VectorInfo>(globals.info);
+  } else if (std::holds_alternative<MatrixInfo>(globals.info)) {
+    info.info = std::get<MatrixInfo>(globals.info);
+  } else {
+    PrintError("Unsupported buffer info type for flattening.");
   }
+  info.binding = globals.binding;
+  info.set = globals.set;
+  info.stages = VK_SHADER_STAGE_ALL;
+  info.name = "Globals";
 
-  static int shaderCompiledCount = 0;
-  shaderCompiledCount++;
+  CHECK_ERR(FlattenResource(info, state));
 
-  if (shaderCompiledCount > 8) {
-    return Error::Create("Test");
+  for (auto &entry : state.flattened->keyToInfo) {
+    state.flattened->size =
+        std::max(state.flattened->size,
+                 entry.second.GetOffset() + entry.second.GetSize());
   }
 
   return {};

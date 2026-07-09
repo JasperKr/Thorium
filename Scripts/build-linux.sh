@@ -18,6 +18,9 @@ elif [ "$CONFIG" == "Release" ]; then
   FLAGS="$FLAGS -O3 -ffast-math -flto=thin -march=native"
 elif [ "$CONFIG" == "RelWithDebInfo" ]; then
   FLAGS="$FLAGS -O2 -g -ftime-trace"
+else
+  echo "Unknown configuration: $CONFIG"
+  exit 1
 fi
 
 echo "Building with configuration: $CONFIG"

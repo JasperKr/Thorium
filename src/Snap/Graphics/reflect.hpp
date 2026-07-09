@@ -210,11 +210,6 @@ struct StructInfo : ResourceBase {
   std::vector<uint32_t> fieldOffsets;
 
   uint32_t alignment;
-
-  [[nodiscard]] auto ResolvePath(Graphics::ResourceKey::const_iterator iterator,
-                                 Graphics::ResourceKey::const_iterator end,
-                                 uint64_t &arrayOffset) const
-      -> const ResourceInfo *;
 };
 
 enum class BufferType : uint8_t {
@@ -259,11 +254,6 @@ struct BufferInfo : ResourceBase {
   }
 
   std::variant<StructInfo, ScalarInfo, VectorInfo, MatrixInfo> info;
-
-  [[nodiscard]] auto ResolvePath(Graphics::ResourceKey::const_iterator iterator,
-                                 Graphics::ResourceKey::const_iterator end,
-                                 uint64_t &arrayOffset) const
-      -> const ResourceInfo *;
 
   [[nodiscard]] auto ToString() const -> std::string;
 };
@@ -353,10 +343,6 @@ struct ResourceInfo {
     return std::visit([](const auto &data) -> uint32_t { return data.size; },
                       info);
   }
-  [[nodiscard]] auto ResolvePath(Graphics::ResourceKey::const_iterator iterator,
-                                 Graphics::ResourceKey::const_iterator end,
-                                 uint64_t &arrayOffset) const
-      -> const ResourceInfo *;
 
   std::variant<SamplerInfo, ScalarInfo, VectorInfo, MatrixInfo, BufferInfo,
                StructInfo>
@@ -428,6 +414,8 @@ auto ResourceInfoToBufferFormat(const ResourceInfo &info, Standard std)
 
 struct FlattenedReflection {
   std::unordered_map<ResourceKey, ResourceInfo, ResourceKeyHash> keyToInfo;
+
+  uint32_t size{}; // Not stride
 };
 struct ShaderReflection {
   std::vector<ResourceInfo> resources;
@@ -440,7 +428,10 @@ struct ShaderReflection {
   auto ConstructUBOStruct(uint32_t set, uint32_t binding) -> Error;
   auto FlattenReflection() -> Error;
 
-  FlattenedReflection flattened;
+  // Set -> FlattenedReflection
+  std::unordered_map<uint32_t, FlattenedReflection> flattened;
+  std::unordered_map<ResourceKey, uint64_t, ResourceKeyHash> keyToSlot;
+  std::vector<FlattenedReflection> pushBuffers;
 };
 
 auto ReflectShader(const Graphics::GraphicsContext &context,

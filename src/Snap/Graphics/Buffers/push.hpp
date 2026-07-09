@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <span>
 #include <vector>
 
@@ -17,12 +18,12 @@ struct FlushInfo {
 
 struct PushBuffer {
 public:
-  explicit PushBuffer(Reflect::ResourceInfo inputLayout,
+  explicit PushBuffer(Reflect::FlattenedReflection reflection,
                       VkShaderStageFlags stage = VK_SHADER_STAGE_ALL);
 
   [[nodiscard]] auto GetBufferOffset() const -> size_t;
   [[nodiscard]] auto GetBufferSize() const -> size_t;
-  [[nodiscard]] auto GetLayout() const -> const Reflect::ResourceInfo &;
+  [[nodiscard]] auto GetLayout() const -> const Reflect::FlattenedReflection &;
   auto FlushData(FlushInfo &info) -> void;
 
   auto SetData(const ResourceKey &key, const std::span<const uint8_t> &values)
@@ -32,15 +33,14 @@ public:
 
   [[nodiscard]] auto GetStageFlags() const -> VkShaderStageFlags;
 
-  [[nodiscard]] auto ContainsUniform(ResourceKey::const_iterator iterator,
-                                     ResourceKey::const_iterator end) const
-      -> bool;
-  [[nodiscard]] auto GetUniform(ResourceKey::const_iterator iterator,
-                                ResourceKey::const_iterator end) const
+  [[nodiscard]] auto ContainsUniform(const ResourceKey &key) const -> bool;
+  [[nodiscard]] auto GetUniformOffset(const ResourceKey &key) const
+      -> std::optional<uint32_t>;
+  [[nodiscard]] auto GetUniform(const ResourceKey &key) const
       -> const Reflect::ResourceInfo *;
 
 private:
-  Reflect::ResourceInfo layout;
+  Reflect::FlattenedReflection layout;
   std::vector<uint8_t> data;
   VkShaderStageFlags stageFlags{VK_SHADER_STAGE_ALL};
 };

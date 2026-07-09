@@ -1,128 +1,75 @@
 #include "push.hpp"
 #include "Graphics/reflect.hpp"
-#include "Modules/console.hpp"
 #include <cstring>
-#include <iterator>
+#include <optional>
 #include <utility>
 #include <vector>
 
 namespace Graphics {
 
-PushBuffer::PushBuffer(Reflect::ResourceInfo inputLayout,
+PushBuffer::PushBuffer(Reflect::FlattenedReflection reflection,
                        VkShaderStageFlags stage)
-    : layout(std::move(inputLayout)), stageFlags(stage) {
+    : layout(std::move(reflection)), stageFlags(stage) {
 
-  if (!layout.IsBuffer()) {
-    PrintError("PushBuffer layout must be a buffer.");
-    return;
-  }
-
-  auto &bufferInfo = std::get<Reflect::BufferInfo>(layout.info);
-
-  if (std::holds_alternative<Reflect::ScalarInfo>(bufferInfo.info)) {
-    data.resize(std::get<Reflect::ScalarInfo>(bufferInfo.info).size);
-  } else if (std::holds_alternative<Reflect::VectorInfo>(bufferInfo.info)) {
-    data.resize(std::get<Reflect::VectorInfo>(bufferInfo.info).size);
-  } else if (std::holds_alternative<Reflect::MatrixInfo>(bufferInfo.info)) {
-    data.resize(std::get<Reflect::MatrixInfo>(bufferInfo.info).size);
-  } else if (std::holds_alternative<Reflect::StructInfo>(bufferInfo.info)) {
-    data.resize(std::get<Reflect::StructInfo>(bufferInfo.info).size);
-  }
-
-  bufferInfo.name = layout.name;
-  bufferInfo.GetInfo<Reflect::StructInfo>().name = layout.name;
+  data.resize(layout.size);
 }
 
-auto PushBuffer::GetBufferSize() const -> size_t {
-  const auto &bufferInfo = std::get<Reflect::BufferInfo>(layout.info);
-  if (std::holds_alternative<Reflect::StructInfo>(bufferInfo.info)) {
-    return std::get<Reflect::StructInfo>(bufferInfo.info).size;
-  }
-  return bufferInfo.size;
-}
+auto PushBuffer::GetBufferSize() const -> size_t { return layout.size; }
 
-auto PushBuffer::GetLayout() const -> const Reflect::ResourceInfo & {
+auto PushBuffer::GetLayout() const -> const Reflect::FlattenedReflection & {
   return layout;
 }
 
 auto PushBuffer::FlushData(FlushInfo &info) -> void {
-  const auto &bufferInfo = std::get<Reflect::BufferInfo>(layout.info);
-  auto bufferSize = bufferInfo.size;
-
-  if (bufferInfo.IsStruct()) {
-    bufferSize = std::get<Reflect::StructInfo>(bufferInfo.info).size;
-  }
+  auto bufferSize = GetBufferSize();
 
   vkCmdPushConstants(info.commandBuffer, info.pipelineLayout, stageFlags,
-                     bufferInfo.offset, bufferSize, data.data());
+                     GetBufferOffset(), bufferSize, data.data());
 }
 
-auto PushBuffer::ContainsUniform(ResourceKey::const_iterator iterator,
-                                 ResourceKey::const_iterator end) const
-    -> bool {
-
-  if (std::next(iterator) == end) {
-    return iterator->Matches(layout.name);
-  }
-
-  if (!iterator->Matches(layout.name)) {
-    return false;
-  }
-
-  const auto &bufferInfo = std::get<Reflect::BufferInfo>(layout.info);
-
-  uint64_t arrayOffset = 0;
-
-  return bufferInfo.ResolvePath(iterator, end, arrayOffset) != nullptr;
+auto PushBuffer::ContainsUniform(const ResourceKey &key) const -> bool {
+  return layout.keyToInfo.contains(key);
 }
 
-auto PushBuffer::GetUniform(ResourceKey::const_iterator iterator,
-                            ResourceKey::const_iterator end) const
+auto PushBuffer::GetUniformOffset(const ResourceKey &key) const
+    -> std::optional<uint32_t> {
+  auto iter = layout.keyToInfo.find(key);
+  if (iter == layout.keyToInfo.end()) {
+    return std::nullopt;
+  }
+
+  return iter->second.offset;
+}
+
+auto PushBuffer::GetUniform(const ResourceKey &key) const
     -> const Reflect::ResourceInfo * {
-  if (std::next(iterator) == end) {
-    if (iterator->Matches(layout.name)) {
-      return &layout;
-    }
-
+  auto iter = layout.keyToInfo.find(key);
+  if (iter == layout.keyToInfo.end()) {
     return nullptr;
   }
 
-  const auto &bufferInfo = std::get<Reflect::BufferInfo>(layout.info);
-
-  uint64_t arrayOffset = 0;
-
-  return bufferInfo.ResolvePath(iterator, end, arrayOffset);
+  return &iter->second;
 }
 
 auto PushBuffer::GetStageFlags() const -> VkShaderStageFlags {
   return stageFlags;
 }
 
+// NOLINTNEXTLINE
 auto PushBuffer::GetBufferOffset() const -> size_t {
-  // const auto &bufferInfo = std::get<Reflect::BufferInfo>(layout.info); // TODO: Use this?
-  return layout.offset;
+  return 0; // TODO
 }
 
 auto PushBuffer::SetData(const ResourceKey &key,
                          const std::span<const uint8_t> &values) -> Error {
 
-  const auto &bufferInfo = std::get<Reflect::BufferInfo>(layout.info);
-
-  if (!std::holds_alternative<Reflect::StructInfo>(bufferInfo.info)) {
-    return Error::Create(
-        "SetData with key only supported for struct push buffers");
+  auto offsetOpt = GetUniformOffset(key);
+  if (!offsetOpt.has_value()) {
+    return Error::Create("Uniform `" + Reflect::ResourceKeyToString(key) +
+                         "` not found in push buffer.");
   }
 
-  const auto *result = GetUniform(key.begin(), key.end());
-  if (result == nullptr) {
-    return Error::Create("Uniform not found in push buffer.");
-  }
-
-  size_t offset = result->GetOffset();
-
-  if (result->GetSize() != values.size()) {
-    return Error::Create("Data size does not match field size");
-  }
+  auto offset = offsetOpt.value();
 
   if (offset + values.size() > data.size()) {
     return Error::Create("Data exceeds buffer size");
@@ -130,24 +77,6 @@ auto PushBuffer::SetData(const ResourceKey &key,
 
   // NOLINTNEXTLINE
   std::memcpy(data.data() + offset, values.data(), values.size());
-
-  return Error::Success();
-}
-
-auto PushBuffer::SetData(const std::span<const uint8_t> &values) -> Error {
-  const auto &bufferInfo = std::get<Reflect::BufferInfo>(layout.info);
-
-  if (!bufferInfo.IsScalar() && !bufferInfo.IsVector() &&
-      !bufferInfo.IsMatrix()) {
-    return Error::Create("SetData without name only supported for scalar, "
-                         "vector, and matrix push buffers");
-  }
-
-  if (values.size() > data.size()) {
-    return Error::Create("Data exceeds buffer size");
-  }
-
-  std::memcpy(data.data(), values.data(), values.size());
 
   return Error::Success();
 }

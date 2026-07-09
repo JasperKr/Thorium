@@ -152,18 +152,12 @@ struct Shader : Object {
   auto Send(const ResourceKey &key,
             const Ref<::Graphics::StructuredBuffer> &buffer) -> Error;
 
-  // Basic resource info. Returned resource does not include offsets based on array indexing but will be the correct type.
   auto GetUniform(const ResourceKey &key) const
       -> const Reflect::ResourceInfo *;
 
-  // Returns the resource info and the offset based on array indexing.
-  // This is separate since copying resource info would be expensive.
-  auto GetUniform(const ResourceKey &key, uint64_t &arrayOffset) const
-      -> const Reflect::ResourceInfo *;
-
   auto GetSlotDescription(uint32_t set, uint32_t binding)
-      -> const Reflect::ResourceInfo *;
-  auto GetSlotDescription(uint64_t slot) -> const Reflect::ResourceInfo *;
+      -> Reflect::ResourceInfo *;
+  auto GetSlotDescription(uint64_t slot) -> Reflect::ResourceInfo *;
 
   auto GetThreadgroupSize() const -> Result<Math::Uvec3>;
   auto GetWaveSize() const -> uint32_t;

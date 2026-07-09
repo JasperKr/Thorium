@@ -527,16 +527,8 @@ auto Shader::Create(
 
   CHECK_ERR(ReflectShader(context, shader->programLayout, shader->reflection));
 
-  for (auto &layout : shader->reflection.resources) {
-    if (layout.IsBuffer()) {
-      const auto &bufferInfo = std::get<Reflect::BufferInfo>(layout.info);
-
-      if (bufferInfo.bufferType == Reflect::BufferType::PushConstant) {
-        auto result = PushBuffer(layout);
-
-        shader->pushBuffers.emplace_back(result);
-      }
-    }
+  for (auto &layout : shader->reflection.pushBuffers) {
+    shader->pushBuffers.emplace_back(layout);
   }
 
 #if Enable_Snapshots
@@ -547,8 +539,12 @@ auto Shader::Create(
   shader->globalUniforms.resize(
       shader->reflection.globalBufferFormat.GetStride());
 
-  shader->slangModule->release();
-  shader->linkedProgram->release();
+  // shader->slangModule->release();
+  // shader->linkedProgram->release();
+
+  shader->programLayout = nullptr;
+  shader->slangModule = nullptr;
+  shader->linkedProgram = nullptr;
 
   return shader;
 }
@@ -584,71 +580,24 @@ inline auto ValidateBuffers(const Shader *shader) -> Error {
 }
 
 void append(ResourceKey &dest, const ResourceKey &src) {
-  // auto iterator = dest.before_begin();
-  // for (auto &&data : dest) {
-  //   iterator++;
-  // }
-  // dest.insert_after(iterator, src.begin(), src.end());
   dest.insert(dest.end(), src.begin(), src.end());
 }
 
 auto Shader::GetUniform(const ResourceKey &key) const
     -> const Reflect::ResourceInfo * {
   for (const auto &pushBuffer : pushBuffers) {
-    const auto *info = pushBuffer.GetUniform(key.begin(), key.end());
+    const auto *info = pushBuffer.GetUniform(key);
     if (info == nullptr) {
       continue;
     }
     return info;
   }
 
-  // check global ubo
-  ResourceKey globalsKey{"Globals"};
-  append(globalsKey, key);
-
-  uint64_t arrayOffset = 0;
-
-  const auto *info = reflection.globals.ResolvePath(
-      globalsKey.begin(), globalsKey.end(), arrayOffset);
-  if (info != nullptr) {
-    return info;
+  const auto &globalInfo = reflection.flattened.at(reflection.globals.set);
+  auto iter = globalInfo.keyToInfo.find(key);
+  if (iter != globalInfo.keyToInfo.end()) {
+    return &iter->second;
   }
-
-  for (const auto &resource : reflection.resources) {
-    if (key.begin()->Matches(resource.name)) {
-      return &resource;
-    }
-  }
-
-  return nullptr;
-}
-
-auto Shader::GetUniform(const ResourceKey &key, uint64_t &arrayOffset) const
-    -> const Reflect::ResourceInfo * {
-  for (const auto &pushBuffer : pushBuffers) {
-    const auto *info = pushBuffer.GetUniform(key.begin(), key.end());
-    if (info == nullptr) {
-      continue;
-    }
-    return info;
-  }
-
-  // check global ubo
-  ResourceKey globalsKey{"Globals"};
-  append(globalsKey, key);
-
-  const auto *info = reflection.globals.ResolvePath(
-      globalsKey.begin(), globalsKey.end(), arrayOffset);
-  if (info != nullptr) {
-    return info;
-  }
-
-  for (const auto &resource : reflection.resources) {
-    if (key.begin()->Matches(resource.name)) {
-      return &resource;
-    }
-  }
-
   return nullptr;
 }
 
@@ -657,25 +606,19 @@ auto Shader::Send(const ResourceKey &key, const std::span<const uint8_t> &data)
   ZoneScopedN("Shader::Send data span");
 
   for (auto &pushBuffer : pushBuffers) {
-    if (pushBuffer.ContainsUniform(key.begin(), key.end())) {
+    if (pushBuffer.ContainsUniform(key)) {
       return pushBuffer.SetData(key, data);
     }
   }
 
-  // check global ubo
-  ResourceKey globalsKey = {"Globals"};
-  append(globalsKey, key);
-
-  uint64_t arrayOffset = 0;
-
-  const auto *info = reflection.globals.ResolvePath(
-      globalsKey.begin(), globalsKey.end(), arrayOffset);
+  const auto *info = GetUniform(key);
   if (info == nullptr) {
-    return Error::Create("Uniform `" + Reflect::ResourceKeyToString(key) +
-                         "` not found.");
+    auto keyname = Reflect::ResourceKeyToString(key);
+    return Error::Createf("Uniform {} not found in shader reflection: {}",
+                          keyname, name);
   }
 
-  size_t offset = info->GetOffset() + arrayOffset;
+  size_t offset = info->offset;
   assert(offset + data.size() <= globalUniforms.size() &&
          "Data exceeds global uniform buffer size.");
 
@@ -692,21 +635,23 @@ auto Shader::Send(const ResourceKey &key, const Ref<Buffer> &buffer) -> Error {
     return Error::Create("Buffer is null.");
   }
 
-  for (const auto &resource : reflection.resources) {
-    if (!std::holds_alternative<Reflect::BufferInfo>(resource.info)) {
-      continue;
+  auto iter = reflection.keyToSlot.find(key);
+  if (iter != reflection.keyToSlot.end()) {
+    auto locationKey = iter->second;
+    auto [set, binding] = Utils::SlotToSetBinding(locationKey);
+
+    auto *info = GetSlotDescription(set, binding);
+    auto *bufferInfo = std::get_if<Reflect::BufferInfo>(&info->info);
+    if (bufferInfo == nullptr) {
+      auto keyname = Reflect::ResourceKeyToString(key);
+      return Error::Createf(
+          "Resource {} is not a buffer in shader reflection: {}", keyname,
+          name);
     }
 
-    const auto &bufferInfo = std::get<Reflect::BufferInfo>(resource.info);
-    if (key.begin()->Matches(resource.name)) {
-      auto locationKey =
-          Utils::SetBindingToSlot(bufferInfo.set, bufferInfo.binding);
-
-      GetState().userBoundBuffers[locationKey] =
-          BoundBufferPair{buffer, &bufferInfo};
-
-      return Error::Success();
-    }
+    GetState().userBoundBuffers[locationKey] =
+        BoundBufferPair{buffer, bufferInfo};
+    return Error::Success();
   }
 
   auto keyname = Reflect::ResourceKeyToString(key);
@@ -736,28 +681,23 @@ auto Shader::Send(const ResourceKey &key, const Ref<Graphics::Texture> &texture)
     return Error::Createf("Texture {} has no valid image view.", keyname);
   }
 
-  for (const auto &resource : reflection.resources) {
-    if (!std::holds_alternative<Reflect::SamplerInfo>(resource.info)) {
-      continue;
+  auto iter = reflection.keyToSlot.find(key);
+  if (iter != reflection.keyToSlot.end()) {
+    auto locationKey = iter->second;
+    auto [set, binding] = Utils::SlotToSetBinding(locationKey);
+
+    auto *info = GetSlotDescription(set, binding);
+    auto *samplerInfo = std::get_if<Reflect::SamplerInfo>(&info->info);
+    if (samplerInfo == nullptr) {
+      auto keyname = Reflect::ResourceKeyToString(key);
+      return Error::Createf(
+          "Resource {} is not a sampler in shader reflection: {}", keyname,
+          name);
     }
 
-    const auto &samplerInfo = std::get<Reflect::SamplerInfo>(resource.info);
-    assert(resource.name != nullptr);
-
-    if (key.begin()->Matches(resource.name)) {
-      auto key = Utils::SetBindingToSlot(samplerInfo.set, samplerInfo.binding);
-
-      if ((samplerInfo.access == SLANG_RESOURCE_ACCESS_WRITE ||
-           samplerInfo.access == SLANG_RESOURCE_ACCESS_READ_WRITE) &&
-          !texture->SupportsStorage()) {
-        return Error::Create(
-            "Texture does not support storage access required by shader.");
-      }
-
-      GetState().userBoundTextures[key] = {texture, &samplerInfo};
-
-      return Error::Success();
-    }
+    GetState().userBoundTextures[locationKey] =
+        BoundTexturePair{texture, samplerInfo};
+    return Error::Success();
   }
 
   auto keyname = Reflect::ResourceKeyToString(key);
@@ -782,7 +722,7 @@ auto Shader::GetThreadgroupSize() const -> Result<Math::Uvec3> {
 auto Shader::GetWaveSize() const -> uint32_t { return waveSize; }
 
 auto Shader::GetSlotDescription(uint32_t set, uint32_t binding) // NOLINT
-    -> const Reflect::ResourceInfo * {
+    -> Reflect::ResourceInfo * {
 
   auto key = Utils::SetBindingToSlot(set, binding);
 
@@ -794,8 +734,7 @@ auto Shader::GetSlotDescription(uint32_t set, uint32_t binding) // NOLINT
   return &iter->second;
 }
 
-auto Shader::GetSlotDescription(uint64_t slot)
-    -> const Reflect::ResourceInfo * {
+auto Shader::GetSlotDescription(uint64_t slot) -> Reflect::ResourceInfo * {
 
   auto iter = reflection.slotToInfo.find(slot);
   if (iter == reflection.slotToInfo.end()) {
