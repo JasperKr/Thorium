@@ -9,6 +9,7 @@
 #include "Modules/error.hpp"
 #include "Modules/imageData.hpp"
 #include "Renderer/rendertargetManager.hpp"
+#include "Renderer/shaderManager.hpp"
 #include "Scene/Lights/directionalLight.hpp"
 #include "Scene/Lights/pointLight.hpp"
 #include "Scene/Lights/rectangleLight.hpp"
@@ -266,35 +267,6 @@ auto Renderer::BindLightBuffers(const Graphics::GraphicsContext &context,
   return {};
 }
 
-auto Renderer::GetShader(ShaderKey shaderKey) -> Result<Ref<Graphics::Shader>> {
-  auto iterator = LoadedShaders.find(shaderKey);
-  if (iterator != LoadedShaders.end()) {
-    return iterator->second;
-  }
-
-  auto configurationIter = ShaderConfigurations.find(shaderKey);
-  if (configurationIter == ShaderConfigurations.end()) {
-    auto intKey = static_cast<int>(shaderKey);
-    return Error::Unexpectedf("Shader not found for key: {}", intKey);
-  }
-
-  const auto &configuration = configurationIter->second;
-
-  auto context = *Graphics::GetCurrentGraphicsContext();
-
-  auto moduleResult =
-      Graphics::Shader::Create(context, configuration.path, configuration.name);
-
-  if (Error::IsError(moduleResult)) {
-    return moduleResult.error();
-  }
-
-  auto shaderModule = moduleResult.value();
-  LoadedShaders[shaderKey] = shaderModule;
-
-  return shaderModule;
-}
-
 auto DrawFullScreen(const Graphics::GraphicsContext &context) -> Error {
   return Graphics::Draw(context, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
                         3, // NOLINT
@@ -315,10 +287,10 @@ void Renderer::Deinitialize() {
   DefaultMaterial = Material();
   MaterialsBuffer.reset();
   ModelTransformsBuffer.reset();
-  LoadedShaders.clear();
 
   SceneLightBuffers = Lights();
   LightProbeBuffer = nullptr;
+  ShaderManager = ::Engine::Renderer::ShaderManager();
 }
 
 } // namespace Engine::Renderer

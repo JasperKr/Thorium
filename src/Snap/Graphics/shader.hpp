@@ -27,15 +27,6 @@ struct StructuredBuffer;
 
 namespace Graphics {
 
-struct ShaderExtern {
-  std::string name;
-  std::string value;
-
-  auto operator==(const ShaderExtern &other) const -> bool {
-    return name == other.name && value == other.value;
-  }
-};
-
 static const Type LuaShaderType = Type("Shader");
 
 constexpr auto
@@ -96,7 +87,6 @@ struct Shader : Object {
   uint64_t modTime{};
 
   std::string name;
-  std::vector<ShaderExtern> externs;
 
   slang::ProgramLayout *programLayout = nullptr;
   Slang::ComPtr<slang::IModule> slangModule = nullptr;
@@ -171,10 +161,6 @@ struct Shader : Object {
       return false;
     }
 
-    if (externs != other.externs) {
-      return false;
-    }
-
     return true;
   }
 
@@ -194,7 +180,5 @@ auto SlangStageToVkStage(SlangStage stage) -> VkShaderStageFlagBits;
 
 auto LoadShaderModule() -> Error;
 void UnloadShaderModule(const GraphicsContext &context);
-
-auto AddGlobalShaderExtern(const ShaderExtern &externVar) -> void;
 
 } // namespace Graphics

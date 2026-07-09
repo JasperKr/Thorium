@@ -123,17 +123,6 @@ void UnloadShaderModule(const Graphics::GraphicsContext &context) {
   slang::shutdown();
 }
 
-static inline auto GetGlobalShaderExterns() -> std::vector<ShaderExtern> & {
-  static std::vector<ShaderExtern> GlobalShaderExterns = {};
-  return GlobalShaderExterns;
-}
-
-auto AddGlobalShaderExtern(const ShaderExtern &externVar) -> void {
-  static std::vector<ShaderExtern> &GlobalShaderExterns =
-      GetGlobalShaderExterns();
-  GlobalShaderExterns.emplace_back(externVar);
-}
-
 inline auto VkShaderStageToShaderCStage(VkShaderStageFlagBits stage)
     -> shaderc_shader_kind {
   switch (stage) {

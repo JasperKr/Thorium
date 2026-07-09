@@ -14,10 +14,12 @@
 #include "Modules/filesystem.hpp"
 #include "Modules/object.hpp"
 #include "Renderer/lightProbe.hpp"
+#include "Renderer/shaderManager.hpp"
 #include "Scene/camera.hpp"
 #include "Scene/cameraMatrices.hpp"
 #include "Scene/scene.hpp"
 #include "Scene/transform.hpp"
+#include "renderer.hpp"
 #include <array>
 #include <cstdint>
 #include <vulkan/vulkan_core.h>
@@ -107,26 +109,6 @@ auto LightprobePrefilterManager::Initialize( // NOLINT
   }
 
   CHECK_ERR(CreateStorageTextures(context, EnvMapReallocationStep));
-
-  DownsampleShader = CHECK_RES(Graphics::Shader::Create(
-      context, "Scripting/Graphics/Shaders/IBL/downsample.slang",
-      "Environment map downsample"));
-
-  EnvironmentMapToOctahedralShader = CHECK_RES(Graphics::Shader::Create(
-      context, "Scripting/Graphics/Shaders/IBL/envToOct.slang",
-      "Store environment map"));
-
-  PrefilterRadianceShader = CHECK_RES(Graphics::Shader::Create(
-      context, "Scripting/Graphics/Shaders/IBL/filterRadiance.slang",
-      "Prefilter radiance"));
-
-  PrefilterIrradianceShader = CHECK_RES(Graphics::Shader::Create(
-      context, "Scripting/Graphics/Shaders/IBL/filterIrradiance.slang",
-      "Prefilter irradiance"));
-
-  StoreEnvironmentMapShader = CHECK_RES(Graphics::Shader::Create(
-      context, "Scripting/Graphics/Shaders/IBL/storeEnvMap.slang",
-      "Store environment map"));
 
   // NOLINTNEXTLINE
   Camera = CHECK_RES(Engine::Camera::Create(
@@ -276,33 +258,40 @@ auto LightprobePrefilterManager::PrefilterRadianceMap(
 
   /// Run the downsample shader to generate the mipmaps for the environment map ///
 
-  Graphics::DynamicRendering::SetShader(DownsampleShader);
+  auto downsampleShader =
+      CHECK_RES(RendererInstance.GetShaderManager().GetShader(
+          ShaderKey::DownsampleEnvironmentMap));
+
+  Graphics::DynamicRendering::SetShader(downsampleShader);
 
   for (uint32_t level = 0; level < ProbeReflectionMipLevels - 1; level++) {
     auto &params = levelParameters.at(level);
 
     CHECK_ERR(
-        DownsampleShader->Send({"tex_hi_res"}, envMapCubeViews.at(level)));
+        downsampleShader->Send({"tex_hi_res"}, envMapCubeViews.at(level)));
     CHECK_ERR(
-        DownsampleShader->Send({"tex_lo_res"}, envMapArrayViews.at(level + 1)));
+        downsampleShader->Send({"tex_lo_res"}, envMapArrayViews.at(level + 1)));
 
     CHECK_ERR(Graphics::DispatchWithin(
         context, {params.Resolution, params.Resolution, 6}));
   }
 
   // Prefilter the environment map for radiance ///
+  auto prefilterRadianceShader =
+      CHECK_RES(RendererInstance.GetShaderManager().GetShader(
+          ShaderKey::PrefilterRadiance));
 
-  CHECK_ERR(PrefilterRadianceShader->Send({"Coefficients"},
+  CHECK_ERR(prefilterRadianceShader->Send({"Coefficients"},
                                           PrefilteredRadianceCoeffsBuffer));
-  CHECK_ERR(PrefilterRadianceShader->Send({"InputTexture"}, envMap));
+  CHECK_ERR(prefilterRadianceShader->Send({"InputTexture"}, envMap));
 
-  Graphics::DynamicRendering::SetShader(PrefilterRadianceShader);
+  Graphics::DynamicRendering::SetShader(prefilterRadianceShader);
 
   for (uint32_t level = 0; level < ProbeReflectionMipLevels; level++) {
     auto key = std::format("OutputTexture{}", level);
     const auto &view = outputViews.at(level);
 
-    CHECK_ERR(PrefilterRadianceShader->Send({key.c_str()}, view));
+    CHECK_ERR(prefilterRadianceShader->Send({key.c_str()}, view));
   }
 
   constexpr static uint64_t PixelCount = Image::GetTexelCount(
@@ -315,20 +304,23 @@ auto LightprobePrefilterManager::PrefilterRadianceMap(
   CHECK_ERR(Graphics::DispatchWithin(context, {PixelCount, 6, 1}));
 
   /// Store the environment map in octahedral format for sampling in the shader ///
+  auto storeEnvironmentMapShader =
+      CHECK_RES(RendererInstance.GetShaderManager().GetShader(
+          ShaderKey::StoreEnvironmentMap));
 
-  CHECK_ERR(StoreEnvironmentMapShader->Send({"Input"}, TemporaryRadianceMap));
+  CHECK_ERR(storeEnvironmentMapShader->Send({"Input"}, TemporaryRadianceMap));
 
   for (uint32_t level = 0; level < ProbeReflectionMipLevels; level++) {
     auto key = std::format("Output_Mip_{}", level);
     const auto &view = RadianceMapViews.at(level);
 
-    CHECK_ERR(StoreEnvironmentMapShader->Send({key.c_str()}, view));
+    CHECK_ERR(storeEnvironmentMapShader->Send({key.c_str()}, view));
   }
 
-  CHECK_ERR(Graphics::UniformWriter::Send(StoreEnvironmentMapShader, {"Slice"},
+  CHECK_ERR(Graphics::UniformWriter::Send(storeEnvironmentMapShader, {"Slice"},
                                           lightProbe.EnvironmentMapIndex));
 
-  Graphics::DynamicRendering::SetShader(StoreEnvironmentMapShader);
+  Graphics::DynamicRendering::SetShader(storeEnvironmentMapShader);
 
   constexpr static uint64_t FullPixelCount = Image::GetTexelCount(
       VkExtent2D{
@@ -344,15 +336,17 @@ auto LightprobePrefilterManager::PrefilterRadianceMap(
 
 auto LightprobePrefilterManager::PrefilterIrradianceMap(
     const Graphics::GraphicsContext &context, int32_t slice) -> Error {
-  if (slice < 0) {
-    return Error::Create("Invalid environment map index");
-  }
+  ERR_ASSERT(slice >= 0);
 
-  CHECK_ERR(Graphics::UniformWriter::Send(PrefilterIrradianceShader, {"Slice"},
+  auto prefilterIrradianceShader =
+      CHECK_RES(RendererInstance.GetShaderManager().GetShader(
+          ShaderKey::PrefilterIrradiance));
+
+  CHECK_ERR(Graphics::UniformWriter::Send(prefilterIrradianceShader, {"Slice"},
                                           slice));
-  CHECK_ERR(PrefilterIrradianceShader->Send({"RadianceInput"}, RadianceMaps));
+  CHECK_ERR(prefilterIrradianceShader->Send({"RadianceInput"}, RadianceMaps));
   CHECK_ERR(
-      PrefilterIrradianceShader->Send({"IrradianceOutput"}, IrradianceMaps));
+      prefilterIrradianceShader->Send({"IrradianceOutput"}, IrradianceMaps));
 
   // NOLINTBEGIN
   if (IrradianceMaps->GetWidth() != 32UL ||
@@ -361,7 +355,7 @@ auto LightprobePrefilterManager::PrefilterIrradianceMap(
   }
   // NOLINTEND
 
-  Graphics::DynamicRendering::SetShader(PrefilterIrradianceShader);
+  Graphics::DynamicRendering::SetShader(prefilterIrradianceShader);
 
   CHECK_ERR(
       Graphics::DispatchWithin(context, {PrefilteredIrradianceMapsSize,
@@ -547,12 +541,6 @@ auto LightprobePrefilterManager::Deinitialize() -> void {
   PrefilteredRadianceCoeffsBuffer.reset();
 
   EnvMapUsed.fill(false);
-
-  DownsampleShader.reset();
-  PrefilterRadianceShader.reset();
-  PrefilterIrradianceShader.reset();
-  StoreEnvironmentMapShader.reset();
-  EnvironmentMapToOctahedralShader.reset();
 }
 
 } // namespace Engine::Renderer

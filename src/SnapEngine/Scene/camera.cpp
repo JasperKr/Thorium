@@ -155,8 +155,9 @@ auto Camera::Create(const Graphics::GraphicsContext &context,
 
 auto Camera::ApplyPostProcessing(const Graphics::GraphicsContext &context)
     -> Error {
-  auto shader = CHECK_RES(Renderer::RendererInstance.GetShader(
-      Renderer::ShaderKey::PostProcessing));
+  auto shader =
+      CHECK_RES(Renderer::RendererInstance.GetShaderManager().GetShader(
+          Renderer::ShaderKey::PostProcessing));
   Graphics::DynamicRendering::SetShader(shader);
 
   OwnedTextures.PostProcessed =
@@ -211,8 +212,9 @@ auto Camera::RenderSkybox(const Graphics::GraphicsContext &context,
                    .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
                }}));
 
-  auto shader = CHECK_RES(
-      Renderer::RendererInstance.GetShader(Renderer::ShaderKey::Skybox));
+  auto shader =
+      CHECK_RES(Renderer::RendererInstance.GetShaderManager().GetShader(
+          Renderer::ShaderKey::Skybox));
 
   static auto depthBufferKey = Graphics::ResourceKey{"DepthTexture"};
   CHECK_ERR(shader->Send(depthBufferKey, OwnedTextures.Depth));
@@ -238,8 +240,9 @@ auto Camera::FillSkybox(const Graphics::GraphicsContext &context,
                    .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
                }}));
 
-  auto shader = CHECK_RES(
-      Renderer::RendererInstance.GetShader(Renderer::ShaderKey::FillSkybox));
+  auto shader =
+      CHECK_RES(Renderer::RendererInstance.GetShaderManager().GetShader(
+          Renderer::ShaderKey::FillSkybox));
 
   CHECK_ERR(shader->Send(cameraBufferKey, CameraBuffer));
 
@@ -362,8 +365,9 @@ auto Camera::ApplyLightProbes(const Graphics::GraphicsContext &context,
                     .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
                 }}));
 
-  auto shader = CHECK_RES(Renderer::RendererInstance.GetShader(
-      Renderer::ShaderKey::ApplyEnvironmentMap));
+  auto shader =
+      CHECK_RES(Renderer::RendererInstance.GetShaderManager().GetShader(
+          Renderer::ShaderKey::ApplyEnvironmentMap));
   Graphics::DynamicRendering::SetShader(shader);
   Graphics::DynamicRendering::SetDepthMode(false, false, VK_COMPARE_OP_ALWAYS);
   Graphics::DynamicRendering::SetCullMode(VK_CULL_MODE_NONE);

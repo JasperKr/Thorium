@@ -120,7 +120,7 @@ do
   function snap.keypressed(key)
     isDown[key] = true
     if key == "f5" then
-      createSnapshot = true
+      snap.renderer.reloadShaders()
     end
   end
 

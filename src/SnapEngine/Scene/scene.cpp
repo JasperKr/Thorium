@@ -491,14 +491,18 @@ auto Scene::DrawModels(Camera &camera, Frustum &frustum,
   auto &ctx = *Graphics::GetCurrentGraphicsContext();
   auto &textures = camera.GetOwnedTextures();
 
-  auto depthOpaque = CHECK_RES(
-      Renderer::RendererInstance.GetShader(Renderer::ShaderKey::DepthPrepass));
-  auto depthMasked = CHECK_RES(
-      Renderer::RendererInstance.GetShader(Renderer::ShaderKey::DepthMaskPass));
-  auto deferred = CHECK_RES(
-      Renderer::RendererInstance.GetShader(Renderer::ShaderKey::Deferred));
-  auto forward = CHECK_RES(Renderer::RendererInstance.GetShader(
-      Renderer::ShaderKey::TransparencyForward));
+  auto depthOpaque =
+      CHECK_RES(Renderer::RendererInstance.GetShaderManager().GetShader(
+          Renderer::ShaderKey::DepthPrepass));
+  auto depthMasked =
+      CHECK_RES(Renderer::RendererInstance.GetShaderManager().GetShader(
+          Renderer::ShaderKey::DepthMaskPass));
+  auto deferred =
+      CHECK_RES(Renderer::RendererInstance.GetShaderManager().GetShader(
+          Renderer::ShaderKey::Deferred));
+  auto forward =
+      CHECK_RES(Renderer::RendererInstance.GetShaderManager().GetShader(
+          Renderer::ShaderKey::TransparencyForward));
 
   static auto cameraBufferKey = Graphics::ResourceKey{"CameraData"};
   auto cameraBuffer = camera.GetBuffer()->GetBuffer();
@@ -739,8 +743,9 @@ auto Scene::DrawModels(Camera &camera, Frustum &frustum,
              }));
   }
 
-  auto shader = CHECK_RES(Renderer::RendererInstance.GetShader(
-      Renderer::ShaderKey::SimpleLighting));
+  auto shader =
+      CHECK_RES(Renderer::RendererInstance.GetShaderManager().GetShader(
+          Renderer::ShaderKey::SimpleLighting));
   Graphics::DynamicRendering::SetShader(shader);
   CHECK_ERR(shader->Send(cameraBufferKey, cameraBuffer));
   static auto albedoTextureKey = Graphics::ResourceKey{"AlbedoTexture"};

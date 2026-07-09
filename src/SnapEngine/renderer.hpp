@@ -9,6 +9,7 @@
 #include "Modules/object.hpp"
 #include "Renderer/bloomManager.hpp"
 #include "Renderer/prefilterManager.hpp"
+#include "Renderer/shaderManager.hpp"
 #include "material.hpp"
 #include <cstddef>
 #include <cstdint>
@@ -18,49 +19,6 @@
 #include <vector>
 #include <vulkan/vulkan_core.h>
 namespace Engine::Renderer {
-
-enum class ShaderKey : uint8_t {
-  DepthPrepass,
-  DepthMaskPass,
-  Deferred,
-  SimpleLighting,
-  PostProcessing,
-  Skybox,
-  FillSkybox,
-  TransparencyForward,
-  ApplyEnvironmentMap,
-};
-
-struct ShaderConfiguration {
-  std::string path;
-  std::string name;
-  std::vector<Graphics::ShaderExtern> Externs;
-};
-
-const std::unordered_map<ShaderKey, ShaderConfiguration> ShaderConfigurations =
-    {
-        {ShaderKey::DepthPrepass,
-         {.path = "Scripting/Graphics/Shaders/Geometry/depthPrepass.slang"}},
-        {ShaderKey::DepthMaskPass,
-         {.path = "Scripting/Graphics/Shaders/Geometry/depthMaskPass.slang"}},
-        {ShaderKey::Deferred,
-         {.path = "Scripting/Graphics/Shaders/Geometry/deferred.slang"}},
-        {ShaderKey::SimpleLighting,
-         {.path = "Scripting/Graphics/Shaders/Lighting/simple.slang"}},
-        {ShaderKey::PostProcessing,
-         {.path = "Scripting/Graphics/Shaders/PostProcessing/"
-                  "postProcessing.slang"}},
-        {ShaderKey::Skybox,
-         {.path = "Scripting/Graphics/Shaders/PostProcessing/skybox.slang"}},
-        {ShaderKey::FillSkybox,
-         {.path =
-              "Scripting/Graphics/Shaders/PostProcessing/fillSkybox.slang"}},
-        {ShaderKey::TransparencyForward,
-         {.path =
-              "Scripting/Graphics/Shaders/Geometry/transparencyForward.slang"}},
-        {ShaderKey::ApplyEnvironmentMap,
-         {.path = "Scripting/Graphics/Shaders/IBL/sampleEnvMaps.slang"}},
-};
 
 const std::vector<Graphics::BufferComponent> MaterialBufferComponents = {
     Graphics::BufferComponent{
@@ -200,8 +158,6 @@ struct Renderer {
   auto BindLightBuffers(const Graphics::GraphicsContext &context,
                         const Ref<Graphics::Shader> &shader) const -> Error;
 
-  auto GetShader(ShaderKey shaderKey) -> Result<Ref<Graphics::Shader>>;
-
   auto GetDefaultMaterial() const -> const Material & {
     return DefaultMaterial;
   }
@@ -234,9 +190,9 @@ struct Renderer {
 
   auto GetLineDrawer() -> LineDrawer & { return LineDrawer; }
   auto GetBloomManager() -> BloomManager & { return BloomManager; }
+  auto GetShaderManager() -> ShaderManager & { return ShaderManager; }
 
 private:
-  std::unordered_map<ShaderKey, Ref<Graphics::Shader>> LoadedShaders;
   Material NoMaterial;
   Material DefaultMaterial;
 
@@ -253,6 +209,8 @@ private:
 
   LineDrawer LineDrawer;
   BloomManager BloomManager;
+
+  ShaderManager ShaderManager;
 
   bool initialized = false;
 

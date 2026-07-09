@@ -136,10 +136,11 @@ auto GetStackTrace(ErrorLevel level) -> std::string {
   const int MaxStackDepth = 64;
 
 #ifndef STD_STACKTRACE_SUPPORTED
+
+#if defined(_WIN32)
   const int MaxSymbolLength = 256;
   std::array<void *, MaxStackDepth> stack = {};
 
-#if defined(_WIN32)
   unsigned short frames =
       CaptureStackBackTrace(2 + level, MaxStackDepth, stack.data(), nullptr);
   std::string trace;

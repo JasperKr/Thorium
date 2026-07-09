@@ -35,6 +35,7 @@ add_library(SnapEngine
   Renderer/lightProbe.cpp
   Renderer/prefilterManager.cpp
   Renderer/bloomManager.cpp
+  Renderer/shaderManager.cpp
 
   # Wrappers
   Wrap/wrap_scene.cpp

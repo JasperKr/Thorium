@@ -68,12 +68,6 @@ private:
 
   std::array<bool, MaxEnvMaps> EnvMapUsed{};
 
-  Ref<Graphics::Shader> DownsampleShader;
-  Ref<Graphics::Shader> PrefilterRadianceShader;
-  Ref<Graphics::Shader> PrefilterIrradianceShader;
-  Ref<Graphics::Shader> StoreEnvironmentMapShader;
-  Ref<Graphics::Shader> EnvironmentMapToOctahedralShader;
-
   Engine::Camera Camera;
 
   std::vector<Ref<Graphics::Texture>> EnvMapArrayViews;
