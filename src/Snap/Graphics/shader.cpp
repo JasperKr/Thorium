@@ -727,7 +727,6 @@ auto Shader::GetSlotDescription(uint64_t slot) -> Reflect::ResourceInfo * {
 
   auto iter = reflection.slotToInfo.find(slot);
   if (iter == reflection.slotToInfo.end()) {
-    const auto &[set, binding] = Utils::SlotToSetBinding(slot);
     return nullptr;
   }
 

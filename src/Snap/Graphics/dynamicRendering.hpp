@@ -15,7 +15,6 @@
 #include <cstdint>
 #include <unordered_map>
 #include <utility>
-#include <variant>
 #include <vector>
 
 #include <vulkan/vulkan_core.h>
@@ -27,69 +26,15 @@ struct PipelineLayout {
   std::vector<VkDescriptorSetLayout> descriptorSetLayouts;
 };
 
-struct ResourceBinding {
-  uint32_t binding;
-  VkDescriptorType descriptorType;
-
-  std::variant<VkDescriptorImageInfo, VkDescriptorBufferInfo> resourceInfo;
-};
-
 struct DescriptorKey {
-  VkDescriptorSetLayout layout;
   std::vector<ResourceBinding> bindings; // sorted by binding
 
   auto operator==(const DescriptorKey &other) const -> bool {
-    if (layout != other.layout) {
-      return false;
-    }
-
     if (bindings.size() != other.bindings.size()) {
       return false;
     }
 
-    for (size_t i = 0; i < bindings.size(); ++i) {
-      const auto &firstBinding = bindings[i];
-      const auto &secondBinding = other.bindings[i];
-
-      if (firstBinding.binding != secondBinding.binding) {
-        return false;
-      }
-
-      if (std::holds_alternative<VkDescriptorImageInfo>(
-              firstBinding.resourceInfo) &&
-          std::holds_alternative<VkDescriptorImageInfo>(
-              secondBinding.resourceInfo)) {
-        const auto &firstImageInfo =
-            std::get<VkDescriptorImageInfo>(firstBinding.resourceInfo);
-        const auto &secondImageInfo =
-            std::get<VkDescriptorImageInfo>(secondBinding.resourceInfo);
-
-        if (firstImageInfo.imageView != secondImageInfo.imageView ||
-            firstImageInfo.sampler != secondImageInfo.sampler ||
-            firstImageInfo.imageLayout != secondImageInfo.imageLayout) {
-          return false;
-        }
-      } else if (std::holds_alternative<VkDescriptorBufferInfo>(
-                     firstBinding.resourceInfo) &&
-                 std::holds_alternative<VkDescriptorBufferInfo>(
-                     secondBinding.resourceInfo)) {
-        const auto &firstBufferInfo =
-            std::get<VkDescriptorBufferInfo>(firstBinding.resourceInfo);
-        const auto &secondBufferInfo =
-            std::get<VkDescriptorBufferInfo>(secondBinding.resourceInfo);
-
-        if (firstBufferInfo.buffer != secondBufferInfo.buffer ||
-            firstBufferInfo.offset != secondBufferInfo.offset ||
-            firstBufferInfo.range != secondBufferInfo.range) {
-          return false;
-        }
-      } else {
-        // One is image info, the other is buffer info
-        return false;
-      }
-    }
-
-    return true;
+    return bindings == other.bindings;
   }
 };
 
@@ -97,25 +42,9 @@ struct DescriptorKeyHash {
   auto operator()(const DescriptorKey &key) const noexcept -> size_t {
     Hash::Hasher hasher{};
 
-    hasher.Add(key.layout);
-
     for (const auto &binding : key.bindings) {
       hasher.Add(binding.binding);
-
-      if (std::holds_alternative<VkDescriptorImageInfo>(binding.resourceInfo)) {
-        const auto &imageInfo =
-            std::get<VkDescriptorImageInfo>(binding.resourceInfo);
-        hasher.Add(imageInfo.imageView);
-        hasher.Add(imageInfo.sampler);
-        hasher.Add(imageInfo.imageLayout);
-      } else if (std::holds_alternative<VkDescriptorBufferInfo>(
-                     binding.resourceInfo)) {
-        const auto &bufferInfo =
-            std::get<VkDescriptorBufferInfo>(binding.resourceInfo);
-        hasher.Add(bufferInfo.buffer);
-        hasher.Add(bufferInfo.offset);
-        hasher.Add(bufferInfo.range);
-      }
+      hasher.Add(binding.resource);
     }
 
     return hasher.Get();

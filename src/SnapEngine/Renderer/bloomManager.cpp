@@ -63,7 +63,7 @@ auto BloomManager::ApplyBloom(const Graphics::GraphicsContext &context,
   const static Graphics::ResourceKey ThresholdKey = {"PushConstants",
                                                      "threshold"};
 
-  CHECK_ERR(Graphics::UniformWriter::Send(ThresholdShader, ThresholdKey, 1.0F));
+  CHECK_ERR(Graphics::UniformWriter::Send(ThresholdShader, ThresholdKey, 0.0F));
 
   const static Graphics::ResourceKey MainSceneKey = {"mainScene"};
   CHECK_ERR(ThresholdShader->Send(MainSceneKey, textures.IncomingLight));
@@ -141,7 +141,7 @@ auto BloomManager::ApplyBloom(const Graphics::GraphicsContext &context,
                                                         "viewportSize"};
 
   // NOLINTNEXTLINE
-  CHECK_ERR(Graphics::UniformWriter::Send(UpsampleShader, IntensityKey, 1.0F));
+  CHECK_ERR(Graphics::UniformWriter::Send(UpsampleShader, IntensityKey, 0.5F));
   CHECK_ERR(Graphics::UniformWriter::Send(
       UpsampleShader, ViewportSizeKey,
       Math::Uvec2(textures.BloomDownsampleChain->GetWidth(),

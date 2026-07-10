@@ -121,6 +121,7 @@ template <class T> struct Result : tl::expected<T, Error> {
 #define CHECK_ERR(expr)                                                        \
   {                                                                            \
     auto error = (expr);                                                       \
+    [[unlikely]]                                                               \
     if (Error::IsError(error)) {                                               \
       return error;                                                            \
     }                                                                          \
@@ -130,6 +131,7 @@ template <class T> struct Result : tl::expected<T, Error> {
 #define CHECK_NEW_ERR(expr)                                                    \
   ({                                                                           \
     auto error = Error::Create(expr);                                          \
+    [[unlikely]]                                                               \
     if (Error::IsError(error)) {                                               \
       return error;                                                            \
     }                                                                          \
@@ -139,6 +141,7 @@ template <class T> struct Result : tl::expected<T, Error> {
 #define CHECK_RES(expr)                                                        \
   ({                                                                           \
     auto &&_result = (expr);                                                   \
+    [[unlikely]]                                                               \
     if (!_result.has_value()) {                                                \
       return _result.error();                                                  \
     }                                                                          \
@@ -148,6 +151,7 @@ template <class T> struct Result : tl::expected<T, Error> {
 
 #define ERR_ASSERT(expr)                                                       \
   {                                                                            \
+    [[unlikely]]                                                               \
     if (!(expr)) {                                                             \
       return Error::Createf("Assertion failed: {}", #expr);                    \
     }                                                                          \
@@ -155,6 +159,7 @@ template <class T> struct Result : tl::expected<T, Error> {
 
 #define ERR_ASSERT_MSG(expr, msg)                                              \
   {                                                                            \
+    [[unlikely]]                                                               \
     if (!(expr)) {                                                             \
       return Error::Createf("Assertion failed: {} - {}", #expr, msg);          \
     }                                                                          \

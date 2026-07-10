@@ -63,9 +63,22 @@ ShaderStageFlagsToPipelineStageFlags(VkShaderStageFlags shaderStages)
 using BoundBufferPair = std::pair<Ref<Buffer>, const Reflect::BufferInfo *>;
 using BoundTexturePair = std::pair<Ref<Texture>, const Reflect::SamplerInfo *>;
 
+struct ResourceBinding {
+  uint32_t binding{};
+  ObjectID resource{};
+
+  bool isDynamic = false;
+
+  auto operator==(const ResourceBinding &other) const -> bool {
+    return binding == other.binding && resource == other.resource &&
+           isDynamic == other.isDynamic;
+  }
+};
+
 struct BoundState {
   std::unordered_map<uint64_t, BoundBufferPair> userBoundBuffers;
   std::unordered_map<uint64_t, BoundTexturePair> userBoundTextures;
+  std::unordered_map<uint32_t, ResourceBinding> bindingInfos;
 };
 
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)

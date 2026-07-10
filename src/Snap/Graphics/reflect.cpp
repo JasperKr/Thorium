@@ -915,6 +915,16 @@ auto ShaderReflection::FlattenReflection() -> Error {
           std::max(state.flattened->size,
                    entry.second.GetOffset() + entry.second.GetSize());
     }
+
+    if (resource.IsBuffer() && !isPushConstant) {
+      bufferSlotsBySet[resource.set].emplace_back(
+          Utils::SetBindingToSlot(resource.set, resource.binding));
+      state.flattened->bindingToInfo.emplace(resource.binding, resource);
+    } else if (resource.IsSampler()) {
+      textureSlotsBySet[resource.set].emplace_back(
+          Utils::SetBindingToSlot(resource.set, resource.binding));
+      state.flattened->bindingToInfo.emplace(resource.binding, resource);
+    }
   }
 
   ResourceKey currentKey;

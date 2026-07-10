@@ -712,6 +712,7 @@ auto Texture::TransitionLayout(const GraphicsContext &context,
                                VkAccessFlags2 dstAccessMask,
                                VkImageSubresourceRange range) const -> Error {
 
+  [[unlikely]]
   if (range.layerCount == 0 || range.levelCount == 0) {
     return Error::Create(
         "Layer count and level count in subresource range must "
@@ -725,6 +726,7 @@ auto Texture::TransitionLayout(const GraphicsContext &context,
 
   auto *commandBuffer = GetCommandBuffer();
 
+  [[unlikely]]
   if (commandBuffer == nullptr) {
     return Error::Create("Failed to get command buffer for layout transition.");
   }
@@ -1216,15 +1218,19 @@ auto Texture::UseAs(const GraphicsContext &context, TextureUsage newUsage,
                     VkPipelineStageFlags2 stage, VkAttachmentLoadOp loadOp,
                     VkAttachmentStoreOp storeOp) -> Error {
 
+#ifndef NDEBUG
+  [[unlikely]]
   if (newUsage == TextureUsage::Unknown ||
       newUsage == TextureUsage::Swapchain) {
     return Error::Create("UseAs: Unknown or Swapchain is not a valid usage.");
   }
 
+  [[unlikely]]
   if (stage == VK_PIPELINE_STAGE_2_NONE) {
     return Error::Create(
         "UseAs: stage must be known when transitioning layouts.");
   }
+#endif
 
   VkAccessFlags2 currentAccess =
       GetAccessFlagsForUsage(imageMemory->lastUsage, imageMemory->format);
@@ -1237,10 +1243,13 @@ auto Texture::UseAs(const GraphicsContext &context, TextureUsage newUsage,
         VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
   }
 
+#ifndef NDEBUG
+  [[unlikely]]
   if (layerCount == 0 || levelCount == 0) {
     return Error::Create(
         "Invalid texture with zero mip levels or array layers.");
   }
+#endif
 
   auto range = VkImageSubresourceRange{
       .aspectMask = GetAspectFlagsForFormat(imageMemory->format),
@@ -1250,6 +1259,8 @@ auto Texture::UseAs(const GraphicsContext &context, TextureUsage newUsage,
       .layerCount = VK_REMAINING_ARRAY_LAYERS};
 
   auto layout = VK_IMAGE_LAYOUT_GENERAL;
+
+  [[unlikely]]
   if (newUsage == TextureUsage::PresentSrc) {
     layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
   }

@@ -414,6 +414,7 @@ auto ResourceInfoToBufferFormat(const ResourceInfo &info, Standard std)
 
 struct FlattenedReflection {
   std::unordered_map<ResourceKey, ResourceInfo, ResourceKeyHash> keyToInfo;
+  std::unordered_map<uint32_t, ResourceInfo> bindingToInfo;
 
   uint32_t size{}; // Not stride
 };
@@ -432,6 +433,10 @@ struct ShaderReflection {
   std::unordered_map<uint32_t, FlattenedReflection> flattened;
   std::unordered_map<ResourceKey, uint64_t, ResourceKeyHash> keyToSlot;
   std::vector<FlattenedReflection> pushBuffers;
+
+  // All buffers and textures corresponding to a given set, for quick lookup when binding descriptors
+  std::unordered_map<uint32_t, std::vector<uint64_t>> bufferSlotsBySet;
+  std::unordered_map<uint32_t, std::vector<uint64_t>> textureSlotsBySet;
 };
 
 auto ReflectShader(const Graphics::GraphicsContext &context,
