@@ -1331,36 +1331,6 @@ inline auto BindTextureDescriptors(const GraphicsContext &context,
     const auto *samplerInfo = pair.second;
     const auto &[set, binding] = Utils::SlotToSetBinding(location);
 
-    auto usage = samplerInfo->access == SLANG_RESOURCE_ACCESS_READ
-                     ? TextureUsage::Sampler
-                     : TextureUsage::Storage;
-
-    switch (usage) {
-    case TextureUsage::Sampler:
-      CHECK_ERR(texture->UseAsSampler(context, stage));
-      break;
-    case TextureUsage::Storage:
-      CHECK_ERR(texture->UseAsStorage(context, stage));
-      break;
-    case TextureUsage::Attachment:
-      CHECK_ERR(texture->UseAsAttachment(context));
-      break;
-    case TextureUsage::TransferSrc:
-      CHECK_ERR(texture->UseAsTransferSrc(context));
-      break;
-    case TextureUsage::TransferDst:
-      CHECK_ERR(texture->UseAsTransferDst(context));
-      break;
-    case TextureUsage::PresentSrc:
-      CHECK_ERR(texture->UseAsPresentSrc(context));
-      break;
-    [[unlikely]]
-    case TextureUsage::Unknown:
-    case TextureUsage::Swapchain:
-      return Error::Create("Bad texture usage type for binding.");
-      break;
-    }
-
     key.bindings.emplace_back(ResourceBinding{
         .binding = binding,
         .resource = texture->getID(),
