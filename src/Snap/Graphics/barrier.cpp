@@ -35,11 +35,13 @@ thread_local std::vector<BarrierSynced> GraphicsResources;
 
 inline auto IsHazard(const ResourceState &oldState,
                      const ResourceState &newState) -> bool {
-  return ((oldState.access | newState.access) &
-          (VK_ACCESS_2_SHADER_WRITE_BIT | VK_ACCESS_2_TRANSFER_WRITE_BIT |
-           VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT |
-           VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT |
-           VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT)) != 0U;
+  static constexpr VkAccessFlagBits2 writeAccessBits =
+      VK_ACCESS_2_SHADER_WRITE_BIT | VK_ACCESS_2_TRANSFER_WRITE_BIT |
+      VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT |
+      VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT |
+      VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
+
+  return ((oldState.access | newState.access) & writeAccessBits) != 0U;
 }
 
 /*
@@ -107,7 +109,6 @@ inline auto TimelineLookback(uint64_t currentTimelineIndex,
                              const ResourceState &resourceLastUsage, // NOLINT
                              const ResourceState &desiredSynchronization)
     -> bool {
-  ZoneScoped;
 
   if (!IsHazard(resourceLastUsage, desiredSynchronization)) {
     return false; // No hazard, no barrier needed
@@ -133,6 +134,7 @@ inline auto TimelineLookback(uint64_t currentTimelineIndex,
 
   uint64_t LocalTimelineIndex = GlobalTimelineIndex - GlobalTimelineOffset;
 
+  [[unlikely]]
   if (LocalTimelineIndex == 0 || currentTimelineIndex >= LocalTimelineIndex) {
     return true; // No barriers yet, need to sync
   }
@@ -149,6 +151,7 @@ inline auto TimelineLookback(uint64_t currentTimelineIndex,
       auto bit = mask & -mask;
       uint32_t bitIndex = std::countr_zero(bit);
 
+      [[unlikely]]
       if (bitIndex == 64U) { // NOLINT
         break;               // No bits set
       }
@@ -192,12 +195,11 @@ auto UpdateUsage(const GraphicsContext &context, const Texture &texture,
 
 auto UpdateUsage(const GraphicsContext &context, const BarrierSynced &resource,
                  const ResourceState &usage) -> void {
-  ZoneScoped;
-
   auto &previousAccess = resource.lastUsedAccess;
   auto &previousStages = resource.lastUsedStages;
 
   // Keep track of first usage for async recording so we can barrier later
+  [[unlikely]]
   if (resource.firstAsyncUsage) {
     GlobalResourceStateUpdates.emplace_back(resource, usage);
   }

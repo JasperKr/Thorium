@@ -334,6 +334,23 @@ auto SetupResource(slang::VariableLayoutReflection *variableLayout,
     bufferInfo.set = variableLayout->getBindingSpace();
     bufferInfo.binding = variableLayout->getBindingIndex();
     bufferInfo.access = access;
+
+    switch (access) {
+    case SLANG_RESOURCE_ACCESS_READ:
+      bufferInfo.accessFlags = VK_ACCESS_2_SHADER_READ_BIT;
+      break;
+    case SLANG_RESOURCE_ACCESS_READ_WRITE:
+      bufferInfo.accessFlags =
+          VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT;
+      break;
+    case SLANG_RESOURCE_ACCESS_WRITE:
+      bufferInfo.accessFlags = VK_ACCESS_2_SHADER_WRITE_BIT;
+      break;
+    default:
+      bufferInfo.accessFlags = 0;
+      break;
+    }
+
     bufferInfo.bufferType = BufferType::Storage;
 
     auto *bufferLayout = variableLayout->getTypeLayout();
@@ -443,6 +460,23 @@ auto SetupFromType(slang::VariableLayoutReflection *variableLayout,
     bufferInfo.set = variableLayout->getBindingSpace();
     bufferInfo.binding = variableLayout->getBindingIndex();
     bufferInfo.access = access;
+
+    switch (access) {
+    case SLANG_RESOURCE_ACCESS_READ:
+      bufferInfo.accessFlags = VK_ACCESS_2_SHADER_READ_BIT;
+      break;
+    case SLANG_RESOURCE_ACCESS_READ_WRITE:
+      bufferInfo.accessFlags =
+          VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT;
+      break;
+    case SLANG_RESOURCE_ACCESS_WRITE:
+      bufferInfo.accessFlags = VK_ACCESS_2_SHADER_WRITE_BIT;
+      break;
+    default:
+      bufferInfo.accessFlags = 0;
+      break;
+    }
+
     bufferInfo.bufferType =
         isPushConstant ? BufferType::PushConstant : BufferType::Uniform;
 

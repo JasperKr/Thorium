@@ -477,13 +477,15 @@ auto Draw(const GraphicsContext &context, Mesh &mesh, uint32_t instanceCount)
     ZoneScopedN("Resource management")
 
     {
-      std::lock_guard<std::mutex> lock(mesh.GetVertexBuffer()->mutex);
-      mesh.GetVertexBuffer()->MarkUse();
+      const auto &vertexBuffer = mesh.GetVertexBuffer();
+      // std::lock_guard<std::mutex> lock(vertexBuffer->mutex);
+      vertexBuffer->MarkUse();
     }
 
     if (mesh.GetIndexCount() > 0) {
-      std::lock_guard<std::mutex> lock(mesh.GetIndexBuffer()->mutex);
-      mesh.GetIndexBuffer()->MarkUse();
+      const auto &indexBuffer = mesh.GetIndexBuffer();
+      // std::lock_guard<std::mutex> lock(indexBuffer->mutex);
+      indexBuffer->MarkUse();
     }
   }
 

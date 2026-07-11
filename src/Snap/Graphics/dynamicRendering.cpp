@@ -1160,6 +1160,7 @@ inline auto BeginRendering(const GraphicsContext &context) -> Error {
 auto EndRendering(const GraphicsContext &context) -> void {
   ZoneScoped;
   if (GetIsCurrentlyRendering()) {
+    [[unlikely]]
     if (Graphics::GetCommandBuffer() == VK_NULL_HANDLE) {
       PrintWarning(
           "Tried to end rendering, but command buffer is null. Skipping.");
@@ -1177,13 +1178,15 @@ auto InsertResourceBarriers(const GraphicsContext &context) -> Error {
   ZoneScoped;
 
   auto &shader = TopOfStack->shader;
+  auto &state = shader->GetState();
 
-  for (const auto &bufferPair : shader->GetState().userBoundBuffers) {
+  for (const auto &bufferPair : state.userBoundBuffers) {
     const auto &buffer = bufferPair.second;
     auto key = bufferPair.first;
 
     const auto &[set, binding] = Utils::SlotToSetBinding(key);
 
+    [[unlikely]]
     if (set == shader->reflection.globals.set &&
         binding == shader->reflection.globals.binding &&
         shader->reflection.hasGlobals) {
@@ -1191,61 +1194,23 @@ auto InsertResourceBarriers(const GraphicsContext &context) -> Error {
     }
 
     const auto *slotInfo = shader->GetSlotDescription(key);
-    if (slotInfo == nullptr) {
-      return Error::Create(
-          "Failed to get slot description for bound buffer slot.");
-    }
-    if (!slotInfo->Is<Reflect::BufferInfo>()) {
-      return Error::Create("Expected buffer info for bound buffer slot.");
-    }
+    ERR_ASSERT(slotInfo != nullptr);
+    ERR_ASSERT(slotInfo->Is<Reflect::BufferInfo>());
 
     const auto &info = slotInfo->GetInfo<Reflect::BufferInfo>();
 
-    VkAccessFlags2 access = 0;
-
-    switch (info.access) {
-    case SLANG_RESOURCE_ACCESS_READ:
-      access = VK_ACCESS_2_SHADER_READ_BIT;
-      break;
-    case SLANG_RESOURCE_ACCESS_READ_WRITE:
-      access = VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT;
-      break;
-    case SLANG_RESOURCE_ACCESS_WRITE:
-      access = VK_ACCESS_2_SHADER_WRITE_BIT;
-      break;
-    default:
-      break;
-    }
-
-    if (access == 0 && info.access != SLANG_RESOURCE_ACCESS_NONE) {
+    [[unlikely]]
+    if (info.accessFlags == 0 && info.access != SLANG_RESOURCE_ACCESS_NONE) {
       PrintWarning("Buffer access type is Unknown for slang access: {}, "
                    "skipping barrier.",
                    static_cast<uint32_t>(info.access));
       continue;
     }
 
-    auto stages = VK_PIPELINE_STAGE_2_NONE;
-
-    for (const auto &stage : shader->entryPoints) {
-      switch (stage.second) {
-      case VK_SHADER_STAGE_VERTEX_BIT:
-        stages |= VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT;
-        break;
-      case VK_SHADER_STAGE_FRAGMENT_BIT:
-        stages |= VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
-        break;
-      case VK_SHADER_STAGE_COMPUTE_BIT:
-        stages |= VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
-        break;
-      default:
-        break;
-      }
-    }
-
     Barrier::UpdateUsage(context, *buffer.first,
                          {
-                             .stages = stages,
-                             .access = access,
+                             .stages = shader->combinedPipelineStages,
+                             .access = info.accessFlags,
                          });
   }
 
@@ -1255,8 +1220,6 @@ auto InsertResourceBarriers(const GraphicsContext &context) -> Error {
 inline auto BindBufferDesciptors(DescriptorKey &key, Ref<Shader> &shader,
                                  const BoundState &state, int setIndex)
     -> Error {
-  ZoneScoped;
-
   if (!shader->reflection.bufferSlotsBySet.contains(setIndex)) {
     return Error::Success();
   }
@@ -1264,9 +1227,7 @@ inline auto BindBufferDesciptors(DescriptorKey &key, Ref<Shader> &shader,
   for (const auto &location :
        shader->reflection.bufferSlotsBySet.at(setIndex)) {
     const auto &[set, binding] = Utils::SlotToSetBinding(location);
-
     ERR_ASSERT(set == setIndex);
-
     auto iter = state.userBoundBuffers.find(location);
 
     [[unlikely]]
@@ -1275,24 +1236,6 @@ inline auto BindBufferDesciptors(DescriptorKey &key, Ref<Shader> &shader,
     }
 
     const auto &buffer = iter->second;
-
-    // VkDescriptorType descriptorType = VK_DESCRIPTOR_TYPE_MAX_ENUM;
-
-    // const auto *info = shader->GetSlotDescription(location);
-    // ERR_ASSERT(info != nullptr);
-    // ERR_ASSERT(info->template Is<Reflect::BufferInfo>());
-
-    // const auto *bufferInfo = info->template GetInfoPtr<Reflect::BufferInfo>();
-
-    // if (bufferInfo->bufferType == Reflect::BufferType::Uniform) {
-    //   descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    //   ERR_ASSERT((buffer.first->usage & VK_BUFFER_USAGE_2_UNIFORM_BUFFER_BIT) !=
-    //              0);
-    // } else if (bufferInfo->bufferType == Reflect::BufferType::Storage) {
-    //   descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    //   ERR_ASSERT((buffer.first->usage & VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT) !=
-    //              0);
-    // }
 
     key.bindings.emplace_back(ResourceBinding{
         .binding = binding,
@@ -1308,8 +1251,6 @@ inline auto BindTextureDescriptors(const GraphicsContext &context,
                                    VkPipelineStageFlags2 stage,
                                    DescriptorKey &key, Ref<Shader> &shader,
                                    int setIndex) -> Error {
-  ZoneScoped;
-
   if (!shader->reflection.textureSlotsBySet.contains(setIndex)) {
     return Error::Success();
   }
@@ -1557,9 +1498,6 @@ auto BindDescriptorSets(const GraphicsContext &context,
   for (const auto &layout : CurrentPipelineLayout.descriptorSetLayouts) {
     ZoneScopedN("BindDescriptorSets loop");
 
-    // TODO: Separate descriptor key from the allocation parameters
-    // Then just iterate over the descriptor set layouts and get the resources bound by their set-binding pairs
-    // hash that and use it to look up the descriptor set in the cache
     thread_local DescriptorKey key = {
         .bindings = {},
     };

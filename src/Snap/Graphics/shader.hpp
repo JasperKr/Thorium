@@ -96,6 +96,7 @@ struct Shader : Object {
   VkShaderModule module{};
   std::vector<std::pair<std::string, VkShaderStageFlagBits>> entryPoints;
   VkShaderStageFlagBits combinedShaderStages{};
+  VkPipelineStageFlagBits2 combinedPipelineStages{};
 
   uint64_t modTime{};
 

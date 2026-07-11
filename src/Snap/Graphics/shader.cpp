@@ -435,6 +435,26 @@ static inline auto LoadSlang(const GraphicsContext &context,
 
   shader->entryPoints.resize(entryPointCount);
 
+  auto vkStages = VK_PIPELINE_STAGE_2_NONE;
+
+  for (const auto &stage : shader->entryPoints) {
+    switch (stage.second) {
+    case VK_SHADER_STAGE_VERTEX_BIT:
+      vkStages |= VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT;
+      break;
+    case VK_SHADER_STAGE_FRAGMENT_BIT:
+      vkStages |= VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+      break;
+    case VK_SHADER_STAGE_COMPUTE_BIT:
+      vkStages |= VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+      break;
+    default:
+      break;
+    }
+  }
+
+  shader->combinedPipelineStages = vkStages;
+
   result = shader->linkedProgram->getTargetCode(0, // targetIndex
                                                 spirvCode.writeRef(),
                                                 diagnosticsBlob.writeRef());
@@ -724,7 +744,6 @@ auto Shader::GetSlotDescription(uint32_t set, uint32_t binding) // NOLINT
 }
 
 auto Shader::GetSlotDescription(uint64_t slot) -> Reflect::ResourceInfo * {
-
   auto iter = reflection.slotToInfo.find(slot);
   if (iter == reflection.slotToInfo.end()) {
     return nullptr;

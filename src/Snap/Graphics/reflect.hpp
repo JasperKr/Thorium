@@ -226,6 +226,7 @@ struct BufferInfo : ResourceBase {
   uint32_t binding;
 
   SlangResourceAccess access;
+  VkAccessFlags2 accessFlags;
   BufferType bufferType;
 
   [[nodiscard]] constexpr auto IsStruct() const -> bool {
