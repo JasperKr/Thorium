@@ -2,6 +2,7 @@
 
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
+#include "Modules/stackVector.hpp"
 #include "buffer.hpp"
 #include <array>
 #include <cstdint>
@@ -113,8 +114,10 @@ struct Mesh : Object {
     VkDeviceSize *offsets;
   };
 
-  auto GetBindingRanges() const -> std::span<const VertexBindingRange> {
-    return {BindingRanges.data(), BindingRangeCount};
+  auto GetBindingRanges() const
+      -> Math::StackVector<VertexBindingRange, VertexFormat::MaxBindings> const
+          & {
+    return BindingRanges;
   }
 
 private:
@@ -129,8 +132,8 @@ private:
   std::array<VkBuffer, VertexFormat::MaxBindings> Bindings;
   std::array<VkDeviceSize, VertexFormat::MaxBindings> BindingOffsets;
 
-  std::array<VertexBindingRange, VertexFormat::MaxBindings> BindingRanges;
-  size_t BindingRangeCount = 0;
+  Math::StackVector<VertexBindingRange, VertexFormat::MaxBindings>
+      BindingRanges;
 
   std::unique_ptr<VertexFormat> Format;
 

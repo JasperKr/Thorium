@@ -310,7 +310,7 @@ auto Mesh::ConstructBindingRanges() -> void {
   // 5 < 8 && 7 + 1 == 8 -> stop
   // BindingRanges[2] = { .firstBinding = 7, .bindingCount = (4 - 4 + 1) = 1, ... }
 
-  BindingRangeCount = 0;
+  BindingRanges.clear();
   for (size_t i = 0; i < count; ++i) {
     size_t start = i;
 
@@ -319,12 +319,12 @@ auto Mesh::ConstructBindingRanges() -> void {
       i++;
     }
 
-    BindingRanges.at(BindingRangeCount++) = {
+    BindingRanges.emplace_back(VertexBindingRange{
         .firstBinding = static_cast<uint32_t>(mapping.at(start)),
         .bindingCount = static_cast<uint32_t>(i - start + 1),
         .bindings = &Bindings.at(start),
         .offsets = &BindingOffsets.at(start),
-    };
+    });
   }
 }
 

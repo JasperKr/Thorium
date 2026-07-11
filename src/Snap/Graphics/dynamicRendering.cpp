@@ -2113,8 +2113,9 @@ auto Clear(const GraphicsContext &context, const ClearInfo &clearInfo)
     return {};
   }
 
-  std::vector<VkClearAttachment> clearAttachments{};
-  std::vector<VkClearRect> clearRects{};
+  Math::StackVector<VkClearAttachment, MAX_COLOR_ATTACHMENTS + 1>
+      clearAttachments{};
+  Math::StackVector<VkClearRect, MAX_COLOR_ATTACHMENTS> clearRects{};
 
   VkClearRect clearRect = {};
   auto viewport = GetClippedViewport();
