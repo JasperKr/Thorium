@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Graphics/bvh.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Modules/stackVector.hpp"
@@ -155,6 +156,8 @@ private:
   std::string DebugName;
 
   VkPrimitiveTopology Topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+
+  Ref<BLAS> BottomLevelAS;
 };
 
 } // namespace Graphics

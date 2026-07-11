@@ -2,15 +2,18 @@
 
 #include "Graphics/barrier.hpp"
 #include "Graphics/buffer.hpp"
-#include "Graphics/mesh.hpp"
+#include "Graphics/resource.hpp"
+#include "Graphics/semaphoreManager.hpp"
 #include "Modules/Math/matrix.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include <cstddef>
+#include <mutex>
 #include <vector>
 #include <vulkan/vulkan_core.h>
 namespace Graphics {
 
+extern std::mutex BVHScratchBufferMutex;                               // NOLINT
 extern Ref<Buffer> BvhScratchBuffer;                                   // NOLINT
 static constexpr size_t InitialScratchBufferSize = 16UL * 1024 * 1024; // 16 MiB
 
@@ -22,7 +25,22 @@ static const Type LuaTLASType = Type("TopLevelAccelerationStructure");
 
 // Bottom-Level Acceleration Structure.
 struct BLAS : Object {
-  static auto Create(const GraphicsContext &context, const Mesh &mesh)
+  BLAS() = default;
+
+  BLAS(const BLAS &) = delete;
+  BLAS(BLAS &&) = delete;
+  auto operator=(const BLAS &) -> BLAS & = delete;
+  auto operator=(BLAS &&) -> BLAS & = delete;
+
+  ~BLAS() override {
+    ScheduleDestruction(
+        AccelerationStructureMemory{
+            .accelerationStructure = accelerationStructure,
+        },
+        SemaphoreManager::GetSemaphoreValue());
+  }
+
+  static auto Create(const GraphicsContext &context, const struct Mesh &mesh)
       -> Result<Ref<BLAS>>;
 
   static auto GetType() -> Type const * { return &LuaBLASType; }
@@ -40,6 +58,21 @@ private:
 
 // Top-Level Acceleration Structure.
 struct TLAS : Object {
+  TLAS() = default;
+
+  TLAS(const TLAS &) = delete;
+  TLAS(TLAS &&) = delete;
+  auto operator=(const TLAS &) -> TLAS & = delete;
+  auto operator=(TLAS &&) -> TLAS & = delete;
+
+  ~TLAS() override {
+    ScheduleDestruction(
+        AccelerationStructureMemory{
+            .accelerationStructure = accelerationStructure,
+        },
+        SemaphoreManager::GetSemaphoreValue());
+  }
+
   static auto Create(const GraphicsContext &context) -> Result<Ref<TLAS>>;
 
   static auto GetType() -> Type const * { return &LuaTLASType; }

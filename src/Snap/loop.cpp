@@ -1,6 +1,7 @@
 #include "loop.hpp"
 #include "Editor/gui.hpp"
 #include "Graphics/Buffers/uniform.hpp"
+#include "Graphics/bvh.hpp"
 #include "Graphics/deviceInfo.hpp"
 #include "Graphics/dynamicRendering.hpp"
 #include "Graphics/graphics.hpp"
@@ -267,6 +268,7 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
 
   CHECK_ERR(Graphics::InitializeRendering(context, wcontext));
   CHECK_ERR(Graphics::DynamicRendering::Load(context));
+  CHECK_ERR(Graphics::InitializeBVHModule(context));
 
   CHECK_ERR(InitializeUniformBufferModule(context));
 

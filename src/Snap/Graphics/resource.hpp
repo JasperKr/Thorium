@@ -54,6 +54,12 @@ struct PipelineMemory {
   static auto Destroy(const GraphicsContext &context, void *data) -> void;
 };
 
+struct AccelerationStructureMemory {
+  VkAccelerationStructureKHR accelerationStructure;
+
+  static auto Destroy(const GraphicsContext &context, void *data) -> void;
+};
+
 struct GraphicsResource {
   GraphicsResource(const GraphicsResource &) = delete;
   GraphicsResource(GraphicsResource &&) = delete;
@@ -99,5 +105,7 @@ auto ScheduleDestruction(const ShaderModuleMemory &shaderModule,
                          uint64_t timelineValue) -> void;
 auto ScheduleDestruction(const PipelineMemory &pipeline, uint64_t timelineValue)
     -> void;
+auto ScheduleDestruction(const AccelerationStructureMemory &resource,
+                         uint64_t timelineValue) -> void;
 
 } // namespace Graphics

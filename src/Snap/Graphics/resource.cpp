@@ -65,6 +65,11 @@ auto ScheduleDestruction(const PipelineMemory &pipeline, uint64_t timelineValue)
   Schedule(pipeline, timelineValue);
 }
 
+auto ScheduleDestruction(const AccelerationStructureMemory &resource,
+                         uint64_t timelineValue) -> void {
+  Schedule(resource, timelineValue);
+}
+
 auto TextureMemory::Destroy(const GraphicsContext &context, void *data)
     -> void {
 
@@ -103,13 +108,16 @@ auto PipelineMemory::Destroy(const GraphicsContext &context, void *data)
 
   vkDestroyPipeline(context.device, pipelineMemory->pipeline,
                     GetAllocationCallbacks());
-  // vkDestroyPipelineLayout(context.device, pipelineMemory->layout,
-  //                         GetAllocationCallbacks());
+}
 
-  // for (const auto &layout : pipelineMemory->descriptorSetLayouts) {
-  //   vkDestroyDescriptorSetLayout(context.device, layout,
-  //                                GetAllocationCallbacks());
-  // }
+auto AccelerationStructureMemory::Destroy(const GraphicsContext &context,
+                                          void *data) -> void {
+  auto *accelStructMemory =
+      reinterpret_cast<AccelerationStructureMemory *>(data);
+
+  vkDestroyAccelerationStructureKHR(context.device,
+                                    accelStructMemory->accelerationStructure,
+                                    GetAllocationCallbacks());
 }
 
 inline auto CanBeDestroyed( // NOLINTNEXTLINE

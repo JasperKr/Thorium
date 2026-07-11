@@ -3,15 +3,19 @@
 #include "Graphics/buffer.hpp"
 #include "Graphics/dynamicRendering.hpp"
 #include "Graphics/graphicsContext.hpp"
+#include "Graphics/mesh.hpp"
 #include "Modules/error.hpp"
 #include <cstdint>
 #include <vulkan/vulkan_core.h>
 
 namespace Graphics {
 
-Ref<Buffer> BvhScratchBuffer; // NOLINT
+std::mutex BVHScratchBufferMutex; // NOLINT
+Ref<Buffer> BvhScratchBuffer;     // NOLINT
 
 auto InitializeBVHModule(const GraphicsContext &context) -> Error {
+  std::lock_guard<std::mutex> lock(BVHScratchBufferMutex);
+
   auto info = BufferCreationInfo{
       .size = InitialScratchBufferSize,
       .usage = static_cast<uint32_t>(VK_BUFFER_USAGE_STORAGE_BUFFER_BIT) |
@@ -31,30 +35,48 @@ auto DeInitializeBVHModule() -> void { BvhScratchBuffer.reset(); }
 
 auto BLAS::Create(const GraphicsContext &context, const Mesh &mesh)
     -> Result<Ref<BLAS>> {
+  std::lock_guard<std::mutex> lock(BVHScratchBufferMutex);
+
   VkAccelerationStructureGeometryKHR geometry{};
   geometry.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
   geometry.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
   geometry.flags = VK_GEOMETRY_OPAQUE_BIT_KHR;
 
   auto positionAddress = CHECK_RES(mesh.GetVertexBuffer()->GetDeviceAddress());
-  auto indexAddress = CHECK_RES(mesh.GetIndexBuffer()->GetDeviceAddress());
 
-  geometry.geometry.triangles = {
-      .sType =
-          VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR,
-      .vertexFormat = VK_FORMAT_R32G32B32_SFLOAT,
-      .vertexData =
-          {
-              .deviceAddress = positionAddress,
-          },
-      .vertexStride = sizeof(float) * 3,
-      .maxVertex = mesh.GetVertexCount() - 1,
-      .indexType = VK_INDEX_TYPE_UINT32,
-      .indexData =
-          {
-              .deviceAddress = indexAddress,
-          },
-  };
+  if (mesh.GetIndexBuffer() != nullptr) {
+    auto indexAddress = CHECK_RES(mesh.GetIndexBuffer()->GetDeviceAddress());
+
+    geometry.geometry.triangles = {
+        .sType =
+            VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR,
+        .vertexFormat = VK_FORMAT_R32G32B32_SFLOAT,
+        .vertexData =
+            {
+                .deviceAddress = positionAddress,
+            },
+        .vertexStride = sizeof(float) * 3,
+        .maxVertex = mesh.GetVertexCount() - 1,
+        .indexType = mesh.GetIndexFormat(),
+        .indexData =
+            {
+                .deviceAddress = indexAddress,
+            },
+    };
+  } else {
+    geometry.geometry.triangles = {
+        .sType =
+            VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR,
+        .vertexFormat = VK_FORMAT_R32G32B32_SFLOAT,
+        .vertexData =
+            {
+                .deviceAddress = positionAddress,
+            },
+        .vertexStride = sizeof(float) * 3,
+        .maxVertex = mesh.GetVertexCount() - 1,
+        .indexType = VK_INDEX_TYPE_NONE_KHR,
+    };
+  }
 
   uint32_t primitiveCount = mesh.GetIndexCount() / 3;
 
@@ -175,19 +197,12 @@ auto TLAS::GetDeviceAddress() const -> VkDeviceAddress {
 }
 
 auto TLAS::Create(const GraphicsContext &context) -> Result<Ref<TLAS>> {
+  std::lock_guard<std::mutex> lock(BVHScratchBufferMutex);
+
   auto tlas = Ref<TLAS>::Make();
 
   // Filled when adding instances
   std::vector<VkAccelerationStructureInstanceKHR> instances;
-
-  // Example:
-  // instances.push_back({
-  //     .transform = ...,
-  //     .instanceCustomIndex = objectID,
-  //     .mask = 0xFF,
-  //     .flags = VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR,
-  //     .accelerationStructureReference = blasAddress,
-  // });
 
   // Upload instances to GPU
   tlas->instanceBuffer = CHECK_RES(Buffer::Create(

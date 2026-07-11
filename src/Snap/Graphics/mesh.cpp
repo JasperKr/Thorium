@@ -59,13 +59,21 @@ auto Mesh::UploadIndices(const GraphicsContext &context,
 
 auto Mesh::Create(const GraphicsContext &context, const MeshCreationInfo &info)
     -> Result<Ref<Mesh>> {
+
+  Ref<Mesh> mesh;
+
   if (!info.vertexData.empty()) {
-    return CreateFromVertexData(context, info);
+    mesh = CHECK_RES(CreateFromVertexData(context, info));
+  } else {
+    ERR_ASSERT_MSG(info.vertexCount > 0, "Vertex count must be greater than 0");
+    mesh = CHECK_RES(CreateFromVertexCount(context, info));
   }
 
-  ERR_ASSERT_MSG(info.vertexCount > 0, "Vertex count must be greater than 0");
+  if (info.createBlas) {
+    mesh->BottomLevelAS = CHECK_RES(BLAS::Create(context, *mesh));
+  }
 
-  return CreateFromVertexCount(context, info);
+  return mesh;
 }
 
 auto Mesh::CreateFromVertexData(const GraphicsContext &context,

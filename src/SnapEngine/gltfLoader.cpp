@@ -1232,6 +1232,7 @@ LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
           .vertexFormat = &SeparateVertexFormat,
           .vertexCount = vertexCount,
           .debugName = std::string(gltfMesh.name),
+          .createBlas = true,
       };
 
       auto mesh = CHECK_RES(Graphics::Mesh::Create(context, meshCreationInfo));

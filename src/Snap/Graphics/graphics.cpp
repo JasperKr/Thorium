@@ -1,5 +1,6 @@
 #include "graphics.hpp"
 #include "Graphics/allocations.hpp"
+#include "Graphics/bvh.hpp"
 #include "Graphics/deviceSettings.hpp"
 #include "Graphics/dynamicRendering.hpp"
 #include "Graphics/graphicsContext.hpp"
@@ -199,6 +200,15 @@ static auto CreateDevice(GraphicsContext &context,
       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_INDEX_TYPE_UINT8_FEATURES_EXT;
   indexTypeUint8Features.indexTypeUint8 = VK_TRUE;
 
+  VkPhysicalDeviceAccelerationStructureFeaturesKHR accelStructFeatures{};
+  accelStructFeatures.sType =
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
+
+  accelStructFeatures.accelerationStructure =
+      settings.hardwareRaytracing == ExtensionRequirement::Required ? VK_TRUE
+                                                                    : VK_FALSE;
+  indexTypeUint8Features.pNext = &accelStructFeatures;
+
   VkPhysicalDeviceVertexAttributeDivisorFeaturesKHR
       vertexAttributeDivisorProperties{};
   vertexAttributeDivisorProperties.sType =
@@ -296,6 +306,8 @@ static auto CreateDevice(GraphicsContext &context,
       {VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
        settings.hardwareRaytracing},
       {VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME, settings.hardwareRaytracing},
+      {VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
+       settings.hardwareRaytracing},
       {VK_KHR_RAY_QUERY_EXTENSION_NAME, settings.inlineRaytracing},
   };
 
@@ -603,22 +615,16 @@ void Deinitialize(GraphicsContext &context) {
   PrintInfo("Deinitializing graphics context...");
 
   vkDeviceWaitIdle(context.device);
-
   Graphics::UploadBuffers.clear();
 
   Graphics::Barrier::ResetModule();
-
   Graphics::UnloadShaderModule(context);
-
   Graphics::DeinitializeRendering(context);
-
   Graphics::DynamicRendering::Shutdown(context);
-
   Graphics::semaphoreManager.Deinitialize(context);
-
   Graphics::DestroySamplers(context);
-
   Graphics::DynamicRendering::Destroy(context);
+  Graphics::DeInitializeBVHModule();
 
   // (BEFORE device, allocator lock)
   Graphics::ProcessReleasedResources(context);
