@@ -956,6 +956,27 @@ Scene::Scene(std::string name) : name(std::move(name)) {
         lastUpdateResult = camera.WriteToBuffer(cameraMatrices, transform);
       }));
 
+  preRender.emplace_back(world.system<Geometry>().kind(0).each(
+      [this](flecs::entity entity, Geometry &geometry) -> auto {
+        if (lastUpdateResult.IsError()) {
+          return;
+        }
+
+        auto &transform = entity.get_mut<Transform>();
+        const auto &worldMatrix = transform.GetWorldMatrix();
+
+        auto &renderer = Renderer::RendererInstance;
+
+        if (geometry.tlasIndex == -1) {
+          geometry.tlasIndex = renderer.GetSceneTLAS()->AddInstance(
+              geometry.mesh->GetBLAS(), worldMatrix);
+          renderer.SetSceneNeedsTLASRebuild(true);
+        } else {
+          renderer.GetSceneTLAS()->UpdateInstance(geometry.tlasIndex,
+                                                  worldMatrix);
+        }
+      }));
+
   finalizePreRenderUploads =
       world.system().kind(0).each([this, &buffers]() -> auto {
         if (lastUpdateResult.IsError()) {
@@ -963,8 +984,23 @@ Scene::Scene(std::string name) : name(std::move(name)) {
         }
 
         auto &ctx = *Graphics::GetCurrentGraphicsContext();
+        auto &renderer = Renderer::RendererInstance;
 
-        auto error = buffers.DirectionalLightsBuffer->GetBuffer()->SetData(
+        Error error = {};
+
+        if (!renderer.GetSceneTLAS()->GetInstances().empty()) {
+          error = renderer.SceneNeedsTLASRebuild()
+                      ? renderer.GetSceneTLAS()->Rebuild(ctx)
+                      : renderer.GetSceneTLAS()->Refit(ctx);
+          renderer.SetSceneNeedsTLASRebuild(false);
+
+          if (Error::IsError(error)) {
+            lastUpdateResult = error;
+            return;
+          }
+        }
+
+        error = buffers.DirectionalLightsBuffer->GetBuffer()->SetData(
             ctx, buffers.DirectionalLightData);
         if (Error::IsError(error)) {
           lastUpdateResult = error;

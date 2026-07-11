@@ -121,6 +121,8 @@ struct Mesh : Object {
     return BindingRanges;
   }
 
+  auto GetBLAS() const -> Ref<BLAS> { return BottomLevelAS; }
+
 private:
   static auto CreateFromVertexData(const GraphicsContext &context,
                                    const MeshCreationInfo &info)

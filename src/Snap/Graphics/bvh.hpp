@@ -22,6 +22,8 @@ auto DeInitializeBVHModule() -> void;
 
 static const Type LuaBLASType = Type("BottomLevelAccelerationStructure");
 static const Type LuaTLASType = Type("TopLevelAccelerationStructure");
+static constexpr size_t InitialTLASInstanceBufferCapacity =
+    1024UL; // 1k instances
 
 // Bottom-Level Acceleration Structure.
 struct BLAS : Object {
@@ -110,6 +112,8 @@ private:
 
   Ref<Buffer> instanceBuffer;
   uint32_t instanceCount = 0;
+
+  size_t instanceCapacity = InitialTLASInstanceBufferCapacity;
 };
 
 } // namespace Graphics

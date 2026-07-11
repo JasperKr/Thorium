@@ -291,6 +291,7 @@ void Renderer::Deinitialize() {
   SceneLightBuffers = Lights();
   LightProbeBuffer = nullptr;
   ShaderManager = ::Engine::Renderer::ShaderManager();
+  SceneTLAS = nullptr;
 }
 
 } // namespace Engine::Renderer

@@ -208,7 +208,8 @@ auto TLAS::Create(const GraphicsContext &context) -> Result<Ref<TLAS>> {
   tlas->instanceBuffer = CHECK_RES(Buffer::Create(
       context,
       {
-          .size = sizeof(VkAccelerationStructureInstanceKHR) * instances.size(),
+          .size = sizeof(VkAccelerationStructureInstanceKHR) *
+                  tlas->instanceCapacity,
           .usage =
               VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR |
               VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
@@ -235,7 +236,8 @@ auto TLAS::Create(const GraphicsContext &context) -> Result<Ref<TLAS>> {
           },
   };
 
-  auto instanceCount = static_cast<uint32_t>(instances.size());
+  auto instanceCount = tlas->instanceCount;
+  auto maxInstanceCount = static_cast<uint32_t>(tlas->instanceCapacity);
 
   VkAccelerationStructureBuildGeometryInfoKHR buildInfo{
       .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR,
@@ -253,7 +255,7 @@ auto TLAS::Create(const GraphicsContext &context) -> Result<Ref<TLAS>> {
 
   vkGetAccelerationStructureBuildSizesKHR(
       context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
-      &buildInfo, &instanceCount, &sizeInfo);
+      &buildInfo, &maxInstanceCount, &sizeInfo);
 
   // Create AS storage buffer
   tlas->accelerationStructureBuffer = CHECK_RES(Buffer::Create(
@@ -341,7 +343,7 @@ auto TLAS::Create(const GraphicsContext &context) -> Result<Ref<TLAS>> {
   tlas->accelerationStructureAddress =
       vkGetAccelerationStructureDeviceAddressKHR(context.device, &addressInfo);
 
-  instanceCount = static_cast<uint32_t>(instances.size());
+  tlas->instanceCount = static_cast<uint32_t>(tlas->instances.size());
 
   return tlas;
 }
@@ -442,8 +444,33 @@ auto TLAS::Refit(const GraphicsContext &context) -> Error {
 
   const auto *rangePtr = &range;
 
+  CHECK_ERR(instanceBuffer->SetData(
+      context, std::span<const VkAccelerationStructureInstanceKHR>(
+                   instances.data(), instances.size())));
+
+  BvhScratchBuffer->MarkUse();
+  instanceBuffer->MarkUse();
+
+  Barrier::UpdateUsage(
+      context, *BvhScratchBuffer,
+      {.stages = VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+       .access = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR});
+
+  Barrier::UpdateUsage(
+      context, *instanceBuffer,
+      {.stages = VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+       .access = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR});
+
+  Barrier::UpdateUsage(
+      context, *accelerationStructureBuffer,
+      {.stages = VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+       .access = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR |
+                 VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR});
+
   vkCmdBuildAccelerationStructuresKHR(GetCommandBuffer(), 1, &buildInfo,
                                       &rangePtr);
+
+  instanceCount = static_cast<uint32_t>(instances.size());
 
   return Error::Success();
 }
@@ -454,6 +481,24 @@ auto TLAS::Rebuild(const GraphicsContext &context) -> Error {
   ERR_ASSERT(accelerationStructure != VK_NULL_HANDLE);
   ERR_ASSERT(instanceBuffer != nullptr);
   ERR_ASSERT(instances.size() > 0);
+
+  while (instances.size() > instanceCapacity) {
+    instanceCapacity *= 2; // Double the capacity
+
+    instanceBuffer = CHECK_RES(Buffer::Create(
+        context,
+        {
+            .size =
+                sizeof(VkAccelerationStructureInstanceKHR) * instanceCapacity,
+            .usage =
+                VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR |
+                VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+            .properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+            .stagingBuffer = true,
+            .persistentMapping = false,
+            .debugName = "TLAS Instances",
+        }));
+  }
 
   auto instanceAddress = CHECK_RES(instanceBuffer->GetDeviceAddress());
 
@@ -482,14 +527,103 @@ auto TLAS::Rebuild(const GraphicsContext &context) -> Error {
                           CHECK_RES(BvhScratchBuffer->GetDeviceAddress())},
   };
 
+  auto primitiveCount = static_cast<uint32_t>(instances.size());
+  VkAccelerationStructureBuildSizesInfoKHR sizeInfo{
+      .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR,
+  };
+
+  vkGetAccelerationStructureBuildSizesKHR(
+      context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
+      &buildInfo, &primitiveCount, &sizeInfo);
+
+  if (accelerationStructureBuffer->size < sizeInfo.accelerationStructureSize) {
+    ScheduleDestruction(
+        AccelerationStructureMemory{
+            .accelerationStructure = accelerationStructure,
+        },
+        SemaphoreManager::GetSemaphoreValue());
+
+    accelerationStructureBuffer->MarkUse();
+
+    accelerationStructureBuffer = CHECK_RES(Buffer::Create(
+        context,
+        {
+            .size = sizeInfo.accelerationStructureSize,
+            .usage = VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR |
+                     VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+            .properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+            .stagingBuffer = false,
+            .persistentMapping = false,
+            .debugName = "TLAS Buffer",
+        }));
+
+    VkAccelerationStructureCreateInfoKHR asCreateInfo{
+        .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR,
+        .buffer = accelerationStructureBuffer->handle,
+        .size = sizeInfo.accelerationStructureSize,
+        .type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR,
+    };
+
+    {
+      std::lock_guard<std::mutex> lock(
+          Graphics::GraphicsContext::mutexes.device);
+
+      CHECK_NEW_ERR(vkCreateAccelerationStructureKHR(
+          context.device, &asCreateInfo, GetAllocationCallbacks(),
+          &accelerationStructure));
+    }
+  }
+
+  ERR_ASSERT(BvhScratchBuffer->size >= sizeInfo.buildScratchSize);
+
+  buildInfo.dstAccelerationStructure = accelerationStructure;
+
   VkAccelerationStructureBuildRangeInfoKHR range{
-      .primitiveCount = static_cast<uint32_t>(instances.size()),
+      .primitiveCount = primitiveCount,
   };
 
   const auto *rangePtr = &range;
 
+  CHECK_ERR(instanceBuffer->SetData(
+      context, std::span<const VkAccelerationStructureInstanceKHR>(
+                   instances.data(), instances.size())));
+
+  BvhScratchBuffer->MarkUse();
+  instanceBuffer->MarkUse();
+
+  Barrier::UpdateUsage(
+      context, *BvhScratchBuffer,
+      {.stages = VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+       .access = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR});
+
+  Barrier::UpdateUsage(
+      context, *instanceBuffer,
+      {.stages = VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+       .access = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR});
+
+  Barrier::UpdateUsage(
+      context, *accelerationStructureBuffer,
+      {.stages = VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+       .access = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR |
+                 VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR});
+
   vkCmdBuildAccelerationStructuresKHR(GetCommandBuffer(), 1, &buildInfo,
                                       &rangePtr);
+
+  Barrier::UpdateUsage(
+      context, *accelerationStructureBuffer,
+      {.stages = VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+       .access = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR});
+
+  VkAccelerationStructureDeviceAddressInfoKHR addressInfo{
+      .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR,
+      .accelerationStructure = accelerationStructure,
+  };
+
+  accelerationStructureAddress =
+      vkGetAccelerationStructureDeviceAddressKHR(context.device, &addressInfo);
+
+  instanceCount = static_cast<uint32_t>(instances.size());
 
   return Error::Success();
 }
