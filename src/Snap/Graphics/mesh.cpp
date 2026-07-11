@@ -69,10 +69,6 @@ auto Mesh::Create(const GraphicsContext &context, const MeshCreationInfo &info)
     mesh = CHECK_RES(CreateFromVertexCount(context, info));
   }
 
-  if (info.createBlas) {
-    mesh->BottomLevelAS = CHECK_RES(BLAS::Create(context, *mesh));
-  }
-
   return mesh;
 }
 
@@ -184,6 +180,10 @@ auto Mesh::CreateFromVertexCount(const GraphicsContext &context,
 }
 
 [[nodiscard]] auto Mesh::GetVertexFormat() -> VertexFormat & { return *Format; }
+
+[[nodiscard]] auto Mesh::GetVertexFormat() const -> const VertexFormat & {
+  return *Format;
+}
 
 [[nodiscard]] auto Mesh::GetVertexCount() const -> uint32_t {
   return VertexCount;

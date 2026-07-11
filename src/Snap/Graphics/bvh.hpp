@@ -9,13 +9,15 @@
 #include "Modules/object.hpp"
 #include <cstddef>
 #include <mutex>
+#include <string>
+#include <string_view>
 #include <vector>
 #include <vulkan/vulkan_core.h>
 namespace Graphics {
 
 extern std::mutex BVHScratchBufferMutex;                               // NOLINT
 extern Ref<Buffer> BvhScratchBuffer;                                   // NOLINT
-static constexpr size_t InitialScratchBufferSize = 16UL * 1024 * 1024; // 16 MiB
+static constexpr size_t InitialScratchBufferSize = 32UL * 1024 * 1024; // n MiB
 
 auto InitializeBVHModule(const struct GraphicsContext &context) -> Error;
 auto DeInitializeBVHModule() -> void;
@@ -52,10 +54,22 @@ struct BLAS : Object {
 
   [[nodiscard]] auto GetDeviceAddress() const -> VkDeviceAddress;
 
+  auto Rebuild(const GraphicsContext &context) -> Error;
+  auto Refit(const GraphicsContext &context) -> Error;
+
 private:
   Ref<Buffer> accelerationStructureBuffer;
   VkDeviceAddress accelerationStructureAddress = 0;
   VkAccelerationStructureKHR accelerationStructure = VK_NULL_HANDLE;
+
+  Ref<Buffer> vertexBuffer;
+  Ref<Buffer> indexBuffer;
+  uint32_t vertexCount = 0;
+  uint32_t indexCount = 0;
+  VkIndexType indexFormat = VK_INDEX_TYPE_NONE_KHR;
+  VkFormat vertexFormat = VK_FORMAT_UNDEFINED;
+  uint32_t vertexStride = 0;
+  uint32_t vertexOffset = 0;
 };
 
 // Top-Level Acceleration Structure.
@@ -75,7 +89,9 @@ struct TLAS : Object {
         SemaphoreManager::GetSemaphoreValue());
   }
 
-  static auto Create(const GraphicsContext &context) -> Result<Ref<TLAS>>;
+  static auto Create(const GraphicsContext &context,
+                     const std::string_view &debugname = "Unnamed TLAS")
+      -> Result<Ref<TLAS>>;
 
   static auto GetType() -> Type const * { return &LuaTLASType; }
   auto GetInstanceType() const -> Type const * override {
@@ -85,7 +101,7 @@ struct TLAS : Object {
   [[nodiscard]] auto GetDeviceAddress() const -> VkDeviceAddress;
 
   auto AddInstance(const Ref<BLAS> &blas, const Math::Matrix4x4 &transform)
-      -> uint32_t;
+      -> Result<uint32_t>;
   auto RemoveInstance(uint32_t index) -> void;
   auto UpdateInstance(uint32_t index, const Math::Matrix4x4 &transform) -> void;
 
@@ -103,6 +119,8 @@ struct TLAS : Object {
   auto Refit(const GraphicsContext &context) -> Error;
   auto Rebuild(const GraphicsContext &context) -> Error;
 
+  auto GetDebugName() const -> std::string_view { return debugName; }
+
 private:
   Ref<Buffer> accelerationStructureBuffer;
   VkAccelerationStructureKHR accelerationStructure = VK_NULL_HANDLE;
@@ -114,6 +132,7 @@ private:
   uint32_t instanceCount = 0;
 
   size_t instanceCapacity = InitialTLASInstanceBufferCapacity;
+  std::string debugName = "Unnamed TLAS";
 };
 
 } // namespace Graphics

@@ -1228,11 +1228,18 @@ LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
       static Graphics::VertexFormat SeparateVertexFormat(
           SeparateVertexComponents);
 
+      auto deinterleavedData = DeinterleaveVertexData(vertexData);
+
+      std::vector<std::span<const uint8_t>> deinterleavedSpans;
+      deinterleavedSpans.reserve(deinterleavedData.size());
+      for (const auto &data : deinterleavedData) {
+        deinterleavedSpans.emplace_back(data.data(), data.size());
+      }
+
       Graphics::MeshCreationInfo meshCreationInfo{
           .vertexFormat = &SeparateVertexFormat,
-          .vertexCount = vertexCount,
+          .vertexData = deinterleavedSpans,
           .debugName = std::string(gltfMesh.name),
-          .createBlas = true,
       };
 
       auto mesh = CHECK_RES(Graphics::Mesh::Create(context, meshCreationInfo));
@@ -1241,18 +1248,11 @@ LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
         CHECK_ERR(mesh->SetIndices(context, indexData, indexType));
       }
 
-      auto deinterleavedData = DeinterleaveVertexData(vertexData);
-
-      // clang-format off
-      CHECK_ERR(mesh->SetVertices(context, 0, deinterleavedData[0])); // POSITION
-      CHECK_ERR(mesh->SetVertices(context, 1, deinterleavedData[1])); // TEXCOORD_0
-      CHECK_ERR(mesh->SetVertices(context, 2, deinterleavedData[2])); // NORMAL + TANGENT
-      CHECK_ERR(mesh->SetVertices(context, 3, deinterleavedData[3])); // COLOR
-      // clang-format on
+      CHECK_ERR(mesh->CreateBLAS(context));
 
       auto geometry = world->entity(
           GetUniqueName(std::string(gltfMesh.name) + " Geometry").c_str());
-      geometry.set<Engine::Geometry>(Engine::Geometry{mesh});
+      geometry.set<Engine::Geometry>(Engine::Geometry{.mesh = mesh});
       geometry.add<Engine::Transform>();
 
       auto lod = world->entity(

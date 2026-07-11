@@ -347,7 +347,7 @@ auto SetupResource(slang::VariableLayoutReflection *variableLayout,
       bufferInfo.accessFlags = VK_ACCESS_2_SHADER_WRITE_BIT;
       break;
     default:
-      bufferInfo.accessFlags = 0;
+      bufferInfo.accessFlags = VK_ACCESS_2_SHADER_READ_BIT;
       break;
     }
 
@@ -398,6 +398,19 @@ auto SetupResource(slang::VariableLayoutReflection *variableLayout,
 
     reflection.slotToInfo[Utils::SetBindingToSlot(
         bufferInfo.set, bufferInfo.binding)] = resourceInfo;
+  } else if (maskedShape == SLANG_ACCELERATION_STRUCTURE) {
+    auto asInfo = AccelerationStructureInfo{};
+    asInfo.set = variableLayout->getBindingSpace();
+    asInfo.binding = variableLayout->getBindingIndex();
+    asInfo.shape = shape;
+    asInfo.access = access;
+
+    resourceInfo.name = variableLayout->getName();
+    resourceInfo.stages = SlangStageToVkStage(variableLayout->getStage());
+    resourceInfo.info = asInfo;
+
+    reflection.slotToInfo[Utils::SetBindingToSlot(asInfo.set, asInfo.binding)] =
+        resourceInfo;
   } else {
     return Error::Unexpected("Unsupported resource shape in reflection.");
   }
@@ -473,7 +486,7 @@ auto SetupFromType(slang::VariableLayoutReflection *variableLayout,
       bufferInfo.accessFlags = VK_ACCESS_2_SHADER_WRITE_BIT;
       break;
     default:
-      bufferInfo.accessFlags = 0;
+      bufferInfo.accessFlags = VK_ACCESS_2_SHADER_READ_BIT;
       break;
     }
 
@@ -658,7 +671,7 @@ auto ScalarTypeToVkFormat(ScalarType type, int count) -> VkFormat {
 
 auto ResourceInfoToBufferFormat(const ResourceInfo &info, Standard std)
     -> Result<std::variant<Graphics::BufferFormat, Graphics::BufferComponent>> {
-  if (std::holds_alternative<BufferInfo>(info.info)) {
+  if (info.IsBuffer()) {
     const auto &bufferInfo = std::get<BufferInfo>(info.info);
 
     if (bufferInfo.IsStruct()) {
@@ -690,7 +703,7 @@ auto ResourceInfoToBufferFormat(const ResourceInfo &info, Standard std)
         "Unsupported buffer info type for buffer format conversion.");
   }
 
-  if (std::holds_alternative<StructInfo>(info.info)) {
+  if (info.IsStruct()) {
     const auto &structInfo = std::get<StructInfo>(info.info);
 
     std::vector<Graphics::BufferComponent> components;
@@ -698,7 +711,7 @@ auto ResourceInfoToBufferFormat(const ResourceInfo &info, Standard std)
     for (const auto &field : structInfo.fields) {
       auto fieldFormatResult = ResourceInfoToBufferFormat(field, std);
 
-      if (Error::IsError(fieldFormatResult)) {
+      if (!fieldFormatResult.has_value()) {
         continue; // Sampler or Buffer or whatever, skip it since it cannot be part of the buffer format
       }
 
@@ -721,7 +734,7 @@ auto ResourceInfoToBufferFormat(const ResourceInfo &info, Standard std)
     return Graphics::BufferFormat(components, std);
   }
 
-  if (std::holds_alternative<ScalarInfo>(info.info)) {
+  if (info.IsScalar()) {
     const auto &scalarInfo = std::get<ScalarInfo>(info.info);
     auto component = Graphics::BufferComponent{};
     component.name = info.name;
@@ -729,7 +742,7 @@ auto ResourceInfoToBufferFormat(const ResourceInfo &info, Standard std)
     return component;
   }
 
-  if (std::holds_alternative<VectorInfo>(info.info)) {
+  if (info.IsVector()) {
     const auto &vectorInfo = std::get<VectorInfo>(info.info);
     auto component = Graphics::BufferComponent{};
     component.name = info.name;
@@ -738,7 +751,7 @@ auto ResourceInfoToBufferFormat(const ResourceInfo &info, Standard std)
     return component;
   }
 
-  if (std::holds_alternative<MatrixInfo>(info.info)) {
+  if (info.IsMatrix()) {
     const auto &matrixInfo = std::get<MatrixInfo>(info.info);
     auto component = Graphics::BufferComponent{};
     component.name = info.name;
@@ -748,6 +761,10 @@ auto ResourceInfoToBufferFormat(const ResourceInfo &info, Standard std)
     component.arraySize = rows;
 
     return component;
+  }
+
+  if (info.IsAccelerationStructure()) {
+    return Error::Success();
   }
 
   return Error::Unexpected("Unsupported resource info type for buffer format.");
@@ -768,7 +785,8 @@ auto ShaderReflection::ConstructUBOStruct(uint32_t set, uint32_t binding)
   // Ordered erase to preserve field order, as this affects offsets in the UBO
   std::vector<ResourceInfo> filteredFields;
   for (const auto &field : resources) {
-    if (!field.IsSampler() && !field.IsBuffer()) {
+    if (!field.IsSampler() && !field.IsBuffer() &&
+        !field.IsAccelerationStructure()) {
       filteredFields.emplace_back(field);
     }
   }
@@ -845,6 +863,10 @@ inline auto FlattenResource(ResourceInfo &resource, FlatteningState &state)
     const auto &samplerInfo = std::get<SamplerInfo>(resource.info);
     resource.set = samplerInfo.set;
     resource.binding = samplerInfo.binding;
+  } else if (resource.IsAccelerationStructure()) {
+    const auto &asInfo = std::get<AccelerationStructureInfo>(resource.info);
+    resource.set = asInfo.set;
+    resource.binding = asInfo.binding;
   } else {
     resource.set = state.parentSet;
     resource.binding = state.parentBinding;
@@ -922,7 +944,8 @@ inline auto FlattenResource(ResourceInfo &resource, FlatteningState &state)
 auto ShaderReflection::FlattenReflection() -> Error {
   for (auto &resource : resources) {
     // Only flatten samplers and buffers, skip other types
-    if (!resource.IsSampler() && !resource.IsBuffer()) {
+    if (!resource.IsSampler() && !resource.IsBuffer() &&
+        !resource.IsAccelerationStructure()) {
       continue;
     }
 
@@ -956,6 +979,10 @@ auto ShaderReflection::FlattenReflection() -> Error {
       state.flattened->bindingToInfo.emplace(resource.binding, resource);
     } else if (resource.IsSampler()) {
       textureSlotsBySet[resource.set].emplace_back(
+          Utils::SetBindingToSlot(resource.set, resource.binding));
+      state.flattened->bindingToInfo.emplace(resource.binding, resource);
+    } else if (resource.IsAccelerationStructure()) {
+      accelerationStructureSlotsBySet[resource.set].emplace_back(
           Utils::SetBindingToSlot(resource.set, resource.binding));
       state.flattened->bindingToInfo.emplace(resource.binding, resource);
     }

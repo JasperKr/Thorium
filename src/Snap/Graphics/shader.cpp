@@ -99,7 +99,8 @@ auto LoadShaderModule() -> Error {
   if (Error::IsError(result)) {
     return Error::Create(result);
   }
-  SpvTargetDesc.profile = GlobalSlangSession->findProfile("spirv_1_5");
+  SpvTargetDesc.profile =
+      GlobalSlangSession->findProfile("spirv_1_5+spvRayQueryKHR");
 
   auto shaderCreationResult = Shader::Create(*GetCurrentGraphicsContext(),
                                              "default2D", "Default shader");
@@ -321,7 +322,14 @@ static inline auto LoadSlang(const GraphicsContext &context,
   shader->slangModule = session->loadModule(shader->moduleName.c_str(),
                                             diagnosticsBlob.writeRef());
 
-  ERR_ASSERT(diagnosticsBlob == nullptr);
+  // ERR_ASSERT(diagnosticsBlob == nullptr);
+  if (diagnosticsBlob != nullptr) {
+    auto diagnostics = std::string_view(
+        static_cast<const char *>(diagnosticsBlob->getBufferPointer()),
+        diagnosticsBlob->getBufferSize());
+    return Error::Createf("Diagnostics:\n{}", diagnostics);
+  }
+
   ERR_ASSERT(shader->slangModule != nullptr);
 
   auto entryPointCount = shader->slangModule->getDefinedEntryPointCount();
@@ -588,6 +596,29 @@ inline auto ValidateBuffers(const Shader *shader) -> Error {
   return Error::Success();
 }
 
+inline auto ValidateAccelerationStructures(const Shader *shader) -> Error {
+  ZoneScoped;
+  for (const auto &resource : shader->reflection.resources) {
+    if (!resource.IsAccelerationStructure()) {
+      continue;
+    }
+
+    const auto &accelStructInfo =
+        std::get<Reflect::AccelerationStructureInfo>(resource.info);
+
+    auto locationKey =
+        Utils::SetBindingToSlot(accelStructInfo.set, accelStructInfo.binding);
+
+    if (!shader->GetState().userBoundAccelerationStructures.contains(
+            locationKey)) {
+      return Error::Createf("Acceleration structure '{}' not set up in shader.",
+                            resource.name);
+    }
+  }
+
+  return Error::Success();
+}
+
 void append(ResourceKey &dest, const ResourceKey &src) {
   dest.insert(dest.end(), src.begin(), src.end());
 }
@@ -672,6 +703,49 @@ auto Shader::Send(const ResourceKey &key,
                   const Ref<::Graphics::StructuredBuffer> &buffer) -> Error {
   ZoneScopedN("Shader::Send structured buffer");
   return Send(key, buffer->GetBuffer());
+}
+
+auto Shader::Send(const ResourceKey &key, const Ref<TLAS> &accelStructure)
+    -> Error {
+  ZoneScopedN("Shader::Send acceleration structure");
+
+  if (!accelStructure.isValid()) {
+    return Error::Create("Acceleration structure is null.");
+  }
+
+  auto iter = reflection.keyToSlot.find(key);
+  if (iter != reflection.keyToSlot.end()) {
+    auto locationKey = iter->second;
+    auto [set, binding] = Utils::SlotToSetBinding(locationKey);
+
+    auto *info = GetSlotDescription(set, binding);
+
+    if (info == nullptr) {
+      auto keyname = Reflect::ResourceKeyToString(key);
+      return Error::Createf("Resource {} is not found in shader reflection: {}",
+                            keyname, name);
+    }
+
+    auto *accelStructInfo =
+        std::get_if<Reflect::AccelerationStructureInfo>(&info->info);
+
+    if (accelStructInfo == nullptr) {
+      auto keyname = Reflect::ResourceKeyToString(key);
+      return Error::Createf(
+          "Resource {} is not an acceleration structure in shader reflection: "
+          "{} ({})",
+          keyname, name, info->ToString());
+    }
+
+    GetState().userBoundAccelerationStructures[locationKey] =
+        BoundASPair{accelStructure, accelStructInfo};
+    return Error::Success();
+  }
+
+  auto keyname = Reflect::ResourceKeyToString(key);
+  return Error::Createf(
+      "Acceleration structure {} not found in shader reflection: {}", keyname,
+      name);
 }
 
 auto Shader::Send(const ResourceKey &key, const Ref<Graphics::Texture> &texture)

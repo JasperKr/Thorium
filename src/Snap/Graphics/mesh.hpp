@@ -39,10 +39,9 @@ static const Type meshType = Type("Mesh");
 
 struct MeshCreationInfo {
   VertexFormat const *vertexFormat;
-  std::vector<std::span<uint8_t>> vertexData;
+  std::vector<std::span<const uint8_t>> vertexData;
   uint64_t vertexCount;
   std::string debugName = "Mesh";
-  bool createBlas = false;
 };
 
 struct Mesh : Object {
@@ -54,6 +53,7 @@ struct Mesh : Object {
                      const MeshCreationInfo &info) -> Result<Ref<Mesh>>;
 
   [[nodiscard]] auto GetVertexFormat() -> VertexFormat &;
+  [[nodiscard]] auto GetVertexFormat() const -> const VertexFormat &;
 
   [[nodiscard]] auto GetVertexCount() const -> uint32_t;
   [[nodiscard]] auto GetVertexData() const -> auto *;
@@ -121,6 +121,11 @@ struct Mesh : Object {
     return BindingRanges;
   }
 
+  auto CreateBLAS(const GraphicsContext &context) -> Error {
+    BottomLevelAS = CHECK_RES(BLAS::Create(context, *this));
+
+    return Error::Success();
+  }
   auto GetBLAS() const -> Ref<BLAS> { return BottomLevelAS; }
 
 private:

@@ -2,6 +2,7 @@
 
 #include "Graphics/Buffers/push.hpp"
 #include "Graphics/buffer.hpp"
+#include "Graphics/bvh.hpp"
 #include "Graphics/resource.hpp"
 #include "Graphics/texture.hpp"
 #include "Modules/Math/vector.hpp"
@@ -62,6 +63,8 @@ ShaderStageFlagsToPipelineStageFlags(VkShaderStageFlags shaderStages)
 
 using BoundBufferPair = std::pair<Ref<Buffer>, const Reflect::BufferInfo *>;
 using BoundTexturePair = std::pair<Ref<Texture>, const Reflect::SamplerInfo *>;
+using BoundASPair =
+    std::pair<Ref<TLAS>, const Reflect::AccelerationStructureInfo *>;
 
 struct ResourceBinding {
   uint32_t binding{};
@@ -78,6 +81,7 @@ struct ResourceBinding {
 struct BoundState {
   std::unordered_map<uint64_t, BoundBufferPair> userBoundBuffers;
   std::unordered_map<uint64_t, BoundTexturePair> userBoundTextures;
+  std::unordered_map<uint64_t, BoundASPair> userBoundAccelerationStructures;
   std::unordered_map<uint32_t, ResourceBinding> bindingInfos;
 };
 
@@ -155,6 +159,8 @@ struct Shader : Object {
       -> Error;
   auto Send(const ResourceKey &key,
             const Ref<::Graphics::StructuredBuffer> &buffer) -> Error;
+
+  auto Send(const ResourceKey &key, const Ref<TLAS> &accelStructure) -> Error;
 
   auto GetUniform(const ResourceKey &key) const
       -> const Reflect::ResourceInfo *;

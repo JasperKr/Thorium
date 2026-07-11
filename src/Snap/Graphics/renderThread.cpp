@@ -72,7 +72,8 @@ inline auto CreateDescriptorPool(ThreadContext &tcontext)
        .descriptorCount = poolSize},
       {.type = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
        .descriptorCount = poolSize},
-  };
+      {.type = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,
+       .descriptorCount = poolSize}};
 
   VkDescriptorPoolCreateInfo poolInfo = {};
   poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;

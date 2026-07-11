@@ -768,6 +768,10 @@ auto Scene::DrawModels(Camera &camera, Frustum &frustum,
       forward, countKey,
       Renderer::RendererInstance.GetSceneLightBuffers().DirectionalLightCount));
 
+  auto tlasKey = Graphics::ResourceKey{"SceneBVH"};
+  CHECK_ERR(shader->Send(tlasKey, Renderer::RendererInstance.GetSceneTLAS()));
+  CHECK_ERR(forward->Send(tlasKey, Renderer::RendererInstance.GetSceneTLAS()));
+
   CHECK_ERR(Renderer::RendererInstance.BindLightBuffers(ctx, shader));
   CHECK_ERR(Renderer::RendererInstance.BindLightBuffers(ctx, forward));
 
@@ -967,13 +971,23 @@ Scene::Scene(std::string name) : name(std::move(name)) {
 
         auto &renderer = Renderer::RendererInstance;
 
-        if (geometry.tlasIndex == -1) {
-          geometry.tlasIndex = renderer.GetSceneTLAS()->AddInstance(
-              geometry.mesh->GetBLAS(), worldMatrix);
-          renderer.SetSceneNeedsTLASRebuild(true);
-        } else {
-          renderer.GetSceneTLAS()->UpdateInstance(geometry.tlasIndex,
-                                                  worldMatrix);
+        if (geometry.mesh->GetBLAS() != nullptr) {
+          if (geometry.tlasIndex == -1) {
+            auto result = renderer.GetSceneTLAS()->AddInstance(
+                geometry.mesh->GetBLAS(), worldMatrix);
+
+            if (Error::IsError(result)) {
+              lastUpdateResult = result.error();
+              return;
+            }
+
+            geometry.tlasIndex = result.value();
+
+            renderer.SetSceneNeedsTLASRebuild(true);
+          } else {
+            renderer.GetSceneTLAS()->UpdateInstance(geometry.tlasIndex,
+                                                    worldMatrix);
+          }
         }
       }));
 

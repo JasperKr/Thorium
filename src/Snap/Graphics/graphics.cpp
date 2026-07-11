@@ -209,6 +209,14 @@ static auto CreateDevice(GraphicsContext &context,
                                                                     : VK_FALSE;
   indexTypeUint8Features.pNext = &accelStructFeatures;
 
+  VkPhysicalDeviceRayQueryFeaturesKHR rayQueryFeatures{};
+  rayQueryFeatures.sType =
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR;
+  rayQueryFeatures.rayQuery =
+      settings.inlineRaytracing == ExtensionRequirement::Required ? VK_TRUE
+                                                                  : VK_FALSE;
+  accelStructFeatures.pNext = &rayQueryFeatures;
+
   VkPhysicalDeviceVertexAttributeDivisorFeaturesKHR
       vertexAttributeDivisorProperties{};
   vertexAttributeDivisorProperties.sType =

@@ -178,6 +178,19 @@ auto TryCreateShaderDescriptorBindingInfo(const GraphicsContext &context,
       };
 
       shader->bindingInfos[imageInfo.set].emplace_back(layoutBinding);
+    } else if (layout.IsAccelerationStructure()) {
+      auto &accelStructInfo =
+          std::get<Reflect::AccelerationStructureInfo>(layout.info);
+
+      auto layoutBinding = VkDescriptorSetLayoutBinding{
+          .binding = accelStructInfo.binding,
+          .descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,
+          .descriptorCount = 1,
+          .stageFlags = VK_SHADER_STAGE_ALL,
+          .pImmutableSamplers = nullptr,
+      };
+
+      shader->bindingInfos[accelStructInfo.set].emplace_back(layoutBinding);
     }
   }
 
@@ -302,7 +315,6 @@ auto GetPipelineLayout(const GraphicsContext &context, Shader *shader)
     layoutKey.bindingFlags = {};
 
     const auto &layout = CHECK_RES(GetDescriptorSetLayout(layoutKey, context));
-    // setLayouts.emplace_back(layout);
     setLayouts.at(setPair.first) = layout;
   }
 
@@ -1102,8 +1114,7 @@ inline auto BeginRendering(const GraphicsContext &context) -> Error {
 #ifndef NDEBUG
   VkExtent2D expectedExtent = GetRenderExtent(context, *TopOfStack);
 
-  for (int i = 0; i < TopOfStack->colorAttachments.size(); i++) {
-    const auto &rendertarget = TopOfStack->colorAttachments.at(i);
+  for (const auto &rendertarget : TopOfStack->colorAttachments) {
     if (rendertarget.texture->GetWidth() != expectedExtent.width ||
         rendertarget.texture->GetHeight() != expectedExtent.height) {
       return Error::Create(
@@ -1239,6 +1250,37 @@ inline auto BindBufferDesciptors(DescriptorKey &key, Ref<Shader> &shader,
   return Error::Success();
 }
 
+inline auto BindAccelerationStructureDescriptors(DescriptorKey &key,
+                                                 Ref<Shader> &shader,
+                                                 const BoundState &state,
+                                                 int setIndex) -> Error {
+  if (!shader->reflection.accelerationStructureSlotsBySet.contains(setIndex)) {
+    return Error::Success();
+  }
+
+  for (const auto &location :
+       shader->reflection.accelerationStructureSlotsBySet.at(setIndex)) {
+    const auto &[set, binding] = Utils::SlotToSetBinding(location);
+    ERR_ASSERT(set == setIndex);
+    auto iter = state.userBoundAccelerationStructures.find(location);
+
+    [[unlikely]]
+    if (iter == state.userBoundAccelerationStructures.end() ||
+        !iter->second.first.isValid()) {
+      continue;
+    }
+
+    const auto &accelStruct = iter->second;
+
+    key.bindings.emplace_back(ResourceBinding{
+        .binding = binding,
+        .resource = accelStruct.first->getID(),
+    });
+  }
+
+  return Error::Success();
+}
+
 // NOLINTNEXTLINE
 inline auto BindTextureDescriptors(const GraphicsContext &context,
                                    VkPipelineStageFlags2 stage,
@@ -1335,14 +1377,21 @@ inline auto AllocateDescriptorSet(const GraphicsContext &context,
   thread_local std::vector<VkWriteDescriptorSet> writeDescriptorSets;
   thread_local std::vector<VkDescriptorBufferInfo> bufferInfos;
   thread_local std::vector<VkDescriptorImageInfo> imageInfos;
+  thread_local std::vector<VkWriteDescriptorSetAccelerationStructureKHR>
+      accelStructInfos;
+  thread_local std::vector<VkAccelerationStructureKHR> accelStructHandles;
 
   snap_defer(writeDescriptorSets.clear());
   snap_defer(bufferInfos.clear());
   snap_defer(imageInfos.clear());
+  snap_defer(accelStructInfos.clear());
+  snap_defer(accelStructHandles.clear());
 
   writeDescriptorSets.reserve(key.bindings.size());
   bufferInfos.reserve(key.bindings.size());
   imageInfos.reserve(key.bindings.size());
+  accelStructInfos.reserve(key.bindings.size());
+  accelStructHandles.reserve(key.bindings.size());
 
   auto &shader = TopOfStack->shader;
   auto &state = shader->GetState();
@@ -1358,14 +1407,12 @@ inline auto AllocateDescriptorSet(const GraphicsContext &context,
     auto slot = Utils::SetBindingToSlot(setIndex, binding.binding);
     auto textureIter = state.userBoundTextures.find(slot);
     auto bufferIter = state.userBoundBuffers.find(slot);
+    auto accelStructIter = state.userBoundAccelerationStructures.find(slot);
 
     if (binding.isDynamic) {
       auto &globalBuffer = GetGlobalUniformBuffer(context.frameIndex);
 
-      if (!globalBuffer.GetBuffer().isValid()) {
-        return Error::Unexpected("Global uniform buffer is invalid for dynamic "
-                                 "descriptor set binding.");
-      }
+      ERR_ASSERT(globalBuffer.GetBuffer().isValid());
 
       write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC;
 
@@ -1382,10 +1429,7 @@ inline auto AllocateDescriptorSet(const GraphicsContext &context,
       const auto &texture = textureIter->second.first;
       const auto *samplerInfo = textureIter->second.second;
 
-      if (samplerInfo == nullptr) {
-        return Error::Unexpected(
-            "Sampler info is null for bound texture in descriptor set.");
-      }
+      ERR_ASSERT(texture.isValid());
 
       if (samplerInfo->access == SLANG_RESOURCE_ACCESS_READ) {
         write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
@@ -1402,14 +1446,14 @@ inline auto AllocateDescriptorSet(const GraphicsContext &context,
           .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
       });
 
+      ERR_ASSERT(imageInfos.back().sampler != VK_NULL_HANDLE);
+      ERR_ASSERT(imageInfos.back().imageView != VK_NULL_HANDLE);
+
       write.pImageInfo = &imageInfos.back();
     } else if (bufferIter != state.userBoundBuffers.end()) {
       const auto &buffer = bufferIter->second;
 
-      if (!buffer.first.isValid()) {
-        return Error::Unexpected(
-            "Buffer is invalid for bound buffer in descriptor set.");
-      }
+      ERR_ASSERT(buffer.first.isValid());
 
       if ((buffer.first->usage & VK_BUFFER_USAGE_2_UNIFORM_BUFFER_BIT) != 0) {
         write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -1428,6 +1472,24 @@ inline auto AllocateDescriptorSet(const GraphicsContext &context,
       });
 
       write.pBufferInfo = &bufferInfos.back();
+    } else if (accelStructIter != state.userBoundAccelerationStructures.end()) {
+      const auto &accelStruct = accelStructIter->second;
+
+      ERR_ASSERT(accelStruct.first.isValid());
+
+      write.descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
+
+      VkWriteDescriptorSetAccelerationStructureKHR accelStructInfo = {};
+      accelStructInfo.sType =
+          VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR;
+      accelStructInfo.accelerationStructureCount = 1;
+
+      accelStructHandles.emplace_back(
+          accelStruct.first->GetAccelerationStructure());
+      accelStructInfo.pAccelerationStructures = &accelStructHandles.back();
+      accelStructInfos.emplace_back(accelStructInfo);
+
+      write.pNext = &accelStructInfos.back();
     } else {
       continue;
     }
@@ -1500,6 +1562,8 @@ auto BindDescriptorSets(const GraphicsContext &context,
     CHECK_ERR(BindBufferDesciptors(key, shader, state, setIndex));
     CHECK_ERR(
         BindTextureDescriptors(context, stageFlags, key, shader, setIndex));
+    CHECK_ERR(
+        BindAccelerationStructureDescriptors(key, shader, state, setIndex));
     CHECK_ERR(
         BindGlobalsDescriptor(context, key, shader, setIndex, dynamicOffsets));
 

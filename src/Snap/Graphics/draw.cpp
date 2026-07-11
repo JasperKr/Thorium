@@ -356,30 +356,7 @@ inline auto InsertBufferBarriers(const GraphicsContext &context) -> Error {
 
     const auto &info = slotInfo->GetInfo<Reflect::BufferInfo>();
 
-    VkAccessFlags2 access = 0;
-
-    switch (info.access) {
-    case SLANG_RESOURCE_ACCESS_NONE:
-      // Shaders with ubo buffers show access of NONE for some reason
-      access = VK_ACCESS_2_UNIFORM_READ_BIT;
-      break;
-    case SLANG_RESOURCE_ACCESS_READ:
-      access = info.bufferType == Reflect::BufferType::Uniform
-                   ? VK_ACCESS_2_UNIFORM_READ_BIT
-                   : VK_ACCESS_2_SHADER_READ_BIT;
-      break;
-    case SLANG_RESOURCE_ACCESS_READ_WRITE:
-      access = VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT;
-      break;
-    case SLANG_RESOURCE_ACCESS_WRITE:
-      access = VK_ACCESS_2_SHADER_WRITE_BIT;
-      break;
-    default:
-      PrintWarning("Buffer access type is Unknown for slang access: {}, "
-                   "skipping barrier.",
-                   static_cast<uint32_t>(info.access));
-      break;
-    }
+    VkAccessFlags2 access = info.accessFlags;
 
     if (access == 0 && info.access != SLANG_RESOURCE_ACCESS_NONE) {
       PrintWarning("Buffer access type is Unknown for slang access: {}, "
@@ -388,23 +365,7 @@ inline auto InsertBufferBarriers(const GraphicsContext &context) -> Error {
       continue;
     }
 
-    auto stages = VK_PIPELINE_STAGE_2_NONE;
-
-    for (const auto &stage : shader->entryPoints) {
-      switch (stage.second) {
-      case VK_SHADER_STAGE_VERTEX_BIT:
-        stages |= VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT;
-        break;
-      case VK_SHADER_STAGE_FRAGMENT_BIT:
-        stages |= VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
-        break;
-      case VK_SHADER_STAGE_COMPUTE_BIT:
-        stages |= VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
-        break;
-      default:
-        break;
-      }
-    }
+    auto stages = shader->combinedPipelineStages;
 
     Barrier::UpdateUsage(context, *buffer.first,
                          {

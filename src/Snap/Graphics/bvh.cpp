@@ -37,25 +37,33 @@ auto BLAS::Create(const GraphicsContext &context, const Mesh &mesh)
     -> Result<Ref<BLAS>> {
   std::lock_guard<std::mutex> lock(BVHScratchBufferMutex);
 
+  const auto *positionAttribute =
+      mesh.GetVertexFormat().GetAttribute("POSITION");
+  ERR_ASSERT_MSG(positionAttribute != nullptr,
+                 "BLAS build requires a 'POSITION' vertex attribute");
+
   VkAccelerationStructureGeometryKHR geometry{};
   geometry.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
   geometry.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
   geometry.flags = VK_GEOMETRY_OPAQUE_BIT_KHR;
 
-  auto positionAddress = CHECK_RES(mesh.GetVertexBuffer()->GetDeviceAddress());
+  auto positionAddress = CHECK_RES(
+      mesh.GetVertexBuffer(positionAttribute->binding)->GetDeviceAddress());
+  positionAddress += positionAttribute->offset;
 
-  if (mesh.GetIndexBuffer() != nullptr) {
+  if (mesh.GetIndexBuffer() != nullptr && mesh.GetIndexCount() > 0) {
     auto indexAddress = CHECK_RES(mesh.GetIndexBuffer()->GetDeviceAddress());
 
     geometry.geometry.triangles = {
         .sType =
             VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR,
-        .vertexFormat = VK_FORMAT_R32G32B32_SFLOAT,
+        .vertexFormat = positionAttribute->format,
         .vertexData =
             {
                 .deviceAddress = positionAddress,
             },
-        .vertexStride = sizeof(float) * 3,
+        .vertexStride =
+            mesh.GetVertexFormat().GetStride(positionAttribute->binding),
         .maxVertex = mesh.GetVertexCount() - 1,
         .indexType = mesh.GetIndexFormat(),
         .indexData =
@@ -67,18 +75,22 @@ auto BLAS::Create(const GraphicsContext &context, const Mesh &mesh)
     geometry.geometry.triangles = {
         .sType =
             VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR,
-        .vertexFormat = VK_FORMAT_R32G32B32_SFLOAT,
+        .vertexFormat = positionAttribute->format,
         .vertexData =
             {
                 .deviceAddress = positionAddress,
             },
-        .vertexStride = sizeof(float) * 3,
+        .vertexStride =
+            mesh.GetVertexFormat().GetStride(positionAttribute->binding),
         .maxVertex = mesh.GetVertexCount() - 1,
         .indexType = VK_INDEX_TYPE_NONE_KHR,
     };
   }
 
   uint32_t primitiveCount = mesh.GetIndexCount() / 3;
+  if (mesh.GetIndexCount() == 0) {
+    primitiveCount = mesh.GetVertexCount() / 3;
+  }
 
   VkAccelerationStructureBuildGeometryInfoKHR buildInfo{
       .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR,
@@ -99,6 +111,15 @@ auto BLAS::Create(const GraphicsContext &context, const Mesh &mesh)
       &buildInfo, &primitiveCount, &sizeInfo);
 
   auto bvh = Ref<BLAS>::Make();
+  bvh->vertexBuffer = mesh.GetVertexBuffer(positionAttribute->binding);
+  bvh->indexBuffer = mesh.GetIndexBuffer();
+  bvh->vertexCount = mesh.GetVertexCount();
+  bvh->indexCount = mesh.GetIndexCount();
+  bvh->indexFormat = mesh.GetIndexFormat();
+  bvh->vertexFormat = positionAttribute->format;
+  bvh->vertexStride =
+      mesh.GetVertexFormat().GetStride(positionAttribute->binding);
+  bvh->vertexOffset = positionAttribute->offset;
 
   // Create AS storage buffer
   bvh->accelerationStructureBuffer = CHECK_RES(Buffer::Create(
@@ -163,6 +184,20 @@ auto BLAS::Create(const GraphicsContext &context, const Mesh &mesh)
       {.stages = VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
        .access = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR});
 
+  Barrier::UpdateUsage(
+      context, *bvh->vertexBuffer,
+      {.stages = VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+       .access = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR |
+                 VK_ACCESS_SHADER_READ_BIT});
+
+  if (bvh->indexBuffer != nullptr && bvh->indexCount > 0) {
+    Barrier::UpdateUsage(
+        context, *bvh->indexBuffer,
+        {.stages = VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+         .access = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR |
+                   VK_ACCESS_SHADER_READ_BIT});
+  }
+
   vkCmdBuildAccelerationStructuresKHR(cmdBuffer, 1, &buildInfo, &rangePtr);
 
   Barrier::UpdateUsage(
@@ -188,6 +223,308 @@ auto BLAS::Create(const GraphicsContext &context, const Mesh &mesh)
   return bvh;
 }
 
+// NOLINTNEXTLINE(readability-function-cognitive-complexity)
+auto BLAS::Rebuild(const GraphicsContext &context) -> Error {
+  ERR_ASSERT(accelerationStructure != VK_NULL_HANDLE);
+  ERR_ASSERT(accelerationStructureBuffer != nullptr);
+  ERR_ASSERT(vertexBuffer != nullptr);
+
+  std::lock_guard<std::mutex> lock(BVHScratchBufferMutex);
+
+  VkAccelerationStructureGeometryKHR geometry{};
+  geometry.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
+  geometry.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
+  geometry.flags = VK_GEOMETRY_OPAQUE_BIT_KHR;
+
+  auto positionAddress = CHECK_RES(vertexBuffer->GetDeviceAddress());
+  positionAddress += vertexOffset;
+
+  if (indexBuffer != nullptr && indexCount > 0) {
+    auto indexAddress = CHECK_RES(indexBuffer->GetDeviceAddress());
+    geometry.geometry.triangles = {
+        .sType =
+            VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR,
+        .vertexFormat = vertexFormat,
+        .vertexData =
+            {
+                .deviceAddress = positionAddress,
+            },
+        .vertexStride = vertexStride,
+        .maxVertex = vertexCount - 1,
+        .indexType = indexFormat,
+        .indexData =
+            {
+                .deviceAddress = indexAddress,
+            },
+    };
+  } else {
+    geometry.geometry.triangles = {
+        .sType =
+            VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR,
+        .vertexFormat = vertexFormat,
+        .vertexData =
+            {
+                .deviceAddress = positionAddress,
+            },
+        .vertexStride = vertexStride,
+        .maxVertex = vertexCount - 1,
+        .indexType = VK_INDEX_TYPE_NONE_KHR,
+    };
+  }
+
+  uint32_t primitiveCount = indexCount / 3;
+  if (indexCount == 0) {
+    primitiveCount = vertexCount / 3;
+  }
+
+  VkAccelerationStructureBuildGeometryInfoKHR buildInfo{
+      .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR,
+      .type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR,
+      .flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR,
+      .mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR,
+      .geometryCount = 1,
+      .pGeometries = &geometry,
+      .scratchData = {.deviceAddress =
+                          CHECK_RES(BvhScratchBuffer->GetDeviceAddress())},
+  };
+
+  VkAccelerationStructureBuildSizesInfoKHR sizeInfo{
+      .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR,
+  };
+
+  vkGetAccelerationStructureBuildSizesKHR(
+      context.device, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR,
+      &buildInfo, &primitiveCount, &sizeInfo);
+
+  if (accelerationStructureBuffer->size < sizeInfo.accelerationStructureSize) {
+    ScheduleDestruction(
+        AccelerationStructureMemory{
+            .accelerationStructure = accelerationStructure,
+        },
+        SemaphoreManager::GetSemaphoreValue());
+
+    accelerationStructureBuffer = CHECK_RES(Buffer::Create(
+        context,
+        {
+            .size = sizeInfo.accelerationStructureSize,
+            .usage = VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR |
+                     VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+            .properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+            .stagingBuffer = false,
+            .persistentMapping = false,
+            .debugName = "BLAS Buffer",
+        }));
+
+    VkAccelerationStructureCreateInfoKHR asCreateInfo{
+        .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR,
+        .buffer = accelerationStructureBuffer->handle,
+        .size = sizeInfo.accelerationStructureSize,
+        .type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR,
+    };
+
+    {
+      std::lock_guard<std::mutex> lockDevice(
+          Graphics::GraphicsContext::mutexes.device);
+
+      CHECK_NEW_ERR(vkCreateAccelerationStructureKHR(
+          context.device, &asCreateInfo, GetAllocationCallbacks(),
+          &accelerationStructure));
+    }
+  }
+
+  ERR_ASSERT(BvhScratchBuffer != nullptr);
+  ERR_ASSERT(BvhScratchBuffer->size >= sizeInfo.buildScratchSize);
+
+  buildInfo.dstAccelerationStructure = accelerationStructure;
+
+  VkAccelerationStructureBuildRangeInfoKHR range{
+      .primitiveCount = primitiveCount,
+      .primitiveOffset = 0,
+      .firstVertex = 0,
+      .transformOffset = 0,
+  };
+
+  const auto *rangePtr = &range;
+
+  auto *cmdBuffer = GetCommandBuffer();
+  ERR_ASSERT(cmdBuffer != nullptr);
+
+  BvhScratchBuffer->MarkUse();
+  vertexBuffer->MarkUse();
+  if (indexBuffer != nullptr && indexCount > 0) {
+    indexBuffer->MarkUse();
+  }
+
+  Barrier::UpdateUsage(
+      context, *BvhScratchBuffer,
+      {.stages = VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+       .access = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR});
+
+  Barrier::UpdateUsage(
+      context, *vertexBuffer,
+      {.stages = VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+       .access = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR |
+                 VK_ACCESS_SHADER_READ_BIT});
+
+  if (indexBuffer != nullptr && indexCount > 0) {
+    Barrier::UpdateUsage(
+        context, *indexBuffer,
+        {.stages = VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+         .access = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR |
+                   VK_ACCESS_SHADER_READ_BIT});
+  }
+
+  Barrier::UpdateUsage(
+      context, *accelerationStructureBuffer,
+      {.stages = VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+       .access = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR});
+
+  vkCmdBuildAccelerationStructuresKHR(cmdBuffer, 1, &buildInfo, &rangePtr);
+
+  Barrier::UpdateUsage(
+      context, *accelerationStructureBuffer,
+      {.stages = VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+       .access = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR});
+
+  VkAccelerationStructureDeviceAddressInfoKHR addressInfo{
+      .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR,
+      .accelerationStructure = accelerationStructure,
+  };
+
+  accelerationStructureAddress =
+      vkGetAccelerationStructureDeviceAddressKHR(context.device, &addressInfo);
+
+  return Error::Success();
+}
+
+auto BLAS::Refit(const GraphicsContext &context) -> Error {
+  ERR_ASSERT(accelerationStructure != VK_NULL_HANDLE);
+  ERR_ASSERT(accelerationStructureBuffer != nullptr);
+  ERR_ASSERT(vertexBuffer != nullptr);
+
+  std::lock_guard<std::mutex> lock(BVHScratchBufferMutex);
+
+  VkAccelerationStructureGeometryKHR geometry{};
+  geometry.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
+  geometry.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
+  geometry.flags = VK_GEOMETRY_OPAQUE_BIT_KHR;
+
+  auto positionAddress = CHECK_RES(vertexBuffer->GetDeviceAddress());
+  positionAddress += vertexOffset;
+
+  if (indexBuffer != nullptr && indexCount > 0) {
+    auto indexAddress = CHECK_RES(indexBuffer->GetDeviceAddress());
+    geometry.geometry.triangles = {
+        .sType =
+            VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR,
+        .vertexFormat = vertexFormat,
+        .vertexData =
+            {
+                .deviceAddress = positionAddress,
+            },
+        .vertexStride = vertexStride,
+        .maxVertex = vertexCount - 1,
+        .indexType = indexFormat,
+        .indexData =
+            {
+                .deviceAddress = indexAddress,
+            },
+    };
+  } else {
+    geometry.geometry.triangles = {
+        .sType =
+            VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR,
+        .vertexFormat = vertexFormat,
+        .vertexData =
+            {
+                .deviceAddress = positionAddress,
+            },
+        .vertexStride = vertexStride,
+        .maxVertex = vertexCount - 1,
+        .indexType = VK_INDEX_TYPE_NONE_KHR,
+    };
+  }
+
+  uint32_t primitiveCount = indexCount / 3;
+  if (indexCount == 0) {
+    primitiveCount = vertexCount / 3;
+  }
+
+  VkAccelerationStructureBuildGeometryInfoKHR buildInfo{
+      .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR,
+      .type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR,
+      .flags = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR |
+               VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR,
+      .mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR,
+      .srcAccelerationStructure = accelerationStructure,
+      .dstAccelerationStructure = accelerationStructure,
+      .geometryCount = 1,
+      .pGeometries = &geometry,
+      .scratchData = {.deviceAddress =
+                          CHECK_RES(BvhScratchBuffer->GetDeviceAddress())},
+  };
+
+  VkAccelerationStructureBuildRangeInfoKHR range{
+      .primitiveCount = primitiveCount,
+      .primitiveOffset = 0,
+      .firstVertex = 0,
+      .transformOffset = 0,
+  };
+
+  const auto *rangePtr = &range;
+
+  auto *cmdBuffer = GetCommandBuffer();
+  ERR_ASSERT(cmdBuffer != nullptr);
+
+  BvhScratchBuffer->MarkUse();
+  vertexBuffer->MarkUse();
+  if (indexBuffer != nullptr && indexCount > 0) {
+    indexBuffer->MarkUse();
+  }
+
+  Barrier::UpdateUsage(
+      context, *BvhScratchBuffer,
+      {.stages = VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+       .access = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR});
+
+  Barrier::UpdateUsage(
+      context, *vertexBuffer,
+      {.stages = VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+       .access = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR |
+                 VK_ACCESS_SHADER_READ_BIT});
+
+  if (indexBuffer != nullptr && indexCount > 0) {
+    Barrier::UpdateUsage(
+        context, *indexBuffer,
+        {.stages = VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+         .access = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR |
+                   VK_ACCESS_SHADER_READ_BIT});
+  }
+
+  Barrier::UpdateUsage(
+      context, *accelerationStructureBuffer,
+      {.stages = VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+       .access = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR |
+                 VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR});
+
+  vkCmdBuildAccelerationStructuresKHR(cmdBuffer, 1, &buildInfo, &rangePtr);
+
+  Barrier::UpdateUsage(
+      context, *accelerationStructureBuffer,
+      {.stages = VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+       .access = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR});
+
+  VkAccelerationStructureDeviceAddressInfoKHR addressInfo{
+      .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR,
+      .accelerationStructure = accelerationStructure,
+  };
+
+  accelerationStructureAddress =
+      vkGetAccelerationStructureDeviceAddressKHR(context.device, &addressInfo);
+
+  return Error::Success();
+}
+
 auto BLAS::GetDeviceAddress() const -> VkDeviceAddress {
   return accelerationStructureAddress;
 }
@@ -196,10 +533,13 @@ auto TLAS::GetDeviceAddress() const -> VkDeviceAddress {
   return accelerationStructureAddress;
 }
 
-auto TLAS::Create(const GraphicsContext &context) -> Result<Ref<TLAS>> {
+auto TLAS::Create(const GraphicsContext &context,
+                  const std::string_view &debugname) -> Result<Ref<TLAS>> {
   std::lock_guard<std::mutex> lock(BVHScratchBufferMutex);
 
   auto tlas = Ref<TLAS>::Make();
+
+  tlas->debugName = std::string(debugname);
 
   // Filled when adding instances
   std::vector<VkAccelerationStructureInstanceKHR> instances;
@@ -349,14 +689,16 @@ auto TLAS::Create(const GraphicsContext &context) -> Result<Ref<TLAS>> {
 }
 
 auto TLAS::AddInstance(const Ref<BLAS> &blas, const Math::Matrix4x4 &transform)
-    -> uint32_t {
+    -> Result<uint32_t> {
+  ERR_ASSERT(blas != nullptr);
+
   VkAccelerationStructureInstanceKHR instance{};
 
   // clang-format off
   instance.transform = VkTransformMatrixKHR{
-      transform.At(0, 0), transform.At(1, 0), transform.At(2, 0), transform.At(3, 0),
-      transform.At(0, 1), transform.At(1, 1), transform.At(2, 1), transform.At(3, 1),
-      transform.At(0, 2), transform.At(1, 2), transform.At(2, 2), transform.At(3, 2),
+      transform.At(0, 0), transform.At(0, 1), transform.At(0, 2), transform.At(0, 3),
+      transform.At(1, 0), transform.At(1, 1), transform.At(1, 2), transform.At(1, 3),
+      transform.At(2, 0), transform.At(2, 1), transform.At(2, 2), transform.At(2, 3),
   };
   // clang-format on
 
@@ -388,10 +730,11 @@ auto TLAS::UpdateInstance(uint32_t index, const Math::Matrix4x4 &transform)
 
   // clang-format off
   instance.transform = VkTransformMatrixKHR{
-      transform.At(0, 0), transform.At(1, 0), transform.At(2, 0), transform.At(3, 0),
-      transform.At(0, 1), transform.At(1, 1), transform.At(2, 1), transform.At(3, 1),
-      transform.At(0, 2), transform.At(1, 2), transform.At(2, 2), transform.At(3, 2),
+      transform.At(0, 0), transform.At(0, 1), transform.At(0, 2), transform.At(0, 3),
+      transform.At(1, 0), transform.At(1, 1), transform.At(1, 2), transform.At(1, 3),
+      transform.At(2, 0), transform.At(2, 1), transform.At(2, 2), transform.At(2, 3),
   };
+
   // clang-format on
 }
 
