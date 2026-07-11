@@ -6,7 +6,6 @@
 #include "Graphics/vertexformat.hpp"
 #include "Modules/Math/vector.hpp"
 #include "Modules/compressedImageData.hpp"
-#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/filesystem.hpp"
 #include "Modules/imageData.hpp"
@@ -27,7 +26,6 @@
 #include <cstring>
 #include <execution>
 #include <flecs.h>
-#include <memory>
 #include <mutex>
 #include <numeric>
 #include <public/tracy/Tracy.hpp>
@@ -1230,9 +1228,13 @@ LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
       static Graphics::VertexFormat SeparateVertexFormat(
           SeparateVertexComponents);
 
-      auto mesh = CHECK_RES(
-          Graphics::Mesh::Create(context, SeparateVertexFormat, vertexCount,
-                                 std::string(gltfMesh.name)));
+      Graphics::MeshCreationInfo meshCreationInfo{
+          .vertexFormat = &SeparateVertexFormat,
+          .vertexCount = vertexCount,
+          .debugName = std::string(gltfMesh.name),
+      };
+
+      auto mesh = CHECK_RES(Graphics::Mesh::Create(context, meshCreationInfo));
 
       if (!indexData.empty()) {
         CHECK_ERR(mesh->SetIndices(context, indexData, indexType));

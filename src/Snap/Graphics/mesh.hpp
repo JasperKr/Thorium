@@ -36,21 +36,21 @@ inline auto GetIndexFormatSize(VkIndexType format) -> size_t {
 
 static const Type meshType = Type("Mesh");
 
+struct MeshCreationInfo {
+  VertexFormat const *vertexFormat;
+  std::vector<std::span<uint8_t>> vertexData;
+  uint64_t vertexCount;
+  std::string debugName = "Mesh";
+  bool createBlas = false;
+};
+
 struct Mesh : Object {
 
   // Vertex data must be laid out as tightly packed arrays;
   // for example, 2 triangles with 2 bindings: [0, 1, 2, 0, 1, 2], [0, 1, 2, 0, 1, 2]
   // where the first array is for binding 0 and the second array is for binding 1.
   static auto Create(const GraphicsContext &context,
-                     const VertexFormat &vertexFormat,
-                     const std::vector<std::span<uint8_t>> &vertexData,
-                     const std::string &debugName = "Mesh")
-      -> Result<Ref<Mesh>>;
-
-  static auto Create(const GraphicsContext &context,
-                     const VertexFormat &vertexFormat, uint64_t vertexCount,
-                     const std::string &debugName = "Mesh")
-      -> Result<Ref<Mesh>>;
+                     const MeshCreationInfo &info) -> Result<Ref<Mesh>>;
 
   [[nodiscard]] auto GetVertexFormat() -> VertexFormat &;
 
@@ -121,6 +121,14 @@ struct Mesh : Object {
   }
 
 private:
+  static auto CreateFromVertexData(const GraphicsContext &context,
+                                   const MeshCreationInfo &info)
+      -> Result<Ref<Mesh>>;
+
+  static auto CreateFromVertexCount(const GraphicsContext &context,
+                                    const MeshCreationInfo &info)
+      -> Result<Ref<Mesh>>;
+
   auto UploadVertices(const GraphicsContext &context, uint32_t binding,
                       const std::span<const uint8_t> &vertices, uint64_t offset)
       -> Error;

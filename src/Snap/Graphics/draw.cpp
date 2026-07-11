@@ -86,7 +86,14 @@ auto CreateQuad01Mesh(const Graphics::GraphicsContext &context)
 
   assert(sizeof(FormatDefault2D) == vertexFormat.GetBindings()[0].stride);
 
-  auto mesh = CHECK_RES(Graphics::Mesh::Create(context, vertexFormat, {span}));
+  MeshCreationInfo info{
+      .vertexFormat = &vertexFormat,
+      .vertexData = {span},
+      .vertexCount = vertices.size(),
+      .debugName = "Quad01Mesh",
+  };
+
+  auto mesh = CHECK_RES(Graphics::Mesh::Create(context, info));
 
   CHECK_ERR(mesh->SetVertices(context, 0, span));
 

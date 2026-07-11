@@ -22,8 +22,13 @@ void LineDrawer::OverlayLine(const Math::Vec3 &start, const Math::Vec3 &end,
 }
 
 auto LineDrawer::Initialize(const Graphics::GraphicsContext &context) -> Error {
-  Mesh = CHECK_RES(Graphics::Mesh::Create(context, LineVertexFormat,
-                                          MaxVertexCount, "Lines mesh"));
+  Graphics::MeshCreationInfo info{
+      .vertexFormat = &LineVertexFormat,
+      .vertexCount = MaxVertexCount,
+      .debugName = "Lines mesh",
+  };
+
+  Mesh = CHECK_RES(Graphics::Mesh::Create(context, info));
 
   Shader = CHECK_RES(
       Graphics::Shader::Create(context, "GUI/lineDrawer", "Line shader"));

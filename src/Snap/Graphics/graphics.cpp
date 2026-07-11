@@ -290,6 +290,8 @@ static auto CreateDevice(GraphicsContext &context,
       {VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME, extOptional},
       {VK_EXT_INDEX_TYPE_UINT8_EXTENSION_NAME, extOptional},
       {VK_EXT_VERTEX_ATTRIBUTE_DIVISOR_EXTENSION_NAME, extOptional},
+      {VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME, extRequired},
+      {VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME, extRequired},
 
       {VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
        settings.hardwareRaytracing},
@@ -453,7 +455,8 @@ static auto CreateVmaAllocator(GraphicsContext &context) -> Error {
   allocatorInfo.instance = context.instance;
   allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_4;
   allocatorInfo.pAllocationCallbacks = GetAllocationCallbacks();
-  allocatorInfo.flags = VMA_ALLOCATOR_CREATE_EXTERNALLY_SYNCHRONIZED_BIT;
+  allocatorInfo.flags = VMA_ALLOCATOR_CREATE_EXTERNALLY_SYNCHRONIZED_BIT |
+                        VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
 
   VmaVulkanFunctions vulkanFunctions;
   Error error = Error::Create(

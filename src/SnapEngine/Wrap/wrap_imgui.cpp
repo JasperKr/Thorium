@@ -244,8 +244,13 @@ inline auto SetupTemporaryCommandLists(ImDrawData *drawData,
     if (vertexCount > temporaryCommandList.MaxVertexCount) {
       temporaryCommandList.MaxVertexCount = vertexCount;
 
-      temporaryCommandList.Mesh = CHECK_RES(
-          Graphics::Mesh::Create(ctx, format, vertexCount, "Imgui UI Mesh"));
+      Graphics::MeshCreationInfo info{
+          .vertexFormat = &format,
+          .vertexCount = static_cast<uint64_t>(vertexCount),
+          .debugName = "Imgui UI Mesh",
+      };
+
+      temporaryCommandList.Mesh = CHECK_RES(Graphics::Mesh::Create(ctx, info));
     }
 
     auto vertexSpan =
