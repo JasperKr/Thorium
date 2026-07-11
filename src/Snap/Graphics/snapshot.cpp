@@ -290,7 +290,7 @@ auto GraphicsEvent::DrawStateImGui(ThreadSnapshot const *parent) const -> void {
               state.shader->moduleName.c_str());
   ImGui::Text("Rendertargets:");
   ImGui::Indent();
-  for (int i = 0; i < state.colorAttachmentCount; i++) {
+  for (int i = 0; i < state.colorAttachments.size(); i++) {
     const auto &target = state.colorAttachments.at(i);
     ImGui::PushID(i);
     DrawRendertargetImGui(target, i);

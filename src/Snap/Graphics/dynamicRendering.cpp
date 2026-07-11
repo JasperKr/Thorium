@@ -19,11 +19,11 @@
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
+#include "Modules/stackVector.hpp"
 #include "slang/slang.h"
 #include <algorithm>
 #include <mutex>
 #include <unordered_set>
-#include <variant>
 #include <vector>
 
 #include "vulkan/vulkan_core.h"
@@ -41,23 +41,21 @@
 
 namespace Graphics::DynamicRendering {
 
-// NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
+// NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables, readability-function-cognitive-complexity, cppcoreguidelines-avoid-magic-numbers, readability-magic-numbers)
 
 constexpr size_t PipelineCacheSize = 512UL;
 
 LRUCache<StateKey, std::pair<VkPipeline, PipelineLayout>, StateKeyHash>
-PipelineCache(
-    PipelineCacheSize,
-    [](const StateKey &key,
-       std::pair<VkPipeline, PipelineLayout> &value) -> void {
-      PipelineMemory pipelineMemory{
-          .pipeline = value.first,
-          // .layout = value.second.layout,
-          // .descriptorSetLayouts = value.second.descriptorSetLayouts,
-      };
-      ScheduleDestruction(pipelineMemory,
-                          Graphics::SemaphoreManager::GetSemaphoreValue());
-    });
+PipelineCache(PipelineCacheSize,
+              [](const StateKey &key,
+                 std::pair<VkPipeline, PipelineLayout> &value) -> void {
+                PipelineMemory pipelineMemory{
+                    .pipeline = value.first,
+                };
+                ScheduleDestruction(
+                    pipelineMemory,
+                    Graphics::SemaphoreManager::GetSemaphoreValue());
+              });
 
 thread_local PipelineLayout CurrentPipelineLayout; // NOLINT
 
@@ -89,15 +87,13 @@ thread_local Stats CurrentStats;
 
 VkDescriptorSetLayout DefaultEmptySetLayout = VK_NULL_HANDLE;
 
-// NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
-
 inline auto GetRenderExtent(const GraphicsContext &context, const State &state)
     -> VkExtent2D {
 
-  if (state.colorAttachmentCount > 0) {
+  if (!state.colorAttachments.empty()) {
     return VkExtent2D{
-        .width = state.colorAttachments.at(0).texture->GetWidth(),
-        .height = state.colorAttachments.at(0).texture->GetHeight(),
+        .width = state.colorAttachments.front().texture->GetWidth(),
+        .height = state.colorAttachments.front().texture->GetHeight(),
     };
   }
 
@@ -484,7 +480,7 @@ auto inline GetColorBlendAttachmentState(const GraphicsContext &context,
   bool hasImplicitLocation = false;
   bool hasExplicitLocation = false;
 
-  for (int i = 0; i < state.colorAttachmentCount; ++i) {
+  for (int i = 0; i < state.colorAttachments.size(); ++i) {
     const auto &rendertarget = state.colorAttachments.at(i);
     int location = rendertarget.location;
     if (location == -1) {
@@ -614,7 +610,7 @@ inline auto CreateGraphicsPipeline(const GraphicsContext &context, State &state)
   bool hasImplicitLocation = false;
   bool hasExplicitLocation = false;
 
-  for (int i = 0; i < state.colorAttachmentCount; i++) {
+  for (int i = 0; i < state.colorAttachments.size(); i++) {
     const auto &rendertarget = state.colorAttachments.at(i);
 
     int location = rendertarget.location;
@@ -637,7 +633,7 @@ inline auto CreateGraphicsPipeline(const GraphicsContext &context, State &state)
 
   VkPipelineRenderingCreateInfo renderingCreateInfo = {};
   renderingCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
-  renderingCreateInfo.colorAttachmentCount = state.colorAttachmentCount;
+  renderingCreateInfo.colorAttachmentCount = state.colorAttachments.size();
   renderingCreateInfo.pColorAttachmentFormats = formats.data();
   renderingCreateInfo.depthAttachmentFormat = depthFormat;
   renderingCreateInfo.stencilAttachmentFormat = stencilFormat;
@@ -649,10 +645,10 @@ inline auto CreateGraphicsPipeline(const GraphicsContext &context, State &state)
   colorBlending.sType =
       VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
   colorBlending.logicOpEnable = VK_FALSE;
-  colorBlending.attachmentCount = state.colorAttachmentCount;
+  colorBlending.attachmentCount = state.colorAttachments.size();
   colorBlending.pAttachments = blendAttachments.data();
 
-  if (state.colorAttachmentCount == 0) {
+  if (state.colorAttachments.size() == 0) {
     colorBlending.pAttachments = nullptr;
   }
 
@@ -796,8 +792,7 @@ inline auto SetupDefaultState(const GraphicsContext &context) -> Result<State> {
   PrintDebug("Setup default state with swapchain handle: {}",
              (void *)texture->view);
 
-  defaultState.colorAttachments.at(0) = swapchainRendertarget;
-  defaultState.colorAttachmentCount = 1;
+  defaultState.colorAttachments.emplace_back(swapchainRendertarget);
   defaultState.hasDepthStencilAttachment = false;
 
   return defaultState;
@@ -916,8 +911,7 @@ auto FlushGraphics(const GraphicsContext &context) -> Result<bool> {
     return Error::Unexpected("Current state is not a graphics pipeline.");
   }
 
-  for (int i = 0; i < TopOfStack->colorAttachmentCount; ++i) {
-    const auto &rendertarget = TopOfStack->colorAttachments.at(i);
+  for (const auto &rendertarget : TopOfStack->colorAttachments) {
     if (IsSwapchainTexture(context, *rendertarget.texture)) {
       DrawnToSwapchain = true;
       break;
@@ -1033,7 +1027,7 @@ inline auto BeginRendering(const GraphicsContext &context) -> Error {
   renderingInfo.viewMask = 0;
   renderingInfo.flags = 0;
 
-  if (TopOfStack->colorAttachmentCount >
+  if (TopOfStack->colorAttachments.size() >
       context.deviceProperties.limits.maxColorAttachments) {
     return Error::Create(
         "Number of bound render targets exceeds device limits.");
@@ -1049,7 +1043,7 @@ inline auto BeginRendering(const GraphicsContext &context) -> Error {
   auto depthAttachment = VkRenderingAttachmentInfo{};
   auto stencilAttachment = VkRenderingAttachmentInfo{};
 
-  for (int i = 0; i < TopOfStack->colorAttachmentCount; i++) {
+  for (int i = 0; i < TopOfStack->colorAttachments.size(); i++) {
     const auto &rendertarget = TopOfStack->colorAttachments.at(i);
     CHECK_ERR(
         rendertarget.texture->UseAsAttachment(context, rendertarget.loadOp));
@@ -1108,7 +1102,7 @@ inline auto BeginRendering(const GraphicsContext &context) -> Error {
 #ifndef NDEBUG
   VkExtent2D expectedExtent = GetRenderExtent(context, *TopOfStack);
 
-  for (int i = 0; i < TopOfStack->colorAttachmentCount; i++) {
+  for (int i = 0; i < TopOfStack->colorAttachments.size(); i++) {
     const auto &rendertarget = TopOfStack->colorAttachments.at(i);
     if (rendertarget.texture->GetWidth() != expectedExtent.width ||
         rendertarget.texture->GetHeight() != expectedExtent.height) {
@@ -1128,7 +1122,7 @@ inline auto BeginRendering(const GraphicsContext &context) -> Error {
   }
 #endif
 
-  renderingInfo.colorAttachmentCount = TopOfStack->colorAttachmentCount;
+  renderingInfo.colorAttachmentCount = TopOfStack->colorAttachments.size();
   renderingInfo.pColorAttachments = colorAttachments.data();
 
   renderingInfo.pStencilAttachment = hasStencil ? &stencilAttachment : nullptr;
@@ -1144,9 +1138,8 @@ inline auto BeginRendering(const GraphicsContext &context) -> Error {
   vkCmdBeginRendering(Graphics::GetCommandBuffer(), &renderingInfo);
   GetIsCurrentlyRendering() = true;
 
-  for (int i = 0; i < TopOfStack->colorAttachmentCount; i++) {
-    auto &rendertarget = TopOfStack->colorAttachments.at(i);
-    // Make sure subsequent renders load from the existing content if we ever need to re-bind mid-pass
+  // Make sure subsequent renders load from the existing content if we ever need to re-bind mid-pass
+  for (auto &rendertarget : TopOfStack->colorAttachments) {
     rendertarget.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
   }
 
@@ -1281,11 +1274,9 @@ inline auto BindTextureDescriptors(const GraphicsContext &context,
   return Error::Success();
 }
 
-inline auto
-BindGlobalsDescriptor(const GraphicsContext &context, DescriptorKey &key,
-                      auto &shader, int setIndex,
-                      std::array<uint32_t, 16> &dynamicOffsets, // NOLINT
-                      uint32_t &dynamicOffsetCount) -> Error {
+inline auto BindGlobalsDescriptor(
+    const GraphicsContext &context, DescriptorKey &key, auto &shader,
+    int setIndex, Math::StackVector<uint32_t, 16> &dynamicOffsets) -> Error {
   ZoneScoped;
 
   if (!shader->reflection.hasGlobals) {
@@ -1301,7 +1292,7 @@ BindGlobalsDescriptor(const GraphicsContext &context, DescriptorKey &key,
 
   auto &buffer = GetGlobalUniformBuffer(context.frameIndex);
   auto offset = buffer.GetOffset();
-  dynamicOffsets.at(dynamicOffsetCount++) = offset;
+  dynamicOffsets.emplace_back(offset);
 
 #if Enable_Snapshots
   Snapshot::CaptureEvent(Snapshot::StructuredBufferUploadEvent(
@@ -1504,14 +1495,13 @@ auto BindDescriptorSets(const GraphicsContext &context,
 
     key.bindings.clear();
 
-    std::array<uint32_t, 16> dynamicOffsets{}; // NOLINT
-    uint32_t dynamicOffsetCount = 0;
+    Math::StackVector<uint32_t, 16> dynamicOffsets{};
 
     CHECK_ERR(BindBufferDesciptors(key, shader, state, setIndex));
     CHECK_ERR(
         BindTextureDescriptors(context, stageFlags, key, shader, setIndex));
-    CHECK_ERR(BindGlobalsDescriptor(context, key, shader, setIndex,
-                                    dynamicOffsets, dynamicOffsetCount));
+    CHECK_ERR(
+        BindGlobalsDescriptor(context, key, shader, setIndex, dynamicOffsets));
 
     if (BoundDescriptorSets.size() <= setIndex) {
       BoundDescriptorSets.resize(setIndex + 1);
@@ -1532,7 +1522,7 @@ auto BindDescriptorSets(const GraphicsContext &context,
 
       vkCmdBindDescriptorSets(
           commandBuffer, TopOfStack->bindPoint, CurrentPipelineLayout.layout,
-          setIndex, 1, &cached, dynamicOffsetCount, dynamicOffsets.data());
+          setIndex, 1, &cached, dynamicOffsets.size(), dynamicOffsets.data());
     } else {
       auto *descriptorSet =
           CHECK_RES(AllocateDescriptorSet(context, key, setIndex, layout));
@@ -1544,7 +1534,7 @@ auto BindDescriptorSets(const GraphicsContext &context,
 
       vkCmdBindDescriptorSets(commandBuffer, TopOfStack->bindPoint,
                               CurrentPipelineLayout.layout, setIndex, 1,
-                              &descriptorSet, dynamicOffsetCount,
+                              &descriptorSet, dynamicOffsets.size(),
                               dynamicOffsets.data());
 
       DescriptorSetCache[key] = descriptorSet;
@@ -1610,11 +1600,11 @@ auto compareDepthConfigs(const State &first, const State &second) -> bool {
 }
 
 auto compareBlendmodes(const State &first, const State &second) -> bool {
-  if (first.colorAttachmentCount != second.colorAttachmentCount) {
+  if (first.colorAttachments.size() != second.colorAttachments.size()) {
     return false;
   }
 
-  for (size_t i = 0; i < first.colorAttachmentCount; i++) {
+  for (size_t i = 0; i < first.colorAttachments.size(); i++) {
     if (!CompareVkPipelineColorBlendAttachmentState(
             first.colorAttachments.at(i).blendMode,
             second.colorAttachments.at(i).blendMode)) {
@@ -1733,23 +1723,21 @@ auto PrepareRendering(const GraphicsContext &context) -> Error {
       vkCmdSetDepthCompareOp(commandBuffer, TopOfStack->depthCompareOp);
     }
 
-    if (!sameBlendMode && TopOfStack->colorAttachmentCount > 0) {
-      std::array<VkBool32, MAX_COLOR_ATTACHMENTS> blendEnables = {};
-      std::array<VkColorComponentFlags, MAX_COLOR_ATTACHMENTS> colorWriteMasks =
-          {};
-      int attachmentCount = TopOfStack->colorAttachmentCount;
-
-      for (uint32_t i = 0; i < attachmentCount; i++) {
-        const auto &attachment = TopOfStack->colorAttachments.at(i);
-        blendEnables.at(i) = attachment.blendMode.blendEnable;
-        colorWriteMasks.at(i) = attachment.blendMode.colorWriteMask;
+    if (!sameBlendMode && TopOfStack->colorAttachments.size() > 0) {
+      Math::StackVector<VkBool32, MAX_COLOR_ATTACHMENTS> blendEnables = {};
+      Math::StackVector<VkColorComponentFlags, MAX_COLOR_ATTACHMENTS>
+          colorWriteMasks = {};
+      for (const auto &attachment : TopOfStack->colorAttachments) {
+        blendEnables.emplace_back(attachment.blendMode.blendEnable);
+        colorWriteMasks.emplace_back(attachment.blendMode.colorWriteMask);
       }
 
-      vkCmdSetColorBlendEquationEXT(commandBuffer, 0, attachmentCount,
+      vkCmdSetColorBlendEquationEXT(commandBuffer, 0,
+                                    TopOfStack->colorBlendEquations.size(),
                                     TopOfStack->colorBlendEquations.data());
-      vkCmdSetColorBlendEnableEXT(commandBuffer, 0, attachmentCount,
+      vkCmdSetColorBlendEnableEXT(commandBuffer, 0, blendEnables.size(),
                                   blendEnables.data());
-      vkCmdSetColorWriteMaskEXT(commandBuffer, 0, attachmentCount,
+      vkCmdSetColorWriteMaskEXT(commandBuffer, 0, colorWriteMasks.size(),
                                 colorWriteMasks.data());
     }
 
@@ -1768,12 +1756,14 @@ auto PrepareRendering(const GraphicsContext &context) -> Error {
 
 auto FinalizeFrame(const GraphicsContext &context) -> Error {
   ZoneScoped;
+
+  [[unlikely]]
   if (StateStack.size() != 1) {
     return Error::Create("More pushes than pops.");
   }
 
-  for (int i = 0; i < TopOfStack->colorAttachmentCount; i++) {
-    auto &rendertarget = TopOfStack->colorAttachments.at(i);
+  for (auto &rendertarget : TopOfStack->colorAttachments) {
+    [[unlikely]]
     if (!IsSwapchainTexture(context, *rendertarget.texture)) {
       return Error::Create(
           "Non-swapchain render targets remain bound at end of frame.");
@@ -1781,6 +1771,7 @@ auto FinalizeFrame(const GraphicsContext &context) -> Error {
   }
 
   EndRendering(context);
+
   return Error::Success();
 }
 
@@ -1793,7 +1784,6 @@ auto BeginFrame(const GraphicsContext &context) -> Error {
   TopOfStack = &StateStack.back();
   LastState = nullptr;
   LastStateStorage = state;
-
   DrawnToSwapchain = false;
 
   return Error::Success();
@@ -1892,72 +1882,52 @@ auto SetRenderTargets(const GraphicsContext &context,
                       const std::vector<RenderTarget> &renderTargets) -> Error {
   TopOfStack->dirty = true;
 
-  if (renderTargets.empty()) {
-    return Error::Create("No render targets provided.");
-  }
+  ERR_ASSERT(!renderTargets.empty());
+  ERR_ASSERT(renderTargets.front().texture != nullptr);
 
-  if (renderTargets.at(0).texture == nullptr) {
-    return Error::Create("First render target has no texture.");
-  }
-
-  bool differentFromCurrent = false;
   bool topHadDepthStencil = TopOfStack->hasDepthStencilAttachment;
   TopOfStack->hasDepthStencilAttachment = false;
 
-  VkExtent2D expectedExtent = {renderTargets.at(0).texture->GetWidth(),
-                               renderTargets.at(0).texture->GetHeight()};
+  VkExtent2D expectedExtent = {renderTargets.front().texture->GetWidth(),
+                               renderTargets.front().texture->GetHeight()};
 
-  int colorIdx = 0;
+  TopOfStack->colorAttachments.clear();
+  TopOfStack->colorBlendEquations.clear();
 
   for (const auto &target : renderTargets) {
-
-    if (target.texture->GetWidth() != expectedExtent.width ||
-        target.texture->GetHeight() != expectedExtent.height) {
-      return Error::Create("All render targets must have the same dimensions.");
-    }
+    ERR_ASSERT(target.texture != nullptr);
+    ERR_ASSERT(target.texture->GetWidth() == expectedExtent.width);
+    ERR_ASSERT(target.texture->GetHeight() == expectedExtent.height);
 
     // Depth/Stencil is separate
-    if (target.texture->IsDepthTexture() ||
-        target.texture->IsStencilTexture()) {
-      if (!topHadDepthStencil) {
-        differentFromCurrent = true;
-      }
+    if (target.texture->IsDepthOrStencilTexture()) {
       TopOfStack->hasDepthStencilAttachment = true;
       TopOfStack->depthStencilAttachment = target;
       continue;
     }
 
-    if (colorIdx >= TopOfStack->colorAttachmentCount ||
-        target != TopOfStack->colorAttachments.at(colorIdx)) {
-      differentFromCurrent = true;
-    }
-    TopOfStack->colorAttachments.at(colorIdx) = target;
-    TopOfStack->colorBlendEquations.at(colorIdx) = {
+    TopOfStack->colorAttachments.emplace_back(target);
+    TopOfStack->colorBlendEquations.emplace_back(VkColorBlendEquationEXT{
         .srcColorBlendFactor = target.blendMode.srcColorBlendFactor,
         .dstColorBlendFactor = target.blendMode.dstColorBlendFactor,
         .colorBlendOp = target.blendMode.colorBlendOp,
         .srcAlphaBlendFactor = target.blendMode.srcAlphaBlendFactor,
         .dstAlphaBlendFactor = target.blendMode.dstAlphaBlendFactor,
         .alphaBlendOp = target.blendMode.alphaBlendOp,
-    };
-
-    colorIdx++;
+    });
   }
 
-  TopOfStack->colorAttachmentCount = colorIdx;
   SetViewport(nullptr);
 
   // Only clear if we have the same render targets as before
   // And have load ops that require clearing
-  if (differentFromCurrent) {
+  if (TopOfStack == LastState) {
     return Error::Success();
   }
 
   if (GetIsCurrentlyRendering()) {
     ClearInfo clearInfo{};
-    for (int i = 0; i < TopOfStack->colorAttachmentCount; i++) {
-      const auto &target = TopOfStack->colorAttachments.at(i);
-
+    for (const auto &target : TopOfStack->colorAttachments) {
       if (target.loadOp == VK_ATTACHMENT_LOAD_OP_CLEAR) {
         clearInfo.colors.emplace_back(target.clearValue.color.float32[0],
                                       target.clearValue.color.float32[1],
@@ -2002,7 +1972,7 @@ auto GetCullMode() -> VkCullModeFlags { return TopOfStack->cullMode; }
 auto GetPolygonMode() -> VkPolygonMode { return TopOfStack->polygonMode; }
 
 auto GetTargetSize() -> VkExtent2D {
-  if (TopOfStack->colorAttachmentCount > 0) {
+  if (TopOfStack->colorAttachments.size() > 0) {
     return {
         TopOfStack->colorAttachments.at(0).texture->GetWidth(),
         TopOfStack->colorAttachments.at(0).texture->GetHeight(),
@@ -2114,7 +2084,7 @@ auto GetShader() -> Ref<Shader> {
 auto GetRenderTargets() -> std::vector<RenderTarget> {
   return {TopOfStack->colorAttachments.begin(),
           TopOfStack->colorAttachments.begin() + // NOLINT
-              TopOfStack->colorAttachmentCount};
+              TopOfStack->colorAttachments.size()};
 }
 
 auto GetWindingOrder() -> VkFrontFace { return TopOfStack->frontFace; }
@@ -2160,7 +2130,7 @@ auto Clear(const GraphicsContext &context, const ClearInfo &clearInfo)
   clearRect.baseArrayLayer = 0;
   clearRect.layerCount = 1;
 
-  for (uint32_t i = 0; i < TopOfStack->colorAttachmentCount; i++) {
+  for (uint32_t i = 0; i < TopOfStack->colorAttachments.size(); i++) {
     VkClearAttachment clearAttachment = {};
     const auto &rendertarget = TopOfStack->colorAttachments.at(i);
 
@@ -2213,5 +2183,7 @@ auto RenderTarget::GetHash() const -> uint64_t {
 
   return hash;
 }
+
+// NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables, readability-function-cognitive-complexity, cppcoreguidelines-avoid-magic-numbers, readability-magic-numbers)
 
 } // namespace Graphics::DynamicRendering

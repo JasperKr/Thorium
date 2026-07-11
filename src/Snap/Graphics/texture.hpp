@@ -333,6 +333,10 @@ struct Texture : Object {
     return Image::IsStencilTexture(imageMemory->format);
   }
 
+  [[nodiscard]] auto IsDepthOrStencilTexture() const -> bool {
+    return Image::IsDepthOrStencilTexture(imageMemory->format);
+  }
+
   auto TransitionLayout(
       const GraphicsContext &context, VkImageLayout layout,
       VkPipelineStageFlags2 sourceStage = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT |

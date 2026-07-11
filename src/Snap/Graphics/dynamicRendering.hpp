@@ -7,10 +7,10 @@
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
+#include "Modules/stackVector.hpp"
 #include "Modules/type.hpp"
 #include "graphicsContext.hpp"
 #include "shader.hpp"
-#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <unordered_map>
@@ -253,24 +253,23 @@ struct State {
   bool hasScissor = false;
   mutable bool dirty = true;
 
-  std::array<VkColorBlendEquationEXT, MAX_COLOR_ATTACHMENTS>
-      colorBlendEquations = {};
+  Math::StackVector<VkColorBlendEquationEXT, MAX_COLOR_ATTACHMENTS>
+      colorBlendEquations;
 
   Ref<Shader> shader;
 
   VkPrimitiveTopology primitiveTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 
   VkPipelineBindPoint bindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-  std::array<RenderTarget, MAX_COLOR_ATTACHMENTS> colorAttachments;
+  Math::StackVector<RenderTarget, MAX_COLOR_ATTACHMENTS> colorAttachments;
   RenderTarget depthStencilAttachment;
   bool hasDepthStencilAttachment = false;
-  uint8_t colorAttachmentCount = 0;
 
   mutable uint64_t hash;
   auto GetHash() const -> uint64_t;
 
   auto operator==(const State &other) const -> bool {
-    if (colorAttachmentCount != other.colorAttachmentCount) {
+    if (colorAttachments != other.colorAttachments) {
       return false;
     }
 
@@ -295,13 +294,6 @@ struct State {
       }
     }
 
-    for (int i = 0; i < colorAttachmentCount; i++) {
-      if (colorAttachments.at(i).texture->getID() !=
-          other.colorAttachments.at(i).texture->getID()) {
-        return false;
-      }
-    }
-
     return true;
   }
 
@@ -309,8 +301,7 @@ struct State {
 };
 
 struct StateKey {
-  std::array<RendertargetKey, MAX_COLOR_ATTACHMENTS> colorAttachments{};
-  uint32_t colorAttachmentCount;
+  Math::StackVector<RendertargetKey, MAX_COLOR_ATTACHMENTS> colorAttachments;
   bool hasDepthStencilAttachment;
   RendertargetKey depthStencilTextureID{};
   ObjectID shaderModuleID;
@@ -320,17 +311,16 @@ struct StateKey {
   VkPrimitiveTopology primitiveTopology;
 
   explicit StateKey(const State &state)
-      : colorAttachmentCount(state.colorAttachmentCount),
-        hasDepthStencilAttachment(state.hasDepthStencilAttachment),
+      : hasDepthStencilAttachment(state.hasDepthStencilAttachment),
         shaderModuleID(state.shader->getID()), bindPoint(state.bindPoint),
         stencilTestEnable(state.stencilTestEnable),
         polygonMode(state.polygonMode),
         primitiveTopology(state.primitiveTopology) {
 
-    colorAttachments.fill({0, -1, -1});
+    colorAttachments.fill({.textureID = 0, .location = -1, .layer = -1});
     depthStencilTextureID = {.textureID = 0, .location = -1};
 
-    for (int i = 0; i < state.colorAttachmentCount; i++) {
+    for (int i = 0; i < state.colorAttachments.size(); i++) {
       const auto &attachment = state.colorAttachments.at(i);
       colorAttachments.at(i) = RendertargetKey{
           .textureID = attachment.texture->getID(),
@@ -347,25 +337,19 @@ struct StateKey {
   }
 
   auto operator==(const StateKey &other) const -> bool {
-    if (colorAttachmentCount != other.colorAttachmentCount ||
-        hasDepthStencilAttachment != other.hasDepthStencilAttachment ||
+    if (hasDepthStencilAttachment != other.hasDepthStencilAttachment ||
         shaderModuleID != other.shaderModuleID ||
         bindPoint != other.bindPoint ||
         stencilTestEnable != other.stencilTestEnable ||
         polygonMode != other.polygonMode ||
-        primitiveTopology != other.primitiveTopology) {
+        primitiveTopology != other.primitiveTopology ||
+        colorAttachments != other.colorAttachments) {
       return false;
     }
 
     if (hasDepthStencilAttachment &&
         !(depthStencilTextureID == other.depthStencilTextureID)) {
       return false;
-    }
-
-    for (int i = 0; i < colorAttachmentCount; i++) {
-      if (!(colorAttachments.at(i) == other.colorAttachments.at(i))) {
-        return false;
-      }
     }
 
     return true;
@@ -411,10 +395,10 @@ struct StateKeyHash {
     hasher.Add(std::hash<VkPrimitiveTopology>()(state.primitiveTopology));
     hasher.Add(state.shaderModuleID);
 
-    for (int i = 0; i < state.colorAttachmentCount; ++i) {
-      hasher.Add(state.colorAttachments.at(i).textureID);
-      hasher.Add(state.colorAttachments.at(i).location);
-      hasher.Add(state.colorAttachments.at(i).layer);
+    for (const auto &attachment : state.colorAttachments) {
+      hasher.Add(attachment.textureID);
+      hasher.Add(attachment.location);
+      hasher.Add(attachment.layer);
     }
 
     return hasher.Get();

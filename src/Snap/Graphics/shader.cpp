@@ -621,18 +621,18 @@ auto Shader::Send(const ResourceKey &key, const std::span<const uint8_t> &data)
   }
 
   const auto *info = GetUniform(key);
+
+  [[unlikely]]
   if (info == nullptr) {
     auto keyname = Reflect::ResourceKeyToString(key);
     return Error::Createf("Uniform {} not found in shader reflection: {}",
                           keyname, name);
   }
 
-  size_t offset = info->offset;
-  assert(offset + data.size() <= globalUniforms.size() &&
-         "Data exceeds global uniform buffer size.");
+  ERR_ASSERT(info->offset + data.size() <= globalUniforms.size());
 
   // NOLINTNEXTLINE, pointer arithmetic
-  memcpy(globalUniforms.data() + offset, data.data(), data.size());
+  memcpy(globalUniforms.data() + info->offset, data.data(), data.size());
 
   return Error::Success();
 }
