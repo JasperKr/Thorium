@@ -115,19 +115,20 @@ FragmentOutput fragmentMain(FragmentInput input) {
       normalize(NormalTexture.Sample(input.VertexCoords).xyz * 2.0 - 1.0);
 
   // metallic, perceptual roughness, reflectance, stencil
-  float4 material = MaterialTexture.Sample(input.VertexCoords);
+  MaterialChannel material =
+      MaterialChannel(MaterialTexture.Sample(input.VertexCoords));
   float3 albedo = AlbedoTexture.Sample(input.VertexCoords).rgb;
 
   float3 viewDir = normalize(worldPosition - camera.Position);
-  float3 f0 = ComputeFresnel0(albedo, material.r, material.b);
-  float3 diffuse = ComputeDiffuseColor(albedo, material.r);
+  float3 f0 = ComputeFresnel0(albedo, material.metallic, material.reflectance);
+  float3 diffuse = ComputeDiffuseColor(albedo, material.metallic);
   float NoV = ClampNoV(dot(normal, -viewDir));
-  float3 E = prefilteredDFG(material.g, f0, NoV);
+  float3 E = prefilteredDFG(material.perceptualRoughness, f0, NoV);
 
   float3 reflectedRay = reflect(viewDir, normal);
 
-  LightProbeSampleInfo probeInfo =
-      SampleLightProbes(worldPosition, normal, reflectedRay, material.g);
+  LightProbeSampleInfo probeInfo = SampleLightProbes(
+      worldPosition, normal, reflectedRay, material.perceptualRoughness);
 
   if (probeInfo.influence >= 1.0) {
     probeInfo.radiance /= probeInfo.influence;
@@ -136,19 +137,20 @@ FragmentOutput fragmentMain(FragmentInput input) {
   {
     float skyboxInfluence = 1.0 - probeInfo.influence;
 
-    float3 reflected = prefilteredRadiance(
-        SpecularTextures, float4(reflectedRay, 0.0), material.g);
+    float3 reflected =
+        prefilteredRadiance(SpecularTextures, float4(reflectedRay, 0.0),
+                            material.perceptualRoughness);
     probeInfo.radiance = reflected * skyboxInfluence + probeInfo.radiance;
 
     float3 irradiance =
         prefilteredIrradiance(IrradianceTextures, float4(normal, 0.0));
 
-    probeInfo.irradiance = irradiance * skyboxInfluence + probeInfo.irradiance;
+    probeInfo.irradiance += irradiance * skyboxInfluence;
   }
 
   probeInfo.irradiance *= INV_PI;
 
-  if (!SpecularEnabled) {
+  if (!SpecularEnabled || false) {
     probeInfo.radiance *= 0.0;
     probeInfo.irradiance *=
         (1.0 - E) *

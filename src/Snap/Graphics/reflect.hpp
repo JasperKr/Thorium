@@ -186,6 +186,8 @@ struct AccelerationStructureInfo : ResourceBase {
 
   SlangResourceShape shape;
   SlangResourceAccess access;
+
+  VkAccessFlags2 accessFlags;
 };
 
 struct ScalarInfo : ResourceBase {

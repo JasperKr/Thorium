@@ -19,7 +19,7 @@ Sampler2D DepthTexture;
 
 float2 GetERPUvs(float3 rayDirection) {
   float2 uv;
-  uv.x = atan2(rayDirection.z, rayDirection.x) * INV_TWO_PI + 0.5;
+  uv.x = atan2(-rayDirection.z, rayDirection.x) * INV_TWO_PI + 0.5;
   uv.y = asin(-rayDirection.y) * INV_PI + 0.5;
   return uv;
 }

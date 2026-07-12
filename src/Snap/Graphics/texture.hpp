@@ -339,13 +339,13 @@ struct Texture : Object {
 
   auto TransitionLayout(
       const GraphicsContext &context, VkImageLayout layout,
-      VkPipelineStageFlags2 sourceStage = VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT |
-                                          VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+      VkPipelineStageFlags2 sourceStage = VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT |
+                                          VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
       VkPipelineStageFlags2 destinationStage =
-          VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT |
-          VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-      VkAccessFlags2 srcAccessMask = VK_ACCESS_NONE, // NOLINT
-      VkAccessFlags2 dstAccessMask = VK_ACCESS_NONE,
+          VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT |
+          VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+      VkAccessFlags2 srcAccessMask = VK_ACCESS_2_NONE, // NOLINT
+      VkAccessFlags2 dstAccessMask = VK_ACCESS_2_NONE,
       VkImageSubresourceRange range = {
           .levelCount = VK_REMAINING_MIP_LEVELS,
           .layerCount = VK_REMAINING_ARRAY_LAYERS}) const -> Error;

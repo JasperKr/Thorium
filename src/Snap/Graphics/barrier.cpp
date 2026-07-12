@@ -40,7 +40,7 @@ inline auto IsHazard(const ResourceState &oldState,
       VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT |
       VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT |
       VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT |
-      VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
+      VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
 
   return ((oldState.access | newState.access) & writeAccessBits) != 0U;
 }

@@ -111,6 +111,9 @@ struct TLAS : Object {
   }
 
   auto GetInstanceBuffer() const -> Ref<Buffer> { return instanceBuffer; }
+  auto GetTLASBuffer() const -> Ref<Buffer> {
+    return accelerationStructureBuffer;
+  }
 
   auto GetAccelerationStructure() const -> VkAccelerationStructureKHR {
     return accelerationStructure;
@@ -120,6 +123,16 @@ struct TLAS : Object {
   auto Rebuild(const GraphicsContext &context) -> Error;
 
   auto GetDebugName() const -> std::string_view { return debugName; }
+
+  auto MarkUse() -> void {
+    if (instanceBuffer != nullptr) {
+      instanceBuffer->MarkUse();
+    }
+
+    if (accelerationStructureBuffer != nullptr) {
+      accelerationStructureBuffer->MarkUse();
+    }
+  }
 
 private:
   Ref<Buffer> accelerationStructureBuffer;

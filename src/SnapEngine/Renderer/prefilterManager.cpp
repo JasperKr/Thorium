@@ -388,25 +388,18 @@ auto LightprobePrefilterManager::PrefilterEnvironmentMap(
   return {};
 }
 
+auto CreateRotated(float yaw, float pitch, float roll) -> Engine::Transform {
+  return Engine::Transform(Math::Conversions::ToQuaternion(
+      Math::EulerAngle(yaw, pitch, roll).ToRadians()));
+}
+
 const static std::array<Engine::Transform, 6> Transforms = {
-    Engine::Transform(Math::Vec3{0.0F, 0.0F, 0.0F}, // X+
-                      Math::Conversions::ToQuaternion(
-                          Math::EulerAngle(90.0F, 0.0F, 0.0F).ToRadians())),
-    Engine::Transform(Math::Vec3{0.0F, 0.0F, 0.0F}, // X-
-                      Math::Conversions::ToQuaternion(
-                          Math::EulerAngle(-90.0F, 0.0F, 0.0F).ToRadians())),
-    Engine::Transform(Math::Vec3{0.0F, 0.0F, 0.0F}, // Y+
-                      Math::Conversions::ToQuaternion(
-                          Math::EulerAngle(0.0F, -90.0F, 0.0F).ToRadians())),
-    Engine::Transform(Math::Vec3{0.0F, 0.0F, 0.0F}, // Y-
-                      Math::Conversions::ToQuaternion(
-                          Math::EulerAngle(0.0F, 90.0F, 0.0F).ToRadians())),
-    Engine::Transform(Math::Vec3{0.0F, 0.0F, 0.0F}, // Z+
-                      Math::Conversions::ToQuaternion(
-                          Math::EulerAngle(0.0F, 0.0F, 0.0F).ToRadians())),
-    Engine::Transform(Math::Vec3{0.0F, 0.0F, 0.0F}, // Z-
-                      Math::Conversions::ToQuaternion(
-                          Math::EulerAngle(180.0F, 0.0F, 0.0F).ToRadians())),
+    CreateRotated(90.0F, 0.0F, 0.0F),  // X+
+    CreateRotated(-90.0F, 0.0F, 0.0F), // X-
+    CreateRotated(0.0F, -90.0F, 0.0F), // Y+
+    CreateRotated(0.0F, 90.0F, 0.0F),  // Y-
+    CreateRotated(0.0F, 0.0F, 0.0F),   // Z+
+    CreateRotated(180.0F, 0.0F, 0.0F), // Z-
 };
 
 const static Math::Matrix4x4 ProjectionMatrix =
@@ -487,6 +480,9 @@ auto LightprobePrefilterManager::PrefilterEnvironment(
     auto cubemapTransfrom = Transforms.at(i);
     cubemapTransfrom.UpdateLocalMatrix();
     cubemapTransfrom.UpdateWorldMatrix(nullptr);
+
+    PrintAlways("Transform: \n{}",
+                cubemapTransfrom.GetWorldMatrix().ToString());
 
     Engine::CameraMatrices drawMatrices = CameraMatrices;
 

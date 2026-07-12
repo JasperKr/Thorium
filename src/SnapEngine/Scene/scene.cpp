@@ -9,6 +9,7 @@
 #include "Graphics/uniformWriter.hpp"
 #include "Modules/Math/matrix.hpp"
 #include "Modules/bindings.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Modules/reflectBindings.hpp"
@@ -36,12 +37,15 @@
 #include "material.hpp"
 #include "renderer.hpp"
 #include <algorithm>
+#include <array>
 #include <cassert>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <flecs.h>
 #include <imgui.h>
 #include <lua.hpp>
+#include <numbers>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -183,21 +187,31 @@ auto Scene::DrawUiElement() const -> Error {
   const Math::Vec3 origin{0.0F, 0.0F, 0.0F};
   auto &lineDrawer = Renderer::RendererInstance.GetLineDrawer();
 
-  lineDrawer.OverlayLine(origin, Math::Vec3{axisLength, 0.0F, 0.0F},
-                         Math::Vec4{1.0F, 0.0F, 0.0F, 1.0F}, axisThickness);
-  lineDrawer.OverlayLine(origin, Math::Vec3{0.0F, axisLength, 0.0F},
-                         Math::Vec4{0.0F, 1.0F, 0.0F, 1.0F}, axisThickness);
-  lineDrawer.OverlayLine(origin, Math::Vec3{0.0F, 0.0F, axisLength},
-                         Math::Vec4{0.0F, 0.0F, 1.0F, 1.0F}, axisThickness);
+  // lineDrawer.OverlayLine(origin, Math::Vec3{axisLength, 0.0F, 0.0F},
+  //                        Math::Vec4{1.0F, 0.0F, 0.0F, 1.0F}, axisThickness);
+  // lineDrawer.OverlayLine(origin, Math::Vec3{0.0F, axisLength, 0.0F},
+  //                        Math::Vec4{0.0F, 1.0F, 0.0F, 1.0F}, axisThickness);
+  // lineDrawer.OverlayLine(origin, Math::Vec3{0.0F, 0.0F, axisLength},
+  //                        Math::Vec4{0.0F, 0.0F, 1.0F, 1.0F}, axisThickness);
+
+  static bool DrawBoundingBox = false;
+  static bool DrawBoundsRecursively = false;
 
   ImGui::Begin(name.c_str());
   auto availableHeight = ImGui::GetContentRegionAvail().y;
+
+  static char buf[256] = {};                    // NOLINT
+  ImGui::InputText("Search", buf, sizeof(buf)); // NOLINT
+  ImGui::Checkbox("Draw Bounds", &DrawBoundingBox);
+  ImGui::SameLine();
+  ImGui::Checkbox("Draw Bounds Recursively", &DrawBoundsRecursively);
+
+  ImGui::Separator();
+  ImGui::Text("Entity Hierarchy:");
+
   if (ImGui::BeginChild("Entity Hierarchy",
                         ImVec2(0, availableHeight * 0.5F), // NOLINT
                         ImGuiChildFlags_Borders)) {
-
-    static char buf[256] = {};                    // NOLINT
-    ImGui::InputText("Search", buf, sizeof(buf)); // NOLINT
 
     world.entity(0).children([&](flecs::entity entity) -> void {
       DrawEntityHierarchy(entity, std::string_view(buf)); // NOLINT
@@ -250,12 +264,6 @@ auto Scene::DrawUiElement() const -> Error {
         userdata->DrawGUI(nullptr);
       }
 
-      if (SelectedEntity.has<BoundingBox>() &&
-          SelectedEntity.get_ref<BoundingBox>().get() != nullptr) {
-        auto boundingBox = SelectedEntity.get_ref<BoundingBox>();
-        boundingBox->DrawGUI();
-      }
-
       if (SelectedEntity.has<LocalBounds>() &&
           SelectedEntity.get_ref<LocalBounds>().get() != nullptr) {
         auto localBounds = SelectedEntity.get_ref<LocalBounds>();
@@ -266,6 +274,30 @@ auto Scene::DrawUiElement() const -> Error {
           SelectedEntity.get_ref<WorldBounds>().get() != nullptr) {
         auto worldBounds = SelectedEntity.get_ref<WorldBounds>();
         worldBounds->DrawGUI();
+
+        if (DrawBoundingBox) {
+          auto &lineDrawer = Renderer::RendererInstance.GetLineDrawer();
+          lineDrawer.DrawWireframeBox(
+              worldBounds->Bounds.Min, worldBounds->Bounds.Max,
+              Math::Vec4{1.0F, 1.0F, 1.0F, 0.5F}, // NOLINT
+              4);
+
+          if (DrawBoundsRecursively) {
+            auto parent = SelectedEntity.parent();
+            while (parent.is_valid()) {
+              if (parent.has<WorldBounds>() &&
+                  parent.get_ref<WorldBounds>().get() != nullptr) {
+                auto parentWorldBounds = parent.get_ref<WorldBounds>();
+                lineDrawer.DrawWireframeBox(
+                    parentWorldBounds->Bounds.Min,
+                    parentWorldBounds->Bounds.Max,
+                    Math::Vec4{1.0F, 1.0F, 0.0F, 0.5F}, // NOLINT
+                    4);
+              }
+              parent = parent.parent();
+            }
+          }
+        }
       }
 
       if (SelectedEntity.has<Renderer::Material>() &&
@@ -623,6 +655,7 @@ auto Scene::DrawModels(Camera &camera, Frustum &frustum,
           context, rendertargets.Depth));
 
   Graphics::DynamicRendering::SetDepthMode(true, true, VK_COMPARE_OP_GREATER);
+  Graphics::DynamicRendering::SetWindingOrder(VK_FRONT_FACE_COUNTER_CLOCKWISE);
   Graphics::DynamicRendering::SetShader(depthOpaque);
 
   CHECK_ERR(Graphics::DynamicRendering::SetRenderTargets(
@@ -796,6 +829,8 @@ auto Scene::DrawModels(Camera &camera, Frustum &frustum,
 
   // Now left: IncomingLight and Depth
 
+  Graphics::DynamicRendering::SetWindingOrder(VK_FRONT_FACE_CLOCKWISE);
+
   CHECK_ERR(Renderer::DrawFullScreen(context));
 
   CHECK_ERR(Graphics::DynamicRendering::SetRenderTargets(
@@ -816,6 +851,8 @@ auto Scene::DrawModels(Camera &camera, Frustum &frustum,
 
   Graphics::PushDebugMarker("Transparent Materials");
 
+  Graphics::DynamicRendering::SetWindingOrder(VK_FRONT_FACE_COUNTER_CLOCKWISE);
+
   // Skybox should be drawn before transparent objects, this is currently wrong.
   Graphics::DynamicRendering::SetDepthMode(true, false, VK_COMPARE_OP_GREATER);
   Graphics::DynamicRendering::SetShader(forward);
@@ -825,6 +862,8 @@ auto Scene::DrawModels(Camera &camera, Frustum &frustum,
   }
 
   Graphics::PopDebugMarker();
+
+  Graphics::DynamicRendering::SetWindingOrder(VK_FRONT_FACE_CLOCKWISE);
 
   // Otherwise meshes won't be destroyed due to living in these vectors
   OpaqueDrawItems.clear();

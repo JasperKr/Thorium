@@ -405,6 +405,22 @@ auto SetupResource(slang::VariableLayoutReflection *variableLayout,
     asInfo.shape = shape;
     asInfo.access = access;
 
+    switch (access) {
+    case SLANG_RESOURCE_ACCESS_READ:
+      asInfo.accessFlags = VK_ACCESS_2_SHADER_READ_BIT;
+      break;
+    case SLANG_RESOURCE_ACCESS_READ_WRITE:
+      asInfo.accessFlags =
+          VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT;
+      break;
+    case SLANG_RESOURCE_ACCESS_WRITE:
+      asInfo.accessFlags = VK_ACCESS_2_SHADER_WRITE_BIT;
+      break;
+    default:
+      asInfo.accessFlags = VK_ACCESS_2_SHADER_READ_BIT;
+      break;
+    }
+
     resourceInfo.name = variableLayout->getName();
     resourceInfo.stages = SlangStageToVkStage(variableLayout->getStage());
     resourceInfo.info = asInfo;
@@ -492,6 +508,10 @@ auto SetupFromType(slang::VariableLayoutReflection *variableLayout,
 
     bufferInfo.bufferType =
         isPushConstant ? BufferType::PushConstant : BufferType::Uniform;
+
+    if (bufferInfo.bufferType == BufferType::Uniform) {
+      bufferInfo.accessFlags = VK_ACCESS_2_UNIFORM_READ_BIT;
+    }
 
     bufferInfo.info = CHECK_RES(SetupVariant(bufferLayout));
 
@@ -816,6 +836,7 @@ auto ShaderReflection::ConstructUBOStruct(uint32_t set, uint32_t binding)
     return Error::Create("Global UBO struct must not be a literal.");
   }
 
+  globals.accessFlags = VK_ACCESS_2_UNIFORM_READ_BIT;
   globals.size = globalBufferFormat.GetStride();
   hasGlobals = globals.size > 0;
 

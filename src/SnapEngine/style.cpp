@@ -4,11 +4,13 @@
 namespace Engine::Style {
 
 inline auto ToImVec4(const Color &color) -> ImVec4 {
-  return {color.r, color.g, color.b, color.a};
+  auto corrected = color.ToLinear();
+  return {corrected.r, corrected.g, corrected.b, corrected.a};
 }
 
 inline auto ToImVec4(const Color &color, float alpha) -> ImVec4 {
-  return {color.r, color.g, color.b, alpha};
+  auto corrected = color.ToLinear();
+  return {corrected.r, corrected.g, corrected.b, alpha};
 }
 
 auto ApplyDefaultStyle(UIStyles uiStyle) -> Error {

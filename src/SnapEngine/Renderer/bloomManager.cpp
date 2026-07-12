@@ -141,7 +141,7 @@ auto BloomManager::ApplyBloom(const Graphics::GraphicsContext &context,
                                                         "viewportSize"};
 
   // NOLINTNEXTLINE
-  CHECK_ERR(Graphics::UniformWriter::Send(UpsampleShader, IntensityKey, 0.5F));
+  CHECK_ERR(Graphics::UniformWriter::Send(UpsampleShader, IntensityKey, 0.25F));
   CHECK_ERR(Graphics::UniformWriter::Send(
       UpsampleShader, ViewportSizeKey,
       Math::Uvec2(textures.BloomDownsampleChain->GetWidth(),

@@ -176,39 +176,39 @@ auto BLAS::Create(const GraphicsContext &context, const Mesh &mesh)
   BvhScratchBuffer->MarkUse();
   Barrier::UpdateUsage(
       context, *BvhScratchBuffer,
-      {.stages = VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
-       .access = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR});
+      {.stages = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+       .access = VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR});
 
   Barrier::UpdateUsage(
       context, *bvh->accelerationStructureBuffer,
-      {.stages = VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
-       .access = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR});
+      {.stages = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+       .access = VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR});
 
   Barrier::UpdateUsage(
       context, *bvh->vertexBuffer,
-      {.stages = VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
-       .access = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR |
-                 VK_ACCESS_SHADER_READ_BIT});
+      {.stages = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+       .access = VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR |
+                 VK_ACCESS_2_SHADER_READ_BIT});
 
   if (bvh->indexBuffer != nullptr && bvh->indexCount > 0) {
     Barrier::UpdateUsage(
         context, *bvh->indexBuffer,
-        {.stages = VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
-         .access = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR |
-                   VK_ACCESS_SHADER_READ_BIT});
+        {.stages = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+         .access = VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR |
+                   VK_ACCESS_2_SHADER_READ_BIT});
   }
 
   vkCmdBuildAccelerationStructuresKHR(cmdBuffer, 1, &buildInfo, &rangePtr);
 
   Barrier::UpdateUsage(
       context, *bvh->accelerationStructureBuffer,
-      {.stages = VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
-       .access = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR});
+      {.stages = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+       .access = VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR});
 
   Barrier::UpdateUsage(
       context, *BvhScratchBuffer,
-      {.stages = VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
-       .access = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR});
+      {.stages = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+       .access = VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR});
 
   bvh->accelerationStructureBuffer->MarkUse();
 
@@ -357,34 +357,34 @@ auto BLAS::Rebuild(const GraphicsContext &context) -> Error {
 
   Barrier::UpdateUsage(
       context, *BvhScratchBuffer,
-      {.stages = VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
-       .access = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR});
+      {.stages = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+       .access = VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR});
 
   Barrier::UpdateUsage(
       context, *vertexBuffer,
-      {.stages = VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
-       .access = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR |
-                 VK_ACCESS_SHADER_READ_BIT});
+      {.stages = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+       .access = VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR |
+                 VK_ACCESS_2_SHADER_READ_BIT});
 
   if (indexBuffer != nullptr && indexCount > 0) {
     Barrier::UpdateUsage(
         context, *indexBuffer,
-        {.stages = VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
-         .access = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR |
-                   VK_ACCESS_SHADER_READ_BIT});
+        {.stages = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+         .access = VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR |
+                   VK_ACCESS_2_SHADER_READ_BIT});
   }
 
   Barrier::UpdateUsage(
       context, *accelerationStructureBuffer,
-      {.stages = VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
-       .access = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR});
+      {.stages = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+       .access = VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR});
 
   vkCmdBuildAccelerationStructuresKHR(cmdBuffer, 1, &buildInfo, &rangePtr);
 
   Barrier::UpdateUsage(
       context, *accelerationStructureBuffer,
-      {.stages = VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
-       .access = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR});
+      {.stages = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+       .access = VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR});
 
   VkAccelerationStructureDeviceAddressInfoKHR addressInfo{
       .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR,
@@ -484,35 +484,35 @@ auto BLAS::Refit(const GraphicsContext &context) -> Error {
 
   Barrier::UpdateUsage(
       context, *BvhScratchBuffer,
-      {.stages = VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
-       .access = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR});
+      {.stages = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+       .access = VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR});
 
   Barrier::UpdateUsage(
       context, *vertexBuffer,
-      {.stages = VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
-       .access = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR |
-                 VK_ACCESS_SHADER_READ_BIT});
+      {.stages = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+       .access = VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR |
+                 VK_ACCESS_2_SHADER_READ_BIT});
 
   if (indexBuffer != nullptr && indexCount > 0) {
     Barrier::UpdateUsage(
         context, *indexBuffer,
-        {.stages = VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
-         .access = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR |
-                   VK_ACCESS_SHADER_READ_BIT});
+        {.stages = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+         .access = VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR |
+                   VK_ACCESS_2_SHADER_READ_BIT});
   }
 
   Barrier::UpdateUsage(
       context, *accelerationStructureBuffer,
-      {.stages = VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
-       .access = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR |
-                 VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR});
+      {.stages = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+       .access = VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR |
+                 VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR});
 
   vkCmdBuildAccelerationStructuresKHR(cmdBuffer, 1, &buildInfo, &rangePtr);
 
   Barrier::UpdateUsage(
       context, *accelerationStructureBuffer,
-      {.stages = VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
-       .access = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR});
+      {.stages = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+       .access = VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR});
 
   VkAccelerationStructureDeviceAddressInfoKHR addressInfo{
       .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR,
@@ -653,25 +653,25 @@ auto TLAS::Create(const GraphicsContext &context,
   BvhScratchBuffer->MarkUse();
   Barrier::UpdateUsage(
       context, *BvhScratchBuffer,
-      {.stages = VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
-       .access = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR});
+      {.stages = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+       .access = VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR});
 
   Barrier::UpdateUsage(
       context, *tlas->accelerationStructureBuffer,
-      {.stages = VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
-       .access = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR});
+      {.stages = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+       .access = VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR});
 
   vkCmdBuildAccelerationStructuresKHR(cmdBuffer, 1, &buildInfo, &rangePtr);
 
   Barrier::UpdateUsage(
       context, *tlas->accelerationStructureBuffer,
-      {.stages = VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
-       .access = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR});
+      {.stages = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+       .access = VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR});
 
   Barrier::UpdateUsage(
       context, *BvhScratchBuffer,
-      {.stages = VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
-       .access = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR});
+      {.stages = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+       .access = VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR});
 
   tlas->accelerationStructureBuffer->MarkUse();
 
@@ -796,19 +796,19 @@ auto TLAS::Refit(const GraphicsContext &context) -> Error {
 
   Barrier::UpdateUsage(
       context, *BvhScratchBuffer,
-      {.stages = VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
-       .access = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR});
+      {.stages = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+       .access = VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR});
 
   Barrier::UpdateUsage(
       context, *instanceBuffer,
-      {.stages = VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
-       .access = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR});
+      {.stages = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+       .access = VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR});
 
   Barrier::UpdateUsage(
       context, *accelerationStructureBuffer,
-      {.stages = VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
-       .access = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR |
-                 VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR});
+      {.stages = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+       .access = VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR |
+                 VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR});
 
   vkCmdBuildAccelerationStructuresKHR(GetCommandBuffer(), 1, &buildInfo,
                                       &rangePtr);
@@ -936,27 +936,27 @@ auto TLAS::Rebuild(const GraphicsContext &context) -> Error {
 
   Barrier::UpdateUsage(
       context, *BvhScratchBuffer,
-      {.stages = VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
-       .access = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR});
+      {.stages = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+       .access = VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR});
 
   Barrier::UpdateUsage(
       context, *instanceBuffer,
-      {.stages = VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
-       .access = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR});
+      {.stages = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+       .access = VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR});
 
   Barrier::UpdateUsage(
       context, *accelerationStructureBuffer,
-      {.stages = VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
-       .access = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR |
-                 VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR});
+      {.stages = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+       .access = VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR |
+                 VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR});
 
   vkCmdBuildAccelerationStructuresKHR(GetCommandBuffer(), 1, &buildInfo,
                                       &rangePtr);
 
   Barrier::UpdateUsage(
       context, *accelerationStructureBuffer,
-      {.stages = VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
-       .access = VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR});
+      {.stages = VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+       .access = VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR});
 
   VkAccelerationStructureDeviceAddressInfoKHR addressInfo{
       .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR,

@@ -66,6 +66,12 @@ struct LineDrawer {
   void OverlayLine(const Math::Vec3 &start, const Math::Vec3 &end,
                    const Math::Vec4 &color, float thickness);
 
+  void DrawWireframeBox(const Math::Vec3 &min, const Math::Vec3 &max,
+                        const Math::Vec4 &color, float thickness);
+
+  void OverlayWireframeBox(const Math::Vec3 &min, const Math::Vec3 &max,
+                           const Math::Vec4 &color, float thickness);
+
   auto Initialize(const Graphics::GraphicsContext &context) -> Error;
   auto Deinitialize() -> void;
 

@@ -168,8 +168,8 @@ auto Buffer::UploadLarge(const GraphicsContext &context,
   DynamicRendering::EndRendering(context);
 
   Barrier::UpdateUsage(context, *this,
-                       {.stages = VK_PIPELINE_STAGE_TRANSFER_BIT,
-                        .access = VK_ACCESS_TRANSFER_WRITE_BIT});
+                       {.stages = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                        .access = VK_ACCESS_2_TRANSFER_WRITE_BIT});
 
   VkBufferCopy copyRegion = {};
   copyRegion.srcOffset = 0;
@@ -251,8 +251,8 @@ auto Buffer::UploadRing(const GraphicsContext &context,
   copyRegion.size = uploadSize;
 
   Barrier::UpdateUsage(context, *this,
-                       {.stages = VK_PIPELINE_STAGE_TRANSFER_BIT,
-                        .access = VK_ACCESS_TRANSFER_WRITE_BIT});
+                       {.stages = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                        .access = VK_ACCESS_2_TRANSFER_WRITE_BIT});
 
   DynamicRendering::EndRendering(context);
   vkCmdCopyBuffer(commandBuffer, uploadBuffer->handle, handle, 1, &copyRegion);
@@ -461,17 +461,17 @@ auto Buffer::CopyTo(const GraphicsContext &context,
 
   if (handle != dstBuffer.handle) {
     Barrier::UpdateUsage(context, *this,
-                         {.stages = VK_PIPELINE_STAGE_TRANSFER_BIT,
-                          .access = VK_ACCESS_TRANSFER_READ_BIT});
+                         {.stages = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                          .access = VK_ACCESS_2_TRANSFER_READ_BIT});
     Barrier::UpdateUsage(context, dstBuffer,
-                         {.stages = VK_PIPELINE_STAGE_TRANSFER_BIT,
-                          .access = VK_ACCESS_TRANSFER_WRITE_BIT});
+                         {.stages = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                          .access = VK_ACCESS_2_TRANSFER_WRITE_BIT});
   } else {
     // If copying within the same buffer, we only need to set the barrier once with both read and write access
-    Barrier::UpdateUsage(
-        context, *this,
-        {.stages = VK_PIPELINE_STAGE_TRANSFER_BIT,
-         .access = VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT});
+    Barrier::UpdateUsage(context, *this,
+                         {.stages = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                          .access = VK_ACCESS_2_TRANSFER_READ_BIT |
+                                    VK_ACCESS_2_TRANSFER_WRITE_BIT});
   }
 
   VkBufferCopy copyRegion = {};
@@ -572,8 +572,8 @@ auto Buffer::Clear(const GraphicsContext &context, uint32_t value,
 
   // Must flush, for WaW hazards
   Barrier::UpdateUsage(context, *this,
-                       {.stages = VK_PIPELINE_STAGE_TRANSFER_BIT,
-                        .access = VK_ACCESS_TRANSFER_WRITE_BIT});
+                       {.stages = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                        .access = VK_ACCESS_2_TRANSFER_WRITE_BIT});
 
   vkCmdFillBuffer(commandBuffer, handle, offset, size, value);
 
@@ -641,8 +641,8 @@ auto Buffer::Readback(const GraphicsContext &context,
   DynamicRendering::EndRendering(context);
 
   Barrier::UpdateUsage(context, *this,
-                       {.stages = VK_PIPELINE_STAGE_TRANSFER_BIT,
-                        .access = VK_ACCESS_TRANSFER_READ_BIT});
+                       {.stages = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                        .access = VK_ACCESS_2_TRANSFER_READ_BIT});
 
   VkBufferCopy copyRegion = {};
   copyRegion.srcOffset = offset;
