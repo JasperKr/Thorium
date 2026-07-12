@@ -115,7 +115,7 @@ auto wrap_SetIndices(lua_State *state) -> int {
   std::span<uint8_t> indexData = std::span<
       uint8_t>( // NOLINTNEXTLINE, pointer arithmetic and reinterpret cast
       reinterpret_cast<uint8_t *>(data->GetData()),
-      static_cast<size_t>(count * ::Graphics::GetIndexFormatSize(format)));
+      (count * ::Graphics::GetIndexFormatSize(format)));
 
   auto result = mesh->SetIndices(*::Graphics::GetCurrentGraphicsContext(),
                                  indexData, format);
@@ -565,7 +565,14 @@ auto wrap_NewMesh(lua_State *state) -> int {
   PrintDebug("Creating mesh with {} bytes of vertex data.\n",
              vertexData.size());
 
-  auto meshResult = ::Graphics::Mesh::Create(*ctx, vertexFormat, {vertexData});
+  ::Graphics::MeshCreationInfo info{
+      .vertexFormat = &vertexFormat,
+      .vertexData = {vertexData},
+      .vertexCount = vertexData.size() / vertexFormat.GetStride(0),
+      .debugName = "LuaMesh",
+  };
+
+  auto meshResult = ::Graphics::Mesh::Create(*ctx, info);
 
   if (Error::IsError(meshResult)) {
     return luaL_error(state, "%s", meshResult.error().message.c_str());

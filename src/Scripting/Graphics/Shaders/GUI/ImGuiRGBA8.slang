@@ -45,8 +45,8 @@ float4 fragmentMain(FragmentInput input) {
   // color.rgb *= color.a;
 
 #ifdef __COLORSPACE_GAMMA_CORRECT
-  color.rgb = GammaToLinear(color.rgb);
-  color.a = 1.0 - GammaToLinear(1.0 - color.a);
+  // color.rgb = GammaToLinear(color.rgb);
+  // color.a = 1.0 - GammaToLinear(1.0 - color.a);
 #endif
 
   return color;

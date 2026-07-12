@@ -12,6 +12,7 @@ static const Type geometryType = Type("Geometry");
 
 struct Geometry {
   Ref<Graphics::Mesh> mesh;
+  long tlasIndex = -1;
 
   auto DrawGUI() const -> void;
 };

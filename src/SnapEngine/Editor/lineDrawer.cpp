@@ -21,9 +21,83 @@ void LineDrawer::OverlayLine(const Math::Vec3 &start, const Math::Vec3 &end,
       .Start = start, .End = end, .Color = color, .Thickness = thickness});
 }
 
+void LineDrawer::DrawWireframeBox(const Math::Vec3 &min, const Math::Vec3 &max,
+                                  const Math::Vec4 &color, float thickness) {
+  // Draw the edges of the box using lines
+  DrawLine(Math::Vec3{min.x, min.y, min.z}, Math::Vec3{max.x, min.y, min.z},
+           color, thickness);
+  DrawLine(Math::Vec3{max.x, min.y, min.z}, Math::Vec3{max.x, max.y, min.z},
+           color, thickness);
+  DrawLine(Math::Vec3{max.x, max.y, min.z}, Math::Vec3{min.x, max.y, min.z},
+           color, thickness);
+  DrawLine(Math::Vec3{min.x, max.y, min.z}, Math::Vec3{min.x, min.y, min.z},
+           color, thickness);
+
+  DrawLine(Math::Vec3{min.x, min.y, max.z}, Math::Vec3{max.x, min.y, max.z},
+           color, thickness);
+  DrawLine(Math::Vec3{max.x, min.y, max.z}, Math::Vec3{max.x, max.y, max.z},
+           color, thickness);
+  DrawLine(Math::Vec3{max.x, max.y, max.z}, Math::Vec3{min.x, max.y, max.z},
+           color, thickness);
+  DrawLine(Math::Vec3{min.x, max.y, max.z}, Math::Vec3{min.x, min.y, max.z},
+           color, thickness);
+
+  DrawLine(Math::Vec3{min.x, min.y, min.z}, Math::Vec3{min.x, min.y, max.z},
+           color, thickness);
+  DrawLine(Math::Vec3{max.x, min.y, min.z}, Math::Vec3{max.x, min.y, max.z},
+           color, thickness);
+  DrawLine(Math::Vec3{max.x, max.y, min.z}, Math::Vec3{max.x, max.y, max.z},
+           color, thickness);
+  DrawLine(Math::Vec3{min.x, max.y, min.z}, Math::Vec3{min.x, max.y, max.z},
+           color,
+           thickness); // NOLINT
+}
+
+void LineDrawer::OverlayWireframeBox(const Math::Vec3 &min,
+                                     const Math::Vec3 &max,
+                                     const Math::Vec4 &color, float thickness) {
+  // Draw the edges of the box using lines
+  OverlayLine(Math::Vec3{min.x, min.y, min.z}, Math::Vec3{max.x, min.y, min.z},
+              color, thickness);
+  OverlayLine(Math::Vec3{max.x, min.y, min.z}, Math::Vec3{max.x, max.y, min.z},
+              color, thickness);
+  OverlayLine(Math::Vec3{max.x, max.y, min.z}, Math::Vec3{min.x, max.y, min.z},
+              color, thickness);
+  OverlayLine(Math::Vec3{min.x, max.y, min.z}, Math::Vec3{min.x, min.y, min.z},
+              color, thickness);
+
+  OverlayLine(Math::Vec3{min.x, min.y, max.z}, Math::Vec3{max.x, min.y, max.z},
+              color, thickness);
+  OverlayLine(Math::Vec3{max.x, min.y, max.z}, Math::Vec3{max.x, max.y, max.z},
+              color, thickness);
+  OverlayLine(Math::Vec3{max.x, max.y, max.z}, Math::Vec3{min.x, max.y, max.z},
+              color, thickness);
+  OverlayLine(Math::Vec3{min.x, max.y, max.z}, Math::Vec3{min.x, min.y, max.z},
+              color,
+              thickness); // NOLINT
+
+  OverlayLine(Math::Vec3{min.x, min.y, min.z}, Math::Vec3{min.x, min.y, max.z},
+              color,
+              thickness); // NOLINT
+  OverlayLine(Math::Vec3{max.x, min.y, min.z}, Math::Vec3{max.x, min.y, max.z},
+              color,
+              thickness); // NOLINT
+  OverlayLine(Math::Vec3{max.x, max.y, min.z}, Math::Vec3{max.x, max.y, max.z},
+              color,
+              thickness); // NOLINT
+  OverlayLine(Math::Vec3{min.x, max.y, min.z}, Math::Vec3{min.x, max.y, max.z},
+              color,
+              thickness); // NOLINT
+}
+
 auto LineDrawer::Initialize(const Graphics::GraphicsContext &context) -> Error {
-  Mesh = CHECK_RES(Graphics::Mesh::Create(context, LineVertexFormat,
-                                          MaxVertexCount, "Lines mesh"));
+  Graphics::MeshCreationInfo info{
+      .vertexFormat = &LineVertexFormat,
+      .vertexCount = MaxVertexCount,
+      .debugName = "Lines mesh",
+  };
+
+  Mesh = CHECK_RES(Graphics::Mesh::Create(context, info));
 
   Shader = CHECK_RES(
       Graphics::Shader::Create(context, "GUI/lineDrawer", "Line shader"));

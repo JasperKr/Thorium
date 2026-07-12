@@ -13,6 +13,44 @@ uniform int Slice;
 Sampler2DArray RadianceInput;
 RWTexture2DArray<float4> IrradianceOutput;
 
+/*
+
+int phiIndex = 0;
+
+  for (float phi = 0.0F; phi < 2.0F * std::numbers::pi; phi += sampleDelta) {
+    // float yawOffset = (phiIndex & 1) ? sampleDelta * 0.5F : 0.0F;
+    float yawOffset = float(phiIndex % 16) * (sampleDelta * 0.0625F);
+
+    float thetaStart = yawOffset;
+
+    for (float theta = thetaStart; theta < (0.5F * std::numbers::pi);
+         theta += sampleDelta) {
+
+      float t = theta / (0.5 * std::numbers::pi);
+      t = std::sqrt(t);
+
+      float biasedTheta = t * (0.5 * std::numbers::pi);
+
+      float sinTheta = std::sin(biasedTheta);
+      float cosTheta = std::cos(biasedTheta);
+
+      float sinPhi = std::sin(phi);
+      float cosPhi = std::cos(phi);
+
+      Math::Vec3 sampleVec = right * (sinTheta * cosPhi) +
+                             upVect * (sinTheta * sinPhi) + normal * cosTheta;
+
+      sampleVec = sampleVec.Normalize();
+
+      lineDrawer.OverlayLine(sampleVec * 0.5F, sampleVec,
+                             Math::Vec4(1.0F, 1.0F, 1.0F, 1.0F), 2.0F);
+    }
+
+    phiIndex++;
+  }
+
+*/
+
 float3 calculateIrradiance(const float3 normal) {
   float3 irradiance = float3(0.0);
 
@@ -20,35 +58,36 @@ float3 calculateIrradiance(const float3 normal) {
   float3 right = normalize(cross(up, normal));
   up = normalize(cross(normal, right));
 
-  float sampleDelta = PI / 8.0;
+  float sampleDelta = PI / 16.0;
   float nrSamples = 0.0;
 
-  float2 dirYaw = float2(0.0, 1.0); // (cos(PI/2), sin(PI/2))
-  float2 rot = float2(cos(sampleDelta), sin(sampleDelta));
+  int phiIndex = 0;
 
   for (float phi = 0.0; phi < 2.0 * PI; phi += sampleDelta) {
-    dirYaw = float2(dirYaw.x * rot.x - dirYaw.y * rot.y,
-                    dirYaw.x * rot.y + dirYaw.y * rot.x);
+    float thetaOffset = float(phiIndex % 16) * (sampleDelta * 0.0625);
 
-    float2 dirPitch = float2(1.0, 0.0); // (cos(0), sin(0))
+    float sinPhi = sin(phi);
+    float cosPhi = cos(phi);
 
-    for (float theta = 0.0; theta < 0.5 * PI; theta += sampleDelta) {
-      dirPitch = float2(dirPitch.x * rot.x - dirPitch.y * rot.y,
-                        dirPitch.x * rot.y + dirPitch.y * rot.x);
+    for (float theta = thetaOffset; theta <= HALF_PI; theta += sampleDelta) {
+      float sinTheta = sin(theta);
+      float cosTheta = cos(theta);
 
       // tangent space to world
-      float3 sampleVec = dirPitch.y * dirYaw.x * right +
-                         dirPitch.y * dirYaw.y * up + dirPitch.x * normal;
+      float3 sampleVec = right * (sinTheta * cosPhi) +
+                         up * (sinTheta * sinPhi) + normal * cosTheta;
+
+      sampleVec = normalize(sampleVec);
+
       float2 uv = Oct3To2(sampleVec) * 0.5 + 0.5;
 
-      // irradiance += textureLod(RadianceInput, float3(uv, Slice), 5.0).rgb *
-      //               dirPitch.x * dirPitch.y;
-
-      irradiance += RadianceInput.SampleLevel(float3(uv, Slice), 5.0).rgb *
-                    dirPitch.x * dirPitch.y;
+      irradiance += RadianceInput.SampleLevel(float3(uv, Slice), 4.0).rgb *
+                    cosTheta * sinTheta;
 
       nrSamples++;
     }
+
+    phiIndex++;
   }
 
   return PI * irradiance / nrSamples;

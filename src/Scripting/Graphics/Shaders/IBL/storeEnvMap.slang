@@ -40,7 +40,8 @@ void computeMain(uint3 id: SV_DispatchThreadID) {
   uv.y = -uv.y;
   float3 direction = DecodeOctahedron(uv * 0.5 + 0.5);
 
-  // float4 data = textureLod(Input, direction, float(level));
+  direction.z = -direction.z;
+
   float4 data = Input.SampleLevel(direction, float(level));
 
   switch (level) {

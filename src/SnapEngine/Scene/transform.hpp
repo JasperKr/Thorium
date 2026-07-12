@@ -75,6 +75,10 @@ public:
                                Math::Vec3 scale = {1.0F, 1.0F, 1.0F})
       : Position(position), Rotation(rotation), Scale(scale) {}
 
+  constexpr explicit Transform(Math::Quaternion rotation)
+      : Position(Math::Vec3{0.0F, 0.0F, 0.0F}), Rotation(rotation),
+        Scale(Math::Vec3{1.0F, 1.0F, 1.0F}) {}
+
   auto DrawGUI() -> void;
 };
 

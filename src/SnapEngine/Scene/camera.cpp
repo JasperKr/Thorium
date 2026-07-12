@@ -335,6 +335,9 @@ auto Camera::UpdateClosestLightProbes(int max, std::vector<uint8_t> &data,
 
 auto Camera::ApplyLightProbes(const Graphics::GraphicsContext &context,
                               const DrawData &drawData, Scene *scene) -> Error {
+
+  Graphics::PushDebugMarker("Apply Light Probes");
+
   constexpr int MaxLightProbes = 64;
 
   auto probeData = std::vector<uint8_t>(
@@ -407,6 +410,8 @@ auto Camera::ApplyLightProbes(const Graphics::GraphicsContext &context,
 
   CHECK_ERR(Renderer::DrawFullScreen(context));
 
+  Graphics::PopDebugMarker();
+
   return {};
 }
 
@@ -437,8 +442,8 @@ auto Camera::Render(const Graphics::GraphicsContext &context,
     Graphics::PopDebugMarker();
   }
 
-  Graphics::PushDebugMarker("Apply Light Probes");
   CHECK_ERR(ApplyLightProbes(context, drawData, scene));
+  Graphics::PushDebugMarker("Write Lighting to Incoming Light");
 
   Graphics::DynamicRendering::SetShader({});
   Graphics::DynamicRendering::SetDepthMode(false, false, VK_COMPARE_OP_ALWAYS);

@@ -151,6 +151,8 @@ struct Buffer : Object, Barrier::BarrierSynced {
                 const Ref<Data::ByteData> &output = Ref<Data::ByteData>())
       -> Result<Ref<BufferReadback>>;
 
+  [[nodiscard]] auto GetDeviceAddress() const -> Result<VkDeviceAddress>;
+
   std::string debugName;
 };
 

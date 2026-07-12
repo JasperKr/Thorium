@@ -3,6 +3,7 @@
 #include "Editor/lineDrawer.hpp"
 #include "Graphics/Buffers/structured.hpp"
 #include "Graphics/bufferformat.hpp"
+#include "Graphics/bvh.hpp"
 #include "Graphics/graphicsContext.hpp"
 #include "Graphics/shader.hpp"
 #include "Modules/error.hpp"
@@ -13,8 +14,6 @@
 #include "material.hpp"
 #include <cstddef>
 #include <cstdint>
-#include <string>
-#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 #include <vulkan/vulkan_core.h>
@@ -146,6 +145,7 @@ struct Renderer {
 
     CHECK_ERR(LineDrawer.Initialize(context));
     CHECK_ERR(BloomManager.Initialize(context));
+    SceneTLAS = CHECK_RES(Graphics::TLAS::Create(context));
 
     initialized = true;
     return {};
@@ -189,8 +189,19 @@ struct Renderer {
   }
 
   auto GetLineDrawer() -> LineDrawer & { return LineDrawer; }
+  auto GetLineDrawer() const -> const LineDrawer & { return LineDrawer; }
   auto GetBloomManager() -> BloomManager & { return BloomManager; }
+  auto GetBloomManager() const -> const BloomManager & { return BloomManager; }
   auto GetShaderManager() -> ShaderManager & { return ShaderManager; }
+  auto GetShaderManager() const -> const ShaderManager & {
+    return ShaderManager;
+  }
+  auto GetSceneTLAS() -> Ref<Graphics::TLAS> & { return SceneTLAS; }
+  auto GetSceneTLAS() const -> const Ref<Graphics::TLAS> & { return SceneTLAS; }
+  auto SceneNeedsTLASRebuild() const -> bool { return SceneTLASNeedsRebuild; }
+  auto SetSceneNeedsTLASRebuild(bool needsRebuild) -> void {
+    SceneTLASNeedsRebuild = needsRebuild;
+  }
 
 private:
   Material NoMaterial;
@@ -211,6 +222,9 @@ private:
   BloomManager BloomManager;
 
   ShaderManager ShaderManager;
+
+  Ref<Graphics::TLAS> SceneTLAS;
+  bool SceneTLASNeedsRebuild = true;
 
   bool initialized = false;
 

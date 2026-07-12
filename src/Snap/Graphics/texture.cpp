@@ -1296,11 +1296,11 @@ auto Texture::UseAsSampler(const GraphicsContext &context,
 }
 auto Texture::UseAsTransferSrc(const GraphicsContext &context) -> Error {
   return UseAs(context, TextureUsage::TransferSrc,
-               VK_PIPELINE_STAGE_TRANSFER_BIT);
+               VK_PIPELINE_STAGE_2_TRANSFER_BIT);
 }
 auto Texture::UseAsTransferDst(const GraphicsContext &context) -> Error {
   return UseAs(context, TextureUsage::TransferDst,
-               VK_PIPELINE_STAGE_TRANSFER_BIT);
+               VK_PIPELINE_STAGE_2_TRANSFER_BIT);
 }
 auto Texture::UseAsStorage(const GraphicsContext &context,
                            VkPipelineStageFlags2 stage) -> Error {

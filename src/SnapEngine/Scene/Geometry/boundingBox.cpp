@@ -64,9 +64,11 @@ auto BoundingBox::Construct(const Transform &transform,
   // Get the 8 corners of the local bounding box
   auto center = localBounds.GetCenter();
   auto extents = localBounds.GetSize() * 0.5F; // NOLINT
-  Math::Vec3 worldCenter =
-      Math::Vec3(transform.GetWorldMatrix() * Math::Vec4(center, 1.0F));
-  auto absoluteMatrix = Math::Abs(Math::Matrix3x3(transform.GetWorldMatrix()));
+
+  auto transposed = transform.GetWorldMatrix().Transpose();
+
+  Math::Vec3 worldCenter = Math::Vec3(transposed * Math::Vec4(center, 1.0F));
+  auto absoluteMatrix = Math::Abs(Math::Matrix3x3(transposed));
   auto worldExtents = absoluteMatrix * extents;
 
   Min = worldCenter - worldExtents;

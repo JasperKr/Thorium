@@ -6,7 +6,6 @@
 #include "Graphics/vertexformat.hpp"
 #include "Modules/Math/vector.hpp"
 #include "Modules/compressedImageData.hpp"
-#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/filesystem.hpp"
 #include "Modules/imageData.hpp"
@@ -27,7 +26,6 @@
 #include <cstring>
 #include <execution>
 #include <flecs.h>
-#include <memory>
 #include <mutex>
 #include <numeric>
 #include <public/tracy/Tracy.hpp>
@@ -581,6 +579,8 @@ static void ConvertNormalToPacked10Bit(const uint8_t *src, uint8_t *dst) {
   memcpy(&normalY, src + sizeof(float), sizeof(float));       // NOLINT
   memcpy(&normalZ, src + (2 * sizeof(float)), sizeof(float)); // NOLINT
 
+  normalZ = -normalZ;
+
   uint32_t packedX = PackToSigned10Bit(normalX);
   uint32_t packedY = PackToSigned10Bit(normalY);
   uint32_t packedZ = PackToSigned10Bit(normalZ);
@@ -601,6 +601,8 @@ static void ConvertTangentToPacked10Bit(const uint8_t *src, uint8_t *dst) {
   memcpy(&tangentZ, src + (2 * sizeof(float)), sizeof(float)); // NOLINT
   memcpy(&tangentW, src + (3 * sizeof(float)), sizeof(float)); // NOLINT
 
+  tangentZ = -tangentZ;
+
   uint32_t packedX = PackToSigned10Bit(tangentX);
   uint32_t packedY = PackToSigned10Bit(tangentY);
   uint32_t packedZ = PackToSigned10Bit(tangentZ);
@@ -610,6 +612,21 @@ static void ConvertTangentToPacked10Bit(const uint8_t *src, uint8_t *dst) {
       (packedX) | (packedY << 10) | (packedZ << 20) | (packedW << 30); // NOLINT
 
   memcpy(dst, &packedTangent, sizeof(uint32_t)); // NOLINT
+}
+
+static void ConvertPositionFlipZ(const uint8_t *src, uint8_t *dst) {
+  float posX = 0.0F;
+  float posY = 0.0F;
+  float posZ = 0.0F;
+  memcpy(&posX, src, sizeof(float));                       // NOLINT
+  memcpy(&posY, src + sizeof(float), sizeof(float));       // NOLINT
+  memcpy(&posZ, src + (2 * sizeof(float)), sizeof(float)); // NOLINT
+
+  posZ = -posZ;
+
+  memcpy(dst, &posX, sizeof(float));                       // NOLINT
+  memcpy(dst + sizeof(float), &posY, sizeof(float));       // NOLINT
+  memcpy(dst + (2 * sizeof(float)), &posZ, sizeof(float)); // NOLINT
 }
 
 static auto PackToUnsigned8Bit(float value) -> uint {
@@ -642,13 +659,11 @@ static auto ConvertColorToPacked8Bit(const uint8_t *src, uint8_t *dst) -> void {
 // The key is the semantic, and the value is a function that takes the source data and writes the converted data to the destination buffer.
 const std::unordered_map<std::string,
                          std::function<void(const uint8_t *src, uint8_t *dst)>>
-    Converters = {
-        {"NORMAL", ConvertNormalToPacked10Bit},
-        {"TANGENT", ConvertTangentToPacked10Bit},
-        {"POSITION",
-         nullptr}, // No conversion for POSITION, but could add one if desired.
-        {"COLOR_0", ConvertColorToPacked8Bit},
-        {"TEXCOORD_0", nullptr}
+    Converters = {{"NORMAL", ConvertNormalToPacked10Bit},
+                  {"TANGENT", ConvertTangentToPacked10Bit},
+                  {"POSITION", ConvertPositionFlipZ},
+                  {"COLOR_0", ConvertColorToPacked8Bit},
+                  {"TEXCOORD_0", nullptr}
 
 };
 
@@ -1076,8 +1091,9 @@ LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
     const auto &trs = std::get<fastgltf::TRS>(gltfNode.transform);
 
     transform.SetPosition(trs.translation[0], trs.translation[1],
-                          trs.translation[2]);
-    transform.SetRotation(trs.rotation[0], trs.rotation[1], trs.rotation[2],
+                          -trs.translation[2]);
+    // Basis conversion with Z-axis reflection: q' = (-x, -y, z, w)
+    transform.SetRotation(-trs.rotation[0], -trs.rotation[1], trs.rotation[2],
                           trs.rotation[3]);
     transform.SetScale(trs.scale[0], trs.scale[1], trs.scale[2]);
   } else {
@@ -1230,26 +1246,31 @@ LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
       static Graphics::VertexFormat SeparateVertexFormat(
           SeparateVertexComponents);
 
-      auto mesh = CHECK_RES(
-          Graphics::Mesh::Create(context, SeparateVertexFormat, vertexCount,
-                                 std::string(gltfMesh.name)));
+      auto deinterleavedData = DeinterleaveVertexData(vertexData);
+
+      std::vector<std::span<const uint8_t>> deinterleavedSpans;
+      deinterleavedSpans.reserve(deinterleavedData.size());
+      for (const auto &data : deinterleavedData) {
+        deinterleavedSpans.emplace_back(data.data(), data.size());
+      }
+
+      Graphics::MeshCreationInfo meshCreationInfo{
+          .vertexFormat = &SeparateVertexFormat,
+          .vertexData = deinterleavedSpans,
+          .debugName = std::string(gltfMesh.name),
+      };
+
+      auto mesh = CHECK_RES(Graphics::Mesh::Create(context, meshCreationInfo));
 
       if (!indexData.empty()) {
         CHECK_ERR(mesh->SetIndices(context, indexData, indexType));
       }
 
-      auto deinterleavedData = DeinterleaveVertexData(vertexData);
-
-      // clang-format off
-      CHECK_ERR(mesh->SetVertices(context, 0, deinterleavedData[0])); // POSITION
-      CHECK_ERR(mesh->SetVertices(context, 1, deinterleavedData[1])); // TEXCOORD_0
-      CHECK_ERR(mesh->SetVertices(context, 2, deinterleavedData[2])); // NORMAL + TANGENT
-      CHECK_ERR(mesh->SetVertices(context, 3, deinterleavedData[3])); // COLOR
-      // clang-format on
+      CHECK_ERR(mesh->CreateBLAS(context));
 
       auto geometry = world->entity(
           GetUniqueName(std::string(gltfMesh.name) + " Geometry").c_str());
-      geometry.set<Engine::Geometry>(Engine::Geometry{mesh});
+      geometry.set<Engine::Geometry>(Engine::Geometry{.mesh = mesh});
       geometry.add<Engine::Transform>();
 
       auto lod = world->entity(

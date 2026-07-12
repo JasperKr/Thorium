@@ -119,3 +119,35 @@ public float ClampPerceptualRoughness(float perceptualRoughness) {
 public float CalculateRoughness(float perceptualRoughness) {
   return max(perceptualRoughness * perceptualRoughness, 0.002025);
 }
+
+public struct MaterialChannel {
+  public float metallic;
+  public float perceptualRoughness;
+  public float reflectance;
+  public float occlusion;
+
+  public __init(float metallic, float perceptualRoughness, float reflectance,
+                float occlusion) {
+    this.metallic = metallic;
+    this.perceptualRoughness = ClampPerceptualRoughness(perceptualRoughness);
+    this.reflectance = reflectance;
+    this.occlusion = occlusion;
+  }
+
+  public __init(float4 packed) {
+    this.metallic = packed.r;
+    this.perceptualRoughness = ClampPerceptualRoughness(packed.g);
+    this.reflectance = packed.b;
+    this.occlusion = packed.a;
+  }
+
+  public property float roughness {
+    get { return CalculateRoughness(perceptualRoughness); }
+  }
+
+  public property float4 packed {
+    get {
+      return float4(metallic, perceptualRoughness, reflectance, occlusion);
+    }
+  }
+};

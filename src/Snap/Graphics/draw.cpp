@@ -1,4 +1,5 @@
 #include "draw.hpp"
+#include "Graphics/Buffers/uniform.hpp"
 #include "Graphics/barrier.hpp"
 #include "Graphics/buffer.hpp"
 #include "Graphics/dynamicRendering.hpp"
@@ -86,7 +87,14 @@ auto CreateQuad01Mesh(const Graphics::GraphicsContext &context)
 
   assert(sizeof(FormatDefault2D) == vertexFormat.GetBindings()[0].stride);
 
-  auto mesh = CHECK_RES(Graphics::Mesh::Create(context, vertexFormat, {span}));
+  MeshCreationInfo info{
+      .vertexFormat = &vertexFormat,
+      .vertexData = {span},
+      .vertexCount = vertices.size(),
+      .debugName = "Quad01Mesh",
+  };
+
+  auto mesh = CHECK_RES(Graphics::Mesh::Create(context, info));
 
   CHECK_ERR(mesh->SetVertices(context, 0, span));
 
@@ -237,8 +245,8 @@ inline auto IsHazard(const Ref<Graphics::Texture> &first,
   return mipOverlap && layerOverlap;
 }
 
-inline auto InsertTextureBarriers(const GraphicsContext &context) -> Error {
-  auto shader = DynamicRendering::GetShader();
+inline auto InsertTextureBarriers(const GraphicsContext &context,
+                                  const Ref<Shader> &shader) -> Error {
 
   for (auto &texturePair : shader->GetState().userBoundTextures) {
     auto &texture = texturePair.second;
@@ -284,24 +292,6 @@ inline auto InsertTextureBarriers(const GraphicsContext &context) -> Error {
       continue;
     }
 
-    auto stages = VK_PIPELINE_STAGE_2_NONE;
-
-    for (const auto &stage : shader->entryPoints) {
-      switch (stage.second) {
-      case VK_SHADER_STAGE_VERTEX_BIT:
-        stages |= VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT;
-        break;
-      case VK_SHADER_STAGE_FRAGMENT_BIT:
-        stages |= VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
-        break;
-      case VK_SHADER_STAGE_COMPUTE_BIT:
-        stages |= VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
-        break;
-      default:
-        break;
-      }
-    }
-
 #ifndef NDEBUG
     if (DynamicRendering::GetBindPoint() == VK_PIPELINE_BIND_POINT_GRAPHICS) {
       const auto &targets = DynamicRendering::GetRenderTargets();
@@ -321,7 +311,7 @@ inline auto InsertTextureBarriers(const GraphicsContext &context) -> Error {
 
     Barrier::UpdateUsage(context, *texture.first,
                          {
-                             .stages = stages,
+                             .stages = shader->combinedPipelineStages,
                              .access = access,
                          });
   }
@@ -329,8 +319,8 @@ inline auto InsertTextureBarriers(const GraphicsContext &context) -> Error {
   return {};
 }
 
-inline auto InsertBufferBarriers(const GraphicsContext &context) -> Error {
-  auto shader = DynamicRendering::GetShader();
+inline auto InsertBufferBarriers(const GraphicsContext &context,
+                                 const Ref<Shader> &shader) -> Error {
 
   for (auto &bufferPair : shader->GetState().userBoundBuffers) {
     auto &buffer = bufferPair.second;
@@ -349,30 +339,7 @@ inline auto InsertBufferBarriers(const GraphicsContext &context) -> Error {
 
     const auto &info = slotInfo->GetInfo<Reflect::BufferInfo>();
 
-    VkAccessFlags2 access = 0;
-
-    switch (info.access) {
-    case SLANG_RESOURCE_ACCESS_NONE:
-      // Shaders with ubo buffers show access of NONE for some reason
-      access = VK_ACCESS_2_UNIFORM_READ_BIT;
-      break;
-    case SLANG_RESOURCE_ACCESS_READ:
-      access = info.bufferType == Reflect::BufferType::Uniform
-                   ? VK_ACCESS_2_UNIFORM_READ_BIT
-                   : VK_ACCESS_2_SHADER_READ_BIT;
-      break;
-    case SLANG_RESOURCE_ACCESS_READ_WRITE:
-      access = VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT;
-      break;
-    case SLANG_RESOURCE_ACCESS_WRITE:
-      access = VK_ACCESS_2_SHADER_WRITE_BIT;
-      break;
-    default:
-      PrintWarning("Buffer access type is Unknown for slang access: {}, "
-                   "skipping barrier.",
-                   static_cast<uint32_t>(info.access));
-      break;
-    }
+    VkAccessFlags2 access = info.accessFlags;
 
     if (access == 0 && info.access != SLANG_RESOURCE_ACCESS_NONE) {
       PrintWarning("Buffer access type is Unknown for slang access: {}, "
@@ -381,25 +348,63 @@ inline auto InsertBufferBarriers(const GraphicsContext &context) -> Error {
       continue;
     }
 
-    auto stages = VK_PIPELINE_STAGE_2_NONE;
-
-    for (const auto &stage : shader->entryPoints) {
-      switch (stage.second) {
-      case VK_SHADER_STAGE_VERTEX_BIT:
-        stages |= VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT;
-        break;
-      case VK_SHADER_STAGE_FRAGMENT_BIT:
-        stages |= VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
-        break;
-      case VK_SHADER_STAGE_COMPUTE_BIT:
-        stages |= VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
-        break;
-      default:
-        break;
-      }
-    }
+    auto stages = shader->combinedPipelineStages;
 
     Barrier::UpdateUsage(context, *buffer.first,
+                         {
+                             .stages = stages,
+                             .access = access,
+                         });
+  }
+
+  const auto &globalUBO =
+      GetGlobalUniformBuffer(context.frameIndex).GetBuffer();
+  globalUBO->MarkUse();
+
+  Barrier::UpdateUsage(context, *globalUBO,
+                       {
+                           .stages = shader->combinedPipelineStages,
+                           .access = VK_ACCESS_2_UNIFORM_READ_BIT,
+                       });
+
+  return {};
+}
+
+inline auto InsertAccelerationStructureBarriers(const GraphicsContext &context,
+                                                const Ref<Shader> &shader)
+    -> Error {
+
+  for (auto &asPair : shader->GetState().userBoundAccelerationStructures) {
+    auto &structure = asPair.second;
+    auto key = asPair.first;
+
+    structure.first->MarkUse();
+
+    const auto *slotInfo = shader->GetSlotDescription(key);
+    if (slotInfo == nullptr) {
+      return Error::Create(
+          "Failed to get slot description for bound acceleration structure "
+          "slot.");
+    }
+    if (!slotInfo->Is<Reflect::AccelerationStructureInfo>()) {
+      return Error::Create(
+          "Expected acceleration structure info for bound acceleration "
+          "structure slot.");
+    }
+
+    const auto &info = slotInfo->GetInfo<Reflect::AccelerationStructureInfo>();
+
+    VkAccessFlags2 access = VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+
+    auto stages = shader->combinedPipelineStages;
+
+    Barrier::UpdateUsage(context, *structure.first->GetInstanceBuffer(),
+                         {
+                             .stages = stages,
+                             .access = access,
+                         });
+
+    Barrier::UpdateUsage(context, *structure.first->GetTLASBuffer(),
                          {
                              .stages = stages,
                              .access = access,
@@ -412,11 +417,12 @@ inline auto InsertBufferBarriers(const GraphicsContext &context) -> Error {
 inline auto InsertResourceBarriers(const GraphicsContext &context) -> Error {
   auto shader = DynamicRendering::GetShader();
   if (shader == nullptr) {
-    return Error::Success(); // No shader, so nothing to update
+    shader = DefaultShaderModule;
   }
 
-  CHECK_ERR(InsertTextureBarriers(context));
-  CHECK_ERR(InsertBufferBarriers(context));
+  CHECK_ERR(InsertTextureBarriers(context, shader));
+  CHECK_ERR(InsertBufferBarriers(context, shader));
+  CHECK_ERR(InsertAccelerationStructureBarriers(context, shader));
 
   return Error::Success();
 }

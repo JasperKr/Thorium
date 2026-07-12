@@ -6,7 +6,6 @@
 #include "Modules/error.hpp"
 #include "slang/slang.h"
 #include <cstdint>
-#include <forward_list>
 #include <string>
 #include <string_view>
 #include <sys/types.h>
@@ -181,6 +180,16 @@ struct SamplerInfo : ResourceBase {
   VkFormat format;
 };
 
+struct AccelerationStructureInfo : ResourceBase {
+  uint32_t set;
+  uint32_t binding;
+
+  SlangResourceShape shape;
+  SlangResourceAccess access;
+
+  VkAccessFlags2 accessFlags;
+};
+
 struct ScalarInfo : ResourceBase {
   ScalarType type;
 };
@@ -259,18 +268,17 @@ struct BufferInfo : ResourceBase {
   [[nodiscard]] auto ToString() const -> std::string;
 };
 
+using ResourceVariant =
+    std::variant<SamplerInfo, ScalarInfo, VectorInfo, MatrixInfo, BufferInfo,
+                 StructInfo, AccelerationStructureInfo>;
+
 struct ResourceInfo {
   ResourceInfo() = default;
   explicit ResourceInfo(const char *name) : name(name) {}
-  ResourceInfo(const char *name,
-               std::variant<SamplerInfo, ScalarInfo, VectorInfo, MatrixInfo,
-                            BufferInfo, StructInfo>
-                   info)
+  ResourceInfo(const char *name, ResourceVariant info)
       : name(name), info(std::move(info)) {}
   ResourceInfo(const char *name, VkShaderStageFlags stages,
-               std::variant<SamplerInfo, ScalarInfo, VectorInfo, MatrixInfo,
-                            BufferInfo, StructInfo>
-                   info)
+               ResourceVariant info)
       : name(name), stages(stages), info(std::move(info)) {}
   ResourceInfo(const ResourceInfo &other) = default;
   ResourceInfo(ResourceInfo &&other) noexcept
@@ -318,6 +326,9 @@ struct ResourceInfo {
   [[nodiscard]] constexpr auto IsMatrix() const -> bool {
     return std::holds_alternative<MatrixInfo>(info);
   }
+  [[nodiscard]] constexpr auto IsAccelerationStructure() const -> bool {
+    return std::holds_alternative<AccelerationStructureInfo>(info);
+  }
   template <typename T>
   [[nodiscard]] constexpr auto GetInfo() const -> const T & {
     return std::get<T>(info);
@@ -345,9 +356,7 @@ struct ResourceInfo {
                       info);
   }
 
-  std::variant<SamplerInfo, ScalarInfo, VectorInfo, MatrixInfo, BufferInfo,
-               StructInfo>
-      info;
+  ResourceVariant info;
 
   [[nodiscard]] auto GetTypename() const -> std::string_view {
     if (IsBuffer()) {
@@ -367,6 +376,9 @@ struct ResourceInfo {
     }
     if (IsMatrix()) {
       return "Matrix";
+    }
+    if (IsAccelerationStructure()) {
+      return "AccelerationStructure";
     }
     return "Unknown";
   }
@@ -399,6 +411,10 @@ struct ResourceInfo {
       const auto &samplerInfo = std::get<SamplerInfo>(info);
       result += "  Set: " + std::to_string(samplerInfo.set) + "\n";
       result += "  Binding: " + std::to_string(samplerInfo.binding) + "\n";
+    } else if (IsAccelerationStructure()) {
+      const auto &asInfo = std::get<AccelerationStructureInfo>(info);
+      result += "  Set: " + std::to_string(asInfo.set) + "\n";
+      result += "  Binding: " + std::to_string(asInfo.binding) + "\n";
     } else if (IsStruct()) {
       const auto &structInfo = std::get<StructInfo>(info);
       result += "  Fields:\n";
@@ -438,6 +454,8 @@ struct ShaderReflection {
   // All buffers and textures corresponding to a given set, for quick lookup when binding descriptors
   std::unordered_map<uint32_t, std::vector<uint64_t>> bufferSlotsBySet;
   std::unordered_map<uint32_t, std::vector<uint64_t>> textureSlotsBySet;
+  std::unordered_map<uint32_t, std::vector<uint64_t>>
+      accelerationStructureSlotsBySet;
 };
 
 auto ReflectShader(const Graphics::GraphicsContext &context,

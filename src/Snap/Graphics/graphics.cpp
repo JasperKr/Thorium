@@ -1,5 +1,6 @@
 #include "graphics.hpp"
 #include "Graphics/allocations.hpp"
+#include "Graphics/bvh.hpp"
 #include "Graphics/deviceSettings.hpp"
 #include "Graphics/dynamicRendering.hpp"
 #include "Graphics/graphicsContext.hpp"
@@ -199,6 +200,23 @@ static auto CreateDevice(GraphicsContext &context,
       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_INDEX_TYPE_UINT8_FEATURES_EXT;
   indexTypeUint8Features.indexTypeUint8 = VK_TRUE;
 
+  VkPhysicalDeviceAccelerationStructureFeaturesKHR accelStructFeatures{};
+  accelStructFeatures.sType =
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
+
+  accelStructFeatures.accelerationStructure =
+      settings.hardwareRaytracing == ExtensionRequirement::Required ? VK_TRUE
+                                                                    : VK_FALSE;
+  indexTypeUint8Features.pNext = &accelStructFeatures;
+
+  VkPhysicalDeviceRayQueryFeaturesKHR rayQueryFeatures{};
+  rayQueryFeatures.sType =
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR;
+  rayQueryFeatures.rayQuery =
+      settings.inlineRaytracing == ExtensionRequirement::Required ? VK_TRUE
+                                                                  : VK_FALSE;
+  accelStructFeatures.pNext = &rayQueryFeatures;
+
   VkPhysicalDeviceVertexAttributeDivisorFeaturesKHR
       vertexAttributeDivisorProperties{};
   vertexAttributeDivisorProperties.sType =
@@ -290,10 +308,14 @@ static auto CreateDevice(GraphicsContext &context,
       {VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME, extOptional},
       {VK_EXT_INDEX_TYPE_UINT8_EXTENSION_NAME, extOptional},
       {VK_EXT_VERTEX_ATTRIBUTE_DIVISOR_EXTENSION_NAME, extOptional},
+      {VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME, extRequired},
+      {VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME, extRequired},
 
       {VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
        settings.hardwareRaytracing},
       {VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME, settings.hardwareRaytracing},
+      {VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME,
+       settings.hardwareRaytracing},
       {VK_KHR_RAY_QUERY_EXTENSION_NAME, settings.inlineRaytracing},
   };
 
@@ -453,7 +475,8 @@ static auto CreateVmaAllocator(GraphicsContext &context) -> Error {
   allocatorInfo.instance = context.instance;
   allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_4;
   allocatorInfo.pAllocationCallbacks = GetAllocationCallbacks();
-  allocatorInfo.flags = VMA_ALLOCATOR_CREATE_EXTERNALLY_SYNCHRONIZED_BIT;
+  allocatorInfo.flags = VMA_ALLOCATOR_CREATE_EXTERNALLY_SYNCHRONIZED_BIT |
+                        VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
 
   VmaVulkanFunctions vulkanFunctions;
   Error error = Error::Create(
@@ -600,22 +623,16 @@ void Deinitialize(GraphicsContext &context) {
   PrintInfo("Deinitializing graphics context...");
 
   vkDeviceWaitIdle(context.device);
-
   Graphics::UploadBuffers.clear();
 
   Graphics::Barrier::ResetModule();
-
   Graphics::UnloadShaderModule(context);
-
   Graphics::DeinitializeRendering(context);
-
   Graphics::DynamicRendering::Shutdown(context);
-
   Graphics::semaphoreManager.Deinitialize(context);
-
   Graphics::DestroySamplers(context);
-
   Graphics::DynamicRendering::Destroy(context);
+  Graphics::DeInitializeBVHModule();
 
   // (BEFORE device, allocator lock)
   Graphics::ProcessReleasedResources(context);

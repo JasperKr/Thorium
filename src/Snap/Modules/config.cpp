@@ -2,6 +2,7 @@
 #include "Graphics/deviceSettings.hpp"
 #include "Graphics/shader.hpp"
 #include "Modules/console.hpp"
+#include "Wrap/Helpers/lua_enum.hpp"
 #include "Wrap/Modules/wrap_window.hpp"
 #include "Wrap/wrap.hpp"
 
@@ -36,29 +37,26 @@ inline auto StringToExtensionRequirement(const char *str)
   return Error::Unexpectedf("Invalid extension requirement '{}'", str);
 }
 
+const LuaWrap::LuaEnum<Graphics::ExtensionRequirement> ExtensionRequirementEnum(
+    "ExtensionRequirement",
+    {
+        {"disabled", Graphics::ExtensionRequirement::Disabled},
+        {"optional", Graphics::ExtensionRequirement::Optional},
+        {"required", Graphics::ExtensionRequirement::Required},
+    });
+
 inline auto SetGraphicsSettings(lua_State *state) -> int {
   lua_getfield(state, 1, "hardwareRaytracing");
   if (!lua_isnoneornil(state, -1)) {
-    auto extRequirementResult =
-        StringToExtensionRequirement(luaL_checkstring(state, -1));
-    if (Error::IsError(extRequirementResult)) {
-      return luaL_error(state, "%s",
-                        extRequirementResult.error().message.c_str());
-    }
     globalConfig.deviceSettings.hardwareRaytracing =
-        extRequirementResult.value();
+        LUA_CK_RES(ExtensionRequirementEnum.FromLua(state, -1));
   }
   lua_pop(state, 1);
 
   lua_getfield(state, 1, "inlineRaytracing");
   if (!lua_isnoneornil(state, -1)) {
-    auto extRequirementResult =
-        StringToExtensionRequirement(luaL_checkstring(state, -1));
-    if (Error::IsError(extRequirementResult)) {
-      return luaL_error(state, "%s",
-                        extRequirementResult.error().message.c_str());
-    }
-    globalConfig.deviceSettings.inlineRaytracing = extRequirementResult.value();
+    globalConfig.deviceSettings.inlineRaytracing =
+        LUA_CK_RES(ExtensionRequirementEnum.FromLua(state, -1));
   }
   lua_pop(state, 1);
 

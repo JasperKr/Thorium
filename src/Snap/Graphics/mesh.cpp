@@ -57,12 +57,30 @@ auto Mesh::UploadIndices(const GraphicsContext &context,
   return IndexBuffer->SetData(context, indices, offset);
 }
 
-auto Mesh::Create(const GraphicsContext &context,
-                  const VertexFormat &vertexFormat,
-                  const std::vector<std::span<uint8_t>> &vertexDatas,
-                  const std::string &debugName) -> Result<Ref<Mesh>> {
+auto Mesh::Create(const GraphicsContext &context, const MeshCreationInfo &info)
+    -> Result<Ref<Mesh>> {
+
+  Ref<Mesh> mesh;
+
+  if (!info.vertexData.empty()) {
+    mesh = CHECK_RES(CreateFromVertexData(context, info));
+  } else {
+    ERR_ASSERT_MSG(info.vertexCount > 0, "Vertex count must be greater than 0");
+    mesh = CHECK_RES(CreateFromVertexCount(context, info));
+  }
+
+  return mesh;
+}
+
+auto Mesh::CreateFromVertexData(const GraphicsContext &context,
+                                const MeshCreationInfo &info)
+    -> Result<Ref<Mesh>> {
 
   auto mesh = Ref<Mesh>::Make();
+
+  const auto &vertexFormat = *info.vertexFormat;
+  const auto &vertexDatas = info.vertexData;
+  const auto &debugName = info.debugName;
 
   auto firstVtxCount =
       vertexDatas.at(0).size() / VertexFormatSize(vertexFormat, 0);
@@ -88,7 +106,9 @@ auto Mesh::Create(const GraphicsContext &context,
   Graphics::BufferCreationInfo vboCreationInfo = {};
   vboCreationInfo.usage =
       static_cast<uint32_t>(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT) |
-      static_cast<uint32_t>(VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+      VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+      VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR |
+      VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
 
   mesh->VertexBuffers.resize(vertexFormat.GetBindingCount());
 
@@ -114,10 +134,13 @@ auto Mesh::Create(const GraphicsContext &context,
   return mesh;
 }
 
-auto Mesh::Create(const GraphicsContext &context,
-                  const VertexFormat &vertexFormat, uint64_t vertexCount,
-                  const std::string &debugName) // NOLINT
+auto Mesh::CreateFromVertexCount(const GraphicsContext &context,
+                                 const MeshCreationInfo &info)
     -> Result<Ref<Mesh>> {
+  const auto &vertexFormat = *info.vertexFormat;
+  const auto &vertexCount = info.vertexCount;
+  const auto &debugName = info.debugName;
+
   std::vector<uint32_t> indexData;
 
   auto mesh = Ref<Mesh>::Make();
@@ -132,7 +155,9 @@ auto Mesh::Create(const GraphicsContext &context,
   Graphics::BufferCreationInfo vboCreationInfo = {};
   vboCreationInfo.usage =
       static_cast<uint32_t>(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT) |
-      static_cast<uint32_t>(VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+      VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+      VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR |
+      VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
 
   for (uint32_t i = 0; i < bindingCount; ++i) {
     auto vertexDataSize = vertexCount * VertexFormatSize(vertexFormat, i);
@@ -155,6 +180,10 @@ auto Mesh::Create(const GraphicsContext &context,
 }
 
 [[nodiscard]] auto Mesh::GetVertexFormat() -> VertexFormat & { return *Format; }
+
+[[nodiscard]] auto Mesh::GetVertexFormat() const -> const VertexFormat & {
+  return *Format;
+}
 
 [[nodiscard]] auto Mesh::GetVertexCount() const -> uint32_t {
   return VertexCount;
@@ -198,7 +227,9 @@ auto Mesh::SetIndices(const GraphicsContext &context,
     Graphics::BufferCreationInfo iboCreationInfo = {};
     iboCreationInfo.usage =
         static_cast<uint32_t>(VK_BUFFER_USAGE_INDEX_BUFFER_BIT) |
-        static_cast<uint32_t>(VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+        VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR |
+        VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
 
     auto properties =
         static_cast<uint32_t>(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
