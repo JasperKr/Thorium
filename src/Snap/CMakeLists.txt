@@ -128,18 +128,15 @@ if (WIN32)
         INTERFACE_INCLUDE_DIRECTORIES "${LUAJIT_SRC}/src"
     )
 elseif(UNIX)
-    set(LUAJIT_LIB "${LUAJIT_SRC}/src/libluajit-5.1.so.2")
+    set(LUAJIT_LIB "${LUAJIT_SRC}/src/libluajit.so")
 
     ExternalProject_Add(luajit
         SOURCE_DIR ${LUAJIT_SRC}
         CONFIGURE_COMMAND ""
-        BUILD_COMMAND
-            make
-        COMMAND
-            ${CMAKE_COMMAND} -E create_symlink libluajit.so ${LUAJIT_LIB}
+        BUILD_COMMAND make
         INSTALL_COMMAND ""
         BUILD_IN_SOURCE 1
-        BUILD_BYPRODUCTS ${LUAJIT_SRC}/src/libluajit.so ${LUAJIT_LIB}
+        BUILD_BYPRODUCTS ${LUAJIT_LIB}
     )
 
     add_library(LuaJIT::LuaJIT SHARED IMPORTED)
