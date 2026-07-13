@@ -272,7 +272,7 @@ auto MainLoop(const std::vector<std::string> &arguments) -> Error {
 
   CHECK_ERR(InitializeUniformBufferModule(context));
 
-  CHECK_RES(Gui::LoadGUIState(state));
+  CHECK_ERR(Engine::Gui::LoadGUIState(state));
 
   CHECK_ERR(LoadLua(state, arguments));
 

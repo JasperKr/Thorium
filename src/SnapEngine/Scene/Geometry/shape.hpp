@@ -11,7 +11,9 @@
 #include <lua.hpp>
 namespace Engine {
 
-struct Shape {};
+struct Shape {
+  auto DrawGUI(flecs::entity entity) const -> void {}
+};
 
 static const Type shapeType = Type("Shape");
 
@@ -30,14 +32,6 @@ struct LuaShape : LuaWrap::LuaECSObject {
   static auto GetLODs(lua_State *state) -> int;
 
   static auto Create(lua_State *state) -> int;
-
-  auto DrawGUI() const -> void {
-    const char *shapeName = entity.name();
-    if (shapeName == nullptr || std::string_view(shapeName).empty()) {
-      shapeName = "Unnamed Shape";
-    }
-    ImGui::Text("Shape: %s", shapeName);
-  }
 };
 
 // extern const ::LuaWrap::LuaClass ShapeClass;

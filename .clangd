@@ -3,4 +3,4 @@ If:
 
 Diagnostics:
   ClangTidy:
-    Remove: modernize*
+    Remove: .*

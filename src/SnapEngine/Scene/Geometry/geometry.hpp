@@ -14,7 +14,7 @@ struct Geometry {
   Ref<Graphics::Mesh> mesh;
   long tlasIndex = -1;
 
-  auto DrawGUI() const -> void;
+  auto DrawGUI(flecs::entity entity) const -> void;
 };
 
 struct LuaGeometry : LuaWrap::LuaECSObject {

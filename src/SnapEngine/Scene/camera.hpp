@@ -15,12 +15,19 @@
 #include "Scene/transform.hpp"
 #include "Wrap/wrap.hpp"
 #include "Wrap/wrap_engine.hpp"
+#include <cstdint>
 #include <vector>
 namespace Engine {
 
 struct DrawData {
   Transform Transform;
   CameraMatrices Matrices;
+};
+
+enum class AgxLook : uint8_t {
+  Default,
+  Punchy,
+  Golden,
 };
 
 struct Camera {
@@ -182,6 +189,7 @@ struct Camera {
     bool BloomDownsampleChain = false;
   };
 
+  // NOLINTBEGIN
   struct PostProcessingConfig {
     float Temperature = 0.0F;
     float Tint = 0.0F;
@@ -189,8 +197,10 @@ struct Camera {
     float Contrast = 1.0F;
     float Saturation = 1.0F;
     float Vignette = 0.0F;
-    float Exposure = 0.2F; // NOLINT
+    float Exposure = 0.2F;
+    AgxLook Look = AgxLook::Default;
   };
+  // NOLINTEND
 
   auto SetPostProcessingConfig(const PostProcessingConfig &config) -> void {
     postProcessingConfig = config;
@@ -202,6 +212,10 @@ struct Camera {
   }
 
   [[nodiscard]] auto GetPostProcessingConfig() const -> PostProcessingConfig {
+    return postProcessingConfig;
+  }
+
+  [[nodiscard]] auto GetPostProcessingConfig() -> PostProcessingConfig & {
     return postProcessingConfig;
   }
 
@@ -223,6 +237,8 @@ struct Camera {
       -> PersistentTextureSettings {
     return persistentTextureSettings;
   }
+
+  auto DrawGUI(flecs::entity entity) -> void;
 
 private:
   Settings settings;

@@ -1,9 +1,14 @@
 #include "displayName.hpp"
 #include "Wrap/wrap.hpp"
 #include "Wrap/wrap_engine.hpp"
+#include <imgui.h>
 #include <lua.hpp>
 
 namespace Engine {
+
+auto DisplayName::DrawGUI(flecs::entity entity) const -> void {
+  ImGui::Text("Display Name: %s", Name.c_str());
+}
 
 auto LuaDisplayName::GetName(lua_State *state) -> int {
   auto *entity = ::LuaWrap::EntityFromLua(state, 1);

@@ -3,7 +3,9 @@
 #include "Graphics/bufferformat.hpp"
 #include "Modules/color.hpp"
 #include <cstdint>
+#include <flecs.h>
 #include <imgui.h>
+
 namespace Engine {
 
 enum class IntensityUnit : uint8_t {
@@ -69,7 +71,7 @@ struct Light {
     return Intensity;
   }
 
-  auto DrawGUI() -> void {
+  auto DrawGUI(flecs::entity entity) -> void {
     ImGui::ColorEdit3("Color", Color.Ptr());
 
     ImGui::InputFloat("Intensity", &Intensity, 0.1F, 100.0F, "%.3f"); // NOLINT

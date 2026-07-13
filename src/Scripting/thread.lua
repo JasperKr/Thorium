@@ -234,18 +234,6 @@ do
       -- texture:setAnisotropy(0)
       texture:setWrap("repeat", "repeat", "repeat")
 
-      -- texture = snap.graphics.newTexture("src/Assets/skybox.hdr")
-      -- Checkerboard = snap.data.newImagedata(4, 4, 1)
-      -- for x = 0, Checkerboard:getWidth() - 1 do
-      --   for y = 0, Checkerboard:getHeight() - 1 do
-      --     local color = ((x + y) % 2 == 0) and 1 or 0
-      --     Checkerboard:setPixel(x, y, 0, color, color, color, 1)
-      --   end
-      -- end
-
-      -- local texture = snap.graphics.newTexture(Checkerboard)
-      -- texture:setFilter("nearest", "nearest", 1)
-
       local env = scene:newEnvironment("Test environment", texture)
       scene:setEnvironment(env)
 

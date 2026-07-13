@@ -27,7 +27,7 @@ struct LevelOfDetail {
     return lod;
   };
 
-  auto DrawGUI() const -> void;
+  auto DrawGUI(flecs::entity entity) const -> void;
 };
 
 static const Type levelOfDetailType = Type("LevelOfDetail");

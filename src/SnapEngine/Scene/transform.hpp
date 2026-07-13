@@ -79,7 +79,7 @@ public:
       : Position(Math::Vec3{0.0F, 0.0F, 0.0F}), Rotation(rotation),
         Scale(Math::Vec3{1.0F, 1.0F, 1.0F}) {}
 
-  auto DrawGUI() -> void;
+  auto DrawGUI(flecs::entity entity) -> void;
 };
 
 const static Type TransformType = Type("Transform");

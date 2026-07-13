@@ -350,11 +350,12 @@ target_link_libraries(snap_core
         ${SLANG_LIBS}
         fastgltf
         tracy
-        flecs::flecs_static
         backtrace
         dl
         unwind
         unwind-x86_64
+        flecs::flecs_static
+
 )
 
 # Copy LuaJIT DLL after build

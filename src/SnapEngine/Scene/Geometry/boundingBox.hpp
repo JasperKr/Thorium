@@ -33,7 +33,7 @@ struct BoundingBox {
   auto Construct(const Transform &transform, const BoundingBox &localBounds)
       -> void;
 
-  auto DrawGUI() const -> void;
+  auto DrawGUI(flecs::entity entity) const -> void;
 };
 
 static const Type boundingBoxType = Type("BoundingBox");
@@ -67,17 +67,17 @@ struct LuaBoundingBox : LuaWrap::LuaECSObject {
 struct LocalBounds {
   BoundingBox Bounds;
 
-  auto DrawGUI() const -> void {
+  auto DrawGUI(flecs::entity entity) const -> void {
     ImGui::TextDisabled("Local Bounds");
-    Bounds.DrawGUI();
+    Bounds.DrawGUI(entity);
   }
 };
 struct WorldBounds {
   BoundingBox Bounds;
 
-  auto DrawGUI() const -> void {
+  auto DrawGUI(flecs::entity entity) const -> void {
     ImGui::TextDisabled("World Bounds");
-    Bounds.DrawGUI();
+    Bounds.DrawGUI(entity);
   }
 };
 

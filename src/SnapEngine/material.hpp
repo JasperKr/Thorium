@@ -115,7 +115,7 @@ struct Material {
     return hasher.Get();
   }
 
-  auto DrawGUI() -> void;
+  auto DrawGUI(flecs::entity entity) -> void;
   auto Update(Graphics::GraphicsContext &context) -> Error;
 
 private:

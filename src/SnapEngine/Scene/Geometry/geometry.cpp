@@ -9,7 +9,7 @@
 
 namespace Engine {
 
-auto Geometry::DrawGUI() const -> void {
+auto Geometry::DrawGUI(flecs::entity entity) const -> void {
   if (mesh.isValid()) {
     ImGui::Text("Mesh: %p", mesh.get());
   } else {

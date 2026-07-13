@@ -258,10 +258,10 @@ auto Transform::UpdateWorldMatrix(const Transform *parent) -> void {
 
   NormalMatrix = Math::Matrix3x3(WorldMatrix).InverseTranspose();
 
-  // WorldDirty = false;
+  WorldDirty = false;
 }
 
-auto Transform::DrawGUI() -> void {
+auto Transform::DrawGUI(flecs::entity entity) -> void {
   ImGuiDataType dataType = sizeof(Math::Scalar) == sizeof(double)
                                ? ImGuiDataType_Double
                                : ImGuiDataType_Float;

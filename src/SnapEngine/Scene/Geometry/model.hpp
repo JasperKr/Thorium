@@ -12,7 +12,7 @@
 namespace Engine {
 
 struct Model {
-  auto DrawGUI() const -> void {}
+  auto DrawGUI(flecs::entity entity) const -> void {}
 };
 
 static const Type modelType = Type("Model");

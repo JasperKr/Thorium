@@ -75,7 +75,8 @@ inline auto ChangeMouseState(ImGuiIO &inout) -> Error {
       Mouse::SetVisible(false);
     } else {
       Mouse::SetVisible(true);
-      const auto &imgui_cursor_to_mouse_cursor = ::Gui::GetImGuiCursorMap();
+      const auto &imgui_cursor_to_mouse_cursor =
+          Engine::Gui::GetImGuiCursorMap();
 
       const auto &iterator = imgui_cursor_to_mouse_cursor.find(imgui_cursor);
       if (iterator != imgui_cursor_to_mouse_cursor.end()) {
@@ -125,7 +126,7 @@ inline auto HandleImguiCreateTextureEvent(Graphics::GraphicsContext &context,
   texture->SetFilter(VK_FILTER_LINEAR, VK_FILTER_LINEAR,
                      VK_SAMPLER_MIPMAP_MODE_LINEAR);
 
-  Gui::ImGuiTextures.emplace(tex->GetTexID(), texture);
+  Engine::Gui::ImGuiTextures.emplace(tex->GetTexID(), texture);
 
   auto pixelSpan = std::span<uint8_t>(
       tex->Pixels,
@@ -162,9 +163,9 @@ inline auto HandleImguiDestroyTextureEvent(ImTextureData *tex) -> Error {
     return Error::Create("Attempted to destroy null ImGui texture.");
   }
 
-  auto iter = Gui::ImGuiTextures.find(tex->GetTexID());
-  if (iter != Gui::ImGuiTextures.end()) {
-    Gui::ImGuiTextures.erase(iter);
+  auto iter = Engine::Gui::ImGuiTextures.find(tex->GetTexID());
+  if (iter != Engine::Gui::ImGuiTextures.end()) {
+    Engine::Gui::ImGuiTextures.erase(iter);
   }
 
   tex->SetTexID(0);
@@ -285,7 +286,7 @@ inline auto SetupTemporaryCommandLists(ImDrawData *drawData,
 inline auto DrawTemporaryCommandLists(Graphics::GraphicsContext &ctx,
                                       ImDrawData *drawData) -> Error {
 
-  Graphics::DynamicRendering::SetShader(::Gui::ImGuiShaderRGBA8);
+  Graphics::DynamicRendering::SetShader(Engine::Gui::ImGuiShaderRGBA8);
 
   for (int i = 0; drawData->CmdListsCount > i; ++i) {
     const auto &temporaryCommandList = TemporaryCommandLists[i];
@@ -320,7 +321,7 @@ inline auto DrawTemporaryCommandLists(Graphics::GraphicsContext &ctx,
 
         auto texRef = Ref<Graphics::Texture>(texture);
         static auto key = Graphics::ResourceKey{"MainTexture"};
-        auto sendResult = ::Gui::ImGuiShaderRGBA8->Send(key, texRef);
+        auto sendResult = Engine::Gui::ImGuiShaderRGBA8->Send(key, texRef);
         if (Error::IsError(sendResult)) {
           return sendResult;
         }
@@ -472,7 +473,7 @@ auto KeyPressed(lua_State *state) -> int {
   auto scancode = static_cast<SDL_Scancode>(scancodeIterator->second);
 
   auto &inout = ImGui::GetIO();
-  auto imkey = ::Gui::KeyEventToImguiKey(keycode, scancode);
+  auto imkey = Engine::Gui::KeyEventToImguiKey(keycode, scancode);
 
   inout.AddKeyEvent(imkey, true);
 
@@ -502,7 +503,7 @@ auto KeyReleased(lua_State *state) -> int {
   auto scancode = static_cast<SDL_Scancode>(scancodeIterator->second);
 
   auto &inout = ImGui::GetIO();
-  auto imkey = ::Gui::KeyEventToImguiKey(keycode, scancode);
+  auto imkey = Engine::Gui::KeyEventToImguiKey(keycode, scancode);
 
   inout.AddKeyEvent(imkey, false);
 
@@ -531,7 +532,7 @@ auto MouseWheelMoved(lua_State *state) -> int {
 }
 
 auto Shutdown(lua_State *state) -> int {
-  auto shutdownResult = Gui::ShutdownImGui();
+  auto shutdownResult = Engine::Gui::ShutdownImGui();
   if (Error::IsError(shutdownResult)) {
     return luaL_error(state, "Failed to shutdown ImGui: %s",
                       shutdownResult.message.c_str());

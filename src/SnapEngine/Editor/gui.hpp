@@ -5,60 +5,20 @@
 #include "Modules/Peripherals/mouse.hpp"
 #include "Modules/error.hpp"
 #include "SDL3/SDL_keycode.h"
-#include "guiState.h"
 #include "imgui.h"
-#include <string>
 #include <vector>
 
 #include "lua.hpp"
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wc23-extensions"
-// NOLINTNEXTLINE
-constexpr unsigned char data[] = {
-#embed "guiState.h"
-};
-#pragma clang diagnostic pop
+namespace Engine::Gui {
 
-// NOLINTNEXTLINE
-const std::string dataView{reinterpret_cast<const char *>(data), sizeof(data)};
-
-inline auto GetGuiState() -> GuiState & {
-  static GuiState guiState{};
-  return guiState;
-}
-
-// code without #...
-const std::string filtered = []() -> std::string {
-  std::string result;
-  bool skip = false;
-  for (size_t i = 0; i < dataView.size(); ++i) {
-    if (i + 1 < dataView.size() && dataView[i] == '#') {
-      skip = true;
-      continue;
-    }
-    if (dataView[i] == '\n') {
-      skip = false;
-    }
-    if (!skip) {
-      result += dataView[i];
-    }
-  }
-  return result;
-}();
-
-const auto luaStateDefinition =
-    "local ffi = require(\"ffi\")\nffi.cdef [[\n" + filtered + "]]";
-
-namespace Gui {
+auto LoadGUIState(lua_State *state) -> Error;
 
 // NOLINTBEGIN
 extern Ref<Graphics::Shader> ImGuiShaderRGBA8;
 extern Ref<Graphics::Shader> ImGuiShaderA8;
 extern std::vector<std::vector<unsigned char>> ImGuiFonts;
 // NOLINTEND
-
-auto LoadGUIState(lua_State *state) -> Result<GuiState>;
 
 inline auto KeyEventToImguiKey(SDL_Keycode keycode, SDL_Scancode scancode)
     -> ImGuiKey {
@@ -348,4 +308,4 @@ extern std::unordered_map<ImTextureID, Ref<Graphics::Texture>>
 auto LoadImGuiCursorMap() -> Error;
 auto ShutdownImGui() -> Error;
 
-} // namespace Gui
+} // namespace Engine::Gui

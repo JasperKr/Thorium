@@ -1,4 +1,5 @@
 #include "scene.hpp"
+#include "Editor/editor.hpp"
 #include "Graphics/draw.hpp"
 #include "Graphics/dynamicRendering.hpp"
 #include "Graphics/graphics.hpp"
@@ -9,7 +10,6 @@
 #include "Graphics/uniformWriter.hpp"
 #include "Modules/Math/matrix.hpp"
 #include "Modules/bindings.hpp"
-#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Modules/reflectBindings.hpp"
@@ -27,11 +27,11 @@
 #include "Scene/Lights/sphereLight.hpp"
 #include "Scene/Lights/spotLight.hpp"
 #include "Scene/camera.hpp"
+#include "Scene/displayName.hpp"
 #include "Scene/environment.hpp"
 #include "Scene/frustum.hpp"
 #include "Scene/node.hpp"
 #include "Scene/transform.hpp"
-#include "Scene/userdata.hpp"
 #include "Wrap/wrap.hpp"
 #include "Wrap/wrap_engine.hpp"
 #include "material.hpp"
@@ -39,13 +39,11 @@
 #include <algorithm>
 #include <array>
 #include <cassert>
-#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <flecs.h>
 #include <imgui.h>
 #include <lua.hpp>
-#include <numbers>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -54,8 +52,6 @@
 #include "../Snap/Modules/Peripherals/keyboard.hpp"
 
 namespace Engine {
-// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
-inline flecs::entity SelectedEntity;
 
 auto LuaScene::LoadBinding(lua_State *state) -> int {
   Bindings::LuaBoundStruct<Scene> bindings("Scene");
@@ -66,263 +62,6 @@ auto LuaScene::LoadBinding(lua_State *state) -> int {
   bindings.Register(state);
 
   return 0;
-}
-
-auto DrawEntity(const flecs::entity &entity) -> void {
-  const char *entityName = entity.name();
-
-  if (entityName == nullptr || std::string_view(entityName).empty()) {
-    if (entity != flecs::ChildOf) {
-      entityName = "Unnamed Component";
-    } else {
-      entityName = "Unnamed Entity";
-    }
-  }
-
-  ImGui::Text("%s", entityName);
-  if (ImGui::IsItemClicked()) {
-    SelectedEntity = entity;
-  }
-
-  entity.each([&](flecs::id identifier) -> auto {
-    if (identifier.is_entity()) {
-      auto componentEntity = identifier.entity();
-
-      if (componentEntity != flecs::ChildOf && componentEntity.is_valid()) {
-        const char *componentName = componentEntity.name();
-        if (componentName == nullptr ||
-            std::string_view(componentName).empty()) {
-          componentName = "Unnamed Component";
-        }
-        ImGui::TextDisabled(" - %s", componentName);
-
-        if (ImGui::IsItemClicked()) {
-          SelectedEntity = componentEntity;
-        }
-      }
-    }
-  });
-}
-
-inline auto fuzzyMatch(const std::string_view &pattern,
-                       const std::string_view &str) -> bool {
-  size_t index = 0;
-  for (char character : str) {
-    if (index < pattern.size() &&
-        tolower(character) == tolower(pattern[index])) {
-      ++index;
-    }
-  }
-  return index == pattern.size();
-}
-
-enum class MatchType : uint8_t {
-  This,
-  Child,
-  None,
-};
-
-inline auto matchesRecursive(const flecs::entity &entity,
-                             const std::string_view &filter) -> MatchType {
-  if (filter.empty()) {
-    return MatchType::This; // If filter is empty, match all entities
-  }
-
-  if (fuzzyMatch(filter, std::string_view(entity.name()))) {
-    return MatchType::This;
-  }
-
-  auto matches = MatchType::None;
-  entity.children([&](flecs::entity child) -> void {
-    if (matches != MatchType::None) {
-      return; // If a match has already been found, skip further checks
-    }
-
-    if (matchesRecursive(child, filter) != MatchType::None) {
-      matches = MatchType::Child;
-    }
-  });
-
-  return matches;
-}
-
-auto DrawEntityHierarchy(const flecs::entity &entity, std::string_view filter)
-    -> void {
-
-  auto match = matchesRecursive(entity, filter);
-  if (match == MatchType::None) {
-    return; // Skip entities that don't match the filter
-  }
-
-  const char *entityName = entity.name();
-
-  if (strcmp(entityName, "flecs") == 0 || strcmp(entityName, "Engine") == 0) {
-    return; // Skip internal flecs root entity
-  }
-
-  // Skip systems
-  if (entity.has(flecs::System)) {
-    return;
-  }
-
-  DrawEntity(entity);
-
-  if (match == MatchType::This) {
-    // If this entity matches, all children should be shown regardless of their names
-    filter = "";
-  }
-
-  entity.children([&](flecs::entity child) -> void {
-    ImGui::Indent();
-    DrawEntityHierarchy(child, filter);
-    ImGui::Unindent();
-  });
-}
-
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
-auto Scene::DrawUiElement() const -> Error {
-  constexpr float axisLength = 1.0F;
-  constexpr float axisThickness = 4.0F;
-
-  const Math::Vec3 origin{0.0F, 0.0F, 0.0F};
-  auto &lineDrawer = Renderer::RendererInstance.GetLineDrawer();
-
-  // lineDrawer.OverlayLine(origin, Math::Vec3{axisLength, 0.0F, 0.0F},
-  //                        Math::Vec4{1.0F, 0.0F, 0.0F, 1.0F}, axisThickness);
-  // lineDrawer.OverlayLine(origin, Math::Vec3{0.0F, axisLength, 0.0F},
-  //                        Math::Vec4{0.0F, 1.0F, 0.0F, 1.0F}, axisThickness);
-  // lineDrawer.OverlayLine(origin, Math::Vec3{0.0F, 0.0F, axisLength},
-  //                        Math::Vec4{0.0F, 0.0F, 1.0F, 1.0F}, axisThickness);
-
-  static bool DrawBoundingBox = false;
-  static bool DrawBoundsRecursively = false;
-
-  ImGui::Begin(name.c_str());
-  auto availableHeight = ImGui::GetContentRegionAvail().y;
-
-  static char buf[256] = {};                    // NOLINT
-  ImGui::InputText("Search", buf, sizeof(buf)); // NOLINT
-  ImGui::Checkbox("Draw Bounds", &DrawBoundingBox);
-  ImGui::SameLine();
-  ImGui::Checkbox("Draw Bounds Recursively", &DrawBoundsRecursively);
-
-  ImGui::Separator();
-  ImGui::Text("Entity Hierarchy:");
-
-  if (ImGui::BeginChild("Entity Hierarchy",
-                        ImVec2(0, availableHeight * 0.5F), // NOLINT
-                        ImGuiChildFlags_Borders)) {
-
-    world.entity(0).children([&](flecs::entity entity) -> void {
-      DrawEntityHierarchy(entity, std::string_view(buf)); // NOLINT
-    });
-  }
-  ImGui::EndChild();
-
-  if (ImGui::BeginChild("Selected Entity", ImVec2(0, 0),
-                        ImGuiChildFlags_Borders)) {
-    if (SelectedEntity.is_valid()) {
-      ImGui::Separator();
-
-      DrawEntity(SelectedEntity);
-
-      SelectedEntity.each([&](flecs::id identifier) -> auto {
-        if (identifier.is_entity()) {
-          auto componentEntity = identifier.entity();
-
-          if (componentEntity != flecs::ChildOf && componentEntity.is_valid()) {
-            const char *componentName = componentEntity.name();
-            if (componentName == nullptr ||
-                std::string_view(componentName).empty()) {
-              componentName = "Unnamed Component";
-            }
-          }
-        }
-      });
-
-      if (SelectedEntity.has<Transform>() &&
-          SelectedEntity.get_ref<Transform>().get() != nullptr) {
-        auto transform = SelectedEntity.get_ref<Transform>();
-        transform->DrawGUI();
-      }
-
-      if (SelectedEntity.has<Geometry>() &&
-          SelectedEntity.get_ref<Geometry>().get() != nullptr) {
-        auto geometry = SelectedEntity.get_ref<Geometry>();
-        geometry->DrawGUI();
-      }
-
-      if (SelectedEntity.has<LevelOfDetail>() &&
-          SelectedEntity.get_ref<LevelOfDetail>().get() != nullptr) {
-        auto lod = SelectedEntity.get_ref<LevelOfDetail>();
-        lod->DrawGUI();
-      }
-
-      if (SelectedEntity.has<Userdata>() &&
-          SelectedEntity.get_ref<Userdata>().get() != nullptr) {
-        auto userdata = SelectedEntity.get_ref<Userdata>();
-        userdata->DrawGUI(nullptr);
-      }
-
-      if (SelectedEntity.has<LocalBounds>() &&
-          SelectedEntity.get_ref<LocalBounds>().get() != nullptr) {
-        auto localBounds = SelectedEntity.get_ref<LocalBounds>();
-        localBounds->DrawGUI();
-      }
-
-      if (SelectedEntity.has<WorldBounds>() &&
-          SelectedEntity.get_ref<WorldBounds>().get() != nullptr) {
-        auto worldBounds = SelectedEntity.get_ref<WorldBounds>();
-        worldBounds->DrawGUI();
-
-        if (DrawBoundingBox) {
-          auto &lineDrawer = Renderer::RendererInstance.GetLineDrawer();
-          lineDrawer.DrawWireframeBox(
-              worldBounds->Bounds.Min, worldBounds->Bounds.Max,
-              Math::Vec4{1.0F, 1.0F, 1.0F, 0.5F}, // NOLINT
-              4);
-
-          if (DrawBoundsRecursively) {
-            auto parent = SelectedEntity.parent();
-            while (parent.is_valid()) {
-              if (parent.has<WorldBounds>() &&
-                  parent.get_ref<WorldBounds>().get() != nullptr) {
-                auto parentWorldBounds = parent.get_ref<WorldBounds>();
-                lineDrawer.DrawWireframeBox(
-                    parentWorldBounds->Bounds.Min,
-                    parentWorldBounds->Bounds.Max,
-                    Math::Vec4{1.0F, 1.0F, 0.0F, 0.5F}, // NOLINT
-                    4);
-              }
-              parent = parent.parent();
-            }
-          }
-        }
-      }
-
-      if (SelectedEntity.has<Renderer::Material>() &&
-          SelectedEntity.get_ref<Renderer::Material>().get() != nullptr) {
-        auto material = SelectedEntity.get_ref<Renderer::Material>();
-        material->DrawGUI();
-      }
-
-      if (SelectedEntity.has<Renderer::LightProbe>() &&
-          SelectedEntity.get_ref<Renderer::LightProbe>().get() != nullptr) {
-        auto lightProbe = SelectedEntity.get_ref<Renderer::LightProbe>();
-        CHECK_ERR(lightProbe->DrawGui(SelectedEntity));
-      }
-
-      if (SelectedEntity.has<Engine::Light>() &&
-          SelectedEntity.get_ref<Engine::Light>().get() != nullptr) {
-        auto light = SelectedEntity.get_ref<Engine::Light>();
-        light->DrawGUI();
-      }
-    }
-  }
-  ImGui::EndChild();
-  ImGui::End();
-
-  return {};
 }
 
 struct DrawItem {
@@ -875,15 +614,18 @@ auto Scene::DrawModels(Camera &camera, Frustum &frustum,
 
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 Scene::Scene(std::string name) : name(std::move(name)) {
-  world.component<Geometry>();
-  world.component<LocalBounds>();
-  world.component<WorldBounds>();
-  world.component<Transform>();
-  world.component<LevelOfDetail>();
-  world.component<Model>();
-  world.component<Node>();
-  world.component<Shape>();
-  world.component<Userdata>();
+  AddGuiMethod<Transform>(&Transform::DrawGUI, true);
+  AddGuiMethod<Camera>(&Camera::DrawGUI, true);
+  AddGuiMethod<Renderer::Material>(&Renderer::Material::DrawGUI, true);
+  AddGuiMethod<LocalBounds>(&LocalBounds::DrawGUI);
+  AddGuiMethod<WorldBounds>(&WorldBounds::DrawGUI);
+  AddGuiMethod<Node>(&Node::DrawGUI);
+  AddGuiMethod<Light>(&Light::DrawGUI, true);
+
+  AddGuiMethod<Model>(&Model::DrawGUI);
+  AddGuiMethod<Shape>(&Shape::DrawGUI);
+  AddGuiMethod<LevelOfDetail>(&LevelOfDetail::DrawGUI);
+  AddGuiMethod<Geometry>(&Geometry::DrawGUI);
 
   auto transformSystem =
       world.system<Engine::Transform, Engine::Transform *>()
@@ -1128,7 +870,7 @@ auto LuaScene::DrawUiElement(lua_State *state) -> int {
     return luaL_error(state, "Expected a Scene object");
   }
 
-  auto drawResult = scene->DrawUiElement();
+  auto drawResult = Editor::DrawSceneHierarchy(*scene);
   if (Error::IsError(drawResult)) {
     return luaL_error(state, "%s", drawResult.ToString().c_str());
   }

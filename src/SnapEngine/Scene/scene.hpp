@@ -9,6 +9,14 @@
 #include <string>
 #include <vector>
 
+struct DrawGuiFuncStorage {
+  std::function<void(flecs::entity)> func;
+  bool defaultOpen;
+};
+
+template <typename T>
+using DrawGuiFunction = std::function<void(T *, flecs::entity)>;
+
 namespace Engine {
 
 static const Type SceneType = Type("Scene");
@@ -20,6 +28,7 @@ struct Scene : Object {
   std::string name;
   Error lastUpdateResult = Error::Success();
   flecs::entity currentEnvironment;
+  std::unordered_map<flecs::id_t, DrawGuiFuncStorage> drawFunctions;
 
   explicit Scene();
   explicit Scene(std::string name);
@@ -37,6 +46,17 @@ struct Scene : Object {
 
   auto SetEnvironment(flecs::entity environment) -> void;
   auto GetEnvironment() const -> flecs::entity;
+
+private:
+  template <typename T>
+  auto AddGuiMethod(const DrawGuiFunction<T> &drawFunction,
+                    bool defaultOpen = false) -> void {
+    drawFunctions[world.component<T>().id()] = DrawGuiFuncStorage{
+        .func = [drawFunction](flecs::entity entity) -> auto {
+          drawFunction(entity.try_get_mut<T>(), entity);
+        },
+        .defaultOpen = defaultOpen};
+  }
 };
 
 struct LuaScene : Object {

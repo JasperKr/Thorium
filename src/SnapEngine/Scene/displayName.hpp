@@ -2,14 +2,16 @@
 
 #include "Wrap/wrap.hpp"
 #include "Wrap/wrap_engine.hpp"
+#include <flecs.h>
 #include <lua.h>
 #include <string>
+
 namespace Engine {
 
 struct DisplayName {
   std::string Name;
 
-  auto DrawGUI(lua_State *state) const -> void;
+  auto DrawGUI(flecs::entity entity) const -> void;
 };
 
 const static Type DisplayNameType = Type("DisplayName");

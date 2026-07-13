@@ -26,6 +26,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <flecs.h>
+#include <imgui.h>
 #include <lauxlib.h>
 #include <lua.h>
 #include <span>
@@ -656,6 +657,31 @@ auto Camera::WriteToBuffer(const CameraMatrices &cameraMatrices,
 
   return CameraBuffer->GetBuffer()->SetData(context, span);
 }
+
+// NOLINTBEGIN
+auto Camera::DrawGUI(flecs::entity entity) -> void {
+  const int MinFOV = 1;
+  const int MaxFOV = 175;
+  const float MinNear = 0.01F;
+  const float MaxNear = 10000.0F;
+
+  ImGui::SeparatorText("Camera Settings");
+  ImGui::DragFloat("Vertical FOV", &verticalFOVDeg, 1.0F, MinFOV, MaxFOV);
+  ImGui::DragFloat("Near Plane", &NearPlane, 1.0F, MinNear, MaxNear);
+  ImGui::DragFloat("Far Plane", &FarPlane, 1.0F, MinNear, MaxNear);
+  FarPlane = std::max(FarPlane, NearPlane + 1.0F);
+
+  ImGui::SeparatorText("Post Processing Settings");
+  auto &settings = GetPostProcessingConfig();
+  ImGui::Checkbox("AGX", &settings.ApplyAGX);
+  ImGui::DragFloat("Temperature", &settings.Temperature, 0.1F, -100.0F, 100.0F);
+  ImGui::DragFloat("Tint", &settings.Tint, 0.1F, -100.0F, 100.0F);
+  ImGui::DragFloat("Contrast", &settings.Contrast, 0.01F, 0.0F, 10.0F);
+  ImGui::DragFloat("Saturation", &settings.Saturation, 0.01F, 0.0F, 10.0F);
+  ImGui::DragFloat("Vignette", &settings.Vignette, 0.01F, 0.0F, 10.0F);
+  ImGui::DragFloat("Exposure", &settings.Exposure, 0.01F, 0.0F, 10.0F);
+}
+// NOLINTEND
 
 // MARK: Lua Camera
 

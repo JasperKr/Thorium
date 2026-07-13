@@ -151,7 +151,7 @@ auto LuaMaterial::wrap_getAlphaMode(lua_State *state) -> int {
   return 1;
 }
 
-auto Material::DrawGUI() -> void {
+auto Material::DrawGUI(flecs::entity entity) -> void {
   // ImGui::Text("Cull Mode: %s", LuaCullModeEnum.ToString(cullMode).c_str());
   // ImGui::Text("Alpha Mode: %s", LuaAlphaModeEnum.ToString(alphaMode).c_str());
 

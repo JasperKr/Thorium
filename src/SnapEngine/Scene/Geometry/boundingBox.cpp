@@ -75,7 +75,7 @@ auto BoundingBox::Construct(const Transform &transform,
   Max = worldCenter + worldExtents;
 }
 
-auto BoundingBox::DrawGUI() const -> void {
+auto BoundingBox::DrawGUI(flecs::entity entity) const -> void {
   ImGui::Text("Min: (%.2f, %.2f, %.2f)", Min.x, Min.y, Min.z);
   ImGui::Text("Max: (%.2f, %.2f, %.2f)", Max.x, Max.y, Max.z);
 }

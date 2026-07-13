@@ -9,7 +9,7 @@
 
 namespace Engine {
 
-auto LevelOfDetail::DrawGUI() const -> void {
+auto LevelOfDetail::DrawGUI(flecs::entity entity) const -> void {
   ImGui::Text("Transition Threshold: %.2f", TransitionThreshold);
 }
 

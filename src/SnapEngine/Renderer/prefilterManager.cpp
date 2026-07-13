@@ -481,9 +481,6 @@ auto LightprobePrefilterManager::PrefilterEnvironment(
     cubemapTransfrom.UpdateLocalMatrix();
     cubemapTransfrom.UpdateWorldMatrix(nullptr);
 
-    PrintAlways("Transform: \n{}",
-                cubemapTransfrom.GetWorldMatrix().ToString());
-
     Engine::CameraMatrices drawMatrices = CameraMatrices;
 
     const auto &worldMatrix = cubemapTransfrom.GetWorldMatrix();

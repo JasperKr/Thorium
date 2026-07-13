@@ -1,4 +1,5 @@
 #include "gui.hpp"
+#include "Modules/error.hpp"
 #include "Modules/filesystem.hpp"
 #include "Modules/object.hpp"
 #include "SDL3/SDL_clipboard.h"
@@ -10,7 +11,7 @@
 #include <cassert>
 #include <unordered_map>
 
-namespace Gui {
+namespace Engine::Gui {
 
 // NOLINTBEGIN
 Ref<Graphics::Shader> ImGuiShaderRGBA8;
@@ -20,23 +21,8 @@ std::vector<std::vector<unsigned char>> ImGuiFonts{};
 
 auto MainWindow() -> void {}
 
-auto LoadGUIState(lua_State *state) -> Result<GuiState> {
-  auto loadResult = LoadImGuiCursorMap();
-  if (Error::IsError(loadResult)) {
-    return loadResult;
-  }
-
-  GuiState guiState{};
-
-  // Load GUI state from Lua
-  if (luaL_dostring(state, luaStateDefinition.c_str()) != LUA_OK) {
-    const char *errorMessage = lua_tostring(state, -1);
-    lua_pop(state, 1); // Remove error message from stack
-
-    return Error::Unexpected(
-        "Failed to load GUI state definition: " +
-        std::string(errorMessage != nullptr ? errorMessage : "Unknown error"));
-  }
+auto LoadGUIState(lua_State *state) -> Error {
+  CHECK_ERR(LoadImGuiCursorMap());
 
   IMGUI_CHECKVERSION();
   ImGui::CreateContext();
@@ -85,12 +71,8 @@ auto LoadGUIState(lua_State *state) -> Result<GuiState> {
 
   const auto &sourceDirectory = Filesystem::GetSourceDirectory();
   const std::string &fontPath = "Graphics/Assets/user_interface_font.ttf";
-  const auto fontDataResult = Filesystem::ReadFile(fontPath);
-  if (Error::IsError(fontDataResult)) {
-    return Error::Unexpected("Failed to load font file:'" +
-                             fontDataResult.error().message);
-  }
-  const auto &fontData = fontDataResult.value();
+  const auto &fontData = CHECK_RES(Filesystem::ReadFile(fontPath));
+
   ImGuiFonts.emplace_back(fontData);
 
   ImFont *font = inout.Fonts->AddFontFromMemoryTTF(
@@ -108,24 +90,13 @@ auto LoadGUIState(lua_State *state) -> Result<GuiState> {
 
   auto ctx = *Graphics::GetCurrentGraphicsContext();
 
-  auto rgba8CreationResult = Graphics::Shader::Create(
-      ctx, "Scripting/Graphics/Shaders/GUI/ImGuiRGBA8", "Imgui rgba8 shader");
-  if (Error::IsError(rgba8CreationResult)) {
-    return Error::Unexpected("Failed to create ImGui RGBA8 shader: " +
-                             rgba8CreationResult.error().message);
-  }
+  ImGuiShaderRGBA8 = CHECK_RES(Graphics::Shader::Create(
+      ctx, "Scripting/Graphics/Shaders/GUI/ImGuiRGBA8", "Imgui rgba8 shader"));
 
-  auto a8CreationResult = Graphics::Shader::Create(
-      ctx, "Scripting/Graphics/Shaders/GUI/ImGuiA8", "Imgui a8 shader");
-  if (Error::IsError(a8CreationResult)) {
-    return Error::Unexpected("Failed to create ImGui A8 shader: " +
-                             a8CreationResult.error().message);
-  }
+  ImGuiShaderA8 = CHECK_RES(Graphics::Shader::Create(
+      ctx, "Scripting/Graphics/Shaders/GUI/ImGuiA8", "Imgui a8 shader"));
 
-  ImGuiShaderRGBA8 = rgba8CreationResult.value();
-  ImGuiShaderA8 = a8CreationResult.value();
-
-  return guiState;
+  return {};
 }
 
 auto LoadImGuiCursorMap() -> Error {
@@ -182,4 +153,4 @@ auto ShutdownImGui() -> Error {
   return Error::Success();
 }
 
-} // namespace Gui
+} // namespace Engine::Gui
