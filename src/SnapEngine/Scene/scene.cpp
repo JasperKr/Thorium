@@ -753,7 +753,9 @@ Scene::Scene(std::string name) : name(std::move(name)) {
         auto &renderer = Renderer::RendererInstance;
 
         if (geometry.mesh->GetBLAS() != nullptr) {
-          if (geometry.tlasIndex == -1) {
+          if (!geometry.hasTlasIndex) {
+            geometry.hasTlasIndex = true;
+
             auto result = renderer.GetSceneTLAS()->AddInstance(
                 geometry.mesh->GetBLAS(), worldMatrix);
 

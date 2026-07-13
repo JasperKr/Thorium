@@ -111,6 +111,14 @@ do
   local isDown = {}
   function snap.mousepressed(x, y, button)
     isDown[button] = true
+
+    local mx, my = snap.mouse.getPosition()
+    mx = mx / camera:getWidth()
+    my = my / camera:getHeight()
+
+    if button == 1 and mx >= 0 and mx <= 1 and my >= 0 and my <= 1 then
+      snap.renderer.pickObject(camera, mx, my)
+    end
   end
 
   function snap.mousereleased(x, y, button)

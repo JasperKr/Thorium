@@ -4,6 +4,7 @@
 #include "Modules/object.hpp"
 #include "Wrap/wrap.hpp"
 #include "Wrap/wrap_engine.hpp"
+#include <cstdint>
 #include <flecs.h>
 #include <lua.hpp>
 namespace Engine {
@@ -12,7 +13,8 @@ static const Type geometryType = Type("Geometry");
 
 struct Geometry {
   Ref<Graphics::Mesh> mesh;
-  long tlasIndex = -1;
+  uint32_t tlasIndex = 0;
+  bool hasTlasIndex = false;
 
   auto DrawGUI(flecs::entity entity) const -> void;
 };

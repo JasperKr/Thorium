@@ -28,6 +28,20 @@ struct Quaternion {
   }
   [[nodiscard]] auto Ptr() const -> const Scalar * { return &x; }
   [[nodiscard]] auto Ptr() -> Scalar * { return &x; }
+
+  auto operator==(const Quaternion &other) const -> bool {
+    return x == other.x && y == other.y && z == other.z && w == other.w;
+  }
+
+  auto operator!=(const Quaternion &other) const -> bool {
+    return !(*this == other);
+  }
+
+  auto operator*(const Quaternion &other) const -> Quaternion {
+    return Multiply(other);
+  }
+
+  auto operator*(const Vec3 &vec) const -> Vec3 { return RotateVector(vec); }
 };
 
 } // namespace Math

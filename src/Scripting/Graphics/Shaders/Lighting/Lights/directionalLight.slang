@@ -4,30 +4,7 @@ import light;
 import pixel;
 import utils;
 import physicallyBased;
-
-RaytracingAccelerationStructure SceneBVH;
-
-bool traceRayFirstHit(RaytracingAccelerationStructure sceneBVH,
-                      float3 rayOrigin, float3 rayDir, float range) {
-  RayDesc ray;
-  ray.Origin = rayOrigin;
-  ray.TMin = 0.01f;
-  ray.Direction = rayDir;
-  ray.TMax = range;
-
-  RayQuery<RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES |
-           RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH> q;
-
-  q.TraceRayInline(sceneBVH,
-                   RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES |
-                       RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH,
-                   0xff, ray);
-
-  while (q.Proceed()) {
-  }
-
-  return q.CommittedStatus() == COMMITTED_TRIANGLE_HIT;
-}
+import raytracing;
 
 public struct DirectionalLight : ILight {
   public Light Base;
@@ -52,8 +29,13 @@ public struct DirectionalLight : ILight {
         SampleBRDF(ViewDirection, WorldForward, NoV, pixel.Normal,
                    pixel.Roughness, pixel.Fresnel0, Diffuse, NdotL, LambdaV);
 
-    bool inShadow =
-        traceRayFirstHit(SceneBVH, WorldPosition, WorldForward, 1e3f);
+    RayDesc ray;
+    ray.Origin = WorldPosition + pixel.Normal * 1e-3f;
+    ray.Direction = WorldForward;
+    ray.TMin = 0.0f;
+    ray.TMax = 1e3f;
+
+    bool inShadow = TraceShadowRay(SceneBVH, ray);
 
     return Color * brdf * (inShadow ? 0.0f : 1.0f);
   }

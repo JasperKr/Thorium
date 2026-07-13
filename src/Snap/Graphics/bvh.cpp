@@ -696,9 +696,9 @@ auto TLAS::AddInstance(const Ref<BLAS> &blas, const Math::Matrix4x4 &transform)
 
   // clang-format off
   instance.transform = VkTransformMatrixKHR{
-      transform.At(0, 0), transform.At(0, 1), transform.At(0, 2), transform.At(0, 3),
-      transform.At(1, 0), transform.At(1, 1), transform.At(1, 2), transform.At(1, 3),
-      transform.At(2, 0), transform.At(2, 1), transform.At(2, 2), transform.At(2, 3),
+      transform.At(0, 0), transform.At(1, 0), transform.At(2, 0), transform.At(3, 0),
+      transform.At(0, 1), transform.At(1, 1), transform.At(2, 1), transform.At(3, 1),
+      transform.At(0, 2), transform.At(1, 2), transform.At(2, 2), transform.At(3, 2),
   };
   // clang-format on
 
@@ -730,11 +730,10 @@ auto TLAS::UpdateInstance(uint32_t index, const Math::Matrix4x4 &transform)
 
   // clang-format off
   instance.transform = VkTransformMatrixKHR{
-      transform.At(0, 0), transform.At(0, 1), transform.At(0, 2), transform.At(0, 3),
-      transform.At(1, 0), transform.At(1, 1), transform.At(1, 2), transform.At(1, 3),
-      transform.At(2, 0), transform.At(2, 1), transform.At(2, 2), transform.At(2, 3),
+      transform.At(0, 0), transform.At(1, 0), transform.At(2, 0), transform.At(3, 0),
+      transform.At(0, 1), transform.At(1, 1), transform.At(2, 1), transform.At(3, 1),
+      transform.At(0, 2), transform.At(1, 2), transform.At(2, 2), transform.At(3, 2),
   };
-
   // clang-format on
 }
 

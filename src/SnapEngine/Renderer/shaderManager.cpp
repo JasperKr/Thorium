@@ -1,4 +1,6 @@
 #include "shaderManager.hpp"
+#include "Graphics/graphics.hpp"
+#include "Graphics/shader.hpp"
 
 namespace Engine::Renderer {
 

@@ -3,12 +3,15 @@
 #include "Modules/Math/math.hpp"
 #include "Modules/Math/mathTypes.hpp"
 #include "Modules/Math/matrix.hpp"
+#include "Modules/Math/quaternion.hpp"
 #include "Wrap/wrap.hpp"
 #include "Wrap/wrap_engine.hpp"
+#include "flecs/addons/cpp/c_types.hpp"
 #include <format>
 #include <imgui.h>
 #include <lua.h>
 #include <lua.hpp>
+#include <numbers>
 
 namespace Engine {
 // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers, readability-magic-numbers)
@@ -261,6 +264,12 @@ auto Transform::UpdateWorldMatrix(const Transform *parent) -> void {
   WorldDirty = false;
 }
 
+enum class RotationMode : uint8_t {
+  EulerRadians,
+  EulerDegrees,
+  Quaternion,
+};
+
 auto Transform::DrawGUI(flecs::entity entity) -> void {
   ImGuiDataType dataType = sizeof(Math::Scalar) == sizeof(double)
                                ? ImGuiDataType_Double
@@ -270,21 +279,95 @@ auto Transform::DrawGUI(flecs::entity entity) -> void {
     LocalDirty = true;
   }
 
-  auto eulerRotation = Math::Conversions::ToEuler(Rotation);
-  if (ImGui::DragScalarN("Rotation (x, y, z)", dataType,
-                         (void *)eulerRotation.Ptr(), 3, 0.01F)) {
-    Rotation = Math::Conversions::ToQuaternion(eulerRotation);
-    LocalDirty = true;
+  static RotationMode rotationMode = RotationMode::EulerDegrees;
+  static flecs::id_t lastEntity = 0;
+  static Math::EulerAngle lastEulerRotation;
+  static Math::Quaternion lastQuaternionRotation;
+
+  if (ImGui::BeginCombo("Rotation Mode", [&]() -> const char * {
+        switch (rotationMode) {
+        case RotationMode::EulerRadians:
+          return "Euler Radians";
+        case RotationMode::EulerDegrees:
+          return "Euler Degrees";
+        case RotationMode::Quaternion:
+          return "Quaternion";
+        default:
+          return "Unknown";
+        }
+      }())) {
+    if (ImGui::Selectable("Euler Radians")) {
+      rotationMode = RotationMode::EulerRadians;
+    }
+    if (ImGui::Selectable("Euler Degrees")) {
+      rotationMode = RotationMode::EulerDegrees;
+    }
+    if (ImGui::Selectable("Quaternion")) {
+      rotationMode = RotationMode::Quaternion;
+    }
+    ImGui::EndCombo();
+  }
+
+  // Load rotation from entity, if it has changed
+  if (lastEntity != entity.id()) {
+    lastEntity = entity.id();
+    lastEulerRotation = Math::Conversions::ToEuler(Rotation).ToDegrees();
+    lastQuaternionRotation = Rotation;
+  }
+
+  // Keep up to date if, for example, physics is updating the rotation
+  if (Rotation != lastQuaternionRotation) {
+    lastQuaternionRotation = Rotation;
+    lastEulerRotation = Math::Conversions::ToEuler(Rotation).ToDegrees();
+  }
+
+  switch (rotationMode) {
+  case RotationMode::EulerRadians: {
+    if (ImGui::DragScalarN("Euler Rotation", dataType,
+                           (void *)lastEulerRotation.Ptr(), 3, 0.01F)) {
+      lastEulerRotation.SanitiseAsRadians();
+      Rotation = Math::Conversions::ToQuaternion(lastEulerRotation);
+
+      // Make sure we don't trigger the if-statement above on the next frame
+      lastQuaternionRotation = Rotation;
+      LocalDirty = true;
+    }
+    break;
+  }
+  case RotationMode::EulerDegrees: {
+    if (ImGui::DragScalarN("Euler Rotation", dataType,
+                           (void *)lastEulerRotation.Ptr(), 3, 1.0F)) {
+      lastEulerRotation.SanitiseAsDegrees();
+      Rotation = Math::Conversions::ToQuaternion(lastEulerRotation.ToRadians());
+
+      // Make sure we don't trigger the if-statement above on the next frame
+      lastQuaternionRotation = Rotation;
+      LocalDirty = true;
+    }
+    break;
+  }
+  case RotationMode::Quaternion:
+    if (ImGui::DragScalarN("Quaternion Rotation", dataType,
+                           (void *)Rotation.Ptr(), 4, 0.01F)) {
+      LocalDirty = true;
+      lastQuaternionRotation = Rotation;
+    }
+    break;
   }
 
   if (ImGui::DragScalarN("Scale", dataType, (void *)Scale.Ptr(), 3, 0.1F)) {
     LocalDirty = true;
   }
 
-  ImGui::Text("%s",
-              std::format("Local Matrix:\n{}", LocalMatrix.ToString()).c_str());
-  ImGui::Text("%s",
-              std::format("World Matrix:\n{}", WorldMatrix.ToString()).c_str());
+  if (ImGui::TreeNode("Local Matrix")) {
+    ImGui::Text("%s", LocalMatrix.ToString().c_str());
+    ImGui::TreePop();
+  }
+
+  if (ImGui::TreeNode("World Matrix")) {
+    ImGui::Text("%s", WorldMatrix.ToString().c_str());
+    ImGui::TreePop();
+  }
 }
 
 auto LuaTransform::GetUp(lua_State *state) -> int {

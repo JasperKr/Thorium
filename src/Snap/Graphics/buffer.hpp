@@ -40,6 +40,7 @@ struct BufferReadback : Object {
     return BufferReadback::GetType();
   }
 
+  Ref<struct Buffer> buffer;
   Ref<Data::ByteData> data;
   bool completed = false;
   Error error = Error::Success();

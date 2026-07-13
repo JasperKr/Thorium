@@ -1,6 +1,7 @@
 #pragma once
 
 #include "mathTypes.hpp"
+#include <cmath>
 #include <numbers>
 #include <span>
 #include <string>
@@ -51,6 +52,22 @@ struct EulerAngle {
 
   [[nodiscard]] constexpr auto ToDegrees() const -> EulerAngle {
     return {RadToDeg(yaw), RadToDeg(pitch), RadToDeg(roll)};
+  }
+
+  constexpr auto SanitiseAsRadians() -> void {
+    constexpr auto limit = static_cast<Scalar>(2.0F * std::numbers::pi);
+
+    yaw = std::fmod(yaw, limit);
+    pitch = std::fmod(pitch, limit);
+    roll = std::fmod(roll, limit);
+  }
+
+  constexpr auto SanitiseAsDegrees() -> void {
+    constexpr auto limit = static_cast<Scalar>(360.0F);
+
+    yaw = std::fmod(yaw, limit);
+    pitch = std::fmod(pitch, limit);
+    roll = std::fmod(roll, limit);
   }
 };
 

@@ -318,6 +318,12 @@ struct LuaCamera : LuaWrap::LuaECSObject {
   static auto GetDimensions(lua_State *state) -> int;
   static auto SetDimensions(lua_State *state) -> int;
 
+  static auto GetWidth(lua_State *state) -> int;
+  static auto SetWidth(lua_State *state) -> int;
+
+  static auto GetHeight(lua_State *state) -> int;
+  static auto SetHeight(lua_State *state) -> int;
+
   static auto GetPersistentTextureSettings(lua_State *state) -> int;
   static auto SetPersistentTextureSettings(lua_State *state) -> int;
 };

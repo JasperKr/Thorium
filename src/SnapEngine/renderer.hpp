@@ -65,18 +65,6 @@ const std::vector<Graphics::BufferComponent> ModelTransformBufferComponents = {
     },
 };
 
-/*
-struct LightProbe {
-  float3 position;
-  int index;
-
-  // Sphere
-  // same as above, but in a sphere
-  float radius;
-  float innerRadius;
-};
-*/
-
 const std::vector<Graphics::BufferComponent> LightProbeBufferComponents = {
     Graphics::BufferComponent{
         .name = "Position",

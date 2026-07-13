@@ -1,8 +1,6 @@
 #pragma once
 
-#include "Graphics/graphicsContext.hpp"
 #include "Graphics/shader.hpp"
-#include <string_view>
 namespace Engine::Renderer {
 
 enum class ShaderKey : uint8_t {
@@ -20,6 +18,7 @@ enum class ShaderKey : uint8_t {
   PrefilterRadiance,
   PrefilterIrradiance,
   StoreEnvironmentMap,
+  ObjectPicker,
 };
 
 struct ShaderConfiguration {
@@ -61,6 +60,8 @@ const std::unordered_map<ShaderKey, ShaderConfiguration> ShaderConfigurations =
          {.path = "Scripting/Graphics/Shaders/IBL/filterIrradiance.slang"}},
         {ShaderKey::StoreEnvironmentMap,
          {.path = "Scripting/Graphics/Shaders/IBL/storeEnvMap.slang"}},
+        {ShaderKey::ObjectPicker,
+         {.path = "Scripting/Graphics/Shaders/Editor/objectPicker.slang"}},
 };
 
 struct ShaderManager {

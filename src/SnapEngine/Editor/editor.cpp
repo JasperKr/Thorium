@@ -1,10 +1,21 @@
 #include "editor.hpp"
+#include "Graphics/buffer.hpp"
+#include "Graphics/draw.hpp"
+#include "Graphics/uniformWriter.hpp"
+#include "Modules/Math/vector.hpp"
 #include "Modules/console.hpp"
+#include "Modules/error.hpp"
+#include "Modules/object.hpp"
+#include "Renderer/shaderManager.hpp"
+#include "Scene/Geometry/geometry.hpp"
 #include "Scene/scene.hpp"
 #include "renderer.hpp"
 #include <format>
 #include <imgui.h>
 #include <lua.h>
+#include <mutex>
+#include <string>
+#include <string_view>
 
 namespace Engine::Editor {
 
@@ -137,6 +148,23 @@ auto DrawEntityHierarchy(const flecs::entity &entity, std::string_view filter)
 
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 auto DrawSceneHierarchy(const Engine::Scene &scene) -> Error {
+  auto pickReadbackResult =
+      CHECK_RES(Editor::GetEditorInstance().PopEntityPickResult());
+
+  if (pickReadbackResult != std::nullopt) {
+    PrintAlways("Pick Readback completed successfully.");
+
+    auto pickResult = pickReadbackResult.value();
+
+    scene.world.each<Geometry>(
+        [&](flecs::entity entity, const Geometry &geometry) -> void {
+          if (geometry.hasTlasIndex &&
+              geometry.tlasIndex == pickResult.InstanceID) {
+            SelectedEntity = entity;
+          }
+        });
+  }
+
   constexpr float axisLength = 1.0F;
   constexpr float axisThickness = 4.0F;
 
@@ -236,4 +264,103 @@ auto DrawSceneHierarchy(const Engine::Scene &scene) -> Error {
 
   return {};
 }
+
+auto Editor::PickEntity(const Camera &camera,
+                        const Graphics::GraphicsContext &context,
+                        Math::Vec2 mousePos) -> Error {
+
+  auto shader =
+      CHECK_RES(Renderer::RendererInstance.GetShaderManager().GetShader(
+          Renderer::ShaderKey::ObjectPicker));
+
+  auto &tlas = Renderer::RendererInstance.GetSceneTLAS();
+
+  Graphics::BufferCreationInfo info{
+      .size = sizeof(uint32_t) * 4,
+      .usage =
+          VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+      .stagingBuffer = true,
+      .persistentMapping = true,
+      .debugName = "Entity Pick Buffer",
+  };
+
+  PrintAlways("Creating pick buffer with size: {}", info.size);
+
+  auto pickBuffer = CHECK_RES(Graphics::Buffer::Create(context, info));
+
+  CHECK_ERR(shader->Send(Graphics::ResourceKey{"SceneBVH"}, tlas));
+  CHECK_ERR(shader->Send(Graphics::ResourceKey{"CameraData"},
+                         camera.GetBuffer()->GetBuffer()));
+  CHECK_ERR(shader->Send(Graphics::ResourceKey{"TraceResults"}, pickBuffer));
+
+  CHECK_ERR(Graphics::UniformWriter::Send(
+      shader, Graphics::ResourceKey{"PushConstants", "uv"}, mousePos));
+
+  Graphics::DynamicRendering::SetShader(shader);
+
+  CHECK_ERR(Graphics::Dispatch(context, {1, 1, 1}));
+
+  auto readback = CHECK_RES(pickBuffer->Readback(context));
+
+  PickEntityReadback pickReadback{
+      .Buffer = pickBuffer,
+      .Readback = readback,
+  };
+
+  PickedEntities.push(pickReadback);
+
+  return {};
+}
+
+auto Editor::PopEntityPickResult() -> Result<std::optional<PickEntityResult>> {
+  if (PickedEntities.empty()) {
+    return std::nullopt;
+  }
+
+  auto pickReadback = PickedEntities.front();
+
+  if (!pickReadback.Readback.isValid()) {
+    PickedEntities.pop();
+    return std::nullopt;
+  }
+
+  std::lock_guard<std::mutex> lock(pickReadback.Readback->mutex);
+
+  if (!pickReadback.Readback->completed) {
+    return std::nullopt;
+  }
+
+  PickedEntities.pop();
+
+  if (Error::IsError(pickReadback.Readback->error)) {
+    return pickReadback.Readback->error;
+  }
+
+  auto data = pickReadback.Readback->data;
+
+  struct PickResult {
+    uint32_t instanceID;
+    uint32_t primitiveID;
+    uint32_t hit;
+    uint32_t padding;
+  };
+
+  const auto *pickResult = // NOLINTNEXTLINE
+      reinterpret_cast<const PickResult *>(data->GetData());
+
+  if (pickResult->hit == 0) {
+    PrintAlways("No entity was picked.");
+    return std::nullopt;
+  }
+
+  PrintAlways("Picked instance ID: {}, primitive ID: {}",
+              pickResult->instanceID, pickResult->primitiveID);
+
+  PickEntityResult pickedEntity;
+  pickedEntity.PrimitiveID = pickResult->primitiveID;
+  pickedEntity.InstanceID = pickResult->instanceID;
+
+  return pickedEntity;
+}
+
 } // namespace Engine::Editor

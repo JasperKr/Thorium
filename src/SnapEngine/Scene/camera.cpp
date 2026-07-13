@@ -870,6 +870,50 @@ auto LuaCamera::SetDimensions(lua_State *state) -> int {
   return 0;
 }
 
+auto LuaCamera::GetWidth(lua_State *state) -> int {
+  auto *obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
+  const auto *camera = LUA_CK_NULL(obj->entity.try_get<Camera>());
+
+  const auto &size = camera->GetDimensions();
+
+  lua_pushinteger(state, size.x);
+  return 1;
+}
+
+auto LuaCamera::GetHeight(lua_State *state) -> int {
+  auto *obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
+  const auto *camera = LUA_CK_NULL(obj->entity.try_get<Camera>());
+
+  const auto &size = camera->GetDimensions();
+
+  lua_pushinteger(state, size.y);
+  return 1;
+}
+
+auto LuaCamera::SetWidth(lua_State *state) -> int {
+  auto *obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
+  auto *camera = LUA_CK_NULL(obj->entity.try_get_mut<Camera>());
+
+  const auto width = luaL_checkinteger(state, 2);
+  const auto &size = camera->GetDimensions();
+
+  camera->SetDimensions({static_cast<uint32_t>(width), size.y});
+
+  return 0;
+}
+
+auto LuaCamera::SetHeight(lua_State *state) -> int {
+  auto *obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
+  auto *camera = LUA_CK_NULL(obj->entity.try_get_mut<Camera>());
+
+  const auto height = luaL_checkinteger(state, 2);
+  const auto &size = camera->GetDimensions();
+
+  camera->SetDimensions({size.x, static_cast<uint32_t>(height)});
+
+  return 0;
+}
+
 const std::unordered_map<std::string_view,
                          bool Camera::PersistentTextureSettings::*>
     persistentTextureMap = {
@@ -943,6 +987,10 @@ auto GetLuaCameraClass() -> ::LuaWrap::LuaClass {
               {"getRendertarget", LuaCamera::GetRendertarget},
               {"getDimensions", LuaCamera::GetDimensions},
               {"setDimensions", LuaCamera::SetDimensions},
+              {"getWidth", LuaCamera::GetWidth},
+              {"setWidth", LuaCamera::SetWidth},
+              {"getHeight", LuaCamera::GetHeight},
+              {"setHeight", LuaCamera::SetHeight},
               {"getPersistentTextureSettings",
                LuaCamera::GetPersistentTextureSettings},
               {"setPersistentTextureSettings",

@@ -601,10 +601,15 @@ auto Buffer::Readback(const GraphicsContext &context,
                              "small for requested readback size.");
   }
 
+  if (this->size == 0) {
+    return Error::Unexpected("Cannot readback from a buffer with size 0.");
+  }
+
   if (uploadSize == 0) {
     auto bufferReadback = Ref<BufferReadback>::Make();
     bufferReadback->data = Ref<Data::ByteData>::Make(0);
     bufferReadback->completed = true;
+    bufferReadback->buffer = Ref<Buffer>(this);
     return bufferReadback;
   }
 
@@ -654,6 +659,7 @@ auto Buffer::Readback(const GraphicsContext &context,
   auto timelineValue = Graphics::SemaphoreManager::GetSemaphoreValue();
 
   auto bufferReadback = Ref<BufferReadback>::Make();
+  bufferReadback->buffer = Ref<Buffer>(this);
   if (output.isValid()) {
     bufferReadback->data = output;
   } else {
