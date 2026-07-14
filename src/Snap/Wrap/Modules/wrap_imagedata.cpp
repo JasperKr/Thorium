@@ -71,19 +71,13 @@ auto wrap_SetPixel(lua_State *state) -> int {
   auto b = luaL_checknumber(state, 7); // NOLINT
   auto a = luaL_checknumber(state, 8); // NOLINT
 
-  auto *imagedata = LuaWrap::ObjectFromLua<::Image::ImageData>(state, 1);
-  if (imagedata == nullptr) {
-    return luaL_error(state, "Expected Imagedata object as first argument.");
-  }
+  auto imagedata =
+      LUA_CK_NULL(LuaWrap::ObjectFromLua<::Image::ImageData>(state, 1));
 
   Color color(r, g, b, a);
   Math::Uvec3 position(x_pos, y_pos, z_pos);
 
-  auto error = imagedata->SetColor(position, color);
-  if (Error::IsError(error)) {
-    return luaL_error(state, "Failed to set pixel color: %s",
-                      error.message.c_str());
-  }
+  LUA_CK_ERR(imagedata->SetColor(position, color));
 
   return 0;
 }
@@ -92,19 +86,10 @@ auto wrap_GetPixel(lua_State *state) -> int {
   auto y_pos = static_cast<uint32_t>(luaL_checkinteger(state, 3));
   auto z_pos = static_cast<uint32_t>(luaL_optinteger(state, 4, 0));
 
-  auto *imagedata = LuaWrap::ObjectFromLua<::Image::ImageData>(state, 1);
+  auto imagedata =
+      LUA_CK_NULL(LuaWrap::ObjectFromLua<::Image::ImageData>(state, 1));
 
-  if (imagedata == nullptr) {
-    return luaL_error(state, "Expected Imagedata object as first argument.");
-  }
-
-  auto result = imagedata->GetColor({x_pos, y_pos, z_pos});
-  if (Error::IsError(result)) {
-    return luaL_error(state, "Failed to get pixel color: %s",
-                      result.error().message.c_str());
-  }
-
-  auto [r, g, b, a] = result.value();
+  auto [r, g, b, a] = LUA_CK_RES(imagedata->GetColor({x_pos, y_pos, z_pos}));
 
   lua_pushnumber(state, r);
   lua_pushnumber(state, g);
@@ -114,33 +99,24 @@ auto wrap_GetPixel(lua_State *state) -> int {
   return 4;
 }
 auto wrap_GetWidth(lua_State *state) -> int {
-  auto *imagedata = LuaWrap::ObjectFromLua<::Image::ImageData>(state, 1);
-
-  if (imagedata == nullptr) {
-    return luaL_error(state, "Expected Imagedata object as first argument.");
-  }
+  auto imagedata =
+      LUA_CK_NULL(LuaWrap::ObjectFromLua<::Image::ImageData>(state, 1));
 
   lua_pushinteger(state, imagedata->GetWidth());
 
   return 1;
 }
 auto wrap_GetHeight(lua_State *state) -> int {
-  auto *imagedata = LuaWrap::ObjectFromLua<::Image::ImageData>(state, 1);
-
-  if (imagedata == nullptr) {
-    return luaL_error(state, "Expected Imagedata object as first argument.");
-  }
+  auto imagedata =
+      LUA_CK_NULL(LuaWrap::ObjectFromLua<::Image::ImageData>(state, 1));
 
   lua_pushinteger(state, imagedata->GetHeight());
 
   return 1;
 }
 auto wrap_GetFormat(lua_State *state) -> int {
-  auto *imagedata = LuaWrap::ObjectFromLua<::Image::ImageData>(state, 1);
-
-  if (imagedata == nullptr) {
-    return luaL_error(state, "Expected Imagedata object as first argument.");
-  }
+  auto imagedata =
+      LUA_CK_NULL(LuaWrap::ObjectFromLua<::Image::ImageData>(state, 1));
 
   auto format = imagedata->GetFormat();
   auto formatStr = Graphics::Format::ImageFormatToString(format);
@@ -150,11 +126,8 @@ auto wrap_GetFormat(lua_State *state) -> int {
   return 1;
 }
 auto wrap_GetDimensions(lua_State *state) -> int {
-  auto *imagedata = LuaWrap::ObjectFromLua<::Image::ImageData>(state, 1);
-
-  if (imagedata == nullptr) {
-    return luaL_error(state, "Expected Imagedata object as first argument.");
-  }
+  auto imagedata =
+      LUA_CK_NULL(LuaWrap::ObjectFromLua<::Image::ImageData>(state, 1));
 
   auto width = imagedata->GetWidth();
   auto height = imagedata->GetHeight();

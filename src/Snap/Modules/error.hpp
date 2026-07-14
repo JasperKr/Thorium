@@ -164,3 +164,13 @@ template <class T> struct Result : tl::expected<T, Error> {
       return Error::Createf("Assertion failed: {} - {}", #expr, msg);          \
     }                                                                          \
   }
+
+#define CHECK_NULL(expr)                                                       \
+  ({                                                                           \
+    auto &&_result = (expr);                                                   \
+    [[unlikely]]                                                               \
+    if (_result == nullptr) {                                                  \
+      return Error::Createf("Null pointer at {}", #expr);                      \
+    }                                                                          \
+    std::move(_result);                                                        \
+  })

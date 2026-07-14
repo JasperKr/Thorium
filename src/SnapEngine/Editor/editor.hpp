@@ -17,10 +17,11 @@ enum class MatchType : uint8_t {
   None,
 };
 
-auto DrawEntity(const flecs::entity &entity) -> void;
+auto DrawEntity(const flecs::entity &entity) -> bool;
 auto DrawEntityHierarchy(const flecs::entity &entity, std::string_view filter)
     -> void;
-auto DrawSceneHierarchy(const Engine::Scene &scene) -> Error;
+auto DrawSceneHierarchy(const Ref<Engine::Scene> &scene) -> Error;
+auto EntityName(const flecs::entity &entity) -> std::string_view;
 
 struct PickEntityReadback {
   Ref<Graphics::Buffer> Buffer;

@@ -171,7 +171,7 @@ struct Texture : Object {
       -> Result<Ref<Texture>>;
 
   static auto FromMemory(const GraphicsContext &context,
-                         const std::vector<Image::ImageData *> &slices,
+                         const std::vector<Ref<Image::ImageData>> &slices,
                          TextureType type, VkImageUsageFlags usage = 0,
                          TextureMipmapOption mipmaps = {})
       -> Result<Ref<Texture>>;

@@ -598,7 +598,7 @@ auto Texture::FromMemory(const GraphicsContext &context,
 
 // texture 3D/Array/Cubemap From array of ImageData slices
 auto Texture::FromMemory(const GraphicsContext &context,
-                         const std::vector<Image::ImageData *> &slices,
+                         const std::vector<Ref<Image::ImageData>> &slices,
                          TextureType type, VkImageUsageFlags usage,
                          TextureMipmapOption mipmaps) -> Result<Ref<Texture>> {
   if (slices.empty()) {

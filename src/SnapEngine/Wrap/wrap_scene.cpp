@@ -17,10 +17,7 @@ auto wrap_NewScene(lua_State *state) -> int {
 }
 
 auto wrap_LoadModel(lua_State *state) -> int {
-  auto *scene = LuaWrap::ObjectFromLua<::Engine::Scene>(state, 1);
-  if (scene == nullptr) {
-    luaL_error(state, "Invalid Scene object.");
-  }
+  auto scene = LUA_CK_NULL(LuaWrap::ObjectFromLua<::Engine::Scene>(state, 1));
 
   const char *path = luaL_checkstring(state, 2);
 

@@ -16,11 +16,7 @@ namespace Engine {
 
 // world:createModel("model", { x, y, z }, { rotX, rotY, rotZ, rotW }, { scaleX, scaleY, scaleZ }, { shape1, shape2 }, material)
 auto LuaModel::Create(lua_State *state) -> int {
-  auto *scene = ::LuaWrap::ObjectFromLua<Scene>(state, 1);
-
-  if (scene == nullptr) {
-    return luaL_error(state, "Expected a Scene object");
-  }
+  auto scene = LUA_CK_NULL(::LuaWrap::ObjectFromLua<Scene>(state, 1));
 
   const char *name = luaL_checkstring(state, 2);
   auto entity = scene->world.entity(name);
@@ -99,10 +95,7 @@ auto LuaModel::Create(lua_State *state) -> int {
 }
 
 auto LuaModel::GetShapes(lua_State *state) -> int {
-  auto *entity = ::LuaWrap::EntityFromLua(state, 1);
-  if (entity == nullptr) {
-    return luaL_error(state, "Expected a Model object");
-  }
+  auto *entity = LUA_CK_NULL(::LuaWrap::EntityFromLua(state, 1));
 
   if (lua_gettop(state) == 1) {
     lua_newtable(state);

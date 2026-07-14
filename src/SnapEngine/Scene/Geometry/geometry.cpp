@@ -18,11 +18,7 @@ auto Geometry::DrawGUI(flecs::entity entity) const -> void {
 }
 
 auto LuaGeometry::GetMesh(lua_State *state) -> int {
-  auto *entity = ::LuaWrap::EntityFromLua(state, 1);
-  if (entity == nullptr) {
-    return luaL_error(state, "Expected a Geometry object");
-  }
-
+  auto *entity = LUA_CK_NULL(::LuaWrap::EntityFromLua(state, 1));
   auto geometry = entity->get<Geometry>();
 
   ::LuaWrap::PushObject(state, Graphics::Mesh::GetType(), geometry.mesh.get());
@@ -30,22 +26,13 @@ auto LuaGeometry::GetMesh(lua_State *state) -> int {
 }
 
 auto LuaGeometry::Create(lua_State *state) -> int {
-  auto *scene = ::LuaWrap::ObjectFromLua<Scene>(state, 1);
+  auto scene = LUA_CK_NULL(::LuaWrap::ObjectFromLua<Scene>(state, 1));
   const char *name = luaL_checkstring(state, 2);
 
-  if (scene == nullptr) {
-    return luaL_error(state, "Expected a World object");
-  }
-
-  auto *mesh = ::LuaWrap::ObjectFromLua<Graphics::Mesh>(state, 3);
-  if (mesh == nullptr) {
-    return luaL_error(state, "Expected a Mesh object");
-  }
-
-  auto meshRef = Ref<Graphics::Mesh>(mesh);
+  auto mesh = LUA_CK_NULL(::LuaWrap::ObjectFromLua<Graphics::Mesh>(state, 3));
 
   auto entity = scene->world.entity(name);
-  entity.set<Geometry>(Geometry{meshRef});
+  entity.set<Geometry>(Geometry{.mesh = mesh});
   entity.add<Transform>();
 
   auto luaGeometry = LuaGeometry::FromEntity(entity);

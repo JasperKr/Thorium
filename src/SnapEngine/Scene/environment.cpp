@@ -23,15 +23,8 @@ auto LuaEnvironment::LoadBinding(lua_State *state) -> int {
 }
 
 auto LuaEnvironment::GetSkyboxTexture(lua_State *state) -> int {
-  auto *obj = ::LuaWrap::ObjectFromLua<LuaEnvironment>(state, 1);
-  if (obj == nullptr) {
-    return luaL_error(state, "Invalid Environment object");
-  }
-
-  const auto *environment = obj->entity.try_get<Environment>();
-  if (environment == nullptr) {
-    return luaL_error(state, "Environment component not found on entity");
-  }
+  auto obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaEnvironment>(state, 1));
+  const auto *environment = LUA_CK_NULL(obj->entity.try_get<Environment>());
 
   const auto &skyboxTexture = environment->SkyboxTexture;
   if (skyboxTexture == nullptr) {
@@ -46,17 +39,11 @@ auto LuaEnvironment::GetSkyboxTexture(lua_State *state) -> int {
 }
 
 auto LuaEnvironment::Create(lua_State *state) -> int {
-  auto *scene = ::LuaWrap::ObjectFromLua<Scene>(state, 1);
+  auto scene = LUA_CK_NULL(::LuaWrap::ObjectFromLua<Scene>(state, 1));
   const char *name = luaL_checkstring(state, 2);
 
-  if (scene == nullptr) {
-    return luaL_error(state, "Expected a Scene object");
-  }
-
-  auto *texture = ::LuaWrap::ObjectFromLua<Graphics::Texture>(state, 3);
-  if (texture == nullptr) {
-    return luaL_error(state, "Expected a Texture object for the skybox");
-  }
+  auto texture =
+      LUA_CK_NULL(::LuaWrap::ObjectFromLua<Graphics::Texture>(state, 3));
 
   Environment newEnvironment{};
   newEnvironment.SkyboxTexture = Ref<Graphics::Texture>(texture);

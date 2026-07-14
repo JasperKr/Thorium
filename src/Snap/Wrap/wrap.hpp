@@ -66,22 +66,22 @@ concept LuaObject = std::is_base_of_v<Object, std::remove_cvref_t<T>>;
 
 template <typename T>
   requires LuaObject<T>
-inline auto ObjectFromLua(lua_State *state, int index) -> T * {
+inline auto ObjectFromLua(lua_State *state, int index) -> Ref<T> {
   // Check if userdata
   if (lua_isuserdata(state, index) == 0) {
-    return nullptr;
+    return Ref<T>(nullptr);
   }
 
   // NOLINTNEXTLINE
   auto *proxy = static_cast<Proxy *>(lua_touserdata(state, index));
   if (proxy == nullptr) {
     PrintWarning("FromLuaObject: proxy is null at index {}", index);
-    return nullptr;
+    return Ref<T>(nullptr);
   }
 
   if (proxy->object == nullptr || proxy->type == nullptr) {
     PrintWarning("FromLuaObject: proxy invalid at index {}", index);
-    return nullptr;
+    return Ref<T>(nullptr);
   }
 
   // Do not compare type addresses, they may differ since the types are
@@ -93,11 +93,11 @@ inline auto ObjectFromLua(lua_State *state, int index) -> T * {
     PrintWarning(
         "FromLuaObject: type mismatch at index {}, expected: {} got: {}", index,
         expectedTypeName, proxyTypeName);
-    return nullptr;
+    return Ref<T>(nullptr);
   }
 
   auto *obj = static_cast<T *>(proxy->object);
-  return obj;
+  return Ref<T>(obj);
 }
 
 template <typename T>
@@ -218,12 +218,36 @@ auto luaL_checkscalar(lua_State *state, int index) -> Math::Scalar;
 auto luaL_optscalar(lua_State *state, int index, Math::Scalar defaultValue)
     -> Math::Scalar;
 
+template <typename T> struct ObjectTypeNameBase {
+  using type = std::remove_cvref_t<T>;
+};
+
+template <typename T> struct ObjectTypeNameBase<Ref<T>> {
+  using type = T;
+};
+
+template <typename T>
+using ObjectTypeNameBaseT =
+    typename ObjectTypeNameBase<std::remove_cvref_t<T>>::type;
+
+template <typename T> constexpr auto ObjectTypeName() -> std::string_view {
+  using Base = ObjectTypeNameBaseT<T>;
+
+  if constexpr (std::is_base_of_v<Object, Base>) {
+    return Base::GetType()->GetName();
+  } else {
+    return "pointer";
+  }
+}
+
 // NOLINTNEXTLINE
 #define LUA_CK_NULL(expr)                                                      \
   ({                                                                           \
     auto &&_result = (expr);                                                   \
+    [[unlikely]]                                                               \
     if (_result == nullptr) {                                                  \
-      return luaL_error(state, "Null pointer at " #expr);                      \
+      auto typeName = ObjectTypeName<decltype(_result)>();                     \
+      return luaL_error(state, "Null %s at " #expr, typeName.data());          \
     }                                                                          \
     std::move(_result);                                                        \
   })
@@ -232,6 +256,7 @@ auto luaL_optscalar(lua_State *state, int index, Math::Scalar defaultValue)
 #define LUA_CK_NULL_MSG(expr, msg)                                             \
   ({                                                                           \
     auto &&_result = (expr);                                                   \
+    [[unlikely]]                                                               \
     if (_result == nullptr) {                                                  \
       return luaL_error(state, "%s", (msg));                                   \
     }                                                                          \
@@ -241,9 +266,10 @@ auto luaL_optscalar(lua_State *state, int index, Math::Scalar defaultValue)
 // NOLINTNEXTLINE
 #define LUA_CK_ERR(expr)                                                       \
   {                                                                            \
-    auto error = (expr);                                                       \
-    if (Error::IsError(error)) {                                               \
-      return luaL_error(state, "%s", error.ToString().c_str());                \
+    auto _error = std::move(expr);                                             \
+    [[unlikely]]                                                               \
+    if (Error::IsError(_error)) {                                              \
+      return luaL_error(state, "%s", _error.ToString().c_str());               \
     }                                                                          \
   }
 
@@ -251,6 +277,7 @@ auto luaL_optscalar(lua_State *state, int index, Math::Scalar defaultValue)
 #define LUA_CK_RES(expr)                                                       \
   ({                                                                           \
     auto &&_result = (expr);                                                   \
+    [[unlikely]]                                                               \
     if (Error::IsError(_result)) {                                             \
       return luaL_error(state, "%s", _result.error().ToString().c_str());      \
     }                                                                          \
@@ -259,7 +286,17 @@ auto luaL_optscalar(lua_State *state, int index, Math::Scalar defaultValue)
 
 #define LUA_ASSERT(expr)                                                       \
   {                                                                            \
+    [[unlikely]]                                                               \
     if (!(expr)) {                                                             \
       return luaL_error(state, "Assertion failed: " #expr);                    \
+    }                                                                          \
+  }
+
+// NOLINTNEXTLINE
+#define LUA_ASSERT_MSG(expr, msg)                                              \
+  {                                                                            \
+    [[unlikely]]                                                               \
+    if (!(expr)) {                                                             \
+      return luaL_error(state, "%s", (msg));                                   \
     }                                                                          \
   }

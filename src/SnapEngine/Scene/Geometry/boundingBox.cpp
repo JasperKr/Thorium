@@ -217,7 +217,7 @@ auto LuaBoundingBox::Union(lua_State *state) -> int {
                       "BoundingBox component not found in one of the objects");
   }
 
-  auto *luaBoundingBoxOut = ::LuaWrap::ObjectFromLua<LuaBoundingBox>(state, 3);
+  auto luaBoundingBoxOut = ::LuaWrap::ObjectFromLua<LuaBoundingBox>(state, 3);
   if (luaBoundingBoxOut == nullptr) {
     auto result = boundingBox1->Union(*boundingBox2.get());
 
@@ -238,7 +238,8 @@ auto LuaBoundingBox::Union(lua_State *state) -> int {
 
   boundingBox1->Union(*boundingBox2.get(), *boundingBoxOut.get());
 
-  ::LuaWrap::PushObject(state, LuaBoundingBox::GetType(), luaBoundingBoxOut);
+  ::LuaWrap::PushObject(state, LuaBoundingBox::GetType(),
+                        luaBoundingBoxOut.get());
 
   return 1;
 }
@@ -259,7 +260,7 @@ auto LuaBoundingBox::Intersect(lua_State *state) -> int {
                       "BoundingBox component not found in one of the objects");
   }
 
-  auto *luaBoundingBoxOut = ::LuaWrap::ObjectFromLua<LuaBoundingBox>(state, 3);
+  auto luaBoundingBoxOut = ::LuaWrap::ObjectFromLua<LuaBoundingBox>(state, 3);
 
   if (luaBoundingBoxOut == nullptr) {
     auto result = boundingBox1->Intersect(*boundingBox2.get());
@@ -280,7 +281,8 @@ auto LuaBoundingBox::Intersect(lua_State *state) -> int {
   }
 
   boundingBox1->Intersect(*boundingBox2.get(), *boundingBoxOut.get());
-  ::LuaWrap::PushObject(state, LuaBoundingBox::GetType(), luaBoundingBoxOut);
+  ::LuaWrap::PushObject(state, LuaBoundingBox::GetType(),
+                        luaBoundingBoxOut.get());
 
   return 1;
 }

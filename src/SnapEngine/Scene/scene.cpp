@@ -27,7 +27,6 @@
 #include "Scene/Lights/sphereLight.hpp"
 #include "Scene/Lights/spotLight.hpp"
 #include "Scene/camera.hpp"
-#include "Scene/displayName.hpp"
 #include "Scene/environment.hpp"
 #include "Scene/frustum.hpp"
 #include "Scene/node.hpp"
@@ -850,11 +849,7 @@ auto Scene::GetEnvironment() const -> flecs::entity {
 }
 
 auto LuaScene::Update(lua_State *state) -> int {
-  auto *scene = ::LuaWrap::ObjectFromLua<Scene>(state, 1);
-
-  if (scene == nullptr) {
-    return luaL_error(state, "Expected a Scene object");
-  }
+  auto scene = LUA_CK_NULL(::LuaWrap::ObjectFromLua<Scene>(state, 1));
 
   auto deltaTime = luaL_checknumber(state, 2);
   auto updateResult = scene->Update(deltaTime);
@@ -866,13 +861,9 @@ auto LuaScene::Update(lua_State *state) -> int {
 }
 
 auto LuaScene::DrawUiElement(lua_State *state) -> int {
-  auto *scene = ::LuaWrap::ObjectFromLua<Scene>(state, 1);
+  auto scene = LUA_CK_NULL(::LuaWrap::ObjectFromLua<Scene>(state, 1));
 
-  if (scene == nullptr) {
-    return luaL_error(state, "Expected a Scene object");
-  }
-
-  auto drawResult = Editor::DrawSceneHierarchy(*scene);
+  auto drawResult = Editor::DrawSceneHierarchy(scene);
   if (Error::IsError(drawResult)) {
     return luaL_error(state, "%s", drawResult.ToString().c_str());
   }
@@ -881,16 +872,8 @@ auto LuaScene::DrawUiElement(lua_State *state) -> int {
 }
 
 auto LuaScene::SetEnvironment(lua_State *state) -> int {
-  auto *scene = ::LuaWrap::ObjectFromLua<Scene>(state, 1);
-
-  if (scene == nullptr) {
-    return luaL_error(state, "Expected a Scene object");
-  }
-
-  auto *environment = ::LuaWrap::EntityFromLua(state, 2);
-  if (environment == nullptr) {
-    return luaL_error(state, "Expected an Environment object");
-  }
+  auto scene = LUA_CK_NULL(::LuaWrap::ObjectFromLua<Scene>(state, 1));
+  auto *environment = LUA_CK_NULL(::LuaWrap::EntityFromLua(state, 2));
 
   scene->SetEnvironment(*environment);
 

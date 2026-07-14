@@ -18,11 +18,8 @@ auto wrap_NewChannel(lua_State *state) -> int {
 }
 
 auto wrap_Push(lua_State *state) -> int {
-  auto *channel = LuaWrap::ObjectFromLua<::Threading::Channel>(state, 1);
-
-  if (channel == nullptr) {
-    return luaL_error(state, "Invalid Channel object.");
-  }
+  auto channel =
+      LUA_CK_NULL(LuaWrap::ObjectFromLua<::Threading::Channel>(state, 1));
 
   if (lua_gettop(state) < 2) {
     return luaL_error(state, "Channel:push requires a message argument.");
@@ -42,10 +39,8 @@ auto wrap_Push(lua_State *state) -> int {
 }
 
 auto wrap_Pop(lua_State *state) -> int {
-  auto *channel = LuaWrap::ObjectFromLua<::Threading::Channel>(state, 1);
-  if (channel == nullptr) {
-    return luaL_error(state, "Invalid Channel object.");
-  }
+  auto channel =
+      LUA_CK_NULL(LuaWrap::ObjectFromLua<::Threading::Channel>(state, 1));
 
   auto message = channel->Pop();
 
@@ -57,16 +52,14 @@ auto wrap_Pop(lua_State *state) -> int {
   auto error = LuaWrap::Data::ToStack(state, message.value());
   ::Threading::RemoveReferences(message.value());
 
-  if (Error::IsError(error)) {
-    return luaL_error(state, "Failed to deserialize message: %s",
-                      error.message.c_str());
-  }
+  LUA_CK_ERR(error);
 
   return 1;
 }
 
 auto wrap_Peek(lua_State *state) -> int {
-  auto *channel = LuaWrap::ObjectFromLua<::Threading::Channel>(state, 1);
+  auto channel =
+      LUA_CK_NULL(LuaWrap::ObjectFromLua<::Threading::Channel>(state, 1));
   if (channel == nullptr) {
     return luaL_error(state, "Invalid Channel object.");
   }
@@ -88,7 +81,8 @@ auto wrap_Peek(lua_State *state) -> int {
   return 1;
 }
 auto wrap_GetCount(lua_State *state) -> int {
-  auto *channel = LuaWrap::ObjectFromLua<::Threading::Channel>(state, 1);
+  auto channel =
+      LUA_CK_NULL(LuaWrap::ObjectFromLua<::Threading::Channel>(state, 1));
   if (channel == nullptr) {
     return luaL_error(state, "Invalid Channel object.");
   }
@@ -100,7 +94,8 @@ auto wrap_GetCount(lua_State *state) -> int {
   return 1;
 }
 auto wrap_Demand(lua_State *state) -> int {
-  auto *channel = LuaWrap::ObjectFromLua<::Threading::Channel>(state, 1);
+  auto channel =
+      LUA_CK_NULL(LuaWrap::ObjectFromLua<::Threading::Channel>(state, 1));
   if (channel == nullptr) {
     return luaL_error(state, "Invalid Channel object.");
   }
@@ -136,7 +131,8 @@ auto wrap_Demand(lua_State *state) -> int {
 }
 
 auto wrap_Clear(lua_State *state) -> int {
-  auto *channel = LuaWrap::ObjectFromLua<::Threading::Channel>(state, 1);
+  auto channel =
+      LUA_CK_NULL(LuaWrap::ObjectFromLua<::Threading::Channel>(state, 1));
   if (channel == nullptr) {
     return luaL_error(state, "Invalid Channel object.");
   }

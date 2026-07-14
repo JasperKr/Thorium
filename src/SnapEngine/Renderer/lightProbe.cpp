@@ -70,10 +70,10 @@ auto LightProbe::WriteToBuffer(std::vector<uint8_t> &buffer, size_t offset,
 }
 
 auto LuaLightProbe::Create(lua_State *state) -> int {
-  auto *scene = LUA_CK_NULL(::LuaWrap::ObjectFromLua<Scene>(state, 1));
+  auto scene = LUA_CK_NULL(::LuaWrap::ObjectFromLua<Scene>(state, 1));
   auto entity = scene->world.entity();
 
-  entity.set(LightProbe{.scene = scene});
+  entity.set(LightProbe{.scene = scene.get()});
   entity.add<Transform>();
   entity.set<DisplayName>({luaL_optstring(state, 2, "LightProbe")});
   entity.add<Userdata>();
@@ -85,7 +85,7 @@ auto LuaLightProbe::Create(lua_State *state) -> int {
 }
 
 auto LuaLightProbe::Render(lua_State *state) -> int {
-  auto *obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaLightProbe>(state, 1));
+  auto obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaLightProbe>(state, 1));
   auto *lightProbe = LUA_CK_NULL(obj->entity.try_get_mut<LightProbe>());
   const auto *transform = LUA_CK_NULL(obj->entity.try_get<Transform>());
 

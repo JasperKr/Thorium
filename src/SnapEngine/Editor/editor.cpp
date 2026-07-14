@@ -3,7 +3,6 @@
 #include "Graphics/draw.hpp"
 #include "Graphics/uniformWriter.hpp"
 #include "Modules/Math/vector.hpp"
-#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Renderer/shaderManager.hpp"
@@ -22,7 +21,7 @@ namespace Engine::Editor {
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 inline flecs::entity SelectedEntity;
 
-auto DrawEntity(const flecs::entity &entity) -> void {
+auto EntityName(const flecs::entity &entity) -> std::string_view {
   const char *entityName = entity.name();
 
   if (entityName == nullptr || std::string_view(entityName).empty()) {
@@ -38,6 +37,12 @@ auto DrawEntity(const flecs::entity &entity) -> void {
     entityName = name->Name.c_str();
   }
 
+  return {entityName};
+}
+
+auto DrawEntity(const flecs::entity &entity) -> bool {
+  auto entityName = EntityName(entity);
+
   ImGui::PushID(static_cast<int>(entity.id()));
 
   ImGuiTreeNodeFlags nodeFlags =
@@ -48,33 +53,14 @@ auto DrawEntity(const flecs::entity &entity) -> void {
     nodeFlags |= ImGuiTreeNodeFlags_Selected;
   }
 
-  bool node = ImGui::TreeNodeEx(entityName, nodeFlags);
+  bool node = ImGui::TreeNodeEx(entityName.data(), nodeFlags);
   if (ImGui::IsItemClicked()) {
     SelectedEntity = entity;
   }
 
-  if (node) {
-    ImGui::Indent();
-    entity.each([&](flecs::id identifier) -> auto {
-      if (identifier.is_entity()) {
-        auto componentEntity = identifier.entity();
-
-        if (componentEntity != flecs::ChildOf && componentEntity.is_valid()) {
-          const char *componentName = componentEntity.name();
-          if (componentName == nullptr ||
-              std::string_view(componentName).empty()) {
-            componentName = "Unnamed Component";
-          }
-          ImGui::TextDisabled("-%s", componentName);
-        }
-      }
-    });
-
-    ImGui::Unindent();
-    ImGui::TreePop();
-  }
-
   ImGui::PopID();
+
+  return node;
 }
 
 inline auto fuzzyMatch(const std::string_view &pattern,
@@ -132,29 +118,85 @@ auto DrawEntityHierarchy(const flecs::entity &entity, std::string_view filter)
     return;
   }
 
-  DrawEntity(entity);
+  bool drawChildren = DrawEntity(entity);
 
   if (match == MatchType::This) {
     // If this entity matches, all children should be shown regardless of their names
     filter = "";
   }
 
-  entity.children([&](flecs::entity child) -> void {
+  if (drawChildren) {
     ImGui::Indent();
-    DrawEntityHierarchy(child, filter);
+    entity.children([&](flecs::entity child) -> void {
+      DrawEntityHierarchy(child, filter);
+    });
     ImGui::Unindent();
+    ImGui::TreePop();
+  }
+}
+
+inline auto DrawEntityEditor(flecs::entity entity, const Ref<Scene> &scene)
+    -> void {
+  if (!SelectedEntity.is_valid()) {
+    return;
+  }
+
+  ImGui::PushID(static_cast<int>(SelectedEntity.id()));
+
+  SelectedEntity.each([&](flecs::id identifier) -> auto {
+    if (!identifier.is_entity()) {
+      return;
+    }
+
+    auto componentEntity = identifier.entity();
+    if (componentEntity == flecs::ChildOf || !componentEntity.is_valid()) {
+      return;
+    }
+
+    auto componentName = EntityName(componentEntity);
+    ImGui::TextDisabled("-%s", componentName.data());
   });
+
+  SelectedEntity.each([&](flecs::id identifier) -> auto {
+    if (!identifier.is_entity()) {
+      return;
+    }
+
+    auto componentEntity = identifier.entity();
+
+    if (componentEntity == flecs::ChildOf || !componentEntity.is_valid()) {
+      return;
+    }
+
+    auto componentName = EntityName(componentEntity);
+
+    auto iter = scene->drawFunctions.find(componentEntity.id());
+    if (iter != scene->drawFunctions.end()) {
+      ImGui::Separator();
+      ImGui::PushID(static_cast<int>(componentEntity.id()));
+      auto name = std::format("Component: {}", componentName.data());
+      if (ImGui::TreeNodeEx(name.c_str(), iter->second.defaultOpen
+                                              ? ImGuiTreeNodeFlags_DefaultOpen
+                                              : 0)) {
+        iter->second.func(SelectedEntity);
+        ImGui::TreePop();
+      }
+      ImGui::PopID();
+    }
+  });
+
+  ImGui::PopID();
 }
 
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
-auto DrawSceneHierarchy(const Engine::Scene &scene) -> Error {
+auto DrawSceneHierarchy(const Ref<Engine::Scene> &scene) -> Error {
   auto pickReadbackResult =
       CHECK_RES(Editor::GetEditorInstance().PopEntityPickResult());
 
   if (pickReadbackResult != std::nullopt) {
     auto pickResult = pickReadbackResult.value();
 
-    scene.world.each<Geometry>(
+    scene->world.each<Geometry>(
         [&](flecs::entity entity, const Geometry &geometry) -> void {
           if (geometry.hasTlasIndex &&
               geometry.tlasIndex == pickResult.InstanceID) {
@@ -169,17 +211,10 @@ auto DrawSceneHierarchy(const Engine::Scene &scene) -> Error {
   const Math::Vec3 origin{0.0F, 0.0F, 0.0F};
   auto &lineDrawer = Renderer::RendererInstance.GetLineDrawer();
 
-  // lineDrawer.OverlayLine(origin, Math::Vec3{axisLength, 0.0F, 0.0F},
-  //                        Math::Vec4{1.0F, 0.0F, 0.0F, 1.0F}, axisThickness);
-  // lineDrawer.OverlayLine(origin, Math::Vec3{0.0F, axisLength, 0.0F},
-  //                        Math::Vec4{0.0F, 1.0F, 0.0F, 1.0F}, axisThickness);
-  // lineDrawer.OverlayLine(origin, Math::Vec3{0.0F, 0.0F, axisLength},
-  //                        Math::Vec4{0.0F, 0.0F, 1.0F, 1.0F}, axisThickness);
-
   static bool DrawBoundingBox = false;
   static bool DrawBoundsRecursively = false;
 
-  ImGui::Begin(scene.name.c_str());
+  ImGui::Begin(scene->name.c_str());
 
   static char buf[256] = {};                    // NOLINT
   ImGui::InputText("Search", buf, sizeof(buf)); // NOLINT
@@ -200,7 +235,7 @@ auto DrawSceneHierarchy(const Engine::Scene &scene) -> Error {
           ImVec2(0, availableHeight * hierarchyHeightRatio), // NOLINT
           ImGuiChildFlags_Borders)) {
 
-    scene.world.entity(0).children([&](flecs::entity entity) -> void {
+    scene->world.entity(0).children([&](flecs::entity entity) -> void {
       DrawEntityHierarchy(entity, std::string_view(buf)); // NOLINT
     });
   }
@@ -222,40 +257,7 @@ auto DrawSceneHierarchy(const Engine::Scene &scene) -> Error {
 
   if (ImGui::BeginChild("Selected Entity", ImVec2(0, 0),
                         ImGuiChildFlags_Borders)) {
-    if (SelectedEntity.is_valid()) {
-      ImGui::PushID(static_cast<int>(SelectedEntity.id()));
-
-      SelectedEntity.each([&](flecs::id identifier) -> auto {
-        if (identifier.is_entity()) {
-          auto componentEntity = identifier.entity();
-
-          if (componentEntity != flecs::ChildOf && componentEntity.is_valid()) {
-            const char *componentName = componentEntity.name();
-            if (componentName == nullptr ||
-                std::string_view(componentName).empty()) {
-              componentName = "Unnamed Component";
-            }
-
-            auto iter = scene.drawFunctions.find(componentEntity.id());
-            if (iter != scene.drawFunctions.end()) {
-              ImGui::Separator();
-              ImGui::PushID(static_cast<int>(componentEntity.id()));
-              auto name = std::format("Component: {}", componentName);
-              if (ImGui::TreeNodeEx(name.c_str(),
-                                    iter->second.defaultOpen
-                                        ? ImGuiTreeNodeFlags_DefaultOpen
-                                        : 0)) {
-                iter->second.func(SelectedEntity);
-                ImGui::TreePop();
-              }
-              ImGui::PopID();
-            }
-          }
-        }
-      });
-
-      ImGui::PopID();
-    }
+    DrawEntityEditor(SelectedEntity, scene);
   }
   ImGui::EndChild();
   ImGui::End();

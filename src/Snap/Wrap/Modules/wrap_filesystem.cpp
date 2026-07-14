@@ -74,16 +74,12 @@ auto Wrap_Append(lua_State *state) -> int {
   std::string path = luaL_checkstring(state, 1);
 
   if (LuaWrap::IsType<Data::ByteData>(state, 2)) {
-    auto *bytedata = LuaWrap::ObjectFromLua<Data::ByteData>(state, 2);
+    auto bytedata =
+        LUA_CK_NULL(LuaWrap::ObjectFromLua<Data::ByteData>(state, 2));
 
-    auto error = ::Filesystem::AppendFile(
+    LUA_CK_ERR(::Filesystem::AppendFile(
         path,
-        std::span<const uint8_t>(bytedata->GetData(), bytedata->GetSize()));
-
-    if (Error::IsError(error)) {
-      return luaL_error(state, "Failed to append to file: %s",
-                        error.message.c_str());
-    }
+        std::span<const uint8_t>(bytedata->GetData(), bytedata->GetSize())));
 
     lua_pushboolean(state, 1);
     return 1;
@@ -93,12 +89,7 @@ auto Wrap_Append(lua_State *state) -> int {
     size_t length = 0;
     const char *data = luaL_checklstring(state, 2, &length);
 
-    auto error = ::Filesystem::AppendFile(path, std::string_view(data, length));
-
-    if (Error::IsError(error)) {
-      return luaL_error(state, "Failed to append to file: %s",
-                        error.message.c_str());
-    }
+    LUA_CK_ERR(::Filesystem::AppendFile(path, std::string_view(data, length)));
 
     lua_pushboolean(state, 1);
     return 1;
@@ -113,16 +104,11 @@ auto Wrap_Write(lua_State *state) -> int {
   std::string path = luaL_checkstring(state, 1);
 
   if (LuaWrap::IsType<Data::ByteData>(state, 2)) {
-    auto *bytedata = LuaWrap::ObjectFromLua<Data::ByteData>(state, 2);
+    auto bytedata = LuaWrap::ObjectFromLua<Data::ByteData>(state, 2);
 
-    auto error = ::Filesystem::WriteFile(
+    LUA_CK_ERR(::Filesystem::WriteFile(
         path,
-        std::span<const uint8_t>(bytedata->GetData(), bytedata->GetSize()));
-
-    if (Error::IsError(error)) {
-      return luaL_error(state, "Failed to write to file: %s",
-                        error.message.c_str());
-    }
+        std::span<const uint8_t>(bytedata->GetData(), bytedata->GetSize())));
 
     lua_pushboolean(state, 1);
     return 1;
@@ -132,12 +118,7 @@ auto Wrap_Write(lua_State *state) -> int {
     size_t length = 0;
     const char *data = luaL_checklstring(state, 2, &length);
 
-    auto error = ::Filesystem::WriteFile(path, std::string_view(data, length));
-
-    if (Error::IsError(error)) {
-      return luaL_error(state, "Failed to write to file: %s",
-                        error.message.c_str());
-    }
+    LUA_CK_ERR(::Filesystem::WriteFile(path, std::string_view(data, length)));
 
     lua_pushboolean(state, 1);
     return 1;
@@ -281,11 +262,7 @@ auto Wrap_ListFiles(lua_State *state) -> int {
 // creates a directory at the given path
 auto Wrap_CreateDirectory(lua_State *state) -> int {
   std::string path = luaL_checkstring(state, 1);
-  auto error = ::Filesystem::CreateDirectory(path);
-  if (Error::IsError(error)) {
-    return luaL_error(state, "Failed to create directory: %s",
-                      error.message.c_str());
-  }
+  LUA_CK_ERR(::Filesystem::CreateDirectory(path));
   return 0;
 }
 

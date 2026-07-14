@@ -87,7 +87,7 @@ auto LuaLevelOfDetail::AddGeometry(lua_State *state) -> int {
     return luaL_error(state, "LevelOfDetail component not found");
   }
 
-  auto *geometry = ::LuaWrap::ObjectFromLua<LuaGeometry>(state, 2);
+  auto geometry = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaGeometry>(state, 2));
   if (geometry == nullptr) {
     return luaL_error(state, "Expected a Mesh object");
   }
@@ -98,7 +98,7 @@ auto LuaLevelOfDetail::AddGeometry(lua_State *state) -> int {
 }
 
 auto LuaLevelOfDetail::Create(lua_State *state) -> int {
-  auto *scene = ::LuaWrap::ObjectFromLua<Scene>(state, 1);
+  auto scene = LUA_CK_NULL(::LuaWrap::ObjectFromLua<Scene>(state, 1));
   const char *name = luaL_checkstring(state, 2);
 
   if (scene == nullptr) {
@@ -127,10 +127,7 @@ auto LuaLevelOfDetail::RemoveGeometry(lua_State *state) -> int {
     return luaL_error(state, "LevelOfDetail component not found");
   }
 
-  auto *geometry = ::LuaWrap::ObjectFromLua<LuaGeometry>(state, 2);
-  if (geometry == nullptr) {
-    return luaL_error(state, "Expected a Mesh object");
-  }
+  auto geometry = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaGeometry>(state, 2));
 
   levelOfDetail.entity().remove<Ref<Graphics::Mesh>>(geometry->entity);
 

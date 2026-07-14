@@ -8,21 +8,14 @@ namespace Engine::Renderer {
 auto wrap_NewMaterial(lua_State *state) -> int { return 0; }
 
 auto wrap_DrawEverything(lua_State *state) -> int {
-  auto *scene = ::LuaWrap::ObjectFromLua<Scene>(state, 1);
-
-  if (scene == nullptr) {
-    return luaL_error(state, "Expected a Scene object");
-  }
+  auto scene = LUA_CK_NULL(::LuaWrap::ObjectFromLua<Scene>(state, 1));
 
   return 0;
 }
 
 auto wrap_Initialize(lua_State *state) -> int {
-  auto error =
-      RendererInstance.Initialize(*Graphics::GetCurrentGraphicsContext());
-  if (Error::IsError(error)) {
-    return luaL_error(state, "%s", error.message.c_str());
-  }
+  LUA_CK_ERR(
+      RendererInstance.Initialize(*Graphics::GetCurrentGraphicsContext()));
 
   return 0;
 }
@@ -33,7 +26,7 @@ auto wrap_ReloadShaders(lua_State *state) -> int {
 }
 
 auto wrap_PickObject(lua_State *state) -> int {
-  auto *camera = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
+  auto camera = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
 
   Math::Vec2 mousePos =
       Math::Vec2{luaL_checkscalar(state, 2), luaL_checkscalar(state, 3)};

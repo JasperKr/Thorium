@@ -10,7 +10,6 @@
 #include "Graphics/shader.hpp"
 #include "Graphics/snapshot.hpp"
 #include "Graphics/texture.hpp"
-#include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Wrap/Graphics/wrap_color.hpp"
 #include "Wrap/wrap.hpp"
@@ -37,24 +36,16 @@ auto wrap_Present(lua_State *state) -> int {
 
     for (int index = 1; index <= lua_objlen(state, 1); index++) {
       lua_rawgeti(state, 1, index);
-      auto *renderInfo =
+      auto renderInfo = LUA_CK_NULL(
           LuaWrap::ObjectFromLua<::Graphics::Threading::RenderThreadInfo>(state,
-                                                                          -1);
-      if (renderInfo == nullptr) {
-        return luaL_error(state, "Invalid RenderThreadInfo at argument %d",
-                          index);
-      }
+                                                                          -1));
 
       commands.emplace_back(renderInfo);
       lua_pop(state, 1);
     }
   }
 
-  auto result = Present(ctx, commands);
-
-  if (Error::IsError(result)) {
-    return luaL_error(state, "%s", result.ToString().c_str());
-  }
+  LUA_CK_ERR(Present(ctx, commands));
 
   return 0;
 }
@@ -62,27 +53,18 @@ auto wrap_Present(lua_State *state) -> int {
 // RenderTarget functions
 auto wrap_Push(lua_State *state) -> int {
   auto *ctx = ::Graphics::GetCurrentGraphicsContext();
-  auto pushError = ::Graphics::DynamicRendering::Push(*ctx);
-  if (Error::IsError(pushError)) {
-    return luaL_error(state, "%s", pushError.ToString().c_str());
-  }
+  LUA_CK_ERR(::Graphics::DynamicRendering::Push(*ctx));
   return 0;
 }
 auto wrap_Pop(lua_State *state) -> int {
   auto *ctx = ::Graphics::GetCurrentGraphicsContext();
-  auto error = ::Graphics::DynamicRendering::Pop(*ctx);
-  if (Error::IsError(error)) {
-    return luaL_error(state, "%s", error.ToString().c_str());
-  }
+  LUA_CK_ERR(::Graphics::DynamicRendering::Pop(*ctx));
 
   return 0;
 }
 auto wrap_Reset(lua_State *state) -> int {
   auto *ctx = ::Graphics::GetCurrentGraphicsContext();
-  auto resetError = ::Graphics::DynamicRendering::Reset(*ctx);
-  if (Error::IsError(resetError)) {
-    return luaL_error(state, "%s", resetError.ToString().c_str());
-  }
+  LUA_CK_ERR(::Graphics::DynamicRendering::Reset(*ctx));
   return 0;
 }
 
@@ -218,9 +200,8 @@ auto wrap_ClipScissor(lua_State *state) -> int {
 
 auto wrap_SetShader(lua_State *state) -> int {
   auto *ctx = ::Graphics::GetCurrentGraphicsContext();
-  auto *shaderHandle = LuaWrap::ObjectFromLua<::Graphics::Shader>(state, 1);
-  ::Graphics::DynamicRendering::SetShader(
-      Ref<::Graphics::Shader>(shaderHandle));
+  auto shaderHandle = LuaWrap::ObjectFromLua<::Graphics::Shader>(state, 1);
+  ::Graphics::DynamicRendering::SetShader(shaderHandle);
   return 0;
 }
 
@@ -417,30 +398,21 @@ auto wrap_Draw(lua_State *state) -> int {
   Ref<::Graphics::Mesh> mesh;
 
   if (LuaWrap::IsType<::Graphics::Texture>(state, 1)) {
-    auto *texture = LuaWrap::ObjectFromLua<::Graphics::Texture>(state, 1);
+    auto texture =
+        LUA_CK_NULL(LuaWrap::ObjectFromLua<::Graphics::Texture>(state, 1));
 
-    if (texture != nullptr) {
-      auto shader = ::Graphics::DynamicRendering::GetShader();
-      if (shader.get() == nullptr) {
-        shader = ::Graphics::DefaultShaderModule;
-      }
-
-      auto texRef = Ref<::Graphics::Texture>(texture);
-      LUA_CK_ERR(shader->Send({"MainTexture"}, texRef));
-    } else {
-      return luaL_error(state, "Texture is null.");
+    auto shader = ::Graphics::DynamicRendering::GetShader();
+    if (shader.get() == nullptr) {
+      shader = ::Graphics::DefaultShaderModule;
     }
+
+    LUA_CK_ERR(shader->Send({"MainTexture"}, texture));
 
     LUA_CK_ERR(::Graphics::Draw(*ctx, *texture, 1));
   } else if (LuaWrap::IsType<::Graphics::Mesh>(state, 1)) {
-    mesh = Ref<::Graphics::Mesh>(
-        LuaWrap::ObjectFromLua<::Graphics::Mesh>(state, 1));
+    mesh = LUA_CK_NULL(LuaWrap::ObjectFromLua<::Graphics::Mesh>(state, 1));
   } else {
     return luaL_error(state, "Invalid argument to draw.");
-  }
-
-  if (mesh.get() == nullptr) {
-    return luaL_error(state, "Mesh is null.");
   }
 
   auto instanceCount = 1U;
@@ -449,11 +421,7 @@ auto wrap_Draw(lua_State *state) -> int {
     instanceCount = static_cast<uint32_t>(luaL_checkinteger(state, 2));
   }
 
-  auto drawResult = Draw(*ctx, *mesh, instanceCount);
-
-  if (Error::IsError(drawResult)) {
-    return luaL_error(state, "%s", drawResult.ToString().c_str());
-  }
+  LUA_CK_ERR(Draw(*ctx, *mesh, instanceCount));
 
   return 0;
 }
@@ -467,11 +435,7 @@ auto wrap_Dispatch(lua_State *state) -> int {
   threadgroups.y = static_cast<uint32_t>(luaL_checkinteger(state, 2));
   threadgroups.z = static_cast<uint32_t>(luaL_checkinteger(state, 3));
 
-  auto dispatchResult = Dispatch(*ctx, threadgroups);
-
-  if (Error::IsError(dispatchResult)) {
-    return luaL_error(state, "%s", dispatchResult.ToString().c_str());
-  }
+  LUA_CK_ERR(Dispatch(*ctx, threadgroups));
 
   return 0;
 }
@@ -480,15 +444,11 @@ auto wrap_DispatchIndirect(lua_State *state) -> int {
   ZoneScoped;
   auto *ctx = ::Graphics::GetCurrentGraphicsContext();
 
-  auto *bufferHandle = LuaWrap::ObjectFromLua<::Graphics::Buffer>(state, 1);
-  Ref<::Graphics::Buffer> indirectBuffer(bufferHandle);
+  auto indirectBuffer =
+      LUA_CK_NULL(LuaWrap::ObjectFromLua<::Graphics::Buffer>(state, 1));
 
   auto offset = static_cast<VkDeviceSize>(luaL_optinteger(state, 2, 0));
-  auto dispatchResult = DispatchIndirect(*ctx, indirectBuffer, offset);
-
-  if (Error::IsError(dispatchResult)) {
-    return luaL_error(state, "%s", dispatchResult.ToString().c_str());
-  }
+  LUA_CK_ERR(DispatchIndirect(*ctx, indirectBuffer, offset));
 
   return 0;
 }
@@ -497,29 +457,13 @@ auto wrap_DrawIndirect(lua_State *state) -> int {
   ZoneScoped;
   auto *ctx = ::Graphics::GetCurrentGraphicsContext();
 
-  Ref<::Graphics::Mesh> mesh;
-
-  if (LuaWrap::IsType<::Graphics::Mesh>(state, 1)) {
-    mesh = Ref<::Graphics::Mesh>(
-        LuaWrap::ObjectFromLua<::Graphics::Mesh>(state, 1));
-  } else {
-    return luaL_error(state, "Invalid argument to drawIndirect.");
-  }
-
-  if (mesh.get() == nullptr) {
-    return luaL_error(state, "Mesh is null.");
-  }
-
-  auto *bufferHandle = LuaWrap::ObjectFromLua<::Graphics::Buffer>(state, 2);
-  Ref<::Graphics::Buffer> indirectBuffer(bufferHandle);
+  auto mesh = LUA_CK_NULL(LuaWrap::ObjectFromLua<::Graphics::Mesh>(state, 1));
+  auto indirectBuffer =
+      LUA_CK_NULL(LuaWrap::ObjectFromLua<::Graphics::Buffer>(state, 2));
 
   auto offset = static_cast<VkDeviceSize>(luaL_optinteger(state, 3, 0));
   auto count = static_cast<uint32_t>(luaL_optinteger(state, 4, 1));
-  auto drawResult = DrawIndirect(*ctx, *mesh, indirectBuffer, offset, count);
-
-  if (Error::IsError(drawResult)) {
-    return luaL_error(state, "%s", drawResult.ToString().c_str());
-  }
+  LUA_CK_ERR(DrawIndirect(*ctx, *mesh, indirectBuffer, offset, count));
 
   return 0;
 }
@@ -593,11 +537,7 @@ auto wrap_Clear(lua_State *state) -> int {
     }
   }
 
-  auto result = ::Graphics::DynamicRendering::Clear(*ctx, clearInfo);
-
-  if (Error::IsError(result)) {
-    return luaL_error(state, "%s", result.ToString().c_str());
-  }
+  LUA_CK_ERR(::Graphics::DynamicRendering::Clear(*ctx, clearInfo));
 
   return 0;
 }
@@ -642,15 +582,11 @@ auto wrap_AquireCommandBuffer(lua_State *state) -> int {
   info.name = luaL_optstring(state, 1, "Unnamed Graphics Commands");
   info.priority = static_cast<int>(luaL_optinteger(state, 2, 0));
 
-  auto result = ::Graphics::Threading::AquireCommandBuffer(*ctx, info);
+  (void)LUA_CK_RES(::Graphics::Threading::AquireCommandBuffer(*ctx, info));
 
   // Optional boolean arg at idx 3 can be used to indicate that we want to create a performance snapshot for this command buffer
   if (lua_toboolean(state, 3) != 0) {
     ::Graphics::Snapshot::StartSnapshot();
-  }
-
-  if (Error::IsError(result)) {
-    return luaL_error(state, "%s", result.error().message.c_str());
   }
 
   return 0;
@@ -663,13 +599,10 @@ auto wrap_SubmitCommandBuffer(lua_State *state) -> int {
     return luaL_error(state, "No current graphics context.");
   }
 
-  auto submitResult = ::Graphics::Threading::SubmitCommands(*ctx);
-  if (Error::IsError(submitResult)) {
-    return luaL_error(state, "%s", submitResult.error().ToString().c_str());
-  }
+  auto submitResult = LUA_CK_RES(::Graphics::Threading::SubmitCommands(*ctx));
 
   LuaWrap::PushObject(state, ::Graphics::Threading::RenderThreadInfo::GetType(),
-                      submitResult.value().get());
+                      submitResult.get());
 
   auto *snapshot = ::Graphics::Snapshot::GetCurrentSnapshot();
   ::Graphics::Snapshot::EndSnapshot();
@@ -707,25 +640,17 @@ auto wrap_CopyBuffer(lua_State *state) -> int {
     return luaL_error(state, "No current GraphicsContext set for this thread.");
   }
 
-  auto *srcBuffer =
-      LuaWrap::ObjectFromLua<::Graphics::StructuredBuffer>(state, 1);
-  auto *dstBuffer =
-      LuaWrap::ObjectFromLua<::Graphics::StructuredBuffer>(state, 2);
-
-  if (srcBuffer == nullptr || dstBuffer == nullptr) {
-    return luaL_error(state, "Expected Buffer as first and second argument");
-  }
+  auto srcBuffer = LUA_CK_NULL(
+      LuaWrap::ObjectFromLua<::Graphics::StructuredBuffer>(state, 1));
+  auto dstBuffer = LUA_CK_NULL(
+      LuaWrap::ObjectFromLua<::Graphics::StructuredBuffer>(state, 2));
 
   auto srcIndex = static_cast<size_t>(luaL_checkinteger(state, 3));
   auto dstIndex = static_cast<size_t>(luaL_checkinteger(state, 4));
   auto size = static_cast<size_t>(luaL_checkinteger(state, 5)); // NOLINT
 
-  auto result = srcBuffer->GetBuffer()->CopyTo(*ctx, *dstBuffer->GetBuffer(),
-                                               srcIndex, dstIndex, size);
-  if (Error::IsError(result)) {
-    return luaL_error(state, "Failed to copy buffer data: %s",
-                      result.message.c_str());
-  }
+  LUA_CK_ERR(srcBuffer->GetBuffer()->CopyTo(*ctx, *dstBuffer->GetBuffer(),
+                                            srcIndex, dstIndex, size));
 
   return 0;
 }
@@ -738,12 +663,10 @@ auto wrap_CopyTexture(lua_State *state) -> int {
     return luaL_error(state, "No current GraphicsContext set for this thread.");
   }
 
-  auto *srcTexture = LuaWrap::ObjectFromLua<::Graphics::Texture>(state, 1);
-  auto *dstTexture = LuaWrap::ObjectFromLua<::Graphics::Texture>(state, 2);
-
-  if (srcTexture == nullptr || dstTexture == nullptr) {
-    return luaL_error(state, "Expected Texture as first and second argument");
-  }
+  auto srcTexture =
+      LUA_CK_NULL(LuaWrap::ObjectFromLua<::Graphics::Texture>(state, 1));
+  auto dstTexture =
+      LUA_CK_NULL(LuaWrap::ObjectFromLua<::Graphics::Texture>(state, 2));
 
   ::Graphics::CopyRegion region{};
 
@@ -776,11 +699,7 @@ auto wrap_CopyTexture(lua_State *state) -> int {
       static_cast<uint32_t>(luaL_optinteger(state, i++, 0));
   region.mipLevelCount = static_cast<uint32_t>(luaL_optinteger(state, i++, 1));
 
-  auto result = srcTexture->CopyTo(*ctx, *dstTexture, region);
-  if (Error::IsError(result)) {
-    return luaL_error(state, "Failed to copy texture data: %s",
-                      result.message.c_str());
-  }
+  LUA_CK_ERR(srcTexture->CopyTo(*ctx, *dstTexture, region));
 
   return 0;
 }
@@ -793,15 +712,10 @@ auto wrap_CopyBufferToTexture(lua_State *state) -> int {
     return luaL_error(state, "No current GraphicsContext set for this thread.");
   }
 
-  auto *srcBuffer =
-      LuaWrap::ObjectFromLua<::Graphics::StructuredBuffer>(state, 1);
-  auto *dstTexture = LuaWrap::ObjectFromLua<::Graphics::Texture>(state, 2);
-
-  if (srcBuffer == nullptr || dstTexture == nullptr) {
-    return luaL_error(
-        state,
-        "Expected Buffer as first argument and Texture as second argument");
-  }
+  auto srcBuffer = LUA_CK_NULL(
+      LuaWrap::ObjectFromLua<::Graphics::StructuredBuffer>(state, 1));
+  auto dstTexture =
+      LUA_CK_NULL(LuaWrap::ObjectFromLua<::Graphics::Texture>(state, 2));
 
   VkBufferImageCopy region{};
 
@@ -832,11 +746,7 @@ auto wrap_CopyBufferToTexture(lua_State *state) -> int {
   region.imageSubresource.layerCount =
       static_cast<uint32_t>(luaL_optinteger(state, i++, 1));
 
-  auto result = srcBuffer->GetBuffer()->CopyTo(*ctx, *dstTexture, region);
-  if (Error::IsError(result)) {
-    return luaL_error(state, "Failed to copy buffer to texture: %s",
-                      result.message.c_str());
-  }
+  LUA_CK_ERR(srcBuffer->GetBuffer()->CopyTo(*ctx, *dstTexture, region));
 
   return 0;
 }
@@ -849,15 +759,10 @@ auto wrap_CopyTextureToBuffer(lua_State *state) -> int {
     return luaL_error(state, "No current GraphicsContext set for this thread.");
   }
 
-  auto *srcTexture = LuaWrap::ObjectFromLua<::Graphics::Texture>(state, 1);
-  auto *dstBuffer =
-      LuaWrap::ObjectFromLua<::Graphics::StructuredBuffer>(state, 2);
-
-  if (srcTexture == nullptr || dstBuffer == nullptr) {
-    return luaL_error(
-        state,
-        "Expected Texture as first argument and Buffer as second argument");
-  }
+  auto srcTexture =
+      LUA_CK_NULL(LuaWrap::ObjectFromLua<::Graphics::Texture>(state, 1));
+  auto dstBuffer = LUA_CK_NULL(
+      LuaWrap::ObjectFromLua<::Graphics::StructuredBuffer>(state, 2));
 
   ::Graphics::ToBufferCopyRegion region{};
 
@@ -883,11 +788,7 @@ auto wrap_CopyTextureToBuffer(lua_State *state) -> int {
 
   region.dstOffset = static_cast<VkDeviceSize>(luaL_optinteger(state, i++, 0));
 
-  auto result = srcTexture->CopyTo(*ctx, *dstBuffer->GetBuffer(), region);
-  if (Error::IsError(result)) {
-    return luaL_error(state, "Failed to copy texture to buffer: %s",
-                      result.message.c_str());
-  }
+  LUA_CK_ERR(srcTexture->CopyTo(*ctx, *dstBuffer->GetBuffer(), region));
 
   return 0;
 }

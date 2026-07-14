@@ -7,19 +7,10 @@
 
 namespace Wrap::Data {
 
-auto GetBytedataFromLua(lua_State *state, int index) -> ::Data::ByteData * {
-  if (LuaWrap::IsType<::Data::ByteData>(state, index)) {
-    return LuaWrap::ObjectFromLua<::Data::ByteData>(state, index);
-  }
-  return nullptr;
-}
-
 template <typename T>
 constexpr auto SetIntFromLuaData(lua_State *state) -> int {
-  auto *bytedata = GetBytedataFromLua(state, 1);
-  if (bytedata == nullptr) {
-    luaL_error(state, "Invalid Bytedata object.");
-  }
+  auto bytedata =
+      LUA_CK_NULL(LuaWrap::ObjectFromLua<::Data::ByteData>(state, 1));
 
   auto span = bytedata->GetDataSpan<uint8_t>();
   auto offset = 0L;
@@ -41,10 +32,8 @@ constexpr auto SetIntFromLuaData(lua_State *state) -> int {
 
 template <typename T>
 constexpr auto SetFloatFromLuaData(lua_State *state) -> int {
-  auto *bytedata = GetBytedataFromLua(state, 1);
-  if (bytedata == nullptr) {
-    luaL_error(state, "Invalid Bytedata object.");
-  }
+  auto bytedata =
+      LUA_CK_NULL(LuaWrap::ObjectFromLua<::Data::ByteData>(state, 1));
 
   auto span = bytedata->GetDataSpan<uint8_t>();
   auto offset = 0L;
@@ -84,10 +73,8 @@ constexpr auto SetFloatFromLuaData(lua_State *state) -> int {
 }
 
 template <typename T> constexpr auto GetIntToLuaData(lua_State *state) -> int {
-  auto *bytedata = GetBytedataFromLua(state, 1);
-  if (bytedata == nullptr) {
-    luaL_error(state, "Invalid Bytedata object.");
-  }
+  auto bytedata =
+      LUA_CK_NULL(LuaWrap::ObjectFromLua<::Data::ByteData>(state, 1));
 
   auto span = bytedata->GetDataSpan<uint8_t>();
   auto offset = 0L;
@@ -122,10 +109,8 @@ template <typename T> constexpr auto GetIntToLuaData(lua_State *state) -> int {
 
 template <typename T>
 constexpr auto GetFloatToLuaData(lua_State *state) -> int {
-  auto *bytedata = GetBytedataFromLua(state, 1);
-  if (bytedata == nullptr) {
-    luaL_error(state, "Invalid Bytedata object.");
-  }
+  auto bytedata =
+      LUA_CK_NULL(LuaWrap::ObjectFromLua<::Data::ByteData>(state, 1));
 
   auto span = bytedata->GetDataSpan<uint8_t>();
   auto offset = 0L;
@@ -212,19 +197,15 @@ auto wrap_GetHalf(lua_State *state) -> int {
 }
 
 auto wrap_GetSize(lua_State *state) -> int {
-  auto *bytedata = GetBytedataFromLua(state, 1);
-  if (bytedata == nullptr) {
-    luaL_error(state, "Invalid Bytedata object.");
-  }
+  auto bytedata =
+      LUA_CK_NULL(LuaWrap::ObjectFromLua<::Data::ByteData>(state, 1));
 
   lua_pushinteger(state, static_cast<lua_Integer>(bytedata->GetSize()));
   return 1;
 }
 auto wrap_GetPointer(lua_State *state) -> int {
-  auto *bytedata = GetBytedataFromLua(state, 1);
-  if (bytedata == nullptr) {
-    luaL_error(state, "Invalid Bytedata object.");
-  }
+  auto bytedata =
+      LUA_CK_NULL(LuaWrap::ObjectFromLua<::Data::ByteData>(state, 1));
 
   lua_pushlightuserdata(state, static_cast<void *>(bytedata->GetData()));
   return 1;

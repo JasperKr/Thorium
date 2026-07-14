@@ -687,7 +687,7 @@ auto Camera::DrawGUI(flecs::entity entity) -> void {
 
 // scene:newCamera(name, verticalFOV, width, height, near, far)
 auto LuaCamera::Create(lua_State *state) -> int {
-  auto *scene = LUA_CK_NULL(::LuaWrap::ObjectFromLua<Scene>(state, 1));
+  auto scene = LUA_CK_NULL(::LuaWrap::ObjectFromLua<Scene>(state, 1));
 
   auto context = *Graphics::GetCurrentGraphicsContext();
 
@@ -719,7 +719,7 @@ auto LuaCamera::Create(lua_State *state) -> int {
 }
 
 auto LuaCamera::SetAspectRatio(lua_State *state) -> int {
-  auto *obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
+  auto obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
   auto *camera = LUA_CK_NULL(obj->entity.try_get_mut<Camera>());
 
   camera->SetAspectRatio(luaL_checkscalar(state, 2));
@@ -728,7 +728,7 @@ auto LuaCamera::SetAspectRatio(lua_State *state) -> int {
 }
 
 auto LuaCamera::SetVerticalFOV(lua_State *state) -> int {
-  auto *obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
+  auto obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
   auto *camera = LUA_CK_NULL(obj->entity.try_get_mut<Camera>());
 
   camera->SetVerticalFOV(luaL_checkscalar(state, 2));
@@ -737,7 +737,7 @@ auto LuaCamera::SetVerticalFOV(lua_State *state) -> int {
 }
 
 auto LuaCamera::SetNearPlane(lua_State *state) -> int {
-  auto *obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
+  auto obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
   auto *camera = LUA_CK_NULL(obj->entity.try_get_mut<Camera>());
 
   camera->SetNearPlane(luaL_checkscalar(state, 2));
@@ -746,7 +746,7 @@ auto LuaCamera::SetNearPlane(lua_State *state) -> int {
 }
 
 auto LuaCamera::SetFarPlane(lua_State *state) -> int {
-  auto *obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
+  auto obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
   auto *camera = LUA_CK_NULL(obj->entity.try_get_mut<Camera>());
 
   camera->SetFarPlane(luaL_checkscalar(state, 2));
@@ -755,7 +755,7 @@ auto LuaCamera::SetFarPlane(lua_State *state) -> int {
 }
 
 auto LuaCamera::GetAspectRatio(lua_State *state) -> int {
-  auto *obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
+  auto obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
   const auto *camera = LUA_CK_NULL(obj->entity.try_get<Camera>());
 
   lua_pushnumber(state, camera->GetAspectRatio());
@@ -763,7 +763,7 @@ auto LuaCamera::GetAspectRatio(lua_State *state) -> int {
 }
 
 auto LuaCamera::GetVerticalFOV(lua_State *state) -> int {
-  auto *obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
+  auto obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
   const auto *camera = LUA_CK_NULL(obj->entity.try_get<Camera>());
 
   lua_pushnumber(state, camera->GetVerticalFOV());
@@ -771,7 +771,7 @@ auto LuaCamera::GetVerticalFOV(lua_State *state) -> int {
 }
 
 auto LuaCamera::GetNearPlane(lua_State *state) -> int {
-  auto *obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
+  auto obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
   const auto *camera = LUA_CK_NULL(obj->entity.try_get<Camera>());
 
   lua_pushnumber(state, camera->GetNearPlane());
@@ -779,7 +779,7 @@ auto LuaCamera::GetNearPlane(lua_State *state) -> int {
 }
 
 auto LuaCamera::GetFarPlane(lua_State *state) -> int {
-  auto *obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
+  auto obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
   const auto *camera = LUA_CK_NULL(obj->entity.try_get<Camera>());
 
   lua_pushnumber(state, camera->GetFarPlane());
@@ -787,7 +787,7 @@ auto LuaCamera::GetFarPlane(lua_State *state) -> int {
 }
 
 auto LuaCamera::GetBuffer(lua_State *state) -> int {
-  auto *obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
+  auto obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
   const auto *camera = LUA_CK_NULL(obj->entity.try_get<Camera>());
 
   ::LuaWrap::PushObject(state, Graphics::StructuredBuffer::GetType(),
@@ -796,10 +796,10 @@ auto LuaCamera::GetBuffer(lua_State *state) -> int {
 }
 
 auto LuaCamera::Render(lua_State *state) -> int {
-  auto *obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
+  auto obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
   auto *camera = LUA_CK_NULL(obj->entity.try_get_mut<Camera>());
 
-  auto *scene = LUA_CK_NULL(::LuaWrap::ObjectFromLua<Scene>(state, 2));
+  auto scene = LUA_CK_NULL(::LuaWrap::ObjectFromLua<Scene>(state, 2));
   auto context = *Graphics::GetCurrentGraphicsContext();
 
   DrawData drawData{
@@ -807,13 +807,13 @@ auto LuaCamera::Render(lua_State *state) -> int {
       .Matrices = *obj->entity.try_get<CameraMatrices>(),
   };
 
-  LUA_CK_ERR(camera->Render(context, drawData, scene));
+  LUA_CK_ERR(camera->Render(context, drawData, scene.get()));
 
   return 0;
 }
 
 auto LuaCamera::GetRendertarget(lua_State *state) -> int {
-  auto *obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
+  auto obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
   auto *camera = LUA_CK_NULL(obj->entity.try_get_mut<Camera>());
 
   auto context = *Graphics::GetCurrentGraphicsContext();
@@ -847,7 +847,7 @@ auto LuaCamera::GetRendertarget(lua_State *state) -> int {
 }
 
 auto LuaCamera::GetDimensions(lua_State *state) -> int {
-  auto *obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
+  auto obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
   const auto *camera = LUA_CK_NULL(obj->entity.try_get<Camera>());
 
   const auto &size = camera->GetDimensions();
@@ -858,7 +858,7 @@ auto LuaCamera::GetDimensions(lua_State *state) -> int {
 }
 
 auto LuaCamera::SetDimensions(lua_State *state) -> int {
-  auto *obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
+  auto obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
   auto *camera = LUA_CK_NULL(obj->entity.try_get_mut<Camera>());
 
   const auto width = luaL_checkinteger(state, 2);
@@ -871,7 +871,7 @@ auto LuaCamera::SetDimensions(lua_State *state) -> int {
 }
 
 auto LuaCamera::GetWidth(lua_State *state) -> int {
-  auto *obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
+  auto obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
   const auto *camera = LUA_CK_NULL(obj->entity.try_get<Camera>());
 
   const auto &size = camera->GetDimensions();
@@ -881,7 +881,7 @@ auto LuaCamera::GetWidth(lua_State *state) -> int {
 }
 
 auto LuaCamera::GetHeight(lua_State *state) -> int {
-  auto *obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
+  auto obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
   const auto *camera = LUA_CK_NULL(obj->entity.try_get<Camera>());
 
   const auto &size = camera->GetDimensions();
@@ -891,7 +891,7 @@ auto LuaCamera::GetHeight(lua_State *state) -> int {
 }
 
 auto LuaCamera::SetWidth(lua_State *state) -> int {
-  auto *obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
+  auto obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
   auto *camera = LUA_CK_NULL(obj->entity.try_get_mut<Camera>());
 
   const auto width = luaL_checkinteger(state, 2);
@@ -903,7 +903,7 @@ auto LuaCamera::SetWidth(lua_State *state) -> int {
 }
 
 auto LuaCamera::SetHeight(lua_State *state) -> int {
-  auto *obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
+  auto obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
   auto *camera = LUA_CK_NULL(obj->entity.try_get_mut<Camera>());
 
   const auto height = luaL_checkinteger(state, 2);
@@ -930,7 +930,7 @@ const std::unordered_map<std::string_view,
 };
 
 auto LuaCamera::GetPersistentTextureSettings(lua_State *state) -> int {
-  auto *obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
+  auto obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
   const auto *camera = LUA_CK_NULL(obj->entity.try_get<Camera>());
 
   const auto &settings = camera->GetPersistentTextureSettings();
@@ -947,7 +947,7 @@ auto LuaCamera::GetPersistentTextureSettings(lua_State *state) -> int {
 }
 
 auto LuaCamera::SetPersistentTextureSettings(lua_State *state) -> int {
-  auto *obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
+  auto obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
   auto *camera = LUA_CK_NULL(obj->entity.try_get_mut<Camera>());
 
   Camera::PersistentTextureSettings newSettings;

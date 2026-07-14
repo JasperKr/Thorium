@@ -7,11 +7,9 @@
 #include "Wrap/wrap.hpp"
 #include "Wrap/wrap_engine.hpp"
 #include "flecs/addons/cpp/c_types.hpp"
-#include <format>
 #include <imgui.h>
 #include <lua.h>
 #include <lua.hpp>
-#include <numbers>
 
 namespace Engine {
 // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers, readability-magic-numbers)

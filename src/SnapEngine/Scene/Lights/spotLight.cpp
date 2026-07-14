@@ -42,9 +42,8 @@ auto SpotLight::Write(std::span<uint8_t> buffer,
 
   auto &format = GetBufferFormat();
   auto offset = light.BufferIndex * format.GetStride();
-  if (offset + format.GetStride() > buffer.size()) {
-    return Error::Create("Writing light data out of bounds.");
-  }
+  ERR_ASSERT_MSG(offset + format.GetStride() <= buffer.size(),
+                 "Writing light data out of bounds.");
 
   auto newOffset = light.Write(buffer, offset);
 
@@ -59,12 +58,8 @@ auto SpotLight::Write(std::span<uint8_t> buffer,
 }
 
 auto LuaSpotLight::Create(lua_State *state) -> int {
-  auto *scene = ::LuaWrap::ObjectFromLua<Scene>(state, 1);
+  auto scene = LUA_CK_NULL(::LuaWrap::ObjectFromLua<Scene>(state, 1));
   const char *name = luaL_checkstring(state, 2);
-
-  if (scene == nullptr) {
-    return luaL_error(state, "Expected a Scene object");
-  }
 
   auto entity = scene->world.entity(name);
   entity.add<SpotLight>();

@@ -9,10 +9,7 @@
 namespace Engine {
 
 auto LuaShape::GetLODs(lua_State *state) -> int {
-  auto *shape = ::LuaWrap::ObjectFromLua<LuaShape>(state, 1);
-  if (shape == nullptr) {
-    return luaL_error(state, "Expected a Shape object");
-  }
+  auto shape = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaShape>(state, 1));
 
   if (lua_gettop(state) == 1) {
     lua_newtable(state);
@@ -33,12 +30,8 @@ auto LuaShape::GetLODs(lua_State *state) -> int {
 
 // scene:createShape(name, lods)
 auto LuaShape::Create(lua_State *state) -> int {
-  auto *scene = ::LuaWrap::ObjectFromLua<Scene>(state, 1);
+  auto scene = LUA_CK_NULL(::LuaWrap::ObjectFromLua<Scene>(state, 1));
   const char *name = luaL_checkstring(state, 2);
-
-  if (scene == nullptr) {
-    return luaL_error(state, "Expected a World object");
-  }
 
   auto shapeEntity = scene->world.entity(name);
 
@@ -49,12 +42,8 @@ auto LuaShape::Create(lua_State *state) -> int {
     lua_pushinteger(state, i);
     lua_gettable(state, 3);
 
-    auto *luaLOD = ::LuaWrap::ObjectFromLua<LuaLevelOfDetail>(state, -1);
-    if (luaLOD == nullptr) {
-      return luaL_error(state,
-                        "Expected a LevelOfDetail object in the LODs table");
-    }
-
+    auto luaLOD =
+        LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaLevelOfDetail>(state, -1));
     luaLOD->entity.child_of(shapeEntity);
   }
   lua_pop(state, lodCount);

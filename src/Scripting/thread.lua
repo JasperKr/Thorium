@@ -77,8 +77,6 @@ do
 
     local startTime = snap.timer.getTime()
 
-    Imgui.ShowDemoWindow()
-
     if snapshot then
       snapshot:draw()
     end

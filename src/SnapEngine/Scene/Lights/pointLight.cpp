@@ -48,12 +48,8 @@ auto PointLight::Write(std::span<uint8_t> buffer,
 }
 
 auto LuaPointLight::Create(lua_State *state) -> int {
-  auto *scene = ::LuaWrap::ObjectFromLua<Scene>(state, 1);
+  auto scene = LUA_CK_NULL(::LuaWrap::ObjectFromLua<Scene>(state, 1));
   const char *name = luaL_checkstring(state, 2);
-
-  if (scene == nullptr) {
-    return luaL_error(state, "Expected a Scene object");
-  }
 
   auto entity = scene->world.entity(name);
   entity.add<PointLight>();

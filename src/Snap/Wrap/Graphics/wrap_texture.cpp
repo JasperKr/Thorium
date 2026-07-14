@@ -27,11 +27,8 @@ auto inline StringToVkFilter(const char *filterStr) -> VkFilter {
 }
 
 auto wrap_SetFilter(lua_State *state) -> int {
-  auto *texture = LuaWrap::ObjectFromLua<::Graphics::Texture>(state, 1);
-
-  if (texture == nullptr) {
-    return luaL_error(state, "Expected Texture as first argument");
-  }
+  auto texture =
+      LUA_CK_NULL(LuaWrap::ObjectFromLua<::Graphics::Texture>(state, 1));
 
   const char *minFilterStr = luaL_checkstring(state, 2);
   const char *magFilterStr = luaL_checkstring(state, 3);
@@ -52,11 +49,8 @@ auto wrap_SetFilter(lua_State *state) -> int {
 auto wrap_GetFilter(lua_State *state) -> int {
   PrintWarning("Getting texture filter");
   PrintWarning("Texture type ptr: {}", (void *)::Graphics::Texture::GetType());
-  auto *texture = LuaWrap::ObjectFromLua<::Graphics::Texture>(state, 1);
-
-  if (texture == nullptr) {
-    return luaL_error(state, "Expected Texture as first argument");
-  }
+  auto texture =
+      LUA_CK_NULL(LuaWrap::ObjectFromLua<::Graphics::Texture>(state, 1));
 
   VkFilter minFilter = VK_FILTER_LINEAR;
   VkFilter magFilter = VK_FILTER_LINEAR;
@@ -78,11 +72,8 @@ auto wrap_GetFilter(lua_State *state) -> int {
 }
 
 auto wrap_SetAnisotropy(lua_State *state) -> int {
-  auto *texture = LuaWrap::ObjectFromLua<::Graphics::Texture>(state, 1);
-
-  if (texture == nullptr) {
-    return luaL_error(state, "Expected Texture as first argument");
-  }
+  auto texture =
+      LUA_CK_NULL(LuaWrap::ObjectFromLua<::Graphics::Texture>(state, 1));
 
   auto anisotropy = static_cast<float>(luaL_checknumber(state, 2));
 
@@ -92,11 +83,8 @@ auto wrap_SetAnisotropy(lua_State *state) -> int {
 }
 
 auto wrap_GetAnisotropy(lua_State *state) -> int {
-  auto *texture = LuaWrap::ObjectFromLua<::Graphics::Texture>(state, 1);
-
-  if (texture == nullptr) {
-    return luaL_error(state, "Expected Texture as first argument");
-  }
+  auto texture =
+      LUA_CK_NULL(LuaWrap::ObjectFromLua<::Graphics::Texture>(state, 1));
 
   float anisotropy = texture->GetAnisotropy();
 
@@ -119,11 +107,8 @@ auto inline StringToAddressMode(const char *addressModeStr)
 }
 
 auto wrap_SetWrapmode(lua_State *state) -> int {
-  auto *texture = LuaWrap::ObjectFromLua<::Graphics::Texture>(state, 1);
-
-  if (texture == nullptr) {
-    return luaL_error(state, "Expected Texture as first argument");
-  }
+  auto texture =
+      LUA_CK_NULL(LuaWrap::ObjectFromLua<::Graphics::Texture>(state, 1));
 
   const char *addressModeUStr = luaL_checkstring(state, 2);
   const char *addressModeVStr = luaL_checkstring(state, 3);
@@ -153,11 +138,8 @@ auto inline AddressModeToString(VkSamplerAddressMode addressMode) -> const
 }
 
 auto wrap_GetWrapmode(lua_State *state) -> int {
-  auto *texture = LuaWrap::ObjectFromLua<::Graphics::Texture>(state, 1);
-
-  if (texture == nullptr) {
-    return luaL_error(state, "Expected Texture as first argument");
-  }
+  auto texture =
+      LUA_CK_NULL(LuaWrap::ObjectFromLua<::Graphics::Texture>(state, 1));
 
   VkSamplerAddressMode addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
   VkSamplerAddressMode addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
@@ -176,11 +158,8 @@ auto wrap_GetWrapmode(lua_State *state) -> int {
 }
 
 auto wrap_SetLodBias(lua_State *state) -> int {
-  auto *texture = LuaWrap::ObjectFromLua<::Graphics::Texture>(state, 1);
-
-  if (texture == nullptr) {
-    return luaL_error(state, "Expected Texture as first argument");
-  }
+  auto texture =
+      LUA_CK_NULL(LuaWrap::ObjectFromLua<::Graphics::Texture>(state, 1));
 
   auto mipLodBias = static_cast<float>(luaL_checknumber(state, 2));
 
@@ -190,11 +169,8 @@ auto wrap_SetLodBias(lua_State *state) -> int {
 }
 
 auto wrap_GetLodBias(lua_State *state) -> int {
-  auto *texture = LuaWrap::ObjectFromLua<::Graphics::Texture>(state, 1);
-
-  if (texture == nullptr) {
-    return luaL_error(state, "Expected Texture as first argument");
-  }
+  auto texture =
+      LUA_CK_NULL(LuaWrap::ObjectFromLua<::Graphics::Texture>(state, 1));
 
   float mipLodBias = texture->GetLodBias();
 
@@ -203,7 +179,8 @@ auto wrap_GetLodBias(lua_State *state) -> int {
 }
 
 auto wrap_SetLodRange(lua_State *state) -> int {
-  auto *texture = LuaWrap::ObjectFromLua<::Graphics::Texture>(state, 1);
+  auto texture =
+      LUA_CK_NULL(LuaWrap::ObjectFromLua<::Graphics::Texture>(state, 1));
 
   if (texture == nullptr) {
     return luaL_error(state, "Expected Texture as first argument");
@@ -218,7 +195,8 @@ auto wrap_SetLodRange(lua_State *state) -> int {
 }
 
 auto wrap_GetLodRange(lua_State *state) -> int {
-  auto *texture = LuaWrap::ObjectFromLua<::Graphics::Texture>(state, 1);
+  auto texture =
+      LUA_CK_NULL(LuaWrap::ObjectFromLua<::Graphics::Texture>(state, 1));
 
   if (texture == nullptr) {
     return luaL_error(state, "Expected Texture as first argument");
@@ -284,11 +262,8 @@ inline auto CompareOpToString(VkCompareOp compareOp) -> const char * {
 }
 
 auto wrap_SetDepthCompare(lua_State *state) -> int {
-  auto *texture = LuaWrap::ObjectFromLua<::Graphics::Texture>(state, 1);
-
-  if (texture == nullptr) {
-    return luaL_error(state, "Expected Texture as first argument");
-  }
+  auto texture =
+      LUA_CK_NULL(LuaWrap::ObjectFromLua<::Graphics::Texture>(state, 1));
 
   if (lua_isnoneornil(state, 2) != 0) {
     texture->SetDepthCompare(false, VK_COMPARE_OP_ALWAYS);
@@ -303,11 +278,8 @@ auto wrap_SetDepthCompare(lua_State *state) -> int {
 }
 
 auto wrap_GetDepthCompare(lua_State *state) -> int {
-  auto *texture = LuaWrap::ObjectFromLua<::Graphics::Texture>(state, 1);
-
-  if (texture == nullptr) {
-    return luaL_error(state, "Expected Texture as first argument");
-  }
+  auto texture =
+      LUA_CK_NULL(LuaWrap::ObjectFromLua<::Graphics::Texture>(state, 1));
 
   bool enable = false;
   VkCompareOp compareOp = VK_COMPARE_OP_ALWAYS;
@@ -318,11 +290,8 @@ auto wrap_GetDepthCompare(lua_State *state) -> int {
 }
 
 auto wrap_GetWidth(lua_State *state) -> int {
-  auto *texture = LuaWrap::ObjectFromLua<::Graphics::Texture>(state, 1);
-
-  if (texture == nullptr) {
-    return luaL_error(state, "Expected Texture as first argument");
-  }
+  auto texture =
+      LUA_CK_NULL(LuaWrap::ObjectFromLua<::Graphics::Texture>(state, 1));
 
   uint32_t width = texture->GetWidth();
 
@@ -331,11 +300,8 @@ auto wrap_GetWidth(lua_State *state) -> int {
 }
 
 auto wrap_GetHeight(lua_State *state) -> int {
-  auto *texture = LuaWrap::ObjectFromLua<::Graphics::Texture>(state, 1);
-
-  if (texture == nullptr) {
-    return luaL_error(state, "Expected Texture as first argument");
-  }
+  auto texture =
+      LUA_CK_NULL(LuaWrap::ObjectFromLua<::Graphics::Texture>(state, 1));
 
   uint32_t height = texture->GetHeight();
 
@@ -344,11 +310,8 @@ auto wrap_GetHeight(lua_State *state) -> int {
 }
 
 auto wrap_GetDepth(lua_State *state) -> int {
-  auto *texture = LuaWrap::ObjectFromLua<::Graphics::Texture>(state, 1);
-
-  if (texture == nullptr) {
-    return luaL_error(state, "Expected Texture as first argument");
-  }
+  auto texture =
+      LUA_CK_NULL(LuaWrap::ObjectFromLua<::Graphics::Texture>(state, 1));
 
   uint32_t depth = texture->GetDepth();
 
@@ -357,11 +320,8 @@ auto wrap_GetDepth(lua_State *state) -> int {
 }
 
 auto wrap_GetDimensions(lua_State *state) -> int {
-  auto *texture = LuaWrap::ObjectFromLua<::Graphics::Texture>(state, 1);
-
-  if (texture == nullptr) {
-    return luaL_error(state, "Expected Texture as first argument");
-  }
+  auto texture =
+      LUA_CK_NULL(LuaWrap::ObjectFromLua<::Graphics::Texture>(state, 1));
 
   VkExtent2D dimensions = texture->GetDimensions();
 
@@ -371,11 +331,8 @@ auto wrap_GetDimensions(lua_State *state) -> int {
 }
 
 auto wrap_GetMipmapCount(lua_State *state) -> int {
-  auto *texture = LuaWrap::ObjectFromLua<::Graphics::Texture>(state, 1);
-
-  if (texture == nullptr) {
-    return luaL_error(state, "Expected Texture as first argument");
-  }
+  auto texture =
+      LUA_CK_NULL(LuaWrap::ObjectFromLua<::Graphics::Texture>(state, 1));
 
   size_t mipmapCount = texture->GetMipmapCount();
 
@@ -384,7 +341,8 @@ auto wrap_GetMipmapCount(lua_State *state) -> int {
 }
 
 auto wrap_GetFormat(lua_State *state) -> int {
-  auto *texture = LuaWrap::ObjectFromLua<::Graphics::Texture>(state, 1);
+  auto texture =
+      LUA_CK_NULL(LuaWrap::ObjectFromLua<::Graphics::Texture>(state, 1));
 
   if (texture == nullptr) {
     return luaL_error(state, "Expected Texture as first argument");
@@ -431,7 +389,7 @@ const std::unordered_set<std::string> ValidOptionKeys = {
     "storage", "mipmapcount", "mipmapstart", "linear",
 };
 
-auto CheckTopOfStackTableKeys(lua_State *state, int index) -> Result<void> {
+auto CheckTopOfStackTableKeys(lua_State *state, int index) -> Error {
   luaL_checktype(state, index, LUA_TTABLE);
 
   lua_pushnil(state); // first key
@@ -440,8 +398,7 @@ auto CheckTopOfStackTableKeys(lua_State *state, int index) -> Result<void> {
     if (lua_type(state, -2) == LUA_TSTRING) {
       const char *keyStr = luaL_checkstring(state, -2);
       if (!ValidOptionKeys.contains(std::string(keyStr))) {
-        return Error::Unexpected(
-            std::format("Invalid texture option key: {}", keyStr));
+        return Error::Createf("Invalid texture option key: {}", keyStr);
       }
     }
 
@@ -476,11 +433,7 @@ struct LuaOptions {
     LuaOptions options{};
     luaL_checktype(state, index, LUA_TTABLE);
 
-    auto result = CheckTopOfStackTableKeys(state, index);
-
-    if (Error::IsError(result)) {
-      return result.error();
-    }
+    CHECK_ERR(CheckTopOfStackTableKeys(state, index));
 
     // type
     lua_getfield(state, index, "type");
@@ -603,7 +556,8 @@ struct LuaOptions {
 static inline auto TextureFromImagedata(lua_State *state)
     -> Result<Ref<::Graphics::Texture>> {
   auto *ctx = ::Graphics::GetCurrentGraphicsContext();
-  auto *imageData = LuaWrap::ObjectFromLua<Image::ImageData>(state, 1);
+  auto imageData =
+      CHECK_NULL(LuaWrap::ObjectFromLua<Image::ImageData>(state, 1));
 
   return CHECK_RES(::Graphics::Texture::FromMemory(*ctx, *imageData,
                                                    VK_IMAGE_USAGE_SAMPLED_BIT));
@@ -611,7 +565,7 @@ static inline auto TextureFromImagedata(lua_State *state)
 
 static inline auto TextureFromFilepath(lua_State *state)
     -> Result<Ref<::Graphics::Texture>> {
-  auto *ctx = ::Graphics::GetCurrentGraphicsContext();
+  auto *ctx = CHECK_NULL(::Graphics::GetCurrentGraphicsContext());
   const char *filepath = luaL_checkstring(state, 1);
 
   return ::Graphics::Texture::FromFile(*ctx, filepath,
@@ -620,15 +574,10 @@ static inline auto TextureFromFilepath(lua_State *state)
 
 static inline auto TextureFromImagedataAndOptions(lua_State *state)
     -> Result<Ref<::Graphics::Texture>> {
-  auto *ctx = ::Graphics::GetCurrentGraphicsContext();
-  auto *imageData = LuaWrap::ObjectFromLua<Image::ImageData>(state, 1);
-  auto optionsResult = LuaOptions::Create(state, 2);
-
-  if (Error::IsError(optionsResult)) {
-    return optionsResult.error();
-  }
-
-  LuaOptions options = optionsResult.value();
+  auto *ctx = CHECK_NULL(::Graphics::GetCurrentGraphicsContext());
+  auto imageData =
+      CHECK_NULL(LuaWrap::ObjectFromLua<Image::ImageData>(state, 1));
+  auto options = CHECK_RES(LuaOptions::Create(state, 2));
 
   auto usage = TextureUsageToVkImageUsage(options.format, options.usage);
   return ::Graphics::Texture::FromMemory(*ctx, *imageData, usage);
@@ -641,29 +590,22 @@ static inline auto TextureFromFilepathAndOptions(lua_State *state)
   auto options = CHECK_RES(LuaOptions::Create(state, 2));
 
   auto usage = TextureUsageToVkImageUsage(options.format, options.usage);
-
   return ::Graphics::Texture::FromFile(*ctx, filepath, usage, options.mipmaps);
 }
 
 static inline auto TextureFromImagedataArrayAndOptions(lua_State *state)
     -> Result<Ref<::Graphics::Texture>> {
-  std::vector<Image::ImageData *> slices;
+  std::vector<Ref<Image::ImageData>> slices;
   size_t len = lua_objlen(state, 1);
   for (size_t i = 0; i < len; ++i) {
     lua_rawgeti(state, 1, static_cast<int>(i + 1));
-    auto *imageData = LuaWrap::ObjectFromLua<Image::ImageData>(state, -1);
+    auto imageData =
+        CHECK_NULL(LuaWrap::ObjectFromLua<Image::ImageData>(state, -1));
     slices.emplace_back(imageData);
     lua_pop(state, 1);
   }
 
-  auto optionsResult = LuaOptions::Create(state, 2);
-
-  if (Error::IsError(optionsResult)) {
-    return optionsResult.error();
-  }
-
-  LuaOptions options = optionsResult.value();
-
+  auto options = CHECK_RES(LuaOptions::Create(state, 2));
   auto *ctx = ::Graphics::GetCurrentGraphicsContext();
 
   return ::Graphics::Texture::FromMemory(*ctx, slices, options.type);
@@ -876,7 +818,7 @@ inline auto subresourceRangeFromLua(lua_State *state, int index)
 //
 // options: { mipmapstart = n, mipmapcount = n, layerstart = n, layercount = n}
 auto wrap_NewTextureView(lua_State *state) -> int {
-  auto *texture =
+  auto texture =
       LUA_CK_NULL(LuaWrap::ObjectFromLua<::Graphics::Texture>(state, 1));
 
   VkImageSubresourceRange range{};
@@ -895,7 +837,7 @@ auto wrap_NewTextureView(lua_State *state) -> int {
       ImageViewTypeEnum.FromLua(state, 3, VK_IMAGE_VIEW_TYPE_2D);
 
   auto view = LUA_CK_RES(
-      ::Graphics::Texture::Create(*ctx, texture, imageViewType, range));
+      ::Graphics::Texture::Create(*ctx, texture.get(), imageViewType, range));
 
   LuaWrap::PushObject(state, ::Graphics::Texture::GetType(), view.get());
 
@@ -903,10 +845,10 @@ auto wrap_NewTextureView(lua_State *state) -> int {
 }
 
 auto wrap_GetID(lua_State *state) -> int {
-  auto *texture =
+  auto texture =
       LUA_CK_NULL(LuaWrap::ObjectFromLua<::Graphics::Texture>(state, 1));
 
-  LuaWrap::PushPointer(state, texture);
+  LuaWrap::PushPointer(state, texture.get());
   return 1;
 }
 
