@@ -9,6 +9,7 @@ do
   local lastShownImDrawTime = 0
   local count = 0
   local frameIdx = 0
+  local viewport = { offset = vec2(), size = vec2() }
 
   local commandBufferChannel, canStartChannel, scene, events = ...
 
@@ -64,6 +65,11 @@ do
       rt:release()
 
       camera:setDimensions(windowSize.x, windowSize.y)
+
+      viewport.offset.x = Imgui.GetWindowPos().x
+      viewport.offset.y = Imgui.GetWindowPos().y
+      viewport.size.x = windowSize.x
+      viewport.size.y = windowSize.y
     end
     Imgui.End()
 
@@ -113,8 +119,10 @@ do
     isDown[button] = true
 
     local mx, my = snap.mouse.getPosition()
-    mx = mx / camera:getWidth()
-    my = my / camera:getHeight()
+    mx = mx - viewport.offset.x
+    my = my - viewport.offset.y
+    mx = mx / viewport.size.x
+    my = my / viewport.size.y
 
     if button == 1 and mx >= 0 and mx <= 1 and my >= 0 and my <= 1 then
       snap.renderer.pickObject(camera, mx, my)
@@ -231,8 +239,8 @@ do
     createSnapshot = false
     if firstFrame then
       snap.graphics.setDefaultFilter("linear", "linear", 16)
-      snap.scene.loadModel(scene, "Assets/Terrain/Bistro/bistro.gltf")
-      -- snap.scene.loadModel(scene, "Assets/Terrain/sponza.glb")
+      -- snap.scene.loadModel(scene, "Assets/Terrain/Bistro/bistro.gltf")
+      snap.scene.loadModel(scene, "Assets/Terrain/sponza.glb")
       -- snap.scene.loadModel(scene, "Assets/Objects/OrientationTest/OrientationTest.gltf")
       -- snap.scene.loadModel(scene, "Assets/Tests/MetalRoughSpheres.glb")
       -- snap.scene.loadModel(scene, "Assets/Tests/orientation2.glb")

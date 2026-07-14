@@ -152,8 +152,6 @@ auto DrawSceneHierarchy(const Engine::Scene &scene) -> Error {
       CHECK_RES(Editor::GetEditorInstance().PopEntityPickResult());
 
   if (pickReadbackResult != std::nullopt) {
-    PrintAlways("Pick Readback completed successfully.");
-
     auto pickResult = pickReadbackResult.value();
 
     scene.world.each<Geometry>(
@@ -284,8 +282,6 @@ auto Editor::PickEntity(const Camera &camera,
       .debugName = "Entity Pick Buffer",
   };
 
-  PrintAlways("Creating pick buffer with size: {}", info.size);
-
   auto pickBuffer = CHECK_RES(Graphics::Buffer::Create(context, info));
 
   CHECK_ERR(shader->Send(Graphics::ResourceKey{"SceneBVH"}, tlas));
@@ -349,12 +345,8 @@ auto Editor::PopEntityPickResult() -> Result<std::optional<PickEntityResult>> {
       reinterpret_cast<const PickResult *>(data->GetData());
 
   if (pickResult->hit == 0) {
-    PrintAlways("No entity was picked.");
     return std::nullopt;
   }
-
-  PrintAlways("Picked instance ID: {}, primitive ID: {}",
-              pickResult->instanceID, pickResult->primitiveID);
 
   PickEntityResult pickedEntity;
   pickedEntity.PrimitiveID = pickResult->primitiveID;
