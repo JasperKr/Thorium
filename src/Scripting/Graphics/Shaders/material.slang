@@ -18,5 +18,5 @@ public enum AlphaMode {
 };
 
 [vk::binding(0, 2)]
-public StructuredBuffer<MaterialData> MaterialBuffer;
+public restrict StructuredBuffer<MaterialData> MaterialBuffer;
 

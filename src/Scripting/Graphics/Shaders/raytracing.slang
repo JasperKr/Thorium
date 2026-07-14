@@ -1,6 +1,6 @@
 module raytracing;
 
-public RaytracingAccelerationStructure SceneBVH;
+public restrict RaytracingAccelerationStructure SceneBVH;
 
 public bool TraceShadowRay(RaytracingAccelerationStructure sceneBVH,
                            RayDesc ray) {

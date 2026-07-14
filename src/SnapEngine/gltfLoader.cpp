@@ -524,7 +524,8 @@ auto ExtractVertexFormat(const fastgltf::Asset &asset,
 
 /// Normalize an integer attribute value to float [0,1] or [-1,1].
 /// Writes `compCount` floats (each 4 bytes) into `dst`.
-inline void NormalizeAttribute(const uint8_t *src, uint8_t *dst,
+inline void NormalizeAttribute(const uint8_t *__restrict src,
+                               uint8_t *__restrict dst,
                                fastgltf::ComponentType compType,
                                size_t compCount) {
 
@@ -571,7 +572,8 @@ static inline auto PackToSigned10Bit(float value) -> uint32_t {
   return static_cast<uint32_t>(intValue) & 0x3FF;                    // NOLINT
 }
 
-static void ConvertNormalToPacked10Bit(const uint8_t *src, uint8_t *dst) {
+static void ConvertNormalToPacked10Bit(const uint8_t *__restrict src,
+                                       uint8_t *__restrict dst) {
   float normalX = 0.0F;
   float normalY = 0.0F;
   float normalZ = 0.0F;
@@ -591,7 +593,8 @@ static void ConvertNormalToPacked10Bit(const uint8_t *src, uint8_t *dst) {
   memcpy(dst, &packedNormal, sizeof(uint32_t)); // NOLINT
 }
 
-static void ConvertTangentToPacked10Bit(const uint8_t *src, uint8_t *dst) {
+static void ConvertTangentToPacked10Bit(const uint8_t *__restrict src,
+                                        uint8_t *__restrict dst) {
   float tangentX = 0.0F;
   float tangentY = 0.0F;
   float tangentZ = 0.0F;
@@ -614,7 +617,8 @@ static void ConvertTangentToPacked10Bit(const uint8_t *src, uint8_t *dst) {
   memcpy(dst, &packedTangent, sizeof(uint32_t)); // NOLINT
 }
 
-static void ConvertPositionFlipZ(const uint8_t *src, uint8_t *dst) {
+static void ConvertPositionFlipZ(const uint8_t *__restrict src,
+                                 uint8_t *__restrict dst) {
   float posX = 0.0F;
   float posY = 0.0F;
   float posZ = 0.0F;
@@ -634,7 +638,8 @@ static auto PackToUnsigned8Bit(float value) -> uint {
   return static_cast<uint32_t>(std::round(value * 255.0F)); // NOLINT
 }
 
-static auto ConvertColorToPacked8Bit(const uint8_t *src, uint8_t *dst) -> void {
+static auto ConvertColorToPacked8Bit(const uint8_t *__restrict src,
+                                     uint8_t *__restrict dst) -> void {
   float colorR = 0.0F;
   float colorG = 0.0F;
   float colorB = 0.0F;
@@ -940,11 +945,13 @@ LoadVertexData(Graphics::VertexFormat &format, const fastgltf::Asset &asset,
       converter = converterIter->second;
     }
 
+    auto *__restrict resultData = result.data();
+    auto *__restrict spanData = span.data();
+
     for (size_t value = 0; value < vertexCount; ++value) {
       const uint8_t *srcPtr =
-          span.data() + value * srcStride + accessor.byteOffset; // NOLINT
-      uint8_t *dstPtr =
-          result.data() + value * outputStride + dstOffset; // NOLINT
+          spanData + value * srcStride + accessor.byteOffset;          // NOLINT
+      uint8_t *dstPtr = resultData + value * outputStride + dstOffset; // NOLINT
 
       if (needsNormalize) {
         NormalizeAttribute(srcPtr, dstPtr, accessor.componentType,
@@ -1035,7 +1042,7 @@ auto DeinterleaveVertexData(const std::vector<uint8_t> &interleavedData)
 
   size_t vertexCount = interleavedData.size() / sizeof(VertexData);
 
-  const auto *vertexArray = // NOLINTNEXTLINE
+  const auto *__restrict vertexArray = // NOLINTNEXTLINE
       reinterpret_cast<const VertexData *>(interleavedData.data());
 
   auto positionStride = sizeof(float) * 3;
@@ -1049,21 +1056,25 @@ auto DeinterleaveVertexData(const std::vector<uint8_t> &interleavedData)
       std::vector<uint8_t>(vertexCount * normalTangentStride);
   auto colorData = std::vector<uint8_t>(vertexCount * colorStride);
 
+  auto *__restrict positionPtr = positionData.data();
+  auto *__restrict texcoordPtr = texcoordData.data();
+  auto *__restrict normalTangentPtr = normalTangentData.data();
+  auto *__restrict colorPtr = colorData.data();
+
   for (int vertex = 0; vertex < vertexCount; ++vertex) {
     const auto &srcVertex = vertexArray[vertex]; // NOLINT
 
     // NOLINTNEXTLINE
-    memcpy(positionData.data() + (vertex * positionStride), &srcVertex.position,
+    memcpy(positionPtr + (vertex * positionStride), &srcVertex.position,
            positionStride);
     // NOLINTNEXTLINE
-    memcpy(texcoordData.data() + (vertex * texcoordStride), &srcVertex.texcoord,
+    memcpy(texcoordPtr + (vertex * texcoordStride), &srcVertex.texcoord,
            texcoordStride);
     // NOLINTNEXTLINE
-    memcpy(normalTangentData.data() + (vertex * normalTangentStride),
-           &srcVertex.normal, normalTangentStride);
+    memcpy(normalTangentPtr + (vertex * normalTangentStride), &srcVertex.normal,
+           normalTangentStride);
     // NOLINTNEXTLINE
-    memcpy(colorData.data() + (vertex * colorStride), &srcVertex.color,
-           colorStride);
+    memcpy(colorPtr + (vertex * colorStride), &srcVertex.color, colorStride);
   }
 
   return {positionData, texcoordData, normalTangentData, colorData};
@@ -1268,13 +1279,11 @@ LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
 
       CHECK_ERR(mesh->CreateBLAS(context));
 
-      auto geometry = world->entity(
-          GetUniqueName(std::string(gltfMesh.name) + " Geometry").c_str());
+      auto geometry = world->entity(GetUniqueName("Geometry").c_str());
       geometry.set<Engine::Geometry>(Engine::Geometry{.mesh = mesh});
       geometry.add<Engine::Transform>();
 
-      auto lod = world->entity(
-          GetUniqueName(std::string(gltfMesh.name) + " LOD").c_str());
+      auto lod = world->entity(GetUniqueName("LOD").c_str());
 
       Engine::LocalBounds localBounds{};
 

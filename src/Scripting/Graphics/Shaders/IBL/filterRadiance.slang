@@ -30,13 +30,13 @@
 
 SamplerCube InputTexture;
 
-RWTexture2DArray<float4> OutputTexture0;
-RWTexture2DArray<float4> OutputTexture1;
-RWTexture2DArray<float4> OutputTexture2;
-RWTexture2DArray<float4> OutputTexture3;
-RWTexture2DArray<float4> OutputTexture4;
-RWTexture2DArray<float4> OutputTexture5;
-RWTexture2DArray<float4> OutputTexture6;
+restrict WTexture2DArray<float4> OutputTexture0;
+restrict WTexture2DArray<float4> OutputTexture1;
+restrict WTexture2DArray<float4> OutputTexture2;
+restrict WTexture2DArray<float4> OutputTexture3;
+restrict WTexture2DArray<float4> OutputTexture4;
+restrict WTexture2DArray<float4> OutputTexture5;
+restrict WTexture2DArray<float4> OutputTexture6;
 
 // restrict readonly buffer CoeffsBuffer
 // {

@@ -11,7 +11,7 @@ uniform int Slice;
 // layout(r11f_g11f_b10f) uniform restrict writeonly image2DArray IrradianceOutput;
 
 Sampler2DArray RadianceInput;
-RWTexture2DArray<float4> IrradianceOutput;
+restrict WTexture2DArray<float4> IrradianceOutput;
 
 /*
 

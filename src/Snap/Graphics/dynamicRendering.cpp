@@ -1433,7 +1433,8 @@ inline auto AllocateDescriptorSet(const GraphicsContext &context,
 
       if (samplerInfo->access == SLANG_RESOURCE_ACCESS_READ) {
         write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-      } else if (samplerInfo->access == SLANG_RESOURCE_ACCESS_READ_WRITE) {
+      } else if (samplerInfo->access == SLANG_RESOURCE_ACCESS_READ_WRITE ||
+                 samplerInfo->access == SLANG_RESOURCE_ACCESS_WRITE) {
         write.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
       } else {
         return Error::Unexpected(

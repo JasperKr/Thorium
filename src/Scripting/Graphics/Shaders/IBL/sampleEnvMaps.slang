@@ -43,7 +43,7 @@ struct LightProbeSampleInfo {
 // TODO: Volume texture for the world, storing an index and count into
 // a list of indices for probes that influence that cell, and then sample the probes in the shader
 uniform int LightProbeCount;
-StructuredBuffer<LightProbe> Probes;
+restrict StructuredBuffer<LightProbe> Probes;
 
 Sampler2DArray SpecularTextures;
 Sampler2DArray IrradianceTextures;

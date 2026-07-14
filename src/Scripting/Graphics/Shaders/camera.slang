@@ -39,7 +39,7 @@ public struct CameraData {
 };
 
 [vk::binding(0, 1)]
-public cbuffer CameraData {
+public restrict cbuffer CameraData {
   public CameraData camera;
   public CameraData previousCamera;
 };
