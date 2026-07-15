@@ -8,6 +8,7 @@
 #include "Graphics/shader.hpp"
 #include "Graphics/texture.hpp"
 #include "Graphics/uniformWriter.hpp"
+#include "Modules/Math/math.hpp"
 #include "Modules/Math/matrix.hpp"
 #include "Modules/bindings.hpp"
 #include "Modules/error.hpp"
@@ -539,9 +540,23 @@ auto Scene::DrawModels(Camera &camera, Frustum &frustum,
       forward, countKey,
       Renderer::RendererInstance.GetSceneLightBuffers().DirectionalLightCount));
 
-  auto tlasKey = Graphics::ResourceKey{"SceneBVH"};
+  static auto tlasKey = Graphics::ResourceKey{"SceneBVH"};
   CHECK_ERR(shader->Send(tlasKey, Renderer::RendererInstance.GetSceneTLAS()));
   CHECK_ERR(forward->Send(tlasKey, Renderer::RendererInstance.GetSceneTLAS()));
+
+  static auto blueNoiseTextureKey = Graphics::ResourceKey{"BlueNoiseTexture"};
+  CHECK_ERR(shader->Send(blueNoiseTextureKey,
+                         Renderer::RendererInstance.GetBlueNoiseTexture()));
+  CHECK_ERR(forward->Send(blueNoiseTextureKey,
+                          Renderer::RendererInstance.GetBlueNoiseTexture()));
+  static auto rndStateKey =
+      Graphics::ResourceKey{"PushConstants", "FrameRandomState"};
+  auto frameRandomState = Math::Random(0xFF, 0x0FFFFFFF); // NOLINT
+
+  CHECK_ERR(
+      Graphics::UniformWriter::Send(shader, rndStateKey, frameRandomState));
+  CHECK_ERR(
+      Graphics::UniformWriter::Send(forward, rndStateKey, frameRandomState));
 
   CHECK_ERR(Renderer::RendererInstance.BindLightBuffers(ctx, shader));
   CHECK_ERR(Renderer::RendererInstance.BindLightBuffers(ctx, forward));
@@ -625,6 +640,7 @@ Scene::Scene(std::string name) : name(std::move(name)) {
   AddGuiMethod<Shape>(&Shape::DrawGUI);
   AddGuiMethod<LevelOfDetail>(&LevelOfDetail::DrawGUI);
   AddGuiMethod<Geometry>(&Geometry::DrawGUI);
+  AddGuiMethod<Renderer::LightProbe>(&Renderer::LightProbe::DrawGUI, true);
 
   auto transformSystem =
       world.system<Engine::Transform, Engine::Transform *>()

@@ -15,13 +15,15 @@ public interface ILight {
 
   static float3 Sample(const float3 WorldPosition, const uint32_t LightIndex,
                        const Pixel pixel, const float3 ViewDirection,
-                       const float NoV, const float LambdaV) {
+                       const float NoV, const float LambdaV, inout uint state,
+                       uint2 screenCoords, uint frameRandomState) {
     return float3(0.0f);
   }
 
   static float3 SampleAll(const float3 WorldPosition, const Pixel pixel,
                           const float3 ViewDirection, const float NoV,
-                          const float LambdaV) {
+                          const float LambdaV, inout uint state,
+                          uint2 screenCoords, uint frameRandomState) {
     return float3(0.0f);
   }
 };

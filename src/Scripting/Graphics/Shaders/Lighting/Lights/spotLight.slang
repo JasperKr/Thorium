@@ -14,8 +14,9 @@ public struct SpotLight : ILight {
   public static override float3 SampleAll(const float3 WorldPosition,
                                           const Pixel pixel,
                                           const float3 ViewDirection,
-                                          const float NoV,
-                                          const float LambdaV) {
+                                          const float NoV, const float LambdaV,
+                                          inout uint state, uint2 screenCoords,
+                                          uint frameRandomState) {
     return float3(0.0f);
   }
 }

@@ -12,6 +12,7 @@ import transform;
 struct PushConstantBuffer {
   uint MaterialBufferIndex;
   uint ModelTransformIndex;
+  uint FrameRandomState;
 };
 
 [[vk::push_constant]]
@@ -65,6 +66,7 @@ struct FragmentInput {
   float2 tex_coord : TEXCOORDS;
   float4 color : COLOR;
   bool isFrontFace : SV_IsFrontFace;
+  float4 screenCoords : SV_Position;
 };
 
 Sampler2D AlbedoTexture;
@@ -122,8 +124,14 @@ float4 fragmentMain(FragmentInput input) {
   float NoV = ClampNoV(dot(normal, viewDir));
   float lambdaV = ComputeLambdaV(pixel.Roughness, NoV);
 
-  float3 direct = DirectionalLight::SampleAll(input.WorldPosition, pixel,
-                                              viewDir, NoV, lambdaV);
+  uint state =
+      uint(input.tex_coord.x * 10000.0f) ^ uint(input.tex_coord.y * 10000.0f);
+  state ^= PushConstants.FrameRandomState;
+  uint2 screenCoords = uint2(input.screenCoords.xy);
+
+  float3 direct = DirectionalLight::SampleAll(
+      input.WorldPosition, pixel, viewDir, NoV, lambdaV, state, screenCoords,
+      PushConstants.FrameRandomState);
   float3 E = prefilteredDFG(pixel.PerceptualRoughness, pixel.Fresnel0, NoV);
   float3 diffuse = ComputeDiffuseColor(pixel.Albedo, pixel.Metallic);
 

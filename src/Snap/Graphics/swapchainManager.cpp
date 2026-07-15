@@ -399,7 +399,8 @@ auto SwapchainManager::CreateVkSwapchain(GraphicsContext &context,
   swapchainInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
   swapchainInfo.surface = context.surface;
 
-  swapchainInfo.minImageCount = surfaceCapabilities.minImageCount + 1;
+  swapchainInfo.minImageCount =
+      std::max(surfaceCapabilities.minImageCount, SWAPCHAIN_IMAGE_COUNT);
 
   if (surfaceCapabilities.maxImageCount > 0 &&
       swapchainInfo.minImageCount > surfaceCapabilities.maxImageCount) {

@@ -14,7 +14,7 @@ struct LightProbe {
   Scene *scene = nullptr;
 
   auto Render(const Transform &transform) -> Error;
-  auto DrawGui(flecs::entity entity) -> Error;
+  auto DrawGUI(flecs::entity entity) -> Error;
 
   auto WriteToBuffer(std::vector<uint8_t> &buffer, size_t offset,
                      const Transform &transform) const -> void;

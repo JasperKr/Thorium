@@ -6,6 +6,7 @@
 #include "Graphics/bvh.hpp"
 #include "Graphics/graphicsContext.hpp"
 #include "Graphics/shader.hpp"
+#include "Graphics/texture.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Renderer/bloomManager.hpp"
@@ -134,6 +135,12 @@ struct Renderer {
     CHECK_ERR(LineDrawer.Initialize(context));
     CHECK_ERR(BloomManager.Initialize(context));
     SceneTLAS = CHECK_RES(Graphics::TLAS::Create(context));
+    BlueNoiseTexture = CHECK_RES(Graphics::Texture::FromFile(
+        context, "src/Scripting/Graphics/Assets/blue_noise_128.bmp",
+        VK_IMAGE_USAGE_SAMPLED_BIT, Graphics::TextureMipmapOption::None));
+    BlueNoiseTexture->SetWrapmode(VK_SAMPLER_ADDRESS_MODE_REPEAT,
+                                  VK_SAMPLER_ADDRESS_MODE_REPEAT,
+                                  VK_SAMPLER_ADDRESS_MODE_REPEAT);
 
     initialized = true;
     return {};
@@ -190,6 +197,12 @@ struct Renderer {
   auto SetSceneNeedsTLASRebuild(bool needsRebuild) -> void {
     SceneTLASNeedsRebuild = needsRebuild;
   }
+  auto GetBlueNoiseTexture() -> Ref<Graphics::Texture> & {
+    return BlueNoiseTexture;
+  }
+  auto GetBlueNoiseTexture() const -> const Ref<Graphics::Texture> & {
+    return BlueNoiseTexture;
+  }
 
 private:
   Material NoMaterial;
@@ -215,6 +228,7 @@ private:
   bool SceneTLASNeedsRebuild = true;
 
   bool initialized = false;
+  Ref<Graphics::Texture> BlueNoiseTexture;
 
   auto InitializeMaterialBuffer(Graphics::GraphicsContext &context,
                                 size_t initialSize) -> Error;

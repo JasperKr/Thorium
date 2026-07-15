@@ -21,7 +21,7 @@ auto LightProbe::Render(const Transform &transform) -> Error {
   return {};
 }
 
-auto LightProbe::DrawGui(flecs::entity entity) -> Error {
+auto LightProbe::DrawGUI(flecs::entity entity) -> Error {
   ImGui::Text("Light Probe");
   ImGui::Separator();
   ImGui::DragFloat("Radius", &Radius, 0.1F, 0.0F, 100.0F);            // NOLINT

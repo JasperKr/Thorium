@@ -292,6 +292,8 @@ void Renderer::Deinitialize() {
   LightProbeBuffer = nullptr;
   ShaderManager = ::Engine::Renderer::ShaderManager();
   SceneTLAS = nullptr;
+
+  BlueNoiseTexture = nullptr;
 }
 
 } // namespace Engine::Renderer

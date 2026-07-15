@@ -240,7 +240,8 @@ template <typename T> constexpr auto ObjectTypeName() -> std::string_view {
   }
 }
 
-// NOLINTNEXTLINE
+// NOLINTBEGIN
+
 #define LUA_CK_NULL(expr)                                                      \
   ({                                                                           \
     auto &&_result = (expr);                                                   \
@@ -252,7 +253,6 @@ template <typename T> constexpr auto ObjectTypeName() -> std::string_view {
     std::move(_result);                                                        \
   })
 
-// NOLINTNEXTLINE
 #define LUA_CK_NULL_MSG(expr, msg)                                             \
   ({                                                                           \
     auto &&_result = (expr);                                                   \
@@ -263,7 +263,6 @@ template <typename T> constexpr auto ObjectTypeName() -> std::string_view {
     std::move(_result);                                                        \
   })
 
-// NOLINTNEXTLINE
 #define LUA_CK_ERR(expr)                                                       \
   {                                                                            \
     auto _error = std::move(expr);                                             \
@@ -273,7 +272,6 @@ template <typename T> constexpr auto ObjectTypeName() -> std::string_view {
     }                                                                          \
   }
 
-// NOLINTNEXTLINE
 #define LUA_CK_RES(expr)                                                       \
   ({                                                                           \
     auto &&_result = (expr);                                                   \
@@ -292,7 +290,6 @@ template <typename T> constexpr auto ObjectTypeName() -> std::string_view {
     }                                                                          \
   }
 
-// NOLINTNEXTLINE
 #define LUA_ASSERT_MSG(expr, msg)                                              \
   {                                                                            \
     [[unlikely]]                                                               \
@@ -300,3 +297,5 @@ template <typename T> constexpr auto ObjectTypeName() -> std::string_view {
       return luaL_error(state, "%s", (msg));                                   \
     }                                                                          \
   }
+
+// NOLINTEND

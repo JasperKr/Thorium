@@ -65,7 +65,9 @@ public struct RectangleLight : ILight {
   public static override float3 Sample(const float3 WorldPosition,
                                        const uint LightIndex, const Pixel pixel,
                                        const float3 ViewDirection,
-                                       const float NoV, const float LambdaV) {
+                                       const float NoV, const float LambdaV,
+                                       inout uint state, uint2 screenCoords,
+                                       uint frameRandomState) {
     RectangleLight light = RectangleLights[LightIndex];
 
     half2 halfSize = half2(light.Size) * 0.5h;

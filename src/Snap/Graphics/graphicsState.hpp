@@ -84,6 +84,7 @@ constexpr VkPipelineColorBlendAttachmentState BlendmodeMultiply = {
 };
 
 constexpr uint32_t FRAMES_IN_FLIGHT = 3;
+constexpr uint32_t SWAPCHAIN_IMAGE_COUNT = 3;
 constexpr uint32_t MAX_SWAPCHAIN_IMAGES = 8;
 
 struct KeyElement {

@@ -18,7 +18,15 @@ struct FragmentOutput {
 
 struct FragmentInput {
   float2 tex_coord : TEXCOORDS;
+  float4 screen_position : SV_Position;
 };
+
+struct PushConstantBuffer {
+  uint FrameRandomState;
+};
+
+[[vk::push_constant]]
+PushConstantBuffer PushConstants;
 
 Sampler2D AlbedoTexture;
 Sampler2D NormalTexture;
@@ -60,12 +68,20 @@ FragmentOutput fragmentMain(FragmentInput input) {
   float NoV = ClampNoV(dot(normal, viewDir));
   float LambdaV = ComputeLambdaV(pixel.Roughness, NoV);
 
-  incomingLight +=
-      DirectionalLight.SampleAll(worldPosition, pixel, viewDir, NoV, LambdaV);
-  incomingLight +=
-      PointLight.SampleAll(worldPosition, pixel, viewDir, NoV, LambdaV);
-  incomingLight +=
-      SpotLight.SampleAll(worldPosition, pixel, viewDir, NoV, LambdaV);
+  uint state = uint(input.screen_position.x) ^ uint(input.screen_position.y);
+  state ^= PushConstants.FrameRandomState;
+
+  uint2 screenCoords = uint2(input.screen_position.xy);
+
+  incomingLight += DirectionalLight.SampleAll(worldPosition, pixel, viewDir,
+                                              NoV, LambdaV, state, screenCoords,
+                                              PushConstants.FrameRandomState);
+  // incomingLight +=
+  //     PointLight.SampleAll(worldPosition, pixel, viewDir, NoV, LambdaV, state,
+  //                          screenCoords, PushConstants.FrameRandomState);
+  // incomingLight +=
+  //     SpotLight.SampleAll(worldPosition, pixel, viewDir, NoV, LambdaV, state,
+  //                         screenCoords, PushConstants.FrameRandomState);
 
   out.color = float4(incomingLight, 1.0f);
 

@@ -130,9 +130,8 @@ auto LuaDirectionalLight::Create(lua_State *state) -> int {
   light.Type = LightType::Directional;
   light.BufferIndex = DirectionalLight::GetFreeBufferIndex();
 
-  if (light.BufferIndex == -1) {
-    return luaL_error(state, "Maximum number of directional lights reached.");
-  }
+  LUA_ASSERT(light.BufferIndex >= 0 &&
+             light.BufferIndex < static_cast<int>(MaxDirectionalLights));
 
   Renderer::RendererInstance.GetSceneLightBuffers().DirectionalLightCount++;
 
