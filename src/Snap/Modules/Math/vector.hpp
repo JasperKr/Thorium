@@ -34,6 +34,8 @@ struct Vec2 {
   auto operator-=(const Vec2 &other) -> Vec2 &;
   auto operator-=(Scalar scalar) -> Vec2 &;
 
+  auto operator-() const -> Vec2;
+
   auto operator*(Scalar scalar) const -> Vec2;
   auto operator*(const Vec2 &other) const -> Vec2;
   auto operator*=(Scalar scalar) -> Vec2 &;
@@ -100,6 +102,8 @@ struct Vec3 {
   auto operator-(Scalar scalar) const -> Vec3;
   auto operator-=(const Vec3 &other) -> Vec3 &;
   auto operator-=(Scalar scalar) -> Vec3 &;
+
+  auto operator-() const -> Vec3;
 
   auto operator*(Scalar scalar) const -> Vec3;
   auto operator*(const Vec3 &other) const -> Vec3;
@@ -171,6 +175,8 @@ struct Vec4 {
   auto operator-(Scalar scalar) const -> Vec4;
   auto operator-=(const Vec4 &other) -> Vec4 &;
   auto operator-=(Scalar scalar) -> Vec4 &;
+
+  auto operator-() const -> Vec4;
 
   auto operator*(Scalar scalar) const -> Vec4;
   auto operator*(const Vec4 &other) const -> Vec4;
@@ -568,6 +574,8 @@ struct Plane : public Vec4 {
   constexpr explicit Plane(const Vec4 &vec4) : Vec4(vec4) {}
   constexpr explicit Plane(const Vec3 &normal, Scalar distance)
       : Vec4(normal.x, normal.y, normal.z, distance) {}
+  constexpr explicit Plane(const Vec3 &origin, const Vec3 &normal)
+      : Vec4(normal.x, normal.y, normal.z, -normal.Dot(origin)) {}
 
   [[nodiscard]] auto Normal() const -> Vec3;
   [[nodiscard]] auto Distance() const -> Scalar;

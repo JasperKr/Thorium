@@ -390,7 +390,7 @@ auto LightprobePrefilterManager::PrefilterEnvironmentMap(
 
 auto CreateRotated(float yaw, float pitch, float roll) -> Engine::Transform {
   return Engine::Transform(Math::Conversions::ToQuaternion(
-      Math::EulerAngle(yaw, pitch, roll).ToRadians()));
+      Math::EulerAngle(pitch, yaw, roll).ToRadians()));
 }
 
 const static std::array<Engine::Transform, 6> Transforms = {

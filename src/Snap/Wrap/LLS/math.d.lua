@@ -3,21 +3,21 @@
 error("Do not require this file")
 
 --- Converts an euler angle to a quaternion
---- @param yaw number
 --- @param pitch number
+--- @param yaw number
 --- @param roll number
 --- @return number x
 --- @return number y
 --- @return number z
 --- @return number w
-function snap.math.eulerToQuaternion(yaw, pitch, roll) end
+function snap.math.eulerToQuaternion(pitch, yaw, roll) end
 
 --- Converts an euler angle to a matrix4x4
---- @param yaw number
 --- @param pitch number
+--- @param yaw number
 --- @param roll number
 --- @return ... matrix
-function snap.math.eulerToMatrix(yaw, pitch, roll) end
+function snap.math.eulerToMatrix(pitch, yaw, roll) end
 
 --- Converts a quaternion to an euler angle
 --- @param x number
@@ -84,7 +84,8 @@ function snap.math.scaleMatrix(x, y, z) end
 --- @param rotationZ number
 --- @return number[16] matrix
 function snap.math.transformMatrix(translationX, translationY, translationZ, scaleX, scaleY, scaleZ, rotationX, rotationY,
-                                   rotationZ) end
+                                   rotationZ)
+end
 
 --- Returns a random integer between min and max
 --- @overload fun(max: integer): integer Returns a random integer between 0 and max inclusive

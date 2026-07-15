@@ -157,10 +157,10 @@ do
 
     local rotation = userdata.rotation
 
-    rotation.x = rotation.x - dx * 0.0015
-    rotation.y = rotation.y - dy * 0.0015
+    rotation.y = rotation.y - dx * 0.0015
+    rotation.x = rotation.x - dy * 0.0015
 
-    rotation.y = math.max(math.min(rotation.y, math.pi / 2), -math.pi / 2)
+    rotation.x = math.max(math.min(rotation.x, math.pi / 2), -math.pi / 2)
     camera:setRotation(snap.math.eulerToQuaternion(rotation:get()))
   end
 

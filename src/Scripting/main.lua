@@ -13,7 +13,7 @@ snap.renderer.initialize()
 
 local thread = snap.thread.newThread("src/Scripting/thread.lua", "Render thread 1")
 
-local qx, qy, qz, qw = snap.math.eulerToQuaternion(0.3, -math.pi / 1.5, 0);
+local qx, qy, qz, qw = snap.math.eulerToQuaternion(-math.pi / 1.5, 0.3, 0);
 scene:newDirectionalLight("Test directional light", qx, qy, qz, qw, 1, 1, 1, 5)
 
 print("Starting render thread")

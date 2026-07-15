@@ -66,6 +66,21 @@ public:
     SetScale(Math::Vec3(xScale, yScale, zScale));
   }
 
+  auto ApplyTranslation(const Math::Vec3 &translation) -> void {
+    Position += translation;
+    LocalDirty = true;
+  }
+
+  auto ApplyRotation(const Math::Quaternion &rotation) -> void {
+    Rotation = rotation * Rotation;
+    LocalDirty = true;
+  }
+
+  auto ApplyScaling(const Math::Vec3 &scale) -> void {
+    Scale *= scale;
+    LocalDirty = true;
+  }
+
   auto UpdateLocalMatrix() -> void;
   auto UpdateWorldMatrix(const Transform *parent) -> void;
 

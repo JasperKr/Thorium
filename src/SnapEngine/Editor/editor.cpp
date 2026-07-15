@@ -1,10 +1,13 @@
 #include "editor.hpp"
 #include "Graphics/buffer.hpp"
 #include "Graphics/draw.hpp"
+#include "Graphics/graphics.hpp"
 #include "Graphics/uniformWriter.hpp"
+#include "Modules/Math/ray.hpp"
 #include "Modules/Math/vector.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
+#include "Modules/window.hpp"
 #include "Renderer/shaderManager.hpp"
 #include "Scene/Geometry/geometry.hpp"
 #include "Scene/scene.hpp"
@@ -355,6 +358,271 @@ auto Editor::PopEntityPickResult() -> Result<std::optional<PickEntityResult>> {
   pickedEntity.InstanceID = pickResult->instanceID;
 
   return pickedEntity;
+}
+
+void GizmoTranslation(const MoveData &moveData, const Math::Ray &currentRay,
+                      Transform &transform) {
+  Math::Vec3 OriginToCamera = (currentRay.Origin - moveData.Origin).Normalize();
+
+  switch (moveData.Axis) {
+  case TransformAxis::None:
+    return;
+  case TransformAxis::X: // Plane on to X axis, normal = OriginToCamera
+  {
+    Math::Vec3 normal = OriginToCamera;
+    normal.x = 0.0F;
+    normal = normal.Normalize();
+    Math::Plane plane(moveData.Origin, normal);
+    auto intersection = moveData.OriginalRay.IntersectPlane2Way(plane);
+    if (!intersection.has_value()) {
+      return;
+    }
+
+    Math::Vec3 intersectionPoint = intersection.value();
+    Math::Vec3 translation = intersectionPoint - moveData.Origin;
+    translation.y = 0.0F;
+    translation.z = 0.0F;
+    transform.ApplyTranslation(translation);
+
+    break;
+  }
+  case TransformAxis::Y: // Plane on to Y axis, normal = OriginToCamera
+  {
+    Math::Vec3 normal = OriginToCamera;
+    normal.y = 0.0F;
+    normal = normal.Normalize();
+    Math::Plane plane(moveData.Origin, normal);
+    auto intersection = moveData.OriginalRay.IntersectPlane2Way(plane);
+    if (!intersection.has_value()) {
+      return;
+    }
+
+    Math::Vec3 intersectionPoint = intersection.value();
+    Math::Vec3 translation = intersectionPoint - moveData.Origin;
+    translation.x = 0.0F;
+    translation.z = 0.0F;
+    transform.ApplyTranslation(translation);
+
+    break;
+  }
+  case TransformAxis::Z: // Plane on to Z axis, normal = OriginToCamera
+  {
+    Math::Vec3 normal = OriginToCamera;
+    normal.z = 0.0F;
+    normal = normal.Normalize();
+    Math::Plane plane(moveData.Origin, normal);
+    auto intersection = moveData.OriginalRay.IntersectPlane2Way(plane);
+    if (!intersection.has_value()) {
+      return;
+    }
+
+    Math::Vec3 intersectionPoint = intersection.value();
+    Math::Vec3 translation = intersectionPoint - moveData.Origin;
+    translation.x = 0.0F;
+    translation.y = 0.0F;
+    transform.ApplyTranslation(translation);
+
+    break;
+  }
+  case TransformAxis::XY: // Plane on to XY plane
+  {
+    Math::Plane plane(moveData.Origin, Math::Vec3(0.0F, 0.0F, 1.0F));
+    auto intersection = moveData.OriginalRay.IntersectPlane2Way(plane);
+    if (!intersection.has_value()) {
+      return;
+    }
+
+    Math::Vec3 intersectionPoint = intersection.value();
+    Math::Vec3 translation = intersectionPoint - moveData.Origin;
+    translation.z = 0.0F;
+    transform.ApplyTranslation(translation);
+
+    break;
+  }
+  case TransformAxis::XZ: // Plane on to XZ plane
+  {
+    Math::Plane plane(moveData.Origin, Math::Vec3(0.0F, 1.0F, 0.0F));
+    auto intersection = moveData.OriginalRay.IntersectPlane2Way(plane);
+    if (!intersection.has_value()) {
+      return;
+    }
+
+    Math::Vec3 intersectionPoint = intersection.value();
+    Math::Vec3 translation = intersectionPoint - moveData.Origin;
+    translation.y = 0.0F;
+    transform.ApplyTranslation(translation);
+
+    break;
+  }
+  case TransformAxis::YZ: // Plane on to YZ plane
+  {
+    Math::Plane plane(moveData.Origin, Math::Vec3(1.0F, 0.0F, 0.0F));
+    auto intersection = moveData.OriginalRay.IntersectPlane2Way(plane);
+    if (!intersection.has_value()) {
+      return;
+    }
+
+    Math::Vec3 intersectionPoint = intersection.value();
+    Math::Vec3 translation = intersectionPoint - moveData.Origin;
+    translation.x = 0.0F;
+    transform.ApplyTranslation(translation);
+
+    break;
+  }
+  case TransformAxis::XYZ: {
+    Math::Vec3 originalPoint =
+        moveData.OriginalRay.PointAt(moveData.OriginalDistance);
+    Math::Vec3 currentPoint = moveData.OriginalRay.PointAt(moveData.Distance);
+    Math::Vec3 translation = currentPoint - originalPoint;
+    transform.ApplyTranslation(translation);
+  } break;
+  }
+}
+
+void GizmoRotation(const MoveData &moveData, const Math::Ray &currentRay,
+                   Transform &transform) {
+  switch (moveData.Axis) {
+  case TransformAxis::None:
+  case TransformAxis::XYZ:
+    return;
+  case TransformAxis::X:
+  case TransformAxis::YZ: { // Rotate around X axis
+    Math::Vec3 axis = Math::Vec3(1.0F, 0.0F, 0.0F);
+    auto intersection = moveData.OriginalRay.IntersectPlane2Way(
+        Math::Plane(moveData.Origin, axis));
+    if (!intersection.has_value()) {
+      return;
+    }
+    auto intersection2 =
+        currentRay.IntersectPlane2Way(Math::Plane(moveData.Origin, axis));
+    if (!intersection2.has_value()) {
+      return;
+    }
+
+    Math::Vec3 originalPoint = intersection.value() - moveData.Origin;
+    Math::Vec3 currentPoint = intersection2.value() - moveData.Origin;
+    Math::Vec2 original2D(originalPoint.y, originalPoint.z);
+    Math::Vec2 current2D(currentPoint.y, currentPoint.z);
+    float angle = std::atan2(current2D.y, current2D.x) -
+                  std::atan2(original2D.y, original2D.x);
+    Math::EulerAngle eulerAngle(angle, 0.0F, 0.0F);
+    Math::Quaternion rotation = Math::Conversions::ToQuaternion(eulerAngle);
+    transform.ApplyRotation(rotation);
+
+    break;
+  }
+  case TransformAxis::Y:
+  case TransformAxis::XZ: { // Rotate around Y axis
+    Math::Vec3 axis = Math::Vec3(0.0F, 1.0F, 0.0F);
+    auto intersection = moveData.OriginalRay.IntersectPlane2Way(
+        Math::Plane(moveData.Origin, axis));
+    if (!intersection.has_value()) {
+      return;
+    }
+    auto intersection2 =
+        currentRay.IntersectPlane2Way(Math::Plane(moveData.Origin, axis));
+    if (!intersection2.has_value()) {
+      return;
+    }
+
+    Math::Vec3 originalPoint = intersection.value() - moveData.Origin;
+    Math::Vec3 currentPoint = intersection2.value() - moveData.Origin;
+    Math::Vec2 original2D(originalPoint.x, originalPoint.z);
+    Math::Vec2 current2D(currentPoint.x, currentPoint.z);
+    float angle = std::atan2(current2D.y, current2D.x) -
+                  std::atan2(original2D.y, original2D.x);
+    Math::EulerAngle eulerAngle(0.0F, angle, 0.0F);
+    Math::Quaternion rotation = Math::Conversions::ToQuaternion(eulerAngle);
+    transform.ApplyRotation(rotation);
+
+    break;
+  }
+  case TransformAxis::Z:
+  case TransformAxis::XY: { // Rotate around Z axis
+    Math::Vec3 axis = Math::Vec3(0.0F, 0.0F, 1.0F);
+    auto intersection = moveData.OriginalRay.IntersectPlane2Way(
+        Math::Plane(moveData.Origin, axis));
+    if (!intersection.has_value()) {
+      return;
+    }
+    auto intersection2 =
+        currentRay.IntersectPlane2Way(Math::Plane(moveData.Origin, axis));
+    if (!intersection2.has_value()) {
+      return;
+    }
+
+    Math::Vec3 originalPoint = intersection.value() - moveData.Origin;
+    Math::Vec3 currentPoint = intersection2.value() - moveData.Origin;
+    Math::Vec2 original2D(originalPoint.x, originalPoint.y);
+    Math::Vec2 current2D(currentPoint.x, currentPoint.y);
+    float angle = std::atan2(current2D.y, current2D.x) -
+                  std::atan2(original2D.y, original2D.x);
+    Math::EulerAngle eulerAngle(0.0F, 0.0F, angle);
+    Math::Quaternion rotation = Math::Conversions::ToQuaternion(eulerAngle);
+    transform.ApplyRotation(rotation);
+
+    break;
+  }
+  }
+}
+
+void GizmoScale(const MoveData &moveData, Transform &transform) {
+  Math::Vec2 mouseDelta =
+      moveData.CurrentMousePosition - moveData.StartMousePosition;
+  auto size =
+      Window::GetDimensions(Graphics::GetCurrentGraphicsContext()->sdlWindow);
+  mouseDelta.x /= Math::Scalar(size.x);
+  mouseDelta.y /= Math::Scalar(size.y);
+
+  float scaling = (mouseDelta.x + mouseDelta.y) * 10.0F; // NOLINT
+  if (scaling < 0.0) {
+    scaling = 1.0F / -scaling;
+  } else {
+    scaling = 1.0F + scaling;
+  }
+
+  switch (moveData.Axis) {
+  case TransformAxis::None:
+    return;
+  case TransformAxis::X:
+    transform.ApplyScaling(Math::Vec3(scaling, 1.0F, 1.0F));
+    break;
+  case TransformAxis::Y:
+    transform.ApplyScaling(Math::Vec3(1.0F, scaling, 1.0F));
+    break;
+  case TransformAxis::Z:
+    transform.ApplyScaling(Math::Vec3(1.0F, 1.0F, scaling));
+    break;
+  case TransformAxis::XY:
+    transform.ApplyScaling(Math::Vec3(scaling, scaling, 1.0F));
+    break;
+  case TransformAxis::XZ:
+    transform.ApplyScaling(Math::Vec3(scaling, 1.0F, scaling));
+    break;
+  case TransformAxis::YZ:
+    transform.ApplyScaling(Math::Vec3(1.0F, scaling, scaling));
+    break;
+  case TransformAxis::XYZ:
+    transform.ApplyScaling(Math::Vec3(scaling, scaling, scaling));
+    break;
+  }
+}
+
+void TransformGizmo(const MoveData &moveData, const Math::Ray &currentRay,
+                    Transform &transform) {
+  switch (moveData.Mode) {
+  default:
+    return;
+  case TransformMode::Translate:
+    GizmoTranslation(moveData, currentRay, transform);
+    break;
+  case TransformMode::Rotate:
+    GizmoRotation(moveData, currentRay, transform);
+    break;
+  case TransformMode::Scale:
+    GizmoScale(moveData, transform);
+    break;
+  }
 }
 
 } // namespace Engine::Editor

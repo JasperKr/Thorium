@@ -9,32 +9,32 @@
 namespace Math {
 
 struct EulerAngle {
-  // Heading, Y-axis / X-Z plane rotation
-  Scalar yaw{};
-
   // Attitude, X-axis / Y-Z plane rotation
   Scalar pitch{};
+
+  // Heading, Y-axis / X-Z plane rotation
+  Scalar yaw{};
 
   // Bank, Z-axis / X-Y plane rotation
   Scalar roll{};
 
   // NOLINTNEXTLINE, easily swappable.
-  constexpr EulerAngle(Scalar yaw_val, Scalar pitch_val, Scalar roll_val)
-      : yaw(yaw_val), pitch(pitch_val), roll(roll_val) {}
+  constexpr EulerAngle(Scalar pitch_val, Scalar yaw_val, Scalar roll_val)
+      : pitch(pitch_val), yaw(yaw_val), roll(roll_val) {}
 
   constexpr EulerAngle() = default;
 
   [[nodiscard]] auto ToString() const -> std::string {
-    return "(Yaw: " + std::to_string(yaw) +
-           ", Pitch: " + std::to_string(pitch) +
-           ", Roll: " + std::to_string(roll) + ")";
+    return "(Pitch: " + std::to_string(pitch) +
+           ", Yaw: " + std::to_string(yaw) + ", Roll: " + std::to_string(roll) +
+           ")";
   }
 
   [[nodiscard]] auto Span() const -> std::span<const Scalar, 3> {
-    return std::span<const Scalar, 3>(&yaw, 3);
+    return std::span<const Scalar, 3>(&pitch, 3);
   }
-  [[nodiscard]] auto Ptr() const -> const Scalar * { return &yaw; }
-  [[nodiscard]] auto Ptr() -> Scalar * { return &yaw; }
+  [[nodiscard]] auto Ptr() const -> const Scalar * { return &pitch; }
+  [[nodiscard]] auto Ptr() -> Scalar * { return &pitch; }
 
   static constexpr auto DegToRad(Scalar degrees) -> Scalar {
     return degrees * static_cast<Scalar>(std::numbers::pi) /
@@ -47,26 +47,26 @@ struct EulerAngle {
   }
 
   [[nodiscard]] constexpr auto ToRadians() const -> EulerAngle {
-    return {DegToRad(yaw), DegToRad(pitch), DegToRad(roll)};
+    return {DegToRad(pitch), DegToRad(yaw), DegToRad(roll)};
   }
 
   [[nodiscard]] constexpr auto ToDegrees() const -> EulerAngle {
-    return {RadToDeg(yaw), RadToDeg(pitch), RadToDeg(roll)};
+    return {RadToDeg(pitch), RadToDeg(yaw), RadToDeg(roll)};
   }
 
   constexpr auto SanitiseAsRadians() -> void {
     constexpr auto limit = static_cast<Scalar>(2.0F * std::numbers::pi);
 
-    yaw = std::fmod(yaw, limit);
     pitch = std::fmod(pitch, limit);
+    yaw = std::fmod(yaw, limit);
     roll = std::fmod(roll, limit);
   }
 
   constexpr auto SanitiseAsDegrees() -> void {
     constexpr auto limit = static_cast<Scalar>(360.0F);
 
-    yaw = std::fmod(yaw, limit);
     pitch = std::fmod(pitch, limit);
+    yaw = std::fmod(yaw, limit);
     roll = std::fmod(roll, limit);
   }
 };

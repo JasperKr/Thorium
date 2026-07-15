@@ -437,6 +437,7 @@ auto Vec2::operator-=(Scalar scalar) -> Vec2 & {
   y -= scalar;
   return *this;
 }
+auto Vec2::operator-() const -> Vec2 { return {-x, -y}; }
 
 /// Multiplication ///
 auto Vec2::operator*(Scalar scalar) const -> Vec2 {
@@ -571,6 +572,7 @@ auto Vec3::operator-=(Scalar scalar) -> Vec3 & {
   z -= scalar;
   return *this;
 }
+auto Vec3::operator-() const -> Vec3 { return {-x, -y, -z}; }
 
 /// Multiplication ///
 auto Vec3::operator*(Scalar scalar) const -> Vec3 {
@@ -725,6 +727,7 @@ auto Vec4::operator-=(Scalar scalar) -> Vec4 & {
   w -= scalar;
   return *this;
 }
+auto Vec4::operator-() const -> Vec4 { return {-x, -y, -z, -w}; }
 
 /// Multiplication ///
 auto Vec4::operator*(Scalar scalar) const -> Vec4 {

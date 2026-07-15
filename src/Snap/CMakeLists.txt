@@ -280,6 +280,7 @@ add_library(snap_core OBJECT
     Modules/Math/matrix.cpp
     Modules/Math/quaternion.cpp
     Modules/Math/math.cpp
+    Modules/Math/ray.cpp
 
 # Helpers
     Modules/Helpers/hasher.cpp

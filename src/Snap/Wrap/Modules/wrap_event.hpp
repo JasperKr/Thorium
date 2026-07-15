@@ -13,7 +13,6 @@ static const std::vector<luaL_Reg> EventLib = {
     {"pull", wrap_Pull},
     {"pop", wrap_Pop},
     {"quit", wrap_Quit},
-
 };
 
 const static std::vector<lua_CFunction> childrenInitFunctions{};

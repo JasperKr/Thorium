@@ -26,19 +26,19 @@ inline auto QuaternionToLua(lua_State *state, const Quaternion &quat) -> int {
 }
 
 inline auto EulerToLua(lua_State *state, const EulerAngle &euler) -> int {
-  lua_pushnumber(state, euler.yaw);
   lua_pushnumber(state, euler.pitch);
+  lua_pushnumber(state, euler.yaw);
   lua_pushnumber(state, euler.roll);
 
   return 3;
 }
 
 auto wrap_EulerToQuaternion(lua_State *state) -> int {
-  auto yaw = checkscalar(state, 1);
-  auto pitch = checkscalar(state, 2);
+  auto pitch = checkscalar(state, 1);
+  auto yaw = checkscalar(state, 2);
   auto roll = checkscalar(state, 3);
 
-  auto quat = ToQuaternion(EulerAngle{yaw, pitch, roll});
+  auto quat = ToQuaternion(EulerAngle{pitch, yaw, roll});
 
   lua_pushnumber(state, quat.x);
   lua_pushnumber(state, quat.y);
@@ -49,11 +49,11 @@ auto wrap_EulerToQuaternion(lua_State *state) -> int {
 }
 
 auto wrap_EulerToMatrix(lua_State *state) -> int {
-  auto yaw = checkscalar(state, 1);
-  auto pitch = checkscalar(state, 2);
+  auto pitch = checkscalar(state, 1);
+  auto yaw = checkscalar(state, 2);
   auto roll = checkscalar(state, 3);
 
-  auto mat = ToMatrix(EulerAngle{yaw, pitch, roll});
+  auto mat = ToMatrix(EulerAngle{pitch, yaw, roll});
 
   return mat.ToLua(state);
 }
