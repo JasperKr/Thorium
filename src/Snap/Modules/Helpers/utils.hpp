@@ -148,6 +148,17 @@ template <typename F> Defer(F) -> Defer<F>;
 
 #define snap_defer(...)                                                        \
   auto UNIQUE_NAME(_defer_) = ::Utils::Defer([&] { __VA_ARGS__; })
+
+#if defined(__clang__) || defined(__GNUC__)
+#define ASSUME(x)                                                              \
+  do {                                                                         \
+    if (!(x))                                                                  \
+      __builtin_unreachable();                                                 \
+  } while (0)
+#elif defined(_MSC_VER)
+#define ASSUME(x) __assume(x)
+#endif
+
 // NOLINTEND
 
 } // namespace Utils

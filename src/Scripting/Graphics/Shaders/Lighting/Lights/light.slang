@@ -5,10 +5,15 @@ import pixel;
 public struct Light {
   public float3 Color;
   public float Intensity;
+  public int ShadowBufferIndex;
 
   public float4 Position;
   public float4 Rotation;
 };
+
+#ifndef SHADER_TYPE_SHADOW_SAMPLING
+Sampler2DArray<float> ShadowVisibilityTexture;
+#endif
 
 public interface ILight {
   Light GetLight();
@@ -25,6 +30,22 @@ public interface ILight {
                           const float LambdaV, inout uint state,
                           uint2 screenCoords, uint frameRandomState) {
     return float3(0.0f);
+  }
+
+  static bool TraceShadow(const float3 WorldPosition, const uint LightIndex,
+                          const float3 Normal, uint2 screenCoords,
+                          const uint frameRandomState) {
+    return false;
+  }
+
+  static float ReadShadowVisibility(const int ShadowBufferIndex,
+                                    const uint2 screenCoords) {
+    if (ShadowBufferIndex < 0) {
+      return 1.0f;
+    }
+
+    return ShadowVisibilityTexture.Load(
+        int4(screenCoords, 0, ShadowBufferIndex));
   }
 };
 

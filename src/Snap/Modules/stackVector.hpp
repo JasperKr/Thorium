@@ -137,6 +137,81 @@ template <typename T, size_t N> struct StackVector {
     currentSize = N;
   }
 
+  constexpr auto insert(size_t index, const T &value) -> void {
+    assert(currentSize < N && "StackVector capacity exceeded");
+    assert(index <= currentSize && "Index out of bounds");
+
+    for (size_t i = currentSize; i > index; --i) {
+      storage[i] = std::move(storage[i - 1]);
+    }
+
+    storage[index] = value;
+    ++currentSize;
+  }
+
+  constexpr auto insert(size_t index, T &&value) -> void {
+    assert(currentSize < N && "StackVector capacity exceeded");
+    assert(index <= currentSize && "Index out of bounds");
+
+    for (size_t i = currentSize; i > index; --i) {
+      storage[i] = std::move(storage[i - 1]);
+    }
+
+    storage[index] = std::move(value);
+    ++currentSize;
+  }
+
+  constexpr auto insert(T *thisStart, T *otherBegin, T *otherEnd) -> void {
+    auto otherSize = static_cast<size_t>(otherEnd - otherBegin);
+    assert(currentSize + otherSize <= N && "StackVector capacity exceeded");
+
+    for (size_t i = 0; i < otherSize; ++i) {
+      // NOLINTNEXTLINE
+      storage[currentSize + i] = std::move(otherBegin[i]);
+    }
+
+    currentSize += otherSize;
+  }
+
+  constexpr auto erase(size_t index) -> void {
+    assert(index < currentSize && "Index out of bounds");
+
+    for (size_t i = index; i < currentSize - 1; ++i) {
+      storage[i] = std::move(storage[i + 1]);
+    }
+
+    --currentSize;
+    storage[currentSize] = T{};
+  }
+
+  constexpr auto resize(size_t newSize) -> void {
+    assert(newSize <= N && "New size exceeds StackVector capacity");
+
+    if (newSize < currentSize) {
+      for (size_t i = newSize; i < currentSize; ++i) {
+        storage[i] = T{};
+      }
+    }
+
+    currentSize = newSize;
+  }
+
+  constexpr auto resize(size_t newSize, const T &value) -> void {
+    assert(newSize <= N && "New size exceeds StackVector capacity");
+
+    if (newSize > currentSize) {
+      for (size_t i = currentSize; i < newSize; ++i) {
+        storage[i] = value;
+      }
+    } else if (newSize < currentSize) {
+      for (size_t i = newSize; i < currentSize; ++i) {
+        storage[i] = T{};
+      }
+    }
+
+    currentSize = newSize;
+  }
+
 private:
   size_t currentSize{};
   std::array<T, N> storage{};

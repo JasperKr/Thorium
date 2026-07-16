@@ -125,12 +125,43 @@ auto Texture::Create(const GraphicsContext &context,
                              "usage.");
   }
 
-  if (info.size.width == 0 || info.size.height == 0 || info.size.depth == 0) {
-    return Error::Unexpected("Texture dimensions must be greater than 0.");
+  ERR_ASSERT(info.size.width > 0 && info.size.height > 0 &&
+             info.size.depth > 0);
+
+  ERR_ASSERT(info.arrayLayers > 0);
+
+  if (info.textureType == TextureType::CUBEMAP && info.arrayLayers != 6) {
+    return Error::Unexpected("Cubemap textures must have exactly 6 array "
+                             "layers.");
+  }
+  ERR_ASSERT(info.mipmapCount > 0);
+  ERR_ASSERT(info.format != VK_FORMAT_UNDEFINED);
+  ERR_ASSERT((info.usage & VK_IMAGE_USAGE_SAMPLED_BIT) != 0U ||
+             (info.usage & VK_IMAGE_USAGE_STORAGE_BIT) != 0U);
+  ERR_ASSERT(
+      !(info.textureType == TextureType::CUBEMAP && info.size.depth != 1));
+  ERR_ASSERT(
+      !(info.textureType == TextureType::CUBEMAP && info.arrayLayers != 6));
+
+  if (info.textureType == TextureType::ARRAY && info.size.depth != 1) {
+    return Error::Unexpected("Array textures must have depth equal to 1.");
   }
 
-  if (info.arrayLayers == 0) {
-    return Error::Unexpected("Texture array layers must be greater than 0.");
+  if (info.textureType == TextureType::CUBEMAP && info.size.depth != 1) {
+    return Error::Unexpected("Cubemap textures must have depth equal to 1.");
+  }
+
+  if (info.textureType == TextureType::DEFAULT && info.size.depth != 1) {
+    return Error::Unexpected("2D textures must have depth equal to 1.");
+  }
+
+  if (info.textureType == TextureType::VOLUME && info.arrayLayers != 1) {
+    return Error::Unexpected(
+        "Volume textures must have exactly 1 array layer.");
+  }
+
+  if (info.textureType == TextureType::DEFAULT && info.arrayLayers != 1) {
+    return Error::Unexpected("2D textures must have exactly 1 array layer.");
   }
 
   if (info.mipmapCount == 0) {
@@ -270,6 +301,9 @@ auto Texture::Create(const GraphicsContext &context,
 
   imageMemory->sizeInBytes = memRequirements.size;
   Texture::TotalAllocatedMemory += imageMemory->sizeInBytes;
+
+  CHECK_ERR(
+      texture->UseAsSampler(context, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT));
 
   return texture;
 }

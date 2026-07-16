@@ -19,12 +19,18 @@ enum class ShaderKey : uint8_t {
   PrefilterIrradiance,
   StoreEnvironmentMap,
   ObjectPicker,
+
+  Shadows_Directional,
+  Shadows_Point,
+  Shadows_Spot,
+  Shadows_Sphere,
+  Shadows_Rectangle,
 };
 
 struct ShaderConfiguration {
   std::string path;
   std::string name;
-  std::vector<slang::PreprocessorMacroDesc> Externs;
+  std::vector<slang::PreprocessorMacroDesc> externs;
 };
 
 const std::unordered_map<ShaderKey, ShaderConfiguration> ShaderConfigurations =
@@ -62,6 +68,21 @@ const std::unordered_map<ShaderKey, ShaderConfiguration> ShaderConfigurations =
          {.path = "Scripting/Graphics/Shaders/IBL/storeEnvMap.slang"}},
         {ShaderKey::ObjectPicker,
          {.path = "Scripting/Graphics/Shaders/Editor/objectPicker.slang"}},
+        {ShaderKey::Shadows_Directional,
+         {.path = "Scripting/Graphics/Shaders/Lighting/shadows.slang",
+          .externs = {{"SHADER_LIGHT_TYPE_DIRECTIONAL", "1"}}}},
+        {ShaderKey::Shadows_Point,
+         {.path = "Scripting/Graphics/Shaders/Lighting/shadows.slang",
+          .externs = {{"SHADER_LIGHT_TYPE_POINT", "1"}}}},
+        {ShaderKey::Shadows_Spot,
+         {.path = "Scripting/Graphics/Shaders/Lighting/shadows.slang",
+          .externs = {{"SHADER_LIGHT_TYPE_SPOT", "1"}}}},
+        {ShaderKey::Shadows_Sphere,
+         {.path = "Scripting/Graphics/Shaders/Lighting/shadows.slang",
+          .externs = {{"SHADER_LIGHT_TYPE_SPHERE", "1"}}}},
+        {ShaderKey::Shadows_Rectangle,
+         {.path = "Scripting/Graphics/Shaders/Lighting/shadows.slang",
+          .externs = {{"SHADER_LIGHT_TYPE_RECTANGLE", "1"}}}},
 };
 
 struct ShaderManager {

@@ -33,6 +33,33 @@ public struct DirectionalLight : ILight {
         SampleBRDF(ViewDirection, WorldForward, NoV, pixel.Normal,
                    pixel.Roughness, pixel.Fresnel0, Diffuse, NdotL, LambdaV);
 
+#ifndef SHADER_TYPE_SHADOW_SAMPLING
+    float visibility =
+        ReadShadowVisibility(light.GetLight().ShadowBufferIndex, screenCoords);
+#else
+    float visibility = 1.0;
+#endif
+
+    return Color * brdf * visibility;
+  }
+
+  public static override bool TraceShadow(const float3 WorldPosition,
+                                          const uint LightIndex,
+                                          const float3 Normal,
+                                          uint2 screenCoords,
+                                          const uint frameRandomState) {
+    DirectionalLight light = DirectionalLights[LightIndex];
+
+    const float3 LocalForward = float3(0.0f, 0.0f, 1.0f);
+    const float3 LocalUp = float3(0.0f, 1.0f, 0.0f);
+    const float3 WorldForward = Rotate(LocalForward, light.Base.Rotation);
+    const float3 WorldUp = Rotate(LocalUp, light.Base.Rotation);
+
+    float NoL = dot(Normal, WorldForward);
+    // if (NoL <= 0.0f) {
+    //   return true;
+    // }
+
     screenCoords += uint2(frameRandomState, frameRandomState * 84313U);
 
     float rnd0 = BlueNoiseTexture.Load(int3(screenCoords % 128, 0)).r;
@@ -48,14 +75,12 @@ public struct DirectionalLight : ILight {
         WorldForward + randomDirection.x * right + randomDirection.y * WorldUp);
 
     RayDesc ray;
-    ray.Origin = WorldPosition + pixel.Normal * 1e-3f;
+    ray.Origin = WorldPosition + Normal * 1e-3f;
     ray.Direction = sampleDirection;
-    ray.TMin = 0.0f;
+    ray.TMin = 0.01f;
     ray.TMax = 1e4f;
 
-    bool inShadow = TraceShadowRay(SceneBVH, ray);
-
-    return Color * brdf * (inShadow ? 0.0f : 1.0f);
+    return TraceShadowRay(SceneBVH, ray);
   }
 
   public static override float3 SampleAll(const float3 WorldPosition,

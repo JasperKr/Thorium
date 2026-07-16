@@ -26,6 +26,8 @@ auto RendertargetDescriptor::Score(const RendertargetDescriptor &other) const
   constexpr auto SizeDiffPixelCount = 100;
   constexpr auto MipmapMatchScore = 10;
   constexpr auto UsageMatchScore = 5;
+  constexpr auto ArrayLayerMatchScore = 5;
+  constexpr auto ArrayLayerDiffCount = 1;
 
   if ((usage & other.usage) == 0) {
     // If the usage does not match, this rendertarget cannot be used.
@@ -53,6 +55,19 @@ auto RendertargetDescriptor::Score(const RendertargetDescriptor &other) const
     return -1;
   }
 
+  if (arrayLayers < other.arrayLayers) {
+    // This rendertarget doesn't have enough array layers for the requirements.
+    return -1;
+  }
+
+  if (arrayLayers != other.arrayLayers) {
+    // The rendertarget has more array layers than the requirements, deduct points based on difference.
+    auto diff = arrayLayers - other.arrayLayers;
+
+    // If diff > ArrayLayerMatchScore, we start deducting score.
+    score += ArrayLayerMatchScore - (diff * ArrayLayerDiffCount);
+  }
+
   if (GetMipmapCount() < other.GetMipmapCount()) {
     // This rendertarget doesn't have enough mip levels for the requirements.
     return -1;
@@ -72,9 +87,9 @@ auto RendertargetDescriptor::Score(const RendertargetDescriptor &other) const
 auto RendertargetDescriptor::operator==(
     const RendertargetDescriptor &other) const -> bool {
   return size == other.size && GetMipmapCount() == other.GetMipmapCount() &&
-         format == other.format && minFilter == other.minFilter &&
-         magFilter == other.magFilter && mipFilter == other.mipFilter &&
-         addressModeU == other.addressModeU &&
+         arrayLayers == other.arrayLayers && format == other.format &&
+         minFilter == other.minFilter && magFilter == other.magFilter &&
+         mipFilter == other.mipFilter && addressModeU == other.addressModeU &&
          addressModeV == other.addressModeV &&
          addressModeW == other.addressModeW &&
          borderColor == other.borderColor && usage == other.usage;
@@ -112,6 +127,7 @@ auto RendertargetDescriptorHash::operator()(
   hasher.Add(desc.addressModeW);
   hasher.Add(desc.borderColor);
   hasher.Add(desc.usage);
+  hasher.Add(desc.arrayLayers);
   return hasher.Get();
 }
 
@@ -186,6 +202,7 @@ auto RenderTargetManager::GetRendertarget(
 
   auto info = ::Graphics::TextureCreationInfo{
       .size = {descriptor.size.x, descriptor.size.y, 1},
+      .arrayLayers = static_cast<uint32_t>(descriptor.arrayLayers),
       .format = descriptor.format,
       .usage = descriptor.usage,
       .mipmapCount = static_cast<int>(descriptor.GetMipmapCount()),
@@ -194,7 +211,9 @@ auto RenderTargetManager::GetRendertarget(
                       Graphics::Format::ImageFormatToString(descriptor.format),
                       std::to_string(descriptor.size.x),
                       std::to_string(descriptor.size.y), Rendertargets.size()),
-      .textureType = ::Graphics::TextureType::DEFAULT,
+      .textureType = descriptor.arrayLayers == 1
+                         ? ::Graphics::TextureType::DEFAULT
+                         : ::Graphics::TextureType::ARRAY,
   };
 
   auto texture = CHECK_RES(::Graphics::Texture::Create(context, info));

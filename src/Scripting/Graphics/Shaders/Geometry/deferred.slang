@@ -126,7 +126,7 @@ FragmentOutput fragmentMain(FragmentInput input) {
 
   float3 emissive = emissiveSample * matData.emissiveFactor;
 
-  return FragmentOutput(float4(albedo, 0.0),
-                        float4(normalize(normal) * 0.5 + 0.5, 0.0),
-                        material.packed, float4(emissive, 1.0), input.motion);
+  return FragmentOutput(
+      float4(albedo, 0.0), float4(normalize(normal) * 0.5 + 0.5, 0.0),
+      material.packed, float4(emissive, 1.0), PackMotionVector(input.motion));
 }

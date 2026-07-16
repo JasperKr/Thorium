@@ -146,11 +146,10 @@ auto BindMesh(const GraphicsContext &context, VkCommandBuffer cmdBuffer,
   }
 #endif
   auto &threadContext = GetThreadContext();
-
   auto vertexBuffer = mesh.GetVertexBuffer();
-  if (!vertexBuffer.isValid()) {
-    return Error::Create("Mesh has no vertex buffer.");
-  }
+
+  assert(vertexBuffer.isValid());
+  ASSUME(vertexBuffer.isValid());
 
   Barrier::UpdateUsage(context, *vertexBuffer,
                        Barrier::ResourceState{
@@ -159,9 +158,9 @@ auto BindMesh(const GraphicsContext &context, VkCommandBuffer cmdBuffer,
                        });
   if (mesh.GetIndexCount() > 0) {
     auto indexBuffer = mesh.GetIndexBuffer();
-    if (!indexBuffer.isValid()) {
-      return Error::Create("Mesh has index count but no index buffer.");
-    }
+
+    assert(indexBuffer.isValid());
+    ASSUME(indexBuffer.isValid());
 
     Barrier::UpdateUsage(context, *indexBuffer,
                          Barrier::ResourceState{
@@ -171,9 +170,8 @@ auto BindMesh(const GraphicsContext &context, VkCommandBuffer cmdBuffer,
 
     std::lock_guard<std::mutex> lock(indexBuffer->mutex);
 
-    if (indexBuffer->handle == VK_NULL_HANDLE) {
-      return Error::Create("Index buffer handle is null.");
-    }
+    assert(indexBuffer->handle != VK_NULL_HANDLE);
+    ASSUME(indexBuffer->handle != VK_NULL_HANDLE);
 
     if (threadContext.currentMesh != mesh.getID()) {
       vkCmdBindIndexBuffer(cmdBuffer, indexBuffer->handle, 0,
@@ -182,7 +180,7 @@ auto BindMesh(const GraphicsContext &context, VkCommandBuffer cmdBuffer,
   }
 
   if (threadContext.currentMesh != mesh.getID()) {
-    auto bindings = mesh.GetBindingRanges();
+    const auto &bindings = mesh.GetBindingRanges();
     for (const auto &binding : bindings) {
       vkCmdBindVertexBuffers(cmdBuffer, binding.firstBinding,
                              binding.bindingCount, binding.bindings,
@@ -190,31 +188,6 @@ auto BindMesh(const GraphicsContext &context, VkCommandBuffer cmdBuffer,
     }
 
     threadContext.currentMesh = mesh.getID();
-  }
-
-  return Error::Success();
-}
-
-inline auto UpdateShaderResourceLayouts(const GraphicsContext &context,
-                                        VkPipelineStageFlags2 stage) -> Error {
-  auto shader = DynamicRendering::GetShader();
-  if (shader == nullptr) {
-    return Error::Success(); // No shader, so nothing to update
-  }
-  const auto &boundTextures = shader->GetState().userBoundTextures;
-
-  for (const auto &resource : boundTextures) {
-    switch (resource.second.second->access) {
-    case SLANG_RESOURCE_ACCESS_READ:
-      CHECK_ERR(resource.second.first->UseAsSampler(context, stage));
-      break;
-    case SLANG_RESOURCE_ACCESS_READ_WRITE:
-    case SLANG_RESOURCE_ACCESS_WRITE:
-      CHECK_ERR(resource.second.first->UseAsStorage(context, stage));
-      break;
-    default:
-      break;
-    }
   }
 
   return Error::Success();
@@ -431,11 +404,7 @@ auto Draw(const GraphicsContext &context, Mesh &mesh, uint32_t instanceCount)
     -> Error {
   ZoneScoped;
 
-  auto *commandBuffer = GetCommandBuffer();
-
-  if (commandBuffer == nullptr) {
-    return Error::Create("Failed to get command buffer for draw call.");
-  }
+  auto *commandBuffer = CHECK_NULL(GetCommandBuffer());
 
   CHECK_ERR(BindMesh(context, commandBuffer, mesh));
 
@@ -444,9 +413,6 @@ auto Draw(const GraphicsContext &context, Mesh &mesh, uint32_t instanceCount)
   auto &vertexFormat = mesh.GetVertexFormat();
   vertexFormat.BindDynamicInputState(commandBuffer);
 
-  CHECK_ERR(UpdateShaderResourceLayouts(
-      context, VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT |
-                   VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT));
   CHECK_ERR(InsertResourceBarriers(context));
 
   CHECK_ERR(DynamicRendering::PrepareRendering(context));
@@ -529,8 +495,6 @@ auto Dispatch(const GraphicsContext &context, const Math::Uvec3 &threadgroups)
   CHECK_ERR(DynamicRendering::PrepareRendering(context));
   DynamicRendering::EndRendering(context);
 
-  CHECK_ERR(UpdateShaderResourceLayouts(
-      context, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT));
   CHECK_ERR(InsertResourceBarriers(context));
 
   DynamicRendering::CurrentStats.dispatchCalls++;
@@ -583,8 +547,6 @@ auto DispatchIndirect(const GraphicsContext &context,
   CHECK_ERR(DynamicRendering::PrepareRendering(context));
   DynamicRendering::EndRendering(context);
 
-  CHECK_ERR(UpdateShaderResourceLayouts(
-      context, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT));
   CHECK_ERR(InsertResourceBarriers(context));
 
   DynamicRendering::CurrentStats.dispatchCalls++;
@@ -615,9 +577,6 @@ auto DrawIndirect(const GraphicsContext &context, Mesh &mesh,
   vertexFormat.BindDynamicInputState(commandBuffer);
   DynamicRendering::SetTopology(mesh.GetTopology());
 
-  CHECK_ERR(UpdateShaderResourceLayouts(
-      context, VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT |
-                   VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT));
   CHECK_ERR(InsertResourceBarriers(context));
 
   CHECK_ERR(DynamicRendering::PrepareRendering(context));
@@ -673,9 +632,6 @@ auto Draw(const GraphicsContext &context, const VkPrimitiveTopology &topology,
   GetThreadContext().currentVertexFormatHash = 0; // No vertex format
   DynamicRendering::SetTopology(topology);
 
-  CHECK_ERR(UpdateShaderResourceLayouts(
-      context, VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT |
-                   VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT));
   CHECK_ERR(InsertResourceBarriers(context));
 
   CHECK_ERR(DynamicRendering::PrepareRendering(context));
@@ -710,9 +666,6 @@ auto Draw(const GraphicsContext &context, const Ref<Buffer> &indexBuffer,
   GetThreadContext().currentVertexFormatHash = 0; // No vertex format
   DynamicRendering::SetTopology(topology);
 
-  CHECK_ERR(UpdateShaderResourceLayouts(
-      context, VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT |
-                   VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT));
   CHECK_ERR(InsertResourceBarriers(context));
 
   CHECK_ERR(DynamicRendering::PrepareRendering(context));

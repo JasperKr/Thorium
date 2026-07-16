@@ -43,16 +43,21 @@ auto DirectionalLight::Write(std::span<uint8_t> buffer,
   auto *floatData = reinterpret_cast<float *>(buffer.data() + offset);
   const auto &position = transform.GetPosition();
   const auto &rotation = transform.GetRotation();
+  int idx = 0;
 
-  floatData[0] = position.x;
-  floatData[1] = position.y;
-  floatData[2] = position.z;
-  floatData[3] = 0.0F; // Padding to align to vec4
+  floatData[idx++] = 0.0F;
+  floatData[idx++] = 0.0F;
+  floatData[idx++] = 0.0F;
 
-  floatData[4] = rotation.x;
-  floatData[5] = rotation.y;
-  floatData[6] = rotation.z;
-  floatData[7] = rotation.w;
+  floatData[idx++] = position.x;
+  floatData[idx++] = position.y;
+  floatData[idx++] = position.z;
+  floatData[idx++] = 0.0F; // Padding to align to vec4
+
+  floatData[idx++] = rotation.x;
+  floatData[idx++] = rotation.y;
+  floatData[idx++] = rotation.z;
+  floatData[idx++] = rotation.w;
   // NOLINTEND
 
   return {};
@@ -92,6 +97,7 @@ auto LuaDirectionalLight::Create(lua_State *state) -> int {
 
     auto &transform = entity.get_mut<Transform>();
     transform.SetRotation(x_rot, y_rot, z_rot, w_rot);
+    transform.SetRotation(transform.GetRotation().Normalize());
 
     auto &light = entity.get_mut<Light>();
     light.SetColor(red, green, blue);
@@ -106,6 +112,7 @@ auto LuaDirectionalLight::Create(lua_State *state) -> int {
 
       auto &transform = entity.get_mut<Transform>();
       transform.SetRotation(x_rot, y_rot, z_rot, w_rot);
+      transform.SetRotation(transform.GetRotation().Normalize());
     }
     lua_pop(state, 1);
 
@@ -129,6 +136,7 @@ auto LuaDirectionalLight::Create(lua_State *state) -> int {
   auto &light = entity.get_mut<Light>();
   light.Type = LightType::Directional;
   light.BufferIndex = DirectionalLight::GetFreeBufferIndex();
+  light.ShadowBufferIndex = 0;
 
   LUA_ASSERT(light.BufferIndex >= 0 &&
              light.BufferIndex < static_cast<int>(MaxDirectionalLights));

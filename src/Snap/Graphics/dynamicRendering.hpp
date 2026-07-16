@@ -23,11 +23,11 @@ namespace Graphics::DynamicRendering {
 
 struct PipelineLayout {
   VkPipelineLayout layout;
-  std::vector<VkDescriptorSetLayout> descriptorSetLayouts;
+  Math::StackVector<VkDescriptorSetLayout, 16> descriptorSetLayouts; // NOLINT
 };
 
 struct DescriptorKey {
-  std::vector<ResourceBinding> bindings; // sorted by binding
+  Math::StackVector<ResourceBinding, 16> bindings; // sorted by binding NOLINT
 
   auto operator==(const DescriptorKey &other) const -> bool {
     if (bindings.size() != other.bindings.size()) {
@@ -85,8 +85,7 @@ extern VkDescriptorSetLayout DefaultEmptySetLayout;
 
 // Key to cache descriptor sets based on layout and resource pointers
 // Immutable pointers but a weak reference is needed to avoid keeping resources alive indefinitely
-extern thread_local std::unordered_map<DescriptorKey, VkDescriptorSet,
-                                       DescriptorKeyHash>
+extern thread_local LRUCache<DescriptorKey, VkDescriptorSet, DescriptorKeyHash>
     DescriptorSetCache;
 
 extern thread_local Stats CurrentStats;
@@ -119,6 +118,7 @@ struct DescriptorSetLayoutKey {
       }
 
       // Compare immutable samplers if they exist
+      [[unlikely]]
       if (firstBinding.pImmutableSamplers != nullptr &&
           secondBinding.pImmutableSamplers != nullptr) {
         for (uint32_t j = 0; j < firstBinding.descriptorCount; ++j) {
@@ -162,7 +162,9 @@ struct DescriptorSetLayoutKeyHash {
       hasher.Add(binding.descriptorCount);
       hasher.Add(binding.stageFlags);
 
+      [[unlikely]]
       if (binding.pImmutableSamplers != nullptr) {
+        // I do not use Immutable samplers, but it is included for completeness, so it is marked as an unlikely branch
         for (uint32_t i = 0; i < binding.descriptorCount; ++i) {
           // NOLINTNEXTLINE, reinterpret cast And pointer arithmetic
           hasher.Add(reinterpret_cast<size_t>(binding.pImmutableSamplers[i]));
@@ -266,14 +268,28 @@ struct State {
   bool hasDepthStencilAttachment = false;
 
   mutable uint64_t hash;
+
+  // Incremented each time the state is modified
+  mutable uint64_t generation = 0;
+
+  void MarkUpdated() {
+    generation++;
+    dirty = true;
+  }
+
   auto GetHash() const -> uint64_t;
 
   auto operator==(const State &other) const -> bool {
+    [[likely]]
+    if (generation == other.generation) { // quick equal
+      return true;
+    }
+
     if (colorAttachments != other.colorAttachments) {
       return false;
     }
 
-    if (*shader != *other.shader) {
+    if (shader != other.shader) {
       return false;
     }
 

@@ -306,6 +306,8 @@ auto Transform::DrawGUI(flecs::entity entity) -> void {
     ImGui::EndCombo();
   }
 
+  Rotation = Rotation.Normalize();
+
   // Load rotation from entity, if it has changed
   if (lastEntity != entity.id()) {
     lastEntity = entity.id();

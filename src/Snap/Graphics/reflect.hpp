@@ -4,6 +4,7 @@
 #include "Graphics/graphicsContext.hpp"
 #include "Graphics/graphicsState.hpp"
 #include "Modules/error.hpp"
+#include "Modules/stackVector.hpp"
 #include "slang/slang.h"
 #include <cstdint>
 #include <string>
@@ -451,11 +452,13 @@ struct ShaderReflection {
   std::unordered_map<ResourceKey, uint64_t, ResourceKeyHash> keyToSlot;
   std::vector<FlattenedReflection> pushBuffers;
 
+  using SlotsStorage =
+      std::unordered_map<uint32_t, Math::StackVector<uint64_t, 16>>; // NOLINT
+
   // All buffers and textures corresponding to a given set, for quick lookup when binding descriptors
-  std::unordered_map<uint32_t, std::vector<uint64_t>> bufferSlotsBySet;
-  std::unordered_map<uint32_t, std::vector<uint64_t>> textureSlotsBySet;
-  std::unordered_map<uint32_t, std::vector<uint64_t>>
-      accelerationStructureSlotsBySet;
+  SlotsStorage bufferSlotsBySet;
+  SlotsStorage textureSlotsBySet;
+  SlotsStorage accelerationStructureSlotsBySet;
 };
 
 auto ReflectShader(const Graphics::GraphicsContext &context,

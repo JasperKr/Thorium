@@ -19,6 +19,7 @@ struct RendertargetDescriptor {
 
   // -1 means auto-calculate based on size and requiresMipmaps
   int32_t mipmapCount = -1;
+  int32_t arrayLayers = 1;
   VkFormat format = VK_FORMAT_UNDEFINED;
   VkFilter minFilter = VK_FILTER_NEAREST;
   VkFilter magFilter = VK_FILTER_NEAREST;

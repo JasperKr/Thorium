@@ -256,44 +256,6 @@ auto Camera::FillSkybox(const Graphics::GraphicsContext &context,
   return {};
 }
 
-auto Camera::ReleasePersistentTextures() -> Error {
-  CHECK_ERR(Renderer::GlobalRenderTargetManager.ReleaseRendertargets({
-      OwnedTextures.Depth,
-      OwnedTextures.IncomingLight,
-      OwnedTextures.PostProcessed,
-      OwnedTextures.Normal,
-      OwnedTextures.Albedo,
-      OwnedTextures.Material,
-      OwnedTextures.Emissive,
-      OwnedTextures.Motion,
-      OwnedTextures.Irradiance,
-      OwnedTextures.DirectLighting,
-  }));
-
-  OwnedTextures.Reset();
-  return {};
-}
-
-auto Camera::ReleaseTransientTextures() const -> Error {
-  const auto &conf = GetPersistentTextureSettings();
-  using TRef = Ref<Graphics::Texture>;
-
-  CHECK_ERR(Renderer::GlobalRenderTargetManager.ReleaseRendertargets({
-      conf.Depth ? TRef() : OwnedTextures.Depth,
-      conf.IncomingLight ? TRef() : OwnedTextures.IncomingLight,
-      conf.PostProcessed ? TRef() : OwnedTextures.PostProcessed,
-      conf.Normal ? TRef() : OwnedTextures.Normal,
-      conf.Albedo ? TRef() : OwnedTextures.Albedo,
-      conf.Material ? TRef() : OwnedTextures.Material,
-      conf.Emissive ? TRef() : OwnedTextures.Emissive,
-      conf.Motion ? TRef() : OwnedTextures.Motion,
-      conf.Irradiance ? TRef() : OwnedTextures.Irradiance,
-      conf.DirectLighting ? TRef() : OwnedTextures.DirectLighting,
-  }));
-
-  return {};
-}
-
 auto Camera::UpdateClosestLightProbes(int max, std::vector<uint8_t> &data,
                                       const DrawData &drawData, Scene *scene)
     -> void {
@@ -419,7 +381,18 @@ auto Camera::ApplyLightProbes(const Graphics::GraphicsContext &context,
 auto Camera::Render(const Graphics::GraphicsContext &context,
                     const DrawData &drawData, Scene *scene) -> Error {
 
-  CHECK_ERR(ReleasePersistentTextures());
+  CHECK_ERR(Renderer::GlobalRenderTargetManager.ReleaseRendertargets({
+      OwnedTextures.DirectLighting,
+      OwnedTextures.Depth,
+      OwnedTextures.Normal,
+      OwnedTextures.Albedo,
+      OwnedTextures.Material,
+      OwnedTextures.Emissive,
+      OwnedTextures.Motion,
+      OwnedTextures.IncomingLight,
+      OwnedTextures.Irradiance,
+  }));
+
   auto frustum = drawData.Matrices.GetFrustum();
 
   Graphics::PushDebugMarker("Draw Models");
@@ -496,22 +469,17 @@ auto Camera::Render(const Graphics::GraphicsContext &context,
     Graphics::PopDebugMarker();
   }
 
-  CHECK_ERR(ReleaseTransientTextures());
-
   return {};
 }
 
 auto Camera::RenderSkyboxOnly(const Graphics::GraphicsContext &context,
                               const Environment &environment) -> Error {
-  CHECK_ERR(ReleasePersistentTextures());
-
   OwnedTextures.DirectLighting =
       CHECK_RES(Renderer::GlobalRenderTargetManager.GetRendertarget(
           context, Rendertargets.DirectLighting));
 
   CHECK_ERR(FillSkybox(context, environment));
 
-  CHECK_ERR(ReleaseTransientTextures());
   return {};
 }
 
@@ -618,6 +586,16 @@ auto Camera::ConfigureRendertargets() -> void {
       .magFilter = VK_FILTER_LINEAR,
       .mipFilter = VK_SAMPLER_MIPMAP_MODE_LINEAR,
       .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+  };
+
+  Rendertargets.ShadowVisibility = Renderer::RendertargetDescriptor{
+      .size = Dimensions,
+      .arrayLayers = 16, // NOLINT
+      .format = VK_FORMAT_R8_UNORM,
+      .minFilter = VK_FILTER_NEAREST,
+      .magFilter = VK_FILTER_NEAREST,
+      .mipFilter = VK_SAMPLER_MIPMAP_MODE_NEAREST,
+      .usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
   };
 }
 

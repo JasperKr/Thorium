@@ -29,6 +29,18 @@ public func UnpackTangent(uint packedTangent)->half4 {
   return tangent;
 }
 
+public float2 UnpackMotionVector(const float2 packedMotionVector) {
+
+  float2 unsignedMotion = packedMotionVector * packedMotionVector;
+  return unsignedMotion * sign(packedMotionVector);
+}
+
+public float2 PackMotionVector(float2 motionVector) {
+  // Bias precision towards 0, as most motion vectors are small
+  float2 unsignedMotion = sqrt(abs(motionVector));
+  return unsignedMotion * sign(motionVector);
+}
+
 public float3 Rotate(float3 v, float4 q) {
   return v + 2.0 * cross(q.xyz, cross(q.xyz, v) + q.w * v);
 }

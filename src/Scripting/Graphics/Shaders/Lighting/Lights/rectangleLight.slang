@@ -92,6 +92,25 @@ public struct RectangleLight : ILight {
         (saturate(dot(v0, pixel.Normal)) + saturate(dot(v1, pixel.Normal)) +
          saturate(dot(v2, pixel.Normal)) + saturate(dot(v3, pixel.Normal)) +
          saturate(dot(pixelToCenter, pixel.Normal)));
+
+    return Radiance * NoL;
+  }
+
+  public static override float3 SampleAll(const float3 WorldPosition,
+                                          const Pixel pixel,
+                                          const float3 ViewDirection,
+                                          const float NoV, const float LambdaV,
+                                          inout uint state, uint2 screenCoords,
+                                          uint frameRandomState) {
+    return float3(0.0f);
+  }
+
+  public static override bool TraceShadow(const float3 WorldPosition,
+                                          const uint LightIndex,
+                                          const float3 Normal,
+                                          uint2 screenCoords,
+                                          const uint frameRandomState) {
+    return false;
   }
 
   public Light GetLight() { return Base; }

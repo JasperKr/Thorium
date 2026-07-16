@@ -132,7 +132,7 @@ static auto is_noisy(const char *file) -> bool {
          name.find("__") != std::string_view::npos;
 };
 
-// NOLINTNEXTLINE
+[[gnu::cold]] // NOLINTNEXTLINE
 auto GetStackTrace(ErrorLevel level) -> std::string {
   const int MaxStackDepth = 64;
 

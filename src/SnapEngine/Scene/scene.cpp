@@ -10,12 +10,14 @@
 #include "Graphics/uniformWriter.hpp"
 #include "Modules/Math/math.hpp"
 #include "Modules/Math/matrix.hpp"
+#include "Modules/Math/vector.hpp"
 #include "Modules/bindings.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Modules/reflectBindings.hpp"
 #include "Renderer/lightProbe.hpp"
 #include "Renderer/rendertargetManager.hpp"
+#include "Renderer/shaderManager.hpp"
 #include "Scene/Geometry/boundingBox.hpp"
 #include "Scene/Geometry/geometry.hpp"
 #include "Scene/Geometry/levelOfDetail.hpp"
@@ -249,8 +251,9 @@ inline auto AddDrawItem(std::vector<DrawItem> &OpaqueDrawItems,
 auto Scene::DrawModels(Camera &camera, Frustum &frustum,
                        const Graphics::GraphicsContext &context) -> Error {
   // Pre-frame setup
+  auto &renderer = Renderer::RendererInstance;
 
-  Renderer::RendererInstance.NewFrame();
+  renderer.NewFrame();
 
   for (const auto &system : preRender) {
     system.run();
@@ -261,19 +264,15 @@ auto Scene::DrawModels(Camera &camera, Frustum &frustum,
 
   auto &ctx = *Graphics::GetCurrentGraphicsContext();
   auto &textures = camera.GetOwnedTextures();
+  auto &manager = renderer.GetShaderManager();
 
   auto depthOpaque =
-      CHECK_RES(Renderer::RendererInstance.GetShaderManager().GetShader(
-          Renderer::ShaderKey::DepthPrepass));
+      CHECK_RES(manager.GetShader(Renderer::ShaderKey::DepthPrepass));
   auto depthMasked =
-      CHECK_RES(Renderer::RendererInstance.GetShaderManager().GetShader(
-          Renderer::ShaderKey::DepthMaskPass));
-  auto deferred =
-      CHECK_RES(Renderer::RendererInstance.GetShaderManager().GetShader(
-          Renderer::ShaderKey::Deferred));
+      CHECK_RES(manager.GetShader(Renderer::ShaderKey::DepthMaskPass));
+  auto deferred = CHECK_RES(manager.GetShader(Renderer::ShaderKey::Deferred));
   auto forward =
-      CHECK_RES(Renderer::RendererInstance.GetShaderManager().GetShader(
-          Renderer::ShaderKey::TransparencyForward));
+      CHECK_RES(manager.GetShader(Renderer::ShaderKey::TransparencyForward));
 
   static auto cameraBufferKey = Graphics::ResourceKey{"CameraData"};
   auto cameraBuffer = camera.GetBuffer()->GetBuffer();
@@ -290,8 +289,7 @@ auto Scene::DrawModels(Camera &camera, Frustum &frustum,
   static auto modelTransformsBufferKey =
       Graphics::ResourceKey{"ModelTransforms"};
 
-  auto modelTransformsBuffer =
-      Renderer::RendererInstance.GetModelTransformsBuffer()->GetBuffer();
+  auto modelTransformsBuffer = renderer.GetModelTransformsBuffer()->GetBuffer();
   CHECK_ERR(Graphics::UniformWriter::Send(depthOpaque, modelTransformsBufferKey,
                                           modelTransformsBuffer));
   CHECK_ERR(Graphics::UniformWriter::Send(depthMasked, modelTransformsBufferKey,
@@ -302,8 +300,7 @@ auto Scene::DrawModels(Camera &camera, Frustum &frustum,
                                           modelTransformsBuffer));
 
   static auto materialBufferKey = Graphics::ResourceKey{"MaterialBuffer"};
-  auto materialBuffer =
-      Renderer::RendererInstance.GetMaterialsBuffer()->GetBuffer();
+  auto materialBuffer = renderer.GetMaterialsBuffer()->GetBuffer();
   CHECK_ERR(depthMasked->Send(materialBufferKey, materialBuffer));
   CHECK_ERR(deferred->Send(materialBufferKey, materialBuffer));
   CHECK_ERR(forward->Send(materialBufferKey, materialBuffer));
@@ -375,15 +372,13 @@ auto Scene::DrawModels(Camera &camera, Frustum &frustum,
     modelTransforms.emplace_back(item.geom_entity.get<Transform>());
   }
 
-  CHECK_ERR(Renderer::RendererInstance.AssureModelTransformBufferSize(
-      transformCount));
+  CHECK_ERR(renderer.AssureModelTransformBufferSize(transformCount));
 
   auto span = std::span<const ModelTransformData>(modelTransforms.data(),
                                                   modelTransforms.size());
 
-  CHECK_ERR(Renderer::RendererInstance.GetModelTransformsBuffer()
-                ->GetBuffer()
-                ->SetData(ctx, span));
+  CHECK_ERR(
+      renderer.GetModelTransformsBuffer()->GetBuffer()->SetData(ctx, span));
 
   // Depth Opaque prepass
 
@@ -498,6 +493,7 @@ auto Scene::DrawModels(Camera &camera, Frustum &frustum,
   }
 
   Graphics::PopDebugMarker();
+  Graphics::PushDebugMarker("Lighting");
 
   if (OpaqueDrawItems.empty() && MaskedDrawItems.empty()) {
     CHECK_ERR(Graphics::DynamicRendering::Clear(
@@ -516,9 +512,7 @@ auto Scene::DrawModels(Camera &camera, Frustum &frustum,
   }
 
   auto shader =
-      CHECK_RES(Renderer::RendererInstance.GetShaderManager().GetShader(
-          Renderer::ShaderKey::SimpleLighting));
-  Graphics::DynamicRendering::SetShader(shader);
+      CHECK_RES(manager.GetShader(Renderer::ShaderKey::SimpleLighting));
   CHECK_ERR(shader->Send(cameraBufferKey, cameraBuffer));
   static auto albedoTextureKey = Graphics::ResourceKey{"AlbedoTexture"};
   static auto normalTextureKey = Graphics::ResourceKey{"NormalTexture"};
@@ -527,28 +521,50 @@ auto Scene::DrawModels(Camera &camera, Frustum &frustum,
   static auto depthBufferKey = Graphics::ResourceKey{"DepthTexture"};
 
   CHECK_ERR(shader->Send(albedoTextureKey, textures.Albedo));
-  CHECK_ERR(shader->Send(normalTextureKey, textures.Normal));
   CHECK_ERR(shader->Send(materialTextureKey, textures.Material));
   CHECK_ERR(shader->Send(emissiveTextureKey, textures.Emissive));
-  CHECK_ERR(shader->Send(depthBufferKey, textures.Depth));
+
+  auto sendInfo = [&](const Ref<Graphics::Shader> &shader) -> Error {
+    CHECK_ERR(shader->Send(normalTextureKey, textures.Normal));
+    CHECK_ERR(shader->Send(depthBufferKey, textures.Depth));
+
+    return {};
+  };
+
+  using K = Renderer::ShaderKey;
+
+  auto shadowDirectional = CHECK_RES(manager.GetShader(K::Shadows_Directional));
+  auto shadowPoint = CHECK_RES(manager.GetShader(K::Shadows_Point));
+  auto shadowSpot = CHECK_RES(manager.GetShader(K::Shadows_Spot));
+  auto shadowSphere = CHECK_RES(manager.GetShader(K::Shadows_Sphere));
+  auto shadowRectangle = CHECK_RES(manager.GetShader(K::Shadows_Rectangle));
+
+  CHECK_ERR(sendInfo(shader));
+  CHECK_ERR(sendInfo(shadowDirectional));
+  // CHECK_ERR(sendInfo(shadowPoint));
+  // CHECK_ERR(sendInfo(shadowSpot));
+  // CHECK_ERR(sendInfo(shadowSphere));
+  // CHECK_ERR(sendInfo(shadowRectangle));
 
   auto countKey = Graphics::ResourceKey{"DirectionalLightCount"};
   CHECK_ERR(Graphics::UniformWriter::Send(
-      shader, countKey,
-      Renderer::RendererInstance.GetSceneLightBuffers().DirectionalLightCount));
+      shader, countKey, renderer.GetSceneLightBuffers().DirectionalLightCount));
   CHECK_ERR(Graphics::UniformWriter::Send(
       forward, countKey,
-      Renderer::RendererInstance.GetSceneLightBuffers().DirectionalLightCount));
+      renderer.GetSceneLightBuffers().DirectionalLightCount));
 
   static auto tlasKey = Graphics::ResourceKey{"SceneBVH"};
-  CHECK_ERR(shader->Send(tlasKey, Renderer::RendererInstance.GetSceneTLAS()));
-  CHECK_ERR(forward->Send(tlasKey, Renderer::RendererInstance.GetSceneTLAS()));
+  CHECK_ERR(shadowDirectional->Send(tlasKey, renderer.GetSceneTLAS()));
+  CHECK_ERR(forward->Send(tlasKey, renderer.GetSceneTLAS()));
 
   static auto blueNoiseTextureKey = Graphics::ResourceKey{"BlueNoiseTexture"};
-  CHECK_ERR(shader->Send(blueNoiseTextureKey,
-                         Renderer::RendererInstance.GetBlueNoiseTexture()));
-  CHECK_ERR(forward->Send(blueNoiseTextureKey,
-                          Renderer::RendererInstance.GetBlueNoiseTexture()));
+  auto &blueNoiseTex = renderer.GetBlueNoiseTexture();
+  CHECK_ERR(shadowDirectional->Send(blueNoiseTextureKey, blueNoiseTex));
+  // CHECK_ERR(shadowPoint->Send(blueNoiseTextureKey, blueNoiseTex));
+  // CHECK_ERR(shadowSpot->Send(blueNoiseTextureKey, blueNoiseTex));
+  // CHECK_ERR(shadowSphere->Send(blueNoiseTextureKey, blueNoiseTex));
+  // CHECK_ERR(shadowRectangle->Send(blueNoiseTextureKey, blueNoiseTex));
+  CHECK_ERR(forward->Send(blueNoiseTextureKey, blueNoiseTex));
   static auto rndStateKey =
       Graphics::ResourceKey{"PushConstants", "FrameRandomState"};
   auto frameRandomState = Math::Random(0xFF, 0x0FFFFFFF); // NOLINT
@@ -557,9 +573,54 @@ auto Scene::DrawModels(Camera &camera, Frustum &frustum,
       Graphics::UniformWriter::Send(shader, rndStateKey, frameRandomState));
   CHECK_ERR(
       Graphics::UniformWriter::Send(forward, rndStateKey, frameRandomState));
+  CHECK_ERR(Graphics::UniformWriter::Send(shadowDirectional, rndStateKey,
+                                          frameRandomState));
 
-  CHECK_ERR(Renderer::RendererInstance.BindLightBuffers(ctx, shader));
-  CHECK_ERR(Renderer::RendererInstance.BindLightBuffers(ctx, forward));
+  CHECK_ERR(renderer.BindLightBuffers(ctx, shader));
+  CHECK_ERR(renderer.BindLightBuffers(ctx, forward));
+  CHECK_ERR(renderer.BindLightBuffers(ctx, shadowDirectional));
+
+  textures.ShadowVisibility =
+      CHECK_RES(Renderer::GlobalRenderTargetManager.GetRendertarget(
+          context, rendertargets.ShadowVisibility));
+
+  if (!textures.PreviousShadowVisibility.isValid()) {
+    textures.PreviousShadowVisibility =
+        CHECK_RES(Renderer::GlobalRenderTargetManager.GetRendertarget(
+            context, rendertargets.ShadowVisibility));
+  }
+
+  Graphics::DynamicRendering::SetShader(shadowDirectional);
+
+  // clang-format off
+  static Graphics::ResourceKey LightIndexKey = {"PushConstants", "LightIndex"};
+  static Graphics::ResourceKey LayerOffsetKey = {"PushConstants", "LayerOffset"};
+  static Graphics::ResourceKey FrameRandomStateKey = {"PushConstants", "FrameRandomState"};
+  static Graphics::ResourceKey OutputTextureKey = {"OutputTexture"};
+  static Graphics::ResourceKey PreviousOutputTextureKey = {"PreviousOutputTexture"};
+  static Graphics::ResourceKey MotionTextureKey = {"MotionTexture"};
+
+  CHECK_ERR(Graphics::UniformWriter::Send(shadowDirectional, FrameRandomStateKey, frameRandomState));
+  CHECK_ERR(Graphics::UniformWriter::Send(shadowDirectional, LayerOffsetKey, 0U)); // NOLINT
+  CHECK_ERR(Graphics::UniformWriter::Send(shadowDirectional, LightIndexKey, 0U)); // NOLINT
+  CHECK_ERR(shadowDirectional->Send(OutputTextureKey, textures.ShadowVisibility));
+  CHECK_ERR(shadowDirectional->Send(cameraBufferKey, cameraBuffer));
+  CHECK_ERR(shadowDirectional->Send(MotionTextureKey, textures.Motion));
+  CHECK_ERR(shadowDirectional->Send(PreviousOutputTextureKey, textures.PreviousShadowVisibility));
+
+  CHECK_ERR(Graphics::DispatchWithin(ctx,
+    Math::Uvec3(textures.ShadowVisibility->GetWidth(), textures.ShadowVisibility->GetHeight(), 1)));
+  // clang-format on
+
+  CHECK_ERR(Renderer::GlobalRenderTargetManager.ReleaseRendertarget(
+      textures.PreviousShadowVisibility));
+  textures.PreviousShadowVisibility = textures.ShadowVisibility;
+
+  Graphics::DynamicRendering::SetShader(shader);
+  static Graphics::ResourceKey ShadowVisibilityTextureKey = {
+      "ShadowVisibilityTexture"};
+  CHECK_ERR(
+      shader->Send(ShadowVisibilityTextureKey, textures.ShadowVisibility));
 
   textures.DirectLighting =
       CHECK_RES(Renderer::GlobalRenderTargetManager.GetRendertarget(
@@ -602,6 +663,7 @@ auto Scene::DrawModels(Camera &camera, Frustum &frustum,
       .bindMaterialBuffer = true,
   };
 
+  Graphics::PopDebugMarker();
   Graphics::PushDebugMarker("Transparent Materials");
 
   Graphics::DynamicRendering::SetWindingOrder(VK_FRONT_FACE_COUNTER_CLOCKWISE);

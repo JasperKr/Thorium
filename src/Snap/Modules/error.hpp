@@ -109,7 +109,7 @@ struct [[nodiscard]] Error {
   [[nodiscard]] auto AsUnexpected() const -> tl::unexpected<Error>;
 };
 
-// template <typename T> using Result = tl::expected<T, Error>;
+// NOLINTBEGIN
 template <class T> struct Result : tl::expected<T, Error> {
   using tl::expected<T, Error>::expected;
 
@@ -117,7 +117,6 @@ template <class T> struct Result : tl::expected<T, Error> {
       : tl::expected<T, Error>(tl::unexpected<Error>(std::move(err))) {}
 };
 
-// NOLINTNEXTLINE
 #define CHECK_ERR(expr)                                                        \
   {                                                                            \
     auto error = (expr);                                                       \
@@ -127,7 +126,6 @@ template <class T> struct Result : tl::expected<T, Error> {
     }                                                                          \
   }
 
-// NOLINTNEXTLINE
 #define CHECK_NEW_ERR(expr)                                                    \
   ({                                                                           \
     auto error = Error::Create(expr);                                          \
@@ -137,7 +135,6 @@ template <class T> struct Result : tl::expected<T, Error> {
     }                                                                          \
   })
 
-// NOLINTNEXTLINE
 #define CHECK_RES(expr)                                                        \
   ({                                                                           \
     auto &&_result = (expr);                                                   \
@@ -174,3 +171,4 @@ template <class T> struct Result : tl::expected<T, Error> {
     }                                                                          \
     std::move(_result);                                                        \
   })
+// NOLINTEND

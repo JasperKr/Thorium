@@ -21,6 +21,10 @@ auto Light::GetBufferFormat() -> Graphics::BufferFormat & {
           .format = VK_FORMAT_R32_SFLOAT,
       },
       Graphics::BufferComponent{
+          .name = "ShadowBufferIndex",
+          .format = VK_FORMAT_R32_SINT,
+      },
+      Graphics::BufferComponent{
           .name = "Position",
           .format = VK_FORMAT_R32G32B32_SFLOAT,
       },

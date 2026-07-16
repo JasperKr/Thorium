@@ -35,6 +35,7 @@ struct Light {
 
   Color Color;
   float Intensity{};
+  int32_t ShadowBufferIndex = -1;
 
   /// CPU only data ///
   IntensityUnit IntensityUnit = IntensityUnit::LuminousIntensity;
@@ -43,20 +44,23 @@ struct Light {
 
   static auto GetBufferFormat() -> Graphics::BufferFormat &;
 
-  // NOLINTNEXTLINE
+  // NOLINTBEGIN
   auto Write(std::span<uint8_t> buffer, size_t offset) const -> size_t {
-    assert(offset + (4UL * sizeof(float)) <= buffer.size());
+    assert(offset + (5UL * sizeof(float)) <= buffer.size());
 
-    // NOLINTBEGIN
     auto *floatData = reinterpret_cast<float *>(buffer.data() + offset);
     floatData[0] = Color.r;
     floatData[1] = Color.g;
     floatData[2] = Color.b;
     floatData[3] = Intensity;
-    // NOLINTEND
 
-    return 4UL * sizeof(float);
+    auto *int32Data = reinterpret_cast<int32_t *>(buffer.data() + offset +
+                                                  (4UL * sizeof(float)));
+    int32Data[0] = ShadowBufferIndex;
+
+    return 5UL * sizeof(float);
   }
+  // NOLINTEND
 
   auto SetColor(const struct Color &color) -> void { Color = color; }
   auto SetColor(float red, float green, float blue) -> void {

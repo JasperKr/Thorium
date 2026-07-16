@@ -19,6 +19,14 @@ public struct SpotLight : ILight {
                                           uint frameRandomState) {
     return float3(0.0f);
   }
+
+  public static override bool TraceShadow(const float3 WorldPosition,
+                                          const uint LightIndex,
+                                          const float3 Normal,
+                                          uint2 screenCoords,
+                                          const uint frameRandomState) {
+    return false;
+  }
 }
 
 uniform uint32_t SpotLightCount;

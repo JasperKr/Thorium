@@ -7,6 +7,7 @@
 #include <cassert>
 #include <cstdint>
 #include <functional>
+#include <public/tracy/Tracy.hpp>
 #include <string>
 #include <utility>
 #include <vector>
@@ -40,6 +41,8 @@ struct VertexFormat {
     for (size_t i = 0; i < divisors.size(); ++i) {
       SetDivisor(static_cast<uint32_t>(i), divisors[i]);
     }
+
+    Hash = CalculateHash();
   }
 
   VertexFormat(VertexFormat &&other) noexcept = default;
@@ -121,9 +124,13 @@ public:
     auto currentHash = GetHash();
     auto &threadContext = GetThreadContext();
 
+    [[likely]]
     if (threadContext.currentVertexFormatHash == currentHash) {
       return; // Already bound this format, skip
     }
+
+    ZoneScoped;
+
     threadContext.currentVertexFormatHash = currentHash;
 
     const auto &bindings = GetBindings();
@@ -148,6 +155,10 @@ public:
   }
 
   auto operator==(const VertexFormat &other) const -> bool {
+    if (GetHash() != other.GetHash()) {
+      return false;
+    }
+
     if (Attributes.size() != other.Attributes.size()) {
       return false;
     }
@@ -169,7 +180,10 @@ public:
     return !(*this == other);
   }
 
-  [[nodiscard]] auto GetHash() const -> size_t {
+  [[nodiscard]] auto GetHash() const -> size_t { return Hash; }
+
+private:
+  [[nodiscard]] auto CalculateHash() const -> size_t {
     Hash::Hasher hasher{};
     for (const auto &attribute : Attributes) {
       hasher.Add(std::hash<std::string>()(attribute.name));
@@ -181,7 +195,6 @@ public:
     return hasher.Get();
   }
 
-private:
   // Private copy
   VertexFormat(const VertexFormat &other) = default;
   auto operator=(const VertexFormat &other) -> VertexFormat & = default;
@@ -264,10 +277,12 @@ private:
     }
 
     constructedBindings = true;
+    Hash = CalculateHash();
   }
 
   std::vector<VkVertexInputBindingDescription2EXT> Bindings;
   std::vector<VkVertexInputAttributeDescription2EXT> VkAttributes2;
+  size_t Hash = 0;
 
   // Mapping of [0 - binding count] -> binding index
   std::vector<uint32_t> BindingIndices;

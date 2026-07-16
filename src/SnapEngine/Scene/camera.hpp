@@ -144,6 +144,9 @@ struct Camera {
 
     // Bloom-Downsample Chain, encoded as b10g11r11_ufloat
     Renderer::RendertargetDescriptor BloomDownsampleChain;
+
+    // Shadow visibility array texture, encoded as r8_unorm
+    Renderer::RendertargetDescriptor ShadowVisibility;
   };
 
   // References to the textures we currently own. Dynamic
@@ -159,6 +162,8 @@ struct Camera {
     Ref<Graphics::Texture> Irradiance;
     Ref<Graphics::Texture> PostProcessed;
     Ref<Graphics::Texture> BloomDownsampleChain;
+    Ref<Graphics::Texture> ShadowVisibility;
+    Ref<Graphics::Texture> PreviousShadowVisibility;
 
     void Reset() {
       Depth = nullptr;
@@ -172,6 +177,8 @@ struct Camera {
       Irradiance = nullptr;
       PostProcessed = nullptr;
       BloomDownsampleChain = nullptr;
+      ShadowVisibility = nullptr;
+      PreviousShadowVisibility = nullptr;
     }
   };
 
@@ -187,6 +194,7 @@ struct Camera {
     bool Irradiance = false;
     bool PostProcessed = false;
     bool BloomDownsampleChain = false;
+    bool ShadowVisibility = true;
   };
 
   // NOLINTBEGIN
@@ -260,9 +268,6 @@ private:
   int VisibleProbeCount = 0;
 
   bool projectionDirty = true;
-
-  auto ReleasePersistentTextures() -> Error;
-  auto ReleaseTransientTextures() const -> Error;
 
   auto ConfigureRendertargets() -> void;
 

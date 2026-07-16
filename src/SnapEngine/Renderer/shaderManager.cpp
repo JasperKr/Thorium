@@ -21,7 +21,7 @@ auto ShaderManager::GetShader(ShaderKey shaderKey)
   auto context = *Graphics::GetCurrentGraphicsContext();
 
   auto shaderModule = CHECK_RES(Graphics::Shader::Create(
-      context, configuration.path, configuration.name, &configuration.Externs));
+      context, configuration.path, configuration.name, &configuration.externs));
 
   LoadedShaders[shaderKey] = shaderModule;
 
