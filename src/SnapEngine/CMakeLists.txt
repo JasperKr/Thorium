@@ -1,3 +1,9 @@
+# MikkTSpace
+
+set(MikkTSpace_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/external/MikkTSpace)
+
+message(STATUS "SnapEngine include: ${PROJECT_SOURCE_DIR}/src/Snap")
+
 add_library(SnapEngine
   material.cpp
   gltfLoader.cpp
@@ -43,6 +49,9 @@ add_library(SnapEngine
   Wrap/wrap_renderer.cpp
   Wrap/wrap_imgui.cpp
   Wrap/wrap_engine.cpp
+
+  # MikkTSpace
+  ${MikkTSpace_INCLUDE_DIR}/mikktspace.c
 )
 
 target_include_directories(SnapEngine

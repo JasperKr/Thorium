@@ -18,8 +18,10 @@
 #include "Scene/transform.hpp"
 #include "Scene/userdata.hpp"
 #include "material.hpp"
+#include "mikkTSpace.hpp"      // Don't remove either
 #include "simdjson/simdjson.h" // <-- Do not remove; Forces the use of project simdjson instead of system simdjson
 #include <algorithm>
+#include <array>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -691,6 +693,209 @@ inline auto TriangleTangent(Math::Vec3 vert0, Math::Vec3 vert1,
   return tangent.Normalize();
 }
 
+static auto DecodeVertexIndex(const std::vector<uint8_t> &indices,
+                              VkIndexType indexType, size_t linearIndex)
+    -> size_t {
+  const auto *indexBytes = indices.data();
+  switch (indexType) {
+  case VK_INDEX_TYPE_UINT8_EXT:
+    return static_cast<size_t>(indexBytes[linearIndex]); // NOLINT
+  case VK_INDEX_TYPE_UINT16: {
+    uint16_t value = 0;
+    memcpy(&value,
+           indexBytes + (linearIndex * sizeof(uint16_t)), // NOLINT
+           sizeof(uint16_t));
+    return static_cast<size_t>(value);
+  }
+  case VK_INDEX_TYPE_UINT32: {
+    uint32_t value = 0;
+    memcpy(&value,
+           indexBytes + (linearIndex * sizeof(uint32_t)), // NOLINT
+           sizeof(uint32_t));
+    return static_cast<size_t>(value);
+  }
+  default:
+    return linearIndex;
+  }
+}
+
+struct MikkUserData {
+  uint8_t *vertexData;
+  const uint8_t *indexData;
+  size_t vertexStride;
+  size_t vertexCount;
+  size_t indexCount;
+  size_t positionOffset;
+  size_t normalOffset;
+  size_t texcoordOffset;
+  size_t tangentOffset;
+  VkIndexType indexType;
+};
+
+static auto ResolveVertexIndex(const MikkUserData &data, int faceIndex,
+                               int vertIndex) -> size_t {
+  const size_t linearIndex =
+      (static_cast<size_t>(faceIndex) * 3) + static_cast<size_t>(vertIndex);
+  if (data.indexData == nullptr || data.indexCount == 0) {
+    return linearIndex;
+  }
+
+  switch (data.indexType) {
+  case VK_INDEX_TYPE_UINT8_EXT:
+    return static_cast<size_t>(data.indexData[linearIndex]); // NOLINT
+  case VK_INDEX_TYPE_UINT16: {
+    uint16_t value = 0;
+    memcpy(&value,
+           data.indexData + (linearIndex * sizeof(uint16_t)), // NOLINT
+           sizeof(uint16_t));
+    return static_cast<size_t>(value);
+  }
+  case VK_INDEX_TYPE_UINT32: {
+    uint32_t value = 0;
+    memcpy(&value,
+           data.indexData + (linearIndex * sizeof(uint32_t)), // NOLINT
+           sizeof(uint32_t));
+    return static_cast<size_t>(value);
+  }
+  default:
+    return linearIndex;
+  }
+}
+
+inline auto GenerateVertexTangents(Graphics::VertexFormat &format,
+                                   std::vector<uint8_t> &existingData,
+                                   const std::vector<uint8_t> &indices,
+                                   VkIndexType indexType) -> void {
+  const auto *positionAttribute = format.GetAttribute("POSITION");
+  const auto *normalAttribute = format.GetAttribute("NORMAL");
+  const auto *texcoordAttribute = format.GetAttribute("TEXCOORD_0");
+  const auto *tangentAttribute = format.GetAttribute("TANGENT");
+
+  if (positionAttribute == nullptr || normalAttribute == nullptr ||
+      texcoordAttribute == nullptr || tangentAttribute == nullptr) {
+    return;
+  }
+
+  const size_t stride = format.GetStride(0);
+  if (stride == 0 || existingData.empty()) {
+    return;
+  }
+
+  const size_t vertexCount = existingData.size() / stride;
+  if (vertexCount == 0) {
+    return;
+  }
+
+  size_t indexCount = 0;
+  if (!indices.empty()) {
+    switch (indexType) {
+    case VK_INDEX_TYPE_UINT8_EXT:
+      indexCount = indices.size();
+      break;
+    case VK_INDEX_TYPE_UINT16:
+      indexCount = indices.size() / sizeof(uint16_t);
+      break;
+    case VK_INDEX_TYPE_UINT32:
+      indexCount = indices.size() / sizeof(uint32_t);
+      break;
+    default:
+      indexCount = 0;
+      break;
+    }
+  }
+
+  MikkUserData userData{.vertexData = existingData.data(),
+                        .indexData = indices.empty() ? nullptr : indices.data(),
+                        .vertexStride = stride,
+                        .vertexCount = vertexCount,
+                        .indexCount = indexCount,
+                        .positionOffset = positionAttribute->offset,
+                        .normalOffset = normalAttribute->offset,
+                        .texcoordOffset = texcoordAttribute->offset,
+                        .tangentOffset = tangentAttribute->offset,
+                        .indexType = indexType};
+
+  SMikkTSpaceInterface mikkInterface{};
+  SMikkTSpaceContext mikkContext{};
+
+  // NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic, cppcoreguidelines-avoid-c-arrays, cppcoreguidelines-avoid-magic-numbers, cppcoreguidelines-pro-type-reinterpret-cast, hicpp-avoid-c-arrays, modernize-avoid-c-arrays)
+
+  mikkInterface.m_getNumFaces = [](const SMikkTSpaceContext *pContext) -> int {
+    auto *data = static_cast<MikkUserData *>(pContext->m_pUserData);
+    if (data->indexCount > 0) {
+      return static_cast<int>(data->indexCount / 3);
+    }
+    return static_cast<int>(data->vertexCount / 3);
+  };
+
+  mikkInterface.m_getNumVerticesOfFace = [](const SMikkTSpaceContext *pContext,
+                                            const int faceIndex) -> int {
+    return 3; // Triangles only
+  };
+
+  mikkInterface.m_getPosition = [](const SMikkTSpaceContext *pContext,
+                                   float outPos[], const int faceIndex,
+                                   const int vertIndex) -> void {
+    auto *data = static_cast<MikkUserData *>(pContext->m_pUserData);
+    const size_t vertexIndex = ResolveVertexIndex(*data, faceIndex, vertIndex);
+
+    const uint8_t *vertexPtr =
+        data->vertexData + (vertexIndex * data->vertexStride);     // NOLINT
+    const uint8_t *positionPtr = vertexPtr + data->positionOffset; // NOLINT
+
+    memcpy(outPos, positionPtr, sizeof(float) * 3);
+  };
+
+  mikkInterface.m_getNormal = [](const SMikkTSpaceContext *pContext,
+                                 float outNormal[], const int faceIndex,
+                                 const int vertIndex) -> void {
+    auto *data = static_cast<MikkUserData *>(pContext->m_pUserData);
+    const size_t vertexIndex = ResolveVertexIndex(*data, faceIndex, vertIndex);
+
+    const uint8_t *vertexPtr =
+        data->vertexData + (vertexIndex * data->vertexStride); // NOLINT
+    const uint8_t *normalPtr = vertexPtr + data->normalOffset; // NOLINT
+
+    memcpy(outNormal, normalPtr, sizeof(float) * 3);
+  };
+
+  mikkInterface.m_getTexCoord = [](const SMikkTSpaceContext *pContext,
+                                   float outUV[], const int faceIndex,
+                                   const int vertIndex) -> void {
+    auto *data = static_cast<MikkUserData *>(pContext->m_pUserData);
+    const size_t vertexIndex = ResolveVertexIndex(*data, faceIndex, vertIndex);
+
+    const uint8_t *vertexPtr =
+        data->vertexData + (vertexIndex * data->vertexStride); // NOLINT
+    const uint8_t *uvPtr = vertexPtr + data->texcoordOffset;   // NOLINT
+
+    memcpy(outUV, uvPtr, sizeof(float) * 2);
+  };
+
+  mikkInterface.m_setTSpaceBasic =
+      [](const SMikkTSpaceContext *pContext, const float tangent[],
+         const float sign, const int faceIndex, const int vertIndex) -> void {
+    auto *data = static_cast<MikkUserData *>(pContext->m_pUserData);
+    const size_t vertexIndex = ResolveVertexIndex(*data, faceIndex, vertIndex);
+
+    uint8_t *vertexPtr =
+        data->vertexData + (vertexIndex * data->vertexStride); // NOLINT
+    uint8_t *tangentPtr = vertexPtr + data->tangentOffset;     // NOLINT
+
+    const std::array<float, 4> generated = {tangent[0], tangent[1], -tangent[2],
+                                            sign};
+    ConvertTangentToPacked10Bit(
+        reinterpret_cast<const uint8_t *>(generated.data()), tangentPtr);
+  };
+
+  // NOLINTEND(cppcoreguidelines-pro-bounds-pointer-arithmetic, cppcoreguidelines-avoid-c-arrays, cppcoreguidelines-avoid-magic-numbers, cppcoreguidelines-pro-type-reinterpret-cast, hicpp-avoid-c-arrays, modernize-avoid-c-arrays)
+
+  mikkContext.m_pInterface = &mikkInterface;
+  mikkContext.m_pUserData = &userData;
+
+  genTangSpaceDefault(&mikkContext);
+}
+
 // NOLINTNEXTLINE
 inline auto FillVertexDataDefaults(Graphics::VertexFormat &format,
                                    const fastgltf::Asset &asset,
@@ -716,101 +921,6 @@ inline auto FillVertexDataDefaults(Graphics::VertexFormat &format,
       continue;
     }
 
-    if (component.name == "TANGENT") {
-      continue;
-
-      auto writeOffset = component.offset;
-      uint32_t positionOffset{};
-      uint32_t uvOffset{};
-
-      // Find POSITION and TEXCOORD_0 offsets.
-      for (const auto &comp : format.GetAttributes()) {
-        if (comp.name == "POSITION") {
-          positionOffset = comp.offset;
-        } else if (comp.name == "TEXCOORD_0") {
-          uvOffset = comp.offset;
-        }
-      }
-
-      if (indexType == VK_INDEX_TYPE_MAX_ENUM) {
-#pragma unroll 2
-        for (size_t vertex = 0; vertex < existingData.size() / stride;
-             vertex += 3) {
-          auto vert0 = existingData.data() + vertex * stride;       // NOLINT
-          auto vert1 = existingData.data() + (vertex + 1) * stride; // NOLINT
-          auto vert2 = existingData.data() + (vertex + 2) * stride; // NOLINT
-
-          Math::Vec3 pos0{};
-          Math::Vec3 pos1{};
-          Math::Vec3 pos2{};
-          Math::Vec2 uv0{};
-          Math::Vec2 uv1{};
-          Math::Vec2 uv2{};
-
-          memcpy(&pos0, vert0 + positionOffset, sizeof(Math::Vec3)); // NOLINT
-          memcpy(&uv0, vert0 + uvOffset, sizeof(Math::Vec2));        // NOLINT
-          memcpy(&pos1, vert1 + positionOffset, sizeof(Math::Vec3)); // NOLINT
-          memcpy(&uv1, vert1 + uvOffset, sizeof(Math::Vec2));        // NOLINT
-          memcpy(&pos2, vert2 + positionOffset, sizeof(Math::Vec3)); // NOLINT
-          memcpy(&uv2, vert2 + uvOffset, sizeof(Math::Vec2));        // NOLINT
-
-          Math::Vec4 tangent = TriangleTangent(pos0, pos1, pos2, uv0, uv1, uv2);
-
-          ConvertTangentToPacked10Bit(
-              reinterpret_cast<const uint8_t *>(&tangent), // NOLINT
-              vert0 + writeOffset);                        // NOLINT
-        }
-      } else {
-        size_t indexSize = indexType == VK_INDEX_TYPE_UINT16 ? 2 : 4;
-        size_t triangleCount = indices.size() / (3 * indexSize);
-#pragma unroll 2
-        for (size_t triangle = 0; triangle < triangleCount; ++triangle) {
-          uint32_t index0{};
-          uint32_t index1{};
-          uint32_t index2{};
-
-          if (indexType == VK_INDEX_TYPE_UINT16) {
-            index0 = *reinterpret_cast<const uint16_t *>(         // NOLINT
-                indices.data() + triangle * 3 * indexSize);       // NOLINT
-            index1 = *reinterpret_cast<const uint16_t *>(         // NOLINT
-                indices.data() + (triangle * 3 + 1) * indexSize); // NOLINT
-            index2 = *reinterpret_cast<const uint16_t *>(         // NOLINT
-                indices.data() + (triangle * 3 + 2) * indexSize); // NOLINT
-          } else {
-            index0 = *reinterpret_cast<const uint32_t *>(         // NOLINT
-                indices.data() + triangle * 3 * indexSize);       // NOLINT
-            index1 = *reinterpret_cast<const uint32_t *>(         // NOLINT
-                indices.data() + (triangle * 3 + 1) * indexSize); // NOLINT
-            index2 = *reinterpret_cast<const uint32_t *>(         // NOLINT
-                indices.data() + (triangle * 3 + 2) * indexSize); // NOLINT
-          }
-
-          auto vert0 = existingData.data() + index0 * stride; // NOLINT
-          auto vert1 = existingData.data() + index1 * stride; // NOLINT
-          auto vert2 = existingData.data() + index2 * stride; // NOLINT
-
-          Math::Vec3 pos0{};
-          Math::Vec3 pos1{};
-          Math::Vec3 pos2{};
-          Math::Vec2 uv0{};
-          Math::Vec2 uv1{};
-          Math::Vec2 uv2{};
-
-          memcpy(&pos0, vert0 + positionOffset, sizeof(Math::Vec3)); // NOLINT
-          memcpy(&uv0, vert0 + uvOffset, sizeof(Math::Vec2));        // NOLINT
-          memcpy(&pos1, vert1 + positionOffset, sizeof(Math::Vec3)); // NOLINT
-          memcpy(&uv1, vert1 + uvOffset, sizeof(Math::Vec2));        // NOLINT
-          memcpy(&pos2, vert2 + positionOffset, sizeof(Math::Vec3)); // NOLINT
-          memcpy(&uv2, vert2 + uvOffset, sizeof(Math::Vec2));        // NOLINT
-
-          Math::Vec4 tangent = TriangleTangent(pos0, pos1, pos2, uv0, uv1, uv2);
-
-          memcpy(vert0 + writeOffset, &tangent, sizeof(Math::Vec4)); // NOLINT
-          memcpy(vert1 + writeOffset, &tangent, sizeof(Math::Vec4)); // NOLINT
-          memcpy(vert2 + writeOffset, &tangent, sizeof(Math::Vec4)); // NOLINT
-        }
-      }
-    }
     if (component.name == "COLOR_0") {
       // Fill missing vertex colors with white (1,1,1,1).
       uint32_t whiteColor = ~0U; // RGBA packed white
@@ -819,8 +929,11 @@ inline auto FillVertexDataDefaults(Graphics::VertexFormat &format,
         memcpy(vert + component.offset, &whiteColor,       // NOLINT
                sizeof(uint32_t));
       }
-    } else {
-      // For other attributes, NOOP.
+    }
+
+    if (component.name == "TANGENT") {
+      // Generate tangents if missing.
+      GenerateVertexTangents(format, existingData, indices, indexType);
     }
   }
 }

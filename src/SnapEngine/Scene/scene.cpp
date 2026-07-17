@@ -519,6 +519,8 @@ auto Scene::DrawModels(Camera &camera, Frustum &frustum,
   static auto materialTextureKey = Graphics::ResourceKey{"MaterialTexture"};
   static auto emissiveTextureKey = Graphics::ResourceKey{"EmissiveTexture"};
   static auto depthBufferKey = Graphics::ResourceKey{"DepthTexture"};
+  static auto previousDepthBufferKey =
+      Graphics::ResourceKey{"PreviousDepthTexture"};
 
   CHECK_ERR(shader->Send(albedoTextureKey, textures.Albedo));
   CHECK_ERR(shader->Send(materialTextureKey, textures.Material));
@@ -545,6 +547,9 @@ auto Scene::DrawModels(Camera &camera, Frustum &frustum,
   // CHECK_ERR(sendInfo(shadowSpot));
   // CHECK_ERR(sendInfo(shadowSphere));
   // CHECK_ERR(sendInfo(shadowRectangle));
+
+  CHECK_ERR(
+      shadowDirectional->Send(previousDepthBufferKey, textures.PreviousDepth));
 
   auto countKey = Graphics::ResourceKey{"DirectionalLightCount"};
   CHECK_ERR(Graphics::UniformWriter::Send(

@@ -383,7 +383,7 @@ auto Camera::Render(const Graphics::GraphicsContext &context,
 
   CHECK_ERR(Renderer::GlobalRenderTargetManager.ReleaseRendertargets({
       OwnedTextures.DirectLighting,
-      OwnedTextures.Depth,
+      OwnedTextures.PreviousDepth,
       OwnedTextures.Normal,
       OwnedTextures.Albedo,
       OwnedTextures.Material,
@@ -392,6 +392,14 @@ auto Camera::Render(const Graphics::GraphicsContext &context,
       OwnedTextures.IncomingLight,
       OwnedTextures.Irradiance,
   }));
+
+  OwnedTextures.PreviousDepth = OwnedTextures.Depth;
+
+  if (!OwnedTextures.PreviousDepth.isValid()) {
+    OwnedTextures.PreviousDepth =
+        CHECK_RES(Renderer::GlobalRenderTargetManager.GetRendertarget(
+            context, Rendertargets.Depth));
+  }
 
   auto frustum = drawData.Matrices.GetFrustum();
 
@@ -592,8 +600,8 @@ auto Camera::ConfigureRendertargets() -> void {
       .size = Dimensions,
       .arrayLayers = 16, // NOLINT
       .format = VK_FORMAT_R8_UNORM,
-      .minFilter = VK_FILTER_NEAREST,
-      .magFilter = VK_FILTER_NEAREST,
+      .minFilter = VK_FILTER_LINEAR,
+      .magFilter = VK_FILTER_LINEAR,
       .mipFilter = VK_SAMPLER_MIPMAP_MODE_NEAREST,
       .usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
   };

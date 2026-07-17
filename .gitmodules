@@ -19,3 +19,6 @@
 [submodule "external/stacktrace"]
 	path = external/stacktrace
 	url = https://github.com/boostorg/stacktrace
+[submodule "external/MikkTSpace"]
+	path = external/MikkTSpace
+	url = https://github.com/mmikk/MikkTSpace

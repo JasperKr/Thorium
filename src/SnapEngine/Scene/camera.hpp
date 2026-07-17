@@ -152,6 +152,7 @@ struct Camera {
   // References to the textures we currently own. Dynamic
   struct AllocatedTextures {
     Ref<Graphics::Texture> Depth;
+    Ref<Graphics::Texture> PreviousDepth;
     Ref<Graphics::Texture> Normal;
     Ref<Graphics::Texture> Albedo;
     Ref<Graphics::Texture> Material;

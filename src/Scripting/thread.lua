@@ -238,10 +238,11 @@ do
     if firstFrame then
       snap.graphics.setDefaultFilter("linear", "linear", 16)
       -- snap.scene.loadModel(scene, "Assets/Terrain/Bistro/bistro.gltf")
-      snap.scene.loadModel(scene, "Assets/Terrain/sponza.glb")
+      -- snap.scene.loadModel(scene, "Assets/Terrain/sponza.glb")
       -- snap.scene.loadModel(scene, "Assets/Objects/OrientationTest/OrientationTest.gltf")
-      -- snap.scene.loadModel(scene, "Assets/Tests/MetalRoughSpheres.glb")
+      snap.scene.loadModel(scene, "Assets/Tests/MetalRoughSpheres.glb")
       -- snap.scene.loadModel(scene, "Assets/Tests/orientation2.glb")
+      -- snap.scene.loadModel(scene, "Assets/Tests/NormalTangentTest.glb")
 
       texture = snap.graphics.newTexture("src/Assets/skybox.hdr", { sampler = true, mipmaps = "init" })
       texture:setFilter("linear", "linear", "linear")

@@ -22,7 +22,8 @@ struct VertexStageOutput {
   float4 tangent : TANGENT;
   float2 tex_coord : TEXCOORDS;
   float4 color : COLOR;
-  float2 motion : MOTION;
+  float4 currentClip : CURRENT_CLIP;
+  float4 previousClip : PREV_CLIP;
 };
 
 struct VertexInput {
@@ -41,7 +42,8 @@ VertexStageOutput vertexMain(VertexInput input) {
 
   float4 worldPos = mul(float4(input.Position, 1.0), transform.ModelMatrix);
   out.sv_position = mul(camera.ViewProjectionMatrix, worldPos);
-  float4 previousClip = mul(previousCamera.ViewProjectionMatrix, worldPos);
+  out.currentClip = out.sv_position;
+  out.previousClip = mul(previousCamera.ViewProjectionMatrix, worldPos);
 
   float3x3 NormalMatrix = float3x3(transform.NormalMatrix);
 
@@ -55,13 +57,6 @@ VertexStageOutput vertexMain(VertexInput input) {
 
   out.color = input.Color;
 
-  float2 currentUV = out.sv_position.xy / out.sv_position.w;
-  float2 previousUV = previousClip.xy / previousClip.w;
-  currentUV = currentUV * 0.5 + 0.5;
-  previousUV = previousUV * 0.5 + 0.5;
-
-  out.motion = currentUV - previousUV;
-
   return out;
 }
 
@@ -70,7 +65,8 @@ struct FragmentInput {
   float4 tangent : TANGENT;
   float2 tex_coord : TEXCOORDS;
   float4 color : COLOR;
-  float2 motion : MOTION;
+  float4 currentClip : CURRENT_CLIP;
+  float4 previousClip : PREV_CLIP;
   bool isFrontFace : SV_IsFrontFace;
 };
 
@@ -95,7 +91,7 @@ FragmentOutput fragmentMain(FragmentInput input) {
 
   if (!input.isFrontFace) {
     normal = -normal;
-    tangent.xyz = -tangent.xyz;
+    tangent = -tangent;
   }
 
   float4 texColor = AlbedoTexture.Sample(input.tex_coord);
@@ -109,7 +105,7 @@ FragmentOutput fragmentMain(FragmentInput input) {
   float3 normalMap =
       normalize(NormalTexture.Sample(input.tex_coord).xyz * 2.0f - 1.0f);
 
-  float3 bitangent = cross(normal, tangent.xyz) * -tangent.w;
+  float3 bitangent = cross(normal, tangent.xyz) * tangent.w;
   float3x3 TBN = float3x3(tangent.xyz, bitangent, normal);
   TBN = transpose(TBN);
   normal = mul(TBN, normalMap);
@@ -126,7 +122,16 @@ FragmentOutput fragmentMain(FragmentInput input) {
 
   float3 emissive = emissiveSample * matData.emissiveFactor;
 
+  float2 currentNDC = input.currentClip.xy / input.currentClip.w;
+  float2 previousNDC = input.previousClip.xy / input.previousClip.w;
+
+  currentNDC = currentNDC * 0.5 + 0.5;   // remap to [0, 1] range
+  previousNDC = previousNDC * 0.5 + 0.5; // remap to [0, 1] range
+
+  float2 motion = currentNDC - previousNDC;
+  // motion = motion * 0.5 + 0.5; // remap to [0, 1] range
+
   return FragmentOutput(
       float4(albedo, 0.0), float4(normalize(normal) * 0.5 + 0.5, 0.0),
-      material.packed, float4(emissive, 1.0), PackMotionVector(input.motion));
+      material.packed, float4(emissive, 1.0), PackMotionVector(motion));
 }
