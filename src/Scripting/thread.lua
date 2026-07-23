@@ -36,7 +36,7 @@ do
 
     Editor.drawGUI()
 
-    camera:render(scene)
+    -- camera:render(scene)
     snap.graphics.setShader()
 
     if Imgui.Begin("Debug Info") then
@@ -62,9 +62,9 @@ do
     if Imgui.Begin("Viewport", nil, flags) then
       local windowSize = Imgui.GetWindowSize()
       Imgui.SetCursorPos(ffi.new("ImVec2", 0, 0))
-      local rt = camera:getRendertarget("PostProcessed")
-      Imgui.Image(rt, windowSize)
-      rt:release()
+      -- local rt = camera:getRendertarget("PostProcessed")
+      -- Imgui.Image(rt, windowSize)
+      -- rt:release()
 
       camera:setDimensions(windowSize.x, windowSize.y)
 
@@ -174,6 +174,7 @@ do
 
   while true do
     if not (canStartChannel:demand(1)) then
+      print("Render thread received stop signal")
       break
     end
 
@@ -184,7 +185,7 @@ do
       print("Requesting snapshot creation")
     end
 
-    snap.graphics.aquireGraphics(nil, nil, createSnapshot)
+    snap.graphics.acquireGraphics(nil, nil, createSnapshot)
 
     createSnapshot = false
 
@@ -243,7 +244,7 @@ do
     if firstFrame then
       snap.graphics.setDefaultFilter("linear", "linear", 16)
       -- snap.scene.loadModel(scene, "Assets/Terrain/Bistro/bistro.gltf")
-      snap.scene.loadModel(scene, "Assets/Terrain/sponza.glb")
+      -- snap.scene.loadModel(scene, "Assets/Terrain/sponza.glb")
       -- snap.scene.loadModel(scene, "Assets/Objects/OrientationTest/OrientationTest.gltf")
       -- snap.scene.loadModel(scene, "Assets/Tests/MetalRoughSpheres.glb")
       -- snap.scene.loadModel(scene, "Assets/Tests/orientation2.glb")

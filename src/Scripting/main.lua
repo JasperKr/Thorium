@@ -8,7 +8,7 @@ local startThreadChannel = snap.thread.newChannel()
 local events = snap.thread.newChannel()
 local scene = snap.scene.newScene("Main")
 
-snap.graphics.aquireGraphics("load")
+snap.graphics.acquireGraphics("load")
 snap.renderer.initialize()
 
 local thread = snap.thread.newThread("src/Scripting/thread.lua", "Render thread 1")
@@ -66,6 +66,8 @@ function snap.wheelmoved(x, y)
 end
 
 function snap.quit()
+  print("main thread received quit signal")
+
   startThreadChannel:push(false)
   startThreadChannel:push(false)
 
@@ -95,6 +97,7 @@ function snap.draw()
 
   while not gotBuffer do
     if thread:getStatus() ~= "running" then
+      print(thread:getError())
       snap.event.quit()
       return
     end

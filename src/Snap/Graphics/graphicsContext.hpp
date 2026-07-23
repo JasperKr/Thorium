@@ -2,6 +2,7 @@
 
 #include "Libraries/vma.hpp"
 #include "Modules/object.hpp"
+#include "Modules/stackVector.hpp"
 #include "SDL3/SDL_video.h"
 #include <mutex>
 #include <vector>
@@ -14,6 +15,8 @@
 
 namespace Graphics {
 
+static constexpr uint32_t MaxImageCount = 8;
+
 struct SurfaceInfo {
   VkSurfaceFormatKHR format;
   VkPresentModeKHR presentMode;
@@ -25,9 +28,9 @@ struct SwapchainInfo {
   VkFormat format;
   VkExtent2D extent;
   uint32_t imageCount;
-  std::vector<Ref<Texture>> textures;
-  std::vector<VkImage> images;
-  std::vector<VkImageView> imageViews;
+  Math::StackVector<Ref<Texture>, MaxImageCount> textures;
+  Math::StackVector<VkImage, MaxImageCount> images;
+  Math::StackVector<VkImageView, MaxImageCount> imageViews;
 };
 
 struct GraphicsMutexes {
@@ -53,17 +56,19 @@ struct GraphicsContext {
   VkPhysicalDeviceProperties deviceProperties;
 
   // Frame resources & image are ready for reuse
-  std::vector<VkSemaphore> imageAvailable;
+  Math::StackVector<VkSemaphore, MaxImageCount> imageAvailable;
 
   // Render finished and ready for presentation, signalled by presentation engine
-  std::vector<VkSemaphore> renderFinished;
+  Math::StackVector<VkSemaphore, MaxImageCount> renderFinished;
 
   // Fences to ensure that command buffers have finished executing before being reused
-  std::vector<VkFence> inFlight;
+  Math::StackVector<VkFence, MaxImageCount> inFlight;
 
   uint64_t currentFrame;
   uint32_t frameIndex;
   uint32_t swapchainImageIndex;
+
+  bool currentlyReordering = false;
 };
 
 } // namespace Graphics

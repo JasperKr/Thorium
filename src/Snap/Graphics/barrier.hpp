@@ -2,6 +2,7 @@
 
 #include <optional>
 
+#include "Modules/localState.hpp"
 #include "vulkan/vulkan_core.h"
 #include <cstdint>
 #include <utility>
@@ -43,7 +44,7 @@ thread_local extern uint64_t FrameBarrierCount;
 
 thread_local extern std::vector<ResourceSync> GlobalResourceSyncTimeline;
 
-thread_local extern std::vector<std::pair<struct BarrierSynced, ResourceState>>
+thread_local extern std::vector<std::pair<struct AccessState, ResourceState>>
     GlobalResourceStateUpdates;
 
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
@@ -68,8 +69,7 @@ now any time we do a command we lookback in the global syncs table starting at t
 to see if we need to sync by checking our last usage and looking back in time if we flushed for that by the time we reached now.
 */
 
-// base class for buffers and textures
-struct BarrierSynced {
+struct AccessState {
   // Now, for future me.
   /*
   We might be inclined to make this a map. For example:
@@ -89,6 +89,7 @@ struct BarrierSynced {
   // read from idx 0
   // whatever happens next.
   */
+
   mutable VkPipelineStageFlags2 lastUsedStages = 0;
   mutable VkAccessFlags2 lastUsedAccess = 0;
 
@@ -110,6 +111,16 @@ struct BarrierSynced {
   mutable bool firstAsyncUsage = false;
 };
 
+// base class for buffers and textures
+
+struct BarrierSynced : public Identifiable {
+  static ThreadLocalState<AccessState> AccessStateManager;
+
+  [[nodiscard]] auto GetAccessState() const -> AccessState & {
+    return AccessStateManager.GetState(*this);
+  }
+};
+
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 extern thread_local std::vector<BarrierSynced> GraphicsResources;
 
@@ -119,7 +130,7 @@ auto UpdateUsage(const GraphicsContext &context, const BarrierSynced &resource,
 auto UpdateUsage(const GraphicsContext &context, const Texture &texture,
                  const ResourceState &usage) -> void;
 
-auto UpdateUsageVirtual(BarrierSynced &resource, const ResourceState &usage)
+auto UpdateUsageVirtual(AccessState &state, const ResourceState &usage)
     -> std::optional<ResourceSync>;
 
 auto UpdateUsageVirtual(const Texture &texture, const ResourceState &usage)

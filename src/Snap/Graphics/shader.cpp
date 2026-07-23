@@ -295,8 +295,6 @@ static inline auto LoadSlang(const GraphicsContext &context,
     directories += " - " + std::string(path) + "\n";
   }
 
-  PrintDebug(directories);
-
   sessionDesc.searchPaths = searchPaths.data();
   sessionDesc.searchPathCount = static_cast<uint32_t>(searchPaths.size());
   sessionDesc.targets = &SpvTargetDesc;

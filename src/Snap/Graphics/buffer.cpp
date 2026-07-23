@@ -67,8 +67,7 @@ inline auto NameBuffer(VkBuffer buffer, VmaAllocation memory,
           static_cast<uint64_t>(reinterpret_cast<uintptr_t>(buffer)), // NOLINT
       .pObjectName = name.c_str(),
   };
-  CHECK_ERR(Error::Create(
-      vkSetDebugUtilsObjectNameEXT(context.device, &debugNameInfo)));
+  CHECK_NEW_ERR(vkSetDebugUtilsObjectNameEXT(context.device, &debugNameInfo));
 
   {
     std::lock_guard<std::mutex> lock(

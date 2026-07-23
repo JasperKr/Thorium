@@ -107,8 +107,8 @@ auto SemaphoreManager::Initialize(GraphicsContext &context) -> Error {
 
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    CHECK_ERR(Error::Create(vkCreateSemaphore(
-        context.device, &semInfo, GetAllocationCallbacks(), &semaphore)));
+    CHECK_NEW_ERR(vkCreateSemaphore(context.device, &semInfo,
+                                    GetAllocationCallbacks(), &semaphore));
   }
 
   return Error::Success();

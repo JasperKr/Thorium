@@ -1,6 +1,6 @@
 #pragma once
 
-// #define LOG_ERRORS
+#define LOG_ERRORS
 
 #include "slang/slang-com-ptr.h"
 #include "slang/slang.h"

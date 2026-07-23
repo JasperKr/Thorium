@@ -335,9 +335,9 @@ auto GetPipelineLayout(const GraphicsContext &context, Shader *shader)
 
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    CHECK_ERR(Error::Create(
-        vkCreatePipelineLayout(context.device, &pipelineLayoutInfo,
-                               GetAllocationCallbacks(), &pipelineLayout)));
+    CHECK_NEW_ERR(vkCreatePipelineLayout(context.device, &pipelineLayoutInfo,
+                                         GetAllocationCallbacks(),
+                                         &pipelineLayout));
   }
 
   {
@@ -711,9 +711,9 @@ inline auto CreateGraphicsPipeline(const GraphicsContext &context, State &state)
   VkPipeline pipeline = VK_NULL_HANDLE;
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    CHECK_ERR(Error::Create(vkCreateGraphicsPipelines(
+    CHECK_NEW_ERR(vkCreateGraphicsPipelines(
         context.device, VK_NULL_HANDLE, 1, &pipelineInfo,
-        GetAllocationCallbacks(), &pipeline)));
+        GetAllocationCallbacks(), &pipeline));
   }
 
   auto key = StateKey(state);
@@ -755,9 +755,9 @@ inline auto CreateComputePipeline(const GraphicsContext &context, State &state)
   VkPipeline pipeline = VK_NULL_HANDLE;
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    CHECK_ERR(Error::Create(vkCreateComputePipelines(
+    CHECK_NEW_ERR(vkCreateComputePipelines(
         context.device, VK_NULL_HANDLE, 1, &pipelineInfo,
-        GetAllocationCallbacks(), &pipeline)));
+        GetAllocationCallbacks(), &pipeline));
   }
 
   auto key = StateKey(state);
@@ -845,9 +845,9 @@ auto Load(const GraphicsContext &context) -> Error {
     layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
     layoutInfo.bindingCount = 0;
     layoutInfo.pBindings = nullptr;
-    CHECK_ERR(Error::Create(vkCreateDescriptorSetLayout(
-        context.device, &layoutInfo, GetAllocationCallbacks(),
-        &DefaultEmptySetLayout)));
+    CHECK_NEW_ERR(vkCreateDescriptorSetLayout(context.device, &layoutInfo,
+                                              GetAllocationCallbacks(),
+                                              &DefaultEmptySetLayout));
   }
 
   return Error::Success();
@@ -1350,8 +1350,8 @@ inline auto AllocateDescriptorSet(const GraphicsContext &context,
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
 
-    CHECK_ERR(Error::Create(
-        vkAllocateDescriptorSets(context.device, &allocInfo, &descriptorSet)));
+    CHECK_NEW_ERR(
+        vkAllocateDescriptorSets(context.device, &allocInfo, &descriptorSet));
   }
 
   thread_local std::vector<VkWriteDescriptorSet> writeDescriptorSets;

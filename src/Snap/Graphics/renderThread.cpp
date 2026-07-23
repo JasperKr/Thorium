@@ -132,21 +132,21 @@ inline auto GetDescriptorPool(ThreadContext &tcontext) -> Error {
 
     tcontext.descriptorPool = pool;
 
-    CHECK_ERR(Error::Create(
-        vkResetDescriptorPool(context.device, tcontext.descriptorPool, 0)));
+    CHECK_NEW_ERR(
+        vkResetDescriptorPool(context.device, tcontext.descriptorPool, 0));
     DynamicRendering::DescriptorSetCache.clear();
   }
 
   return Error::Success();
 }
 
-auto AquireCommandBuffer(Graphics::GraphicsContext &context,
-                         const AquireInfo &info)
+auto AcquireCommandBuffer(Graphics::GraphicsContext &context,
+                          const AcquireInfo &info)
     -> Result<Ref<RenderThreadInfo>> {
 
   if (CurrentRenderThreadInfo.get() != nullptr) {
     return Error::Unexpected(
-        "Current thread already has an aquired command buffer");
+        "Current thread already has an acquired command buffer");
   }
 
   auto threadInfo = Ref<RenderThreadInfo>::Make();
@@ -154,7 +154,7 @@ auto AquireCommandBuffer(Graphics::GraphicsContext &context,
   threadInfo->threadData.priority = info.priority;
   threadInfo->threadData.name = info.name;
   threadInfo->threadData.id = threadDataIDCounter.fetch_add(1);
-  threadInfo->threadData.aquiredAtFrame = context.currentFrame;
+  threadInfo->threadData.acquiredAtFrame = context.currentFrame;
 
   auto &tcontext = GetThreadContext();
 
@@ -177,27 +177,29 @@ auto AquireCommandBuffer(Graphics::GraphicsContext &context,
     allocInfo.commandBufferCount = 1;
 
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    CHECK_ERR(Error::Create(vkAllocateCommandBuffers(
-        context.device, &allocInfo, &threadInfo->threadData.commandBuffer)));
+    CHECK_NEW_ERR(vkAllocateCommandBuffers(
+        context.device, &allocInfo, &threadInfo->threadData.commandBuffer));
   } else {
     threadInfo->threadData.commandBuffer = cachedCmdBuffer.value();
   }
 
   tcontext.timelineValue = Graphics::semaphoreManager.NewSemaphoreValue();
   threadInfo->threadData.cmdBufferTimelineValue = tcontext.timelineValue;
+  tcontext.initialImageStates.clear();
+  tcontext.finalImageStates.clear();
 
   // Reset old command buffer
   VkCommandBufferResetFlags resetFlags{};
-  CHECK_ERR(Error::Create(
-      vkResetCommandBuffer(threadInfo->threadData.commandBuffer, resetFlags)));
+  CHECK_NEW_ERR(
+      vkResetCommandBuffer(threadInfo->threadData.commandBuffer, resetFlags));
 
   CHECK_ERR(GetDescriptorPool(tcontext));
 
   VkCommandBufferBeginInfo beginInfo = {};
   beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
   beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-  CHECK_ERR(Error::Create(
-      vkBeginCommandBuffer(threadInfo->threadData.commandBuffer, &beginInfo)));
+  CHECK_NEW_ERR(
+      vkBeginCommandBuffer(threadInfo->threadData.commandBuffer, &beginInfo));
 
   Barrier::ResetModule();
 
@@ -205,7 +207,7 @@ auto AquireCommandBuffer(Graphics::GraphicsContext &context,
   CurrentRenderThreadInfo = threadInfo;
 
   if (GetCommandBuffer() == VK_NULL_HANDLE) {
-    return Error::Unexpected("Failed to aquire command buffer.");
+    return Error::Unexpected("Failed to acquire command buffer.");
   }
 
   Graphics::SetDirtyState();
@@ -227,6 +229,7 @@ auto SubmitCommands(Graphics::GraphicsContext &context)
       CurrentRenderThreadInfo->threadData.commandBuffer == VK_NULL_HANDLE) {
     return Error::Unexpected("No command buffer to submit.");
   }
+  auto &threadContext = GetThreadContext();
 
   CHECK_NEW_ERR(
       vkEndCommandBuffer(CurrentRenderThreadInfo->threadData.commandBuffer));
@@ -237,8 +240,10 @@ auto SubmitCommands(Graphics::GraphicsContext &context)
       Barrier::GlobalResourceStateUpdates;
   CurrentRenderThreadInfo->threadData.drawsToSwapchain =
       Graphics::DynamicRendering::DrawnToSwapchain;
-
-  auto &threadContext = GetThreadContext();
+  CurrentRenderThreadInfo->threadData.initialImageStates =
+      threadContext.initialImageStates;
+  CurrentRenderThreadInfo->threadData.finalImageStates =
+      threadContext.finalImageStates;
 
   for (auto &pool : threadContext.descriptorPools) {
     if (pool.descriptorPool == threadContext.descriptorPool) {
@@ -252,7 +257,6 @@ auto SubmitCommands(Graphics::GraphicsContext &context)
   threadContext.currentMesh = 0;
 
   auto threadInfo = CurrentRenderThreadInfo;
-
   CurrentRenderThreadInfo.reset();
 
   return threadInfo;
@@ -293,20 +297,12 @@ auto Initialize(Graphics::GraphicsContext &context) -> Error {
 
   PrintDebug("Creating command pool for render thread...");
 
-  auto poolCreationResult = CreateCommandPool(tcontext);
-  if (Error::IsError(poolCreationResult)) {
-    return poolCreationResult;
-  }
-
+  CHECK_ERR(CreateCommandPool(tcontext));
   PrintDebug("Initializing uniform buffer module...");
 
   CHECK_ERR(InitializeUniformBufferModule(context));
 
-  auto rendertargetLoadError = Graphics::DynamicRendering::Load(context);
-
-  if (Error::IsError(rendertargetLoadError)) {
-    return rendertargetLoadError;
-  }
+  CHECK_ERR(Graphics::DynamicRendering::Load(context));
 
   return Error::Success();
 }
@@ -320,7 +316,7 @@ auto Deinitialize(Graphics::GraphicsContext &context) -> Error {
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
 
-    // TODO: Delay thread destruction until this isn't needed anymore since this will never fire if another thread is doing shit
+    // TODO: Delay thread destruction until this isn't needed anymore since this is kinda bad
     CHECK_NEW_ERR(vkDeviceWaitIdle(context.device));
 
     for (auto &descriptorPoolInfo : GetThreadContext().descriptorPools) {

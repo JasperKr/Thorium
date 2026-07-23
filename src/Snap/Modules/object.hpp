@@ -24,6 +24,19 @@ extern std::unordered_map<void const *,
 
 using ObjectID = uint64_t;
 
+struct Identifiable {
+public:
+  [[nodiscard]] auto getID() const -> ObjectID;
+
+  auto operator==(const Identifiable &other) const -> bool {
+    return id == other.id;
+  }
+
+private:
+  static inline std::atomic<ObjectID> globalIDCounter{0};
+  ObjectID id = globalIDCounter.fetch_add(1UL, std::memory_order_relaxed);
+};
+
 class Object {
 protected:
   Object() = default;
@@ -52,15 +65,9 @@ public:
 #endif
 
   [[nodiscard]] auto getReferenceCount() const -> int;
-  [[nodiscard]] auto getID() const -> ObjectID;
-
-  auto operator==(const Object &other) const -> bool { return id == other.id; }
 
 private:
   mutable std::atomic<int> count{0};
-
-  static inline std::atomic<ObjectID> globalIDCounter{0};
-  ObjectID id = globalIDCounter.fetch_add(1UL, std::memory_order_relaxed);
 };
 
 template <typename T> class Ref {

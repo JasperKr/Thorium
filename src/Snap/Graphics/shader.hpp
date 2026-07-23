@@ -7,6 +7,7 @@
 #include "Graphics/texture.hpp"
 #include "Modules/Math/vector.hpp"
 #include "Modules/error.hpp"
+#include "Modules/localState.hpp"
 #include "Modules/object.hpp"
 #include "Modules/type.hpp"
 #include "graphics.hpp"
@@ -85,11 +86,7 @@ struct BoundState {
   std::unordered_map<uint32_t, ResourceBinding> bindingInfos;
 };
 
-// NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
-extern thread_local std::unordered_map<VkShaderModule, BoundState> BoundStates;
-// NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
-
-struct Shader : Object {
+struct Shader : Object, Identifiable {
   Shader() = default;
   Shader(const Shader &) = delete;
   Shader(Shader &&) = delete;
@@ -121,8 +118,9 @@ struct Shader : Object {
 
   std::vector<slang::PreprocessorMacroDesc> preprocessorMacros;
 
+  static ThreadLocalState<BoundState> BoundStateManager;
   auto GetState() const -> BoundState & {
-    return BoundStates.try_emplace(module).first->second;
+    return BoundStateManager.GetState(*this);
   }
 
   std::vector<uint8_t> globalUniforms;
@@ -136,7 +134,8 @@ struct Shader : Object {
     auto &state = GetState();
     state.userBoundBuffers.clear();
     state.userBoundTextures.clear();
-    BoundStates.erase(module);
+
+    BoundStateManager.EraseState(*this);
 
     ScheduleDestruction(
         ShaderModuleMemory{

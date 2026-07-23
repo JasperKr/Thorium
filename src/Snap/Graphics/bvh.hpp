@@ -28,7 +28,7 @@ static constexpr size_t InitialTLASInstanceBufferCapacity =
     1024UL; // 1k instances
 
 // Bottom-Level Acceleration Structure.
-struct BLAS : Object {
+struct BLAS : Object, Identifiable {
   BLAS() = default;
 
   BLAS(const BLAS &) = delete;
@@ -73,7 +73,7 @@ private:
 };
 
 // Top-Level Acceleration Structure.
-struct TLAS : Object {
+struct TLAS : Object, Identifiable {
   TLAS() = default;
 
   TLAS(const TLAS &) = delete;

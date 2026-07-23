@@ -98,4 +98,4 @@ auto Object::release() -> bool {
   return false;
 }
 
-auto Object::getID() const -> uint64_t { return id; }
+auto Identifiable::getID() const -> uint64_t { return id; }

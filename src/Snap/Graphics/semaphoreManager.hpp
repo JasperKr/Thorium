@@ -16,7 +16,7 @@ namespace Graphics {
 
 /*
 Semaphores are signalled every submit, so every vsync.
-Every time a command buffer is aquired (async) We call NewSemaphoreValue
+Every time a command buffer is acquired (async) We call NewSemaphoreValue
 This increments the current timeline value and adds it to the pending map,
 Each value in this map corresponds to a not-yet submitted command buffer
 The uncompletedTimelineValues correspond to submitted not yet completed command buffers

@@ -46,7 +46,7 @@ auto wrap_GetWidth(lua_State *state) -> int;
 auto wrap_GetHeight(lua_State *state) -> int;
 auto wrap_GetDimensions(lua_State *state) -> int;
 
-auto wrap_AquireCommandBuffer(lua_State *state) -> int;
+auto wrap_AcquireCommandBuffer(lua_State *state) -> int;
 auto wrap_SubmitCommandBuffer(lua_State *state) -> int;
 
 auto wrap_CopyBuffer(lua_State *state) -> int;
@@ -102,7 +102,7 @@ static const std::vector<luaL_Reg> GraphicsLib = {
     {"getWidth", wrap_GetWidth},
     {"getHeight", wrap_GetHeight},
     {"getDimensions", wrap_GetDimensions},
-    {"aquireGraphics", wrap_AquireCommandBuffer},
+    {"acquireGraphics", wrap_AcquireCommandBuffer},
     {"submitGraphics", wrap_SubmitCommandBuffer},
     {"readbackBuffer", Buffer::wrap_Readback},
     {"copyBuffer", wrap_CopyBuffer},

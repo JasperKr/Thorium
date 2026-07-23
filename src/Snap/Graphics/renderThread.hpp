@@ -3,13 +3,16 @@
 #include "Graphics/barrier.hpp"
 #include "Graphics/graphicsContext.hpp"
 #include "Graphics/sampler.hpp"
+#include "Graphics/texture.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Modules/type.hpp"
 #include <cstdint>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <sys/types.h>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -21,7 +24,7 @@ struct RenderThreadData {
   // The usage updates recorded for all worker threads
   // We will append resource barriers after each command buffer recording
   // After reordering at the end of the frame
-  std::vector<std::pair<Barrier::BarrierSynced, Barrier::ResourceState>>
+  std::vector<std::pair<Barrier::AccessState, Barrier::ResourceState>>
       usageUpdates;
   std::vector<Barrier::ResourceSync> resourceSyncs;
 
@@ -31,7 +34,12 @@ struct RenderThreadData {
   VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
   uint64_t cmdBufferTimelineValue{};
   bool drawsToSwapchain = false;
-  uint64_t aquiredAtFrame{};
+  uint64_t acquiredAtFrame{};
+
+  std::vector<std::pair<std::weak_ptr<ImageMemory>, ImageState>>
+      initialImageStates;
+
+  std::unordered_map<ObjectID, ImageState> finalImageStates;
 
   std::string name;
   uint64_t id{};
@@ -71,14 +79,14 @@ extern thread_local Ref<RenderThreadInfo> CurrentRenderThreadInfo;
 
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
-struct AquireInfo {
+struct AcquireInfo {
   std::string name;
   int64_t priority;
 };
 
-// Aquire a command buffer for the current thread, must have rendering permission
-auto AquireCommandBuffer(Graphics::GraphicsContext &context,
-                         const AquireInfo &info)
+// Acquire a command buffer for the current thread, must have rendering permission
+auto AcquireCommandBuffer(Graphics::GraphicsContext &context,
+                          const AcquireInfo &info)
     -> Result<Ref<RenderThreadInfo>>;
 
 // Submit the commands recorded on the current thread

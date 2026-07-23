@@ -42,6 +42,8 @@
 namespace Graphics {
 
 ImageMemory::~ImageMemory() {
+  ImageStateManager.EraseState(*this);
+
   if (isSwapchainMemory) {
     // Swapchain images are managed by the swapchain, so we don't destroy them
     return;
@@ -119,6 +121,16 @@ inline auto SetDebugName(const std::string &debugName, Texture *texture,
   return Error::Success();
 }
 
+[[nodiscard]] auto ImageMemory::GetState() const -> ImageState & {
+  [[unlikely]]
+  if (GetCurrentGraphicsContext()->currentlyReordering) {
+    return currentState;
+  }
+
+  return ImageStateManager.GetState(*this);
+}
+
+// NOLINTNEXTLINE
 auto Texture::Create(const GraphicsContext &context,
                      const TextureCreationInfo &info) -> Result<Ref<Texture>> {
   ZoneScoped;
@@ -135,7 +147,8 @@ auto Texture::Create(const GraphicsContext &context,
 
   ERR_ASSERT(info.arrayLayers > 0);
 
-  if (info.textureType == TextureType::CUBEMAP && info.arrayLayers != 6) {
+  if (info.textureType == TextureType::CUBEMAP &&
+      info.arrayLayers != 6) { // NOLINT
     return Error::Unexpected("Cubemap textures must have exactly 6 array "
                              "layers.");
   }
@@ -419,7 +432,7 @@ auto Texture::FromSwapchain(const GraphicsContext &context,
   texture->view = swapchainImageView;
 
   imageMemory->usage = context.surfaceInfo.capabilities.supportedUsageFlags;
-  imageMemory->lastUsage = TextureUsage::Swapchain;
+  imageMemory->GetState().lastUsage = TextureUsage::Swapchain;
 
   texture->debugName = "Swapchain Image";
   texture->imageMemory = imageMemory;
@@ -672,7 +685,7 @@ auto Texture::FromMemory(const GraphicsContext &context,
       mipmapCount = static_cast<int>(Image::GetMipmapCount(width, height));
     }
 
-    auto cubeMapTexture = Create(
+    texture = CHECK_RES(Create(
         context, TextureCreationInfo{
                      .size = VkExtent3D{width, height, 1},
                      .arrayLayers = 6, // NOLINT
@@ -681,13 +694,8 @@ auto Texture::FromMemory(const GraphicsContext &context,
                                           VK_IMAGE_USAGE_TRANSFER_DST_BIT),
                      .mipmapCount = mipmapCount,
                      .textureType = TextureType::CUBEMAP,
-                 });
+                 }));
 
-    if (Error::IsError(cubeMapTexture)) {
-      return cubeMapTexture.error();
-    }
-
-    texture = cubeMapTexture.value();
     break;
   }
   case TextureType::ARRAY: {
@@ -695,7 +703,7 @@ auto Texture::FromMemory(const GraphicsContext &context,
       mipmapCount = static_cast<int>(Image::GetMipmapCount(width, height));
     }
 
-    auto arrayTexture = Create(
+    texture = CHECK_RES(Create(
         context, TextureCreationInfo{
                      .size = VkExtent3D{width, height, 1},
                      .arrayLayers = static_cast<uint32_t>(slices.size()),
@@ -704,14 +712,7 @@ auto Texture::FromMemory(const GraphicsContext &context,
                                           VK_IMAGE_USAGE_TRANSFER_DST_BIT),
                      .mipmapCount = mipmapCount,
                      .textureType = TextureType::ARRAY,
-                 });
-
-    if (Error::IsError(arrayTexture)) {
-      return arrayTexture.error();
-    }
-
-    texture = arrayTexture.value();
-    break;
+                 }));
   }
   case TextureType::VOLUME: {
     if (mipmaps != TextureMipmapOption::None) {
@@ -719,7 +720,7 @@ auto Texture::FromMemory(const GraphicsContext &context,
           static_cast<int>(Image::GetMipmapCount(width, height, slices.size()));
     }
 
-    auto volumeTexture = Create(
+    texture = CHECK_RES(Create(
         context, TextureCreationInfo{
                      .size = VkExtent3D{width, height,
                                         static_cast<uint32_t>(slices.size())},
@@ -728,13 +729,8 @@ auto Texture::FromMemory(const GraphicsContext &context,
                                           VK_IMAGE_USAGE_TRANSFER_DST_BIT),
                      .mipmapCount = mipmapCount,
                      .textureType = TextureType::VOLUME,
-                 });
+                 }));
 
-    if (Error::IsError(volumeTexture)) {
-      return volumeTexture.error();
-    }
-
-    texture = volumeTexture.value();
     break;
   }
   default:
@@ -743,24 +739,22 @@ auto Texture::FromMemory(const GraphicsContext &context,
   }
 
   for (size_t i = 0; i < slices.size(); ++i) {
-    auto result =
-        texture->SetPixels(context, *slices[i], 0, static_cast<uint32_t>(i));
-    if (Error::IsError(result)) {
-      return result;
-    }
+    CHECK_ERR(
+        texture->SetPixels(context, *slices[i], 0, static_cast<uint32_t>(i)));
   }
 
   return texture;
 }
 
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
-auto Texture::TransitionLayout(const GraphicsContext &context,
-                               VkImageLayout layout,
-                               VkPipelineStageFlags2 sourceStage, // NOLINT
-                               VkPipelineStageFlags2 destinationStage,
-                               VkAccessFlags2 srcAccessMask, // NOLINT
-                               VkAccessFlags2 dstAccessMask,
-                               VkImageSubresourceRange range) const -> Error {
+auto ImageMemory::TransitionLayout(const GraphicsContext &context,
+                                   VkImageLayout layout,
+                                   VkPipelineStageFlags2 sourceStage, // NOLINT
+                                   VkPipelineStageFlags2 destinationStage,
+                                   VkAccessFlags2 srcAccessMask, // NOLINT
+                                   VkAccessFlags2 dstAccessMask,
+                                   VkImageSubresourceRange range) const
+    -> Error {
 
   [[unlikely]]
   if (range.layerCount == 0 || range.levelCount == 0) {
@@ -769,28 +763,24 @@ auto Texture::TransitionLayout(const GraphicsContext &context,
         "be greater than 0.");
   }
 
+  auto &state = GetState();
+
   if (sourceStage == destinationStage && srcAccessMask == dstAccessMask &&
-      imageMemory->currentLayout == layout) {
+      state.currentLayout == layout) {
     return Error::Success();
   }
 
-  auto *commandBuffer = GetCommandBuffer();
-
-  [[unlikely]]
-  if (commandBuffer == nullptr) {
-    return Error::Create("Failed to get command buffer for layout transition.");
-  }
+  auto *commandBuffer = CHECK_NULL(GetCommandBuffer());
 
   VkImageMemoryBarrier2 barrier = {};
   barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-  barrier.oldLayout = imageMemory->currentLayout;
+  barrier.oldLayout = state.currentLayout;
   barrier.newLayout = layout;
   barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
   barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-  barrier.image = imageMemory->image;
+  barrier.image = image;
   barrier.subresourceRange = range;
-  barrier.subresourceRange.aspectMask =
-      GetAspectFlagsForFormat(imageMemory->format);
+  barrier.subresourceRange.aspectMask = GetAspectFlagsForFormat(format);
 
   barrier.srcAccessMask = srcAccessMask;
   barrier.dstAccessMask = dstAccessMask;
@@ -805,7 +795,7 @@ auto Texture::TransitionLayout(const GraphicsContext &context,
   DynamicRendering::EndRendering(context);
   vkCmdPipelineBarrier2(commandBuffer, &dep);
 
-  imageMemory->currentLayout = layout;
+  state.currentLayout = layout;
 
   return Error::Success();
 }
@@ -1275,10 +1265,9 @@ inline auto GetAccessFlagsForUsage(
   }
 }
 
-auto Texture::UseAs(const GraphicsContext &context, TextureUsage newUsage,
-                    VkPipelineStageFlags2 stage, VkAttachmentLoadOp loadOp,
-                    VkAttachmentStoreOp storeOp) -> Error {
-
+auto ImageMemory::UseAs(const GraphicsContext &context, TextureUsage newUsage,
+                        VkPipelineStageFlags2 stage, VkAttachmentLoadOp loadOp,
+                        VkAttachmentStoreOp storeOp) const -> Error {
 #ifndef NDEBUG
   [[unlikely]]
   if (newUsage == TextureUsage::Unknown ||
@@ -1291,33 +1280,13 @@ auto Texture::UseAs(const GraphicsContext &context, TextureUsage newUsage,
     return Error::Create(
         "UseAs: stage must be known when transitioning layouts.");
   }
-#endif
 
-  VkAccessFlags2 currentAccess =
-      GetAccessFlagsForUsage(imageMemory->lastUsage, imageMemory->format);
-  VkAccessFlags2 newAccess =
-      GetAccessFlagsForUsage(newUsage, imageMemory->format);
-
-  if (imageMemory->lastUsage == TextureUsage::Swapchain) {
-    currentAccess = VK_ACCESS_2_NONE;
-    imageMemory->lastPipelineStage =
-        VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
-  }
-
-#ifndef NDEBUG
   [[unlikely]]
-  if (layerCount == 0 || levelCount == 0) {
+  if (arrayLayers == 0 || mipmapcount == 0) {
     return Error::Create(
         "Invalid texture with zero mip levels or array layers.");
   }
 #endif
-
-  auto range = VkImageSubresourceRange{
-      .aspectMask = GetAspectFlagsForFormat(imageMemory->format),
-      .baseMipLevel = 0,
-      .levelCount = VK_REMAINING_MIP_LEVELS,
-      .baseArrayLayer = 0,
-      .layerCount = VK_REMAINING_ARRAY_LAYERS};
 
   auto layout = VK_IMAGE_LAYOUT_GENERAL;
 
@@ -1326,13 +1295,67 @@ auto Texture::UseAs(const GraphicsContext &context, TextureUsage newUsage,
     layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
   }
 
-  auto result =
-      TransitionLayout(context, layout, imageMemory->lastPipelineStage, stage,
-                       currentAccess, newAccess, range);
+  auto &state = GetState();
 
-  imageMemory->lastUsage = newUsage;
-  imageMemory->lastPipelineStage = stage;
+  VkAccessFlags2 currentAccess =
+      GetAccessFlagsForUsage(state.lastUsage, format, loadOp, storeOp);
+  VkAccessFlags2 newAccess =
+      GetAccessFlagsForUsage(newUsage, format, loadOp, storeOp);
+
+  if (state.lastUsage == TextureUsage::Swapchain) {
+    currentAccess = VK_ACCESS_2_NONE;
+    state.lastPipelineStage = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+  }
+
+  auto range =
+      VkImageSubresourceRange{.aspectMask = GetAspectFlagsForFormat(format),
+                              .baseMipLevel = 0,
+                              .levelCount = VK_REMAINING_MIP_LEVELS,
+                              .baseArrayLayer = 0,
+                              .layerCount = VK_REMAINING_ARRAY_LAYERS};
+
+  auto result = TransitionLayout(context, layout, state.lastPipelineStage,
+                                 stage, currentAccess, newAccess, range);
+
+  state.lastUsage = newUsage;
+  state.lastPipelineStage = stage;
+
   return result;
+}
+
+auto Texture::UseAs(const GraphicsContext &context, TextureUsage newUsage,
+                    VkPipelineStageFlags2 stage, VkAttachmentLoadOp loadOp,
+                    VkAttachmentStoreOp storeOp) -> Error {
+  auto &state = imageMemory->GetState();
+
+  // First usage this frame on this thread
+  // Reordering thread will insert the layout transition barrier before this command buffer is submitted
+  [[unlikely]]
+  if (state.lastUsedFrame != context.currentFrame &&
+      !context.currentlyReordering) {
+
+    state.lastUsedFrame = context.currentFrame;
+
+    state.lastUsage = newUsage;
+    state.lastPipelineStage = stage;
+
+    state.currentLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+    [[unlikely]]
+    if (newUsage == TextureUsage::PresentSrc) {
+      state.currentLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    }
+
+    GetThreadContext().initialImageStates.emplace_back(imageMemory, state);
+
+    return Error::Success();
+  }
+
+  if (!context.currentlyReordering) {
+    GetThreadContext().finalImageStates[imageMemory->getID()] = state;
+  }
+
+  return imageMemory->UseAs(context, newUsage, stage, loadOp, storeOp);
 }
 
 auto Texture::UseAsAttachment(const GraphicsContext &context,
@@ -1541,10 +1564,12 @@ auto Texture::GenerateMipmaps(const GraphicsContext &context) const -> Error {
   auto mipWidth = static_cast<int32_t>(imageMemory->size.width);
   auto mipHeight = static_cast<int32_t>(imageMemory->size.height);
 
+  auto &state = imageMemory->GetState();
+
   VkImageMemoryBarrier2 barrier = {};
   barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
   barrier.srcAccessMask =
-      GetAccessFlagsForUsage(imageMemory->lastUsage, imageMemory->format);
+      GetAccessFlagsForUsage(state.lastUsage, imageMemory->format);
   barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
   barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
   barrier.image = imageMemory->image;
@@ -1560,9 +1585,9 @@ auto Texture::GenerateMipmaps(const GraphicsContext &context) const -> Error {
   dep.imageMemoryBarrierCount = 1;
   dep.pImageMemoryBarriers = &barrier;
 
-  barrier.srcStageMask = imageMemory->lastPipelineStage;
+  barrier.srcStageMask = state.lastPipelineStage;
   barrier.srcAccessMask =
-      GetAccessFlagsForUsage(imageMemory->lastUsage, imageMemory->format);
+      GetAccessFlagsForUsage(state.lastUsage, imageMemory->format);
   barrier.dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
   barrier.dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
   barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
@@ -1633,8 +1658,8 @@ auto Texture::GenerateMipmaps(const GraphicsContext &context) const -> Error {
 
   vkCmdPipelineBarrier2(commandBuffer, &dep);
 
-  imageMemory->lastUsage = TextureUsage::TransferSrc;
-  imageMemory->lastPipelineStage = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
+  state.lastUsage = TextureUsage::TransferSrc;
+  state.lastPipelineStage = VK_PIPELINE_STAGE_2_TRANSFER_BIT;
 
   return {};
 }

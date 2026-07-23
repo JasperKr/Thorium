@@ -1,7 +1,12 @@
 #pragma once
 
+#include <functional>
+#include <memory>
+#include <unordered_map>
+#include <utility>
 #include <vector>
 
+#include "Graphics/texture.hpp"
 #include "Modules/object.hpp"
 #include "vulkan/vulkan_core.h"
 
@@ -23,5 +28,10 @@ struct ThreadContext {
   VkDescriptorPool descriptorPool = VK_NULL_HANDLE; // Current descriptor pool
 
   uint64_t timelineValue = 0;
+
+  std::vector<std::pair<std::weak_ptr<ImageMemory>, ImageState>>
+      initialImageStates;
+
+  std::unordered_map<ObjectID, ImageState> finalImageStates;
 };
 } // namespace Graphics
