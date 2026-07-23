@@ -12,6 +12,7 @@ add_library(SnapEngine
 
   Editor/gui.cpp
   Editor/lineDrawer.cpp
+  Editor/primitiveDrawer.cpp
   Editor/editor.cpp
 
   Scene/scene.cpp

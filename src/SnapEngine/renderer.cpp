@@ -277,6 +277,7 @@ void Renderer::Deinitialize() {
   GlobalRenderTargetManager.Deinitialize();
   PrefilterManager.Deinitialize();
   LineDrawer.Deinitialize();
+  PrimitiveDrawer.Deinitialize();
   BloomManager.Deinitialize();
 
   if (!initialized) {

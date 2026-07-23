@@ -11,11 +11,10 @@ struct LevelOfDetail {
   // Threshold is calculated based on the area of the bounding box of the mesh on the screen.
   // Starting at 1.0 and decreasing as the mesh gets smaller on the screen.
   // This threshold determines when to switch to the next level of detail.
-  Math::Scalar TransitionThreshold = 0.0F;
+  float TransitionThreshold = 0.0F;
 
   static auto CreateLevelOfDetail(flecs::world &world, const std::string &name,
-                                  Math::Scalar transitionThreshold)
-      -> flecs::entity {
+                                  float transitionThreshold) -> flecs::entity {
     auto lod = world.entity(name.c_str());
     lod.set<LevelOfDetail>(
         LevelOfDetail{.TransitionThreshold = transitionThreshold});

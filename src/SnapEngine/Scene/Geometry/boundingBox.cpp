@@ -116,9 +116,9 @@ auto LuaBoundingBox::SetMin(lua_State *state) -> int {
     return luaL_error(state, "BoundingBox component not found");
   }
 
-  boundingBox->Min.x = static_cast<Math::Scalar>(luaL_checknumber(state, 2));
-  boundingBox->Min.y = static_cast<Math::Scalar>(luaL_checknumber(state, 3));
-  boundingBox->Min.z = static_cast<Math::Scalar>(luaL_checknumber(state, 4));
+  boundingBox->Min.x = static_cast<float>(luaL_checknumber(state, 2));
+  boundingBox->Min.y = static_cast<float>(luaL_checknumber(state, 3));
+  boundingBox->Min.z = static_cast<float>(luaL_checknumber(state, 4));
 
   return 0;
 }
@@ -154,9 +154,9 @@ auto LuaBoundingBox::SetMax(lua_State *state) -> int {
     return luaL_error(state, "BoundingBox component not found");
   }
 
-  boundingBox->Max.x = static_cast<Math::Scalar>(luaL_checknumber(state, 2));
-  boundingBox->Max.y = static_cast<Math::Scalar>(luaL_checknumber(state, 3));
-  boundingBox->Max.z = static_cast<Math::Scalar>(luaL_checknumber(state, 4));
+  boundingBox->Max.x = static_cast<float>(luaL_checknumber(state, 2));
+  boundingBox->Max.y = static_cast<float>(luaL_checknumber(state, 3));
+  boundingBox->Max.z = static_cast<float>(luaL_checknumber(state, 4));
 
   return 0;
 }

@@ -26,16 +26,19 @@ auto wrap_ReloadShaders(lua_State *state) -> int {
 }
 
 auto wrap_PickObject(lua_State *state) -> int {
-  auto camera = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
-
   Math::Vec2 mousePos =
-      Math::Vec2{luaL_checkscalar(state, 2), luaL_checkscalar(state, 3)};
-
-  auto cameraEntity = camera->entity;
-  const auto &cameraObj = cameraEntity.get<Camera>();
+      Math::Vec2{luaL_checkscalar(state, 1), luaL_checkscalar(state, 2)};
 
   LUA_CK_ERR(Editor::Editor::GetEditorInstance().PickEntity(
-      cameraObj, *Graphics::GetCurrentGraphicsContext(), mousePos));
+      *Graphics::GetCurrentGraphicsContext(), mousePos));
+
+  return 0;
+}
+
+auto wrap_SetEditorCamera(lua_State *state) -> int {
+  auto camera = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
+
+  Editor::Editor::GetEditorInstance().EditorCamera = camera->entity;
 
   return 0;
 }

@@ -15,32 +15,32 @@ Matrix4x4::Matrix4x4(Matrix3x3 init) {
   At(3, 3) = 1.0F;
 }
 
-auto Matrix4x4::FromRows(std::initializer_list<Scalar> init) -> Matrix4x4 {
+auto Matrix4x4::FromRows(std::initializer_list<float> init) -> Matrix4x4 {
   return {init};
 }
 
-auto Matrix4x4::At(size_t row, size_t col) -> Scalar & {
+auto Matrix4x4::At(size_t row, size_t col) -> float & {
 #ifndef NDEBUG
   assert(row < 4 && col < 4);
 #endif
   return elements.at((row * Cols) + col);
 }
 
-auto Matrix4x4::At(size_t row, size_t col) const -> Scalar {
+auto Matrix4x4::At(size_t row, size_t col) const -> float {
 #ifndef NDEBUG
   assert(row < 4 && col < 4);
 #endif
   return elements.at((row * Cols) + col);
 }
 
-auto Matrix4x4::At(size_t index) -> Scalar & {
+auto Matrix4x4::At(size_t index) -> float & {
 #ifndef NDEBUG
   assert(index < Size);
 #endif
   return elements.at(index);
 }
 
-auto Matrix4x4::At(size_t index) const -> Scalar {
+auto Matrix4x4::At(size_t index) const -> float {
 #ifndef NDEBUG
   assert(index < Size);
 #endif
@@ -54,7 +54,7 @@ Matrix4x4::Matrix4x4() {
   At(3, 3) = 1.0F;
 }
 
-auto Matrix4x4::Determinant() const -> std::pair<Scalar, Matrix4x4> {
+auto Matrix4x4::Determinant() const -> std::pair<float, Matrix4x4> {
   Matrix4x4 inv;
 
   // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers, readability-magic-numbers)
@@ -123,8 +123,8 @@ auto Matrix4x4::Determinant() const -> std::pair<Scalar, Matrix4x4> {
             (At(4) * At(1) * At(10)) + (At(4) * At(2) * At(9)) +
             (At(8) * At(1) * At(6)) - ((At(8) * At(2) * At(5)));
 
-  Scalar det = (At(0) * inv[0]) + (At(1) * inv[4]) + (At(2) * inv[8]) +
-               (At(3) * inv[12]);
+  float det = (At(0) * inv[0]) + (At(1) * inv[4]) + (At(2) * inv[8]) +
+              (At(3) * inv[12]);
 
   // NOLINTEND(cppcoreguidelines-avoid-magic-numbers, readability-magic-numbers)
 
@@ -170,7 +170,7 @@ auto Matrix4x4::operator*(const Matrix4x4 &other) const -> Matrix4x4 {
   for (size_t row = 0; row < Rows; ++row) {
 #pragma unroll
     for (size_t col = 0; col < Cols; ++col) {
-      Scalar sum = 0.0F;
+      float sum = 0.0F;
 #pragma unroll
       for (size_t k = 0; k < Cols; ++k) {
         sum += At(row, k) * other.At(k, col);
@@ -187,7 +187,7 @@ auto Matrix4x4::operator*(const Vec4 &vec) const -> Vec4 {
   Vec4 result{};
 #pragma unroll
   for (size_t row = 0; row < Rows; ++row) {
-    Scalar sum = 0.0F;
+    float sum = 0.0F;
 #pragma unroll
     for (size_t col = 0; col < Cols; ++col) {
       sum += At(row, col) * vec[col];
@@ -235,22 +235,22 @@ auto Matrix4x4::operator!=(const Matrix4x4 &other) const -> bool {
   return !(*this == other);
 }
 
-auto Matrix4x4::operator[](size_t index) -> Scalar & {
+auto Matrix4x4::operator[](size_t index) -> float & {
 #ifndef NDEBUG
   assert(index < Size);
 #endif
   return elements.at(index);
 }
 
-auto Matrix4x4::operator[](size_t index) const -> Scalar {
+auto Matrix4x4::operator[](size_t index) const -> float {
 #ifndef NDEBUG
   assert(index < Size);
 #endif
   return elements.at(index);
 }
 
-auto Matrix4x4::Perspective(Scalar left, Scalar right, Scalar bottom,
-                            Scalar top, Scalar near, Scalar far) -> Matrix4x4 {
+auto Matrix4x4::Perspective(float left, float right, float bottom, float top,
+                            float near, float far) -> Matrix4x4 {
 
   auto rml = right - left;
   auto tmb = top - bottom;
@@ -275,10 +275,10 @@ auto Matrix4x4::Perspective(Scalar left, Scalar right, Scalar bottom,
 }
 
 // NOLINTNEXTLINE
-auto Matrix4x4::Perspective(Scalar fov, Scalar aspect, Scalar near, Scalar far)
+auto Matrix4x4::Perspective(float fov, float aspect, float near, float far)
     -> Matrix4x4 {
-  Scalar ithf = 1.0F / std::tan(fov / 2.0F); // NOLINT
-  Scalar invr = 1.0F / (near - far);
+  float ithf = 1.0F / std::tan(fov / 2.0F); // NOLINT
+  float invr = 1.0F / (near - far);
   auto npf = near + far;
   auto nmf = near * far;
   auto fmn = far - near;
@@ -298,9 +298,8 @@ auto Matrix4x4::Perspective(Scalar fov, Scalar aspect, Scalar near, Scalar far)
   return result;
 }
 
-auto Matrix4x4::Orthographic(Scalar left, Scalar right, Scalar bottom,
-                             Scalar top, Scalar nearPlane, Scalar farPlane)
-    -> Matrix4x4 {
+auto Matrix4x4::Orthographic(float left, float right, float bottom, float top,
+                             float nearPlane, float farPlane) -> Matrix4x4 {
 
   auto rml = right - left;
   auto tmb = top - bottom;
@@ -325,12 +324,12 @@ auto Matrix4x4::Orthographic(Scalar left, Scalar right, Scalar bottom,
 }
 
 // NOLINTBEGIN
-auto Matrix4x4::Orthographic(Scalar width, Scalar height, Scalar nearPlane,
-                             Scalar farPlane) -> Matrix4x4 {
-  Scalar left = -width / 2.0F;
-  Scalar right = width / 2.0F;
-  Scalar bottom = -height / 2.0F;
-  Scalar top = height / 2.0F;
+auto Matrix4x4::Orthographic(float width, float height, float nearPlane,
+                             float farPlane) -> Matrix4x4 {
+  float left = -width / 2.0F;
+  float right = width / 2.0F;
+  float bottom = -height / 2.0F;
+  float top = height / 2.0F;
 
   return Matrix4x4::Orthographic(left, right, bottom, top, nearPlane, farPlane);
 }
@@ -344,7 +343,7 @@ auto Matrix4x4::TranslationMatrix(Vec3 translation) -> Matrix4x4 {
   return result;
 }
 
-auto Matrix4x4::TranslationMatrix(Scalar x_pos, Scalar y_pos, Scalar z_pos)
+auto Matrix4x4::TranslationMatrix(float x_pos, float y_pos, float z_pos)
     -> Matrix4x4 {
   Matrix4x4 result;
   result.At(3, 0) = x_pos;
@@ -361,7 +360,7 @@ auto Matrix4x4::ScaleMatrix(Vec3 scale) -> Matrix4x4 {
   return result;
 }
 
-auto Matrix4x4::ScaleMatrix(Scalar x_scale, Scalar y_scale, Scalar z_scale)
+auto Matrix4x4::ScaleMatrix(float x_scale, float y_scale, float z_scale)
     -> Matrix4x4 {
   Matrix4x4 result;
   result.At(0, 0) = x_scale;
@@ -379,10 +378,10 @@ auto Matrix4x4::TransformationMatrix(Vec3 translation, Vec3 scale,
   return scaleMatrix * rotationMatrix * translationMatrix;
 }
 
-auto Matrix4x4::TransformationMatrix(Scalar x_pos, Scalar y_pos, Scalar z_pos,
-                                     Scalar x_scale, Scalar y_scale,
-                                     Scalar z_scale, Scalar x_rot, Scalar y_rot,
-                                     Scalar z_rot, Scalar w_rot) -> Matrix4x4 {
+auto Matrix4x4::TransformationMatrix(float x_pos, float y_pos, float z_pos,
+                                     float x_scale, float y_scale,
+                                     float z_scale, float x_rot, float y_rot,
+                                     float z_rot, float w_rot) -> Matrix4x4 {
   Matrix4x4 translationMatrix =
       Matrix4x4::TranslationMatrix(x_pos, y_pos, z_pos);
   Matrix4x4 scaleMatrix = Matrix4x4::ScaleMatrix(x_scale, y_scale, z_scale);
@@ -406,28 +405,28 @@ auto Matrix4x4::ToString() const -> std::string {
   return result;
 }
 
-auto Matrix3x3::At(size_t row, size_t col) -> Scalar & {
+auto Matrix3x3::At(size_t row, size_t col) -> float & {
 #ifndef NDEBUG
   assert(row < 3 && col < 3);
 #endif
   return elements.at((row * Cols) + col);
 }
 
-auto Matrix3x3::At(size_t row, size_t col) const -> Scalar {
+auto Matrix3x3::At(size_t row, size_t col) const -> float {
 #ifndef NDEBUG
   assert(row < 3 && col < 3);
 #endif
   return elements.at((row * Cols) + col);
 }
 
-auto Matrix3x3::At(size_t index) -> Scalar & {
+auto Matrix3x3::At(size_t index) -> float & {
 #ifndef NDEBUG
   assert(index < Size);
 #endif
   return elements.at(index);
 }
 
-auto Matrix3x3::At(size_t index) const -> Scalar {
+auto Matrix3x3::At(size_t index) const -> float {
 #ifndef NDEBUG
   assert(index < Size);
 #endif
@@ -459,7 +458,7 @@ auto Matrix3x3::operator*(const Matrix3x3 &other) const -> Matrix3x3 {
   for (size_t row = 0; row < Rows; ++row) {
 #pragma unroll
     for (size_t col = 0; col < Cols; ++col) {
-      Scalar sum = 0.0F;
+      float sum = 0.0F;
 #pragma unroll
       for (size_t k = 0; k < Cols; ++k) {
         sum += At(row, k) * other.At(k, col);
@@ -473,7 +472,7 @@ auto Matrix3x3::operator*(const Matrix3x3 &other) const -> Matrix3x3 {
 auto Matrix3x3::operator*(const Vec3 &vec) const -> Vec3 {
   Vec3 result{};
   for (size_t row = 0; row < Rows; ++row) {
-    Scalar sum = 0.0F;
+    float sum = 0.0F;
     for (size_t col = 0; col < Cols; ++col) {
       sum += At(row, col) * vec[col];
     }
@@ -490,11 +489,11 @@ auto Matrix3x3::operator!=(const Matrix3x3 &other) const -> bool {
   return !(*this == other);
 }
 
-auto Matrix3x3::Determinant() const -> std::pair<Scalar, Matrix3x3> {
+auto Matrix3x3::Determinant() const -> std::pair<float, Matrix3x3> {
   // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers, readability-magic-numbers)
-  Scalar det = (At(0) * (At(4) * At(8) - At(5) * At(7))) -
-               (At(1) * (At(3) * At(8) - At(5) * At(6))) +
-               (At(2) * (At(3) * At(7) - At(4) * At(6)));
+  float det = (At(0) * (At(4) * At(8) - At(5) * At(7))) -
+              (At(1) * (At(3) * At(8) - At(5) * At(6))) +
+              (At(2) * (At(3) * At(7) - At(4) * At(6)));
 
   Matrix3x3 cofactorMatrix{};
   cofactorMatrix.At(0) = (At(4) * At(8)) - (At(5) * At(7));
@@ -524,7 +523,7 @@ auto Matrix3x3::InverseTranspose() const -> Matrix3x3 {
     return Matrix3x3{NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN, NAN};
   }
 
-  Scalar invDet = 1.0F / det;
+  float invDet = 1.0F / det;
 
   Matrix3x3 result;
 
@@ -572,7 +571,7 @@ auto Matrix4x4::FromLua(lua_State *state, int index) -> Matrix4x4 {
   Matrix4x4 mat;
   for (int i = 0; i < Size; ++i) {
     lua_rawgeti(state, index, i + 1);
-    mat.At(i) = static_cast<Scalar>(lua_tonumber(state, -1));
+    mat.At(i) = static_cast<float>(lua_tonumber(state, -1));
   }
   lua_pop(state, Size);
   return mat;
@@ -582,7 +581,7 @@ auto Matrix3x3::FromLua(lua_State *state, int index) -> Matrix3x3 {
   Matrix3x3 mat;
   for (int i = 0; i < Size; ++i) {
     lua_rawgeti(state, index, i + 1);
-    mat.At(i) = static_cast<Scalar>(lua_tonumber(state, -1));
+    mat.At(i) = static_cast<float>(lua_tonumber(state, -1));
   }
   lua_pop(state, Size);
   return mat;

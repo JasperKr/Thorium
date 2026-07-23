@@ -15,9 +15,9 @@ struct Matrix4x4 {
   constexpr static size_t Cols = 4;
   constexpr static size_t Size = Rows * Cols;
 
-  std::array<Scalar, Size> elements{};
+  std::array<float, Size> elements{};
 
-  constexpr Matrix4x4(std::initializer_list<Scalar> init) {
+  constexpr Matrix4x4(std::initializer_list<float> init) {
     size_t index = 0;
     for (const auto &value : init) {
       elements.at(index++) = value;
@@ -26,19 +26,19 @@ struct Matrix4x4 {
 
   explicit Matrix4x4(struct Matrix3x3 init);
 
-  auto AsSpan() -> std::span<const Scalar> { return {elements}; }
+  auto AsSpan() -> std::span<const float> { return {elements}; }
   auto AsByteSpan()
       -> std::span<const uint8_t> { // NOLINTNEXTLINE reinterpret cast
     return {reinterpret_cast<const uint8_t *>(elements.data()),
-            sizeof(Scalar) * Size};
+            sizeof(float) * Size};
   }
 
-  static auto FromRows(std::initializer_list<Scalar> init) -> Matrix4x4;
+  static auto FromRows(std::initializer_list<float> init) -> Matrix4x4;
 
-  auto At(size_t row, size_t col) -> Scalar &;
-  [[nodiscard]] auto At(size_t row, size_t col) const -> Scalar;
-  auto At(size_t index) -> Scalar &;
-  [[nodiscard]] auto At(size_t index) const -> Scalar;
+  auto At(size_t row, size_t col) -> float &;
+  [[nodiscard]] auto At(size_t row, size_t col) const -> float;
+  auto At(size_t index) -> float &;
+  [[nodiscard]] auto At(size_t index) const -> float;
 
   Matrix4x4();
 
@@ -60,10 +60,10 @@ struct Matrix4x4 {
   auto operator==(const Matrix4x4 &other) const -> bool;
   auto operator!=(const Matrix4x4 &other) const -> bool;
 
-  auto operator[](size_t index) -> Scalar &;
-  auto operator[](size_t index) const -> Scalar;
+  auto operator[](size_t index) -> float &;
+  auto operator[](size_t index) const -> float;
 
-  [[nodiscard]] auto Determinant() const -> std::pair<Scalar, Matrix4x4>;
+  [[nodiscard]] auto Determinant() const -> std::pair<float, Matrix4x4>;
   [[nodiscard]] auto Inverse() const -> Matrix4x4;
   [[nodiscard]] auto InverseTranspose() const -> Matrix4x4;
   [[nodiscard]] auto AsMatrix3x3() const -> Matrix4x4;
@@ -72,38 +72,38 @@ struct Matrix4x4 {
 
   static auto FromLua(lua_State *state, int index) -> Matrix4x4;
 
-  static auto Perspective(Scalar left, Scalar right, Scalar bottom, Scalar top,
-                          Scalar nearPlane, Scalar farPlane) -> Matrix4x4;
-  static auto Perspective(Scalar fovRadians, Scalar aspectRatio,
-                          Scalar nearPlane, Scalar farPlane) -> Matrix4x4;
-  static auto Orthographic(Scalar left, Scalar right, Scalar bottom, Scalar top,
-                           Scalar nearPlane, Scalar farPlane) -> Matrix4x4;
-  static auto Orthographic(Scalar width, Scalar height, Scalar nearPlane,
-                           Scalar farPlane) -> Matrix4x4;
+  static auto Perspective(float left, float right, float bottom, float top,
+                          float nearPlane, float farPlane) -> Matrix4x4;
+  static auto Perspective(float fovRadians, float aspectRatio, float nearPlane,
+                          float farPlane) -> Matrix4x4;
+  static auto Orthographic(float left, float right, float bottom, float top,
+                           float nearPlane, float farPlane) -> Matrix4x4;
+  static auto Orthographic(float width, float height, float nearPlane,
+                           float farPlane) -> Matrix4x4;
   static auto TranslationMatrix(Vec3 translation) -> Matrix4x4;
-  static auto TranslationMatrix(Scalar x_pos, Scalar y_pos, Scalar z_pos)
+  static auto TranslationMatrix(float x_pos, float y_pos, float z_pos)
       -> Matrix4x4;
   static auto ScaleMatrix(Vec3 scale) -> Matrix4x4;
-  static auto ScaleMatrix(Scalar x_scale, Scalar y_scale, Scalar z_scale)
+  static auto ScaleMatrix(float x_scale, float y_scale, float z_scale)
       -> Matrix4x4;
   static auto RotationMatrix(Quaternion rotation) -> Matrix4x4;
-  static auto RotationMatrix(Scalar x_rot, Scalar y_rot, Scalar z_rot,
-                             Scalar w_rot) -> Matrix4x4;
+  static auto RotationMatrix(float x_rot, float y_rot, float z_rot, float w_rot)
+      -> Matrix4x4;
   static auto TransformationMatrix(Vec3 translation, Vec3 scale,
                                    Quaternion rotation) -> Matrix4x4;
-  static auto TransformationMatrix(Scalar x_pos, Scalar y_pos, Scalar z_pos,
-                                   Scalar x_scale, Scalar y_scale,
-                                   Scalar z_scale, Scalar x_rot, Scalar y_rot,
-                                   Scalar z_rot, Scalar w_rot) -> Matrix4x4;
+  static auto TransformationMatrix(float x_pos, float y_pos, float z_pos,
+                                   float x_scale, float y_scale, float z_scale,
+                                   float x_rot, float y_rot, float z_rot,
+                                   float w_rot) -> Matrix4x4;
 
   [[nodiscard]] auto ToString() const -> std::string;
 
-  [[nodiscard]] auto data() const -> const Scalar * { return elements.data(); }
+  [[nodiscard]] auto data() const -> const float * { return elements.data(); }
   static auto size() -> size_t { return Size; }
   [[nodiscard]] auto byteSpan() const
       -> std::span<const uint8_t> { // NOLINTNEXTLINE reinterpret cast
     return {reinterpret_cast<const uint8_t *>(elements.data()),
-            sizeof(Scalar) * Size};
+            sizeof(float) * Size};
   }
   [[nodiscard]] auto floatSpan() const
       -> std::span<const float> { // NOLINT reinterpret cast
@@ -135,15 +135,15 @@ struct Matrix3x3 {
   constexpr static size_t Cols = 3;
   constexpr static size_t Size = Rows * Cols;
 
-  std::array<Scalar, Size> elements{};
+  std::array<float, Size> elements{};
 
-  auto At(size_t row, size_t col) -> Scalar &;
-  [[nodiscard]] auto At(size_t row, size_t col) const -> Scalar;
-  auto At(size_t index) -> Scalar &;
-  [[nodiscard]] auto At(size_t index) const -> Scalar;
+  auto At(size_t row, size_t col) -> float &;
+  [[nodiscard]] auto At(size_t row, size_t col) const -> float;
+  auto At(size_t index) -> float &;
+  [[nodiscard]] auto At(size_t index) const -> float;
 
   Matrix3x3();
-  constexpr Matrix3x3(std::initializer_list<Scalar> init) {
+  constexpr Matrix3x3(std::initializer_list<float> init) {
     size_t index = 0;
     for (const auto &value : init) {
       elements.at(index++) = value;
@@ -165,10 +165,10 @@ struct Matrix3x3 {
   auto operator==(const Matrix3x3 &other) const -> bool;
   auto operator!=(const Matrix3x3 &other) const -> bool;
 
-  auto operator[](size_t index) -> Scalar &;
-  auto operator[](size_t index) const -> Scalar;
+  auto operator[](size_t index) -> float &;
+  auto operator[](size_t index) const -> float;
 
-  [[nodiscard]] auto Determinant() const -> std::pair<Scalar, Matrix3x3>;
+  [[nodiscard]] auto Determinant() const -> std::pair<float, Matrix3x3>;
   [[nodiscard]] auto Inverse() const -> Matrix3x3;
   [[nodiscard]] auto InverseTranspose() const -> Matrix3x3;
 
@@ -176,13 +176,13 @@ struct Matrix3x3 {
   [[nodiscard]] auto ToLua(lua_State *state) const -> int;
   static auto FromLua(lua_State *state, int index) -> Matrix3x3;
 
-  [[nodiscard]] auto data() const -> const Scalar * { return elements.data(); }
+  [[nodiscard]] auto data() const -> const float * { return elements.data(); }
   static auto size() -> size_t { return Size; }
 
   [[nodiscard]] auto byteSpan() const
       -> std::span<const uint8_t> { // NOLINTNEXTLINE reinterpret cast
     return {reinterpret_cast<const uint8_t *>(elements.data()),
-            sizeof(Scalar) * Size};
+            sizeof(float) * Size};
   }
 
   [[nodiscard]] auto FloatSpan() const

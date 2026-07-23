@@ -21,53 +21,53 @@ struct Ivec3;
 struct Ivec4;
 
 struct Vec2 {
-  Scalar x{};
-  Scalar y{};
+  float x{};
+  float y{};
 
   auto operator+(const Vec2 &other) const -> Vec2;
-  auto operator+(Scalar scalar) const -> Vec2;
+  auto operator+(float scalar) const -> Vec2;
   auto operator+=(const Vec2 &other) -> Vec2 &;
-  auto operator+=(Scalar scalar) -> Vec2 &;
+  auto operator+=(float scalar) -> Vec2 &;
 
   auto operator-(const Vec2 &other) const -> Vec2;
-  auto operator-(Scalar scalar) const -> Vec2;
+  auto operator-(float scalar) const -> Vec2;
   auto operator-=(const Vec2 &other) -> Vec2 &;
-  auto operator-=(Scalar scalar) -> Vec2 &;
+  auto operator-=(float scalar) -> Vec2 &;
 
   auto operator-() const -> Vec2;
 
-  auto operator*(Scalar scalar) const -> Vec2;
+  auto operator*(float scalar) const -> Vec2;
   auto operator*(const Vec2 &other) const -> Vec2;
-  auto operator*=(Scalar scalar) -> Vec2 &;
+  auto operator*=(float scalar) -> Vec2 &;
   auto operator*=(const Vec2 &other) -> Vec2 &;
 
-  auto operator/(Scalar scalar) const -> Vec2;
+  auto operator/(float scalar) const -> Vec2;
   auto operator/(const Vec2 &other) const -> Vec2;
-  auto operator/=(Scalar scalar) -> Vec2 &;
+  auto operator/=(float scalar) -> Vec2 &;
   auto operator/=(const Vec2 &other) -> Vec2 &;
 
   auto operator==(const Vec2 &other) const -> bool;
   auto operator!=(const Vec2 &other) const -> bool;
 
-  auto operator[](uint32_t index) -> Scalar &;
-  auto operator[](uint32_t index) const -> Scalar;
+  auto operator[](uint32_t index) -> float &;
+  auto operator[](uint32_t index) const -> float;
 
-  [[nodiscard]] auto Length() const -> Scalar;
-  [[nodiscard]] auto LengthSqr() const -> Scalar;
+  [[nodiscard]] auto Length() const -> float;
+  [[nodiscard]] auto LengthSqr() const -> float;
   [[nodiscard]] auto Inverse() const -> Vec2;
   [[nodiscard]] auto Normalize() const -> Vec2;
-  [[nodiscard]] auto Distance(const Vec2 &other) const -> Scalar;
-  [[nodiscard]] auto DistanceSqr(const Vec2 &other) const -> Scalar;
-  [[nodiscard]] auto Dot(const Vec2 &other) const -> Scalar;
+  [[nodiscard]] auto Distance(const Vec2 &other) const -> float;
+  [[nodiscard]] auto DistanceSqr(const Vec2 &other) const -> float;
+  [[nodiscard]] auto Dot(const Vec2 &other) const -> float;
   [[nodiscard]] auto Cross(const Vec2 &other) const -> Vec2;
 
   [[nodiscard]] auto Max(const Vec2 &other) const -> Vec2;
-  [[nodiscard]] auto Max(Scalar scalar) const -> Vec2;
+  [[nodiscard]] auto Max(float scalar) const -> Vec2;
   [[nodiscard]] auto Min(const Vec2 &other) const -> Vec2;
-  [[nodiscard]] auto Min(Scalar scalar) const -> Vec2;
+  [[nodiscard]] auto Min(float scalar) const -> Vec2;
 
-  constexpr Vec2(Scalar x_val, Scalar y_val) : x(x_val), y(y_val) {}
-  constexpr explicit Vec2(Scalar val) : x(val), y(val) {}
+  constexpr Vec2(float x_val, float y_val) : x(x_val), y(y_val) {}
+  constexpr explicit Vec2(float val) : x(val), y(val) {}
   constexpr Vec2() = default;
   explicit Vec2(const Vec3 &vec3);
   explicit Vec2(const Vec4 &vec4);
@@ -82,71 +82,72 @@ struct Vec2 {
 
   [[nodiscard]] auto ToString() const -> std::string;
   [[nodiscard]] auto Hash() const -> uint64_t;
-  [[nodiscard]] auto Span() -> std::span<Scalar> { return {&x, 2}; }
-  [[nodiscard]] auto Span() const -> std::span<const Scalar> { return {&x, 2}; }
-  [[nodiscard]] auto Ptr() -> Scalar * { return &x; }
-  [[nodiscard]] auto Ptr() const -> const Scalar * { return &x; }
+  [[nodiscard]] auto Span() -> std::span<float> { return {&x, 2}; }
+  [[nodiscard]] auto Span() const -> std::span<const float> { return {&x, 2}; }
+  [[nodiscard]] auto Ptr() -> float * { return &x; }
+  [[nodiscard]] auto Ptr() const -> const float * { return &x; }
 };
 
 struct Vec3 {
-  Scalar x;
-  Scalar y;
-  Scalar z;
+  float x{};
+  float y{};
+  float z{};
 
   auto operator+(const Vec3 &other) const -> Vec3;
-  auto operator+(Scalar scalar) const -> Vec3;
+  auto operator+(float scalar) const -> Vec3;
   auto operator+=(const Vec3 &other) -> Vec3 &;
-  auto operator+=(Scalar scalar) -> Vec3 &;
+  auto operator+=(float scalar) -> Vec3 &;
 
   auto operator-(const Vec3 &other) const -> Vec3;
-  auto operator-(Scalar scalar) const -> Vec3;
+  auto operator-(float scalar) const -> Vec3;
   auto operator-=(const Vec3 &other) -> Vec3 &;
-  auto operator-=(Scalar scalar) -> Vec3 &;
+  auto operator-=(float scalar) -> Vec3 &;
 
   auto operator-() const -> Vec3;
 
-  auto operator*(Scalar scalar) const -> Vec3;
+  auto operator*(float scalar) const -> Vec3;
   auto operator*(const Vec3 &other) const -> Vec3;
-  auto operator*=(Scalar scalar) -> Vec3 &;
+  auto operator*=(float scalar) -> Vec3 &;
   auto operator*=(const Vec3 &other) -> Vec3 &;
 
-  auto operator/(Scalar scalar) const -> Vec3;
+  auto operator/(float scalar) const -> Vec3;
   auto operator/(const Vec3 &other) const -> Vec3;
-  auto operator/=(Scalar scalar) -> Vec3 &;
+  auto operator/=(float scalar) -> Vec3 &;
   auto operator/=(const Vec3 &other) -> Vec3 &;
 
   auto operator==(const Vec3 &other) const -> bool;
   auto operator!=(const Vec3 &other) const -> bool;
 
-  auto operator[](uint32_t index) -> Scalar &;
-  auto operator[](uint32_t index) const -> Scalar;
+  auto operator[](uint32_t index) -> float &;
+  auto operator[](uint32_t index) const -> float;
 
-  [[nodiscard]] auto Length() const -> Scalar;
-  [[nodiscard]] auto LengthSqr() const -> Scalar;
+  [[nodiscard]] auto Length() const -> float;
+  [[nodiscard]] auto LengthSqr() const -> float;
   [[nodiscard]] auto Inverse() const -> Vec3;
   [[nodiscard]] auto Normalize() const -> Vec3;
-  [[nodiscard]] auto Distance(const Vec3 &other) const -> Scalar;
-  [[nodiscard]] auto DistanceSqr(const Vec3 &other) const -> Scalar;
-  [[nodiscard]] auto Dot(const Vec3 &other) const -> Scalar;
+  [[nodiscard]] auto Distance(const Vec3 &other) const -> float;
+  [[nodiscard]] auto DistanceSqr(const Vec3 &other) const -> float;
+  [[nodiscard]] auto Dot(const Vec3 &other) const -> float;
   [[nodiscard]] auto Cross(const Vec3 &other) const -> Vec3;
+  [[nodiscard]] auto GetTangent() const -> Vec3;
 
   [[nodiscard]] auto Max(const Vec3 &other) const -> Vec3;
-  [[nodiscard]] auto Max(Scalar scalar) const -> Vec3;
+  [[nodiscard]] auto Max(float scalar) const -> Vec3;
   [[nodiscard]] auto Min(const Vec3 &other) const -> Vec3;
-  [[nodiscard]] auto Min(Scalar scalar) const -> Vec3;
+  [[nodiscard]] auto Min(float scalar) const -> Vec3;
 
-  constexpr Vec3(Scalar x_val, Scalar y_val, Scalar z_val)
+  constexpr Vec3(float x_val, float y_val, float z_val)
       : x(x_val), y(y_val), z(z_val) {}
-  constexpr explicit Vec3(Scalar val) : x(val), y(val), z(val) {}
+  constexpr explicit Vec3(float val) : x(val), y(val), z(val) {}
   constexpr Vec3() = default;
-  explicit Vec3(const Vec2 &vec2, Scalar z_val = 0.0F);
+  explicit Vec3(const Vec2 &vec2, float z_val = 0.0F);
   explicit Vec3(const Vec4 &vec4);
 
-  explicit Vec3(const Ivec2 &vec2, Scalar z_val = 0.0F);
+  explicit Vec3(const Ivec2 &vec2, float z_val = 0.0F);
   explicit Vec3(const Ivec3 &vec3);
   explicit Vec3(const Ivec4 &vec4);
 
-  explicit Vec3(const Uvec2 &vec2, Scalar z_val = 0.0F);
+  explicit Vec3(const Uvec2 &vec2, float z_val = 0.0F);
   explicit Vec3(const Uvec3 &vec3);
   explicit Vec3(const Uvec4 &vec4);
 
@@ -154,82 +155,82 @@ struct Vec3 {
 
   [[nodiscard]] auto ToString() const -> std::string;
   [[nodiscard]] auto Hash() const -> uint64_t;
-  [[nodiscard]] auto Span() -> std::span<Scalar> { return {&x, 3}; }
-  [[nodiscard]] auto Span() const -> std::span<const Scalar> { return {&x, 3}; }
-  [[nodiscard]] auto Ptr() -> Scalar * { return &x; }
-  [[nodiscard]] auto Ptr() const -> const Scalar * { return &x; }
+  [[nodiscard]] auto Span() -> std::span<float> { return {&x, 3}; }
+  [[nodiscard]] auto Span() const -> std::span<const float> { return {&x, 3}; }
+  [[nodiscard]] auto Ptr() -> float * { return &x; }
+  [[nodiscard]] auto Ptr() const -> const float * { return &x; }
 };
 
 struct Vec4 {
-  Scalar x;
-  Scalar y;
-  Scalar z;
-  Scalar w;
+  float x{};
+  float y{};
+  float z{};
+  float w{};
 
   auto operator+(const Vec4 &other) const -> Vec4;
-  auto operator+(Scalar scalar) const -> Vec4;
+  auto operator+(float scalar) const -> Vec4;
   auto operator+=(const Vec4 &other) -> Vec4 &;
-  auto operator+=(Scalar scalar) -> Vec4 &;
+  auto operator+=(float scalar) -> Vec4 &;
 
   auto operator-(const Vec4 &other) const -> Vec4;
-  auto operator-(Scalar scalar) const -> Vec4;
+  auto operator-(float scalar) const -> Vec4;
   auto operator-=(const Vec4 &other) -> Vec4 &;
-  auto operator-=(Scalar scalar) -> Vec4 &;
+  auto operator-=(float scalar) -> Vec4 &;
 
   auto operator-() const -> Vec4;
 
-  auto operator*(Scalar scalar) const -> Vec4;
+  auto operator*(float scalar) const -> Vec4;
   auto operator*(const Vec4 &other) const -> Vec4;
-  auto operator*=(Scalar scalar) -> Vec4 &;
+  auto operator*=(float scalar) -> Vec4 &;
   auto operator*=(const Vec4 &other) -> Vec4 &;
 
-  auto operator/(Scalar scalar) const -> Vec4;
+  auto operator/(float scalar) const -> Vec4;
   auto operator/(const Vec4 &other) const -> Vec4;
-  auto operator/=(Scalar scalar) -> Vec4 &;
+  auto operator/=(float scalar) -> Vec4 &;
   auto operator/=(const Vec4 &other) -> Vec4 &;
 
   auto operator==(const Vec4 &other) const -> bool;
   auto operator!=(const Vec4 &other) const -> bool;
 
-  auto operator[](uint32_t index) -> Scalar &;
-  auto operator[](uint32_t index) const -> Scalar;
+  auto operator[](uint32_t index) -> float &;
+  auto operator[](uint32_t index) const -> float;
 
-  [[nodiscard]] auto Length() const -> Scalar;
-  [[nodiscard]] auto LengthSqr() const -> Scalar;
+  [[nodiscard]] auto Length() const -> float;
+  [[nodiscard]] auto LengthSqr() const -> float;
   [[nodiscard]] auto Inverse() const -> Vec4;
   [[nodiscard]] auto Normalize() const -> Vec4;
-  [[nodiscard]] auto Distance(const Vec4 &other) const -> Scalar;
-  [[nodiscard]] auto DistanceSqr(const Vec4 &other) const -> Scalar;
-  [[nodiscard]] auto Dot(const Vec4 &other) const -> Scalar;
-  [[nodiscard]] auto Dot(const Vec3 &other) const -> Scalar;
+  [[nodiscard]] auto Distance(const Vec4 &other) const -> float;
+  [[nodiscard]] auto DistanceSqr(const Vec4 &other) const -> float;
+  [[nodiscard]] auto Dot(const Vec4 &other) const -> float;
+  [[nodiscard]] auto Dot(const Vec3 &other) const -> float;
   [[nodiscard]] auto Cross(const Vec4 &other) const -> Vec3;
 
   [[nodiscard]] auto Max(const Vec4 &other) const -> Vec4;
-  [[nodiscard]] auto Max(Scalar scalar) const -> Vec4;
+  [[nodiscard]] auto Max(float scalar) const -> Vec4;
   [[nodiscard]] auto Min(const Vec4 &other) const -> Vec4;
-  [[nodiscard]] auto Min(Scalar scalar) const -> Vec4;
+  [[nodiscard]] auto Min(float scalar) const -> Vec4;
 
-  constexpr Vec4(Scalar x_val, Scalar y_val, Scalar z_val, Scalar w_val)
+  constexpr Vec4(float x_val, float y_val, float z_val, float w_val)
       : x(x_val), y(y_val), z(z_val), w(w_val) {}
-  constexpr explicit Vec4(Scalar val) : x(val), y(val), z(val), w(val) {}
+  constexpr explicit Vec4(float val) : x(val), y(val), z(val), w(val) {}
   constexpr Vec4() = default;
-  explicit Vec4(const Vec2 &vec2, Scalar z_val = 0.0F, Scalar w_val = 0.0F);
-  explicit Vec4(const Vec3 &vec3, Scalar w_val = 0.0F);
+  explicit Vec4(const Vec2 &vec2, float z_val = 0.0F, float w_val = 0.0F);
+  explicit Vec4(const Vec3 &vec3, float w_val = 0.0F);
 
-  explicit Vec4(const Ivec2 &vec2, Scalar z_val = 0.0F, Scalar w_val = 0.0F);
-  explicit Vec4(const Ivec3 &vec3, Scalar w_val = 0.0F);
+  explicit Vec4(const Ivec2 &vec2, float z_val = 0.0F, float w_val = 0.0F);
+  explicit Vec4(const Ivec3 &vec3, float w_val = 0.0F);
   explicit Vec4(const Ivec4 &vec4);
 
-  explicit Vec4(const Uvec2 &vec2, Scalar z_val = 0.0F, Scalar w_val = 0.0F);
-  explicit Vec4(const Uvec3 &vec3, Scalar w_val = 0.0F);
+  explicit Vec4(const Uvec2 &vec2, float z_val = 0.0F, float w_val = 0.0F);
+  explicit Vec4(const Uvec3 &vec3, float w_val = 0.0F);
   explicit Vec4(const Uvec4 &vec4);
 
   [[nodiscard]] auto ToString() const -> std::string;
   [[nodiscard]] auto Hash() const -> uint64_t;
-  [[nodiscard]] auto Span() -> std::span<Scalar> { return {&x, 4}; }
-  [[nodiscard]] auto Span() const -> std::span<const Scalar> { return {&x, 4}; }
-  [[nodiscard]] auto Ptr() -> Scalar * { return &x; }
-  [[nodiscard]] auto Ptr() const -> const Scalar * { return &x; }
+  [[nodiscard]] auto Span() -> std::span<float> { return {&x, 4}; }
+  [[nodiscard]] auto Span() const -> std::span<const float> { return {&x, 4}; }
+  [[nodiscard]] auto Ptr() -> float * { return &x; }
+  [[nodiscard]] auto Ptr() const -> const float * { return &x; }
 };
 
 struct Uvec2 {
@@ -569,19 +570,19 @@ auto Max(const Ivec4 &vec_a, const Ivec4 &vec_b) -> Ivec4;
 
 struct Plane : public Vec4 {
   Plane() = default;
-  constexpr Plane(Scalar x_val, Scalar y_val, Scalar z_val, Scalar w_val)
+  constexpr Plane(float x_val, float y_val, float z_val, float w_val)
       : Vec4(x_val, y_val, z_val, w_val) {}
   constexpr explicit Plane(const Vec4 &vec4) : Vec4(vec4) {}
-  constexpr explicit Plane(const Vec3 &normal, Scalar distance)
+  constexpr explicit Plane(const Vec3 &normal, float distance)
       : Vec4(normal.x, normal.y, normal.z, distance) {}
   constexpr explicit Plane(const Vec3 &origin, const Vec3 &normal)
       : Vec4(normal.x, normal.y, normal.z, -normal.Dot(origin)) {}
 
   [[nodiscard]] auto Normal() const -> Vec3;
-  [[nodiscard]] auto Distance() const -> Scalar;
+  [[nodiscard]] auto Distance() const -> float;
   [[nodiscard]] auto Normalize() const -> Plane;
   [[nodiscard]] auto Point() const -> Vec3;
-  [[nodiscard]] auto DistanceToPoint(const Vec3 &point) const -> Scalar;
+  [[nodiscard]] auto DistanceToPoint(const Vec3 &point) const -> float;
   [[nodiscard]] auto IntersectRay(const Vec3 &origin,
                                   const Vec3 &direction) const
       -> std::optional<Vec3>;

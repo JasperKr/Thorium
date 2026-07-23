@@ -37,40 +37,36 @@ struct Camera {
     bool DoPostProcessing = true;
   };
 
-  void SetVerticalFOV(Math::Scalar fovDeg) {
+  void SetVerticalFOV(float fovDeg) {
     verticalFOVDeg = fovDeg;
     VerticalFOVRad = Math::DegToRad(fovDeg);
     projectionDirty = true;
   }
 
-  void SetAspectRatio(Math::Scalar aspectRatio) {
+  void SetAspectRatio(float aspectRatio) {
     AspectRatio = aspectRatio;
     projectionDirty = true;
   }
 
-  void SetNearPlane(Math::Scalar nearPlane) {
+  void SetNearPlane(float nearPlane) {
     NearPlane = nearPlane;
     projectionDirty = true;
   }
 
-  void SetFarPlane(Math::Scalar farPlane) {
+  void SetFarPlane(float farPlane) {
     FarPlane = farPlane;
     projectionDirty = true;
   }
 
   void SetSettings(const Settings &newSettings) { settings = newSettings; }
 
-  [[nodiscard]] auto GetAspectRatio() const -> Math::Scalar {
-    return AspectRatio;
-  }
+  [[nodiscard]] auto GetAspectRatio() const -> float { return AspectRatio; }
 
-  [[nodiscard]] auto GetVerticalFOV() const -> Math::Scalar {
-    return verticalFOVDeg;
-  }
+  [[nodiscard]] auto GetVerticalFOV() const -> float { return verticalFOVDeg; }
 
-  [[nodiscard]] auto GetNearPlane() const -> Math::Scalar { return NearPlane; }
+  [[nodiscard]] auto GetNearPlane() const -> float { return NearPlane; }
 
-  [[nodiscard]] auto GetFarPlane() const -> Math::Scalar { return FarPlane; }
+  [[nodiscard]] auto GetFarPlane() const -> float { return FarPlane; }
 
   [[nodiscard]] auto GetBuffer() const -> Ref<Graphics::StructuredBuffer> {
     return CameraBuffer;
@@ -86,15 +82,15 @@ struct Camera {
     Dimensions = newDimensions;
     projectionDirty = true;
     ConfigureRendertargets();
-    AspectRatio = static_cast<Math::Scalar>(Dimensions.x) /
-                  static_cast<Math::Scalar>(Dimensions.y);
+    AspectRatio =
+        static_cast<float>(Dimensions.x) / static_cast<float>(Dimensions.y);
   }
 
   static void RegisterCameraSystems(Scene &scene);
 
   static auto Create(const Graphics::GraphicsContext &context,
-                     Math::Scalar verticalFOVDeg, Math::Uvec2 Dimensions,
-                     Math::Scalar near, Math::Scalar far) -> Result<Camera>;
+                     float verticalFOVDeg, Math::Uvec2 Dimensions, float near,
+                     float far) -> Result<Camera>;
 
   auto WriteToBuffer(const CameraMatrices &cameraMatrices,
                      const Transform &transform) const -> Error;
@@ -253,12 +249,12 @@ private:
   Settings settings;
   PersistentTextureSettings persistentTextureSettings;
 
-  Math::Scalar verticalFOVDeg{};
-  Math::Scalar VerticalFOVRad{};
+  float verticalFOVDeg{};
+  float VerticalFOVRad{};
   Math::Uvec2 Dimensions;
-  Math::Scalar AspectRatio{};
-  Math::Scalar NearPlane{};
-  Math::Scalar FarPlane{};
+  float AspectRatio{};
+  float NearPlane{};
+  float FarPlane{};
 
   Ref<struct Graphics::StructuredBuffer> CameraBuffer;
 

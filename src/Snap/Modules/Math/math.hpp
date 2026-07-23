@@ -25,18 +25,17 @@ auto ToMatrix3x3(Quaternion quat) -> Matrix3x3;
 // NOLINTEND(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
 
 auto Random(int Min, int Max) -> int;
-auto Random(Scalar Min, Scalar Max) -> Scalar;
+auto Random(float Min, float Max) -> float;
 auto Random(long Min, long Max) -> long;
 auto Random(int Max) -> int;
-auto Random() -> Scalar;
+auto Random() -> float;
 
-auto Noise(Scalar x_channel, uint x_wrap) -> Scalar;
-auto Noise(Scalar x_channel, Scalar y_channel, uint x_wrap, uint y_wrap)
-    -> Scalar;
-auto Noise(Scalar x_channel, Scalar y_channel, Scalar z_channel, uint x_wrap,
-           uint y_wrap, uint z_wrap) -> Scalar;
+auto Noise(float x_channel, uint x_wrap) -> float;
+auto Noise(float x_channel, float y_channel, uint x_wrap, uint y_wrap) -> float;
+auto Noise(float x_channel, float y_channel, float z_channel, uint x_wrap,
+           uint y_wrap, uint z_wrap) -> float;
 
-auto Abs(Scalar value) -> Scalar;
+auto Abs(float value) -> float;
 auto Abs(Vec2 vec) -> Vec2;
 auto Abs(Vec3 vec) -> Vec3;
 auto Abs(Vec4 vec) -> Vec4;
@@ -46,7 +45,7 @@ auto Abs(Ivec4 vec) -> Ivec4;
 auto Abs(Matrix3x3 mat) -> Matrix3x3;
 auto Abs(Matrix4x4 mat) -> Matrix4x4;
 
-auto Floor(Scalar value) -> Scalar;
+auto Floor(float value) -> float;
 auto Floor(Vec2 vec) -> Vec2;
 auto Floor(Vec3 vec) -> Vec3;
 auto Floor(Vec4 vec) -> Vec4;
@@ -57,7 +56,7 @@ auto Floor(Ivec2 vec) -> Ivec2;
 auto Floor(Ivec3 vec) -> Ivec3;
 auto Floor(Ivec4 vec) -> Ivec4;
 
-auto Ceil(Scalar value) -> Scalar;
+auto Ceil(float value) -> float;
 auto Ceil(Vec2 vec) -> Vec2;
 auto Ceil(Vec3 vec) -> Vec3;
 auto Ceil(Vec4 vec) -> Vec4;
@@ -69,25 +68,25 @@ auto Ceil(Ivec3 vec) -> Ivec3;
 auto Ceil(Ivec4 vec) -> Ivec4;
 
 // NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
-constexpr auto RadToDeg(Scalar radians) -> Scalar {
-  return radians * (180.0F / std::numbers::pi_v<Scalar>);
+constexpr auto RadToDeg(float radians) -> float {
+  return radians * (180.0F / std::numbers::pi_v<float>);
 }
 
-constexpr auto DegToRad(Scalar degrees) -> Scalar {
-  return degrees * (std::numbers::pi_v<Scalar> / 180.0F);
+constexpr auto DegToRad(float degrees) -> float {
+  return degrees * (std::numbers::pi_v<float> / 180.0F);
 }
 
-constexpr auto RadToTurns(Scalar radians) -> Scalar {
-  return radians / (2.0F * std::numbers::pi_v<Scalar>);
+constexpr auto RadToTurns(float radians) -> float {
+  return radians / (2.0F * std::numbers::pi_v<float>);
 }
 
-constexpr auto DegToTurns(Scalar degrees) -> Scalar { return degrees / 360.0F; }
+constexpr auto DegToTurns(float degrees) -> float { return degrees / 360.0F; }
 
-constexpr auto TurnsToRad(Scalar turns) -> Scalar {
-  return turns * (2.0F * std::numbers::pi_v<Scalar>);
+constexpr auto TurnsToRad(float turns) -> float {
+  return turns * (2.0F * std::numbers::pi_v<float>);
 }
 
-constexpr auto TurnsToDeg(Scalar turns) -> Scalar { return turns * 360.0F; }
+constexpr auto TurnsToDeg(float turns) -> float { return turns * 360.0F; }
 // NOLINTEND(cppcoreguidelines-avoid-magic-numbers,readability-magic-numbers)
 
 }; // namespace Math

@@ -17,6 +17,26 @@ struct CameraMatrices {
   Math::Matrix4x4 RotationProjectionMatrix;
   Math::Matrix4x4 InverseRotationProjectionMatrix;
 
+  [[nodiscard]] auto GetForward() const -> Math::Vec3 {
+    return Math::Vec3{-ViewMatrix.At(2, 0), -ViewMatrix.At(2, 1),
+                      -ViewMatrix.At(2, 2)};
+  }
+
+  [[nodiscard]] auto GetUp() const -> Math::Vec3 {
+    return Math::Vec3{ViewMatrix.At(1, 0), ViewMatrix.At(1, 1),
+                      ViewMatrix.At(1, 2)};
+  }
+
+  [[nodiscard]] auto GetRight() const -> Math::Vec3 {
+    return Math::Vec3{ViewMatrix.At(0, 0), ViewMatrix.At(0, 1),
+                      ViewMatrix.At(0, 2)};
+  }
+
+  [[nodiscard]] auto GetPosition() const -> Math::Vec3 {
+    return Math::Vec3{InverseViewMatrix.At(3, 0), InverseViewMatrix.At(3, 1),
+                      InverseViewMatrix.At(3, 2)};
+  }
+
   [[nodiscard]] auto GetFrustum() const -> struct Frustum;
   auto Update() -> void;
 };

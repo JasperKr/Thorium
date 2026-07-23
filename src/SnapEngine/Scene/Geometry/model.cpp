@@ -29,11 +29,11 @@ auto LuaModel::Create(lua_State *state) -> int {
   if (lua_gettop(state) >= 3) {
     luaL_checktype(state, 3, LUA_TTABLE);
     lua_rawgeti(state, 3, 1);
-    position.x = static_cast<Math::Scalar>(luaL_checknumber(state, -1));
+    position.x = static_cast<float>(luaL_checknumber(state, -1));
     lua_rawgeti(state, 3, 2);
-    position.y = static_cast<Math::Scalar>(luaL_checknumber(state, -1));
+    position.y = static_cast<float>(luaL_checknumber(state, -1));
     lua_rawgeti(state, 3, 3);
-    position.z = static_cast<Math::Scalar>(luaL_checknumber(state, -1));
+    position.z = static_cast<float>(luaL_checknumber(state, -1));
     lua_pop(state, 3);
   }
 
@@ -42,13 +42,13 @@ auto LuaModel::Create(lua_State *state) -> int {
   if (lua_gettop(state) >= 4) {
     luaL_checktype(state, 4, LUA_TTABLE);
     lua_rawgeti(state, 4, 1);
-    rotation.x = static_cast<Math::Scalar>(luaL_checknumber(state, -1));
+    rotation.x = static_cast<float>(luaL_checknumber(state, -1));
     lua_rawgeti(state, 4, 2);
-    rotation.y = static_cast<Math::Scalar>(luaL_checknumber(state, -1));
+    rotation.y = static_cast<float>(luaL_checknumber(state, -1));
     lua_rawgeti(state, 4, 3);
-    rotation.z = static_cast<Math::Scalar>(luaL_checknumber(state, -1));
+    rotation.z = static_cast<float>(luaL_checknumber(state, -1));
     lua_rawgeti(state, 4, 4);
-    rotation.w = static_cast<Math::Scalar>(luaL_checknumber(state, -1));
+    rotation.w = static_cast<float>(luaL_checknumber(state, -1));
     lua_pop(state, 4);
   }
 
@@ -57,11 +57,11 @@ auto LuaModel::Create(lua_State *state) -> int {
   if (lua_gettop(state) >= 5) {
     luaL_checktype(state, 5, LUA_TTABLE);
     lua_rawgeti(state, 5, 1);
-    scale.x = static_cast<Math::Scalar>(luaL_checknumber(state, -1));
+    scale.x = static_cast<float>(luaL_checknumber(state, -1));
     lua_rawgeti(state, 5, 2);
-    scale.y = static_cast<Math::Scalar>(luaL_checknumber(state, -1));
+    scale.y = static_cast<float>(luaL_checknumber(state, -1));
     lua_rawgeti(state, 5, 3);
-    scale.z = static_cast<Math::Scalar>(luaL_checknumber(state, -1));
+    scale.z = static_cast<float>(luaL_checknumber(state, -1));
     lua_pop(state, 3);
   }
 

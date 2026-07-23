@@ -20,25 +20,25 @@ thread_local inline Hash::Hasher Hasher;
 
 [[nodiscard]] auto Vec2::Hash() const -> uint64_t {
   Hasher.Reset();
-  Hasher.Add(std::hash<Scalar>()(x));
-  Hasher.Add(std::hash<Scalar>()(y));
+  Hasher.Add(std::hash<float>()(x));
+  Hasher.Add(std::hash<float>()(y));
   return Hasher.Get();
 }
 
 [[nodiscard]] auto Vec3::Hash() const -> uint64_t {
   Hasher.Reset();
-  Hasher.Add(std::hash<Scalar>()(x));
-  Hasher.Add(std::hash<Scalar>()(y));
-  Hasher.Add(std::hash<Scalar>()(z));
+  Hasher.Add(std::hash<float>()(x));
+  Hasher.Add(std::hash<float>()(y));
+  Hasher.Add(std::hash<float>()(z));
   return Hasher.Get();
 }
 
 [[nodiscard]] auto Vec4::Hash() const -> uint64_t {
   Hasher.Reset();
-  Hasher.Add(std::hash<Scalar>()(x));
-  Hasher.Add(std::hash<Scalar>()(y));
-  Hasher.Add(std::hash<Scalar>()(z));
-  Hasher.Add(std::hash<Scalar>()(w));
+  Hasher.Add(std::hash<float>()(x));
+  Hasher.Add(std::hash<float>()(y));
+  Hasher.Add(std::hash<float>()(z));
+  Hasher.Add(std::hash<float>()(w));
   return Hasher.Get();
 }
 
@@ -137,7 +137,8 @@ thread_local inline Hash::Hasher Hasher;
   oss << "Ivec4(" << x << ", " << y << ", " << z << ", " << w << ")";
   return oss.str();
 }
-auto Vec2::operator[](uint32_t index) -> Scalar & {
+
+auto Vec2::operator[](uint32_t index) -> float & {
   switch (index) {
   case 0:
     return x;
@@ -149,7 +150,7 @@ auto Vec2::operator[](uint32_t index) -> Scalar & {
   }
 }
 
-auto Vec2::operator[](uint32_t index) const -> Scalar {
+auto Vec2::operator[](uint32_t index) const -> float {
   switch (index) {
   case 0:
     return x;
@@ -161,7 +162,7 @@ auto Vec2::operator[](uint32_t index) const -> Scalar {
   }
 }
 
-auto Vec3::operator[](uint32_t index) -> Scalar & {
+auto Vec3::operator[](uint32_t index) -> float & {
   switch (index) {
   case 0:
     return x;
@@ -176,7 +177,7 @@ auto Vec3::operator[](uint32_t index) -> Scalar & {
 }
 
 // Vec3
-auto Vec3::operator[](uint32_t index) const -> Scalar {
+auto Vec3::operator[](uint32_t index) const -> float {
   switch (index) {
   case 0:
     return x;
@@ -191,7 +192,7 @@ auto Vec3::operator[](uint32_t index) const -> Scalar {
 }
 
 // Vec4
-auto Vec4::operator[](uint32_t index) -> Scalar & {
+auto Vec4::operator[](uint32_t index) -> float & {
   switch (index) {
   case 0:
     return x;
@@ -208,7 +209,7 @@ auto Vec4::operator[](uint32_t index) -> Scalar & {
 }
 
 // Vec4
-auto Vec4::operator[](uint32_t index) const -> Scalar {
+auto Vec4::operator[](uint32_t index) const -> float {
   switch (index) {
   case 0:
     return x;
@@ -398,7 +399,7 @@ auto Ivec4::operator[](uint32_t index) const -> int32_t {
   }
 }
 
-static constexpr Scalar Epsilon = 1e-6F;
+static constexpr float Epsilon = 1e-6F;
 
 ///// Vec2 /////
 
@@ -406,7 +407,7 @@ static constexpr Scalar Epsilon = 1e-6F;
 auto Vec2::operator+(const Vec2 &other) const -> Vec2 {
   return {x + other.x, y + other.y};
 }
-auto Vec2::operator+(Scalar scalar) const -> Vec2 {
+auto Vec2::operator+(float scalar) const -> Vec2 {
   return {x + scalar, y + scalar};
 }
 auto Vec2::operator+=(const Vec2 &other) -> Vec2 & {
@@ -414,7 +415,7 @@ auto Vec2::operator+=(const Vec2 &other) -> Vec2 & {
   y += other.y;
   return *this;
 }
-auto Vec2::operator+=(Scalar scalar) -> Vec2 & {
+auto Vec2::operator+=(float scalar) -> Vec2 & {
   x += scalar;
   y += scalar;
   return *this;
@@ -424,7 +425,7 @@ auto Vec2::operator+=(Scalar scalar) -> Vec2 & {
 auto Vec2::operator-(const Vec2 &other) const -> Vec2 {
   return {x - other.x, y - other.y};
 }
-auto Vec2::operator-(Scalar scalar) const -> Vec2 {
+auto Vec2::operator-(float scalar) const -> Vec2 {
   return {x - scalar, y - scalar};
 }
 auto Vec2::operator-=(const Vec2 &other) -> Vec2 & {
@@ -432,7 +433,7 @@ auto Vec2::operator-=(const Vec2 &other) -> Vec2 & {
   y -= other.y;
   return *this;
 }
-auto Vec2::operator-=(Scalar scalar) -> Vec2 & {
+auto Vec2::operator-=(float scalar) -> Vec2 & {
   x -= scalar;
   y -= scalar;
   return *this;
@@ -440,13 +441,13 @@ auto Vec2::operator-=(Scalar scalar) -> Vec2 & {
 auto Vec2::operator-() const -> Vec2 { return {-x, -y}; }
 
 /// Multiplication ///
-auto Vec2::operator*(Scalar scalar) const -> Vec2 {
+auto Vec2::operator*(float scalar) const -> Vec2 {
   return {x * scalar, y * scalar};
 }
 auto Vec2::operator*(const Vec2 &other) const -> Vec2 {
   return {x * other.x, y * other.y};
 }
-auto Vec2::operator*=(Scalar scalar) -> Vec2 & {
+auto Vec2::operator*=(float scalar) -> Vec2 & {
   x *= scalar;
   y *= scalar;
   return *this;
@@ -458,13 +459,13 @@ auto Vec2::operator*=(const Vec2 &other) -> Vec2 & {
 }
 
 /// Division ///
-auto Vec2::operator/(Scalar scalar) const -> Vec2 {
+auto Vec2::operator/(float scalar) const -> Vec2 {
   return {x / scalar, y / scalar};
 }
 auto Vec2::operator/(const Vec2 &other) const -> Vec2 {
   return {x / other.x, y / other.y};
 }
-auto Vec2::operator/=(Scalar scalar) -> Vec2 & {
+auto Vec2::operator/=(float scalar) -> Vec2 & {
   x /= scalar;
   y /= scalar;
   return *this;
@@ -481,24 +482,24 @@ auto Vec2::operator==(const Vec2 &other) const -> bool {
 auto Vec2::operator!=(const Vec2 &other) const -> bool {
   return !(*this == other);
 }
-auto Vec2::Length() const -> Scalar { return std::sqrt((x * x) + (y * y)); }
-auto Vec2::LengthSqr() const -> Scalar { return (x * x) + (y * y); }
-auto Vec2::Distance(const Vec2 &other) const -> Scalar {
+auto Vec2::Length() const -> float { return std::sqrt((x * x) + (y * y)); }
+auto Vec2::LengthSqr() const -> float { return (x * x) + (y * y); }
+auto Vec2::Distance(const Vec2 &other) const -> float {
   return std::sqrt(((x - other.x) * (x - other.x)) +
                    ((y - other.y) * (y - other.y)));
 }
-auto Vec2::DistanceSqr(const Vec2 &other) const -> Scalar {
+auto Vec2::DistanceSqr(const Vec2 &other) const -> float {
   return ((x - other.x) * (x - other.x)) + ((y - other.y) * (y - other.y));
 }
 auto Vec2::Inverse() const -> Vec2 { return {1.0F / x, 1.0F / y}; }
 auto Vec2::Normalize() const -> Vec2 {
-  Scalar len = Length();
+  float len = Length();
   if (len <= Epsilon) {
     return {0.0F, 0.0F};
   }
   return {x / len, y / len};
 }
-auto Vec2::Dot(const Vec2 &other) const -> Scalar {
+auto Vec2::Dot(const Vec2 &other) const -> float {
   return (x * other.x) + (y * other.y);
 }
 auto Vec2::Cross(const Vec2 &other) const -> Vec2 {
@@ -507,29 +508,29 @@ auto Vec2::Cross(const Vec2 &other) const -> Vec2 {
 auto Vec2::Max(const Vec2 &other) const -> Vec2 {
   return {std::fmax(x, other.x), std::fmax(y, other.y)};
 }
-auto Vec2::Max(Scalar scalar) const -> Vec2 {
+auto Vec2::Max(float scalar) const -> Vec2 {
   return {std::fmax(x, scalar), std::fmax(y, scalar)};
 }
 auto Vec2::Min(const Vec2 &other) const -> Vec2 {
   return {std::fmin(x, other.x), std::fmin(y, other.y)};
 }
-auto Vec2::Min(Scalar scalar) const -> Vec2 {
+auto Vec2::Min(float scalar) const -> Vec2 {
   return {std::fmin(x, scalar), std::fmin(y, scalar)};
 }
 Vec2::Vec2(const Vec3 &vec3) : x(vec3.x), y(vec3.y) {}
 Vec2::Vec2(const Vec4 &vec4) : x(vec4.x), y(vec4.y) {}
 Vec2::Vec2(const Ivec2 &vec2)
-    : x(static_cast<Scalar>(vec2.x)), y(static_cast<Scalar>(vec2.y)) {}
+    : x(static_cast<float>(vec2.x)), y(static_cast<float>(vec2.y)) {}
 Vec2::Vec2(const Ivec3 &vec3)
-    : x(static_cast<Scalar>(vec3.x)), y(static_cast<Scalar>(vec3.y)) {}
+    : x(static_cast<float>(vec3.x)), y(static_cast<float>(vec3.y)) {}
 Vec2::Vec2(const Ivec4 &vec4)
-    : x(static_cast<Scalar>(vec4.x)), y(static_cast<Scalar>(vec4.y)) {}
+    : x(static_cast<float>(vec4.x)), y(static_cast<float>(vec4.y)) {}
 Vec2::Vec2(const Uvec2 &vec2)
-    : x(static_cast<Scalar>(vec2.x)), y(static_cast<Scalar>(vec2.y)) {}
+    : x(static_cast<float>(vec2.x)), y(static_cast<float>(vec2.y)) {}
 Vec2::Vec2(const Uvec3 &vec3)
-    : x(static_cast<Scalar>(vec3.x)), y(static_cast<Scalar>(vec3.y)) {}
+    : x(static_cast<float>(vec3.x)), y(static_cast<float>(vec3.y)) {}
 Vec2::Vec2(const Uvec4 &vec4)
-    : x(static_cast<Scalar>(vec4.x)), y(static_cast<Scalar>(vec4.y)) {}
+    : x(static_cast<float>(vec4.x)), y(static_cast<float>(vec4.y)) {}
 
 ///// Vec3 /////
 
@@ -537,7 +538,7 @@ Vec2::Vec2(const Uvec4 &vec4)
 auto Vec3::operator+(const Vec3 &other) const -> Vec3 {
   return {x + other.x, y + other.y, z + other.z};
 }
-auto Vec3::operator+(Scalar scalar) const -> Vec3 {
+auto Vec3::operator+(float scalar) const -> Vec3 {
   return {x + scalar, y + scalar, z + scalar};
 }
 auto Vec3::operator+=(const Vec3 &other) -> Vec3 & {
@@ -546,7 +547,7 @@ auto Vec3::operator+=(const Vec3 &other) -> Vec3 & {
   z += other.z;
   return *this;
 }
-auto Vec3::operator+=(Scalar scalar) -> Vec3 & {
+auto Vec3::operator+=(float scalar) -> Vec3 & {
   x += scalar;
   y += scalar;
   z += scalar;
@@ -557,7 +558,7 @@ auto Vec3::operator+=(Scalar scalar) -> Vec3 & {
 auto Vec3::operator-(const Vec3 &other) const -> Vec3 {
   return {x - other.x, y - other.y, z - other.z};
 }
-auto Vec3::operator-(Scalar scalar) const -> Vec3 {
+auto Vec3::operator-(float scalar) const -> Vec3 {
   return {x - scalar, y - scalar, z - scalar};
 }
 auto Vec3::operator-=(const Vec3 &other) -> Vec3 & {
@@ -566,7 +567,7 @@ auto Vec3::operator-=(const Vec3 &other) -> Vec3 & {
   z -= other.z;
   return *this;
 }
-auto Vec3::operator-=(Scalar scalar) -> Vec3 & {
+auto Vec3::operator-=(float scalar) -> Vec3 & {
   x -= scalar;
   y -= scalar;
   z -= scalar;
@@ -575,13 +576,13 @@ auto Vec3::operator-=(Scalar scalar) -> Vec3 & {
 auto Vec3::operator-() const -> Vec3 { return {-x, -y, -z}; }
 
 /// Multiplication ///
-auto Vec3::operator*(Scalar scalar) const -> Vec3 {
+auto Vec3::operator*(float scalar) const -> Vec3 {
   return {x * scalar, y * scalar, z * scalar};
 }
 auto Vec3::operator*(const Vec3 &other) const -> Vec3 {
   return {x * other.x, y * other.y, z * other.z};
 }
-auto Vec3::operator*=(Scalar scalar) -> Vec3 & {
+auto Vec3::operator*=(float scalar) -> Vec3 & {
   x *= scalar;
   y *= scalar;
   z *= scalar;
@@ -595,13 +596,13 @@ auto Vec3::operator*=(const Vec3 &other) -> Vec3 & {
 }
 
 /// Division ///
-auto Vec3::operator/(Scalar scalar) const -> Vec3 {
+auto Vec3::operator/(float scalar) const -> Vec3 {
   return {x / scalar, y / scalar, z / scalar};
 }
 auto Vec3::operator/(const Vec3 &other) const -> Vec3 {
   return {x / other.x, y / other.y, z / other.z};
 }
-auto Vec3::operator/=(Scalar scalar) -> Vec3 & {
+auto Vec3::operator/=(float scalar) -> Vec3 & {
   x /= scalar;
   y /= scalar;
   z /= scalar;
@@ -620,28 +621,28 @@ auto Vec3::operator==(const Vec3 &other) const -> bool {
 auto Vec3::operator!=(const Vec3 &other) const -> bool {
   return !(*this == other);
 }
-auto Vec3::Length() const -> Scalar {
+auto Vec3::Length() const -> float {
   return std::sqrt((x * x) + (y * y) + (z * z));
 }
-auto Vec3::LengthSqr() const -> Scalar { return (x * x) + (y * y) + (z * z); }
-auto Vec3::Distance(const Vec3 &other) const -> Scalar {
+auto Vec3::LengthSqr() const -> float { return (x * x) + (y * y) + (z * z); }
+auto Vec3::Distance(const Vec3 &other) const -> float {
   return std::sqrt(((x - other.x) * (x - other.x)) +
                    ((y - other.y) * (y - other.y)) +
                    ((z - other.z) * (z - other.z)));
 }
-auto Vec3::DistanceSqr(const Vec3 &other) const -> Scalar {
+auto Vec3::DistanceSqr(const Vec3 &other) const -> float {
   return ((x - other.x) * (x - other.x)) + ((y - other.y) * (y - other.y)) +
          ((z - other.z) * (z - other.z));
 }
 auto Vec3::Inverse() const -> Vec3 { return {1.0F / x, 1.0F / y, 1.0F / z}; }
 auto Vec3::Normalize() const -> Vec3 {
-  Scalar len = Length();
+  float len = Length();
   if (len <= Epsilon) {
     return {0.0F, 0.0F, 0.0F};
   }
   return {x / len, y / len, z / len};
 }
-auto Vec3::Dot(const Vec3 &other) const -> Scalar {
+auto Vec3::Dot(const Vec3 &other) const -> float {
   return (x * other.x) + (y * other.y) + (z * other.z);
 }
 auto Vec3::Cross(const Vec3 &other) const -> Vec3 {
@@ -651,36 +652,42 @@ auto Vec3::Cross(const Vec3 &other) const -> Vec3 {
 auto Vec3::Max(const Vec3 &other) const -> Vec3 {
   return {std::fmax(x, other.x), std::fmax(y, other.y), std::fmax(z, other.z)};
 }
-auto Vec3::Max(Scalar scalar) const -> Vec3 {
+auto Vec3::Max(float scalar) const -> Vec3 {
   return {std::fmax(x, scalar), std::fmax(y, scalar), std::fmax(z, scalar)};
 }
 auto Vec3::Min(const Vec3 &other) const -> Vec3 {
   return {std::fmin(x, other.x), std::fmin(y, other.y), std::fmin(z, other.z)};
 }
-auto Vec3::Min(Scalar scalar) const -> Vec3 {
+auto Vec3::Min(float scalar) const -> Vec3 {
   return {std::fmin(x, scalar), std::fmin(y, scalar), std::fmin(z, scalar)};
 }
-Vec3::Vec3(const Vec2 &vec2, Scalar z_val) : x(vec2.x), y(vec2.y), z(z_val) {}
+Vec3::Vec3(const Vec2 &vec2, float z_val) : x(vec2.x), y(vec2.y), z(z_val) {}
 Vec3::Vec3(const Vec4 &vec4) : x(vec4.x), y(vec4.y), z(vec4.z) {}
-Vec3::Vec3(const Ivec2 &vec2, Scalar z_val)
-    : x(static_cast<Scalar>(vec2.x)), y(static_cast<Scalar>(vec2.y)), z(z_val) {
-}
+Vec3::Vec3(const Ivec2 &vec2, float z_val)
+    : x(static_cast<float>(vec2.x)), y(static_cast<float>(vec2.y)), z(z_val) {}
 Vec3::Vec3(const Ivec3 &vec3)
-    : x(static_cast<Scalar>(vec3.x)), y(static_cast<Scalar>(vec3.y)),
-      z(static_cast<Scalar>(vec3.z)) {}
+    : x(static_cast<float>(vec3.x)), y(static_cast<float>(vec3.y)),
+      z(static_cast<float>(vec3.z)) {}
 Vec3::Vec3(const Ivec4 &vec4)
-    : x(static_cast<Scalar>(vec4.x)), y(static_cast<Scalar>(vec4.y)),
-      z(static_cast<Scalar>(vec4.z)) {}
-Vec3::Vec3(const Uvec2 &vec2, Scalar z_val)
-    : x(static_cast<Scalar>(vec2.x)), y(static_cast<Scalar>(vec2.y)), z(z_val) {
-}
+    : x(static_cast<float>(vec4.x)), y(static_cast<float>(vec4.y)),
+      z(static_cast<float>(vec4.z)) {}
+Vec3::Vec3(const Uvec2 &vec2, float z_val)
+    : x(static_cast<float>(vec2.x)), y(static_cast<float>(vec2.y)), z(z_val) {}
 Vec3::Vec3(const Uvec3 &vec3)
-    : x(static_cast<Scalar>(vec3.x)), y(static_cast<Scalar>(vec3.y)),
-      z(static_cast<Scalar>(vec3.z)) {}
+    : x(static_cast<float>(vec3.x)), y(static_cast<float>(vec3.y)),
+      z(static_cast<float>(vec3.z)) {}
 Vec3::Vec3(const Uvec4 &vec4)
-    : x(static_cast<Scalar>(vec4.x)), y(static_cast<Scalar>(vec4.y)),
-      z(static_cast<Scalar>(vec4.z)) {}
+    : x(static_cast<float>(vec4.x)), y(static_cast<float>(vec4.y)),
+      z(static_cast<float>(vec4.z)) {}
 Vec3::Vec3(const Vec4 &&vec4) : x(vec4.x), y(vec4.y), z(vec4.z) {}
+
+[[nodiscard]] auto Vec3::GetTangent() const -> Vec3 {
+  Vec3 tangent = {0.0F, 1.0F, 0.0F};
+  if (tangent.Dot(*this) > 0.99F) { // NOLINT
+    tangent = {1.0F, 0.0F, 0.0F};
+  }
+  return tangent.Cross(*this).Normalize();
+}
 
 ///// Vec4 /////
 
@@ -688,7 +695,7 @@ Vec3::Vec3(const Vec4 &&vec4) : x(vec4.x), y(vec4.y), z(vec4.z) {}
 auto Vec4::operator+(const Vec4 &other) const -> Vec4 {
   return {x + other.x, y + other.y, z + other.z, w + other.w};
 }
-auto Vec4::operator+(Scalar scalar) const -> Vec4 {
+auto Vec4::operator+(float scalar) const -> Vec4 {
   return {x + scalar, y + scalar, z + scalar, w + scalar};
 }
 auto Vec4::operator+=(const Vec4 &other) -> Vec4 & {
@@ -698,7 +705,7 @@ auto Vec4::operator+=(const Vec4 &other) -> Vec4 & {
   w += other.w;
   return *this;
 }
-auto Vec4::operator+=(Scalar scalar) -> Vec4 & {
+auto Vec4::operator+=(float scalar) -> Vec4 & {
   x += scalar;
   y += scalar;
   z += scalar;
@@ -710,7 +717,7 @@ auto Vec4::operator+=(Scalar scalar) -> Vec4 & {
 auto Vec4::operator-(const Vec4 &other) const -> Vec4 {
   return {x - other.x, y - other.y, z - other.z, w - other.w};
 }
-auto Vec4::operator-(Scalar scalar) const -> Vec4 {
+auto Vec4::operator-(float scalar) const -> Vec4 {
   return {x - scalar, y - scalar, z - scalar, w - scalar};
 }
 auto Vec4::operator-=(const Vec4 &other) -> Vec4 & {
@@ -720,7 +727,7 @@ auto Vec4::operator-=(const Vec4 &other) -> Vec4 & {
   w -= other.w;
   return *this;
 }
-auto Vec4::operator-=(Scalar scalar) -> Vec4 & {
+auto Vec4::operator-=(float scalar) -> Vec4 & {
   x -= scalar;
   y -= scalar;
   z -= scalar;
@@ -730,13 +737,13 @@ auto Vec4::operator-=(Scalar scalar) -> Vec4 & {
 auto Vec4::operator-() const -> Vec4 { return {-x, -y, -z, -w}; }
 
 /// Multiplication ///
-auto Vec4::operator*(Scalar scalar) const -> Vec4 {
+auto Vec4::operator*(float scalar) const -> Vec4 {
   return {x * scalar, y * scalar, z * scalar, w * scalar};
 }
 auto Vec4::operator*(const Vec4 &other) const -> Vec4 {
   return {x * other.x, y * other.y, z * other.z, w * other.w};
 }
-auto Vec4::operator*=(Scalar scalar) -> Vec4 & {
+auto Vec4::operator*=(float scalar) -> Vec4 & {
   x *= scalar;
   y *= scalar;
   z *= scalar;
@@ -752,13 +759,13 @@ auto Vec4::operator*=(const Vec4 &other) -> Vec4 & {
 }
 
 /// Division ///
-auto Vec4::operator/(Scalar scalar) const -> Vec4 {
+auto Vec4::operator/(float scalar) const -> Vec4 {
   return {x / scalar, y / scalar, z / scalar, w / scalar};
 }
 auto Vec4::operator/(const Vec4 &other) const -> Vec4 {
   return {x / other.x, y / other.y, z / other.z, w / other.w};
 }
-auto Vec4::operator/=(Scalar scalar) -> Vec4 & {
+auto Vec4::operator/=(float scalar) -> Vec4 & {
   x /= scalar;
   y /= scalar;
   z /= scalar;
@@ -779,18 +786,18 @@ auto Vec4::operator==(const Vec4 &other) const -> bool {
 auto Vec4::operator!=(const Vec4 &other) const -> bool {
   return !(*this == other);
 }
-auto Vec4::Length() const -> Scalar {
+auto Vec4::Length() const -> float {
   return std::sqrt((x * x) + (y * y) + (z * z) + (w * w));
 }
-auto Vec4::LengthSqr() const -> Scalar {
+auto Vec4::LengthSqr() const -> float {
   return (x * x) + (y * y) + (z * z) + (w * w);
 }
-auto Vec4::Distance(const Vec4 &other) const -> Scalar {
+auto Vec4::Distance(const Vec4 &other) const -> float {
   return std::sqrt(
       ((x - other.x) * (x - other.x)) + ((y - other.y) * (y - other.y)) +
       ((z - other.z) * (z - other.z)) + ((w - other.w) * (w - other.w)));
 }
-auto Vec4::DistanceSqr(const Vec4 &other) const -> Scalar {
+auto Vec4::DistanceSqr(const Vec4 &other) const -> float {
   return ((x - other.x) * (x - other.x)) + ((y - other.y) * (y - other.y)) +
          ((z - other.z) * (z - other.z)) + ((w - other.w) * (w - other.w));
 }
@@ -799,7 +806,7 @@ auto Vec4::Inverse() const -> Vec4 {
   return {1.0F / x, 1.0F / y, 1.0F / z, 1.0F / w};
 }
 auto Vec4::Normalize() const -> Vec4 {
-  Scalar len = Length();
+  float len = Length();
   if (len <= Epsilon) {
     return {0.0F, 0.0F, 0.0F, 0.0F};
   }
@@ -809,17 +816,17 @@ auto Vec4::Cross(const Vec4 &other) const -> Vec3 {
   return {(y * other.z) - (z * other.y), (z * other.x) - (x * other.z),
           (x * other.y) - (y * other.x)};
 }
-auto Vec4::Dot(const Vec4 &other) const -> Scalar {
+auto Vec4::Dot(const Vec4 &other) const -> float {
   return (x * other.x) + (y * other.y) + (z * other.z) + (w * other.w);
 }
-auto Vec4::Dot(const Vec3 &other) const -> Scalar {
+auto Vec4::Dot(const Vec3 &other) const -> float {
   return (x * other.x) + (y * other.y) + (z * other.z);
 }
 auto Vec4::Max(const Vec4 &other) const -> Vec4 {
   return {std::fmax(x, other.x), std::fmax(y, other.y), std::fmax(z, other.z),
           std::fmax(w, other.w)};
 }
-auto Vec4::Max(Scalar scalar) const -> Vec4 {
+auto Vec4::Max(float scalar) const -> Vec4 {
   return {std::fmax(x, scalar), std::fmax(y, scalar), std::fmax(z, scalar),
           std::fmax(w, scalar)};
 }
@@ -827,32 +834,32 @@ auto Vec4::Min(const Vec4 &other) const -> Vec4 {
   return {std::fmin(x, other.x), std::fmin(y, other.y), std::fmin(z, other.z),
           std::fmin(w, other.w)};
 }
-auto Vec4::Min(Scalar scalar) const -> Vec4 {
+auto Vec4::Min(float scalar) const -> Vec4 {
   return {std::fmin(x, scalar), std::fmin(y, scalar), std::fmin(z, scalar),
           std::fmin(w, scalar)};
 }
-Vec4::Vec4(const Vec2 &vec2, Scalar z_val, Scalar w_val)
+Vec4::Vec4(const Vec2 &vec2, float z_val, float w_val)
     : x(vec2.x), y(vec2.y), z(z_val), w(w_val) {}
-Vec4::Vec4(const Vec3 &vec3, Scalar w_val)
+Vec4::Vec4(const Vec3 &vec3, float w_val)
     : x(vec3.x), y(vec3.y), z(vec3.z), w(w_val) {}
-Vec4::Vec4(const Ivec2 &vec2, Scalar z_val, Scalar w_val)
-    : x(static_cast<Scalar>(vec2.x)), y(static_cast<Scalar>(vec2.y)), z(z_val),
+Vec4::Vec4(const Ivec2 &vec2, float z_val, float w_val)
+    : x(static_cast<float>(vec2.x)), y(static_cast<float>(vec2.y)), z(z_val),
       w(w_val) {}
-Vec4::Vec4(const Ivec3 &vec3, Scalar w_val)
-    : x(static_cast<Scalar>(vec3.x)), y(static_cast<Scalar>(vec3.y)),
-      z(static_cast<Scalar>(vec3.z)), w(w_val) {}
+Vec4::Vec4(const Ivec3 &vec3, float w_val)
+    : x(static_cast<float>(vec3.x)), y(static_cast<float>(vec3.y)),
+      z(static_cast<float>(vec3.z)), w(w_val) {}
 Vec4::Vec4(const Ivec4 &vec4)
-    : x(static_cast<Scalar>(vec4.x)), y(static_cast<Scalar>(vec4.y)),
-      z(static_cast<Scalar>(vec4.z)), w(static_cast<Scalar>(vec4.w)) {}
-Vec4::Vec4(const Uvec2 &vec2, Scalar z_val, Scalar w_val)
-    : x(static_cast<Scalar>(vec2.x)), y(static_cast<Scalar>(vec2.y)), z(z_val),
+    : x(static_cast<float>(vec4.x)), y(static_cast<float>(vec4.y)),
+      z(static_cast<float>(vec4.z)), w(static_cast<float>(vec4.w)) {}
+Vec4::Vec4(const Uvec2 &vec2, float z_val, float w_val)
+    : x(static_cast<float>(vec2.x)), y(static_cast<float>(vec2.y)), z(z_val),
       w(w_val) {}
-Vec4::Vec4(const Uvec3 &vec3, Scalar w_val)
-    : x(static_cast<Scalar>(vec3.x)), y(static_cast<Scalar>(vec3.y)),
-      z(static_cast<Scalar>(vec3.z)), w(w_val) {}
+Vec4::Vec4(const Uvec3 &vec3, float w_val)
+    : x(static_cast<float>(vec3.x)), y(static_cast<float>(vec3.y)),
+      z(static_cast<float>(vec3.z)), w(w_val) {}
 Vec4::Vec4(const Uvec4 &vec4)
-    : x(static_cast<Scalar>(vec4.x)), y(static_cast<Scalar>(vec4.y)),
-      z(static_cast<Scalar>(vec4.z)), w(static_cast<Scalar>(vec4.w)) {}
+    : x(static_cast<float>(vec4.x)), y(static_cast<float>(vec4.y)),
+      z(static_cast<float>(vec4.z)), w(static_cast<float>(vec4.w)) {}
 
 ///// Uvec2 /////
 
@@ -1529,10 +1536,10 @@ auto Max(const Ivec4 &vec_a, const Ivec4 &vec_b) -> Ivec4 {
 /*
 struct Plane : public Vec4 {
   [[nodiscard]] auto Normal() const -> Vec3;
-  [[nodiscard]] auto Distance() const -> Scalar;
+  [[nodiscard]] auto Distance() const -> float;
   [[nodiscard]] auto Normalize() const -> Plane;
   [[nodiscard]] auto Point() const -> Vec3;
-  [[nodiscard]] auto DistanceToPoint(const Vec3 &point) const -> Scalar;
+  [[nodiscard]] auto DistanceToPoint(const Vec3 &point) const -> float;
   [[nodiscard]] auto IntersectRay(const Vec3 &origin, const Vec3 &direction) const
       -> std::optional<Vec3>;
 };
@@ -1540,38 +1547,38 @@ struct Plane : public Vec4 {
 
 auto Plane::Normal() const -> Vec3 { return {x, y, z}; }
 
-auto Plane::Distance() const -> Scalar { return w; }
+auto Plane::Distance() const -> float { return w; }
 
 auto Plane::Normalize() const -> Plane {
-  Scalar length = Normal().Length();
+  float length = Normal().Length();
   if (length <= Epsilon) {
     return {0.0F, 0.0F, 0.0F, 0.0F};
   }
-  Scalar inv_length = 1.0F / length;
+  float inv_length = 1.0F / length;
   return {x * inv_length, y * inv_length, z * inv_length, w * inv_length};
 }
 
 auto Plane::Point() const -> Vec3 {
   Vec3 normal = Normal();
-  Scalar distance = Distance();
+  float distance = Distance();
   return normal * distance;
 }
 
-auto Plane::DistanceToPoint(const Vec3 &point) const -> Scalar {
+auto Plane::DistanceToPoint(const Vec3 &point) const -> float {
   Vec3 normal = Normal();
-  Scalar distance = Distance();
+  float distance = Distance();
   return normal.Dot(point) - distance;
 }
 
 auto Plane::IntersectRay(const Vec3 &origin, const Vec3 &direction) const
     -> std::optional<Vec3> {
   Vec3 normal = Normal();
-  Scalar distance = Distance();
-  Scalar denom = normal.Dot(direction);
+  float distance = Distance();
+  float denom = normal.Dot(direction);
   if (std::abs(denom) < Epsilon) {
     return std::nullopt; // Ray is parallel to the plane
   }
-  Scalar time = (distance - normal.Dot(origin)) / denom;
+  float time = (distance - normal.Dot(origin)) / denom;
   if (time < 0) {
     return std::nullopt; // Intersection is behind the ray origin
   }

@@ -4,7 +4,7 @@
 
 namespace Math {
 [[nodiscard]] auto Quaternion::Normalize() const -> Quaternion {
-  Scalar length = std::sqrt((x * x) + (y * y) + (z * z) + (w * w));
+  float length = std::sqrt((x * x) + (y * y) + (z * z) + (w * w));
   return {x / length, y / length, z / length, w / length};
 }
 
@@ -13,13 +13,13 @@ namespace Math {
 }
 
 [[nodiscard]] auto Quaternion::Inverse() const -> Quaternion {
-  Scalar lengthSq = (x * x) + (y * y) + (z * z) + (w * w);
+  float lengthSq = (x * x) + (y * y) + (z * z) + (w * w);
   Quaternion conj = Conjugate();
   return {conj.x / lengthSq, conj.y / lengthSq, conj.z / lengthSq,
           conj.w / lengthSq};
 }
 
-[[nodiscard]] auto Quaternion::Dot(const Quaternion &other) const -> Scalar {
+[[nodiscard]] auto Quaternion::Dot(const Quaternion &other) const -> float {
   return (x * other.x) + (y * other.y) + (z * other.z) + (w * other.w);
 }
 

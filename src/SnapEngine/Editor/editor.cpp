@@ -1,4 +1,5 @@
 #include "editor.hpp"
+#include "Editor/lineDrawer.hpp"
 #include "Graphics/buffer.hpp"
 #include "Graphics/draw.hpp"
 #include "Graphics/graphics.hpp"
@@ -10,6 +11,7 @@
 #include "Modules/window.hpp"
 #include "Renderer/shaderManager.hpp"
 #include "Scene/Geometry/geometry.hpp"
+#include "Scene/cameraMatrices.hpp"
 #include "Scene/scene.hpp"
 #include "renderer.hpp"
 #include <format>
@@ -19,7 +21,7 @@
 #include <string>
 #include <string_view>
 
-namespace Engine::Editor {
+namespace Engine {
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 inline flecs::entity SelectedEntity;
@@ -208,11 +210,7 @@ auto DrawSceneHierarchy(const Ref<Engine::Scene> &scene) -> Error {
         });
   }
 
-  constexpr float axisLength = 1.0F;
-  constexpr float axisThickness = 4.0F;
-
-  const Math::Vec3 origin{0.0F, 0.0F, 0.0F};
-  auto &lineDrawer = Renderer::RendererInstance.GetLineDrawer();
+  Editor::GetEditorInstance().DrawGizmo();
 
   static bool DrawBoundingBox = false;
   static bool DrawBoundsRecursively = false;
@@ -268,8 +266,7 @@ auto DrawSceneHierarchy(const Ref<Engine::Scene> &scene) -> Error {
   return {};
 }
 
-auto Editor::PickEntity(const Camera &camera,
-                        const Graphics::GraphicsContext &context,
+auto Editor::PickEntity(const Graphics::GraphicsContext &context,
                         Math::Vec2 mousePos) -> Error {
 
   auto shader =
@@ -288,6 +285,8 @@ auto Editor::PickEntity(const Camera &camera,
   };
 
   auto pickBuffer = CHECK_RES(Graphics::Buffer::Create(context, info));
+
+  const auto &camera = GetEditorInstance().EditorCamera.get<Camera>();
 
   CHECK_ERR(shader->Send(Graphics::ResourceKey{"SceneBVH"}, tlas));
   CHECK_ERR(shader->Send(Graphics::ResourceKey{"CameraData"},
@@ -571,8 +570,8 @@ void GizmoScale(const MoveData &moveData, Transform &transform) {
       moveData.CurrentMousePosition - moveData.StartMousePosition;
   auto size =
       Window::GetDimensions(Graphics::GetCurrentGraphicsContext()->sdlWindow);
-  mouseDelta.x /= Math::Scalar(size.x);
-  mouseDelta.y /= Math::Scalar(size.y);
+  mouseDelta.x /= float(size.x);
+  mouseDelta.y /= float(size.y);
 
   float scaling = (mouseDelta.x + mouseDelta.y) * 10.0F; // NOLINT
   if (scaling < 0.0) {
@@ -625,4 +624,68 @@ void TransformGizmo(const MoveData &moveData, const Math::Ray &currentRay,
   }
 }
 
-} // namespace Engine::Editor
+inline auto DrawArrow(const Math::Vec3 &origin, const Math::Vec3 &direction,
+                      float length, float headLength, float headWidth,
+                      const Math::PackedColor &color, float thickness) -> void {
+  auto &lineDrawer = Renderer::RendererInstance.GetLineDrawer();
+  auto &primDrawer = Renderer::RendererInstance.GetPrimitiveDrawer();
+
+  Math::Vec3 arrowTip = origin + direction * length;
+  lineDrawer.OverlayLine(origin, arrowTip, color, thickness);
+
+  const auto &tangent = direction.GetTangent();
+  Math::Vec3 bitangent = direction.Cross(tangent).Normalize();
+
+  Math::Vec3 headBase = arrowTip - direction * headLength;
+
+  // NOLINTBEGIN
+  const int segments = 16;
+  for (int i = 0; i < segments; ++i) {
+    float angle1 = (2.0F * M_PI * i) / segments;
+    float angle2 = (2.0F * M_PI * (i + 1)) / segments;
+
+    float c1 = std::cos(angle1) * headWidth;
+    float s1 = std::sin(angle1) * headWidth;
+    float c2 = std::cos(angle2) * headWidth;
+    float s2 = std::sin(angle2) * headWidth;
+
+    Math::Vec3 headPoint1 = headBase + tangent * c1 + bitangent * s1;
+    Math::Vec3 headPoint2 = headBase + tangent * c2 + bitangent * s2;
+
+    primDrawer.OverlayPrimitive(arrowTip, headPoint1, headPoint2, color);
+  }
+
+  // NOLINTEND
+}
+
+auto Editor::DrawGizmo() -> void {
+  const auto &camera = EditorCamera.get<Camera>();
+  const auto &matrices = EditorCamera.get<CameraMatrices>();
+
+  auto scale = (CurrentMoveData.Origin - matrices.GetPosition()).Length() *
+               0.1F; // NOLINT
+  auto &lineDrawer = Renderer::RendererInstance.GetLineDrawer();
+  const auto thickness = 4.0F;
+  auto originToCamera =
+      (matrices.GetPosition() - CurrentMoveData.Origin).Normalize();
+
+  auto arrowLength = scale;
+  auto arrowHeadLength = scale * 0.2F; // NOLINT
+  auto arrowHeadWidth = scale * 0.1F;  // NOLINT
+
+  // X axis
+  DrawArrow(CurrentMoveData.Origin, Math::Vec3{1.0F, 0.0F, 0.0F}, arrowLength,
+            arrowHeadLength, arrowHeadWidth,
+            Math::PackedColor{1.0F, 0.0F, 0.0F, 1.0F}, thickness);
+
+  // Y axis
+  DrawArrow(CurrentMoveData.Origin, Math::Vec3{0.0F, 1.0F, 0.0F}, arrowLength,
+            arrowHeadLength, arrowHeadWidth,
+            Math::PackedColor{0.0F, 1.0F, 0.0F, 1.0F}, thickness);
+
+  // Z axis
+  DrawArrow(CurrentMoveData.Origin, Math::Vec3{0.0F, 0.0F, 1.0F}, arrowLength,
+            arrowHeadLength, arrowHeadWidth,
+            Math::PackedColor{0.0F, 0.0F, 1.0F, 1.0F}, thickness);
+}
+} // namespace Engine

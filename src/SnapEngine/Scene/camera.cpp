@@ -64,11 +64,11 @@ struct CameraBufferStruct {
   Math::Matrix4x4 InverseViewProjectionMatrix;
   Math::Matrix4x4 RotationProjectionMatrix;
   Math::Matrix4x4 InverseRotationProjectionMatrix;
-  Math::Vec3 Position{};
-  Math::Scalar Near{};
-  Math::Scalar Far{};
-  Math::Scalar NearMulFar{};
-  Math::Scalar FarMinusNear{};
+  Math::Vec3 Position;
+  float Near{};
+  float Far{};
+  float NearMulFar{};
+  float FarMinusNear{};
   uint32_t HistoryInvalidated{};
   Math::Vec2 Jitter;
   uint32_t ProjectionType{};
@@ -122,14 +122,14 @@ void Camera::RegisterCameraSystems(Scene &scene) {
 }
 
 auto Camera::Create(const Graphics::GraphicsContext &context,
-                    Math::Scalar verticalFOVDeg, Math::Uvec2 Dimensions,
-                    Math::Scalar near, Math::Scalar far) -> Result<Camera> {
+                    float verticalFOVDeg, Math::Uvec2 Dimensions, float near,
+                    float far) -> Result<Camera> {
   Camera camera;
   camera.verticalFOVDeg = verticalFOVDeg;
   camera.VerticalFOVRad = Math::DegToRad(verticalFOVDeg);
   camera.Dimensions = Dimensions;
-  camera.AspectRatio = static_cast<Math::Scalar>(Dimensions.x) /
-                       static_cast<Math::Scalar>(Dimensions.y);
+  camera.AspectRatio =
+      static_cast<float>(Dimensions.x) / static_cast<float>(Dimensions.y);
   camera.NearPlane = near;
   camera.FarPlane = far;
 
@@ -271,7 +271,7 @@ auto Camera::UpdateClosestLightProbes(int max, std::vector<uint8_t> &data,
 
   auto context = *Graphics::GetCurrentGraphicsContext();
 
-  std::vector<std::pair<Math::Scalar, ProbeData>> probes;
+  std::vector<std::pair<float, ProbeData>> probes;
 
   scene->world.each([&](flecs::entity entity, const Transform &transform,
                         const Renderer::LightProbe &lightProbe) -> void {
@@ -464,6 +464,8 @@ auto Camera::Render(const Graphics::GraphicsContext &context,
 
   Graphics::PushDebugMarker("Draw Lines");
   CHECK_ERR(Renderer::RendererInstance.GetLineDrawer().Render(context, *this));
+  CHECK_ERR(
+      Renderer::RendererInstance.GetPrimitiveDrawer().Render(context, *this));
   Graphics::PopDebugMarker();
 
   if (settings.DoPostProcessing) {

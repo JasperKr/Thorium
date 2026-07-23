@@ -10,19 +10,20 @@
 namespace Engine::Renderer {
 
 void LineDrawer::DrawLine(const Math::Vec3 &start, const Math::Vec3 &end,
-                          const Math::Vec4 &color, float thickness) {
-  Lines.emplace_back(LineData{
+                          const Math::PackedColor &color, float thickness) {
+  Lines.emplace_back(LineVertex{
       .Start = start, .End = end, .Color = color, .Thickness = thickness});
 }
 
 void LineDrawer::OverlayLine(const Math::Vec3 &start, const Math::Vec3 &end,
-                             const Math::Vec4 &color, float thickness) {
-  OverlayLines.emplace_back(LineData{
+                             const Math::PackedColor &color, float thickness) {
+  OverlayLines.emplace_back(LineVertex{
       .Start = start, .End = end, .Color = color, .Thickness = thickness});
 }
 
 void LineDrawer::DrawWireframeBox(const Math::Vec3 &min, const Math::Vec3 &max,
-                                  const Math::Vec4 &color, float thickness) {
+                                  const Math::PackedColor &color,
+                                  float thickness) {
   // Draw the edges of the box using lines
   DrawLine(Math::Vec3{min.x, min.y, min.z}, Math::Vec3{max.x, min.y, min.z},
            color, thickness);
@@ -55,7 +56,8 @@ void LineDrawer::DrawWireframeBox(const Math::Vec3 &min, const Math::Vec3 &max,
 
 void LineDrawer::OverlayWireframeBox(const Math::Vec3 &min,
                                      const Math::Vec3 &max,
-                                     const Math::Vec4 &color, float thickness) {
+                                     const Math::PackedColor &color,
+                                     float thickness) {
   // Draw the edges of the box using lines
   OverlayLine(Math::Vec3{min.x, min.y, min.z}, Math::Vec3{max.x, min.y, min.z},
               color, thickness);
@@ -111,36 +113,10 @@ auto LineDrawer::Deinitialize() -> void {
 }
 
 auto LineDrawer::GenerateMesh(const Graphics::GraphicsContext &context,
-                              const std::vector<LineData> &lines) -> Error {
-  std::vector<LineVertex> vertices;
-  vertices.reserve(lines.size()); // NOLINT
-
-  for (const auto &line : lines) {
-    const auto &start = line.Start;
-    const auto &end = line.End;
-    const auto &color = line.Color;
-    const auto &thickness = line.Thickness;
-
-    // Calculate the direction and perpendicular vector
-
-    // NOLINTBEGIN
-    uint32_t packedColor = static_cast<uint32_t>(color.x * 255.0F) |
-                           static_cast<uint32_t>(color.y * 255.0F) << 8 |
-                           static_cast<uint32_t>(color.z * 255.0F) << 16 |
-                           static_cast<uint32_t>(color.w * 255.0F) << 24;
-    // NOLINTEND
-
-    vertices.emplace_back(LineVertex{
-        .Start = start,
-        .End = end,
-        .Color = packedColor,
-        .Thickness = thickness,
-    });
-  }
-
+                              std::vector<LineVertex> &lines) -> Error {
   // NOLINTNEXTLINE
-  auto span = std::span<uint8_t>(reinterpret_cast<uint8_t *>(vertices.data()),
-                                 vertices.size() * sizeof(LineVertex));
+  auto span = std::span<uint8_t>(reinterpret_cast<uint8_t *>(lines.data()),
+                                 lines.size() * sizeof(LineVertex));
 
   CHECK_ERR(Mesh->SetVertices(context, 0, span));
 

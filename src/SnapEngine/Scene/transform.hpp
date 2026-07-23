@@ -11,7 +11,7 @@
 namespace Engine {
 struct Transform {
 private:
-  Math::Vec3 Position{};
+  Math::Vec3 Position;
   Math::Vec3 Scale{1.0F, 1.0F, 1.0F};
 
   bool LocalDirty = true;
@@ -51,18 +51,15 @@ public:
     LocalDirty = true;
   }
 
-  auto SetPosition(Math::Scalar xPos, Math::Scalar yPos, Math::Scalar zPos)
-      -> void {
+  auto SetPosition(float xPos, float yPos, float zPos) -> void {
     SetPosition(Math::Vec3(xPos, yPos, zPos));
   }
 
-  auto SetRotation(Math::Scalar xRot, Math::Scalar yRot, Math::Scalar zRot,
-                   Math::Scalar wRot) -> void {
+  auto SetRotation(float xRot, float yRot, float zRot, float wRot) -> void {
     SetRotation(Math::Quaternion(xRot, yRot, zRot, wRot));
   }
 
-  auto SetScale(Math::Scalar xScale, Math::Scalar yScale, Math::Scalar zScale)
-      -> void {
+  auto SetScale(float xScale, float yScale, float zScale) -> void {
     SetScale(Math::Vec3(xScale, yScale, zScale));
   }
 

@@ -269,7 +269,7 @@ enum class RotationMode : uint8_t {
 };
 
 auto Transform::DrawGUI(flecs::entity entity) -> void {
-  ImGuiDataType dataType = sizeof(Math::Scalar) == sizeof(double)
+  ImGuiDataType dataType = sizeof(float) == sizeof(double)
                                ? ImGuiDataType_Double
                                : ImGuiDataType_Float;
   if (ImGui::DragScalarN("Position", dataType, (void *)Position.Ptr(), 3,

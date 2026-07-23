@@ -946,7 +946,7 @@ auto LuaScene::Update(lua_State *state) -> int {
 auto LuaScene::DrawUiElement(lua_State *state) -> int {
   auto scene = LUA_CK_NULL(::LuaWrap::ObjectFromLua<Scene>(state, 1));
 
-  auto drawResult = Editor::DrawSceneHierarchy(scene);
+  auto drawResult = DrawSceneHierarchy(scene);
   if (Error::IsError(drawResult)) {
     return luaL_error(state, "%s", drawResult.ToString().c_str());
   }

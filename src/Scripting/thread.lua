@@ -19,6 +19,8 @@ do
     PostProcessed = true,
   })
 
+  snap.renderer.setEditorCamera(camera)
+
   local probe = scene:newLightProbe()
 
   local snapshot
@@ -238,9 +240,9 @@ do
     if firstFrame then
       snap.graphics.setDefaultFilter("linear", "linear", 16)
       -- snap.scene.loadModel(scene, "Assets/Terrain/Bistro/bistro.gltf")
-      -- snap.scene.loadModel(scene, "Assets/Terrain/sponza.glb")
+      snap.scene.loadModel(scene, "Assets/Terrain/sponza.glb")
       -- snap.scene.loadModel(scene, "Assets/Objects/OrientationTest/OrientationTest.gltf")
-      snap.scene.loadModel(scene, "Assets/Tests/MetalRoughSpheres.glb")
+      -- snap.scene.loadModel(scene, "Assets/Tests/MetalRoughSpheres.glb")
       -- snap.scene.loadModel(scene, "Assets/Tests/orientation2.glb")
       -- snap.scene.loadModel(scene, "Assets/Tests/NormalTangentTest.glb")
 

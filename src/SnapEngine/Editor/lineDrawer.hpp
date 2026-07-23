@@ -4,6 +4,7 @@
 #include "Graphics/mesh.hpp"
 #include "Graphics/shader.hpp"
 #include "Graphics/vertexformat.hpp"
+#include "Modules/Math/packedColor.hpp"
 #include "Modules/Math/vector.hpp"
 #include "Modules/object.hpp"
 #include "Scene/camera.hpp"
@@ -43,34 +44,27 @@ const Graphics::VertexFormat LineVertexFormat = [] -> Graphics::VertexFormat {
 }();
 
 struct LineDrawer {
-  struct LineData {
-    Math::Vec3 Start;
-    Math::Vec3 End;
-    Math::Vec4 Color;
-    float Thickness;
-  };
-
   struct LineVertex {
     Math::Vec3 Start;
     Math::Vec3 End;
-    uint32_t Color;
-    float Thickness;
+    Math::PackedColor Color;
+    float Thickness{};
   };
 
   static constexpr size_t MaxLineCount = 1e5;
   static constexpr size_t MaxVertexCount = MaxLineCount * 6;
 
   void DrawLine(const Math::Vec3 &start, const Math::Vec3 &end,
-                const Math::Vec4 &color, float thickness);
+                const Math::PackedColor &color, float thickness);
 
   void OverlayLine(const Math::Vec3 &start, const Math::Vec3 &end,
-                   const Math::Vec4 &color, float thickness);
+                   const Math::PackedColor &color, float thickness);
 
   void DrawWireframeBox(const Math::Vec3 &min, const Math::Vec3 &max,
-                        const Math::Vec4 &color, float thickness);
+                        const Math::PackedColor &color, float thickness);
 
   void OverlayWireframeBox(const Math::Vec3 &min, const Math::Vec3 &max,
-                           const Math::Vec4 &color, float thickness);
+                           const Math::PackedColor &color, float thickness);
 
   auto Initialize(const Graphics::GraphicsContext &context) -> Error;
   auto Deinitialize() -> void;
@@ -80,10 +74,10 @@ struct LineDrawer {
 
 private:
   auto GenerateMesh(const Graphics::GraphicsContext &context,
-                    const std::vector<LineData> &lines) -> Error;
+                    std::vector<LineVertex> &lines) -> Error;
 
-  std::vector<LineData> OverlayLines;
-  std::vector<LineData> Lines;
+  std::vector<LineVertex> OverlayLines;
+  std::vector<LineVertex> Lines;
 
   Ref<Graphics::Mesh> Mesh;
   Ref<Graphics::Shader> Shader;

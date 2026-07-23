@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Editor/lineDrawer.hpp"
+#include "Editor/primitiveDrawer.hpp"
 #include "Graphics/Buffers/structured.hpp"
 #include "Graphics/bufferformat.hpp"
 #include "Graphics/bvh.hpp"
@@ -133,6 +134,7 @@ struct Renderer {
         }));
 
     CHECK_ERR(LineDrawer.Initialize(context));
+    CHECK_ERR(PrimitiveDrawer.Initialize(context));
     CHECK_ERR(BloomManager.Initialize(context));
     SceneTLAS = CHECK_RES(Graphics::TLAS::Create(context));
     BlueNoiseTexture = CHECK_RES(Graphics::Texture::FromFile(
@@ -185,6 +187,10 @@ struct Renderer {
 
   auto GetLineDrawer() -> LineDrawer & { return LineDrawer; }
   auto GetLineDrawer() const -> const LineDrawer & { return LineDrawer; }
+  auto GetPrimitiveDrawer() -> PrimitiveDrawer & { return PrimitiveDrawer; }
+  auto GetPrimitiveDrawer() const -> const PrimitiveDrawer & {
+    return PrimitiveDrawer;
+  }
   auto GetBloomManager() -> BloomManager & { return BloomManager; }
   auto GetBloomManager() const -> const BloomManager & { return BloomManager; }
   auto GetShaderManager() -> ShaderManager & { return ShaderManager; }
@@ -220,6 +226,7 @@ private:
   LightprobePrefilterManager PrefilterManager;
 
   LineDrawer LineDrawer;
+  PrimitiveDrawer PrimitiveDrawer;
   BloomManager BloomManager;
 
   ShaderManager ShaderManager;

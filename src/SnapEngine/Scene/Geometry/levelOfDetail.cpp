@@ -41,7 +41,7 @@ auto LuaLevelOfDetail::SetTransitionThreshold(lua_State *state) -> int {
   }
 
   levelOfDetail->TransitionThreshold =
-      static_cast<Math::Scalar>(luaL_checknumber(state, 2));
+      static_cast<float>(luaL_checknumber(state, 2));
   return 0;
 }
 
@@ -105,8 +105,7 @@ auto LuaLevelOfDetail::Create(lua_State *state) -> int {
     return luaL_error(state, "Expected a World object");
   }
 
-  auto transitionThreshold =
-      static_cast<Math::Scalar>(luaL_optnumber(state, 3, 0.0F));
+  auto transitionThreshold = static_cast<float>(luaL_optnumber(state, 3, 0.0F));
 
   auto lodEntity = LevelOfDetail::CreateLevelOfDetail(scene->world, name,
                                                       transitionThreshold);

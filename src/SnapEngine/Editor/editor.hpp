@@ -5,13 +5,13 @@
 #include "Modules/Math/vector.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
-#include "Scene/camera.hpp"
 #include "Scene/scene.hpp"
+#include "Scene/transform.hpp"
 #include <flecs.h>
 #include <optional>
 #include <queue>
 #include <vector>
-namespace Engine::Editor {
+namespace Engine {
 
 enum class MatchType : uint8_t {
   This,
@@ -59,30 +59,27 @@ struct MoveData {
   TransformMode Mode = TransformMode::None;
   Math::Ray OriginalRay;
   float OriginalDistance = 0.0F;
-  Math::Vec3 Origin{};
+  Math::Vec3 Origin;
   float Distance{};
   Math::Vec2 StartMousePosition;
   Math::Vec2 CurrentMousePosition;
 };
 
-void GizmoTranslation(const MoveData &moveData, const Math::Ray &currentRay,
-                      Transform &transform);
-
-void GizmoRotation(const MoveData &moveData, const Math::Ray &currentRay,
-                   Transform &transform);
-
-void GizmoScale(const MoveData &moveData, Transform &transform);
-
-void TransformGizmo(const MoveData &moveData, const Math::Ray &currentRay,
-                    Transform &transform);
-
 struct Editor {
   std::queue<PickEntityReadback> PickedEntities;
   MoveData CurrentMoveData;
 
+  flecs::entity SelectedEntity;
+  flecs::entity EditorCamera;
+
+  void GizmoTranslation(const Math::Ray &currentRay, Transform &transform);
+  void GizmoRotation(const Math::Ray &currentRay, Transform &transform);
+  void GizmoScale(Transform &transform);
+  void TransformGizmo(const Math::Ray &currentRay, Transform &transform);
+  auto DrawGizmo() -> void;
+
   // Mouse position is expected to be within the range [0, 1]
-  auto PickEntity(const Camera &camera,
-                  const Graphics::GraphicsContext &context, Math::Vec2 mousePos)
+  auto PickEntity(const Graphics::GraphicsContext &context, Math::Vec2 mousePos)
       -> Error;
 
   auto PopEntityPickResult() -> Result<std::optional<PickEntityResult>>;
@@ -93,4 +90,4 @@ struct Editor {
   }
 };
 
-} // namespace Engine::Editor
+} // namespace Engine
