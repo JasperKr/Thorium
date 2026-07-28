@@ -6,16 +6,19 @@
 #include "Graphics/barrier.hpp"
 #include "Graphics/bufferformat.hpp"
 #include "Graphics/dynamicRendering.hpp"
+#include "Modules/Helpers/utils.hpp"
 #include "Modules/object.hpp"
 #include "Modules/timer.hpp"
 #include "Modules/type.hpp"
 #include <cstdint>
+#include <imgui.h>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 #include <vulkan/vulkan_core.h>
 
-#define Enable_Snapshots 0
+#define Enable_Snapshots 1
 
 namespace Graphics::Snapshot {
 
@@ -61,10 +64,55 @@ enum class EventType : uint8_t {
   Set_PushConstants,
 
   Barrier,
+  EndRendering,
+  LayoutTransition,
 };
 
-auto EventTypeToString(EventType type) -> const char *;
-auto EventTypeFromString(const std::string &str) -> EventType;
+const static Utils::EnumStringHelper<EventType> EventTypeStringHelper{{
+    "Unknown",
+
+    "Create_Buffer",
+    "Create_Texture",
+    "Create_Pipeline",
+    "Create_DescriptorSet",
+    "Create_Sampler",
+    "Create_ShaderModule",
+
+    "Destroy_Buffer",
+    "Destroy_Texture",
+    "Destroy_Pipeline",
+    "Destroy_DescriptorSet",
+    "Destroy_Sampler",
+    "Destroy_ShaderModule",
+
+    "Structured_Buffer_Upload",
+
+    "Upload_To_Buffer",
+    "Upload_To_Texture",
+
+    "Copy_Buffer_To_Buffer",
+    "Copy_Buffer_To_Texture",
+    "Copy_Texture_To_Buffer",
+    "Copy_Texture_To_Texture",
+
+    "Draw",
+    "DrawIndexed",
+    "DrawIndirect",
+    "DrawIndexedIndirect",
+
+    "Dispatch",
+    "DispatchIndirect",
+
+    "Set_Pipeline",
+    "Set_DescriptorSet",
+    "Set_VertexBuffer",
+    "Set_IndexBuffer",
+    "Set_PushConstants",
+
+    "Barrier",
+    "EndRendering",
+    "LayoutTransition",
+}};
 
 using Handle = void *;
 using Timestamp = uint64_t;
@@ -579,14 +627,78 @@ struct SetPushConstantsEvent : public Event {
 
 struct BarrierEvent : public Event {
   Barrier::ResourceSync sync{};
+  ObjectID resourceId{};
 
   BarrierEvent() : Event(EventType::Barrier) {}
-  explicit BarrierEvent(const Barrier::ResourceSync &sync)
-      : Event(EventType::Barrier), sync(sync) {}
+  explicit BarrierEvent(const Barrier::ResourceSync &sync, ObjectID resourceId)
+      : Event(EventType::Barrier), sync(sync), resourceId(resourceId) {}
 
   auto DrawVariantImGui(struct ThreadSnapshot const *parent) const
       -> void override;
 };
+
+struct LayoutTransitionEvent : public Event {
+  VkImageLayout srcLayout{};
+  VkImageLayout dstLayout{};
+
+  VkAccessFlags2 srcAccessMask{};
+  VkAccessFlags2 dstAccessMask{};
+
+  VkPipelineStageFlags2 srcStageMask{};
+  VkPipelineStageFlags2 dstStageMask{};
+
+  LayoutTransitionEvent() : Event(EventType::LayoutTransition) {}
+  explicit LayoutTransitionEvent(VkImageLayout srcLayout,
+                                 VkImageLayout dstLayout,
+                                 VkAccessFlags2 srcAccessMask,
+                                 VkAccessFlags2 dstAccessMask,
+                                 VkPipelineStageFlags2 srcStageMask,
+                                 VkPipelineStageFlags2 dstStageMask)
+      : srcLayout(srcLayout), dstLayout(dstLayout),
+        srcAccessMask(srcAccessMask), dstAccessMask(dstAccessMask),
+        srcStageMask(srcStageMask), dstStageMask(dstStageMask),
+        Event(EventType::LayoutTransition) {}
+};
+
+struct EndRenderingEvent : public Event {
+  EndRenderingEvent() : Event(EventType::EndRendering) {}
+};
+
+constexpr VkShaderStageFlagBits allRTStages =
+    static_cast<VkShaderStageFlagBits>(
+        static_cast<uint32_t>(VK_SHADER_STAGE_ANY_HIT_BIT_KHR) |
+        VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_RAYGEN_BIT_KHR |
+        VK_SHADER_STAGE_MISS_BIT_KHR | VK_SHADER_STAGE_INTERSECTION_BIT_KHR);
+
+// clang-format off
+const std::unordered_map<VkShaderStageFlagBits,
+                         std::pair<ImColor, const char *>>
+    ShaderStageUiInfo{
+        {VK_SHADER_STAGE_FRAGMENT_BIT, {0x1b50ba, "Fragment"}},
+        {VK_SHADER_STAGE_VERTEX_BIT, {0x1bba1b, "Vertex"}},
+        {VK_SHADER_STAGE_COMPUTE_BIT, {0xc9c320, "Compute"}},
+        {allRTStages, {0xc92023, "Raytracing"}},
+    };
+
+const std::unordered_map<VkPipelineStageFlagBits2,
+                         std::pair<ImColor, const char *>>
+    PipelineStageUiInfo{
+        {VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT, {0x158715, "Vertex input"}},
+        {VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT, {0x1bba1b, "Vertex shader"}},
+        {VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, {0x1b50ba, "Fragment shader"}},
+        {VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT, {0x18449b, "Early fragment test"}},
+        {VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT, {0x205cd6, "Late fragment test"}},
+        {VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, {0x20d6c0, "Color attachment output"}},
+        {VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, {0xc9c320, "Compute shader"}},
+        {VK_PIPELINE_STAGE_2_TRANSFER_BIT, {0xb420d6, "Transfer"}},
+    };
+// clang-format on
+
+auto DrawPipelineStage(VkPipelineStageFlagBits2 stage);
+auto DrawPipelineStages(VkPipelineStageFlagBits2 stages);
+
+auto DrawShaderStage(VkShaderStageFlagBits stage);
+auto DrawShaderStages(VkShaderStageFlagBits stages);
 
 static const Type ThreadSnapshotType = Type("ThreadSnapshot");
 

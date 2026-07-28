@@ -1188,12 +1188,11 @@ inline auto BeginRendering(const GraphicsContext &context) -> Error {
 
 auto EndRendering(const GraphicsContext &context) -> void {
   if (GetIsCurrentlyRendering()) {
-    [[unlikely]]
-    if (Graphics::GetCommandBuffer() == VK_NULL_HANDLE) {
-      PrintWarning(
-          "Tried to end rendering, but command buffer is null. Skipping.");
-      return;
-    }
+    assert(Graphics::GetCommandBuffer() != nullptr);
+
+#if Enable_Snapshots
+    Snapshot::CaptureEvent(Snapshot::EndRenderingEvent());
+#endif
 
     TracyMessageL("End Rendering");
     vkCmdEndRendering(Graphics::GetCommandBuffer());

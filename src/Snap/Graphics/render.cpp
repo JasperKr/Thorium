@@ -353,7 +353,7 @@ SubmitBarriers(GraphicsContext &context,
     GetThreadContext().commandBuffer = nullptr;
     vkEndCommandBuffer(commandBuffer);
 
-    GlobalStitchInfo.usedCommandBuffers.emplace_back(true);
+    // GlobalStitchInfo.usedCommandBuffers.emplace_back(true);
   }
 
   return Error::Success();
@@ -381,9 +381,9 @@ inline auto GetFinalCommandBuffers(
     auto *threadBuffer = commands.at(i)->threadData.commandBuffer;
 
     // If no barriers were needed for this thread, skip its barrier command buffer
-    if (GlobalStitchInfo.usedCommandBuffers.at(i)) {
-      finalCommandBuffers[index++] = stitchBuffer;
-    }
+    // if (GlobalStitchInfo.usedCommandBuffers.at(i)) {
+    finalCommandBuffers[index++] = stitchBuffer;
+    // }
     finalCommandBuffers[index++] = threadBuffer;
   }
 
@@ -428,7 +428,7 @@ auto Present(Graphics::GraphicsContext &context,
   GetThreadContext().commandBuffer = nullptr;
   vkEndCommandBuffer(presentTransitionBuffer);
 
-  GlobalStitchInfo.usedCommandBuffers.clear();
+  // GlobalStitchInfo.usedCommandBuffers.clear();
 
   // Draw of this frame is done, end recording
   CHECK_ERR(EndRecording(context, context.frameIndex));

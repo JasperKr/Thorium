@@ -3,8 +3,11 @@
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
-#include <functional>
+#include <initializer_list>
 #include <span>
+#include <string>
+#include <string_view>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 namespace Utils {
@@ -117,6 +120,152 @@ template <class T> struct BitMaskRange {
 };
 
 auto GetMemoryUsage() -> size_t;
+
+template <typename T> struct EnumStringHelper {
+  std::unordered_map<T, std::string> enumToString;
+  std::unordered_map<std::string, T> stringToEnum;
+
+  EnumStringHelper(std::initializer_list<std::pair<std::string, T>> entries) {
+    for (const auto &[key, value] : entries) {
+      enumToString[value] = key;
+      stringToEnum[key] = value;
+    }
+  }
+
+  explicit EnumStringHelper(std::vector<std::pair<std::string, T>> entries) {
+    for (const auto &[key, value] : entries) {
+      enumToString[value] = key;
+      stringToEnum[key] = value;
+    }
+  }
+
+  explicit EnumStringHelper(const std::vector<std::string> &keys) {
+    for (size_t i = 0; i < keys.size(); ++i) {
+      enumToString[static_cast<T>(i)] = keys[i];
+      stringToEnum[keys[i]] = static_cast<T>(i);
+    }
+  }
+
+  auto ToString(T value) const -> std::string_view {
+    auto iter = enumToString.find(value);
+    if (iter == enumToString.end()) {
+      return "UNKNOWN";
+    }
+    return iter->second;
+  }
+
+  [[nodiscard]] auto FromString(const std::string_view &str) const -> T {
+    auto iter = stringToEnum.find(str);
+    if (iter == stringToEnum.end()) {
+      return T{};
+    }
+    return iter->second;
+  }
+
+  [[nodiscard]] auto FromString(const std::string_view &str,
+                                T defaultValue) const -> T {
+    auto iter = stringToEnum.find(str);
+    if (iter == stringToEnum.end()) {
+      return defaultValue;
+    }
+    return iter->second;
+  }
+};
+
+template <typename T> class BitIterator {
+  static_assert(std::is_unsigned_v<T>);
+
+public:
+  using value_type = unsigned;
+  using difference_type = std::ptrdiff_t;
+  using iterator_category = std::forward_iterator_tag;
+
+  constexpr explicit BitIterator(T bits) : bits(bits) {}
+
+  constexpr auto operator*() const -> unsigned {
+    return std::countr_zero(bits);
+  }
+
+  constexpr auto operator++() -> BitIterator & {
+    bits &= bits - 1; // Clear lowest set bit
+    return *this;
+  }
+
+  constexpr auto operator++(int) -> BitIterator {
+    auto tmp = *this;
+    ++(*this);
+    return tmp;
+  }
+
+  constexpr auto operator==(const BitIterator &other) const -> bool {
+    return bits == other.bits;
+  }
+
+private:
+  T bits;
+};
+
+template <typename T> class BitRange {
+  static_assert(std::is_unsigned_v<T>);
+
+public:
+  constexpr explicit BitRange(T bits) : bits(bits) {}
+
+  constexpr auto begin() const -> BitIterator<T> {
+    return BitIterator<T>(bits);
+  }
+  constexpr auto end() const -> BitIterator<T> { return BitIterator<T>(0); }
+
+private:
+  T bits;
+};
+
+template <typename T> class FlagIterator {
+  static_assert(std::is_unsigned_v<T>);
+
+public:
+  using value_type = T;
+  using difference_type = std::ptrdiff_t;
+  using iterator_category = std::forward_iterator_tag;
+
+  constexpr explicit FlagIterator(T bits) : bits(bits) {}
+
+  constexpr auto operator*() const -> T {
+    return bits & (~bits + 1); // Lowest set bit
+                               // Equivalent to: bits & -bits
+  }
+
+  constexpr auto operator++() -> FlagIterator & {
+    bits &= bits - 1; // Clear lowest set bit
+    return *this;
+  }
+
+  constexpr auto operator++(int) -> FlagIterator {
+    auto tmp = *this;
+    ++(*this);
+    return tmp;
+  }
+
+  constexpr auto operator==(const FlagIterator &) const -> bool = default;
+
+private:
+  T bits;
+};
+
+template <typename T> class FlagRange {
+  static_assert(std::is_unsigned_v<T>);
+
+public:
+  constexpr explicit FlagRange(T bits) : bits(bits) {}
+
+  constexpr auto begin() const -> FlagIterator<T> {
+    return FlagIterator<T>(bits);
+  }
+  constexpr auto end() const -> FlagIterator<T> { return FlagIterator<T>(0); }
+
+private:
+  T bits;
+};
 
 // Fast ceil division, returns the smallest integer greater than or equal to value/divisor
 template <typename T> constexpr auto CeilDivFast(T value, T divisor) -> T {

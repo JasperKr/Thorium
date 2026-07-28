@@ -62,7 +62,8 @@ enum class TextureMipmapOption : uint8_t {
 
 extern std::unordered_map<std::pair<VkFormat, TextureType>, Ref<struct Texture>,
                           struct VkFormatTextureTypeHash>
-    DefaultTextureCache; // NOLINT
+    DefaultTextureCache;                    // NOLINT
+extern std::mutex DefaultTextureCacheMutex; // NOLINT
 
 auto UnloadModule() -> void;
 

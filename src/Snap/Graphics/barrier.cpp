@@ -207,8 +207,6 @@ auto UpdateUsage(const GraphicsContext &context, const BarrierSynced &resource,
     GlobalResourceStateUpdates.emplace_back(state, usage);
   }
 
-  state.firstAsyncUsage = false;
-
   if (!state.firstAsyncUsage &&
       TimelineLookback(state.lastUsedTimelineIndex, // NOLINT
                        {.stages = previousStages, .access = previousAccess},
@@ -243,7 +241,7 @@ auto UpdateUsage(const GraphicsContext &context, const BarrierSynced &resource,
         .dstAccess = barrier.dstAccessMask,
     };
 
-    auto event = Snapshot::BarrierEvent(sync);
+    auto event = Snapshot::BarrierEvent(sync, resource.getID());
 
     Snapshot::CaptureEvent(event);
 #endif

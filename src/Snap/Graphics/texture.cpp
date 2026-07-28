@@ -8,6 +8,7 @@
 #include "Graphics/graphicsContext.hpp"
 #include "Graphics/renderThread.hpp"
 #include "Graphics/resource.hpp"
+#include "Graphics/snapshot.hpp"
 #include "Modules/Helpers/utils.hpp"
 #include "Modules/Math/vector.hpp"
 #include "Modules/color.hpp"
@@ -501,16 +502,19 @@ auto Texture::FromMemory(const GraphicsContext &context,
         Image::GetMipmapCount(imageData.GetWidth(), imageData.GetHeight()));
   }
 
-  auto texture = CHECK_RES(
-      Create(context, TextureCreationInfo{
-                          .size = imageData.GetDimensions(),
-                          .format = imageData.GetFormat(),
-                          .usage = usage | static_cast<uint32_t>(
-                                               VK_IMAGE_USAGE_TRANSFER_DST_BIT),
-                          .mipmapCount = mipmapCount,
-                          .debugName = "Image_ImageData",
-                          .textureType = ::Graphics::TextureType::DEFAULT,
-                      }));
+  auto texture = CHECK_RES(Create(
+      context, TextureCreationInfo{
+                   .size = imageData.GetDimensions(),
+                   .format = imageData.GetFormat(),
+                   .usage = usage | static_cast<uint32_t>(
+                                        VK_IMAGE_USAGE_TRANSFER_DST_BIT),
+                   .mipmapCount = mipmapCount,
+                   .debugName = std::format(
+                       "Image_ImageData_{}x{}_{}", imageData.GetWidth(),
+                       imageData.GetHeight(),
+                       Format::ImageFormatToString(imageData.GetFormat())),
+                   .textureType = ::Graphics::TextureType::DEFAULT,
+               }));
 
   CHECK_ERR(texture->SetPixels(context, imageData, 0, 0));
 
@@ -765,6 +769,12 @@ auto ImageMemory::TransitionLayout(const GraphicsContext &context,
 
   auto &state = GetState();
 
+#if Enable_Snapshots
+  Snapshot::CaptureEvent(Snapshot::LayoutTransitionEvent(
+      state.currentLayout, layout, srcAccessMask, dstAccessMask, sourceStage,
+      destinationStage));
+#endif
+
   if (sourceStage == destinationStage && srcAccessMask == dstAccessMask &&
       state.currentLayout == layout) {
     return Error::Success();
@@ -793,6 +803,7 @@ auto ImageMemory::TransitionLayout(const GraphicsContext &context,
                        .pImageMemoryBarriers = &barrier};
 
   DynamicRendering::EndRendering(context);
+
   vkCmdPipelineBarrier2(commandBuffer, &dep);
 
   state.currentLayout = layout;
@@ -1139,13 +1150,16 @@ struct VkFormatTextureTypeHash {
 
 std::unordered_map<std::pair<VkFormat, TextureType>, Ref<struct Texture>,
                    struct VkFormatTextureTypeHash>
-    DefaultTextureCache; // NOLINT
+    DefaultTextureCache;             // NOLINT
+std::mutex DefaultTextureCacheMutex; // NOLINT
 
 auto UnloadModule() -> void { DefaultTextureCache.clear(); }
 
 auto Texture::GetDefault(const GraphicsContext &context, VkFormat format,
                          Graphics::TextureType textureType)
     -> Result<Ref<Graphics::Texture>> {
+
+  std::lock_guard<std::mutex> lock(DefaultTextureCacheMutex);
 
   auto key = std::make_pair(format, textureType);
   auto textureIterator = DefaultTextureCache.find(key);
@@ -1190,26 +1204,13 @@ auto Texture::GetDefault(const GraphicsContext &context, VkFormat format,
 
   auto texture = CHECK_RES(Create(context, texInfo));
 
-  auto imageDataResult =
-      Image::ImageData::Create(texture->imageMemory->size, format);
+  auto imageData =
+      CHECK_RES(Image::ImageData::Create(texture->imageMemory->size, format));
 
-  if (Error::IsError(imageDataResult)) {
-    return imageDataResult.error();
-  }
+  CHECK_ERR(imageData->SetColor(
+      Math::Uvec3{}, Color(UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX)));
 
-  auto imageData = imageDataResult.value();
-  auto error = imageData->SetColor(
-      Math::Uvec3{}, Color(UINT8_MAX, UINT8_MAX, UINT8_MAX, UINT8_MAX));
-
-  if (Error::IsError(error)) {
-    return error;
-  }
-
-  auto setPixelsResult = texture->SetPixels(context, *imageData);
-
-  if (Error::IsError(setPixelsResult)) {
-    return setPixelsResult;
-  }
+  CHECK_ERR(texture->SetPixels(context, *imageData));
 
   DefaultTextureCache[key] = texture;
 
