@@ -216,6 +216,7 @@ auto Buffer::UploadRing(const GraphicsContext &context,
         static_cast<uint32_t>(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) |
         static_cast<uint32_t>(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
     bufferInfo.persistentMapping = true;
+    bufferInfo.stagingBuffer = true;
     bufferInfo.debugName = "Upload Buffer";
 
     UploadBuffers.at(context.frameIndex) =
@@ -231,10 +232,12 @@ auto Buffer::UploadRing(const GraphicsContext &context,
   // Copy data to upload buffer
   CHECK_ERR(uploadBuffer->MapMemory(context));
 
-  // NOLINTNEXTLINE, because of pointer arithmetic
-  std::memcpy(static_cast<uint8_t *>(uploadBuffer->mappedData) + uploadOffset,
-              data.data(), uploadSize);
-
+  {
+    ZoneScoped;
+    // NOLINTNEXTLINE, because of pointer arithmetic
+    std::memcpy(static_cast<uint8_t *>(uploadBuffer->mappedData) + uploadOffset,
+                data.data(), uploadSize);
+  }
   uploadBuffer->UnmapMemory(context);
 
   // Record copy command

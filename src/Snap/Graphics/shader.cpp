@@ -539,6 +539,8 @@ auto Shader::Create(
     -> Result<Ref<Shader>> {
   ZoneScoped;
 
+  ZoneName(modulename.c_str(), modulename.size());
+
   Ref<Shader> shader = Ref<Shader>::Make();
   shader->name = name;
   shader->moduleName = modulename;

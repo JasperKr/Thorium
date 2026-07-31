@@ -19,15 +19,6 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-// uniform highp samplerCube tex_in;
-// layout(r11f_g11f_b10f) uniform restrict writeonly imageCube tex_out0;
-// layout(r11f_g11f_b10f) uniform restrict writeonly imageCube tex_out1;
-// layout(r11f_g11f_b10f) uniform restrict writeonly imageCube tex_out2;
-// layout(r11f_g11f_b10f) uniform restrict writeonly imageCube tex_out3;
-// layout(r11f_g11f_b10f) uniform restrict writeonly imageCube tex_out4;
-// layout(r11f_g11f_b10f) uniform restrict writeonly imageCube tex_out5;
-// layout(r11f_g11f_b10f) uniform restrict writeonly imageCube tex_out6;
-
 SamplerCube InputTexture;
 
 restrict WTexture2DArray<float4> OutputTexture0;
@@ -38,14 +29,9 @@ restrict WTexture2DArray<float4> OutputTexture4;
 restrict WTexture2DArray<float4> OutputTexture5;
 restrict WTexture2DArray<float4> OutputTexture6;
 
-// restrict readonly buffer CoeffsBuffer
-// {
-// 	float4 Coefficients[];
-// };
-
 import utils;
 
-StructuredBuffer<float4> Coefficients;
+restrict StructuredBuffer<float4> Coefficients;
 
 #define NUM_TAPS 32
 
@@ -53,6 +39,10 @@ import helpers;
 import cubemapHelpers;
 
 #define GROUP_SIZE 64
+
+static constexpr float3[3] UpAxes = { float3(1.0, 0.0, 0.0),
+                                      float3(0.0, 1.0, 0.0),
+                                      float3(0.0, 0.0, 1.0) };
 
 [shader("compute")]
 [numthreads(GROUP_SIZE, 1, 1)]
@@ -85,25 +75,17 @@ void computeMain(uint3 invocationID: SV_DispatchThreadID) {
 
   // GGX gather colors
   float4 color = float4(0.0);
+
+  [[loop]]
   for (int axis = 0; axis < 3; axis++) {
     const int otherAxis0 = 1 - (axis & 1) - (axis >> 1);
     const int otherAxis1 = 2 - (axis >> 1);
 
     float frameweight = (max(adir[otherAxis0], adir[otherAxis1]) - .75) / .25;
+
     if (frameweight > 0) {
       // determine frame
-      float3 UpVector;
-      switch (axis) {
-      case 0:
-        UpVector = float3(1.0, 0.0, 0.0);
-        break;
-      case 1:
-        UpVector = float3(0.0, 1.0, 0.0);
-        break;
-      default:
-        UpVector = float3(0.0, 0.0, 1.0);
-        break;
-      }
+      float3 UpVector = UpAxes[axis];
       float3 frameX = normalize(cross(UpVector, frameZ));
       float3 frameY = cross(frameZ, frameX);
 
@@ -139,6 +121,7 @@ void computeMain(uint3 invocationID: SV_DispatchThreadID) {
       float phi2 = phi * phi;
 
       // sample
+      [[loop]]
       for (int iSuperTap = 0; iSuperTap < NUM_TAPS / 4; iSuperTap++) {
         const int index = (NUM_TAPS / 4) * axis + iSuperTap;
         float4 coeffsDir0[3];
@@ -147,8 +130,8 @@ void computeMain(uint3 invocationID: SV_DispatchThreadID) {
         float4 coeffsLevel[3];
         float4 coeffsWeight[3];
 
+        [[unroll]]
         for (int iCoeff = 0; iCoeff < 3; iCoeff++) {
-          // TODO: wtf
           // Array: float4 coeffs[7][5][3][24]
           // indexed as:
           // level * 5 * 3 * 24 +
@@ -159,12 +142,6 @@ void computeMain(uint3 invocationID: SV_DispatchThreadID) {
 
           int finalIndex = level * 5 * 3 * 24 + iCoeff * 24 + index;
 
-          // coeffsDir0[iCoeff] = coeffs[level][0][iCoeff][index];
-          // coeffsDir1[iCoeff] = coeffs[level][1][iCoeff][index];
-          // coeffsDir2[iCoeff] = coeffs[level][2][iCoeff][index];
-          // coeffsLevel[iCoeff] = coeffs[level][3][iCoeff][index];
-          // coeffsWeight[iCoeff] = coeffs[level][4][iCoeff][index];
-
           coeffsDir0[iCoeff] = Coefficients[finalIndex + (0 * 24 * 3)];
           coeffsDir1[iCoeff] = Coefficients[finalIndex + (1 * 24 * 3)];
           coeffsDir2[iCoeff] = Coefficients[finalIndex + (2 * 24 * 3)];
@@ -172,6 +149,7 @@ void computeMain(uint3 invocationID: SV_DispatchThreadID) {
           coeffsWeight[iCoeff] = Coefficients[finalIndex + (4 * 24 * 3)];
         }
 
+        [[unroll]]
         for (int iSubTap = 0; iSubTap < 4; iSubTap++) {
           // determine sample attributes (dir, weight, level)
           float3 sample_dir = frameX * (coeffsDir0[0][iSubTap] +

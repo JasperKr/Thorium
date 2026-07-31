@@ -36,7 +36,7 @@ do
 
     Editor.drawGUI()
 
-    -- camera:render(scene)
+    camera:render(scene)
     snap.graphics.setShader()
 
     if Imgui.Begin("Debug Info") then
@@ -62,9 +62,9 @@ do
     if Imgui.Begin("Viewport", nil, flags) then
       local windowSize = Imgui.GetWindowSize()
       Imgui.SetCursorPos(ffi.new("ImVec2", 0, 0))
-      -- local rt = camera:getRendertarget("PostProcessed")
-      -- Imgui.Image(rt, windowSize)
-      -- rt:release()
+      local rt = camera:getRendertarget("PostProcessed")
+      Imgui.Image(rt, windowSize)
+      rt:release()
 
       camera:setDimensions(windowSize.x, windowSize.y)
 
@@ -243,7 +243,7 @@ do
     snap.graphics.setWindingOrder("cw")
     if firstFrame then
       snap.graphics.setDefaultFilter("linear", "linear", 16)
-      -- snap.scene.loadModel(scene, "Assets/Terrain/Bistro/bistro.gltf")
+      snap.scene.loadModel(scene, "Assets/Terrain/Bistro/bistro.gltf")
       -- snap.scene.loadModel(scene, "Assets/Terrain/sponza.glb")
       -- snap.scene.loadModel(scene, "Assets/Objects/OrientationTest/OrientationTest.gltf")
       -- snap.scene.loadModel(scene, "Assets/Tests/MetalRoughSpheres.glb")
