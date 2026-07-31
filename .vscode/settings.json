@@ -15,5 +15,5 @@
         "external/": true,
         "third_party/": true
     },
-    "chat.disableAIFeatures": true
+    "chat.disableAIFeatures": false
 }

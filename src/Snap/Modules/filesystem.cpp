@@ -2,6 +2,7 @@
 #include "../external/physfs/src/physfs.h"
 #include "Modules/bytedata.hpp"
 #include "error.hpp"
+#include <atomic>
 #include <cstdint>
 #include <span>
 #include <string>
@@ -10,6 +11,14 @@
 
 namespace Filesystem {
 constexpr int PHYSFS_ERR_ERROR = 0;
+
+std::atomic<bool> FilesystemInitialized{false}; // NOLINT
+
+inline auto CheckIsInitialized() -> Error {
+  return FilesystemInitialized.load(std::memory_order_relaxed)
+             ? Error::Success()
+             : Error::Create("Filesystem uninitialized");
+}
 
 inline auto GetErrorString() -> const char * {
   return PHYSFS_getErrorByCode(PHYSFS_getLastErrorCode());
@@ -39,6 +48,8 @@ auto Init(const std::string &orgDir) -> Error {
 
   PHYSFS_permitSymbolicLinks(0);
 
+  FilesystemInitialized.store(true);
+
   return Error::Success();
 }
 
@@ -61,11 +72,16 @@ auto Deinit() -> Error {
   }
 
   PHYSFS_deinit();
+
+  FilesystemInitialized.store(false);
+
   return Error::Success();
 }
 
 auto ReadFile(const std::string &path, int64_t readLength)
     -> Result<std::vector<unsigned char>> {
+  CHECK_ERR(CheckIsInitialized());
+
   PHYSFS_File *file = PHYSFS_openRead(path.c_str());
   if (file == nullptr) {
     return Error::Unexpected("Failed to open file: " + path);
@@ -114,6 +130,8 @@ auto ReadFile(const std::string &path, int64_t readLength)
 // Instead of stack allocating a vector and copying it over.
 auto ReadFileToBytedata(const std::string &path, int64_t readLength)
     -> Result<Ref<Data::ByteData>> {
+  CHECK_ERR(CheckIsInitialized());
+
   PHYSFS_File *file = PHYSFS_openRead(path.c_str());
   if (file == nullptr) {
     return Error::Unexpected("Failed to open file: " + path);
@@ -161,6 +179,8 @@ auto ReadFileToBytedata(const std::string &path, int64_t readLength)
 
 auto ReadTextFile(const std::string &path, int64_t readLength)
     -> Result<std::string> {
+  CHECK_ERR(CheckIsInitialized());
+
   PHYSFS_File *file = PHYSFS_openRead(path.c_str());
   if (file == nullptr) {
     return Error::Unexpected("Failed to open file: " + path);
@@ -207,6 +227,8 @@ auto ReadTextFile(const std::string &path, int64_t readLength)
 
 auto AppendFile(const std::string &path, std::span<const uint8_t> data)
     -> Error {
+  CHECK_ERR(CheckIsInitialized());
+
   PHYSFS_File *file = PHYSFS_openAppend(path.c_str());
   if (file == nullptr) {
     return Error::Createf("Failed to open file for appending: {}",
@@ -229,6 +251,8 @@ auto AppendFile(const std::string &path, std::span<const uint8_t> data)
 }
 
 auto AppendFile(const std::string &path, std::string_view data) -> Error {
+  CHECK_ERR(CheckIsInitialized());
+
   PHYSFS_File *file = PHYSFS_openAppend(path.c_str());
   if (file == nullptr) {
     return Error::Createf("Failed to open file for appending: {}",
@@ -252,6 +276,8 @@ auto AppendFile(const std::string &path, std::string_view data) -> Error {
 
 auto WriteFile(const std::string &path, std::span<const uint8_t> data)
     -> Error {
+  CHECK_ERR(CheckIsInitialized());
+
   PHYSFS_File *file = PHYSFS_openWrite(path.c_str());
   if (file == nullptr) {
     return Error::Createf("Failed to open file '{}' for writing: {}", path,
@@ -274,6 +300,7 @@ auto WriteFile(const std::string &path, std::span<const uint8_t> data)
 }
 
 auto WriteFile(const std::string &path, std::string_view data) -> Error {
+  CHECK_ERR(CheckIsInitialized());
 
   PHYSFS_File *file = PHYSFS_openWrite(path.c_str());
   if (file == nullptr) {
@@ -297,10 +324,16 @@ auto WriteFile(const std::string &path, std::string_view data) -> Error {
 }
 
 auto FileExists(const std::string &path) -> bool {
+  if (Error::IsError(CheckIsInitialized())) {
+    return false;
+  }
+
   return PHYSFS_exists(path.c_str()) != 0;
 }
 
 auto AddToSearchPath(const std::string &path, bool appendToPath) -> Error {
+  CHECK_ERR(CheckIsInitialized());
+
   if (PHYSFS_mount(path.c_str(), nullptr, appendToPath ? 1 : 0) == 0) {
     return GetError();
   }
@@ -308,6 +341,8 @@ auto AddToSearchPath(const std::string &path, bool appendToPath) -> Error {
 }
 
 auto RemoveFromSearchPath(const std::string &path) -> Error {
+  CHECK_ERR(CheckIsInitialized());
+
   if (PHYSFS_unmount(path.c_str()) == 0) {
     return Error::Createf("Failed to remove path from search path: {}",
                           GetErrorString());
@@ -316,6 +351,8 @@ auto RemoveFromSearchPath(const std::string &path) -> Error {
 }
 
 auto GetRealPath(const std::string &path) -> Result<std::string> {
+  CHECK_ERR(CheckIsInitialized());
+
   const char *realPath = PHYSFS_getRealDir(path.c_str());
   if (realPath == nullptr) {
     return Error::Unexpected("Failed to get real path of: " + path);
@@ -325,6 +362,8 @@ auto GetRealPath(const std::string &path) -> Result<std::string> {
 }
 
 auto ListFiles(const std::string &path) -> Result<std::vector<std::string>> {
+  CHECK_ERR(CheckIsInitialized());
+
   auto *fileList = PHYSFS_enumerateFiles(path.c_str());
   if (fileList == nullptr) {
     return Error::Unexpected("Failed to list files");
@@ -348,6 +387,8 @@ Error Unmount(std::string path);
 
 auto Mount(const std::string &path, const std::string &mountPoint,
            bool appendToPath) -> Error {
+  CHECK_ERR(CheckIsInitialized());
+
   if (PHYSFS_mount(path.c_str(), mountPoint.c_str(), appendToPath ? 1 : 0) ==
       0) {
     return Error::Createf("Failed to mount path: {}", GetErrorString());
@@ -356,6 +397,8 @@ auto Mount(const std::string &path, const std::string &mountPoint,
 }
 
 auto Unmount(const std::string &path) -> Error {
+  CHECK_ERR(CheckIsInitialized());
+
   if (PHYSFS_unmount(path.c_str()) == 0) {
     return Error::Createf("Failed to unmount path: {}", GetErrorString());
   }
@@ -385,18 +428,26 @@ auto SetSourceDirectory(const std::string &path) -> Error {
 }
 
 auto GetSaveDirectory() -> std::string {
-  const auto *identity =
-      PHYSFS_getPrefDir("snap", GetConfig().identity.c_str());
+  static std::string identity;
 
-  return identity != nullptr ? std::string(identity) : std::string();
+  if (identity.empty()) {
+    identity =
+        std::string(PHYSFS_getPrefDir("snap", GetConfig().identity.c_str()));
+  }
+
+  return identity;
 }
 
 auto GetSourceDirectory() -> std::string { return GetSourceDirectoryStorage(); }
 
 auto GetSourceBaseDirectory() -> std::string {
-  const auto *sourceDir = PHYSFS_getBaseDir();
+  static std::string source;
 
-  return sourceDir != nullptr ? std::string(sourceDir) : std::string();
+  if (source.empty()) {
+    source = std::string(PHYSFS_getBaseDir());
+  }
+
+  return source;
 }
 
 #ifdef CreateDirectory

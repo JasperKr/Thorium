@@ -1,6 +1,11 @@
 #pragma once
 
 #include "Graphics/shader.hpp"
+#include "Modules/error.hpp"
+#include <condition_variable>
+#include <cstdint>
+#include <mutex>
+#include <unordered_map>
 namespace Engine::Renderer {
 
 enum class ShaderKey : uint8_t {
@@ -99,11 +104,27 @@ const std::unordered_map<ShaderKey, ShaderConfiguration> ShaderConfigurations =
                "denoiser.slang"}}};
 
 struct ShaderManager {
+  auto Preload() -> Error;
   auto GetShader(ShaderKey shaderKey) -> Result<Ref<Graphics::Shader>>;
   auto ReloadShaders() -> void;
 
 private:
   std::unordered_map<ShaderKey, Ref<Graphics::Shader>> LoadedShaders;
+
+  enum class ShaderCompilationStatus : uint8_t {
+    Unloaded,
+    Created,
+    Loading,
+  };
+
+  std::unordered_map<ShaderKey, ShaderCompilationStatus> CompilationStatuses;
 };
+
+// NOLINTBEGIN
+
+extern std::mutex StatusMutex;
+extern std::condition_variable CreatedCV;
+
+// NOLINTEND
 
 } // namespace Engine::Renderer

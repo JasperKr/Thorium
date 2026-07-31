@@ -45,5 +45,5 @@ public restrict cbuffer CameraData {
 };
 
 // Reverse-Z
-public static constexpr float DepthFarPlane = 0.0;
-public static constexpr float DepthNearPlane = 1.0;
+public static const float DepthFarPlane = 0.0;
+public static const float DepthNearPlane = 1.0;

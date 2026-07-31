@@ -5,15 +5,15 @@ module cubemapHelpers;
 // id.x is the texel index in the range [0, sum of all texels in all mipmaps)
 // id output is in the range [0, BASE-1] for x and y and z stores the mip level
 public void getTexelInfo(inout int3 id, out int level, out float2 uv,
-                         constexpr int BASE) {
+                         const int BASE) {
 
-  constexpr int MIP0 = BASE * BASE;
-  constexpr int MIP1 = MIP0 + (BASE >> 1) * (BASE >> 1);
-  constexpr int MIP2 = MIP1 + (BASE >> 2) * (BASE >> 2);
-  constexpr int MIP3 = MIP2 + (BASE >> 3) * (BASE >> 3);
-  constexpr int MIP4 = MIP3 + (BASE >> 4) * (BASE >> 4);
-  constexpr int MIP5 = MIP4 + (BASE >> 5) * (BASE >> 5);
-  constexpr int MIP6 = MIP5 + (BASE >> 6) * (BASE >> 6);
+  const int MIP0 = BASE * BASE;
+  const int MIP1 = MIP0 + (BASE >> 1) * (BASE >> 1);
+  const int MIP2 = MIP1 + (BASE >> 2) * (BASE >> 2);
+  const int MIP3 = MIP2 + (BASE >> 3) * (BASE >> 3);
+  const int MIP4 = MIP3 + (BASE >> 4) * (BASE >> 4);
+  const int MIP5 = MIP4 + (BASE >> 5) * (BASE >> 5);
+  const int MIP6 = MIP5 + (BASE >> 6) * (BASE >> 6);
 
   // determine which texel this is
   if (id.x < MIP0)

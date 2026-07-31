@@ -20,6 +20,7 @@
 #include "slang/slang-com-ptr.h"
 #include "slang/slang.h"
 #include <array>
+#include <condition_variable>
 #include <cstring>
 #include <format>
 #include <public/tracy/Tracy.hpp>
@@ -39,10 +40,55 @@ namespace Graphics {
 
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
 thread_local std::unordered_map<VkShaderModule, BoundState> BoundStates;
-static slang::IGlobalSession *GlobalSlangSession = nullptr;
+
+static const uint32_t MaxConcurrentSlangSessionCount = 6;
+
+static std::vector<slang::IGlobalSession *> SessionStorage; // For destruction
+static std::vector<slang::IGlobalSession *> UnusedGlobalSlangSessions;
+static std::condition_variable SlangSessionCV;
+static std::mutex SlangSessionMutex;
+
+thread_local slang::IGlobalSession *GlobalSlangSession;
+static uint32_t SlangSessionCount = 0;
 std::vector<const char *> ShaderSearchPaths;
 
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
+
+inline auto GetGlobalSlangSession() -> Result<slang::IGlobalSession *> {
+  if (GlobalSlangSession == nullptr) {
+    std::unique_lock<std::mutex> lock(SlangSessionMutex);
+
+    if (SlangSessionCount < MaxConcurrentSlangSessionCount) {
+      ZoneScopedN("Create new global session");
+
+      CHECK_NEW_ERR(slang::createGlobalSession(&GlobalSlangSession));
+
+      SessionStorage.emplace_back(GlobalSlangSession);
+      SlangSessionCount++;
+    } else {
+      ZoneScopedN("Reuse existing global session");
+
+      SlangSessionCV.wait(
+          lock, [&]() -> bool { return !UnusedGlobalSlangSessions.empty(); });
+
+      GlobalSlangSession = UnusedGlobalSlangSessions.back();
+      UnusedGlobalSlangSessions.pop_back();
+    }
+  }
+
+  return GlobalSlangSession;
+}
+
+inline auto ReleaseGlobalSlangSession() -> void {
+  std::lock_guard<std::mutex> lock(SlangSessionMutex);
+
+  if (GlobalSlangSession != nullptr) {
+    UnusedGlobalSlangSessions.emplace_back(GlobalSlangSession);
+    GlobalSlangSession = nullptr;
+
+    SlangSessionCV.notify_one();
+  }
+}
 
 static const std::vector<slang::CompilerOptionEntry> CompilerOptions = {
     slang::CompilerOptionEntry{
@@ -96,10 +142,10 @@ Ref<Shader> DefaultShaderModule = {}; // NOLINT
 
 auto LoadShaderModule() -> Error {
   ZoneScoped;
-  CHECK_NEW_ERR(slang::createGlobalSession(&GlobalSlangSession));
 
-  SpvTargetDesc.profile =
-      GlobalSlangSession->findProfile("spirv_1_5+spvRayQueryKHR");
+  auto *session = CHECK_RES(GetGlobalSlangSession());
+  SpvTargetDesc.profile = session->findProfile("spirv_1_5+spvRayQueryKHR");
+  ReleaseGlobalSlangSession();
 
   DefaultShaderModule = CHECK_RES(Shader::Create(
       *GetCurrentGraphicsContext(), "default2D", "Default shader"));
@@ -110,8 +156,10 @@ auto LoadShaderModule() -> Error {
 void UnloadShaderModule(const Graphics::GraphicsContext &context) {
   DefaultShaderModule.reset();
 
-  if (GlobalSlangSession != nullptr) {
-    GlobalSlangSession->release();
+  for (auto *session : SessionStorage) {
+    if (session != nullptr) {
+      session->release();
+    }
   }
 
   slang::shutdown();
@@ -303,12 +351,13 @@ static inline auto LoadSlang(const GraphicsContext &context,
   sessionDesc.preprocessorMacroCount =
       static_cast<uint32_t>(shader->preprocessorMacros.size());
 
+  auto *globalSession = CHECK_RES(GetGlobalSlangSession());
+
   Slang::ComPtr<slang::ISession> session;
   {
     ZoneScopedN("Create session");
 
-    auto result =
-        GlobalSlangSession->createSession(sessionDesc, session.writeRef());
+    auto result = globalSession->createSession(sessionDesc, session.writeRef());
 
     CHECK_NEW_ERR(result);
   }
@@ -488,6 +537,8 @@ static inline auto LoadSlang(const GraphicsContext &context,
 
     CHECK_ERR(Error::Create(result, diagnosticsBlob, spirvCode.readRef()));
   }
+
+  ReleaseGlobalSlangSession();
 
   PrintDebug("Creating Vulkan shader module...");
 

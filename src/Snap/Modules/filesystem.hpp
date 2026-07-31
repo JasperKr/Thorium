@@ -3,6 +3,7 @@
 #include "Modules/bytedata.hpp"
 #include "error.hpp"
 #include "physfs.h"
+#include <atomic>
 #include <cstdint>
 #include <span>
 #include <string_view>
@@ -11,6 +12,8 @@ namespace Filesystem {
 struct Config {
   std::string identity; // Application identity for save dirs
 };
+
+extern std::atomic<bool> FilesystemInitialized; // NOLINT
 
 auto GetConfig() -> Config &;
 

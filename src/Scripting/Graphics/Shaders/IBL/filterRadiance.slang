@@ -40,9 +40,8 @@ import cubemapHelpers;
 
 #define GROUP_SIZE 64
 
-static constexpr float3[3] UpAxes = { float3(1.0, 0.0, 0.0),
-                                      float3(0.0, 1.0, 0.0),
-                                      float3(0.0, 0.0, 1.0) };
+static float3[3] UpAxes = { float3(1.0, 0.0, 0.0), float3(0.0, 1.0, 0.0),
+                            float3(0.0, 0.0, 1.0) };
 
 [shader("compute")]
 [numthreads(GROUP_SIZE, 1, 1)]

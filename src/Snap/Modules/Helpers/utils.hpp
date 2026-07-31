@@ -1,9 +1,13 @@
 #pragma once
 
+#include "Modules/error.hpp"
+#include <algorithm>
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
+#include <execution>
 #include <initializer_list>
+#include <numeric>
 #include <span>
 #include <string>
 #include <string_view>
@@ -275,6 +279,41 @@ template <typename T> constexpr auto CeilDivFast(T value, T divisor) -> T {
 // Overflow-safe ceil division, returns the smallest integer greater than or equal to value/divisor
 template <typename T> constexpr auto CeilDiv(T value, T divisor) -> T {
   return (value / divisor) + (value % divisor != 0);
+}
+
+template <typename F> void ParallelFor(size_t count, F &&func) {
+  std::vector<size_t> indices(count);
+  std::ranges::iota(indices, 0);
+
+  std::for_each(std::execution::par, indices.begin(), indices.end(),
+                std::forward<F>(func));
+}
+
+template <typename F>
+  requires(std::same_as<std::invoke_result_t<F &, size_t>, Error>)
+auto ParallelFor(size_t count, F &&func) -> Error {
+  std::vector<size_t> indices(count);
+  std::ranges::iota(indices, 0);
+
+  std::atomic<bool> hasError{false};
+  auto error = Error::Success();
+
+  std::for_each(std::execution::par, indices.begin(), indices.end(),
+                [&](const auto &index) -> void {
+                  if (hasError.load()) {
+                    return;
+                  }
+
+                  auto err = std::forward<F>(func)(index);
+
+                  if (Error::IsError(err)) {
+                    if (!hasError.exchange(true, std::memory_order_relaxed)) {
+                      error = err;
+                    }
+                  }
+                });
+
+  return error;
 }
 
 // NOLINTBEGIN

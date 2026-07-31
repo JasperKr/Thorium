@@ -218,7 +218,7 @@ void computeMain(uint3 id: SV_DispatchThreadID) {
     color += Sample(dir) * weights.w;
 #endif
 
-    constexpr float Clamped = 100.0;
+    const float Clamped = 100.0;
 
     if (isinf(color.r)) {
       color.r = Clamped;

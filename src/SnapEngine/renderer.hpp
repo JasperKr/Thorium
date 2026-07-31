@@ -144,6 +144,8 @@ struct Renderer {
                                   VK_SAMPLER_ADDRESS_MODE_REPEAT,
                                   VK_SAMPLER_ADDRESS_MODE_REPEAT);
 
+    CHECK_ERR(ShaderManager.Preload());
+
     initialized = true;
     return {};
   }
