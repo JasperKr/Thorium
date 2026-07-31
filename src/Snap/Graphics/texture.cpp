@@ -47,6 +47,11 @@ ImageMemory::~ImageMemory() {
     return;
   }
 
+  // {
+  //   std::lock_guard<std::mutex> lock(Barrier::GraphicsResourcesMutex);
+  //   Utils::UnorderedErase(Barrier::GraphicsResources, this);
+  // }
+
   ScheduleDestruction(
       TextureMemory{
           .allocation = memory,
@@ -201,6 +206,12 @@ auto Texture::Create(const GraphicsContext &context,
 
   texture->samplerDescription = config.defaultSamplerDescription;
 
+  if (Image::IsIntegerFormat(imageMemory->format)) {
+    texture->samplerDescription.minFilter = VK_FILTER_NEAREST;
+    texture->samplerDescription.magFilter = VK_FILTER_NEAREST;
+    texture->samplerDescription.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+  }
+
   auto imageType = VK_IMAGE_TYPE_MAX_ENUM;
 
   switch (info.textureType) {
@@ -301,6 +312,11 @@ auto Texture::Create(const GraphicsContext &context,
 
   imageMemory->sizeInBytes = memRequirements.size;
   Texture::TotalAllocatedMemory += imageMemory->sizeInBytes;
+
+  // {
+  //   std::lock_guard<std::mutex> lock(Barrier::GraphicsResourcesMutex);
+  //   Barrier::GraphicsResources.emplace_back(texture->imageMemory.get());
+  // }
 
   CHECK_ERR(
       texture->UseAsSampler(context, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT));
@@ -800,6 +816,12 @@ auto Texture::SetFilter(VkFilter minFilter, VkFilter magFilter, // NOLINT
   samplerDescription.magFilter = magFilter;
   samplerDescription.mipmapMode = mipFilter;
 
+  if (Image::IsIntegerFormat(imageMemory->format)) {
+    samplerDescription.minFilter = VK_FILTER_NEAREST;
+    samplerDescription.magFilter = VK_FILTER_NEAREST;
+    samplerDescription.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+  }
+
   samplerDirty = true;
 }
 
@@ -822,6 +844,11 @@ auto Texture::GetBorderColor() const -> VkBorderColor {
 auto Texture::SetAnisotropy(float anisotropy) -> void {
   samplerDescription.anisotropyEnable = (anisotropy > 1.0F);
   samplerDescription.maxAnisotropy = anisotropy;
+
+  if (Image::IsIntegerFormat(imageMemory->format)) {
+    samplerDescription.anisotropyEnable = false;
+    samplerDescription.maxAnisotropy = 1.0F;
+  }
 
   samplerDirty = true;
 }

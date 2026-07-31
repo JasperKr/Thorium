@@ -1,5 +1,6 @@
 #pragma once
 
+#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -27,9 +28,9 @@ auto UnorderedErase(std::vector<T> &vect, Pred &&predicate) -> uint32_t {
   return count;
 }
 
-template <typename T>
-  requires std::equality_comparable<T>
-auto UnorderedErase(std::vector<T> &vect, const T &value) -> uint32_t {
+template <typename T, typename V>
+  requires std::equality_comparable_with<T, V>
+auto UnorderedErase(std::vector<T> &vect, const V &value) -> uint32_t {
   uint32_t count = 0;
 
   for (std::size_t i = 0; i < vect.size();) {

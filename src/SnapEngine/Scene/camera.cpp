@@ -341,34 +341,27 @@ auto Camera::ApplyLightProbes(const Graphics::GraphicsContext &context,
   static auto cameraBufferKey = Graphics::ResourceKey{"CameraData"};
   CHECK_ERR(shader->Send(cameraBufferKey, CameraBuffer));
 
-  static auto irradianceTextureKey =
-      Graphics::ResourceKey{"IrradianceTextures"};
   CHECK_ERR(shader->Send(
-      irradianceTextureKey,
+      {"IrradianceTextures"},
       Renderer::RendererInstance.GetPrefilterManager().GetIrradianceMaps()));
-  static auto radianceTextureKey = Graphics::ResourceKey{"SpecularTextures"};
   CHECK_ERR(shader->Send(
-      radianceTextureKey,
+      {"SpecularTextures"},
       Renderer::RendererInstance.GetPrefilterManager().GetRadianceMaps()));
 
-  static auto lightProbeBufferKey = Graphics::ResourceKey{"Probes"};
   CHECK_ERR(shader->Send(
-      lightProbeBufferKey,
+      {"Probes"},
       Renderer::RendererInstance.GetLightProbeBuffer()->GetBuffer()));
 
   static auto lightProbeCountKey = Graphics::ResourceKey{"LightProbeCount"};
   CHECK_ERR(Graphics::UniformWriter::Send(
       shader, lightProbeCountKey, static_cast<uint32_t>(VisibleProbeCount)));
 
-  static auto albedoTextureKey = Graphics::ResourceKey{"AlbedoTexture"};
-  static auto normalTextureKey = Graphics::ResourceKey{"NormalTexture"};
-  static auto materialTextureKey = Graphics::ResourceKey{"MaterialTexture"};
-  static auto depthBufferKey = Graphics::ResourceKey{"DepthTexture"};
-
-  CHECK_ERR(shader->Send(albedoTextureKey, textures.Albedo));
-  CHECK_ERR(shader->Send(normalTextureKey, textures.Normal));
-  CHECK_ERR(shader->Send(materialTextureKey, textures.Material));
-  CHECK_ERR(shader->Send(depthBufferKey, textures.Depth));
+  CHECK_ERR(shader->Send({"AlbedoTexture"}, textures.Albedo));
+  CHECK_ERR(shader->Send({"NormalTexture"}, textures.Normal));
+  CHECK_ERR(shader->Send({"MaterialTexture"}, textures.Material));
+  CHECK_ERR(shader->Send({"DepthTexture"}, textures.Depth));
+  CHECK_ERR(
+      shader->Send({"AmbientOcclusionTexture"}, textures.AmbientOcclusion));
   CHECK_ERR(Graphics::UniformWriter::Send(shader, {"SpecularEnabled"}, 1));
 
   CHECK_ERR(Renderer::DrawFullScreen(context));
@@ -607,6 +600,33 @@ auto Camera::ConfigureRendertargets() -> void {
       .mipFilter = VK_SAMPLER_MIPMAP_MODE_NEAREST,
       .usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
   };
+
+  Rendertargets.ShadowHitFlags = Renderer::RendertargetDescriptor{
+      .size = Dimensions,
+      .format = VK_FORMAT_R32_UINT,
+      .minFilter = VK_FILTER_NEAREST,
+      .magFilter = VK_FILTER_NEAREST,
+      .mipFilter = VK_SAMPLER_MIPMAP_MODE_NEAREST,
+      .usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+  };
+
+  Rendertargets.AmbientOcclusion = Renderer::RendertargetDescriptor{
+      .size = Dimensions,
+      .format = VK_FORMAT_R8G8_UNORM,
+      .minFilter = VK_FILTER_LINEAR,
+      .magFilter = VK_FILTER_LINEAR,
+      .mipFilter = VK_SAMPLER_MIPMAP_MODE_NEAREST,
+      .usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+  };
+
+  Rendertargets.AmbientOcclusionSamples = Renderer::RendertargetDescriptor{
+      .size = Dimensions,
+      .format = VK_FORMAT_R8_UINT,
+      .minFilter = VK_FILTER_NEAREST,
+      .magFilter = VK_FILTER_NEAREST,
+      .mipFilter = VK_SAMPLER_MIPMAP_MODE_NEAREST,
+      .usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+  };
 }
 
 auto Camera::WriteToBuffer(const CameraMatrices &cameraMatrices,
@@ -784,6 +804,8 @@ auto LuaCamera::GetBuffer(lua_State *state) -> int {
 }
 
 auto LuaCamera::Render(lua_State *state) -> int {
+  ZoneScoped;
+
   auto obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaCamera>(state, 1));
   auto *camera = LUA_CK_NULL(obj->entity.try_get_mut<Camera>());
 

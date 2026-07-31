@@ -95,21 +95,14 @@ static slang::TargetDesc SpvTargetDesc = {
 Ref<Shader> DefaultShaderModule = {}; // NOLINT
 
 auto LoadShaderModule() -> Error {
-  auto result = slang::createGlobalSession(&GlobalSlangSession);
-  if (Error::IsError(result)) {
-    return Error::Create(result);
-  }
+  ZoneScoped;
+  CHECK_NEW_ERR(slang::createGlobalSession(&GlobalSlangSession));
+
   SpvTargetDesc.profile =
       GlobalSlangSession->findProfile("spirv_1_5+spvRayQueryKHR");
 
-  auto shaderCreationResult = Shader::Create(*GetCurrentGraphicsContext(),
-                                             "default2D", "Default shader");
-
-  if (Error::IsError(shaderCreationResult)) {
-    return shaderCreationResult.error();
-  }
-
-  DefaultShaderModule = shaderCreationResult.value();
+  DefaultShaderModule = CHECK_RES(Shader::Create(
+      *GetCurrentGraphicsContext(), "default2D", "Default shader"));
 
   return Error::Success();
 }
@@ -275,6 +268,8 @@ inline auto SlangStageToString(SlangStage stage) -> std::string_view {
 // NOLINTNEXTLINE
 static inline auto LoadSlang(const GraphicsContext &context,
                              Ref<Shader> &shader) -> Error {
+  ZoneScoped;
+
   slang::SessionDesc sessionDesc = {};
   sessionDesc.allowGLSLSyntax = false;
   sessionDesc.defaultMatrixLayoutMode =
@@ -311,18 +306,23 @@ static inline auto LoadSlang(const GraphicsContext &context,
       static_cast<uint32_t>(shader->preprocessorMacros.size());
 
   Slang::ComPtr<slang::ISession> session;
-  auto result =
-      GlobalSlangSession->createSession(sessionDesc, session.writeRef());
+  {
+    ZoneScopedN("Create session");
 
-  CHECK_NEW_ERR(result);
+    auto result =
+        GlobalSlangSession->createSession(sessionDesc, session.writeRef());
+
+    CHECK_NEW_ERR(result);
+  }
 
   Slang::ComPtr<slang::IBlob> diagnosticsBlob;
   PrintDebug("Compiling shader: " + shader->moduleName);
+  {
+    ZoneScopedN("Load Module");
+    shader->slangModule = session->loadModule(shader->moduleName.c_str(),
+                                              diagnosticsBlob.writeRef());
+  }
 
-  shader->slangModule = session->loadModule(shader->moduleName.c_str(),
-                                            diagnosticsBlob.writeRef());
-
-  // ERR_ASSERT(diagnosticsBlob == nullptr);
   if (diagnosticsBlob != nullptr) {
     auto diagnostics = std::string_view(
         static_cast<const char *>(diagnosticsBlob->getBufferPointer()),
@@ -380,26 +380,44 @@ static inline auto LoadSlang(const GraphicsContext &context,
   Slang::ComPtr<slang::IComponentType> composedProgram;
 
   PrintDebug("Composing program...");
-  result = session->createCompositeComponentType(
-      componentTypes.data(), static_cast<SlangInt>(componentTypes.size()),
-      composedProgram.writeRef(), diagnosticsBlob.writeRef());
+  {
+    ZoneScopedN("Create composite component type");
 
-  CHECK_ERR(Error::Create(result, diagnosticsBlob, composedProgram.readRef()));
+    auto result = session->createCompositeComponentType(
+        componentTypes.data(), static_cast<SlangInt>(componentTypes.size()),
+        composedProgram.writeRef(), diagnosticsBlob.writeRef());
+
+    CHECK_ERR(
+        Error::Create(result, diagnosticsBlob, composedProgram.readRef()));
+  }
 
   PrintDebug("Linking program...");
 
-  result = composedProgram->link(shader->linkedProgram.writeRef(),
-                                 diagnosticsBlob.writeRef());
+  {
+    ZoneScopedN("Link program");
 
-  CHECK_ERR(
-      Error::Create(result, diagnosticsBlob, shader->linkedProgram.readRef()));
+    auto result = composedProgram->link(shader->linkedProgram.writeRef(),
+                                        diagnosticsBlob.writeRef());
+
+    CHECK_ERR(Error::Create(result, diagnosticsBlob,
+                            shader->linkedProgram.readRef()));
+  }
 
   PrintDebug("Getting program layout...");
 
-  shader->programLayout =
-      shader->linkedProgram->getLayout(0, diagnosticsBlob.writeRef());
+  {
+    ZoneScopedN("Get program layout");
 
-  CHECK_ERR(Error::Create(result, diagnosticsBlob, shader->programLayout));
+    shader->programLayout =
+        shader->linkedProgram->getLayout(0, diagnosticsBlob.writeRef());
+
+    if (diagnosticsBlob != nullptr) {
+      auto diagnostics = std::string_view(
+          static_cast<const char *>(diagnosticsBlob->getBufferPointer()),
+          diagnosticsBlob->getBufferSize());
+      return Error::Createf("Diagnostics:\n{}", diagnostics);
+    }
+  }
 
   ERR_ASSERT(!shader->entryPoints.empty());
 
@@ -463,11 +481,15 @@ static inline auto LoadSlang(const GraphicsContext &context,
 
   shader->combinedPipelineStages = vkStages;
 
-  result = shader->linkedProgram->getTargetCode(0, // targetIndex
-                                                spirvCode.writeRef(),
-                                                diagnosticsBlob.writeRef());
+  {
+    ZoneScopedN("Get target code");
 
-  CHECK_ERR(Error::Create(result, diagnosticsBlob, spirvCode.readRef()));
+    auto result = shader->linkedProgram->getTargetCode(
+        0, // targetIndex
+        spirvCode.writeRef(), diagnosticsBlob.writeRef());
+
+    CHECK_ERR(Error::Create(result, diagnosticsBlob, spirvCode.readRef()));
+  }
 
   PrintDebug("Creating Vulkan shader module...");
 
@@ -484,6 +506,8 @@ static inline auto LoadSlang(const GraphicsContext &context,
   moduleCreateInfo.codeSize = data.size() * sizeof(uint32_t);
   moduleCreateInfo.pCode = data.data();
   {
+    ZoneScopedN("Create vulkan shadermodule");
+
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
     CHECK_NEW_ERR(vkCreateShaderModule(context.device, &moduleCreateInfo,
                                        GetAllocationCallbacks(),
@@ -515,6 +539,8 @@ auto Shader::Create(
     const std::string &name,
     const std::vector<slang::PreprocessorMacroDesc> *preprocessorMacros)
     -> Result<Ref<Shader>> {
+  ZoneScoped;
+
   Ref<Shader> shader = Ref<Shader>::Make();
   shader->name = name;
   shader->moduleName = modulename;

@@ -125,7 +125,7 @@ do
     my = my / viewport.size.y
 
     if button == 1 and mx >= 0 and mx <= 1 and my >= 0 and my <= 1 then
-      snap.renderer.pickObject(camera, mx, my)
+      snap.renderer.pickObject(mx, my)
     end
   end
 
@@ -137,6 +137,8 @@ do
     isDown[key] = true
     if key == "f5" then
       snap.renderer.reloadShaders()
+    elseif key == "f6" then
+      createSnapshot = true
     end
   end
 
@@ -183,6 +185,8 @@ do
     end
 
     snap.graphics.aquireGraphics(nil, nil, createSnapshot)
+
+    createSnapshot = false
 
     local data = events:pop()
     while data do
@@ -236,7 +240,6 @@ do
     end
 
     snap.graphics.setWindingOrder("cw")
-    createSnapshot = false
     if firstFrame then
       snap.graphics.setDefaultFilter("linear", "linear", 16)
       -- snap.scene.loadModel(scene, "Assets/Terrain/Bistro/bistro.gltf")
@@ -254,7 +257,7 @@ do
       local env = scene:newEnvironment("Test environment", texture)
       scene:setEnvironment(env)
 
-      probe:render()
+      -- probe:render()
     end
 
     local dt = snap.timer.getTime() - t

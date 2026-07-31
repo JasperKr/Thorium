@@ -281,6 +281,7 @@ auto Transform::DrawGUI(flecs::entity entity) -> void {
   static flecs::id_t lastEntity = 0;
   static Math::EulerAngle lastEulerRotation;
   static Math::Quaternion lastQuaternionRotation;
+  static bool UserInteractedLastFrame = false;
 
   if (ImGui::BeginCombo("Rotation Mode", [&]() -> const char * {
         switch (rotationMode) {
@@ -316,10 +317,12 @@ auto Transform::DrawGUI(flecs::entity entity) -> void {
   }
 
   // Keep up to date if, for example, physics is updating the rotation
-  if (Rotation != lastQuaternionRotation) {
+  if (Rotation != lastQuaternionRotation && !UserInteractedLastFrame) {
     lastQuaternionRotation = Rotation;
     lastEulerRotation = Math::Conversions::ToEuler(Rotation).ToDegrees();
   }
+
+  UserInteractedLastFrame = false;
 
   switch (rotationMode) {
   case RotationMode::EulerRadians: {
@@ -353,6 +356,11 @@ auto Transform::DrawGUI(flecs::entity entity) -> void {
       lastQuaternionRotation = Rotation;
     }
     break;
+  }
+
+  if (ImGui::IsItemActivated() || ImGui::IsItemDeactivatedAfterEdit() ||
+      ImGui::IsItemActive()) {
+    UserInteractedLastFrame = true;
   }
 
   if (ImGui::DragScalarN("Scale", dataType, (void *)Scale.Ptr(), 3, 0.1F)) {

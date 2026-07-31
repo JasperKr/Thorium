@@ -13,10 +13,6 @@ uniform bool SpecularEnabled;
 
 #include "fullscreen.slang"
 
-struct FragmentInput {
-  float2 VertexCoords : TEXCOORD0;
-};
-
 struct FragmentOutput {
   float4 Radiance : SV_Target0;
   float4 Irradiance : SV_Target1;
@@ -45,8 +41,9 @@ struct LightProbeSampleInfo {
 uniform int LightProbeCount;
 restrict StructuredBuffer<LightProbe> Probes;
 
-Sampler2DArray SpecularTextures;
-Sampler2DArray IrradianceTextures;
+Sampler2DArray<float3> SpecularTextures;
+Sampler2DArray<float3> IrradianceTextures;
+Sampler2D<float2> AmbientOcclusionTexture;
 
 LightProbeSampleInfo SampleLightProbe(int probeIndex, float3 worldPosition,
                                       float3 normal, float3 reflectedRay,
@@ -71,8 +68,7 @@ LightProbeSampleInfo SampleLightProbe(int probeIndex, float3 worldPosition,
   float3 reflected = prefilteredRadiance(
       SpecularTextures, float4(reflectedRay, probe.index), perceptualRoughness);
   float3 irradiance =
-      prefilteredIrradiance(IrradianceTextures, float4(normal, probe.index))
-          .rgb;
+      prefilteredIrradiance(IrradianceTextures, float4(normal, probe.index));
 
   return LightProbeSampleInfo(reflected, irradiance, influence);
 }
@@ -98,8 +94,8 @@ LightProbeSampleInfo SampleLightProbes(float3 worldPosition, float3 normal,
 }
 
 [shader("fragment")]
-FragmentOutput fragmentMain(FragmentInput input) {
-  float depth = DepthTexture.Sample(input.VertexCoords).r;
+FragmentOutput fragmentMain(float2 VertexCoords: TEXCOORD0) {
+  float depth = DepthTexture.Sample(VertexCoords).r;
 
   if (depth == DepthFarPlane) {
     // TODO: Or discard?
@@ -109,21 +105,21 @@ FragmentOutput fragmentMain(FragmentInput input) {
     return output;
   }
 
-  float3 worldPosition = camera.GetWorldPosition(input.VertexCoords, depth);
+  float3 worldPosition = camera.GetWorldPosition(VertexCoords, depth);
 
-  float3 normal =
-      normalize(NormalTexture.Sample(input.VertexCoords).xyz * 2.0 - 1.0);
+  float3 normal = normalize(NormalTexture.Sample(VertexCoords).xyz * 2.0 - 1.0);
 
   // metallic, perceptual roughness, reflectance, stencil
   MaterialChannel material =
-      MaterialChannel(MaterialTexture.Sample(input.VertexCoords));
-  float3 albedo = AlbedoTexture.Sample(input.VertexCoords).rgb;
+      MaterialChannel(MaterialTexture.Sample(VertexCoords));
+  float3 albedo = AlbedoTexture.Sample(VertexCoords).rgb;
 
   float3 viewDir = normalize(worldPosition - camera.Position);
   float3 f0 = ComputeFresnel0(albedo, material.metallic, material.reflectance);
   float3 diffuse = ComputeDiffuseColor(albedo, material.metallic);
   float NoV = ClampNoV(dot(normal, -viewDir));
   float3 E = prefilteredDFG(material.perceptualRoughness, f0, NoV);
+  float ao = AmbientOcclusionTexture.Sample(VertexCoords).x;
 
   float3 reflectedRay = reflect(viewDir, normal);
 
@@ -160,6 +156,9 @@ FragmentOutput fragmentMain(FragmentInput input) {
     probeInfo.radiance *= E;
     probeInfo.irradiance *= (1.0 - E) * diffuse;
   }
+
+  probeInfo.radiance *= SpecularOcclusion(NoV, ao, material.roughness);
+  probeInfo.irradiance *= ao;
 
   // Radiance = probeInfo.radiance;
   // Irradiance = probeInfo.irradiance;

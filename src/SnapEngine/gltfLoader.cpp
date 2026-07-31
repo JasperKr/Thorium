@@ -30,6 +30,7 @@
 #include <flecs.h>
 #include <mutex>
 #include <numeric>
+#include <optional>
 #include <public/tracy/Tracy.hpp>
 #include <span>
 #include <string>
@@ -221,7 +222,7 @@ inline auto LoadDataSource(const fastgltf::Asset &asset,
   return Error::Unexpected("Unsupported data source.");
 }
 
-inline auto LoadTexture(Graphics::GraphicsContext &context,
+inline auto LoadTexture(const Graphics::GraphicsContext &context,
                         const fastgltf::Asset &asset,
                         const std::string_view &basePath,
                         const fastgltf::TextureInfo &gltfTexture)
@@ -276,7 +277,7 @@ inline auto LoadTexture(Graphics::GraphicsContext &context,
   return textureRef;
 }
 
-inline auto LoadMaterial(Graphics::GraphicsContext &context,
+inline auto LoadMaterial(const Graphics::GraphicsContext &context,
                          const fastgltf::Asset &asset,
                          const std::string_view &basePath,
                          const fastgltf::Material &gltfMaterial,
@@ -762,10 +763,12 @@ static auto ResolveVertexIndex(const MikkUserData &data, int faceIndex,
   }
 }
 
-inline auto GenerateVertexTangents(Graphics::VertexFormat &format,
+inline auto GenerateVertexTangents(const Graphics::VertexFormat &format,
                                    std::vector<uint8_t> &existingData,
                                    const std::vector<uint8_t> &indices,
                                    VkIndexType indexType) -> void {
+  ZoneScoped;
+
   const auto *positionAttribute = format.GetAttribute("POSITION");
   const auto *normalAttribute = format.GetAttribute("NORMAL");
   const auto *texcoordAttribute = format.GetAttribute("TEXCOORD_0");
@@ -897,7 +900,7 @@ inline auto GenerateVertexTangents(Graphics::VertexFormat &format,
 }
 
 // NOLINTNEXTLINE
-inline auto FillVertexDataDefaults(Graphics::VertexFormat &format,
+inline auto FillVertexDataDefaults(const Graphics::VertexFormat &format,
                                    const fastgltf::Asset &asset,
                                    const fastgltf::Primitive &primitive,
                                    std::vector<uint8_t> &existingData,
@@ -939,10 +942,13 @@ inline auto FillVertexDataDefaults(Graphics::VertexFormat &format,
 }
 
 inline auto // NOLINTNEXTLINE
-LoadVertexData(Graphics::VertexFormat &format, const fastgltf::Asset &asset,
+LoadVertexData(const Graphics::VertexFormat &format,
+               const fastgltf::Asset &asset,
                const fastgltf::Primitive &primitive,
                const std::vector<uint8_t> &indices, VkIndexType indexType)
     -> Result<std::vector<uint8_t>> {
+  ZoneScoped;
+
   if (primitive.attributes.empty()) {
     return Error::Unexpected("Primitive has no attributes.");
   }
@@ -1110,12 +1116,14 @@ inline auto LoadIndexData(const fastgltf::Asset &asset,
 }
 
 template <typename IndexT>
-void OptimizeMesh(std::span<IndexT> indices, std::span<uint8_t> vertices,
+void OptimizeMesh(std::span<IndexT> indices, std::vector<uint8_t> &vertices,
                   size_t vertexCount, size_t vertexStride) {
+  ZoneScoped;
 
   size_t indexCount = indices.size();
 
-  std::vector<unsigned int> remap(vertexCount);
+  thread_local std::vector<unsigned int> remap;
+  remap.resize(vertexCount * vertexStride);
 
   size_t newVertexCount =
       meshopt_generateVertexRemap(remap.data(), indices.data(), indexCount,
@@ -1128,10 +1136,12 @@ void OptimizeMesh(std::span<IndexT> indices, std::span<uint8_t> vertices,
                             vertexStride, remap.data());
 
   meshopt_optimizeVertexCache(indices.data(), indices.data(), indexCount,
-                              vertexCount);
+                              newVertexCount);
 
   meshopt_optimizeVertexFetch(vertices.data(), indices.data(), indexCount,
-                              vertices.data(), vertexCount, vertexStride);
+                              vertices.data(), newVertexCount, vertexStride);
+
+  vertices.resize(newVertexCount * vertexStride);
 }
 
 auto GetInterleavedStride(const Graphics::VertexFormat &format) -> size_t {
@@ -1144,6 +1154,7 @@ auto GetInterleavedStride(const Graphics::VertexFormat &format) -> size_t {
 
 auto DeinterleaveVertexData(const std::vector<uint8_t> &interleavedData)
     -> std::vector<std::vector<uint8_t>> {
+  ZoneScoped;
 
   struct VertexData {
     float position[3]; // NOLINT
@@ -1193,11 +1204,201 @@ auto DeinterleaveVertexData(const std::vector<uint8_t> &interleavedData)
   return {positionData, texcoordData, normalTangentData, colorData};
 }
 
+using Comp = Graphics::VertexComponent;
+
+static const std::vector<Comp> InitialVertexComponents = {
+    Comp{.name = "POSITION",
+         .location = 0,
+         .binding = 0,
+         .format = VK_FORMAT_R32G32B32_SFLOAT},
+    Comp{.name = "TEXCOORD_0",
+         .location = 1,
+         .binding = 0,
+         .format = VK_FORMAT_R32G32_SFLOAT},
+    Comp{.name = "NORMAL",
+         .location = 2,
+         .binding = 0,
+         .format = VK_FORMAT_R32_UINT},
+    Comp{.name = "TANGENT",
+         .location = 3,
+         .binding = 0,
+         .format = VK_FORMAT_R32_UINT},
+    Comp{.name = "COLOR_0",
+         .location = 4,
+         .binding = 0,
+         .format = VK_FORMAT_R8G8B8A8_UNORM}};
+
+struct VertexData {
+  float position[3]; // NOLINT
+  float texcoord[2]; // NOLINT
+  uint32_t normal;
+  uint32_t tangent;
+  uint32_t color;
+};
+
+static const Graphics::VertexFormat SeparateVertexFormat = [] -> auto {
+  std::vector<Comp> comps = InitialVertexComponents;
+  for (auto comp : comps) {
+    comp.location = 0;
+  }
+
+  comps.at(0).binding = 0; // POSITION
+  comps.at(1).binding = 1; // TEXCOORD_0
+  comps.at(2).binding = 2; // NORMAL + TANGENT
+  comps.at(3).binding = 2; // NORMAL + TANGENT
+  comps.at(4).binding = 3; // COLOR_0
+
+  return Graphics::VertexFormat(comps);
+}();
+
+static const Graphics::VertexFormat InitialVertexFormat = [] -> auto {
+  return Graphics::VertexFormat(InitialVertexComponents);
+}();
+
+struct MeshLoadInfo {
+  std::vector<uint8_t> Vertices;
+  std::vector<uint8_t> Indices;
+
+  VkIndexType IndexType;
+  std::string Name;
+  flecs::entity Parent;
+  fastgltf::OptionalWithFlagValue<unsigned long> MaterialIndex;
+
+  // Only set after calling OptimiseMesh
+  std::vector<std::vector<uint8_t>> DeinterleavedData;
+};
+
+inline auto OptimiseMesh(MeshLoadInfo &info) {
+  ZoneScoped;
+
+  auto stride = InitialVertexFormat.GetStride(0);
+  auto vertexCount = info.Vertices.size() / stride;
+
+  switch (info.IndexType) {
+  case VK_INDEX_TYPE_UINT8:
+    OptimizeMesh( // NOLINTNEXTLINE
+        std::span(reinterpret_cast<uint8_t *>(info.Indices.data()),
+                  info.Indices.size() / sizeof(uint8_t)),
+        info.Vertices, vertexCount, stride);
+    break;
+  case VK_INDEX_TYPE_UINT16:
+    OptimizeMesh( // NOLINTNEXTLINE
+        std::span(reinterpret_cast<uint16_t *>(info.Indices.data()),
+                  info.Indices.size() / sizeof(uint16_t)),
+        info.Vertices, vertexCount, stride);
+    break;
+  case VK_INDEX_TYPE_UINT32:
+    OptimizeMesh( // NOLINTNEXTLINE
+        std::span(reinterpret_cast<uint32_t *>(info.Indices.data()),
+                  info.Indices.size() / sizeof(uint32_t)),
+        info.Vertices, vertexCount, stride);
+    break;
+  case VK_INDEX_TYPE_NONE_KHR:
+  case VK_INDEX_TYPE_MAX_ENUM:
+    break;
+  }
+
+  info.DeinterleavedData = DeinterleaveVertexData(info.Vertices);
+}
+
+inline auto LoadMesh(const Graphics::GraphicsContext &context,
+                     flecs::world *world, MeshLoadInfo &info,
+                     const fastgltf::Asset &asset,
+                     const std::string_view &basePath) -> Error {
+  ZoneScoped;
+
+  std::vector<std::span<const uint8_t>> deinterleavedSpans;
+  deinterleavedSpans.reserve(info.DeinterleavedData.size());
+  for (const auto &data : info.DeinterleavedData) {
+    deinterleavedSpans.emplace_back(data.data(), data.size());
+  }
+
+  Graphics::MeshCreationInfo meshCreationInfo{
+      .vertexFormat = &SeparateVertexFormat,
+      .vertexData = deinterleavedSpans,
+      .debugName = std::string(info.Name),
+  };
+
+  auto mesh = CHECK_RES(Graphics::Mesh::Create(context, meshCreationInfo));
+
+  if (!info.Indices.empty()) {
+    CHECK_ERR(mesh->SetIndices(context, info.Indices, info.IndexType));
+  }
+
+  CHECK_ERR(mesh->CreateBLAS(context));
+
+  auto geometry = world->entity(GetUniqueName("Geometry").c_str());
+  geometry.set<Engine::Geometry>(Engine::Geometry{.mesh = mesh});
+  geometry.add<Engine::Transform>();
+
+  Engine::LocalBounds localBounds{};
+
+  std::span<const VertexData> vertexDataSpan(
+      reinterpret_cast<const VertexData *>(info.Vertices.data()), // NOLINT
+      info.Vertices.size() / sizeof(VertexData));
+
+  for (const auto &vertex : vertexDataSpan) {
+    Math::Vec3 pos(vertex.position[0], vertex.position[1], vertex.position[2]);
+    localBounds.Bounds.Grow(pos);
+  }
+
+  geometry.set<Engine::LocalBounds>(localBounds);
+  geometry.add<Engine::WorldBounds>();
+  geometry.child_of(info.Parent);
+
+  // Load material if present.
+  if (info.MaterialIndex.has_value()) {
+    const auto &material = asset.materials[info.MaterialIndex.value()];
+    geometry.add<Engine::Renderer::Material>();
+    auto rendererMaterial = Ref<Engine::Renderer::LuaMaterial>::Make(geometry);
+
+    CHECK_ERR(
+        LoadMaterial(context, asset, basePath, material, rendererMaterial));
+  }
+
+  return {};
+}
+
+struct MeshVertexDataLoadInfo {
+  fastgltf::Asset const *Asset;
+  fastgltf::Primitive const *Primitive;
+};
+
+inline auto LoadMeshVertexData(MeshVertexDataLoadInfo &info,
+                               MeshLoadInfo &output) -> Error {
+  output.Indices = CHECK_RES(LoadIndexData(*info.Asset, *info.Primitive));
+  output.IndexType = VK_INDEX_TYPE_MAX_ENUM;
+  if (!output.Indices.empty()) {
+    const auto &accessor =
+        info.Asset->accessors.at(info.Primitive->indicesAccessor.value());
+    switch (accessor.componentType) {
+    case fastgltf::ComponentType::UnsignedByte:
+      output.IndexType = VK_INDEX_TYPE_UINT8_EXT;
+      break;
+    case fastgltf::ComponentType::UnsignedShort:
+      output.IndexType = VK_INDEX_TYPE_UINT16;
+      break;
+    case fastgltf::ComponentType::UnsignedInt:
+      output.IndexType = VK_INDEX_TYPE_UINT32;
+      break;
+    default:
+      return Error::Create("Unsupported index component type.");
+    }
+  }
+
+  output.Vertices = CHECK_RES(LoadVertexData(InitialVertexFormat, *info.Asset,
+                                             *info.Primitive, output.Indices,
+                                             output.IndexType));
+
+  return {};
+}
+
 inline auto // NOLINTNEXTLINE
-LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
-         const fastgltf::Asset &asset, const std::string_view &basePath,
-         const fastgltf::Node &gltfNode,
-         std::unordered_set<size_t> &parentIndices)
+LoadNode(
+    flecs::world *world, Graphics::GraphicsContext &context,
+    const fastgltf::Asset &asset, const std::string_view &basePath,
+    const fastgltf::Node &gltfNode, std::unordered_set<size_t> &parentIndices,
+    std::vector<std::pair<MeshVertexDataLoadInfo, MeshLoadInfo>> &loadInfos)
     -> Result<std::vector<flecs::entity>> {
   bool isMesh = gltfNode.meshIndex.has_value();
   bool isSkin = gltfNode.skinIndex.has_value();
@@ -1245,8 +1446,9 @@ LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
 
       parentIndices.emplace(childIndex);
 
-      auto childNode = CHECK_RES(LoadNode(world, context, asset, basePath,
-                                          childGltfNode, parentIndices));
+      auto childNode =
+          CHECK_RES(LoadNode(world, context, asset, basePath, childGltfNode,
+                             parentIndices, loadInfos));
 
       for (auto &childObject : childNode) {
         childObject.child_of(node);
@@ -1273,163 +1475,26 @@ LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
 
       shapes.emplace_back(shapeEntity);
 
-      auto indexData = CHECK_RES(LoadIndexData(asset, primitive));
-      VkIndexType indexType = VK_INDEX_TYPE_MAX_ENUM;
-      if (!indexData.empty()) {
-        const auto &accessor =
-            asset.accessors.at(primitive.indicesAccessor.value());
-        switch (accessor.componentType) {
-        case fastgltf::ComponentType::UnsignedByte:
-          indexType = VK_INDEX_TYPE_UINT8_EXT;
-          break;
-        case fastgltf::ComponentType::UnsignedShort:
-          indexType = VK_INDEX_TYPE_UINT16;
-          break;
-        case fastgltf::ComponentType::UnsignedInt:
-          indexType = VK_INDEX_TYPE_UINT32;
-          break;
-        default:
-          return Error::Unexpected("Unsupported index component type.");
-        }
-      }
-
-      using Comp = Graphics::VertexComponent;
-
-      static std::vector<Comp> InitialVertexComponents = {
-          Comp{.name = "POSITION",
-               .location = 0,
-               .binding = 0,
-               .format = VK_FORMAT_R32G32B32_SFLOAT},
-          Comp{.name = "TEXCOORD_0",
-               .location = 1,
-               .binding = 0,
-               .format = VK_FORMAT_R32G32_SFLOAT},
-          Comp{.name = "NORMAL",
-               .location = 2,
-               .binding = 0,
-               .format = VK_FORMAT_R32_UINT},
-          Comp{.name = "TANGENT",
-               .location = 3,
-               .binding = 0,
-               .format = VK_FORMAT_R32_UINT},
-          Comp{.name = "COLOR_0",
-               .location = 4,
-               .binding = 0,
-               .format = VK_FORMAT_R8G8B8A8_UNORM}};
-
-      static std::vector<Comp> SeparateVertexComponents =
-          InitialVertexComponents;
-
-      SeparateVertexComponents.at(0).binding = 0; // POSITION
-      SeparateVertexComponents.at(1).binding = 1; // TEXCOORD_0
-      SeparateVertexComponents.at(2).binding = 2; // NORMAL + TANGENT
-      SeparateVertexComponents.at(3).binding = 2; // NORMAL + TANGENT
-      SeparateVertexComponents.at(4).binding = 3; // COLOR_0
-
-      struct VertexData {
-        float position[3]; // NOLINT
-        float texcoord[2]; // NOLINT
-        uint32_t normal;
-        uint32_t tangent;
-        uint32_t color;
-      };
-
-      Graphics::VertexFormat InitialVertexFormat(InitialVertexComponents);
-
-      auto &vertexFormat = InitialVertexFormat;
-      auto vertexData = CHECK_RES(
-          LoadVertexData(vertexFormat, asset, primitive, indexData, indexType));
-
-      auto stride = vertexFormat.GetStride(0);
-      auto vertexCount = vertexData.size() / stride;
-
-      switch (indexType) {
-      case VK_INDEX_TYPE_UINT8:
-        OptimizeMesh( // NOLINTNEXTLINE
-            std::span(reinterpret_cast<uint8_t *>(indexData.data()),
-                      indexData.size() / sizeof(uint8_t)),
-            vertexData, vertexCount, stride);
-        break;
-      case VK_INDEX_TYPE_UINT16:
-        OptimizeMesh( // NOLINTNEXTLINE
-            std::span(reinterpret_cast<uint16_t *>(indexData.data()),
-                      indexData.size() / sizeof(uint16_t)),
-            vertexData, vertexCount, stride);
-        break;
-      case VK_INDEX_TYPE_UINT32:
-        OptimizeMesh( // NOLINTNEXTLINE
-            std::span(reinterpret_cast<uint32_t *>(indexData.data()),
-                      indexData.size() / sizeof(uint32_t)),
-            vertexData, vertexCount, stride);
-        break;
-      case VK_INDEX_TYPE_NONE_KHR:
-      case VK_INDEX_TYPE_MAX_ENUM:
-        break;
-      }
-
-      static Graphics::VertexFormat SeparateVertexFormat(
-          SeparateVertexComponents);
-
-      auto deinterleavedData = DeinterleaveVertexData(vertexData);
-
-      std::vector<std::span<const uint8_t>> deinterleavedSpans;
-      deinterleavedSpans.reserve(deinterleavedData.size());
-      for (const auto &data : deinterleavedData) {
-        deinterleavedSpans.emplace_back(data.data(), data.size());
-      }
-
-      Graphics::MeshCreationInfo meshCreationInfo{
-          .vertexFormat = &SeparateVertexFormat,
-          .vertexData = deinterleavedSpans,
-          .debugName = std::string(gltfMesh.name),
-      };
-
-      auto mesh = CHECK_RES(Graphics::Mesh::Create(context, meshCreationInfo));
-
-      if (!indexData.empty()) {
-        CHECK_ERR(mesh->SetIndices(context, indexData, indexType));
-      }
-
-      CHECK_ERR(mesh->CreateBLAS(context));
-
-      auto geometry = world->entity(GetUniqueName("Geometry").c_str());
-      geometry.set<Engine::Geometry>(Engine::Geometry{.mesh = mesh});
-      geometry.add<Engine::Transform>();
-
       auto lod = world->entity(GetUniqueName("LOD").c_str());
 
-      Engine::LocalBounds localBounds{};
+      MeshLoadInfo loadInfo = {
+          .Name = std::string(gltfMesh.name),
+          .Parent = lod,
+          .MaterialIndex = primitive.materialIndex,
+      };
 
-      std::span<const VertexData> vertexDataSpan(
-          reinterpret_cast<const VertexData *>(vertexData.data()), // NOLINT
-          vertexData.size() / sizeof(VertexData));
+      MeshVertexDataLoadInfo verticesLoadInfo{
+          .Asset = &asset,
+          .Primitive = &primitive,
+      };
 
-      for (const auto &vertex : vertexDataSpan) {
-        Math::Vec3 pos(vertex.position[0], vertex.position[1],
-                       vertex.position[2]);
-        localBounds.Bounds.Grow(pos);
-      }
+      loadInfos.emplace_back(verticesLoadInfo, loadInfo);
 
       lod.add<Engine::LevelOfDetail>();
       lod.add<Engine::WorldBounds>();
       lod.add<Engine::Transform>();
 
-      geometry.set<Engine::LocalBounds>(localBounds);
-      geometry.add<Engine::WorldBounds>();
-
-      geometry.child_of(lod);
       lod.child_of(shapeEntity);
-
-      // Load material if present.
-      if (primitive.materialIndex.has_value()) {
-        const auto &material = asset.materials[primitive.materialIndex.value()];
-        geometry.add<Engine::Renderer::Material>();
-        auto rendererMaterial =
-            Ref<Engine::Renderer::LuaMaterial>::Make(geometry);
-
-        CHECK_ERR(
-            LoadMaterial(context, asset, basePath, material, rendererMaterial));
-      }
     }
 
     return shapes;
@@ -1453,6 +1518,7 @@ LoadNode(flecs::world *world, Graphics::GraphicsContext &context,
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 auto LoadGltfModel(Graphics::GraphicsContext &context, const std::string &path,
                    flecs::world *world) -> Error {
+  ZoneScoped;
   /// Load the file into a data buffer.
 
   auto bytes = CHECK_RES(Filesystem::ReadFile(path));
@@ -1534,6 +1600,7 @@ auto LoadGltfModel(Graphics::GraphicsContext &context, const std::string &path,
   }
 
   std::unordered_set<size_t> parentIndices;
+  std::vector<std::pair<MeshVertexDataLoadInfo, MeshLoadInfo>> loadInfos;
 
   // loop through scenes
   for (const auto &glTFScene : asset->scenes) {
@@ -1542,9 +1609,33 @@ auto LoadGltfModel(Graphics::GraphicsContext &context, const std::string &path,
 
       parentIndices.emplace(nodeIndex);
 
-      CHECK_RES(
-          LoadNode(world, context, asset.get(), view, gltfNode, parentIndices));
+      CHECK_RES(LoadNode(world, context, asset.get(), view, gltfNode,
+                         parentIndices, loadInfos));
     }
+  }
+
+  std::vector<size_t> indices2(loadInfos.size());
+  std::ranges::iota(indices2, 0);
+  auto loadError = Error::Success();
+
+  std::for_each(std::execution::par, indices2.begin(), indices2.end(),
+                [&](const auto &index) -> auto {
+                  std::pair<MeshVertexDataLoadInfo, MeshLoadInfo> &infoPair =
+                      loadInfos.at(index);
+
+                  auto error =
+                      LoadMeshVertexData(infoPair.first, infoPair.second);
+                  if (error.IsError()) {
+                    loadError = error;
+                  }
+
+                  OptimiseMesh(infoPair.second);
+                });
+
+  CHECK_ERR(loadError);
+
+  for (auto &info : loadInfos) {
+    CHECK_ERR(LoadMesh(context, world, info.second, asset.get(), view));
   }
 
   {

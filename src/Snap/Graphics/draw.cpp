@@ -497,8 +497,13 @@ auto Dispatch(const GraphicsContext &context, const Math::Uvec3 &threadgroups)
 
   CHECK_ERR(InsertResourceBarriers(context));
 
-  DynamicRendering::CurrentStats.dispatchCalls++;
-  vkCmdDispatch(commandBuffer, threadgroups.x, threadgroups.y, threadgroups.z);
+  {
+    ZoneScopedN("Vk Dispatch");
+
+    DynamicRendering::CurrentStats.dispatchCalls++;
+    vkCmdDispatch(commandBuffer, threadgroups.x, threadgroups.y,
+                  threadgroups.z);
+  }
 
 #if Enable_Snapshots
   CaptureEvent(DispatchEvent(threadgroups.x, threadgroups.y, threadgroups.z));

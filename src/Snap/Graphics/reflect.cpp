@@ -12,6 +12,7 @@
 #include <cassert>
 #include <cstdint>
 #include <format>
+#include <public/tracy/Tracy.hpp>
 #include <variant>
 
 namespace Graphics::Reflect {
@@ -436,6 +437,8 @@ auto SetupResource(slang::VariableLayoutReflection *variableLayout,
 
 auto SetupFromType(slang::VariableLayoutReflection *variableLayout,
                    ShaderReflection &reflection) -> Result<ResourceInfo> {
+  ZoneScoped;
+
   auto *typeLayout = variableLayout->getTypeLayout();
   auto kind = typeLayout->getKind();
 
@@ -588,6 +591,7 @@ auto SetupFromType(slang::VariableLayoutReflection *variableLayout,
 auto ReflectShader(const Graphics::GraphicsContext &context,
                    slang::ProgramLayout *programLayout,
                    ShaderReflection &outReflection) -> Error {
+  ZoneScoped;
 
   /// Search parameters ///
   auto parameterCount = programLayout->getParameterCount();

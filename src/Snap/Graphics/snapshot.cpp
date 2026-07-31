@@ -384,9 +384,14 @@ auto GraphicsEvent::DrawStateImGui(ThreadSnapshot const *parent) const -> void {
                 state.viewport.x, state.viewport.y, state.viewport.width,
                 state.viewport.height);
   } else {
-    auto texture = state.colorAttachments.at(0).texture;
-    ImGui::Text("Viewport: x=0.00, y=0.00, width=%.2u, height=%.2u (Default)",
-                texture->GetWidth(), texture->GetHeight());
+    if (!state.colorAttachments.empty() &&
+        state.colorAttachments.at(0).texture) {
+      auto texture = state.colorAttachments.at(0).texture;
+      ImGui::Text("Viewport: x=0.00, y=0.00, width=%.2u, height=%.2u (Default)",
+                  texture->GetWidth(), texture->GetHeight());
+    } else {
+      ImGui::Text("Viewport: Unknown");
+    }
   }
 
   if (state.hasScissor) {
@@ -394,9 +399,14 @@ auto GraphicsEvent::DrawStateImGui(ThreadSnapshot const *parent) const -> void {
                 state.scissor.offset.x, state.scissor.offset.y,
                 state.scissor.extent.width, state.scissor.extent.height);
   } else {
-    auto texture = state.colorAttachments.at(0).texture;
-    ImGui::Text("Scissor: x=0, y=0, width=%u, height=%u (Default)",
-                texture->GetWidth(), texture->GetHeight());
+    if (!state.colorAttachments.empty() &&
+        state.colorAttachments.at(0).texture) {
+      auto texture = state.colorAttachments.at(0).texture;
+      ImGui::Text("Scissor: x=0, y=0, width=%u, height=%u (Default)",
+                  texture->GetWidth(), texture->GetHeight());
+    } else {
+      ImGui::Text("Scissor: Unknown");
+    }
   }
 };
 

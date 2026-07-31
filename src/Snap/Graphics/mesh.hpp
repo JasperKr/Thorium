@@ -122,6 +122,8 @@ struct Mesh : Object {
   }
 
   auto CreateBLAS(const GraphicsContext &context) -> Error {
+    ZoneScoped;
+
     BottomLevelAS = CHECK_RES(BLAS::Create(context, *this));
 
     return Error::Success();

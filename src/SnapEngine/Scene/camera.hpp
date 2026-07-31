@@ -141,8 +141,17 @@ struct Camera {
     // Bloom-Downsample Chain, encoded as b10g11r11_ufloat
     Renderer::RendertargetDescriptor BloomDownsampleChain;
 
-    // Shadow visibility array texture, encoded as r8_unorm
+    // Shadow visibility array texture, encoded as an array of r8_unorm
     Renderer::RendertargetDescriptor ShadowVisibility;
+
+    // Shadow hit flag array texture, encoded as r32ui
+    Renderer::RendertargetDescriptor ShadowHitFlags;
+
+    // Ambient occlusion texture, encoded as r8g8_unorm
+    Renderer::RendertargetDescriptor AmbientOcclusion;
+
+    // Ambient occlusion samples texture, encoded as r8_uint
+    Renderer::RendertargetDescriptor AmbientOcclusionSamples;
   };
 
   // References to the textures we currently own. Dynamic
@@ -161,6 +170,10 @@ struct Camera {
     Ref<Graphics::Texture> BloomDownsampleChain;
     Ref<Graphics::Texture> ShadowVisibility;
     Ref<Graphics::Texture> PreviousShadowVisibility;
+    Ref<Graphics::Texture> ShadowHitFlags;
+    Ref<Graphics::Texture> AmbientOcclusion;
+    Ref<Graphics::Texture> PreviousAmbientOcclusion;
+    Ref<Graphics::Texture> AmbientOcclusionSamples;
 
     void Reset() {
       Depth = nullptr;
@@ -176,6 +189,10 @@ struct Camera {
       BloomDownsampleChain = nullptr;
       ShadowVisibility = nullptr;
       PreviousShadowVisibility = nullptr;
+      ShadowHitFlags = nullptr;
+      AmbientOcclusion = nullptr;
+      PreviousAmbientOcclusion = nullptr;
+      AmbientOcclusionSamples = nullptr;
     }
   };
 
@@ -191,7 +208,11 @@ struct Camera {
     bool Irradiance = false;
     bool PostProcessed = false;
     bool BloomDownsampleChain = false;
-    bool ShadowVisibility = true;
+    bool ShadowVisibility = false;
+    bool ShadowHitFlags = false;
+    bool AmbientOcclusion = false;
+    bool PreviousAmbientOcclusion = false;
+    bool AmbientOcclusionSamples = false;
   };
 
   // NOLINTBEGIN

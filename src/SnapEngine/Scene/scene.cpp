@@ -46,6 +46,7 @@
 #include <flecs.h>
 #include <imgui.h>
 #include <lua.hpp>
+#include <public/tracy/Tracy.hpp>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -250,6 +251,8 @@ inline auto AddDrawItem(std::vector<DrawItem> &OpaqueDrawItems,
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 auto Scene::DrawModels(Camera &camera, Frustum &frustum,
                        const Graphics::GraphicsContext &context) -> Error {
+  ZoneScoped;
+
   // Pre-frame setup
   auto &renderer = Renderer::RendererInstance;
 
@@ -380,9 +383,17 @@ auto Scene::DrawModels(Camera &camera, Frustum &frustum,
   CHECK_ERR(
       renderer.GetModelTransformsBuffer()->GetBuffer()->SetData(ctx, span));
 
-  // Depth Opaque prepass
+  static auto albedoTextureKey = Graphics::ResourceKey{"AlbedoTexture"};
+  static auto normalTextureKey = Graphics::ResourceKey{"NormalTexture"};
+  static auto materialTextureKey = Graphics::ResourceKey{"MaterialTexture"};
+  static auto emissiveTextureKey = Graphics::ResourceKey{"EmissiveTexture"};
+  static auto depthBufferKey = Graphics::ResourceKey{"DepthTexture"};
+  static auto previousDepthBufferKey =
+      Graphics::ResourceKey{"PreviousDepthTexture"};
 
   const auto &rendertargets = camera.GetRendertargets();
+
+  // Depth Opaque prepass
 
   textures.Depth =
       CHECK_RES(Renderer::GlobalRenderTargetManager.GetRendertarget(
@@ -514,14 +525,6 @@ auto Scene::DrawModels(Camera &camera, Frustum &frustum,
   auto shader =
       CHECK_RES(manager.GetShader(Renderer::ShaderKey::SimpleLighting));
   CHECK_ERR(shader->Send(cameraBufferKey, cameraBuffer));
-  static auto albedoTextureKey = Graphics::ResourceKey{"AlbedoTexture"};
-  static auto normalTextureKey = Graphics::ResourceKey{"NormalTexture"};
-  static auto materialTextureKey = Graphics::ResourceKey{"MaterialTexture"};
-  static auto emissiveTextureKey = Graphics::ResourceKey{"EmissiveTexture"};
-  static auto depthBufferKey = Graphics::ResourceKey{"DepthTexture"};
-  static auto previousDepthBufferKey =
-      Graphics::ResourceKey{"PreviousDepthTexture"};
-
   CHECK_ERR(shader->Send(albedoTextureKey, textures.Albedo));
   CHECK_ERR(shader->Send(materialTextureKey, textures.Material));
   CHECK_ERR(shader->Send(emissiveTextureKey, textures.Emissive));
@@ -535,21 +538,21 @@ auto Scene::DrawModels(Camera &camera, Frustum &frustum,
 
   using K = Renderer::ShaderKey;
 
-  auto shadowDirectional = CHECK_RES(manager.GetShader(K::Shadows_Directional));
   auto shadowPoint = CHECK_RES(manager.GetShader(K::Shadows_Point));
   auto shadowSpot = CHECK_RES(manager.GetShader(K::Shadows_Spot));
   auto shadowSphere = CHECK_RES(manager.GetShader(K::Shadows_Sphere));
   auto shadowRectangle = CHECK_RES(manager.GetShader(K::Shadows_Rectangle));
+  auto shadowDenoise = CHECK_RES(manager.GetShader(K::Shadows_Denoise));
 
   CHECK_ERR(sendInfo(shader));
-  CHECK_ERR(sendInfo(shadowDirectional));
   // CHECK_ERR(sendInfo(shadowPoint));
   // CHECK_ERR(sendInfo(shadowSpot));
   // CHECK_ERR(sendInfo(shadowSphere));
   // CHECK_ERR(sendInfo(shadowRectangle));
+  CHECK_ERR(shadowDenoise->Send(depthBufferKey, textures.Depth));
 
   CHECK_ERR(
-      shadowDirectional->Send(previousDepthBufferKey, textures.PreviousDepth));
+      shadowDenoise->Send(previousDepthBufferKey, textures.PreviousDepth));
 
   auto countKey = Graphics::ResourceKey{"DirectionalLightCount"};
   CHECK_ERR(Graphics::UniformWriter::Send(
@@ -558,32 +561,71 @@ auto Scene::DrawModels(Camera &camera, Frustum &frustum,
       forward, countKey,
       renderer.GetSceneLightBuffers().DirectionalLightCount));
 
-  static auto tlasKey = Graphics::ResourceKey{"SceneBVH"};
-  CHECK_ERR(shadowDirectional->Send(tlasKey, renderer.GetSceneTLAS()));
-  CHECK_ERR(forward->Send(tlasKey, renderer.GetSceneTLAS()));
+  CHECK_ERR(renderer.BindLightBuffers(ctx, shader));
+  CHECK_ERR(renderer.BindLightBuffers(ctx, forward));
+
+  textures.ShadowHitFlags =
+      CHECK_RES(Renderer::GlobalRenderTargetManager.GetRendertarget(
+          context, rendertargets.ShadowHitFlags));
+
+  // clang-format off
+  static Graphics::ResourceKey LightIndexKey = {"PushConstants", "LightIndex"};
+  static Graphics::ResourceKey LayerOffsetKey = {"PushConstants", "LayerOffset"};
+  static Graphics::ResourceKey OutputTextureKey = {"OutputTexture"};
+  static Graphics::ResourceKey PreviousOutputTextureKey = {"PreviousOutputTexture"};
+  static Graphics::ResourceKey MotionTextureKey = {"MotionTexture"};
+  static Graphics::ResourceKey RayHitFlagsTextureKey = {"RayHitTexture"};
 
   static auto blueNoiseTextureKey = Graphics::ResourceKey{"BlueNoiseTexture"};
   auto &blueNoiseTex = renderer.GetBlueNoiseTexture();
-  CHECK_ERR(shadowDirectional->Send(blueNoiseTextureKey, blueNoiseTex));
+
+
+  auto shadowDirectional = CHECK_RES(manager.GetShader(K::Shadows_Directional));
+  CHECK_ERR(shadowDirectional->Send(depthBufferKey, textures.Depth));
+  CHECK_ERR(shadowDirectional->Send(normalTextureKey, textures.Normal));
+
+  static auto rndStateKey =
+      Graphics::ResourceKey{"PushConstants", "FrameRandomState"};
+  auto frameRandomState = Math::Random(0, 255); // NOLINT
+  CHECK_ERR(Graphics::UniformWriter::Send(shadowDirectional, rndStateKey,
+                                          frameRandomState));
+
   // CHECK_ERR(shadowPoint->Send(blueNoiseTextureKey, blueNoiseTex));
   // CHECK_ERR(shadowSpot->Send(blueNoiseTextureKey, blueNoiseTex));
   // CHECK_ERR(shadowSphere->Send(blueNoiseTextureKey, blueNoiseTex));
   // CHECK_ERR(shadowRectangle->Send(blueNoiseTextureKey, blueNoiseTex));
   CHECK_ERR(forward->Send(blueNoiseTextureKey, blueNoiseTex));
-  static auto rndStateKey =
-      Graphics::ResourceKey{"PushConstants", "FrameRandomState"};
-  auto frameRandomState = Math::Random(0xFF, 0x0FFFFFFF); // NOLINT
 
   CHECK_ERR(
       Graphics::UniformWriter::Send(shader, rndStateKey, frameRandomState));
   CHECK_ERR(
       Graphics::UniformWriter::Send(forward, rndStateKey, frameRandomState));
-  CHECK_ERR(Graphics::UniformWriter::Send(shadowDirectional, rndStateKey,
-                                          frameRandomState));
 
-  CHECK_ERR(renderer.BindLightBuffers(ctx, shader));
-  CHECK_ERR(renderer.BindLightBuffers(ctx, forward));
+  static auto tlasKey = Graphics::ResourceKey{"SceneBVH"};
+  CHECK_ERR(shadowDirectional->Send(tlasKey, renderer.GetSceneTLAS()));
+  CHECK_ERR(shadowDirectional->Send(blueNoiseTextureKey, blueNoiseTex));
+  CHECK_ERR(forward->Send(tlasKey, renderer.GetSceneTLAS()));
+
   CHECK_ERR(renderer.BindLightBuffers(ctx, shadowDirectional));
+
+  CHECK_ERR(Graphics::UniformWriter::Send(shadowDirectional, LayerOffsetKey, 0U));
+  CHECK_ERR(Graphics::UniformWriter::Send(shadowDirectional, LightIndexKey, 0U));
+  CHECK_ERR(shadowDirectional->Send(cameraBufferKey, cameraBuffer));
+  CHECK_ERR(shadowDirectional->Send(OutputTextureKey, textures.ShadowHitFlags));
+
+  auto shadowsReset = CHECK_RES(manager.GetShader(Renderer::ShaderKey::Shadows_ClearHitFlags));
+  CHECK_ERR(shadowsReset->Send(OutputTextureKey, textures.ShadowHitFlags));
+
+  auto width = textures.ShadowHitFlags->GetWidth();
+  auto height = textures.ShadowHitFlags->GetHeight();
+
+  Graphics::DynamicRendering::SetShader(shadowsReset);
+
+  CHECK_ERR(Graphics::DispatchWithin(ctx, Math::Uvec3(width / 4, height / 4, 1)));
+
+  Graphics::DynamicRendering::SetShader(shadowDirectional);
+
+  CHECK_ERR(Graphics::DispatchWithin(ctx, Math::Uvec3(width, height, 1)));
 
   textures.ShadowVisibility =
       CHECK_RES(Renderer::GlobalRenderTargetManager.GetRendertarget(
@@ -595,31 +637,77 @@ auto Scene::DrawModels(Camera &camera, Frustum &frustum,
             context, rendertargets.ShadowVisibility));
   }
 
-  Graphics::DynamicRendering::SetShader(shadowDirectional);
+  CHECK_ERR(Graphics::UniformWriter::Send(shadowDenoise, LayerOffsetKey, 0U));
+  CHECK_ERR(shadowDenoise->Send(cameraBufferKey, cameraBuffer));
+  CHECK_ERR(shadowDenoise->Send(OutputTextureKey, textures.ShadowVisibility));
+  CHECK_ERR(shadowDenoise->Send(MotionTextureKey, textures.Motion));
+  CHECK_ERR(shadowDenoise->Send(PreviousOutputTextureKey,
+                                textures.PreviousShadowVisibility));
+  CHECK_ERR(
+      shadowDenoise->Send(RayHitFlagsTextureKey, textures.ShadowHitFlags));
 
-  // clang-format off
-  static Graphics::ResourceKey LightIndexKey = {"PushConstants", "LightIndex"};
-  static Graphics::ResourceKey LayerOffsetKey = {"PushConstants", "LayerOffset"};
-  static Graphics::ResourceKey FrameRandomStateKey = {"PushConstants", "FrameRandomState"};
-  static Graphics::ResourceKey OutputTextureKey = {"OutputTexture"};
-  static Graphics::ResourceKey PreviousOutputTextureKey = {"PreviousOutputTexture"};
-  static Graphics::ResourceKey MotionTextureKey = {"MotionTexture"};
+  Graphics::DynamicRendering::SetShader(shadowDenoise);
 
-  CHECK_ERR(Graphics::UniformWriter::Send(shadowDirectional, FrameRandomStateKey, frameRandomState));
-  CHECK_ERR(Graphics::UniformWriter::Send(shadowDirectional, LayerOffsetKey, 0U)); // NOLINT
-  CHECK_ERR(Graphics::UniformWriter::Send(shadowDirectional, LightIndexKey, 0U)); // NOLINT
-  CHECK_ERR(shadowDirectional->Send(OutputTextureKey, textures.ShadowVisibility));
-  CHECK_ERR(shadowDirectional->Send(cameraBufferKey, cameraBuffer));
-  CHECK_ERR(shadowDirectional->Send(MotionTextureKey, textures.Motion));
-  CHECK_ERR(shadowDirectional->Send(PreviousOutputTextureKey, textures.PreviousShadowVisibility));
+  CHECK_ERR(Graphics::DispatchWithin(ctx, Math::Uvec3(width, height, 1)));
 
-  CHECK_ERR(Graphics::DispatchWithin(ctx,
-    Math::Uvec3(textures.ShadowVisibility->GetWidth(), textures.ShadowVisibility->GetHeight(), 1)));
   // clang-format on
 
-  CHECK_ERR(Renderer::GlobalRenderTargetManager.ReleaseRendertarget(
-      textures.PreviousShadowVisibility));
+  Graphics::PopDebugMarker();
+  Graphics::PushDebugMarker("Ambient Occlusion");
+
+  textures.AmbientOcclusionSamples =
+      CHECK_RES(Renderer::GlobalRenderTargetManager.GetRendertarget(
+          context, rendertargets.AmbientOcclusionSamples));
+  if (!textures.PreviousAmbientOcclusion.isValid()) {
+    textures.PreviousAmbientOcclusion =
+        CHECK_RES(Renderer::GlobalRenderTargetManager.GetRendertarget(
+            context, rendertargets.AmbientOcclusion));
+  }
+
+  auto ambientOcclusionShader =
+      CHECK_RES(manager.GetShader(Renderer::ShaderKey::RTAO));
+  CHECK_ERR(ambientOcclusionShader->Send(depthBufferKey, textures.Depth));
+  CHECK_ERR(ambientOcclusionShader->Send(normalTextureKey, textures.Normal));
+  CHECK_ERR(ambientOcclusionShader->Send(blueNoiseTextureKey, blueNoiseTex));
+  CHECK_ERR(ambientOcclusionShader->Send(cameraBufferKey, cameraBuffer));
+  CHECK_ERR(ambientOcclusionShader->Send(tlasKey, renderer.GetSceneTLAS()));
+  CHECK_ERR(ambientOcclusionShader->Send(OutputTextureKey,
+                                         textures.AmbientOcclusionSamples));
+  CHECK_ERR(Graphics::UniformWriter::Send(ambientOcclusionShader, rndStateKey,
+                                          frameRandomState));
+
+  Graphics::DynamicRendering::SetShader(ambientOcclusionShader);
+
+  CHECK_ERR(Graphics::DispatchWithin(ctx, Math::Uvec3(width, height, 1)));
+
+  textures.AmbientOcclusion =
+      CHECK_RES(Renderer::GlobalRenderTargetManager.GetRendertarget(
+          context, rendertargets.AmbientOcclusion));
+
+  auto aoDenoiseShader =
+      CHECK_RES(manager.GetShader(Renderer::ShaderKey::AO_Denoise));
+  CHECK_ERR(aoDenoiseShader->Send(depthBufferKey, textures.Depth));
+  CHECK_ERR(
+      aoDenoiseShader->Send(previousDepthBufferKey, textures.PreviousDepth));
+  CHECK_ERR(aoDenoiseShader->Send(MotionTextureKey, textures.Motion));
+  CHECK_ERR(aoDenoiseShader->Send(RayHitFlagsTextureKey,
+                                  textures.AmbientOcclusionSamples));
+  CHECK_ERR(aoDenoiseShader->Send(cameraBufferKey, cameraBuffer));
+  CHECK_ERR(aoDenoiseShader->Send(PreviousOutputTextureKey,
+                                  textures.PreviousAmbientOcclusion));
+  CHECK_ERR(aoDenoiseShader->Send(OutputTextureKey, textures.AmbientOcclusion));
+
+  Graphics::DynamicRendering::SetShader(aoDenoiseShader);
+
+  CHECK_ERR(Graphics::DispatchWithin(ctx, Math::Uvec3(width, height, 1)));
+
+  Graphics::PopDebugMarker();
+
+  CHECK_ERR(Renderer::GlobalRenderTargetManager.ReleaseRendertargets(
+      {textures.PreviousShadowVisibility, textures.ShadowHitFlags,
+       textures.AmbientOcclusionSamples, textures.PreviousAmbientOcclusion}));
   textures.PreviousShadowVisibility = textures.ShadowVisibility;
+  textures.PreviousAmbientOcclusion = textures.AmbientOcclusion;
 
   Graphics::DynamicRendering::SetShader(shader);
   static Graphics::ResourceKey ShadowVisibilityTextureKey = {

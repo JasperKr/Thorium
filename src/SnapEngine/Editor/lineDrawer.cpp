@@ -101,8 +101,8 @@ auto LineDrawer::Initialize(const Graphics::GraphicsContext &context) -> Error {
 
   Mesh = CHECK_RES(Graphics::Mesh::Create(context, info));
 
-  Shader = CHECK_RES(
-      Graphics::Shader::Create(context, "GUI/lineDrawer", "Line shader"));
+  Shader = CHECK_RES(Graphics::Shader::Create(
+      context, "Graphics/Shaders/GUI/lineDrawer", "Line shader"));
 
   return {};
 }

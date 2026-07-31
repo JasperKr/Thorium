@@ -1187,7 +1187,6 @@ inline auto BeginRendering(const GraphicsContext &context) -> Error {
 }
 
 auto EndRendering(const GraphicsContext &context) -> void {
-  ZoneScoped;
   if (GetIsCurrentlyRendering()) {
     [[unlikely]]
     if (Graphics::GetCommandBuffer() == VK_NULL_HANDLE) {

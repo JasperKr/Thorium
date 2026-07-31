@@ -81,4 +81,7 @@ auto IsCompressedTexture(VkFormat format) -> bool;
 
 auto IsDDS(const std::span<const uint8_t> &data) -> bool;
 
+auto IsNormalisedFormat(VkFormat format) -> bool;
+auto IsIntegerFormat(VkFormat format) -> bool;
+
 } // namespace Image

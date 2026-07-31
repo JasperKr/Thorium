@@ -78,6 +78,18 @@ public float3 RandomHemisphereDirection(float3 normal, uint state) {
   return dir * sign(dot(normal, dir));
 }
 
+public float3 RandomHemisphereDirection(float3 normal, float rnd0, float rnd1) {
+  float z = 2.0 * rnd0 - 1.0;
+  float phi = TWO_PI * rnd1;
+
+  float r = sqrt(1.0 - z * z);
+  float s, c;
+  sincos(phi, s, c);
+
+  float3 dir = float3(r * c, r * s, z);
+  return dir * sign(dot(normal, dir));
+}
+
 public float2 RandomHemisphereDirection(float2 normal, uint state) {
   float2 dir = RandomDirection2D(state);
   return dir * sign(dot(normal, dir));

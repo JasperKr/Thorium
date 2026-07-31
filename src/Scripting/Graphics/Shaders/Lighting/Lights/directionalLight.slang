@@ -50,15 +50,15 @@ public struct DirectionalLight : ILight {
                                           const uint frameRandomState) {
     DirectionalLight light = DirectionalLights[LightIndex];
 
-    const float3 LocalForward = float3(0.0f, 0.0f, 1.0f);
-    const float3 LocalUp = float3(0.0f, 1.0f, 0.0f);
-    const float3 WorldForward = Rotate(LocalForward, light.Base.Rotation);
-    const float3 WorldUp = Rotate(LocalUp, light.Base.Rotation);
+    const float3 WorldForward =
+        Rotate(float3(0.0f, 0.0f, 1.0f), light.Base.Rotation);
+    const float3 WorldUp =
+        Rotate(float3(0.0f, 1.0f, 0.0f), light.Base.Rotation);
 
     float NoL = dot(Normal, WorldForward);
-    // if (NoL <= 0.0f) {
-    //   return true;
-    // }
+    if (NoL <= 0.0f) {
+      return true;
+    }
 
     screenCoords += uint2(frameRandomState, frameRandomState * 84313U);
 
@@ -80,7 +80,7 @@ public struct DirectionalLight : ILight {
     ray.TMin = 0.01f;
     ray.TMax = 1e4f;
 
-    return TraceShadowRay(SceneBVH, ray);
+    return TraceAnyHitRay(SceneBVH, ray);
   }
 
   public static override float3 SampleAll(const float3 WorldPosition,

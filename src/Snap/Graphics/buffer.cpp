@@ -403,6 +403,11 @@ auto Buffer::Create(const GraphicsContext &context,
   PrintDebug("Buffer size in bytes: {}", buffer->sizeInBytes);
   buffer->lastUsedTimestamp = 0;
 
+  // {
+  //   std::lock_guard<std::mutex> lock(Barrier::GraphicsResourcesMutex);
+  //   Barrier::GraphicsResources.emplace_back(buffer.get());
+  // }
+
   return buffer;
 }
 
@@ -721,6 +726,11 @@ auto Buffer::Readback(const GraphicsContext &context,
 
 Buffer::~Buffer() {
   auto *context = GetCurrentGraphicsContext();
+
+  // {
+  //   std::lock_guard<std::mutex> lock(Barrier::GraphicsResourcesMutex);
+  //   Utils::UnorderedErase(Barrier::GraphicsResources, this);
+  // }
 
   ScheduleDestruction(
       BufferMemory{

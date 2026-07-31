@@ -85,6 +85,8 @@ auto LuaLightProbe::Create(lua_State *state) -> int {
 }
 
 auto LuaLightProbe::Render(lua_State *state) -> int {
+  ZoneScoped;
+
   auto obj = LUA_CK_NULL(::LuaWrap::ObjectFromLua<LuaLightProbe>(state, 1));
   auto *lightProbe = LUA_CK_NULL(obj->entity.try_get_mut<LightProbe>());
   const auto *transform = LUA_CK_NULL(obj->entity.try_get<Transform>());

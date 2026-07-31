@@ -14,5 +14,6 @@
         "include/": true,
         "external/": true,
         "third_party/": true
-    }
+    },
+    "chat.disableAIFeatures": true
 }

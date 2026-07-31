@@ -148,11 +148,11 @@ auto ApplyDefaultStyle(UIStyles uiStyle) -> Error {
   colors[ImGuiCol_PlotHistogramHovered] = ToImVec4(Accent(tertiary));
 
   // Tables
-  colors[ImGuiCol_TableHeaderBg] = ToImVec4(secondary);
+  colors[ImGuiCol_TableHeaderBg] = ToImVec4(primary);
   colors[ImGuiCol_TableBorderStrong] = ToImVec4(Accent(primary));
-  colors[ImGuiCol_TableBorderLight] = ToImVec4(Accent(primary, 2.0F));
-  colors[ImGuiCol_TableRowBg] = ToImVec4(Accent(primary, 2.5F));
-  colors[ImGuiCol_TableRowBgAlt] = ToImVec4(Accent(primary, 3.0F));
+  colors[ImGuiCol_TableBorderLight] = ToImVec4(Accent(primary, 1.1F));
+  colors[ImGuiCol_TableRowBg] = ToImVec4(Accent(primary, 1.2F));
+  colors[ImGuiCol_TableRowBgAlt] = ToImVec4(Accent(primary, 1.3F));
 
   // Misc
   colors[ImGuiCol_TextLink] = ToImVec4(Accent(secondary));
