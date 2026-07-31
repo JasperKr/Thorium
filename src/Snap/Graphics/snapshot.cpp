@@ -4,6 +4,10 @@
 #include "Graphics/format.hpp"
 #include "Graphics/graphics.hpp"
 #include "Modules/Helpers/utils.hpp"
+#include "Modules/Math/packedColor.hpp"
+#include "Modules/Math/vector.hpp"
+#include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <imgui.h>
 #include <memory>
@@ -13,113 +17,6 @@
 #include <vulkan/vulkan_core.h>
 
 namespace Graphics::Snapshot {
-
-auto EventTypeToString(EventType type) -> const char * {
-  switch (type) {
-  case EventType::Create_Buffer:
-    return "Create buffer";
-  case EventType::Create_Texture:
-    return "Create texture";
-  case EventType::Create_Pipeline:
-    return "Create pipeline";
-  case EventType::Create_DescriptorSet:
-    return "Create descriptor set";
-  case EventType::Create_Sampler:
-    return "Create sampler";
-  case EventType::Create_ShaderModule:
-    return "Create shader module";
-  case EventType::Destroy_Buffer:
-    return "Destroy buffer";
-  case EventType::Destroy_Texture:
-    return "Destroy texture";
-  case EventType::Destroy_Pipeline:
-    return "Destroy pipeline";
-  case EventType::Destroy_DescriptorSet:
-    return "Destroy descriptor set";
-  case EventType::Destroy_Sampler:
-    return "Destroy sampler";
-  case EventType::Destroy_ShaderModule:
-    return "Destroy shader module";
-  case EventType::Structured_Buffer_Upload:
-    return "Structured buffer upload";
-  case EventType::Upload_To_Buffer:
-    return "Upload to buffer";
-  case EventType::Upload_To_Texture:
-    return "Upload to texture";
-  case EventType::Copy_Buffer_To_Buffer:
-    return "Copy buffer to buffer";
-  case EventType::Copy_Buffer_To_Texture:
-    return "Copy buffer to texture";
-  case EventType::Copy_Texture_To_Buffer:
-    return "Copy texture to buffer";
-  case EventType::Copy_Texture_To_Texture:
-    return "Copy texture to texture";
-  case EventType::Draw:
-    return "Draw";
-  case EventType::DrawIndexed:
-    return "Draw indexed";
-  case EventType::DrawIndirect:
-    return "Draw indirect";
-  case EventType::DrawIndexedIndirect:
-    return "Draw indexed indirect";
-  case EventType::Dispatch:
-    return "Dispatch";
-  case EventType::DispatchIndirect:
-    return "Dispatch indirect";
-  case EventType::Set_Pipeline:
-    return "Set pipeline";
-  case EventType::Set_DescriptorSet:
-    return "Set descriptor set";
-  case EventType::Set_VertexBuffer:
-    return "Set vertex buffer";
-  case EventType::Set_IndexBuffer:
-    return "Set index buffer";
-  case EventType::Set_PushConstants:
-    return "Set push constants";
-  case EventType::Barrier:
-    return "Barrier";
-  default:
-    return "Unknown";
-  }
-}
-
-// NOLINTNEXTLINE(readability-function-cognitive-complexity)
-auto EventTypeFromString(const std::string &str) -> EventType {
-  // clang-format off
-  if (str == "Create buffer") { return EventType::Create_Buffer; }
-  if (str == "Create texture") { return EventType::Create_Texture; }
-  if (str == "Create pipeline") { return EventType::Create_Pipeline; }
-  if (str == "Create descriptor set") { return EventType::Create_DescriptorSet; }
-  if (str == "Create sampler") { return EventType::Create_Sampler; }
-  if (str == "Create shader module") { return EventType::Create_ShaderModule; }
-  if (str == "Destroy buffer") { return EventType::Destroy_Buffer; }
-  if (str == "Destroy texture") { return EventType::Destroy_Texture; }
-  if (str == "Destroy pipeline") { return EventType::Destroy_Pipeline; }
-  if (str == "Destroy descriptor set") { return EventType::Destroy_DescriptorSet; }
-  if (str == "Destroy sampler") { return EventType::Destroy_Sampler; }
-  if (str == "Destroy shader module") { return EventType::Destroy_ShaderModule; }
-  if (str == "Structured buffer upload") { return EventType::Structured_Buffer_Upload; }
-  if (str == "Upload to buffer") { return EventType::Upload_To_Buffer; }
-  if (str == "Upload to texture") { return EventType::Upload_To_Texture; }
-  if (str == "Copy buffer to buffer") { return EventType::Copy_Buffer_To_Buffer; }
-  if (str == "Copy buffer to texture") { return EventType::Copy_Buffer_To_Texture; }
-  if (str == "Copy texture to buffer") { return EventType::Copy_Texture_To_Buffer; }
-  if (str == "Copy texture to texture") { return EventType::Copy_Texture_To_Texture; }
-  if (str == "Draw") { return EventType::Draw; }
-  if (str == "Draw indexed") { return EventType::DrawIndexed; }
-  if (str == "Draw indirect") { return EventType::DrawIndirect; }
-  if (str == "Draw indexed indirect") { return EventType::DrawIndexedIndirect; }
-  if (str == "Dispatch") { return EventType::Dispatch; }
-  if (str == "Dispatch indirect") { return EventType::DispatchIndirect; }
-  if (str == "Set pipeline") { return EventType::Set_Pipeline; }
-  if (str == "Set descriptor set") { return EventType::Set_DescriptorSet; }
-  if (str == "Set vertex buffer") { return EventType::Set_VertexBuffer; }
-  if (str == "Set index buffer") { return EventType::Set_IndexBuffer; }
-  if (str == "Set push constants") { return EventType::Set_PushConstants; }
-  if (str == "Barrier") { return EventType::Barrier; }
-  return EventType::Unknown;
-  // clang-format on
-}
 
 auto GetInternalSnapshot() -> ThreadSnapshot & {
   thread_local ThreadSnapshot currentSnapshot(
@@ -148,6 +45,7 @@ auto StartSnapshot() -> void {
   currentSnapshot.threadName = Graphics::ContextDebugname;
   currentSnapshot.active = true;
 }
+
 auto EndSnapshot() -> void {
   auto &currentSnapshot = GetInternalSnapshot();
   currentSnapshot.active = false;
@@ -156,27 +54,165 @@ auto EndSnapshot() -> void {
   // currentSnapshot.threadName = {};
   // currentSnapshot.events = std::vector<std::unique_ptr<Event>>{};
 }
+
+inline auto DrawLegendItem(const char *name, ImU32 color) {
+  auto *drawList = ImGui::GetWindowDrawList();
+
+  float height = ImGui::GetTextLineHeightWithSpacing();
+  const float radius = 7.0F;
+
+  ImVec2 cursor = ImGui::GetCursorScreenPos();
+
+  auto center = cursor;
+  center.x += radius;
+  center.y += height / 2.0F; // NOLINT
+
+  drawList->AddCircleFilled(center, radius, color);
+  drawList->AddCircle(center, radius, 0x2d2d2d); // NOLINT
+
+  ImGui::SetCursorScreenPos(
+      {cursor.x + radius * 2.0F + 4.0F, cursor.y}); // NOLINT
+  ImGui::Text("%s", name);
+}
+
+auto DrawPipelineStage(VkPipelineStageFlagBits2 stage) {
+  auto infoIter = PipelineStageUiInfo.find(stage);
+  if (infoIter == PipelineStageUiInfo.end()) {
+    return;
+  }
+
+  DrawLegendItem(infoIter->second.second, infoIter->second.first);
+}
+
+auto DrawPipelineStages(VkPipelineStageFlagBits2 stages) {
+  for (auto flag : Utils::FlagRange(stages)) {
+    DrawPipelineStage(flag);
+  }
+}
+
+auto DrawShaderStage(VkShaderStageFlagBits stage) {
+  auto infoIter = ShaderStageUiInfo.find(stage);
+  if (infoIter == ShaderStageUiInfo.end()) {
+    return;
+  }
+
+  DrawLegendItem(infoIter->second.second, infoIter->second.first);
+}
+auto DrawShaderStages(VkShaderStageFlagBits stages) {
+  for (auto flag : Utils::FlagRange(static_cast<uint32_t>(stages))) {
+    DrawShaderStage(static_cast<VkShaderStageFlagBits>(flag));
+  }
+}
+
+enum class TextRenderMode : uint8_t { None, Initials, Full };
+
+auto GetTextRenderMode(float widthAvailable) {
+  auto mode = TextRenderMode::None;
+  auto singleCharSize = ImGui::CalcTextSize("W").x;
+
+  if (widthAvailable > singleCharSize * 4) {
+    mode = TextRenderMode::Full;
+  } else if (widthAvailable > singleCharSize) {
+    mode = TextRenderMode::Initials;
+  }
+
+  return mode;
+}
+
 auto RenderSnapshot(const ThreadSnapshot &snapshot) -> void {
   int index = 1;
+
+  if (snapshot.events.empty()) {
+    return;
+  }
+
+  /*
+  if (ImGui::BeginTable("Events", 1,
+                        ImGuiTableFlags_RowBg |
+                            ImGuiTableFlags_BordersInnerV)) {
+    for (const auto &event : snapshot.events) {
+      ImGui::PushID(index++);
+
+      ImGui::TableNextRow();
+      ImGui::TableNextColumn();
+
+      if (ImGui::TreeNode(
+              "", "%s", EventTypeStringHelper.ToString(event->type).data())) {
+
+        event->DrawImGui(&snapshot);
+        ImGui::TreePop();
+      }
+      ImGui::PopID();
+    }
+
+    ImGui::EndTable();
+  } // namespace Graphics::Snapshot
+  */
+
+  float offset{};
+  float lineHeight = ImGui::GetTextLineHeightWithSpacing();
+
+  const ImU32 defaultCol = ImColor(0.6F, 0.6F, 0.6F);
+  const ImU32 barrierCol = ImColor(0.6F, 0.45F, 0.4F);
+  const ImU32 layoutCol = ImColor(0.4F, 0.45F, 0.6F);
+  const ImU32 endRenderingCol = ImColor(0.9F, 0.2F, 0.1F);
+
+  float charWidth = ImGui::CalcTextSize("W").x;
+
   if (ImGui::Begin("Snapshot Viewer")) {
-    if (ImGui::BeginTable("Events", 1,
-                          ImGuiTableFlags_RowBg |
-                              ImGuiTableFlags_BordersInnerV)) {
-      for (const auto &event : snapshot.events) {
-        ImGui::PushID(index++);
+    auto *list = ImGui::GetWindowDrawList();
 
-        ImGui::TableNextRow();
-        ImGui::TableNextColumn();
+    static Math::Vec2 cameraPosition;
+    static float cameraZoom;
 
-        if (ImGui::TreeNode("", "%s", EventTypeToString(event->type))) {
+    float widthAvailable = ImGui::GetContentRegionAvail().x;
+    float itemSize = widthAvailable /
+                     static_cast<float>(std::max(1UL, snapshot.events.size()));
 
-          event->DrawImGui(&snapshot);
-          ImGui::TreePop();
-        }
-        ImGui::PopID();
+    float yOffset = ImGui::GetCursorPosY();
+    float rounding = ImGui::GetStyle().FrameRounding;
+
+    ImVec2 mousePosition = ImGui::GetMousePos();
+
+    for (const auto &event : snapshot.events) {
+      ImGui::PushID(index++);
+
+      ImVec2 min = {offset, yOffset};
+      offset += itemSize;
+      ImVec2 size = {itemSize - 1, lineHeight};
+      ImU32 color = defaultCol;
+
+      if (event->type == EventType::Barrier) {
+        min.y += lineHeight;
+        color = barrierCol;
+      } else if (event->type == EventType::LayoutTransition) {
+        min.y += lineHeight * 2;
+        color = layoutCol;
+      } else if (event->type == EventType::EndRendering) {
+        min.y += lineHeight * 3;
+        color = endRenderingCol;
       }
 
-      ImGui::EndTable();
+      min.x += ImGui::GetWindowPos().x;
+      min.y += ImGui::GetWindowPos().y;
+
+      ImVec2 max = {min.x + size.x, min.y + size.y};
+
+      list->AddRectFilled(min, max, color, rounding);
+
+      if (size.x - 4 > charWidth) {
+        max.x -= 4;
+        min.x += 2;
+
+        list->PushClipRect(min, max, false);
+
+        ImGui::SetCursorScreenPos(min);
+        ImGui::Text("%s", EventTypeStringHelper.ToString(event->type).data());
+
+        list->PopClipRect();
+      }
+
+      ImGui::PopID();
     }
   }
   ImGui::End();
@@ -900,6 +936,7 @@ inline auto AccessFlag2ToString(VkAccessFlags2 flag) {
 auto BarrierEvent::DrawVariantImGui(ThreadSnapshot const *parent) const
     -> void {
 
+  ImGui::Text("Acting on resource: %lu", resourceId);
   ImGui::Text("Source Stages:");
   ImGui::Indent();
   if (sync.srcStages == 0) {

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Modules/Helpers/hasher.hpp"
+#include "Modules/stackVector.hpp"
 #include <forward_list>
 #include <optional>
 #include <string>
@@ -127,7 +128,11 @@ struct KeyElement {
   }
 };
 
-using ResourceKey = std::vector<KeyElement>;
+// While a max limit on resource depth is a bit annoying
+// Allowing stack allocation of resource keys is probably worth it for performance reasons
+constexpr size_t MAX_KEY_ELEMENTS = 8;
+
+using ResourceKey = Math::StackVector<KeyElement, MAX_KEY_ELEMENTS>;
 
 struct ResourceKeyHash {
   auto operator()(const ResourceKey &key) const -> size_t {

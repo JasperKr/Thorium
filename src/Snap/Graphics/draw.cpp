@@ -109,6 +109,7 @@ auto CreateQuad01Mesh(const Graphics::GraphicsContext &context)
 
 using namespace Snapshot;
 
+// NOLINTNEXTLINE
 auto BindMesh(const GraphicsContext &context, VkCommandBuffer cmdBuffer,
               const Mesh &mesh) -> Error {
   ZoneScoped;

@@ -3,13 +3,23 @@
 #include <array>
 #include <cassert>
 #include <cstddef>
+#include <iterator>
 #include <utility>
 
 namespace Math {
 
 template <typename T, size_t N> struct StackVector {
+  using StorageType = std::array<T, N>;
+  using const_iterator = typename StorageType::const_iterator;
+
   constexpr StackVector() = default;
   constexpr ~StackVector() = default;
+
+  constexpr StackVector(std::initializer_list<T> init) {
+    assert(init.size() <= N && "StackVector initializer list exceeds capacity");
+    std::copy(init.begin(), init.end(), storage.begin());
+    currentSize = init.size();
+  }
 
   StackVector(StackVector &&) = default;
   StackVector(const StackVector &) = default;
@@ -161,16 +171,22 @@ template <typename T, size_t N> struct StackVector {
     ++currentSize;
   }
 
-  constexpr auto insert(T *thisStart, T *otherBegin, T *otherEnd) -> void {
-    auto otherSize = static_cast<size_t>(otherEnd - otherBegin);
-    assert(currentSize + otherSize <= N && "StackVector capacity exceeded");
+  template <class InputIt>
+  constexpr void insert(const_iterator pos, InputIt first, InputIt last) {
+    size_t index = pos - storage.data();
+    auto count = std::distance(first, last);
 
-    for (size_t i = 0; i < otherSize; ++i) {
-      // NOLINTNEXTLINE
-      storage[currentSize + i] = std::move(otherBegin[i]);
+    assert(currentSize + count <= N && "StackVector capacity exceeded");
+
+    for (size_t i = currentSize + count; i-- > index + count;) {
+      storage[i] = std::move(storage[i - count]);
     }
 
-    currentSize += otherSize;
+    for (size_t i = 0; i < count; ++i, ++first) {
+      storage[index + i] = *first;
+    }
+
+    currentSize += count;
   }
 
   constexpr auto erase(size_t index) -> void {

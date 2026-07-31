@@ -7,6 +7,7 @@
 #include "Modules/error.hpp"
 #include "Modules/image.hpp"
 #include "Modules/imageData.hpp"
+#include "Modules/localState.hpp"
 #include "Modules/object.hpp"
 #include "Modules/type.hpp"
 #include <atomic>
@@ -49,7 +50,7 @@ enum class TextureUsage : uint8_t {
   TransferSrc,
   TransferDst,
   PresentSrc,
-  Swapchain, // Just aquired from the swapchain
+  Swapchain, // Just acquired from the swapchain
   Unknown,
 };
 
@@ -61,7 +62,8 @@ enum class TextureMipmapOption : uint8_t {
 
 extern std::unordered_map<std::pair<VkFormat, TextureType>, Ref<struct Texture>,
                           struct VkFormatTextureTypeHash>
-    DefaultTextureCache; // NOLINT
+    DefaultTextureCache;                    // NOLINT
+extern std::mutex DefaultTextureCacheMutex; // NOLINT
 
 auto UnloadModule() -> void;
 
@@ -110,6 +112,16 @@ struct TextureCreationInfo {
   TextureType textureType = TextureType::ENUM_MAX;
 };
 
+struct ImageState {
+  VkPipelineStageFlagBits2 lastPipelineStage =
+      VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT;
+  VkImageLayout currentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+  TextureUsage lastUsage = TextureUsage::Unknown;
+
+  // Not for destruction, initialized to UINT64_MAX, since frame 0 is valid
+  uint64_t lastUsedFrame = UINT64_MAX;
+};
+
 struct ImageMemory : Barrier::BarrierSynced {
   ImageMemory() = default;
   ImageMemory(const ImageMemory &) = delete;
@@ -127,14 +139,35 @@ struct ImageMemory : Barrier::BarrierSynced {
   uint64_t lastUsedTimestamp{};
 
   VkFormat format = VK_FORMAT_UNDEFINED;
-  size_t mipmapcount{};
+  size_t mipmapcount{1};
   size_t arrayLayers{1};
   VkImageUsageFlags usage{};
 
-  VkPipelineStageFlagBits2 lastPipelineStage =
-      VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT;
-  VkImageLayout currentLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-  TextureUsage lastUsage = TextureUsage::Unknown;
+  // Actual state of the image. Should never be accessed in any graphics thread
+  // Including the main thread. Only relevant to the reordering thread while reordering.
+  mutable ImageState currentState;
+
+  static ThreadLocalState<ImageState> ImageStateManager;
+  [[nodiscard]] auto GetState() const -> ImageState &;
+
+  auto UseAs(const GraphicsContext &context, TextureUsage newUsage,
+             VkPipelineStageFlags2 stage,
+             VkAttachmentLoadOp loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+             VkAttachmentStoreOp storeOp = VK_ATTACHMENT_STORE_OP_STORE) const
+      -> Error;
+
+  auto TransitionLayout(
+      const GraphicsContext &context, VkImageLayout layout,
+      VkPipelineStageFlags2 sourceStage = VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT |
+                                          VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+      VkPipelineStageFlags2 destinationStage =
+          VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT |
+          VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+      VkAccessFlags2 srcAccessMask = VK_ACCESS_2_NONE, // NOLINT
+      VkAccessFlags2 dstAccessMask = VK_ACCESS_2_NONE,
+      VkImageSubresourceRange range = {
+          .levelCount = VK_REMAINING_MIP_LEVELS,
+          .layerCount = VK_REMAINING_ARRAY_LAYERS}) const -> Error;
 
   VkExtent3D size{};
 
@@ -144,7 +177,7 @@ struct ImageMemory : Barrier::BarrierSynced {
   enum TextureType textureType = TextureType::ENUM_MAX;
 };
 
-struct Texture : Object {
+struct Texture : Object, Identifiable {
   static auto Create(const GraphicsContext &context,
                      const TextureCreationInfo &info) -> Result<Ref<Texture>>;
   static auto Create(const GraphicsContext &context, Texture *parentTexture,
@@ -336,19 +369,6 @@ struct Texture : Object {
   [[nodiscard]] auto IsDepthOrStencilTexture() const -> bool {
     return Image::IsDepthOrStencilTexture(imageMemory->format);
   }
-
-  auto TransitionLayout(
-      const GraphicsContext &context, VkImageLayout layout,
-      VkPipelineStageFlags2 sourceStage = VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT |
-                                          VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
-      VkPipelineStageFlags2 destinationStage =
-          VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT |
-          VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
-      VkAccessFlags2 srcAccessMask = VK_ACCESS_2_NONE, // NOLINT
-      VkAccessFlags2 dstAccessMask = VK_ACCESS_2_NONE,
-      VkImageSubresourceRange range = {
-          .levelCount = VK_REMAINING_MIP_LEVELS,
-          .layerCount = VK_REMAINING_ARRAY_LAYERS}) const -> Error;
 
   static auto GetType() -> Type const * { return &LuaTextureType; }
 

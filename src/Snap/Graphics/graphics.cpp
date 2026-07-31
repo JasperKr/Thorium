@@ -149,12 +149,12 @@ static auto FindQueueFamilies(GraphicsContext &context) -> Error {
 auto GetAvailableDeviceExtensions(const GraphicsContext &context)
     -> Result<std::vector<VkExtensionProperties>> {
   uint32_t extensionCount = 0;
-  CHECK_ERR(Error::Create(vkEnumerateDeviceExtensionProperties(
-      context.physicalDevice, nullptr, &extensionCount, nullptr)));
+  CHECK_NEW_ERR(vkEnumerateDeviceExtensionProperties(
+      context.physicalDevice, nullptr, &extensionCount, nullptr));
 
   std::vector<VkExtensionProperties> extensions(extensionCount);
-  CHECK_ERR(Error::Create(vkEnumerateDeviceExtensionProperties(
-      context.physicalDevice, nullptr, &extensionCount, extensions.data())));
+  CHECK_NEW_ERR(vkEnumerateDeviceExtensionProperties(
+      context.physicalDevice, nullptr, &extensionCount, extensions.data()));
 
   return extensions;
 }
@@ -622,7 +622,11 @@ auto Initialize(GraphicsContext &context, Window::WindowContext &wcontext,
 void Deinitialize(GraphicsContext &context) {
   PrintInfo("Deinitializing graphics context...");
 
-  vkDeviceWaitIdle(context.device);
+  {
+    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
+    vkDeviceWaitIdle(context.device);
+  }
+
   Graphics::UploadBuffers.clear();
 
   Graphics::Barrier::ResetModule();

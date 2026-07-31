@@ -67,8 +67,7 @@ inline auto NameBuffer(VkBuffer buffer, VmaAllocation memory,
           static_cast<uint64_t>(reinterpret_cast<uintptr_t>(buffer)), // NOLINT
       .pObjectName = name.c_str(),
   };
-  CHECK_ERR(Error::Create(
-      vkSetDebugUtilsObjectNameEXT(context.device, &debugNameInfo)));
+  CHECK_NEW_ERR(vkSetDebugUtilsObjectNameEXT(context.device, &debugNameInfo));
 
   {
     std::lock_guard<std::mutex> lock(
@@ -217,6 +216,7 @@ auto Buffer::UploadRing(const GraphicsContext &context,
         static_cast<uint32_t>(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) |
         static_cast<uint32_t>(VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
     bufferInfo.persistentMapping = true;
+    bufferInfo.stagingBuffer = true;
     bufferInfo.debugName = "Upload Buffer";
 
     UploadBuffers.at(context.frameIndex) =
@@ -232,10 +232,12 @@ auto Buffer::UploadRing(const GraphicsContext &context,
   // Copy data to upload buffer
   CHECK_ERR(uploadBuffer->MapMemory(context));
 
-  // NOLINTNEXTLINE, because of pointer arithmetic
-  std::memcpy(static_cast<uint8_t *>(uploadBuffer->mappedData) + uploadOffset,
-              data.data(), uploadSize);
-
+  {
+    ZoneScoped;
+    // NOLINTNEXTLINE, because of pointer arithmetic
+    std::memcpy(static_cast<uint8_t *>(uploadBuffer->mappedData) + uploadOffset,
+                data.data(), uploadSize);
+  }
   uploadBuffer->UnmapMemory(context);
 
   // Record copy command

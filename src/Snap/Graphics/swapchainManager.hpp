@@ -4,6 +4,7 @@
 #include "Graphics/texture.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
+#include "Modules/stackVector.hpp"
 #include "Modules/window.hpp"
 
 #include "vulkan/vulkan_core.h"
@@ -13,10 +14,10 @@ namespace Graphics::SwapchainManager {
 
 struct OldSwapchain {
   VkSwapchainKHR swapchain = VK_NULL_HANDLE;
-  std::vector<Ref<Texture>> textures;
+  Math::StackVector<Ref<Texture>, MaxImageCount> textures;
   uint64_t lastFrameUsed = 0;
 
-  std::vector<VkSemaphore> imageReady;
+  Math::StackVector<VkSemaphore, MaxImageCount> imageReady;
 };
 
 class SwapchainManager {
@@ -47,7 +48,7 @@ private:
   std::vector<OldSwapchain> oldSwapchains;
 
   VkSwapchainKHR currentSwapchain = VK_NULL_HANDLE;
-  std::vector<Ref<Texture>> currentTextures;
+  Math::StackVector<Ref<Texture>, MaxImageCount> currentTextures;
   uint64_t lastFrameUsed = 0;
 
   bool isDirty = false;

@@ -295,8 +295,6 @@ static inline auto LoadSlang(const GraphicsContext &context,
     directories += " - " + std::string(path) + "\n";
   }
 
-  PrintDebug(directories);
-
   sessionDesc.searchPaths = searchPaths.data();
   sessionDesc.searchPathCount = static_cast<uint32_t>(searchPaths.size());
   sessionDesc.targets = &SpvTargetDesc;
@@ -540,6 +538,8 @@ auto Shader::Create(
     const std::vector<slang::PreprocessorMacroDesc> *preprocessorMacros)
     -> Result<Ref<Shader>> {
   ZoneScoped;
+
+  ZoneName(modulename.c_str(), modulename.size());
 
   Ref<Shader> shader = Ref<Shader>::Make();
   shader->name = name;

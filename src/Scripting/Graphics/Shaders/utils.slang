@@ -1,4 +1,3 @@
-
 module Utils;
 
 public func UnpackNormal(uint packedNormal)->half4 {

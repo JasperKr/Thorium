@@ -571,18 +571,18 @@ auto wrap_GetDimensions(lua_State *state) -> int {
   return 2;
 }
 
-auto wrap_AquireCommandBuffer(lua_State *state) -> int {
+auto wrap_AcquireCommandBuffer(lua_State *state) -> int {
   auto *ctx = ::Graphics::GetCurrentGraphicsContext();
 
   if (ctx == nullptr) {
     return luaL_error(state, "No current graphics context.");
   }
 
-  ::Graphics::Threading::AquireInfo info{};
+  ::Graphics::Threading::AcquireInfo info{};
   info.name = luaL_optstring(state, 1, "Unnamed Graphics Commands");
   info.priority = static_cast<int>(luaL_optinteger(state, 2, 0));
 
-  (void)LUA_CK_RES(::Graphics::Threading::AquireCommandBuffer(*ctx, info));
+  (void)LUA_CK_RES(::Graphics::Threading::AcquireCommandBuffer(*ctx, info));
 
   // Optional boolean arg at idx 3 can be used to indicate that we want to create a performance snapshot for this command buffer
   if (lua_toboolean(state, 3) != 0) {

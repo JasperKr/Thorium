@@ -26,7 +26,7 @@ thread_local uint64_t FrameBarrierCount = 0;
 
 thread_local std::vector<ResourceSync> GlobalResourceSyncTimeline{};
 
-thread_local std::vector<std::pair<BarrierSynced, ResourceState>>
+thread_local std::vector<std::pair<AccessState, ResourceState>>
     GlobalResourceStateUpdates{};
 
 thread_local std::vector<BarrierSynced> GraphicsResources;
@@ -196,19 +196,19 @@ auto UpdateUsage(const GraphicsContext &context, const Texture &texture,
 
 auto UpdateUsage(const GraphicsContext &context, const BarrierSynced &resource,
                  const ResourceState &usage) -> void {
-  auto &previousAccess = resource.lastUsedAccess;
-  auto &previousStages = resource.lastUsedStages;
+  auto &state = resource.GetAccessState();
+
+  auto &previousAccess = state.lastUsedAccess;
+  auto &previousStages = state.lastUsedStages;
 
   // Keep track of first usage for async recording so we can barrier later
   [[unlikely]]
-  if (resource.firstAsyncUsage) {
-    GlobalResourceStateUpdates.emplace_back(resource, usage);
+  if (state.firstAsyncUsage) {
+    GlobalResourceStateUpdates.emplace_back(state, usage);
   }
 
-  resource.firstAsyncUsage = false;
-
-  if (!resource.firstAsyncUsage &&
-      TimelineLookback(resource.lastUsedTimelineIndex, // NOLINT
+  if (!state.firstAsyncUsage &&
+      TimelineLookback(state.lastUsedTimelineIndex, // NOLINT
                        {.stages = previousStages, .access = previousAccess},
                        usage)) {
 
@@ -241,7 +241,7 @@ auto UpdateUsage(const GraphicsContext &context, const BarrierSynced &resource,
         .dstAccess = barrier.dstAccessMask,
     };
 
-    auto event = Snapshot::BarrierEvent(sync);
+    auto event = Snapshot::BarrierEvent(sync, resource.getID());
 
     Snapshot::CaptureEvent(event);
 #endif
@@ -249,7 +249,7 @@ auto UpdateUsage(const GraphicsContext &context, const BarrierSynced &resource,
     // Update to new usage
     previousAccess = usage.access;
     previousStages = usage.stages;
-    resource.lastUsedTimelineIndex = GlobalTimelineIndex;
+    state.lastUsedTimelineIndex = GlobalTimelineIndex;
     GlobalResourceSyncTimeline.emplace_back(
         barrier.srcStageMask, barrier.srcAccessMask, barrier.dstStageMask,
         barrier.dstAccessMask);
@@ -261,34 +261,30 @@ auto UpdateUsage(const GraphicsContext &context, const BarrierSynced &resource,
     // Not doing this might miss some necessary stages/accesses
     previousAccess |= usage.access;
     previousStages |= usage.stages;
-    resource.lastUsedTimelineIndex = GlobalTimelineIndex;
+    state.lastUsedTimelineIndex = GlobalTimelineIndex;
   }
 
-  resource.firstAsyncUsage = false;
+  state.firstAsyncUsage = false;
 }
 
 auto UpdateUsageVirtual(const Texture &texture, const ResourceState &usage)
     -> std::optional<ResourceSync> {
-  return UpdateUsageVirtual(*texture.imageMemory, usage);
+  return UpdateUsageVirtual(texture.imageMemory->GetAccessState(), usage);
 }
 
 // The same as Update Usage but doesn't insert any barriers
-auto UpdateUsageVirtual(BarrierSynced &resource, const ResourceState &usage)
+auto UpdateUsageVirtual(AccessState &state, const ResourceState &usage)
     -> std::optional<ResourceSync> {
   ZoneScoped;
-  auto &previousAccess = resource.lastUsedAccess;
-  auto &previousStages = resource.lastUsedStages;
 
-  // Keep track of first usage for async recording so we can barrier later
-  if (resource.firstAsyncUsage) {
-    GlobalResourceStateUpdates.emplace_back(resource, usage);
-  }
+  auto &previousAccess = state.lastUsedAccess;
+  auto &previousStages = state.lastUsedStages;
 
-  if (!resource.firstAsyncUsage &&
-      TimelineLookback(resource.lastUsedTimelineIndex, // NOLINT
+  if (!state.firstAsyncUsage &&
+      TimelineLookback(state.lastUsedTimelineIndex, // NOLINT
                        {.stages = previousStages, .access = previousAccess},
                        usage)) {
-    resource.lastUsedTimelineIndex = GlobalTimelineIndex;
+    state.lastUsedTimelineIndex = GlobalTimelineIndex;
 
     auto sync = ResourceSync{.srcStages = previousStages,
                              .srcAccess = previousAccess,
@@ -311,9 +307,9 @@ auto UpdateUsageVirtual(BarrierSynced &resource, const ResourceState &usage)
   // Not doing this might miss some necessary stages/accesses
   previousAccess |= usage.access;
   previousStages |= usage.stages;
-  resource.lastUsedTimelineIndex = GlobalTimelineIndex;
+  state.lastUsedTimelineIndex = GlobalTimelineIndex;
 
-  resource.firstAsyncUsage = false;
+  state.firstAsyncUsage = false;
 
   return std::nullopt;
 }
@@ -339,7 +335,7 @@ auto ResetModule() -> void {
   GlobalResourceStateUpdates.clear();
 
   for (auto &res : GraphicsResources) {
-    res.firstAsyncUsage = true;
+    res.GetAccessState().firstAsyncUsage = true;
   }
 }
 

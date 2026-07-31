@@ -174,6 +174,7 @@ do
 
   while true do
     if not (canStartChannel:demand(1)) then
+      print("Render thread received stop signal")
       break
     end
 
@@ -184,7 +185,7 @@ do
       print("Requesting snapshot creation")
     end
 
-    snap.graphics.aquireGraphics(nil, nil, createSnapshot)
+    snap.graphics.acquireGraphics(nil, nil, createSnapshot)
 
     createSnapshot = false
 
@@ -242,8 +243,8 @@ do
     snap.graphics.setWindingOrder("cw")
     if firstFrame then
       snap.graphics.setDefaultFilter("linear", "linear", 16)
-      -- snap.scene.loadModel(scene, "Assets/Terrain/Bistro/bistro.gltf")
-      snap.scene.loadModel(scene, "Assets/Terrain/sponza.glb")
+      snap.scene.loadModel(scene, "Assets/Terrain/Bistro/bistro.gltf")
+      -- snap.scene.loadModel(scene, "Assets/Terrain/sponza.glb")
       -- snap.scene.loadModel(scene, "Assets/Objects/OrientationTest/OrientationTest.gltf")
       -- snap.scene.loadModel(scene, "Assets/Tests/MetalRoughSpheres.glb")
       -- snap.scene.loadModel(scene, "Assets/Tests/orientation2.glb")

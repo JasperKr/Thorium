@@ -44,7 +44,7 @@ struct MeshCreationInfo {
   std::string debugName = "Mesh";
 };
 
-struct Mesh : Object {
+struct Mesh : Object, Identifiable {
 
   // Vertex data must be laid out as tightly packed arrays;
   // for example, 2 triangles with 2 bindings: [0, 1, 2, 0, 1, 2], [0, 1, 2, 0, 1, 2]
