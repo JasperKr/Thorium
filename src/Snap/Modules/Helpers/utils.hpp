@@ -316,6 +316,15 @@ auto ParallelFor(size_t count, F &&func) -> Error {
   return error;
 }
 
+// Returns the next capacity that is greater than or equal to requiredCapacity
+// and is a power-of-two multiple of currentCapacity.
+auto NextCapacity(size_t currentCapacity, size_t requiredCapacity) -> size_t;
+
+// Returns the next capacity that is greater than or equal to requiredCapacity
+// and is a power-of-two multiple of currentCapacity.
+auto NextCapacity(size_t currentCapacity, size_t requiredCapacity,
+                  size_t initialCapacity) -> size_t;
+
 // NOLINTBEGIN
 template <typename F> struct Defer {
   F func;

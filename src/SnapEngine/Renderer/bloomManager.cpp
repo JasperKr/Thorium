@@ -66,7 +66,7 @@ auto BloomManager::ApplyBloom(const Graphics::GraphicsContext &context,
   CHECK_ERR(Graphics::UniformWriter::Send(ThresholdShader, ThresholdKey, 0.0F));
 
   const static Graphics::ResourceKey MainSceneKey = {"mainScene"};
-  CHECK_ERR(ThresholdShader->Send(MainSceneKey, textures.IncomingLight));
+  CHECK_ERR(ThresholdShader->Send(MainSceneKey, textures.TAA));
 
   CHECK_ERR(DrawFullScreen(context));
 
@@ -177,14 +177,18 @@ auto BloomManager::ApplyBloom(const Graphics::GraphicsContext &context,
 
   CHECK_ERR(DrawFullScreen(context));
 
+  textures.BloomFinal = CHECK_RES(GlobalRenderTargetManager.GetRendertarget(
+      context, renderTargets.IncomingLight));
+
   CHECK_ERR(Graphics::DynamicRendering::SetRenderTargets(
       context, {Graphics::DynamicRendering::RenderTarget{
                    .blendMode = Graphics::BlendmodeAdditive,
-                   .texture = textures.IncomingLight,
-                   .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+                   .texture = textures.BloomFinal,
+                   .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
                }}));
 
   Graphics::DynamicRendering::SetShader({});
+  CHECK_ERR(Graphics::Draw(context, *textures.TAA));
   CHECK_ERR(Graphics::Draw(context, *DownsampleChainViews.at(1)));
 
   CHECK_ERR(GlobalRenderTargetManager.ReleaseRendertarget(

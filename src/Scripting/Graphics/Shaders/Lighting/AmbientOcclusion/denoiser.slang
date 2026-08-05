@@ -9,7 +9,7 @@ Sampler2D<float> PreviousDepthTexture;
 
 Sampler2D<float2> MotionTexture;
 
-Sampler2D<uint> RayHitTexture;
+Sampler2D<float> RayHitTexture;
 restrict WTexture2D<float2> OutputTexture;
 Sampler2D<float2> PreviousOutputTexture;
 
@@ -40,7 +40,7 @@ void computeMain(uint2 id: SV_DispatchThreadID) {
   float2 sampleCoord = float2(uv);
   sampleCoord.xy -= UnpackMotionVector(MotionTexture.Load(int3(id, 0)));
 
-  float visibility = (RayHitTexture.Load(int3(id, 0)) == 0) ? 0.0 : 1.0;
+  float visibility = RayHitTexture.Load(int3(id, 0));
 
   if (any(sampleCoord.xy < texelSize * 0.5) ||
       any(sampleCoord.xy >= 1.0 - texelSize * 0.5)) {

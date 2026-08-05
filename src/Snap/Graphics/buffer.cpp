@@ -676,6 +676,14 @@ auto Buffer::Readback(const GraphicsContext &context,
   auto readbackThread = std::thread([context, stagingBuffer, stagingMemory,
                                      timelineValue, uploadSize,
                                      bufferReadback]() -> void {
+    {
+      std::unique_lock<std::mutex> lock(
+          Graphics::semaphoreManager.timelineCompletionMutex);
+      Graphics::semaphoreManager.timelineCompletionCV.wait(lock, [&]() -> bool {
+        return !Graphics::semaphoreManager.IsInUse(timelineValue);
+      });
+    }
+
     void *mapped = nullptr;
     {
       std::lock_guard<std::mutex> lock(
@@ -695,14 +703,6 @@ auto Buffer::Readback(const GraphicsContext &context,
 
         return;
       }
-    }
-
-    {
-      std::unique_lock<std::mutex> lock(
-          Graphics::semaphoreManager.timelineCompletionMutex);
-      Graphics::semaphoreManager.timelineCompletionCV.wait(lock, [&]() -> bool {
-        return !Graphics::semaphoreManager.IsInUse(timelineValue);
-      });
     }
 
     std::memcpy(bufferReadback->data->GetData(), mapped, uploadSize);

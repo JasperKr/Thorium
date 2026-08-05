@@ -152,6 +152,8 @@ struct Camera {
 
     // Ambient occlusion samples texture, encoded as r8_uint
     Renderer::RendertargetDescriptor AmbientOcclusionSamples;
+
+    Renderer::RendertargetDescriptor TemporalAntiAliasing;
   };
 
   // References to the textures we currently own. Dynamic
@@ -164,9 +166,12 @@ struct Camera {
     Ref<Graphics::Texture> Emissive;
     Ref<Graphics::Texture> Motion;
     Ref<Graphics::Texture> IncomingLight;
+    Ref<Graphics::Texture> TAA;
+    Ref<Graphics::Texture> PreviousTAA;
     Ref<Graphics::Texture> DirectLighting;
     Ref<Graphics::Texture> Irradiance;
     Ref<Graphics::Texture> PostProcessed;
+    Ref<Graphics::Texture> BloomFinal;
     Ref<Graphics::Texture> BloomDownsampleChain;
     Ref<Graphics::Texture> ShadowVisibility;
     Ref<Graphics::Texture> PreviousShadowVisibility;
@@ -183,9 +188,12 @@ struct Camera {
       Emissive = nullptr;
       Motion = nullptr;
       IncomingLight = nullptr;
+      TAA = nullptr;
+      PreviousTAA = nullptr;
       DirectLighting = nullptr;
       Irradiance = nullptr;
       PostProcessed = nullptr;
+      BloomFinal = nullptr;
       BloomDownsampleChain = nullptr;
       ShadowVisibility = nullptr;
       PreviousShadowVisibility = nullptr;
@@ -204,9 +212,12 @@ struct Camera {
     bool Emissive = false;
     bool Motion = false;
     bool IncomingLight = false;
+    bool TAA = false;
+    bool PreviousTAA = false;
     bool DirectLighting = false;
     bool Irradiance = false;
     bool PostProcessed = false;
+    bool BloomFinal = false;
     bool BloomDownsampleChain = false;
     bool ShadowVisibility = false;
     bool ShadowHitFlags = false;
@@ -276,6 +287,7 @@ private:
   float AspectRatio{};
   float NearPlane{};
   float FarPlane{};
+  Math::Vec2 Jitter;
 
   Ref<struct Graphics::StructuredBuffer> CameraBuffer;
 

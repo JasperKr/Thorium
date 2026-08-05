@@ -2,10 +2,6 @@ import camera;
 import utils;
 import constants;
 
-struct FragmentInput {
-  float2 tex_coord : TEXCOORDS;
-};
-
 #define ERP
 
 #if defined(CUBE_MAP)
@@ -24,19 +20,25 @@ float2 GetERPUvs(float3 rayDirection) {
   return uv;
 }
 
+struct FragmentOutput {
+  float4 color : SV_Target0;
+  float2 motion : SV_Target1;
+};
+
 [shader("fragment")]
-float4 fragmentMain(FragmentInput input) {
-  float depth = DepthTexture.SampleLevelZero(input.tex_coord).r;
-  // Reverse z, so 0 = far plane and 1 = near plane
-  if (depth != 0.0) {
+FragmentOutput fragmentMain(float2 tex_coord: TEXCOORDS) {
+  float depth = DepthTexture.SampleLevelZero(tex_coord).r;
+  if (depth != DepthFarPlane) {
     discard;
   }
 
-  float3 rayDirection =
-      GetRayDirection(input.tex_coord, camera.InverseRotationProjectionMatrix);
+  float3 rayDirection = camera.GetRayDirection(tex_coord);
+
+  float3 previous = camera.ReprojectToPreviousNDC(tex_coord, depth);
+  float2 motion = tex_coord - previous.xy;
 
 #if defined(CUBE_MAP)
-  return SkyboxTexture.Sample(rayDirection);
+  return FragmentOutput(SkyboxTexture.Sample(rayDirection), motion);
 #elif defined(ERP)
   float2 uv = GetERPUvs(rayDirection);
 
@@ -49,7 +51,7 @@ float4 fragmentMain(FragmentInput input) {
   if (abs(duvdy.x) > 0.5)
     duvdy.x = -sign(duvdy.x) * (1.0 - abs(duvdy.x));
 
-  return SkyboxTexture.SampleGrad(uv, duvdx, duvdy);
+  return FragmentOutput(SkyboxTexture.SampleGrad(uv, duvdx, duvdy), motion);
 #endif
 
   // return float4(saturate(rayDirection * 0.5 + 0.5), 1.0);

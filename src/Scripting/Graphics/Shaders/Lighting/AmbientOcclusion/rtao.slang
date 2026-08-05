@@ -42,20 +42,30 @@ void computeMain(uint3 id: SV_DispatchThreadID) {
   uint randomState = PushConstants.FrameRandomState + screenCoords.x * 1702 +
                      screenCoords.y * 40301;
 
-  screenCoords += uint2(randomState, randomState * 84313U);
-  float rnd0 = BlueNoiseTexture.Load(int3(screenCoords % 128, 0)).r;
-  screenCoords += uint2(randomState * 3913U, randomState);
-  float rnd1 = BlueNoiseTexture.Load(int3(screenCoords % 128, 0)).r;
+  worldPosition += normal * 0.01f;
 
-  float3 direction = RandomHemisphereDirection(normal, rnd0, rnd1);
+  int hitCount = 0;
+  const int sampleCount = 1;
 
-  RayDesc ray;
-  ray.Origin = worldPosition + normal * 0.001f;
-  ray.Direction = direction;
-  ray.TMin = 0.001f;
-  ray.TMax = 1.0f;
+  for (int i = 0; i < sampleCount; ++i) {
+    screenCoords += uint2(randomState, randomState * 84313U);
+    float rnd0 = BlueNoiseTexture.Load(int3(screenCoords % 128, 0)).r;
+    screenCoords += uint2(randomState * 3913U, randomState);
+    float rnd1 = BlueNoiseTexture.Load(int3(screenCoords % 128, 0)).r;
 
-  bool hit = TraceAnyHitRay(SceneBVH, ray);
+    float3 direction = RandomHemisphereDirection(normal, rnd0, rnd1);
+    RayDesc ray;
+    ray.Origin = worldPosition;
+    ray.Direction = direction;
+    ray.TMin = 0.001f;
+    ray.TMax = 1.0f;
 
-  OutputTexture.Store(id.xy, hit ? 0.0F : 1.0F);
+    bool hit = TraceAnyHitRay(SceneBVH, ray);
+
+    if (hit) {
+      hitCount++;
+    }
+  }
+
+  OutputTexture.Store(id.xy, 1.0 - float(hitCount) / float(sampleCount));
 }

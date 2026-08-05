@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Modules/Math/matrix.hpp"
+#include "Modules/Math/vector.hpp"
 #include "Wrap/wrap.hpp"
 #include "Wrap/wrap_engine.hpp"
 namespace Engine {
@@ -16,6 +17,7 @@ struct CameraMatrices {
   Math::Matrix4x4 InverseViewProjectionMatrix;
   Math::Matrix4x4 RotationProjectionMatrix;
   Math::Matrix4x4 InverseRotationProjectionMatrix;
+  Math::Vec2 Jitter;
 
   [[nodiscard]] auto GetForward() const -> Math::Vec3 {
     return Math::Vec3{-ViewMatrix.At(2, 0), -ViewMatrix.At(2, 1),

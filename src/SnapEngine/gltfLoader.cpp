@@ -5,6 +5,7 @@
 #include "Graphics/texture.hpp"
 #include "Graphics/vertexformat.hpp"
 #include "Modules/Math/vector.hpp"
+#include "Modules/color.hpp"
 #include "Modules/compressedImageData.hpp"
 #include "Modules/error.hpp"
 #include "Modules/filesystem.hpp"

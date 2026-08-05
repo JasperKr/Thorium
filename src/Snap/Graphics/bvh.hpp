@@ -7,6 +7,7 @@
 #include "Modules/Math/matrix.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
+#include <atomic>
 #include <cstddef>
 #include <mutex>
 #include <string>
@@ -15,9 +16,41 @@
 #include <vulkan/vulkan_core.h>
 namespace Graphics {
 
-extern std::mutex BVHScratchBufferMutex;                               // NOLINT
-extern Ref<Buffer> BvhScratchBuffer;                                   // NOLINT
-static constexpr size_t InitialScratchBufferSize = 32UL * 1024 * 1024; // n MiB
+struct CompactionEvent {
+  VkDeviceSize compactedSize;
+  struct BLAS *blas;
+};
+
+struct BVHManager {
+public:
+  static const size_t InitialScratchBufferSize = 1UL * 1024 * 1024;
+  static std::mutex CompactionMutex;
+  static std::mutex ScratchBufferMutex;
+
+  auto GetBVHScratchBuffer(const GraphicsContext &context,
+                           VkDeviceSize minimumSize) -> Result<Ref<Buffer>>;
+
+  auto Initialize(const GraphicsContext &context) -> Error;
+  auto DeInitialize() -> void;
+  auto Update(const GraphicsContext &context) -> Error;
+
+  [[nodiscard]] auto GetCompactionEvents() -> std::vector<CompactionEvent> & {
+    return CompactionEvents;
+  }
+
+  auto AddCompactionEvent(const CompactionEvent &event) -> void {
+    std::lock_guard<std::mutex> lock(CompactionMutex);
+
+    CompactionEvents.emplace_back(event);
+  }
+
+private:
+  Ref<Buffer> BvhScratchBuffer;
+
+  std::vector<CompactionEvent> CompactionEvents;
+};
+
+extern BVHManager BVHManagerInstance; // NOLINT
 
 auto InitializeBVHModule(const struct GraphicsContext &context) -> Error;
 auto DeInitializeBVHModule() -> void;
@@ -37,6 +70,10 @@ struct BLAS : Object, Identifiable {
   auto operator=(BLAS &&) -> BLAS & = delete;
 
   ~BLAS() override {
+    if (accelerationStructureBuffer != nullptr) {
+      TotalAllocatedMemory.fetch_sub(accelerationStructureBuffer->size);
+    }
+
     ScheduleDestruction(
         AccelerationStructureMemory{
             .accelerationStructure = accelerationStructure,
@@ -56,6 +93,13 @@ struct BLAS : Object, Identifiable {
 
   auto Rebuild(const GraphicsContext &context) -> Error;
   auto Refit(const GraphicsContext &context) -> Error;
+  auto Compact(const GraphicsContext &context) -> Error;
+
+  // DO NOT USE. INTERNAL
+  auto FinalizeCompaction(const GraphicsContext &context,
+                          VkDeviceSize compactedSize) -> Error;
+
+  static std::atomic<size_t> TotalAllocatedMemory;
 
 private:
   Ref<Buffer> accelerationStructureBuffer;
@@ -70,6 +114,8 @@ private:
   VkFormat vertexFormat = VK_FORMAT_UNDEFINED;
   uint32_t vertexStride = 0;
   uint32_t vertexOffset = 0;
+
+  std::mutex mutex;
 };
 
 // Top-Level Acceleration Structure.
@@ -82,6 +128,10 @@ struct TLAS : Object, Identifiable {
   auto operator=(TLAS &&) -> TLAS & = delete;
 
   ~TLAS() override {
+    if (accelerationStructureBuffer != nullptr) {
+      TotalAllocatedMemory.fetch_sub(accelerationStructureBuffer->size);
+    }
+
     ScheduleDestruction(
         AccelerationStructureMemory{
             .accelerationStructure = accelerationStructure,
@@ -133,6 +183,8 @@ struct TLAS : Object, Identifiable {
       accelerationStructureBuffer->MarkUse();
     }
   }
+
+  static std::atomic<size_t> TotalAllocatedMemory;
 
 private:
   Ref<Buffer> accelerationStructureBuffer;

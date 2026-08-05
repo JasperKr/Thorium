@@ -24,9 +24,9 @@ auto GetThreadContext() -> ThreadContext &;
 auto GetCommandBuffer() -> VkCommandBuffer;
 void Deinitialize(GraphicsContext &context);
 
-auto BeginSingleTimeCommands(GraphicsContext &context) -> VkCommandBuffer;
+auto BeginSingleTimeCommands(const GraphicsContext &context) -> VkCommandBuffer;
 
-auto EndSingleTimeCommands(GraphicsContext &context,
+auto EndSingleTimeCommands(const GraphicsContext &context,
                            VkCommandBuffer commandBuffer) -> void;
 
 // Graphics context NOLINTNEXTLINE

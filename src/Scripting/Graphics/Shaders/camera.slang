@@ -36,6 +36,17 @@ public struct CameraData {
     float4 worldPos = mul(clipPos, InverseRotationProjectionMatrix);
     return normalize(worldPos.xyz);
   }
+
+  public float3 GetPreviousNDC(float3 worldPos) {
+    float4 clipPos =
+        mul(float4(worldPos, 1.0), previousCamera.ViewProjectionMatrix);
+    return clipPos.xyz / clipPos.w;
+  }
+
+  public float3 ReprojectToPreviousNDC(float2 uv, float depth) {
+    float3 worldPos = GetWorldPosition(uv, depth);
+    return GetPreviousNDC(worldPos);
+  }
 };
 
 [vk::binding(0, 1)]

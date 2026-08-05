@@ -23,7 +23,7 @@ namespace Graphics {
 
 static auto VertexFormatSize(const VertexFormat &format, uint32_t binding)
     -> uint32_t {
-  return format.GetBindings().at(binding).stride;
+  return format.GetStride(binding);
 }
 
 auto Mesh::UploadVertices(const GraphicsContext &context, uint32_t binding,
@@ -82,12 +82,10 @@ auto Mesh::CreateFromVertexData(const GraphicsContext &context,
   const auto &vertexDatas = info.vertexData;
   const auto &debugName = info.debugName;
 
-  auto firstVtxCount =
-      vertexDatas.at(0).size() / VertexFormatSize(vertexFormat, 0);
+  auto firstVtxCount = vertexDatas.at(0).size() / vertexFormat.GetStride(0);
 
   for (size_t i = 1; i < vertexDatas.size(); ++i) {
-    auto vtxCount =
-        vertexDatas.at(i).size() / VertexFormatSize(vertexFormat, i);
+    auto vtxCount = vertexDatas.at(i).size() / vertexFormat.GetStride(i);
     if (vtxCount != firstVtxCount) {
       return Error::Createf(
           "Vertex data for binding {} has a different vertex count than "
@@ -96,8 +94,7 @@ auto Mesh::CreateFromVertexData(const GraphicsContext &context,
     }
   }
 
-  mesh->VertexCount =
-      vertexDatas.at(0).size() / VertexFormatSize(vertexFormat, 0);
+  mesh->VertexCount = vertexDatas.at(0).size() / vertexFormat.GetStride(0);
   mesh->IndexCount = 0;
   mesh->Format = std::make_unique<VertexFormat>(vertexFormat.Copy());
 
@@ -114,7 +111,7 @@ auto Mesh::CreateFromVertexData(const GraphicsContext &context,
 
   for (size_t i = 0; i < vertexFormat.GetBindingCount(); i++) {
     const auto &vertexData = vertexDatas.at(i);
-    assert(vertexData.size() % VertexFormatSize(vertexFormat, i) == 0);
+    assert(vertexData.size() % vertexFormat.GetStride(i) == 0);
 
     vboCreationInfo.properties = properties;
     vboCreationInfo.size = vertexData.size();
@@ -308,6 +305,15 @@ auto Mesh::SetTopology(VkPrimitiveTopology topology) -> Error {
   }
 
   Topology = topology;
+
+  return Error::Success();
+}
+
+auto Mesh::CreateBLAS(const GraphicsContext &context) -> Error {
+  ZoneScoped;
+
+  BottomLevelAS = CHECK_RES(BLAS::Create(context, *this));
+  // CHECK_ERR(BottomLevelAS->Compact(context));
 
   return Error::Success();
 }

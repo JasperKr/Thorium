@@ -1,5 +1,6 @@
 #include "utils.hpp"
 #include <algorithm>
+#include <bit>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -75,6 +76,42 @@ auto SlotToSetBinding(uint64_t slot) -> std::pair<uint32_t, uint32_t> {
   auto set = static_cast<uint32_t>((slot >> 32U) & UINT32_MAX); // NOLINT
   auto binding = static_cast<uint32_t>(slot & UINT32_MAX);
   return {set, binding};
+}
+
+// Returns the next capacity that is greater than or equal to requiredCapacity
+// and is a power-of-two multiple of currentCapacity.
+auto NextCapacity(size_t currentCapacity, size_t requiredCapacity) -> size_t {
+  if (requiredCapacity <= currentCapacity) {
+    return currentCapacity;
+  }
+
+  if (currentCapacity == 0) {
+    return std::max<size_t>(1, requiredCapacity);
+  }
+
+  while (currentCapacity < requiredCapacity) {
+    currentCapacity *= 2;
+  }
+
+  return currentCapacity;
+}
+
+// Returns the next capacity that is greater than or equal to requiredCapacity
+// and is a power-of-two multiple of currentCapacity.
+auto NextCapacity(size_t currentCapacity, size_t requiredCapacity,
+                  size_t initialCapacity) -> size_t {
+  assert(initialCapacity > 0 && "Initial size must be greater than zero.");
+  currentCapacity = std::max(currentCapacity, initialCapacity);
+
+  if (requiredCapacity <= currentCapacity) {
+    return currentCapacity;
+  }
+
+  while (currentCapacity < requiredCapacity) {
+    currentCapacity *= 2;
+  }
+
+  return currentCapacity;
 }
 
 #if defined(__linux__)

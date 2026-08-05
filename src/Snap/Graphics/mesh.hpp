@@ -121,13 +121,7 @@ struct Mesh : Object, Identifiable {
     return BindingRanges;
   }
 
-  auto CreateBLAS(const GraphicsContext &context) -> Error {
-    ZoneScoped;
-
-    BottomLevelAS = CHECK_RES(BLAS::Create(context, *this));
-
-    return Error::Success();
-  }
+  auto CreateBLAS(const GraphicsContext &context) -> Error;
   auto GetBLAS() const -> Ref<BLAS> { return BottomLevelAS; }
 
 private:

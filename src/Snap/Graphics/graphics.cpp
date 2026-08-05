@@ -105,6 +105,20 @@ static auto FindPhysicalDevice(GraphicsContext &context) -> Error {
 
   context.physicalDevice = gpus.at(bestGpuIndex);
 
+  VkPhysicalDeviceAccelerationStructurePropertiesKHR accelStructProperties{
+      .sType =
+          VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_PROPERTIES_KHR,
+  };
+
+  VkPhysicalDeviceProperties2 deviceProperties2{
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
+      .pNext = &accelStructProperties,
+  };
+
+  vkGetPhysicalDeviceProperties2(context.physicalDevice, &deviceProperties2);
+
+  context.accelerationStructureProperties = accelStructProperties;
+
   return Error::Success();
 }
 
@@ -679,7 +693,8 @@ void Deinitialize(GraphicsContext &context) {
   context.sdlWindow = nullptr;
 }
 
-auto BeginSingleTimeCommands(GraphicsContext &context) -> VkCommandBuffer {
+auto BeginSingleTimeCommands(const GraphicsContext &context)
+    -> VkCommandBuffer {
   VkCommandBufferAllocateInfo allocInfo = {};
   allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
   allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
@@ -704,7 +719,7 @@ auto BeginSingleTimeCommands(GraphicsContext &context) -> VkCommandBuffer {
   return commandBuffer;
 }
 
-auto EndSingleTimeCommands(GraphicsContext &context,
+auto EndSingleTimeCommands(const GraphicsContext &context,
                            VkCommandBuffer commandBuffer) -> void {
   vkEndCommandBuffer(commandBuffer);
 

@@ -24,6 +24,7 @@
 #include "Wrap/wrap.hpp"
 #include "renderer.hpp"
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <flecs.h>
 #include <imgui.h>
@@ -75,12 +76,28 @@ struct CameraBufferStruct {
   uint32_t ShadowCascadeCount{};
 };
 
+static constexpr std::array<Math::Vec2, 4> JitterPattern = {
+    Math::Vec2{2.5F, 0.5F},
+    Math::Vec2{0.5F, 1.5F},
+    Math::Vec2{3.5F, 2.5F},
+    Math::Vec2{1.5F, 3.5F},
+};
+
 void Camera::RegisterCameraSystems(Scene &scene) {
   auto cameraProjection =
       scene.world.system<Camera, CameraMatrices>()
           .kind(flecs::PostUpdate)
           .each([](flecs::entity entity, Camera &camera,
                    CameraMatrices &matrices) -> void {
+            camera.Jitter = JitterPattern.at(
+                Graphics::GetCurrentGraphicsContext()->currentFrame %
+                JitterPattern.size());
+            camera.Jitter /= 4.0F; // NOLINT
+            camera.Jitter -= 0.5F; // NOLINT
+
+            camera.Jitter /= Math::Vec2(camera.Dimensions);
+            matrices.Jitter = camera.Jitter;
+
             if (camera.projectionDirty) {
               matrices.ProjectionMatrix = Math::Matrix4x4::Perspective(
                   camera.VerticalFOVRad, camera.AspectRatio, camera.NearPlane,
@@ -172,7 +189,14 @@ auto Camera::ApplyPostProcessing(const Graphics::GraphicsContext &context)
                }}));
 
   static auto incomingLightKey = Graphics::ResourceKey{"IncomingLight"};
-  CHECK_ERR(shader->Send(incomingLightKey, OwnedTextures.IncomingLight));
+
+  [[likely]]
+  if (OwnedTextures.BloomFinal.isValid()) {
+    CHECK_ERR(shader->Send(incomingLightKey, OwnedTextures.BloomFinal));
+  } else {
+    // Bloom might be skipped in the case of a really tiny viewport
+    CHECK_ERR(shader->Send(incomingLightKey, OwnedTextures.TAA));
+  }
 
   auto temperatureKey = Graphics::ResourceKey{"Temperature"};
   auto tintKey = Graphics::ResourceKey{"Tint"};
@@ -199,6 +223,10 @@ auto Camera::ApplyPostProcessing(const Graphics::GraphicsContext &context)
                                           postProcessingConfig.Exposure));
 
   CHECK_ERR(Renderer::DrawFullScreen(context));
+
+  CHECK_ERR(Renderer::GlobalRenderTargetManager.ReleaseRendertarget(
+      OwnedTextures.BloomFinal));
+
   return {};
 }
 
@@ -209,9 +237,14 @@ auto Camera::RenderSkybox(const Graphics::GraphicsContext &context,
 
   CHECK_ERR(Graphics::DynamicRendering::SetRenderTargets(
       context, {{
-                   .texture = OwnedTextures.DirectLighting,
-                   .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
-               }}));
+                    .texture = OwnedTextures.DirectLighting,
+                    .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+                },
+                {
+                    .blendMode = Graphics::BlendmodeNone,
+                    .texture = OwnedTextures.Motion,
+                    .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+                }}));
 
   auto shader =
       CHECK_RES(Renderer::RendererInstance.GetShaderManager().GetShader(
@@ -371,6 +404,7 @@ auto Camera::ApplyLightProbes(const Graphics::GraphicsContext &context,
   return {};
 }
 
+// NOLINTNEXTLINE
 auto Camera::Render(const Graphics::GraphicsContext &context,
                     const DrawData &drawData, Scene *scene) -> Error {
 
@@ -382,7 +416,6 @@ auto Camera::Render(const Graphics::GraphicsContext &context,
       OwnedTextures.Material,
       OwnedTextures.Emissive,
       OwnedTextures.Motion,
-      OwnedTextures.IncomingLight,
       OwnedTextures.Irradiance,
   }));
 
@@ -459,6 +492,43 @@ auto Camera::Render(const Graphics::GraphicsContext &context,
   CHECK_ERR(Renderer::RendererInstance.GetLineDrawer().Render(context, *this));
   CHECK_ERR(
       Renderer::RendererInstance.GetPrimitiveDrawer().Render(context, *this));
+  Graphics::PopDebugMarker();
+  Graphics::PushDebugMarker("Temporal Anti-Aliasing");
+
+  auto taaShader =
+      CHECK_RES(Renderer::RendererInstance.GetShaderManager().GetShader(
+          Renderer::ShaderKey::TAA));
+
+  OwnedTextures.TAA =
+      CHECK_RES(Renderer::GlobalRenderTargetManager.GetRendertarget(
+          context, Rendertargets.TemporalAntiAliasing));
+
+  CHECK_ERR(Graphics::DynamicRendering::SetRenderTargets(
+      context, {{
+                   .blendMode = Graphics::BlendmodeNone,
+                   .texture = OwnedTextures.TAA,
+                   .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+               }}));
+
+  if (!OwnedTextures.PreviousTAA.isValid()) {
+    OwnedTextures.PreviousTAA =
+        CHECK_RES(Renderer::GlobalRenderTargetManager.GetRendertarget(
+            context, Rendertargets.TemporalAntiAliasing));
+  }
+
+  Graphics::DynamicRendering::SetShader(taaShader);
+  CHECK_ERR(taaShader->Send({"IncomingLight"}, OwnedTextures.IncomingLight));
+  CHECK_ERR(
+      taaShader->Send({"PreviousIncomingLight"}, OwnedTextures.PreviousTAA));
+  CHECK_ERR(taaShader->Send({"MotionTexture"}, OwnedTextures.Motion));
+
+  CHECK_ERR(Renderer::DrawFullScreen(context));
+
+  CHECK_ERR(Renderer::GlobalRenderTargetManager.ReleaseRendertarget(
+      OwnedTextures.PreviousTAA));
+
+  OwnedTextures.PreviousTAA = OwnedTextures.TAA;
+
   Graphics::PopDebugMarker();
 
   if (settings.DoPostProcessing) {
@@ -621,11 +691,20 @@ auto Camera::ConfigureRendertargets() -> void {
 
   Rendertargets.AmbientOcclusionSamples = Renderer::RendertargetDescriptor{
       .size = Dimensions,
-      .format = VK_FORMAT_R8_UINT,
+      .format = VK_FORMAT_R8_UNORM,
       .minFilter = VK_FILTER_NEAREST,
       .magFilter = VK_FILTER_NEAREST,
       .mipFilter = VK_SAMPLER_MIPMAP_MODE_NEAREST,
       .usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+  };
+
+  Rendertargets.TemporalAntiAliasing = Renderer::RendertargetDescriptor{
+      .size = Dimensions,
+      .format = VK_FORMAT_B10G11R11_UFLOAT_PACK32,
+      .minFilter = VK_FILTER_LINEAR,
+      .magFilter = VK_FILTER_LINEAR,
+      .mipFilter = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+      .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
   };
 }
 
@@ -655,7 +734,7 @@ auto Camera::WriteToBuffer(const CameraMatrices &cameraMatrices,
       .NearMulFar = NearPlane * FarPlane,
       .FarMinusNear = FarPlane - NearPlane,
       .HistoryInvalidated = 0,
-      .Jitter = {0.0F, 0.0F},
+      .Jitter = Jitter,
       .ProjectionType = 0,
       .ShadowCascadeCount = 0,
   };
@@ -840,6 +919,8 @@ auto LuaCamera::GetRendertarget(lua_State *state) -> int {
           {"Emissive", &Camera::AllocatedTextures::Emissive},
           {"Motion", &Camera::AllocatedTextures::Motion},
           {"IncomingLight", &Camera::AllocatedTextures::IncomingLight},
+          {"TAA", &Camera::AllocatedTextures::TAA},
+          {"PreviousTAA", &Camera::AllocatedTextures::PreviousTAA},
           {"DirectLighting", &Camera::AllocatedTextures::DirectLighting},
           {"Irradiance", &Camera::AllocatedTextures::Irradiance},
           {"PostProcessed", &Camera::AllocatedTextures::PostProcessed},
@@ -934,6 +1015,8 @@ const std::unordered_map<std::string_view,
         {"Emissive", &Camera::PersistentTextureSettings::Emissive},
         {"Motion", &Camera::PersistentTextureSettings::Motion},
         {"IncomingLight", &Camera::PersistentTextureSettings::IncomingLight},
+        {"TAA", &Camera::PersistentTextureSettings::TAA},
+        {"PreviousTAA", &Camera::PersistentTextureSettings::PreviousTAA},
         {"DirectLighting", &Camera::PersistentTextureSettings::DirectLighting},
         {"Irradiance", &Camera::PersistentTextureSettings::Irradiance},
         {"PostProcessed", &Camera::PersistentTextureSettings::PostProcessed},

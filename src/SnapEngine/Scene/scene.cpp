@@ -1,5 +1,6 @@
 #include "scene.hpp"
 #include "Editor/editor.hpp"
+#include "Graphics/bvh.hpp"
 #include "Graphics/draw.hpp"
 #include "Graphics/dynamicRendering.hpp"
 #include "Graphics/graphics.hpp"
@@ -522,12 +523,12 @@ auto Scene::DrawModels(Camera &camera, Frustum &frustum,
              }));
   }
 
-  auto shader =
+  auto lightingShader =
       CHECK_RES(manager.GetShader(Renderer::ShaderKey::SimpleLighting));
-  CHECK_ERR(shader->Send(cameraBufferKey, cameraBuffer));
-  CHECK_ERR(shader->Send(albedoTextureKey, textures.Albedo));
-  CHECK_ERR(shader->Send(materialTextureKey, textures.Material));
-  CHECK_ERR(shader->Send(emissiveTextureKey, textures.Emissive));
+  CHECK_ERR(lightingShader->Send(cameraBufferKey, cameraBuffer));
+  CHECK_ERR(lightingShader->Send(albedoTextureKey, textures.Albedo));
+  CHECK_ERR(lightingShader->Send(materialTextureKey, textures.Material));
+  CHECK_ERR(lightingShader->Send(emissiveTextureKey, textures.Emissive));
 
   auto sendInfo = [&](const Ref<Graphics::Shader> &shader) -> Error {
     CHECK_ERR(shader->Send(normalTextureKey, textures.Normal));
@@ -544,7 +545,7 @@ auto Scene::DrawModels(Camera &camera, Frustum &frustum,
   auto shadowRectangle = CHECK_RES(manager.GetShader(K::Shadows_Rectangle));
   auto shadowDenoise = CHECK_RES(manager.GetShader(K::Shadows_Denoise));
 
-  CHECK_ERR(sendInfo(shader));
+  CHECK_ERR(sendInfo(lightingShader));
   // CHECK_ERR(sendInfo(shadowPoint));
   // CHECK_ERR(sendInfo(shadowSpot));
   // CHECK_ERR(sendInfo(shadowSphere));
@@ -556,12 +557,13 @@ auto Scene::DrawModels(Camera &camera, Frustum &frustum,
 
   auto countKey = Graphics::ResourceKey{"DirectionalLightCount"};
   CHECK_ERR(Graphics::UniformWriter::Send(
-      shader, countKey, renderer.GetSceneLightBuffers().DirectionalLightCount));
+      lightingShader, countKey,
+      renderer.GetSceneLightBuffers().DirectionalLightCount));
   CHECK_ERR(Graphics::UniformWriter::Send(
       forward, countKey,
       renderer.GetSceneLightBuffers().DirectionalLightCount));
 
-  CHECK_ERR(renderer.BindLightBuffers(ctx, shader));
+  CHECK_ERR(renderer.BindLightBuffers(ctx, lightingShader));
   CHECK_ERR(renderer.BindLightBuffers(ctx, forward));
 
   textures.ShadowHitFlags =
@@ -597,7 +599,7 @@ auto Scene::DrawModels(Camera &camera, Frustum &frustum,
   CHECK_ERR(forward->Send(blueNoiseTextureKey, blueNoiseTex));
 
   CHECK_ERR(
-      Graphics::UniformWriter::Send(shader, rndStateKey, frameRandomState));
+      Graphics::UniformWriter::Send(lightingShader, rndStateKey, frameRandomState));
   CHECK_ERR(
       Graphics::UniformWriter::Send(forward, rndStateKey, frameRandomState));
 
@@ -702,6 +704,7 @@ auto Scene::DrawModels(Camera &camera, Frustum &frustum,
   CHECK_ERR(Graphics::DispatchWithin(ctx, Math::Uvec3(width, height, 1)));
 
   Graphics::PopDebugMarker();
+  Graphics::PushDebugMarker("Lighting");
 
   CHECK_ERR(Renderer::GlobalRenderTargetManager.ReleaseRendertargets(
       {textures.PreviousShadowVisibility, textures.ShadowHitFlags,
@@ -709,11 +712,11 @@ auto Scene::DrawModels(Camera &camera, Frustum &frustum,
   textures.PreviousShadowVisibility = textures.ShadowVisibility;
   textures.PreviousAmbientOcclusion = textures.AmbientOcclusion;
 
-  Graphics::DynamicRendering::SetShader(shader);
+  Graphics::DynamicRendering::SetShader(lightingShader);
   static Graphics::ResourceKey ShadowVisibilityTextureKey = {
       "ShadowVisibilityTexture"};
-  CHECK_ERR(
-      shader->Send(ShadowVisibilityTextureKey, textures.ShadowVisibility));
+  CHECK_ERR(lightingShader->Send(ShadowVisibilityTextureKey,
+                                 textures.ShadowVisibility));
 
   textures.DirectLighting =
       CHECK_RES(Renderer::GlobalRenderTargetManager.GetRendertarget(
@@ -953,7 +956,12 @@ Scene::Scene(std::string name) : name(std::move(name)) {
         auto &ctx = *Graphics::GetCurrentGraphicsContext();
         auto &renderer = Renderer::RendererInstance;
 
-        Error error = {};
+        Error error = Graphics::BVHManagerInstance.Update(ctx);
+
+        if (Error::IsError(error)) {
+          lastUpdateResult = error;
+          return;
+        }
 
         if (!renderer.GetSceneTLAS()->GetInstances().empty()) {
           error = renderer.SceneNeedsTLASRebuild()

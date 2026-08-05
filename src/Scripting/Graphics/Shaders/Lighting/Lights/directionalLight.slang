@@ -75,7 +75,7 @@ public struct DirectionalLight : ILight {
         WorldForward + randomDirection.x * right + randomDirection.y * WorldUp);
 
     RayDesc ray;
-    ray.Origin = WorldPosition + Normal * 1e-3f;
+    ray.Origin = WorldPosition + Normal * 1e-2f;
     ray.Direction = sampleDirection;
     ray.TMin = 0.01f;
     ray.TMax = 1e4f;

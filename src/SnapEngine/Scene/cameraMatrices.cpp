@@ -11,9 +11,16 @@ auto CameraMatrices::GetFrustum() const -> Frustum {
 }
 
 auto CameraMatrices::Update() -> void {
-  ViewProjectionMatrix = ProjectionMatrix * ViewMatrix;
+  constexpr float kUvToNdcScale = 2.0F;
+
+  auto jitteredProjection = ProjectionMatrix;
+  // Jitter is stored in UV space; clip-space/NDC offset is twice that range.
+  jitteredProjection.At(0, 2) += Jitter.x * kUvToNdcScale;
+  jitteredProjection.At(1, 2) += Jitter.y * kUvToNdcScale;
+
+  ViewProjectionMatrix = jitteredProjection * ViewMatrix;
   InverseViewProjectionMatrix = ViewProjectionMatrix.InverseTranspose();
-  RotationProjectionMatrix = ProjectionMatrix * RotationMatrix;
+  RotationProjectionMatrix = jitteredProjection * RotationMatrix;
   InverseRotationProjectionMatrix = RotationProjectionMatrix.InverseTranspose();
   InverseRotationMatrix = RotationMatrix.Transpose();
 }

@@ -35,6 +35,8 @@ enum class ShaderKey : uint8_t {
 
   RTAO,
   AO_Denoise,
+
+  TAA,
 };
 
 struct ShaderConfiguration {
@@ -101,7 +103,10 @@ const std::unordered_map<ShaderKey, ShaderConfiguration> ShaderConfigurations =
                "rtao.slang"}},
      {ShaderKey::AO_Denoise,
       {.path = "Scripting/Graphics/Shaders/Lighting/AmbientOcclusion/"
-               "denoiser.slang"}}};
+               "denoiser.slang"}},
+
+     {ShaderKey::TAA,
+      {.path = "Scripting/Graphics/Shaders/PostProcessing/taa.slang"}}};
 
 struct ShaderManager {
   auto Preload() -> Error;
