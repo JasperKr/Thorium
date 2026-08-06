@@ -11,6 +11,7 @@
 #include "Modules/object.hpp"
 
 #include "vulkan/vulkan_core.h"
+#include <atomic>
 #include <cassert>
 #include <cstdint>
 #include <functional>
@@ -184,6 +185,10 @@ auto AcquireCommandBuffer(Graphics::GraphicsContext &context,
   }
 
   tcontext.timelineValue = Graphics::semaphoreManager.NewSemaphoreValue();
+
+  static std::atomic<uint64_t> cmdBufferIdentifierCounter;
+  tcontext.recordingIdentifier = cmdBufferIdentifierCounter.fetch_add(1);
+
   threadInfo->threadData.cmdBufferTimelineValue = tcontext.timelineValue;
   tcontext.initialImageStates.clear();
   tcontext.finalImageStates.clear();
@@ -254,7 +259,7 @@ auto SubmitCommands(Graphics::GraphicsContext &context)
 
   threadContext.commandBuffer = VK_NULL_HANDLE;
   threadContext.currentVertexFormatHash = 0;
-  threadContext.currentMesh = 0;
+  threadContext.currentMesh = UINT64_MAX;
 
   auto threadInfo = CurrentRenderThreadInfo;
   CurrentRenderThreadInfo.reset();

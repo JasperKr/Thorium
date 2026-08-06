@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <unordered_map>
@@ -22,6 +23,9 @@ struct ThreadContext {
   VkCommandPool commandPool = VK_NULL_HANDLE;        // Per-thread command pool
   VkCommandBuffer commandBuffer = VK_NULL_HANDLE;    // Current command buffer
   size_t currentVertexFormatHash = 0;
+
+  // unique identifier to not the frame, but recording of command buffer
+  uint64_t recordingIdentifier = 0;
   ObjectID currentMesh;
 
   std::vector<DescriptorPoolInfo> descriptorPools;  // Descriptor pool info

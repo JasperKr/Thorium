@@ -6,10 +6,9 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <vector>
 
-constexpr size_t InitialUniformBufferSize = 64L * 1024; // 64 KB
-
-// 16 MB; allows for doubling in size 8x
+constexpr size_t InitialUniformBufferSize = 64L * 1024;
 constexpr size_t MaximumUniformBufferSize = 64L * 1024 * 1024;
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
@@ -22,21 +21,27 @@ public:
   static auto Create(GraphicsContext &context)
       -> Result<FrameUniformBufferObject>;
 
-  auto Write(const Graphics::GraphicsContext &context,
-             const std::span<const uint8_t> &data, size_t writeOffset = 0UL)
-      -> Result<bool>;
+  auto Write(const std::span<const uint8_t> &data, size_t writeOffset = 0UL)
+      -> Error;
 
   [[nodiscard]] auto GetOffset() const -> size_t { return offset; }
   [[nodiscard]] auto GetSize() const -> size_t { return buffer->size; }
   [[nodiscard]] auto GetBuffer() const -> Ref<Graphics::Buffer> {
     return buffer;
   }
+
+  auto Finalize(const GraphicsContext &context) -> Error;
   auto NewFrame() -> void { offset = 0; }
 
 private:
   Ref<Graphics::Buffer> buffer;
+  std::vector<uint8_t> stagingBuffer =
+      std::vector<uint8_t>(InitialUniformBufferSize);
 
+  size_t internalSize = InitialUniformBufferSize;
   size_t offset{};
+
+  size_t minUniformBufferOffsetAlignment;
 };
 
 extern thread_local std::vector<FrameUniformBufferObject>

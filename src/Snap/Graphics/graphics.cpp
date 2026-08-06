@@ -273,6 +273,7 @@ static auto CreateDevice(GraphicsContext &context,
       .runtimeDescriptorArray = VK_TRUE,
       .timelineSemaphore = VK_TRUE,
       .bufferDeviceAddress = VK_TRUE,
+      .shaderInt8 = VK_TRUE,
   };
 
   PrintDebug(

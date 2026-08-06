@@ -201,14 +201,28 @@ auto UpdateUsage(const GraphicsContext &context, const BarrierSynced &resource,
   auto &previousAccess = state.lastUsedAccess;
   auto &previousStages = state.lastUsedStages;
 
+  state.firstAsyncUsage = false;
+
   // Keep track of first usage for async recording so we can barrier later
   [[unlikely]]
   if (state.firstAsyncUsage) {
     GlobalResourceStateUpdates.emplace_back(state, usage);
   }
 
+  // TODO: Sometimes two barriers that are exactly the same get emitted with, Afaik, no work in between
+  // According to the timeline debugger at least.
+
+  // If this resource was last edited in a different frame or thread context (command buffer)
+  // It means we do not have data from the last context to do a timeline lookback
+  // So we set it to 0 to just read the whole current context, as a fix
+  // if (!state.firstAsyncUsage &&
+  //     state.lastUsedCmdBufferIndex != GetThreadContext().recordingIdentifier) {
+  //   state.lastUsedTimelineIndex = GlobalTimelineOffset;
+  //   state.lastUsedCmdBufferIndex = GetThreadContext().recordingIdentifier;
+  // }
+
   if (!state.firstAsyncUsage &&
-      TimelineLookback(state.lastUsedTimelineIndex, // NOLINT
+      TimelineLookback(state.lastUsedTimelineIndex,
                        {.stages = previousStages, .access = previousAccess},
                        usage)) {
 
@@ -235,10 +249,10 @@ auto UpdateUsage(const GraphicsContext &context, const BarrierSynced &resource,
 
 #if Enable_Snapshots
     auto sync = ResourceSync{
-        .srcStages = barrier.srcStageMask,
-        .srcAccess = barrier.srcAccessMask,
-        .dstStages = barrier.dstStageMask,
-        .dstAccess = barrier.dstAccessMask,
+        .srcStages = previousStages,
+        .srcAccess = previousAccess,
+        .dstStages = usage.stages,
+        .dstAccess = usage.access,
     };
 
     auto event = Snapshot::BarrierEvent(sync, resource.getID());

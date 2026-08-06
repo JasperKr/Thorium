@@ -940,9 +940,7 @@ auto IsSwapchainTexture(const GraphicsContext &context,
 auto FlushGraphics(const GraphicsContext &context) -> Result<bool> {
   ZoneScoped;
 
-  if (TopOfStack->bindPoint != VK_PIPELINE_BIND_POINT_GRAPHICS) {
-    return Error::Unexpected("Current state is not a graphics pipeline.");
-  }
+  ERR_ASSERT(TopOfStack->bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS);
 
   for (const auto &rendertarget : TopOfStack->colorAttachments) {
     if (IsSwapchainTexture(context, *rendertarget.texture)) {
@@ -953,11 +951,7 @@ auto FlushGraphics(const GraphicsContext &context) -> Result<bool> {
 
   auto pipeline = CHECK_RES(GetPipeline(context, *TopOfStack));
 
-  auto *commandBuffer = Graphics::GetCommandBuffer();
-
-  if (commandBuffer == nullptr) {
-    return Error::Unexpected("Command buffer is null in FlushGraphics.");
-  }
+  auto *commandBuffer = CHECK_NULL(Graphics::GetCommandBuffer());
 
   auto viewport = GetClippedViewport();
 
@@ -969,16 +963,12 @@ auto FlushGraphics(const GraphicsContext &context) -> Result<bool> {
 
   auto viewProjectionMatrix = translationMatrix * projectionMatrix;
 
-  static auto projectionMatrixKey = ResourceKey{"DefaultProjectionMatrix"};
+  static auto projectionMatrixKey =
+      ResourceKey{"PushConstants", "DefaultProjectionMatrix"};
 
   if (TopOfStack->shader->GetUniform(projectionMatrixKey) != nullptr) {
-    auto sendErr = UniformWriter::Send(TopOfStack->shader, projectionMatrixKey,
-                                       viewProjectionMatrix);
-
-    if (Error::IsError(sendErr)) {
-      PrintError("Failed to send projection matrix to shader: {}",
-                 sendErr.message);
-    }
+    CHECK_ERR(UniformWriter::Send(TopOfStack->shader, projectionMatrixKey,
+                                  viewProjectionMatrix));
   }
 
   CurrentPipelineLayout = pipeline.second;
@@ -1320,7 +1310,7 @@ inline auto BindGlobalsDescriptor(
       buffer.GetBuffer()->handle, shader->reflection.globalBufferFormat));
 #endif
 
-  CHECK_RES(buffer.Write(context, shader->globalUniforms));
+  CHECK_ERR(buffer.Write(shader->globalUniforms));
   assert((buffer.GetBuffer()->usage & VK_BUFFER_USAGE_2_STORAGE_BUFFER_BIT) ==
          0);
 
@@ -1828,6 +1818,9 @@ auto FinalizeFrame(const GraphicsContext &context) -> Error {
 
   EndRendering(context);
 
+  auto &frameUbo = GetGlobalUniformBuffer(context.frameIndex);
+  CHECK_ERR(frameUbo.Finalize(context));
+
   return Error::Success();
 }
 
@@ -1849,6 +1842,12 @@ auto BeginFrame(const GraphicsContext &context) -> Error {
 
 auto SetDepthMode(bool enable, bool writeEnable, VkCompareOp compareOp)
     -> void {
+  if (TopOfStack->depthTestEnable == static_cast<VkBool32>(enable) &&
+      TopOfStack->depthWriteEnable == static_cast<VkBool32>(writeEnable) &&
+      TopOfStack->depthCompareOp == compareOp) {
+    return;
+  }
+
   TopOfStack->depthTestEnable = static_cast<VkBool32>(enable);
   TopOfStack->depthWriteEnable = static_cast<VkBool32>(writeEnable);
   TopOfStack->depthCompareOp = compareOp;
@@ -1857,39 +1856,77 @@ auto SetDepthMode(bool enable, bool writeEnable, VkCompareOp compareOp)
 }
 
 auto SetCullMode(VkCullModeFlags cullMode) -> void {
+  if (TopOfStack->cullMode == cullMode) {
+    return;
+  }
+
   TopOfStack->cullMode = cullMode;
   TopOfStack->MarkUpdated();
 }
 
 auto SetPolygonMode(VkPolygonMode polygonMode) -> void {
+  if (TopOfStack->polygonMode == polygonMode) {
+    return;
+  }
+
   TopOfStack->polygonMode = polygonMode;
   TopOfStack->MarkUpdated();
 }
 
 auto SetViewport(const VkViewport *viewport) -> void {
-  TopOfStack->MarkUpdated();
   if (viewport == nullptr) {
+    if (!TopOfStack->hasViewport) {
+      return;
+    }
+
+    TopOfStack->MarkUpdated();
+
     TopOfStack->hasViewport = false;
     return;
   }
+
+  if (TopOfStack->hasViewport && TopOfStack->viewport.x == viewport->x &&
+      TopOfStack->viewport.y == viewport->y &&
+      TopOfStack->viewport.width == viewport->width &&
+      TopOfStack->viewport.height == viewport->height) {
+    return;
+  }
+
+  TopOfStack->MarkUpdated();
 
   TopOfStack->hasViewport = true;
   TopOfStack->viewport = *viewport;
 }
 
 auto SetScissor(const VkRect2D *scissor) -> void {
-  TopOfStack->MarkUpdated();
   if (scissor == nullptr) {
+    if (!TopOfStack->hasScissor) {
+      return;
+    }
+
+    TopOfStack->MarkUpdated();
+
     TopOfStack->hasScissor = false;
     return;
   }
+
+  if (TopOfStack->hasScissor &&
+      TopOfStack->scissor.offset.x == scissor->offset.x &&
+      TopOfStack->scissor.offset.y == scissor->offset.y &&
+      TopOfStack->scissor.extent.width == scissor->extent.width &&
+      TopOfStack->scissor.extent.height == scissor->extent.height) {
+    return;
+  }
+
+  TopOfStack->MarkUpdated();
 
   TopOfStack->hasScissor = true;
   TopOfStack->scissor = *scissor;
 }
 
 auto ClipScissor(const VkRect2D &scissor) -> void {
-  TopOfStack->MarkUpdated();
+  TopOfStack
+      ->MarkUpdated(); // We just assume the scissor is changing, so mark the state as dirty
   auto &currentScissor = TopOfStack->scissor;
 
   int32_t rectMinX = std::max(currentScissor.offset.x, scissor.offset.x);
@@ -1918,10 +1955,17 @@ auto ClipScissor(const VkRect2D &scissor) -> void {
 }
 
 auto SetShader(const Ref<Shader> &shader) -> void {
-  TopOfStack->MarkUpdated();
-  if (shader.get() == nullptr) {
+  if (shader == nullptr) {
+    if (TopOfStack->shader != nullptr) {
+      TopOfStack->MarkUpdated();
+    }
+
     TopOfStack->shader = DefaultShaderModule;
   } else {
+    if (TopOfStack->shader != shader) {
+      TopOfStack->MarkUpdated();
+    }
+
     TopOfStack->shader = shader;
   }
 
@@ -2007,11 +2051,19 @@ auto SetRenderTargets(const GraphicsContext &context,
 }
 
 auto SetWindingOrder(VkFrontFace frontFace) -> void {
+  if (TopOfStack->frontFace == frontFace) {
+    return;
+  }
+
   TopOfStack->frontFace = frontFace;
   TopOfStack->MarkUpdated();
 }
 
 auto SetTopology(VkPrimitiveTopology topology) -> void {
+  if (TopOfStack->primitiveTopology == topology) {
+    return;
+  }
+
   TopOfStack->primitiveTopology = topology;
   TopOfStack->MarkUpdated();
 }

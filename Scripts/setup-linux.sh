@@ -17,7 +17,7 @@ fi
 git submodule update --init --recursive
 
 # Create include folders
-mkdir -p include/tl include/vma include/stb include/volk include/shaderc
+mkdir -p include/tl include/vma include/stb include/volk
 
 
 # Fetch TL expected.hpp
@@ -82,17 +82,6 @@ if [ "$override" -eq 1 ] || [ ! -d "include/embree" ] || [ -z "$(ls -A include/e
     cp -r temp_embree/lib/* lib/embree/
     rm -rf temp_embree
 fi
-
-
-# Shaderc: clone repository and copy necessary include
-if [ "$override" -eq 1 ] || [ -z "$(ls -A include/shaderc)" ]; then
-    echo "Fetching shaderc..."
-    git clone --depth 1 https://github.com/google/shaderc.git temp_shaderc
-    cp -r temp_shaderc/include/* include/shaderc/
-else
-    echo "shaderc include folder is not empty, skipping fetch."
-fi
-rm -rf temp_shaderc
 
 
 # If "./include/slang/" is missing or empty, or override is set:

@@ -161,18 +161,16 @@ auto BindMesh(const GraphicsContext &context, VkCommandBuffer cmdBuffer,
     auto indexBuffer = mesh.GetIndexBuffer();
 
     assert(indexBuffer.isValid());
-    ASSUME(indexBuffer.isValid());
 
     Barrier::UpdateUsage(context, *indexBuffer,
                          Barrier::ResourceState{
-                             .stages = VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT,
+                             .stages = VK_PIPELINE_STAGE_2_INDEX_INPUT_BIT,
                              .access = VK_ACCESS_2_INDEX_READ_BIT,
                          });
 
     std::lock_guard<std::mutex> lock(indexBuffer->mutex);
 
     assert(indexBuffer->handle != VK_NULL_HANDLE);
-    ASSUME(indexBuffer->handle != VK_NULL_HANDLE);
 
     if (threadContext.currentMesh != mesh.getID()) {
       vkCmdBindIndexBuffer(cmdBuffer, indexBuffer->handle, 0,
@@ -679,7 +677,7 @@ auto Draw(const GraphicsContext &context, const Ref<Buffer> &indexBuffer,
   {
     Barrier::UpdateUsage(context, *indexBuffer,
                          Barrier::ResourceState{
-                             .stages = VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT,
+                             .stages = VK_PIPELINE_STAGE_2_INDEX_INPUT_BIT,
                              .access = VK_ACCESS_2_INDEX_READ_BIT,
                          });
 

@@ -6,12 +6,14 @@
 #include "Modules/Helpers/utils.hpp"
 #include "Modules/Math/packedColor.hpp"
 #include "Modules/Math/vector.hpp"
+#include "Modules/object.hpp"
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <imgui.h>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <variant>
 #include <vector>
 #include <vulkan/vulkan_core.h>
@@ -20,7 +22,7 @@ namespace Graphics::Snapshot {
 
 auto GetInternalSnapshot() -> ThreadSnapshot & {
   thread_local ThreadSnapshot currentSnapshot(
-      std::vector<std::unique_ptr<::Graphics::Snapshot::Event>>{},
+      std::vector<std::shared_ptr<::Graphics::Snapshot::Event>>{},
       std::vector<::Graphics::DynamicRendering::State>{}, 0, "", false);
   return currentSnapshot;
 }
@@ -52,7 +54,7 @@ auto EndSnapshot() -> void {
   // currentSnapshot.renderStates = {};
   // currentSnapshot.threadId = 0;
   // currentSnapshot.threadName = {};
-  // currentSnapshot.events = std::vector<std::unique_ptr<Event>>{};
+  // currentSnapshot.events = std::vector<std::shared_ptr<Event>>{};
 }
 
 inline auto DrawLegendItem(const char *name, ImU32 color) {
@@ -68,7 +70,7 @@ inline auto DrawLegendItem(const char *name, ImU32 color) {
   center.y += height / 2.0F; // NOLINT
 
   drawList->AddCircleFilled(center, radius, color);
-  drawList->AddCircle(center, radius, 0x2d2d2d); // NOLINT
+  drawList->AddCircle(center, radius, HexToImU32(0x2d2d2d)); // NOLINT
 
   ImGui::SetCursorScreenPos(
       {cursor.x + radius * 2.0F + 4.0F, cursor.y}); // NOLINT
@@ -85,7 +87,7 @@ auto DrawPipelineStage(VkPipelineStageFlagBits2 stage) {
 }
 
 auto DrawPipelineStages(VkPipelineStageFlagBits2 stages) {
-  for (auto flag : Utils::FlagRange(stages)) {
+  for (auto flag : Utils::BitMaskRange(stages)) {
     DrawPipelineStage(flag);
   }
 }
@@ -98,8 +100,9 @@ auto DrawShaderStage(VkShaderStageFlagBits stage) {
 
   DrawLegendItem(infoIter->second.second, infoIter->second.first);
 }
+
 auto DrawShaderStages(VkShaderStageFlagBits stages) {
-  for (auto flag : Utils::FlagRange(static_cast<uint32_t>(stages))) {
+  for (auto flag : Utils::BitMaskRange(static_cast<uint32_t>(stages))) {
     DrawShaderStage(static_cast<VkShaderStageFlagBits>(flag));
   }
 }
@@ -126,44 +129,30 @@ auto RenderSnapshot(const ThreadSnapshot &snapshot) -> void {
     return;
   }
 
-  /*
-  if (ImGui::BeginTable("Events", 1,
-                        ImGuiTableFlags_RowBg |
-                            ImGuiTableFlags_BordersInnerV)) {
-    for (const auto &event : snapshot.events) {
-      ImGui::PushID(index++);
-
-      ImGui::TableNextRow();
-      ImGui::TableNextColumn();
-
-      if (ImGui::TreeNode(
-              "", "%s", EventTypeStringHelper.ToString(event->type).data())) {
-
-        event->DrawImGui(&snapshot);
-        ImGui::TreePop();
-      }
-      ImGui::PopID();
-    }
-
-    ImGui::EndTable();
-  } // namespace Graphics::Snapshot
-  */
-
   float offset{};
   float lineHeight = ImGui::GetTextLineHeightWithSpacing();
 
-  const ImU32 defaultCol = ImColor(0.6F, 0.6F, 0.6F);
-  const ImU32 barrierCol = ImColor(0.6F, 0.45F, 0.4F);
-  const ImU32 layoutCol = ImColor(0.4F, 0.45F, 0.6F);
-  const ImU32 endRenderingCol = ImColor(0.9F, 0.2F, 0.1F);
+  const ImU32 defaultCol = HexToImU32(0x333333);
+  const ImU32 barrierCol = HexToImU32(0x6d1712);
+  const ImU32 layoutCol = HexToImU32(0x124d6d);
+  const ImU32 endRenderingCol = HexToImU32(0x185615);
 
   float charWidth = ImGui::CalcTextSize("W").x;
+
+  static std::shared_ptr<const Event> focussedEvent;
+  static ObjectID associatedIdentifier;
+
+  if (associatedIdentifier != snapshot.getID()) {
+    focussedEvent = nullptr;
+  }
+
+  auto &inout = ImGui::GetIO();
 
   if (ImGui::Begin("Snapshot Viewer")) {
     auto *list = ImGui::GetWindowDrawList();
 
     static Math::Vec2 cameraPosition;
-    static float cameraZoom;
+    static float cameraZoom = 1.0F;
 
     float widthAvailable = ImGui::GetContentRegionAvail().x;
     float itemSize = widthAvailable /
@@ -172,6 +161,17 @@ auto RenderSnapshot(const ThreadSnapshot &snapshot) -> void {
     float yOffset = ImGui::GetCursorPosY();
     float rounding = ImGui::GetStyle().FrameRounding;
 
+    cameraZoom *= 1.0F + (inout.MouseWheel * 0.1F); // NOLINT
+
+    Math::Vec2 currentCameraPosition = cameraPosition;
+
+    currentCameraPosition.x -=
+        ImGui::GetMouseDragDelta(ImGuiMouseButton_Right).x / cameraZoom;
+
+    if (ImGui::IsMouseReleased(ImGuiMouseButton_Right)) {
+      cameraPosition = currentCameraPosition;
+    }
+
     ImVec2 mousePosition = ImGui::GetMousePos();
 
     for (const auto &event : snapshot.events) {
@@ -179,7 +179,7 @@ auto RenderSnapshot(const ThreadSnapshot &snapshot) -> void {
 
       ImVec2 min = {offset, yOffset};
       offset += itemSize;
-      ImVec2 size = {itemSize - 1, lineHeight};
+      ImVec2 size = {itemSize - (1 / cameraZoom), lineHeight};
       ImU32 color = defaultCol;
 
       if (event->type == EventType::Barrier) {
@@ -193,18 +193,29 @@ auto RenderSnapshot(const ThreadSnapshot &snapshot) -> void {
         color = endRenderingCol;
       }
 
+      min.x -= currentCameraPosition.x;
+      min.x -= ImGui::GetWindowWidth() / 2;
+      min.x *= cameraZoom;
+      min.x += ImGui::GetWindowWidth() / 2;
+
       min.x += ImGui::GetWindowPos().x;
       min.y += ImGui::GetWindowPos().y;
+
+      size.x *= cameraZoom;
 
       ImVec2 max = {min.x + size.x, min.y + size.y};
 
       list->AddRectFilled(min, max, color, rounding);
 
+      ImGui::SetCursorScreenPos(min);
+      ImGui::Dummy(size);
+      bool clicked = ImGui::IsItemHovered();
+
       if (size.x - 4 > charWidth) {
         max.x -= 4;
         min.x += 2;
 
-        list->PushClipRect(min, max, false);
+        list->PushClipRect(min, max, true);
 
         ImGui::SetCursorScreenPos(min);
         ImGui::Text("%s", EventTypeStringHelper.ToString(event->type).data());
@@ -212,13 +223,38 @@ auto RenderSnapshot(const ThreadSnapshot &snapshot) -> void {
         list->PopClipRect();
       }
 
+      if (clicked) {
+        ImGui::BeginTooltip();
+        // event->DrawImGui(&snapshot);
+        ImGui::Text("%s", EventTypeStringHelper.ToString(event->type).data());
+        ImGui::EndTooltip();
+
+        if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+          focussedEvent = event;
+          associatedIdentifier = snapshot.getID();
+        }
+      }
+
       ImGui::PopID();
     }
   }
   ImGui::End();
+
+  if (focussedEvent != nullptr) {
+    bool isOpen = true;
+    if (ImGui::Begin("Event Info", &isOpen)) {
+      focussedEvent->DrawImGui(&snapshot);
+    }
+    ImGui::End();
+
+    if (!isOpen) {
+      focussedEvent = nullptr;
+    }
+  }
 }
 
 auto Event::DrawImGui(ThreadSnapshot const *parent) const -> void {
+  ImGui::Text("Event type: %s", EventTypeStringHelper.ToString(type).data());
   ImGui::Text("Timestamp: %lu", timestamp);
 
   DrawVariantImGui(parent);
@@ -301,7 +337,6 @@ inline auto DrawRendertargetImGui(const DynamicRendering::RenderTarget &target,
     }
 
     ImGui::Text("Location: %d", location);
-    // ImGui::Text("Layer: %d", target.layer);
 
     ImGui::TreePop();
   }
@@ -324,6 +359,7 @@ auto GraphicsEvent::DrawStateImGui(ThreadSnapshot const *parent) const -> void {
   ImGui::Indent();
   ImGui::Text("Shader: %s (Module name: %s)", state.shader->name.c_str(),
               state.shader->moduleName.c_str());
+  DrawShaderStage(state.shader->combinedShaderStages);
   ImGui::Text("Rendertargets:");
   ImGui::Indent();
   for (int i = 0; i < state.colorAttachments.size(); i++) {
@@ -445,13 +481,6 @@ auto GraphicsEvent::DrawStateImGui(ThreadSnapshot const *parent) const -> void {
     }
   }
 };
-
-/*
-struct BufferCreateEvent
-struct BufferDestroyEvent
-struct BufferUploadEvent
-struct StructuredBufferUploadEvent
-*/
 
 auto BufferCreateEvent::DrawVariantImGui(ThreadSnapshot const *parent) const
     -> void {
@@ -608,15 +637,6 @@ auto StructuredBufferUploadEvent::DrawVariantImGui(
   }
 };
 
-/*
-struct BufferCopyEvent
-struct TextureCreateEvent
-struct TextureDestroyEvent
-struct TextureUploadEvent
-struct TextureCopyEvent
-
-*/
-
 auto BufferCopyEvent::DrawVariantImGui(ThreadSnapshot const *parent) const
     -> void {
   ImGui::Text("Src Buffer Handle: %p", srcBufferHandle);
@@ -669,11 +689,6 @@ auto TextureCopyEvent::DrawVariantImGui(ThreadSnapshot const *parent) const
   ImGui::Text("Src Height: %u", srcHeight);
 };
 
-/*
-struct PipelineCreateEvent
-struct PipelineDestroyEvent
-*/
-
 auto PipelineCreateEvent::DrawVariantImGui(ThreadSnapshot const *parent) const
     -> void {
   ImGui::Text("Pipeline Handle: %p", pipelineHandle);
@@ -685,12 +700,6 @@ auto PipelineDestroyEvent::DrawVariantImGui(ThreadSnapshot const *parent) const
   ImGui::Text("Pipeline Handle: %p", pipelineHandle);
 };
 
-/*
-struct DescriptorSetCreateEvent
-struct DescriptorSetDestroyEvent
-
-*/
-
 auto DescriptorSetCreateEvent::DrawVariantImGui(
     ThreadSnapshot const *parent) const -> void {
   ImGui::Text("Descriptor Set Handle: %p", descriptorSetHandle);
@@ -701,12 +710,6 @@ auto DescriptorSetDestroyEvent::DrawVariantImGui(
   ImGui::Text("Descriptor Set Handle: %p", descriptorSetHandle);
 };
 
-/*
-struct SamplerCreateEvent
-struct SamplerDestroyEvent
-
-*/
-
 auto SamplerCreateEvent::DrawVariantImGui(ThreadSnapshot const *parent) const
     -> void {
   ImGui::Text("Sampler Handle: %p", samplerHandle);
@@ -716,17 +719,6 @@ auto SamplerDestroyEvent::DrawVariantImGui(ThreadSnapshot const *parent) const
     -> void {
   ImGui::Text("Sampler Handle: %p", samplerHandle);
 };
-
-/*
-struct ShaderModuleCreateEvent
-struct ShaderModuleDestroyEvent
-struct DrawEvent
-struct DrawIndexedEvent
-struct DrawIndirectEvent
-struct DrawIndexedIndirectEvent
-struct DispatchEvent
-struct DispatchIndirectEvent
-*/
 
 auto ShaderModuleCreateEvent::DrawVariantImGui(
     ThreadSnapshot const *parent) const -> void {
@@ -796,14 +788,6 @@ auto DispatchIndirectEvent::DrawVariantImGui(ThreadSnapshot const *parent) const
   DrawStateImGui(parent);
 };
 
-/*
-struct SetPipelineEvent
-struct SetDescriptorSetEvent
-struct SetVertexBufferEvent
-struct SetIndexBufferEvent
-struct SetPushConstantsEvent
-*/
-
 auto SetPipelineEvent::DrawVariantImGui(ThreadSnapshot const *parent) const
     -> void {
   ImGui::Text("Pipeline Handle: %p", pipelineHandle);
@@ -829,132 +813,133 @@ auto SetIndexBufferEvent::DrawVariantImGui(ThreadSnapshot const *parent) const
   ImGui::Text("Index Type: %u", indexType);
 };
 
-inline auto PipelineStageFlag2ToString(VkPipelineStageFlags2 flag)
-    -> std::string_view {
-  switch (flag) {
-    // clang-format off
-  case VK_PIPELINE_STAGE_2_NONE: {return "NONE";}
-  case VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT: {return "TOP_OF_PIPE_BIT";}
-  case VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT: {return "DRAW_INDIRECT_BIT";}
-  case VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT: {return "VERTEX_INPUT_BIT";}
-  case VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT: {return "VERTEX_SHADER_BIT";}
-  case VK_PIPELINE_STAGE_2_TESSELLATION_CONTROL_SHADER_BIT: {return "TESSELLATION_CONTROL_SHADER_BIT";}
-  case VK_PIPELINE_STAGE_2_TESSELLATION_EVALUATION_SHADER_BIT: {return "TESSELLATION_EVALUATION_SHADER_BIT";}
-  case VK_PIPELINE_STAGE_2_GEOMETRY_SHADER_BIT: {return "GEOMETRY_SHADER_BIT";}
-  case VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT: {return "FRAGMENT_SHADER_BIT";}
-  case VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT: {return "EARLY_FRAGMENT_TESTS_BIT";}
-  case VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT: {return "LATE_FRAGMENT_TESTS_BIT";}
-  case VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT: {return "COLOR_ATTACHMENT_OUTPUT_BIT";}
-  case VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT: {return "COMPUTE_SHADER_BIT";}
-  case VK_PIPELINE_STAGE_2_ALL_TRANSFER_BIT: {return "ALL_TRANSFER_BIT";}
-  case VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT: {return "BOTTOM_OF_PIPE_BIT";}
-  case VK_PIPELINE_STAGE_2_HOST_BIT: {return "HOST_BIT";}
-  case VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT: {return "ALL_GRAPHICS_BIT";}
-  case VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT: {return "ALL_COMMANDS_BIT";}
-  case VK_PIPELINE_STAGE_2_COPY_BIT: {return "COPY_BIT";}
-  case VK_PIPELINE_STAGE_2_RESOLVE_BIT: {return "RESOLVE_BIT";}
-  case VK_PIPELINE_STAGE_2_BLIT_BIT: {return "BLIT_BIT";}
-  case VK_PIPELINE_STAGE_2_CLEAR_BIT: {return "CLEAR_BIT";}
-  case VK_PIPELINE_STAGE_2_INDEX_INPUT_BIT: {return "INDEX_INPUT_BIT";}
-  case VK_PIPELINE_STAGE_2_VERTEX_ATTRIBUTE_INPUT_BIT: {return "VERTEX_ATTRIBUTE_INPUT_BIT";}
-  case VK_PIPELINE_STAGE_2_PRE_RASTERIZATION_SHADERS_BIT: {return "PRE_RASTERIZATION_SHADERS_BIT";}
-  case VK_PIPELINE_STAGE_2_VIDEO_DECODE_BIT_KHR: {return "VIDEO_DECODE_BIT_KHR";}
-  case VK_PIPELINE_STAGE_2_VIDEO_ENCODE_BIT_KHR: {return "VIDEO_ENCODE_BIT_KHR";}
-  case VK_PIPELINE_STAGE_2_TRANSFORM_FEEDBACK_BIT_EXT: {return "TRANSFORM_FEEDBACK_BIT_EXT";}
-  case VK_PIPELINE_STAGE_2_CONDITIONAL_RENDERING_BIT_EXT: {return "CONDITIONAL_RENDERING_BIT_EXT";}
-  case VK_PIPELINE_STAGE_2_COMMAND_PREPROCESS_BIT_NV: {return "COMMAND_PREPROCESS_BIT_NV";}
-  case VK_PIPELINE_STAGE_2_FRAGMENT_SHADING_RATE_ATTACHMENT_BIT_KHR: {return "FRAGMENT_SHADING_RATE_ATTACHMENT_BIT_KHR";}
-  case VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR: {return "ACCELERATION_STRUCTURE_BUILD_BIT_KHR";}
-  case VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR: {return "RAY_TRACING_SHADER_BIT_KHR";}
-  case VK_PIPELINE_STAGE_2_FRAGMENT_DENSITY_PROCESS_BIT_EXT: {return "FRAGMENT_DENSITY_PROCESS_BIT_EXT";}
-  case VK_PIPELINE_STAGE_2_TASK_SHADER_BIT_EXT: {return "TASK_SHADER_BIT_EXT";}
-  case VK_PIPELINE_STAGE_2_MESH_SHADER_BIT_EXT: {return "MESH_SHADER_BIT_EXT";}
-  case VK_PIPELINE_STAGE_2_SUBPASS_SHADER_BIT_HUAWEI: {return "SUBPASS_SHADER_BIT_HUAWEI";}
-  // clang-format on
-  default:
-    return "Unknown Pipeline Stage Flag";
+inline auto ImageLayoutToString(VkImageLayout layout) -> std::string_view {
+  // clang-format off
+  switch (layout) {
+  case VK_IMAGE_LAYOUT_UNDEFINED: return "Undefined";
+  case VK_IMAGE_LAYOUT_GENERAL: return "General";
+  case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL: return "Color attachment optimal";
+  case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL: return "Depth stencil attachment optimal";
+  case VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL: return "Depth stencil read only optimal";
+  case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL: return "Shader read only optimal";
+  case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL: return "Transfer src optimal";
+  case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL: return "Transfer dst optimal";
+  case VK_IMAGE_LAYOUT_PREINITIALIZED: return "Preinitialized";
+  case VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_STENCIL_ATTACHMENT_OPTIMAL: return "Depth read only stencil attachment optimal";
+  case VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_STENCIL_READ_ONLY_OPTIMAL: return "Depth attachment stencil read only optimal";
+  case VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL: return "Depth attachment optimal";
+  case VK_IMAGE_LAYOUT_DEPTH_READ_ONLY_OPTIMAL: return "Depth read only optimal";
+  case VK_IMAGE_LAYOUT_STENCIL_ATTACHMENT_OPTIMAL: return "Stencil attachment optimal";
+  case VK_IMAGE_LAYOUT_STENCIL_READ_ONLY_OPTIMAL: return "Stencil read only optimal";
+  case VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL: return "Read only optimal";
+  case VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL: return "Attachment optimal";
+  case VK_IMAGE_LAYOUT_RENDERING_LOCAL_READ: return "Rendering local read";
+  case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR: return "Present src khr";
+  case VK_IMAGE_LAYOUT_VIDEO_DECODE_DST_KHR: return "Video decode dst khr";
+  case VK_IMAGE_LAYOUT_VIDEO_DECODE_SRC_KHR: return "Video decode src khr";
+  case VK_IMAGE_LAYOUT_VIDEO_DECODE_DPB_KHR: return "Video decode dpb khr";
+  case VK_IMAGE_LAYOUT_SHARED_PRESENT_KHR: return "Shared present khr";
+  case VK_IMAGE_LAYOUT_FRAGMENT_DENSITY_MAP_OPTIMAL_EXT: return "Fragment density map optimal ext";
+  case VK_IMAGE_LAYOUT_FRAGMENT_SHADING_RATE_ATTACHMENT_OPTIMAL_KHR: return "Fragment shading rate attachment optimal khr";
+  case VK_IMAGE_LAYOUT_VIDEO_ENCODE_DST_KHR: return "Video encode dst khr";
+  case VK_IMAGE_LAYOUT_VIDEO_ENCODE_SRC_KHR: return "Video encode src khr";
+  case VK_IMAGE_LAYOUT_VIDEO_ENCODE_DPB_KHR: return "Video encode dpb khr";
+  case VK_IMAGE_LAYOUT_ATTACHMENT_FEEDBACK_LOOP_OPTIMAL_EXT: return "Attachment feedback loop optimal ext";
+  case VK_IMAGE_LAYOUT_TENSOR_ALIASING_ARM: return "Tensor aliasing arm";
+  case VK_IMAGE_LAYOUT_VIDEO_ENCODE_QUANTIZATION_MAP_KHR: return "Video encode quantization map khr";
+  case VK_IMAGE_LAYOUT_ZERO_INITIALIZED_EXT: return "Zero initialized ext";
+  case VK_IMAGE_LAYOUT_MAX_ENUM: return "Max enum";
   }
+  // clang-format on
 }
 
 inline auto AccessFlag2ToString(VkAccessFlags2 flag) {
   switch (flag) {
     // clang-format off
 
-  case VK_ACCESS_2_NONE: { return "NONE"; }
-  case VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT: { return "INDIRECT_COMMAND_READ_BIT"; }
-  case VK_ACCESS_2_INDEX_READ_BIT: { return "INDEX_READ_BIT"; }
-  case VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT: { return "VERTEX_ATTRIBUTE_READ_BIT"; }
-  case VK_ACCESS_2_UNIFORM_READ_BIT: { return "UNIFORM_READ_BIT"; }
-  case VK_ACCESS_2_INPUT_ATTACHMENT_READ_BIT: { return "INPUT_ATTACHMENT_READ_BIT"; }
-  case VK_ACCESS_2_SHADER_READ_BIT: { return "SHADER_READ_BIT"; }
-  case VK_ACCESS_2_SHADER_WRITE_BIT: { return "SHADER_WRITE_BIT"; }
-  case VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT: { return "COLOR_ATTACHMENT_READ_BIT"; }
-  case VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT: { return "COLOR_ATTACHMENT_WRITE_BIT"; }
-  case VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT: { return "DEPTH_STENCIL_ATTACHMENT_READ_BIT"; }
-  case VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT: { return "DEPTH_STENCIL_ATTACHMENT_WRITE_BIT"; }
-  case VK_ACCESS_2_TRANSFER_READ_BIT: { return "TRANSFER_READ_BIT"; }
-  case VK_ACCESS_2_TRANSFER_WRITE_BIT: { return "TRANSFER_WRITE_BIT"; }
-  case VK_ACCESS_2_HOST_READ_BIT: { return "HOST_READ_BIT"; }
-  case VK_ACCESS_2_HOST_WRITE_BIT: { return "HOST_WRITE_BIT"; }
-  case VK_ACCESS_2_MEMORY_READ_BIT: { return "MEMORY_READ_BIT"; }
-  case VK_ACCESS_2_MEMORY_WRITE_BIT: { return "MEMORY_WRITE_BIT"; }
-  case VK_ACCESS_2_SHADER_SAMPLED_READ_BIT: { return "SHADER_SAMPLED_READ_BIT"; }
-  case VK_ACCESS_2_SHADER_STORAGE_READ_BIT: { return "SHADER_STORAGE_READ_BIT"; }
-  case VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT: { return "SHADER_STORAGE_WRITE_BIT"; }
-  case VK_ACCESS_2_VIDEO_DECODE_READ_BIT_KHR: { return "VIDEO_DECODE_READ_BIT_KHR"; }
-  case VK_ACCESS_2_VIDEO_DECODE_WRITE_BIT_KHR: { return "VIDEO_DECODE_WRITE_BIT_KHR"; }
-  case VK_ACCESS_2_VIDEO_ENCODE_READ_BIT_KHR: { return "VIDEO_ENCODE_READ_BIT_KHR"; }
-  case VK_ACCESS_2_VIDEO_ENCODE_WRITE_BIT_KHR: { return "VIDEO_ENCODE_WRITE_BIT_KHR"; }
-  case VK_ACCESS_2_SHADER_TILE_ATTACHMENT_READ_BIT_QCOM: { return "SHADER_TILE_ATTACHMENT_READ_BIT_QCOM"; }
-  case VK_ACCESS_2_SHADER_TILE_ATTACHMENT_WRITE_BIT_QCOM: { return "SHADER_TILE_ATTACHMENT_WRITE_BIT_QCOM"; }
-  case VK_ACCESS_2_TRANSFORM_FEEDBACK_WRITE_BIT_EXT: { return "TRANSFORM_FEEDBACK_WRITE_BIT_EXT"; }
-  case VK_ACCESS_2_TRANSFORM_FEEDBACK_COUNTER_READ_BIT_EXT: { return "TRANSFORM_FEEDBACK_COUNTER_READ_BIT_EXT"; }
-  case VK_ACCESS_2_TRANSFORM_FEEDBACK_COUNTER_WRITE_BIT_EXT: { return "TRANSFORM_FEEDBACK_COUNTER_WRITE_BIT_EXT"; }
-  case VK_ACCESS_2_CONDITIONAL_RENDERING_READ_BIT_EXT: { return "CONDITIONAL_RENDERING_READ_BIT_EXT"; }
-  case VK_ACCESS_2_COMMAND_PREPROCESS_READ_BIT_EXT: { return "COMMAND_PREPROCESS_READ_BIT_EXT"; }
-  case VK_ACCESS_2_COMMAND_PREPROCESS_WRITE_BIT_EXT: { return "COMMAND_PREPROCESS_WRITE_BIT_EXT"; }
-  case VK_ACCESS_2_FRAGMENT_SHADING_RATE_ATTACHMENT_READ_BIT_KHR: { return "FRAGMENT_SHADING_RATE_ATTACHMENT_READ_BIT_KHR"; }
-  case VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR: { return "ACCELERATION_STRUCTURE_READ_BIT_KHR"; }
-  case VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR: { return "ACCELERATION_STRUCTURE_WRITE_BIT_KHR"; }
-  case VK_ACCESS_2_FRAGMENT_DENSITY_MAP_READ_BIT_EXT: { return "FRAGMENT_DENSITY_MAP_READ_BIT_EXT"; }
-  case VK_ACCESS_2_COLOR_ATTACHMENT_READ_NONCOHERENT_BIT_EXT: { return "COLOR_ATTACHMENT_READ_NONCOHERENT_BIT_EXT"; }
-  case VK_ACCESS_2_DESCRIPTOR_BUFFER_READ_BIT_EXT: { return "DESCRIPTOR_BUFFER_READ_BIT_EXT"; }
-  case VK_ACCESS_2_INVOCATION_MASK_READ_BIT_HUAWEI: { return "INVOCATION_MASK_READ_BIT_HUAWEI"; }
-  case VK_ACCESS_2_SHADER_BINDING_TABLE_READ_BIT_KHR: { return "SHADER_BINDING_TABLE_READ_BIT_KHR"; }
-  case VK_ACCESS_2_MICROMAP_READ_BIT_EXT: { return "MICROMAP_READ_BIT_EXT"; }
-  case VK_ACCESS_2_MICROMAP_WRITE_BIT_EXT: { return "MICROMAP_WRITE_BIT_EXT"; }
-  case VK_ACCESS_2_OPTICAL_FLOW_READ_BIT_NV: { return "OPTICAL_FLOW_READ_BIT_NV"; }
-  case VK_ACCESS_2_OPTICAL_FLOW_WRITE_BIT_NV: { return "OPTICAL_FLOW_WRITE_BIT_NV"; }
-  case VK_ACCESS_2_DATA_GRAPH_READ_BIT_ARM: { return "DATA_GRAPH_READ_BIT_ARM"; }
-  case VK_ACCESS_2_DATA_GRAPH_WRITE_BIT_ARM: { return "DATA_GRAPH_WRITE_BIT_ARM"; }
+  case VK_ACCESS_2_NONE: { return "None"; }
+  case VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT: { return "Indirect command read bit"; }
+  case VK_ACCESS_2_INDEX_READ_BIT: { return "Index read bit"; }
+  case VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT: { return "Vertex attribute read bit"; }
+  case VK_ACCESS_2_UNIFORM_READ_BIT: { return "Uniform read bit"; }
+  case VK_ACCESS_2_INPUT_ATTACHMENT_READ_BIT: { return "Input attachment read bit"; }
+  case VK_ACCESS_2_SHADER_READ_BIT: { return "Shader read bit"; }
+  case VK_ACCESS_2_SHADER_WRITE_BIT: { return "Shader write bit"; }
+  case VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT: { return "Color attachment read bit"; }
+  case VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT: { return "Color attachment write bit"; }
+  case VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT: { return "Depth stencil attachment read bit"; }
+  case VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT: { return "Depth stencil attachment write bit"; }
+  case VK_ACCESS_2_TRANSFER_READ_BIT: { return "Transfer read bit"; }
+  case VK_ACCESS_2_TRANSFER_WRITE_BIT: { return "Transfer write bit"; }
+  case VK_ACCESS_2_HOST_READ_BIT: { return "Host read bit"; }
+  case VK_ACCESS_2_HOST_WRITE_BIT: { return "Host write bit"; }
+  case VK_ACCESS_2_MEMORY_READ_BIT: { return "Memory read bit"; }
+  case VK_ACCESS_2_MEMORY_WRITE_BIT: { return "Memory write bit"; }
+  case VK_ACCESS_2_SHADER_SAMPLED_READ_BIT: { return "Shader sampled read bit"; }
+  case VK_ACCESS_2_SHADER_STORAGE_READ_BIT: { return "Shader storage read bit"; }
+  case VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT: { return "Shader storage write bit"; }
+  case VK_ACCESS_2_VIDEO_DECODE_READ_BIT_KHR: { return "Video decode read bit khr"; }
+  case VK_ACCESS_2_VIDEO_DECODE_WRITE_BIT_KHR: { return "Video decode write bit khr"; }
+  case VK_ACCESS_2_VIDEO_ENCODE_READ_BIT_KHR: { return "Video encode read bit khr"; }
+  case VK_ACCESS_2_VIDEO_ENCODE_WRITE_BIT_KHR: { return "Video encode write bit khr"; }
+  case VK_ACCESS_2_SHADER_TILE_ATTACHMENT_READ_BIT_QCOM: { return "Shader tile attachment read bit qcom"; }
+  case VK_ACCESS_2_SHADER_TILE_ATTACHMENT_WRITE_BIT_QCOM: { return "Shader tile attachment write bit qcom"; }
+  case VK_ACCESS_2_TRANSFORM_FEEDBACK_WRITE_BIT_EXT: { return "Transform feedback write bit ext"; }
+  case VK_ACCESS_2_TRANSFORM_FEEDBACK_COUNTER_READ_BIT_EXT: { return "Transform feedback counter read bit ext"; }
+  case VK_ACCESS_2_TRANSFORM_FEEDBACK_COUNTER_WRITE_BIT_EXT: { return "Transform feedback counter write bit ext"; }
+  case VK_ACCESS_2_CONDITIONAL_RENDERING_READ_BIT_EXT: { return "Conditional rendering read bit ext"; }
+  case VK_ACCESS_2_COMMAND_PREPROCESS_READ_BIT_EXT: { return "Command preprocess read bit ext"; }
+  case VK_ACCESS_2_COMMAND_PREPROCESS_WRITE_BIT_EXT: { return "Command preprocess write bit ext"; }
+  case VK_ACCESS_2_FRAGMENT_SHADING_RATE_ATTACHMENT_READ_BIT_KHR: { return "Fragment shading rate attachment read bit khr"; }
+  case VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR: { return "Acceleration structure read bit khr"; }
+  case VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR: { return "Acceleration structure write bit khr"; }
+  case VK_ACCESS_2_FRAGMENT_DENSITY_MAP_READ_BIT_EXT: { return "Fragment density map read bit ext"; }
+  case VK_ACCESS_2_COLOR_ATTACHMENT_READ_NONCOHERENT_BIT_EXT: { return "Color attachment read noncoherent bit ext"; }
+  case VK_ACCESS_2_DESCRIPTOR_BUFFER_READ_BIT_EXT: { return "Descriptor buffer read bit ext"; }
+  case VK_ACCESS_2_INVOCATION_MASK_READ_BIT_HUAWEI: { return "Invocation mask read bit huawei"; }
+  case VK_ACCESS_2_SHADER_BINDING_TABLE_READ_BIT_KHR: { return "Shader binding table read bit khr"; }
+  case VK_ACCESS_2_MICROMAP_READ_BIT_EXT: { return "Micromap read bit ext"; }
+  case VK_ACCESS_2_MICROMAP_WRITE_BIT_EXT: { return "Micromap write bit ext"; }
+  case VK_ACCESS_2_OPTICAL_FLOW_READ_BIT_NV: { return "Optical flow read bit nv"; }
+  case VK_ACCESS_2_OPTICAL_FLOW_WRITE_BIT_NV: { return "Optical flow write bit nv"; }
+  case VK_ACCESS_2_DATA_GRAPH_READ_BIT_ARM: { return "Data graph read bit arm"; }
+  case VK_ACCESS_2_DATA_GRAPH_WRITE_BIT_ARM: { return "Data graph write bit arm"; }
   // clang-format on
   default:
     return "Unknown Access Flag";
   }
 }
 
+auto LayoutTransitionEvent::DrawVariantImGui(ThreadSnapshot const *parent) const
+    -> void {
+  ImGui::Text("Layout: %s -> %s", ImageLayoutToString(srcLayout).data(),
+              ImageLayoutToString(dstLayout).data());
+
+  ImGui::SeparatorText("Source access mask");
+  for (const auto &access : Utils::BitMaskRange(srcAccessMask)) {
+    ImGui::Text("%s", AccessFlag2ToString(access));
+  }
+
+  ImGui::SeparatorText("Destination access mask");
+  for (const auto &access : Utils::BitMaskRange(dstAccessMask)) {
+    ImGui::Text("%s", AccessFlag2ToString(access));
+  }
+
+  ImGui::SeparatorText("Source pipeline stages");
+  DrawPipelineStages(srcStageMask);
+  ImGui::SeparatorText("Destination pipeline stages");
+  DrawPipelineStages(dstStageMask);
+}
+
 auto BarrierEvent::DrawVariantImGui(ThreadSnapshot const *parent) const
     -> void {
-
   ImGui::Text("Acting on resource: %lu", resourceId);
   ImGui::Text("Source Stages:");
   ImGui::Indent();
   if (sync.srcStages == 0) {
     ImGui::Text("None");
   } else {
-    for (const auto &stage : Utils::BitMaskRange(sync.srcStages)) {
-      ImGui::Text("%s", PipelineStageFlag2ToString(stage).data());
-    }
-  }
-  ImGui::Unindent();
-  ImGui::Text("Source Access:");
-  ImGui::Indent();
-  if (sync.srcAccess == 0) {
-    ImGui::Text("None");
-  } else {
-    for (const auto &access : Utils::BitMaskRange(sync.srcAccess)) {
-      ImGui::Text("%s", AccessFlag2ToString(access));
-    }
+    DrawPipelineStages(sync.srcStages);
   }
   ImGui::Unindent();
   ImGui::Text("Destination Stages:");
@@ -962,8 +947,17 @@ auto BarrierEvent::DrawVariantImGui(ThreadSnapshot const *parent) const
   if (sync.dstStages == 0) {
     ImGui::Text("None");
   } else {
-    for (const auto &stage : Utils::BitMaskRange(sync.dstStages)) {
-      ImGui::Text("%s", PipelineStageFlag2ToString(stage).data());
+    DrawPipelineStages(sync.dstStages);
+  }
+  ImGui::Unindent();
+
+  ImGui::Text("Source Access:");
+  ImGui::Indent();
+  if (sync.srcAccess == 0) {
+    ImGui::Text("None");
+  } else {
+    for (const auto &access : Utils::BitMaskRange(sync.srcAccess)) {
+      ImGui::Text("%s", AccessFlag2ToString(access));
     }
   }
   ImGui::Unindent();

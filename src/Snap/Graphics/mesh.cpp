@@ -210,8 +210,8 @@ auto Mesh::SetVertices(const GraphicsContext &context, uint32_t binding,
 }
 
 auto Mesh::SetIndices(const GraphicsContext &context,
-                      const std::span<uint8_t> &indexData, VkIndexType format)
-    -> Error {
+                      const std::span<uint8_t> &indexData, VkIndexType format,
+                      uint32_t offset) -> Error {
 
   if (format != VK_INDEX_TYPE_UINT16 && format != VK_INDEX_TYPE_UINT32 &&
       format != VK_INDEX_TYPE_UINT8) {
@@ -245,7 +245,7 @@ auto Mesh::SetIndices(const GraphicsContext &context,
 
   IndicesFormat = format;
 
-  return UploadIndices(context, indexData, 0, format);
+  return UploadIndices(context, indexData, offset, format);
 }
 
 auto Mesh::SetVertexBuffer(const Ref<Buffer> &buffer, uint32_t binding)

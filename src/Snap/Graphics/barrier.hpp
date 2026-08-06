@@ -102,6 +102,7 @@ struct AccessState {
   // CS read from buffer 2
   // We need to know when stuff was synced last
   mutable uint64_t lastUsedTimelineIndex = 0;
+  // mutable uint64_t lastUsedCmdBufferIndex = UINT64_MAX;
 
   // Whether this is the first usage recorded for this resource in the frame
   // When using it for async work.

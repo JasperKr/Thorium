@@ -609,10 +609,7 @@ auto wrap_SubmitCommandBuffer(lua_State *state) -> int {
 
   if (snapshot != nullptr) {
     // We copy the snapshot data to a new object so the next one isn't overwritten
-    auto snapshotCopyResult = Ref<::Graphics::Snapshot::ThreadSnapshot>::Make(
-        std::vector<std::unique_ptr<::Graphics::Snapshot::Event>>{},
-        std::vector<::Graphics::DynamicRendering::State>{}, snapshot->threadId,
-        snapshot->threadName, false);
+    auto snapshotCopyResult = snapshot->Copy();
 
     snapshotCopyResult->events = std::move(snapshot->events);
     snapshotCopyResult->renderStates = std::move(snapshot->renderStates);

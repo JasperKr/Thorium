@@ -13,10 +13,12 @@
 #include "Modules/error.hpp"
 #include "Modules/imageData.hpp"
 #include "Modules/object.hpp"
+#include "Wrap/wrap.hpp"
 #include "imgui.h"
 
 #include "style.hpp"
 #include "vulkan/vulkan_core.h"
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -263,21 +265,14 @@ inline auto SetupTemporaryCommandLists(ImDrawData *drawData,
         reinterpret_cast<uint8_t *>(vertexSpan.data()),
         vertexSpan.size_bytes());
 
-    auto setResult =
-        temporaryCommandList.Mesh->SetVertices(ctx, 0, rawVertexSpan, 0);
-    if (Error::IsError(setResult)) {
-      return setResult;
-    }
+    CHECK_ERR(temporaryCommandList.Mesh->SetVertices(ctx, 0, rawVertexSpan, 0));
 
     auto indexSpan = std::span<uint8_t>( // NOLINTNEXTLINE
         reinterpret_cast<uint8_t *>(commandList->IdxBuffer.Data),
         static_cast<size_t>(commandList->IdxBuffer.size() * 2));
 
-    setResult = temporaryCommandList.Mesh->SetIndices(ctx, indexSpan,
-                                                      VK_INDEX_TYPE_UINT16);
-    if (Error::IsError(setResult)) {
-      return setResult;
-    }
+    CHECK_ERR(temporaryCommandList.Mesh->SetIndices(ctx, indexSpan,
+                                                    VK_INDEX_TYPE_UINT16));
   }
 
   return Error::Success();
@@ -313,29 +308,17 @@ inline auto DrawTemporaryCommandLists(Graphics::GraphicsContext &ctx,
         Graphics::DynamicRendering::SetScissor(&scissorRect);
 
         auto *texture = // NOLINTNEXTLINE
-            reinterpret_cast<Graphics::Texture *>(pcmd.GetTexID());
-
-        if (texture == nullptr) {
-          return Error::Create("ImGui texture is null");
-        }
+            CHECK_NULL(reinterpret_cast<Graphics::Texture *>(pcmd.GetTexID()));
 
         auto texRef = Ref<Graphics::Texture>(texture);
-        static auto key = Graphics::ResourceKey{"MainTexture"};
-        auto sendResult = Engine::Gui::ImGuiShaderRGBA8->Send(key, texRef);
-        if (Error::IsError(sendResult)) {
-          return sendResult;
-        }
+        CHECK_ERR(Engine::Gui::ImGuiShaderRGBA8->Send({"MainTexture"}, texRef));
 
         temporaryCommandList.Mesh->SetDrawRange({
             .Offset = static_cast<uint32_t>(pcmd.IdxOffset),
             .Count = static_cast<uint32_t>(pcmd.ElemCount),
         });
 
-        auto drawResult = Graphics::Draw(ctx, *temporaryCommandList.Mesh);
-
-        if (Error::IsError(drawResult)) {
-          return drawResult;
-        }
+        CHECK_ERR(Graphics::Draw(ctx, *temporaryCommandList.Mesh));
       }
     }
   }
@@ -352,57 +335,30 @@ auto Draw(lua_State *state) -> int {
   Graphics::DynamicRendering::SetCullMode(VK_CULL_MODE_NONE);
   Graphics::DynamicRendering::SetDepthMode(false, false, VK_COMPARE_OP_ALWAYS);
 
-  auto changeResult = ChangeMouseState(inout);
-  if (Error::IsError(changeResult)) {
-    return luaL_error(state, "Failed to change ImGui mouse state: %s",
-                      changeResult.message.c_str());
-  }
-
-  auto *drawData = ImGui::GetDrawData();
-
-  if (drawData == nullptr) {
-    return luaL_error(state, "ImGui draw data is null");
-  }
+  LUA_CK_ERR(ChangeMouseState(inout));
+  auto *drawData = LUA_CK_NULL(ImGui::GetDrawData());
 
   for (ImTextureData *tex : *drawData->Textures) {
     if (tex->Status == ImTextureStatus_WantCreate) {
-      auto creationResult = HandleImguiCreateTextureEvent(ctx, tex);
-      if (Error::IsError(creationResult)) {
-        return luaL_error(state, "Failed to create ImGui texture: %s",
-                          creationResult.message.c_str());
-      }
+      LUA_CK_ERR(HandleImguiCreateTextureEvent(ctx, tex));
     } else if (tex->Status == ImTextureStatus_WantDestroy) {
-      auto destructionResult = HandleImguiDestroyTextureEvent(tex);
-      if (Error::IsError(destructionResult)) {
-        return luaL_error(state, "Failed to destroy ImGui texture: %s",
-                          destructionResult.message.c_str());
-      }
+      LUA_CK_ERR(HandleImguiDestroyTextureEvent(tex));
     } else if (tex->Status == ImTextureStatus_WantUpdates) {
-      auto updateResult = HandleImguiUpdateTextureEvent(ctx, tex);
-      if (Error::IsError(updateResult)) {
-        return luaL_error(state, "Failed to update ImGui texture: %s",
-                          updateResult.message.c_str());
-      }
+      LUA_CK_ERR(HandleImguiUpdateTextureEvent(ctx, tex));
     }
   }
 
-  auto setupResult = SetupTemporaryCommandLists(drawData, ctx);
-
-  if (Error::IsError(setupResult)) {
-    return luaL_error(state,
-                      "Failed to setup ImGui temporary command lists: %s",
-                      setupResult.message.c_str());
-  }
-
-  auto drawResult = DrawTemporaryCommandLists(ctx, drawData);
-
-  if (Error::IsError(drawResult)) {
-    return luaL_error(state, "Failed to draw ImGui temporary command lists: %s",
-                      drawResult.message.c_str());
-  }
+  LUA_CK_ERR(SetupTemporaryCommandLists(drawData, ctx));
+  LUA_CK_ERR(DrawTemporaryCommandLists(ctx, drawData));
 
   return 0;
 }
+
+const std::array<int, 3> ImGuiMouseButtonRemap{
+    0, // 0 -> 0
+    2, // 1 -> 2
+    1  // 2 -> 1
+};
 
 // Imgui event passthrough functions
 auto MousePressed(lua_State *state) -> int {
@@ -415,7 +371,7 @@ auto MousePressed(lua_State *state) -> int {
 
   // NOLINTBEGIN
   if (button >= 0 && button < IM_ARRAYSIZE(inout.MouseDown)) {
-    inout.AddMouseButtonEvent(button, true);
+    inout.AddMouseButtonEvent(ImGuiMouseButtonRemap.at(button), true);
   }
   // NOLINTEND
 
@@ -431,7 +387,7 @@ auto MouseReleased(lua_State *state) -> int {
   auto &inout = ImGui::GetIO();
   // NOLINTBEGIN
   if (button >= 0 && button < IM_ARRAYSIZE(inout.MouseDown)) {
-    inout.AddMouseButtonEvent(button, false);
+    inout.AddMouseButtonEvent(ImGuiMouseButtonRemap.at(button), false);
   }
   // NOLINTEND
 

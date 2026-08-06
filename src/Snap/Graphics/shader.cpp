@@ -14,9 +14,6 @@
 #include "Modules/object.hpp"
 #include "Modules/window.hpp"
 #include "graphics.hpp"
-#include "shaderc/shaderc.h"
-#include "shaderc/shaderc.hpp"
-#include "shaderc/status.h"
 #include "slang/slang-com-ptr.h"
 #include "slang/slang.h"
 #include <array>
@@ -165,80 +162,6 @@ void UnloadShaderModule(const Graphics::GraphicsContext &context) {
   slang::shutdown();
 }
 
-inline auto VkShaderStageToShaderCStage(VkShaderStageFlagBits stage)
-    -> shaderc_shader_kind {
-  switch (stage) {
-  case VK_SHADER_STAGE_VERTEX_BIT:
-    return shaderc_vertex_shader;
-  case VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT:
-    return shaderc_tess_control_shader;
-  case VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT:
-    return shaderc_tess_evaluation_shader;
-  case VK_SHADER_STAGE_GEOMETRY_BIT:
-    return shaderc_geometry_shader;
-  case VK_SHADER_STAGE_FRAGMENT_BIT:
-    return shaderc_fragment_shader;
-  case VK_SHADER_STAGE_COMPUTE_BIT:
-    return shaderc_compute_shader;
-
-  // mesh/task shaders (Vulkan 1.2 / EXT_mesh_shader)
-  case VK_SHADER_STAGE_MESH_BIT_EXT:
-    return shaderc_mesh_shader; // Shaderc >= 2022
-  case VK_SHADER_STAGE_TASK_BIT_EXT:
-    return shaderc_task_shader;
-
-  // ray tracing shaders (Vulkan 1.2+ / EXT_ray_tracing)
-  case VK_SHADER_STAGE_RAYGEN_BIT_KHR:
-    return shaderc_raygen_shader;
-  case VK_SHADER_STAGE_ANY_HIT_BIT_KHR:
-    return shaderc_anyhit_shader;
-  case VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR:
-    return shaderc_closesthit_shader;
-  case VK_SHADER_STAGE_MISS_BIT_KHR:
-    return shaderc_miss_shader;
-  case VK_SHADER_STAGE_INTERSECTION_BIT_KHR:
-    return shaderc_intersection_shader;
-  case VK_SHADER_STAGE_CALLABLE_BIT_KHR:
-    return shaderc_callable_shader;
-
-  default:
-    return (shaderc_shader_kind)-1; // invalid
-  }
-}
-
-static auto GetShaderCCompiler() -> shaderc::Compiler & {
-  static shaderc::Compiler compiler = {};
-
-  return compiler;
-}
-
-static inline auto
-SpvCompilationStatusToString(const shaderc_compilation_status result)
-    -> std::string_view {
-  switch (result) {
-  case shaderc_compilation_status_success:
-    return "Compilation succeeded.";
-  case shaderc_compilation_status_invalid_stage:
-    return "Invalid shader stage.";
-  case shaderc_compilation_status_compilation_error:
-    return "Compilation error: ";
-  case shaderc_compilation_status_internal_error:
-    return "Internal compiler error: ";
-  case shaderc_compilation_status_null_result_object:
-    return "Null result object.";
-  case shaderc_compilation_status_invalid_assembly:
-    return "Invalid SPIR-V assembly.";
-  case shaderc_compilation_status_validation_error:
-    return "SPIR-V validation error.";
-  case shaderc_compilation_status_transformation_error:
-    return "SPIR-V transformation error.";
-  case shaderc_compilation_status_configuration_error:
-    return "Configuration error.";
-  default:
-    return "Unknown compilation status.";
-  }
-}
-
 auto SlangStageToVkStage(SlangStage stage) -> VkShaderStageFlagBits {
   switch (stage) {
   case SLANG_STAGE_VERTEX:
@@ -374,6 +297,12 @@ static inline auto LoadSlang(const GraphicsContext &context,
     auto diagnostics = std::string_view(
         static_cast<const char *>(diagnosticsBlob->getBufferPointer()),
         diagnosticsBlob->getBufferSize());
+
+    if (diagnosticsBlob.get() == nullptr ||
+        (diagnosticsBlob->getBufferSize() == 0U)) {
+      return Error::Create("Unknown error");
+    }
+
     return Error::Createf("Diagnostics:\n{}", diagnostics);
   }
 

@@ -10,13 +10,18 @@ struct VertexInput {
   float4 Color : COLOR;
 };
 
-uniform float4x4 DefaultProjectionMatrix;
+struct PushConstantsBuffer {
+  float4x4 DefaultProjectionMatrix;
+};
+
+[[vk::push_constant]]
+PushConstantsBuffer PushConstants;
 
 [shader("vertex")]
 VertexStageOutput vertexMain(VertexInput input) {
   VertexStageOutput out;
-  out.sv_position =
-      mul(float4(input.Position, 0.0, 1.0), DefaultProjectionMatrix);
+  out.sv_position = mul(float4(input.Position, 0.0, 1.0),
+                        PushConstants.DefaultProjectionMatrix);
   out.tex_coord = input.TexCoord;
   out.color = input.Color;
   return out;

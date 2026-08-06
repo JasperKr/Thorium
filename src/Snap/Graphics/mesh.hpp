@@ -72,8 +72,8 @@ struct Mesh : Object, Identifiable {
                    const std::span<const uint8_t> &vertexData,
                    uint64_t offset = 0) -> Error;
   auto SetIndices(const GraphicsContext &context,
-                  const std::span<uint8_t> &indexData, VkIndexType format)
-      -> Error;
+                  const std::span<uint8_t> &indexData, VkIndexType format,
+                  uint32_t offset = 0) -> Error;
 
   auto SetVertexBuffer(const Ref<Buffer> &buffer, uint32_t binding = 0) -> void;
   auto SetIndexBuffer(const Ref<Buffer> &buffer, VkIndexType format) -> Error;

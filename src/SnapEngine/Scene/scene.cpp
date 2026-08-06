@@ -232,8 +232,8 @@ inline auto AddDrawItem(std::vector<DrawItem> &OpaqueDrawItems,
   auto drawItem = DrawItem{.geom_entity = entity,
                            .geometry = geometry,
                            .material = material,
-                           .primaryKey = material->GetMainSortKey(),
-                           .secondaryKey = geometry.mesh->GetHash(),
+                           .primaryKey = material->getID(),
+                           .secondaryKey = geometry.mesh->getID(),
                            .tertiaryKey = material->GetSecondarySortKey()};
 
   switch (material->alphaMode) {

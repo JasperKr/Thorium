@@ -12,6 +12,7 @@
 #include "Modules/type.hpp"
 #include <cstdint>
 #include <imgui.h>
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -658,6 +659,9 @@ struct LayoutTransitionEvent : public Event {
         srcAccessMask(srcAccessMask), dstAccessMask(dstAccessMask),
         srcStageMask(srcStageMask), dstStageMask(dstStageMask),
         Event(EventType::LayoutTransition) {}
+
+  auto DrawVariantImGui(struct ThreadSnapshot const *parent) const
+      -> void override;
 };
 
 struct EndRenderingEvent : public Event {
@@ -670,27 +674,41 @@ constexpr VkShaderStageFlagBits allRTStages =
         VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_RAYGEN_BIT_KHR |
         VK_SHADER_STAGE_MISS_BIT_KHR | VK_SHADER_STAGE_INTERSECTION_BIT_KHR);
 
+inline auto HexToImU32(uint32_t hex) -> ImU32 {
+  uint32_t result = hex;
+
+  // NOLINTBEGIN
+  uint8_t *parts = reinterpret_cast<uint8_t *>(&result);
+  uint8_t temp = parts[0];
+  parts[0] = parts[2];
+  parts[2] = temp;
+  parts[3] = 0xFF;
+  // NOLINTEND
+
+  return result;
+}
+
 // clang-format off
 const std::unordered_map<VkShaderStageFlagBits,
                          std::pair<ImColor, const char *>>
     ShaderStageUiInfo{
-        {VK_SHADER_STAGE_FRAGMENT_BIT, {0x1b50ba, "Fragment"}},
-        {VK_SHADER_STAGE_VERTEX_BIT, {0x1bba1b, "Vertex"}},
-        {VK_SHADER_STAGE_COMPUTE_BIT, {0xc9c320, "Compute"}},
-        {allRTStages, {0xc92023, "Raytracing"}},
+        {VK_SHADER_STAGE_FRAGMENT_BIT, {HexToImU32(0x1b50ba), "Fragment"}},
+        {VK_SHADER_STAGE_VERTEX_BIT, {HexToImU32(0x1bba1b), "Vertex"}},
+        {VK_SHADER_STAGE_COMPUTE_BIT, {HexToImU32(0xc9c320), "Compute"}},
+        {allRTStages, {HexToImU32(0xc92023), "Raytracing"}},
     };
 
 const std::unordered_map<VkPipelineStageFlagBits2,
                          std::pair<ImColor, const char *>>
     PipelineStageUiInfo{
-        {VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT, {0x158715, "Vertex input"}},
-        {VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT, {0x1bba1b, "Vertex shader"}},
-        {VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, {0x1b50ba, "Fragment shader"}},
-        {VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT, {0x18449b, "Early fragment test"}},
-        {VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT, {0x205cd6, "Late fragment test"}},
-        {VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, {0x20d6c0, "Color attachment output"}},
-        {VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, {0xc9c320, "Compute shader"}},
-        {VK_PIPELINE_STAGE_2_TRANSFER_BIT, {0xb420d6, "Transfer"}},
+        {VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT, {HexToImU32(0x158715), "Vertex input"}},
+        {VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT, {HexToImU32(0x1bba1b), "Vertex shader"}},
+        {VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, {HexToImU32(0x1b50ba), "Fragment shader"}},
+        {VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT, {HexToImU32(0x18449b), "Early fragment test"}},
+        {VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT, {HexToImU32(0x205cd6), "Late fragment test"}},
+        {VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT, {HexToImU32(0x20d6c0), "Color attachment output"}},
+        {VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, {HexToImU32(0xc9c320), "Compute shader"}},
+        {VK_PIPELINE_STAGE_2_TRANSFER_BIT, {HexToImU32(0xb420d6), "Transfer"}},
     };
 // clang-format on
 
@@ -702,8 +720,8 @@ auto DrawShaderStages(VkShaderStageFlagBits stages);
 
 static const Type ThreadSnapshotType = Type("ThreadSnapshot");
 
-struct ThreadSnapshot : Object {
-  std::vector<std::unique_ptr<Event>> events;
+struct ThreadSnapshot : Object, Identifiable {
+  std::vector<std::shared_ptr<Event>> events;
   std::vector<DynamicRendering::State> renderStates;
 
   uint64_t threadId;
@@ -718,12 +736,17 @@ struct ThreadSnapshot : Object {
     return "Unnamed Thread";
   }
 
+  [[nodiscard]] auto Copy() const -> Ref<ThreadSnapshot> {
+    return Ref<ThreadSnapshot>::Make(events, renderStates, threadId, threadName,
+                                     false);
+  }
+
   static auto GetType() -> Type const * { return &ThreadSnapshotType; }
   [[nodiscard]] auto GetInstanceType() const -> Type const * override {
     return GetType();
   }
 
-  ThreadSnapshot(std::vector<std::unique_ptr<Event>> events,
+  ThreadSnapshot(std::vector<std::shared_ptr<Event>> events,
                  std::vector<DynamicRendering::State> renderStates,
                  uint64_t threadId, std::string threadName, bool active)
       : events(std::move(events)), renderStates(std::move(renderStates)),

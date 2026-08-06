@@ -33,7 +33,7 @@ using TexRef = Ref<Graphics::Texture>;
 
 const Type materialType = Type("Material");
 
-struct Material {
+struct Material : Identifiable {
   Material(std::string name, Ref<Graphics::Shader> shader, TexRef preview,
            TexRef albedoTexture, TexRef normalTexture,
            TexRef metallicRoughnessTexture, TexRef ambientOcclusionTexture,

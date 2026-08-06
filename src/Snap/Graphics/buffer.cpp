@@ -315,7 +315,6 @@ auto Buffer::Upload(const GraphicsContext &context,
 
   if (uploadSize > LargeUploadThreshold) {
     CHECK_ERR(UploadLarge(context, data, offset, size));
-
   } else {
     CHECK_ERR(UploadRing(context, data, offset, size));
   }

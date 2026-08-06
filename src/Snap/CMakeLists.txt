@@ -87,19 +87,6 @@ target_compile_definitions(physfs PRIVATE _POSIX_C_SOURCE=200809L)
 
 set(BINARIES_DIR "${CMAKE_SOURCE_DIR}/bin/")
 set(LIBRARIES_DIR "${CMAKE_SOURCE_DIR}/lib/")
-set(SHADERC_BIN_DIR "${BINARIES_DIR}/shaderc/")
-set(SHADERC_LIB_DIR "${LIBRARIES_DIR}/shaderc/")
-
-# -------------------------------
-# Shaderc
-# -------------------------------
-
-# Shaderc library
-if(WIN32)
-    set(SHADERC_LIB "${SHADERC_LIB_DIR}/shaderc_shared.lib")
-elseif(UNIX)
-    set(SHADERC_LIB "${SHADERC_LIB_DIR}/libshaderc_shared.so")
-endif()
 
 # -------------------------------
 # LuaJIT
