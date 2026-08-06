@@ -3,6 +3,7 @@
 #include "Modules/bytedata.hpp"
 #include "error.hpp"
 #include <atomic>
+#include <cctype>
 #include <cstdint>
 #include <span>
 #include <string>
@@ -609,6 +610,19 @@ auto Join(const std::vector<std::string> &paths) -> std::string {
 
 auto Join(const char *base, const char *append) -> std::string {
   return Join(std::string(base), std::string(append));
+}
+
+// test/my.file.txt -> test_my_file_txt
+auto PlainText(const std::string_view &filename) -> std::string {
+  std::string result;
+  result.reserve(filename.size());
+
+  for (unsigned char character : filename) {
+    result +=
+        (std::isalnum(character) != 0) ? static_cast<char>(character) : '_';
+  }
+
+  return result;
 }
 
 } // namespace Path

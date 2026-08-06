@@ -9,6 +9,7 @@
 #include "Graphics/resource.hpp"
 #include "Graphics/shader.hpp"
 #include "Libraries/vma.hpp"
+#include "Modules/Helpers/utils.hpp"
 #include "Modules/color.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
@@ -127,36 +128,32 @@ static auto FindQueueFamilies(GraphicsContext &context) -> Error {
   vkGetPhysicalDeviceQueueFamilyProperties(context.physicalDevice,
                                            &queueFamilyCount, nullptr);
 
-  if (queueFamilyCount == 0) {
-    return Error::Create("No queue families found on physical device.");
-  }
+  ERR_ASSERT(queueFamilyCount != 0);
 
   std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
   vkGetPhysicalDeviceQueueFamilyProperties(
       context.physicalDevice, &queueFamilyCount, queueFamilies.data());
-
-  bool found = false;
-  int selectedIndex = -1;
 
   for (uint32_t i = 0; i < queueFamilyCount; i++) {
     VkBool32 presentSupport = VK_FALSE;
     vkGetPhysicalDeviceSurfaceSupportKHR(context.physicalDevice, i,
                                          context.surface, &presentSupport);
 
-    if ((queueFamilies.at(i).queueFlags &
-         static_cast<uint32_t>(VK_QUEUE_GRAPHICS_BIT)) != 0 &&
-        presentSupport == VK_TRUE) {
-      found = true;
-      selectedIndex = static_cast<int>(i);
-      break;
+    auto flags = queueFamilies.at(i).queueFlags;
+
+    if (Utils::Includes(flags, VK_QUEUE_GRAPHICS_BIT)) {
+      ERR_ASSERT(presentSupport);
+
+      context.graphicsQueueFamily = i;
+    } else if (Utils::Includes(flags, VK_QUEUE_COMPUTE_BIT)) {
+      context.computeQueueFamily = i;
+    } else if (Utils::Includes(flags, VK_QUEUE_TRANSFER_BIT)) {
+      context.transferQueueFamily = i;
     }
   }
 
-  if (!found) {
-    return Error::Create("No suitable queue family found.");
-  }
+  ERR_ASSERT(context.graphicsQueueFamily != UINT32_MAX);
 
-  context.graphicsQueueFamily = static_cast<uint32_t>(selectedIndex);
   return Error::Success();
 }
 
@@ -364,19 +361,24 @@ static auto CreateDevice(GraphicsContext &context,
   createInfo.ppEnabledExtensionNames = deviceExtensions.data();
 
   std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-  Error error =
-      Error::Create(vkCreateDevice(context.physicalDevice, &createInfo,
-                                   GetAllocationCallbacks(), &context.device));
-
-  if (Error::IsError(error)) {
-    return error;
-  }
+  CHECK_NEW_ERR(vkCreateDevice(context.physicalDevice, &createInfo,
+                               GetAllocationCallbacks(), &context.device));
 
   PrintDebug("Loading Vulkan device with Volk...");
   volkLoadDevice(context.device);
 
   vkGetDeviceQueue(context.device, context.graphicsQueueFamily, 0,
-                   &context.graphicsQueue);
+                   &context.queues.at(context.graphicsQueueFamily));
+
+  if (context.computeQueueFamily != UINT32_MAX) {
+    vkGetDeviceQueue(context.device, context.computeQueueFamily, 0,
+                     &context.queues.at(context.computeQueueFamily));
+  }
+
+  if (context.transferQueueFamily != UINT32_MAX) {
+    vkGetDeviceQueue(context.device, context.transferQueueFamily, 0,
+                     &context.queues.at(context.transferQueueFamily));
+  }
 
   return Error::Success();
 }
@@ -512,7 +514,7 @@ static auto CreateVmaAllocator(GraphicsContext &context) -> Error {
 inline auto CreateCommandPool(ThreadContext &tcontext) -> Error {
   VkCommandPoolCreateInfo poolInfo = {};
   poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-  poolInfo.queueFamilyIndex = tcontext.graphicsContext->graphicsQueueFamily;
+  poolInfo.queueFamilyIndex = tcontext.queueFamily;
   poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 
   {
@@ -612,6 +614,7 @@ auto Initialize(GraphicsContext &context, Window::WindowContext &wcontext,
   }
 
   CHECK_ERR(FindPhysicalDevice(context));
+  CHECK_ERR(FindQueueFamilies(context));
 
   auto *windowContext = Window::GetWindowContext();
 
@@ -729,10 +732,11 @@ auto EndSingleTimeCommands(const GraphicsContext &context,
   submitInfo.commandBufferCount = 1;
   submitInfo.pCommandBuffers = &commandBuffer;
 
-  vkQueueSubmit(context.graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
-  vkQueueWaitIdle(context.graphicsQueue);
-
   auto &tcontext = GetThreadContext();
+
+  vkQueueSubmit(context.queues.at(tcontext.queueFamily), 1, &submitInfo,
+                VK_NULL_HANDLE);
+  vkQueueWaitIdle(context.queues.at(tcontext.queueFamily));
 
   vkFreeCommandBuffers(context.device, tcontext.commandPool, 1, &commandBuffer);
 }

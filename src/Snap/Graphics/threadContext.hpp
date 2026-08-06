@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstdint>
-#include <functional>
 #include <memory>
 #include <unordered_map>
 #include <utility>
@@ -37,5 +36,8 @@ struct ThreadContext {
       initialImageStates;
 
   std::unordered_map<ObjectID, ImageState> finalImageStates;
+
+  uint32_t queueFamily;
+  VkQueueFlags queueFlags;
 };
 } // namespace Graphics

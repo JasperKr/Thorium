@@ -2,11 +2,9 @@
 
 #include "Modules/Helpers/hasher.hpp"
 #include "Modules/stackVector.hpp"
-#include <forward_list>
 #include <optional>
 #include <string>
 #include <string_view>
-#include <vector>
 #include <vulkan/vulkan_core.h>
 namespace Graphics {
 

@@ -192,6 +192,7 @@ auto AcquireCommandBuffer(Graphics::GraphicsContext &context,
   threadInfo->threadData.cmdBufferTimelineValue = tcontext.timelineValue;
   tcontext.initialImageStates.clear();
   tcontext.finalImageStates.clear();
+  tcontext.queueFamily = info.queueFamily;
 
   // Reset old command buffer
   VkCommandBufferResetFlags resetFlags{};
@@ -261,6 +262,9 @@ auto SubmitCommands(Graphics::GraphicsContext &context)
   threadContext.currentVertexFormatHash = 0;
   threadContext.currentMesh = UINT64_MAX;
 
+  threadContext.queueFamily = UINT32_MAX;
+  threadContext.queueFlags = VK_QUEUE_FLAG_BITS_MAX_ENUM;
+
   auto threadInfo = CurrentRenderThreadInfo;
   CurrentRenderThreadInfo.reset();
 
@@ -270,7 +274,7 @@ auto SubmitCommands(Graphics::GraphicsContext &context)
 inline auto CreateCommandPool(ThreadContext &tcontext) -> Error {
   VkCommandPoolCreateInfo poolInfo = {};
   poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-  poolInfo.queueFamilyIndex = tcontext.graphicsContext->graphicsQueueFamily;
+  poolInfo.queueFamilyIndex = tcontext.queueFamily;
   poolInfo.flags =
       static_cast<uint32_t>(VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT) |
       static_cast<uint32_t>(VK_COMMAND_POOL_CREATE_TRANSIENT_BIT);

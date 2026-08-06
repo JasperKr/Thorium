@@ -86,5 +86,6 @@ auto Join(std::string_view first, const Strings &...rest) -> std::string {
 
 auto Join(const std::vector<std::string> &paths) -> std::string;
 auto Join(const char *base, const char *append) -> std::string;
+auto PlainText(const std::string_view &filename) -> std::string;
 
 } // namespace Path

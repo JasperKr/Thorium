@@ -12,6 +12,7 @@
 #include "Graphics/texture.hpp"
 #include "Modules/object.hpp"
 #include "Wrap/Graphics/wrap_color.hpp"
+#include "Wrap/Helpers/lua_enum.hpp"
 #include "Wrap/wrap.hpp"
 #include <cassert>
 
@@ -571,21 +572,41 @@ auto wrap_GetDimensions(lua_State *state) -> int {
   return 2;
 }
 
-auto wrap_AcquireCommandBuffer(lua_State *state) -> int {
-  auto *ctx = ::Graphics::GetCurrentGraphicsContext();
+inline const LuaWrap::LuaEnum<VkQueueFlagBits> queueFlags{
+    "DeviceQueue",
+    {
+        {"Graphics", VK_QUEUE_GRAPHICS_BIT},
+        {"Compute", VK_QUEUE_COMPUTE_BIT},
+        {"Transfer", VK_QUEUE_TRANSFER_BIT},
+    }};
 
-  if (ctx == nullptr) {
-    return luaL_error(state, "No current graphics context.");
-  }
+auto wrap_AcquireCommandBuffer(lua_State *state) -> int {
+  auto *ctx = LUA_CK_NULL(::Graphics::GetCurrentGraphicsContext());
 
   ::Graphics::Threading::AcquireInfo info{};
   info.name = luaL_optstring(state, 1, "Unnamed Graphics Commands");
   info.priority = static_cast<int>(luaL_optinteger(state, 2, 0));
 
+  switch (queueFlags.FromLua(state, 3, VK_QUEUE_GRAPHICS_BIT)) {
+  case VK_QUEUE_GRAPHICS_BIT:
+    info.queueFamily = ctx->graphicsQueueFamily;
+    break;
+  case VK_QUEUE_COMPUTE_BIT:
+    info.queueFamily = ctx->computeQueueFamily;
+    break;
+  case VK_QUEUE_TRANSFER_BIT:
+    info.queueFamily = ctx->transferQueueFamily;
+    break;
+  default:
+    break;
+  }
+
+  LUA_ASSERT(info.queueFamily !=
+             UINT32_MAX); // Hit if using queue family that isn't present
   (void)LUA_CK_RES(::Graphics::Threading::AcquireCommandBuffer(*ctx, info));
 
-  // Optional boolean arg at idx 3 can be used to indicate that we want to create a performance snapshot for this command buffer
-  if (lua_toboolean(state, 3) != 0) {
+  // Optional boolean arg at idx 4 can be used to indicate that we want to create a performance snapshot for this command buffer
+  if (lua_toboolean(state, 4) != 0) {
     ::Graphics::Snapshot::StartSnapshot();
   }
 

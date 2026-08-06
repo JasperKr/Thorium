@@ -114,6 +114,14 @@ auto NextCapacity(size_t currentCapacity, size_t requiredCapacity,
   return currentCapacity;
 }
 
+auto Includes(uint64_t src, uint64_t flag) -> bool {
+  return (src & flag) != 0U;
+}
+
+auto Excludes(uint64_t src, uint64_t flag) -> bool {
+  return (src & flag) == 0U;
+}
+
 #if defined(__linux__)
 auto GetMemoryUsage() -> size_t {
   // Read memory usage from /proc/self/statm

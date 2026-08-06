@@ -150,9 +150,12 @@ auto SubmitCommandBuffers(Graphics::GraphicsContext &context,
   submitInfo.signalSemaphoreInfoCount = 1;
   submitInfo.pSignalSemaphoreInfos = &signalInfo;
 
+  auto &tcontext = GetThreadContext();
+
   {
     ZoneScopedN("Submit command buffer to queue");
-    CHECK_NEW_ERR(vkQueueSubmit2(context.graphicsQueue, 1, &submitInfo,
+    CHECK_NEW_ERR(vkQueueSubmit2(context.queues.at(tcontext.queueFamily), 1,
+                                 &submitInfo,
                                  context.inFlight[context.frameIndex]));
   }
 
@@ -175,8 +178,8 @@ auto SubmitCommandBuffers(Graphics::GraphicsContext &context,
       submitTimeline.signalSemaphoreInfoCount = 1;
       submitTimeline.pSignalSemaphoreInfos = &timelineSignalInfo;
 
-      CHECK_NEW_ERR(vkQueueSubmit2(context.graphicsQueue, 1, &submitTimeline,
-                                   VK_NULL_HANDLE));
+      CHECK_NEW_ERR(vkQueueSubmit2(context.queues.at(tcontext.queueFamily), 1,
+                                   &submitTimeline, VK_NULL_HANDLE));
     }
   }
 
@@ -195,8 +198,11 @@ auto PresentFrame(Graphics::GraphicsContext &context) -> Error {
   presentInfo.pSwapchains = &context.swapchainInfo.swapchain;
   presentInfo.pImageIndices = &context.swapchainImageIndex;
 
+  auto &tcontext = GetThreadContext();
+
   // Present the image
-  CHECK_NEW_ERR(vkQueuePresentKHR(context.graphicsQueue, &presentInfo));
+  CHECK_NEW_ERR(
+      vkQueuePresentKHR(context.queues.at(tcontext.queueFamily), &presentInfo));
 
   return {};
 }

@@ -4,8 +4,8 @@
 #include "Modules/object.hpp"
 #include "Modules/stackVector.hpp"
 #include "SDL3/SDL_video.h"
+#include <cstdint>
 #include <mutex>
-#include <vector>
 
 #include "volk/volk.h"
 
@@ -45,8 +45,11 @@ struct GraphicsContext {
   VkSurfaceKHR surface;
   VkPhysicalDevice physicalDevice;
   VkDevice device;
-  VkQueue graphicsQueue;
-  uint32_t graphicsQueueFamily;
+
+  Math::StackVector<VkQueue, 8> queues; // NOLINT
+  uint32_t graphicsQueueFamily = UINT32_MAX;
+  uint32_t computeQueueFamily = UINT32_MAX;
+  uint32_t transferQueueFamily = UINT32_MAX;
 
   SDL_Window *sdlWindow;
   VmaAllocator vmaAllocator;

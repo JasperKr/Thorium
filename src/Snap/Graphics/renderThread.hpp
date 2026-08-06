@@ -82,6 +82,8 @@ extern thread_local Ref<RenderThreadInfo> CurrentRenderThreadInfo;
 struct AcquireInfo {
   std::string name;
   int64_t priority;
+
+  uint32_t queueFamily;
 };
 
 // Acquire a command buffer for the current thread, must have rendering permission

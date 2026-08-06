@@ -123,6 +123,10 @@ template <class T> struct BitMaskRange {
   auto end() const -> it { return {0}; }
 };
 
+auto Includes(uint64_t src, uint64_t flag) -> bool;
+
+auto Excludes(uint64_t src, uint64_t flag) -> bool;
+
 auto GetMemoryUsage() -> size_t;
 
 template <typename T> struct EnumStringHelper {
