@@ -295,6 +295,7 @@ void Renderer::Deinitialize() {
   SceneTLAS = nullptr;
 
   BlueNoiseTexture = nullptr;
+  PMJ02bnSamples = nullptr;
 }
 
 } // namespace Engine::Renderer

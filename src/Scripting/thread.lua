@@ -241,7 +241,7 @@ while true do
     print("Requesting snapshot creation")
   end
 
-  snap.graphics.acquireGraphics(nil, nil, createSnapshot)
+  snap.graphics.acquireGraphics(nil, nil, "Graphics", createSnapshot)
 
   createSnapshot = false
 

@@ -18,9 +18,6 @@ namespace Graphics::Barrier {
 // Per-Frame global timeline index
 thread_local uint64_t GlobalTimelineIndex = 0;
 
-// Timeline index offset for this frame
-thread_local uint64_t GlobalTimelineOffset = 0;
-
 // The number of barriers issued this frame
 thread_local uint64_t FrameBarrierCount = 0;
 
@@ -31,16 +28,17 @@ thread_local std::vector<std::pair<AccessState, ResourceState>>
 
 thread_local std::vector<BarrierSynced> GraphicsResources;
 
+static constexpr VkAccessFlagBits2 writeAccessBits =
+    VK_ACCESS_2_SHADER_WRITE_BIT | VK_ACCESS_2_TRANSFER_WRITE_BIT |
+    VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT |
+    VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT |
+    VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT |
+    VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
+
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
 inline auto IsHazard(const ResourceState &oldState,
                      const ResourceState &newState) -> bool {
-  static constexpr VkAccessFlagBits2 writeAccessBits =
-      VK_ACCESS_2_SHADER_WRITE_BIT | VK_ACCESS_2_TRANSFER_WRITE_BIT |
-      VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT |
-      VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT |
-      VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT |
-      VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
 
   return ((oldState.access | newState.access) & writeAccessBits) != 0U;
 }
@@ -115,8 +113,8 @@ inline auto TimelineLookback(uint64_t currentTimelineIndex,
     return false; // No hazard, no barrier needed
   }
 
-  // NOLINTNEXTLINE, magic number 64 for max bits in flags
-  std::array<uint64_t, 64> maskBits{};
+  // accumulated accesses, access per stage
+  std::array<uint64_t, UINT64_WIDTH> maskBits{};
 
   // Store unsynced access bits per stage bit
   // so we can early out when all bits are satisfied
@@ -133,30 +131,23 @@ inline auto TimelineLookback(uint64_t currentTimelineIndex,
     maskBits.at(bitIndex) = desiredSynchronization.access;
   }
 
-  uint64_t LocalTimelineIndex = GlobalTimelineIndex - GlobalTimelineOffset;
-
   [[unlikely]]
-  if (LocalTimelineIndex == 0 || currentTimelineIndex >= LocalTimelineIndex) {
+  if (GlobalTimelineIndex == 0) {
     return true; // No barriers yet, need to sync
   }
 
   // current timeline index meaning the last barrier that affected this resource
   // and global timeline index the actual current barrier index
   for (uint64_t i = GlobalTimelineIndex - 1ULL; i > currentTimelineIndex; i--) {
-    assert(i - GlobalTimelineOffset < GlobalResourceSyncTimeline.size() &&
+    assert(i < GlobalResourceSyncTimeline.size() &&
            "Timeline index out of bounds in lookback");
-    auto &sync = GlobalResourceSyncTimeline[i - GlobalTimelineOffset];
+    auto &sync = GlobalResourceSyncTimeline[i];
 
     auto mask = sync.dstStages;
     while (mask != 0U) {
       auto bit = mask & -mask;
+
       uint32_t bitIndex = std::countr_zero(bit);
-
-      [[unlikely]]
-      if (bitIndex == 64U) { // NOLINT
-        break;               // No bits set
-      }
-
       mask &= ~bit;
       // If this stage bit is active in this sync and we still need it
 
@@ -198,9 +189,6 @@ auto UpdateUsage(const GraphicsContext &context, const BarrierSynced &resource,
                  const ResourceState &usage) -> void {
   auto &state = resource.GetAccessState();
 
-  auto &previousAccess = state.lastUsedAccess;
-  auto &previousStages = state.lastUsedStages;
-
   state.firstAsyncUsage = false;
 
   // Keep track of first usage for async recording so we can barrier later
@@ -221,17 +209,70 @@ auto UpdateUsage(const GraphicsContext &context, const BarrierSynced &resource,
   //   state.lastUsedCmdBufferIndex = GetThreadContext().recordingIdentifier;
   // }
 
-  if (!state.firstAsyncUsage &&
-      TimelineLookback(state.lastUsedTimelineIndex,
-                       {.stages = previousStages, .access = previousAccess},
-                       usage)) {
+  auto &ctx = GetThreadContext();
 
+  bool isWrite = (usage.access | writeAccessBits) != 0U;
+  bool barrierRequired = false;
+
+  VkPipelineStageFlags2 syncStageFlags{};
+  VkAccessFlags2 syncAccessFlags{};
+
+  bool requiredByWrite = false;
+  bool requiredByRead = false;
+
+  if (isWrite) {
+    // If writing to a resource, we barrier if it has been used before
+    // And if according to, up to the last write and read it hasn't been touched
+    requiredByWrite = state.lastWriteTimelineIndex == ctx.recordingIdentifier &&
+                      TimelineLookback(state.lastWriteTimelineIndex,
+                                       {
+                                           .stages = state.lastWriteStageFlags,
+                                           .access = state.lastWriteAccessFlags,
+                                       },
+                                       usage);
+    requiredByRead = state.lastReadTimelineIndex == ctx.recordingIdentifier &&
+                     TimelineLookback(state.lastReadTimelineIndex,
+                                      {
+                                          .stages = state.lastReadStageFlags,
+                                          .access = state.lastReadAccessFlags,
+                                      },
+                                      usage);
+
+    if (requiredByWrite) {
+      syncStageFlags = state.lastWriteStageFlags;
+      syncAccessFlags = state.lastWriteAccessFlags;
+    }
+
+    if (requiredByRead) {
+      syncStageFlags |= state.lastReadStageFlags;
+      syncAccessFlags |= state.lastReadAccessFlags;
+    }
+
+    barrierRequired = requiredByWrite || requiredByRead;
+  } else {
+    // If reading from a resource, we only need to consider RAW barriers
+    barrierRequired = state.lastWriteTimelineIndex == ctx.recordingIdentifier &&
+                      TimelineLookback(state.lastWriteTimelineIndex,
+                                       {
+                                           .stages = state.lastWriteStageFlags,
+                                           .access = state.lastWriteAccessFlags,
+                                       },
+                                       usage);
+
+    if (barrierRequired) {
+      syncStageFlags = state.lastWriteStageFlags;
+      syncAccessFlags = state.lastWriteAccessFlags;
+      requiredByWrite = true;
+    }
+  }
+
+  if (!state.firstAsyncUsage && barrierRequired) {
     ZoneScopedN("Inserting barrier");
     // Insert barrier
     VkMemoryBarrier2 barrier = {};
     barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2;
-    barrier.srcStageMask = previousStages;
-    barrier.srcAccessMask = previousAccess;
+    barrier.srcStageMask = syncStageFlags;
+    barrier.srcAccessMask = syncAccessFlags;
     barrier.dstStageMask = usage.stages;
     barrier.dstAccessMask = usage.access;
 
@@ -249,8 +290,8 @@ auto UpdateUsage(const GraphicsContext &context, const BarrierSynced &resource,
 
 #if Enable_Snapshots
     auto sync = ResourceSync{
-        .srcStages = previousStages,
-        .srcAccess = previousAccess,
+        .srcStages = syncStageFlags,
+        .srcAccess = syncAccessFlags,
         .dstStages = usage.stages,
         .dstAccess = usage.access,
     };
@@ -261,9 +302,25 @@ auto UpdateUsage(const GraphicsContext &context, const BarrierSynced &resource,
 #endif
 
     // Update to new usage
-    previousAccess = usage.access;
-    previousStages = usage.stages;
-    state.lastUsedTimelineIndex = GlobalTimelineIndex;
+    if (requiredByWrite) {
+      state.lastWriteAccessFlags = usage.access;
+      state.lastWriteStageFlags = usage.stages;
+      state.lastWriteTimelineIndex = GlobalTimelineIndex;
+      state.lastWriteCmdBufferIndex = ctx.recordingIdentifier;
+    }
+
+    if (isWrite) {
+      state.lastReadAccessFlags = 0;
+      state.lastReadStageFlags = 0;
+    }
+
+    if (requiredByRead) {
+      state.lastReadAccessFlags = usage.access;
+      state.lastReadStageFlags = usage.stages;
+      state.lastReadTimelineIndex = GlobalTimelineIndex;
+      state.lastReadCmdBufferIndex = ctx.recordingIdentifier;
+    }
+
     GlobalResourceSyncTimeline.emplace_back(
         barrier.srcStageMask, barrier.srcAccessMask, barrier.dstStageMask,
         barrier.dstAccessMask);
@@ -273,9 +330,10 @@ auto UpdateUsage(const GraphicsContext &context, const BarrierSynced &resource,
     // Only used to accumulate read access/stages
     // Since anything involving writes would have caused a hazard and barrier above
     // Not doing this might miss some necessary stages/accesses
-    previousAccess |= usage.access;
-    previousStages |= usage.stages;
-    state.lastUsedTimelineIndex = GlobalTimelineIndex;
+    state.lastReadAccessFlags |= usage.access;
+    state.lastReadStageFlags |= usage.stages;
+    state.lastReadTimelineIndex = GlobalTimelineIndex;
+    state.lastReadCmdBufferIndex = ctx.recordingIdentifier;
   }
 
   state.firstAsyncUsage = false;
@@ -328,22 +386,16 @@ auto UpdateUsageVirtual(AccessState &state, const ResourceState &usage)
   return std::nullopt;
 }
 
-auto InsertBarrier(ResourceSync &barrier) -> void {
-  GlobalResourceSyncTimeline.emplace_back(barrier);
-  FrameBarrierCount++;
-}
-
 auto ResetFrameTimeline() -> void {
-  GlobalTimelineOffset += FrameBarrierCount;
   GlobalResourceSyncTimeline.clear();
   GlobalResourceStateUpdates.clear();
 
   FrameBarrierCount = 0;
+  GlobalTimelineIndex = 0;
 }
 
 auto ResetModule() -> void {
   GlobalTimelineIndex = 0;
-  GlobalTimelineOffset = 0;
   FrameBarrierCount = 0;
   GlobalResourceSyncTimeline.clear();
   GlobalResourceStateUpdates.clear();

@@ -90,8 +90,23 @@ struct AccessState {
   // whatever happens next.
   */
 
-  mutable VkPipelineStageFlags2 lastUsedStages = 0;
-  mutable VkAccessFlags2 lastUsedAccess = 0;
+  /*
+  Another issue arises when trying to use last usage states.
+  Say we have this scenario:
+  write
+  read <- access flag A -> barrier
+  read <- access flag B -> Read-After-Read, no barrier: Validation error
+  we can solve this issue with Last Write and last Read flags.
+  write
+  read <- now reads write flag: barrier
+  read <- now checks read flag: not satisfied, syncs for write.
+  */
+
+  mutable VkPipelineStageFlags2 lastWriteStageFlags = 0;
+  mutable VkAccessFlags2 lastWriteAccessFlags = 0;
+
+  mutable VkPipelineStageFlags2 lastReadStageFlags = 0;
+  mutable VkAccessFlags2 lastReadAccessFlags = 0;
 
   // To make sure this scenario is handled correctly:
   // CS write to buffer 1
@@ -101,8 +116,11 @@ struct AccessState {
   // No barrier here because of previous barrier
   // CS read from buffer 2
   // We need to know when stuff was synced last
-  mutable uint64_t lastUsedTimelineIndex = 0;
-  // mutable uint64_t lastUsedCmdBufferIndex = UINT64_MAX;
+  mutable uint64_t lastWriteTimelineIndex = 0;
+  mutable uint64_t lastReadTimelineIndex = 0;
+
+  mutable uint64_t lastWriteCmdBufferIndex = UINT64_MAX;
+  mutable uint64_t lastReadCmdBufferIndex = UINT64_MAX;
 
   // Whether this is the first usage recorded for this resource in the frame
   // When using it for async work.
@@ -137,7 +155,6 @@ auto UpdateUsageVirtual(AccessState &state, const ResourceState &usage)
 auto UpdateUsageVirtual(const Texture &texture, const ResourceState &usage)
     -> std::optional<ResourceSync>;
 
-auto InsertBarrier(ResourceSync &barrier) -> void;
 auto ResetFrameTimeline() -> void;
 auto ResetModule() -> void;
 

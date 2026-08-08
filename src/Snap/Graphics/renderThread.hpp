@@ -35,6 +35,7 @@ struct RenderThreadData {
   uint64_t cmdBufferTimelineValue{};
   bool drawsToSwapchain = false;
   uint64_t acquiredAtFrame{};
+  uint32_t queueFamily{};
 
   std::vector<std::pair<std::weak_ptr<ImageMemory>, ImageState>>
       initialImageStates;

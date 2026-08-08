@@ -18,7 +18,9 @@
 #include "SDL3/SDL_vulkan.h"
 
 #include "vulkan/vulkan_core.h"
+#include <algorithm>
 #include <cassert>
+#include <cstddef>
 #include <cstdint>
 #include <mutex>
 #include <string>
@@ -194,16 +196,39 @@ auto ExtensionListSupported(
 static auto CreateDevice(GraphicsContext &context,
                          const DeviceSettings &settings) -> Error {
   float queuePriority = 1.0F;
-  VkDeviceQueueCreateInfo queueCreateInfo{};
-  queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-  queueCreateInfo.queueFamilyIndex = context.graphicsQueueFamily;
-  queueCreateInfo.queueCount = 1;
-  queueCreateInfo.pQueuePriorities = &queuePriority;
+  std::vector<VkDeviceQueueCreateInfo> queueCreateInfos{};
+
+  if (context.graphicsQueueFamily != UINT32_MAX) {
+    VkDeviceQueueCreateInfo queueCreateInfo{};
+    queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+    queueCreateInfo.queueFamilyIndex = context.graphicsQueueFamily;
+    queueCreateInfo.queueCount = 1;
+    queueCreateInfo.pQueuePriorities = &queuePriority;
+    queueCreateInfos.emplace_back(queueCreateInfo);
+  }
+
+  if (context.computeQueueFamily != UINT32_MAX) {
+    VkDeviceQueueCreateInfo queueCreateInfo{};
+    queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+    queueCreateInfo.queueFamilyIndex = context.computeQueueFamily;
+    queueCreateInfo.queueCount = 1;
+    queueCreateInfo.pQueuePriorities = &queuePriority;
+    queueCreateInfos.emplace_back(queueCreateInfo);
+  }
+
+  if (context.transferQueueFamily != UINT32_MAX) {
+    VkDeviceQueueCreateInfo queueCreateInfo{};
+    queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+    queueCreateInfo.queueFamilyIndex = context.transferQueueFamily;
+    queueCreateInfo.queueCount = 1;
+    queueCreateInfo.pQueuePriorities = &queuePriority;
+    queueCreateInfos.emplace_back(queueCreateInfo);
+  }
 
   VkDeviceCreateInfo createInfo{};
   createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-  createInfo.pQueueCreateInfos = &queueCreateInfo;
-  createInfo.queueCreateInfoCount = 1;
+  createInfo.pQueueCreateInfos = queueCreateInfos.data();
+  createInfo.queueCreateInfoCount = queueCreateInfos.size();
   createInfo.pEnabledFeatures = nullptr;
 
   VkPhysicalDeviceIndexTypeUint8FeaturesEXT indexTypeUint8Features{};
@@ -367,15 +392,25 @@ static auto CreateDevice(GraphicsContext &context,
   PrintDebug("Loading Vulkan device with Volk...");
   volkLoadDevice(context.device);
 
+  PrintAlways("graphics: {}, compute: {}, transfer: {}",
+              context.graphicsQueueFamily, context.computeQueueFamily,
+              context.transferQueueFamily);
+
+  context.queues.resize(
+      std::max<size_t>(context.graphicsQueueFamily + 1, context.queues.size()));
   vkGetDeviceQueue(context.device, context.graphicsQueueFamily, 0,
                    &context.queues.at(context.graphicsQueueFamily));
 
   if (context.computeQueueFamily != UINT32_MAX) {
+    context.queues.resize(std::max<size_t>(context.computeQueueFamily + 1,
+                                           context.queues.size()));
     vkGetDeviceQueue(context.device, context.computeQueueFamily, 0,
                      &context.queues.at(context.computeQueueFamily));
   }
 
   if (context.transferQueueFamily != UINT32_MAX) {
+    context.queues.resize(std::max<size_t>(context.transferQueueFamily + 1,
+                                           context.queues.size()));
     vkGetDeviceQueue(context.device, context.transferQueueFamily, 0,
                      &context.queues.at(context.transferQueueFamily));
   }

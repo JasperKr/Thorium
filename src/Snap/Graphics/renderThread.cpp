@@ -193,6 +193,9 @@ auto AcquireCommandBuffer(Graphics::GraphicsContext &context,
   tcontext.initialImageStates.clear();
   tcontext.finalImageStates.clear();
   tcontext.queueFamily = info.queueFamily;
+  threadInfo->threadData.queueFamily = info.queueFamily;
+
+  assert(tcontext.queueFamily == 0);
 
   // Reset old command buffer
   VkCommandBufferResetFlags resetFlags{};
