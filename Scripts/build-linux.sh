@@ -15,7 +15,7 @@ elif [ "$CONFIG" = "Profile" ]; then
   FLAGS="$FLAGS -DTRACY_ENABLE=1 -DTRACY_WAIT_FOR_CLIENT=1 -O3"
   CONFIG="RelWithDebInfo"
 elif [ "$CONFIG" == "Release" ]; then
-  FLAGS="$FLAGS -O3 -ffast-math -flto=thin -march=native"
+  FLAGS="$FLAGS -O3 -ffast-math -flto=thin -funsafe-math-optimizations -march=native"
 elif [ "$CONFIG" == "RelWithDebInfo" ]; then
   FLAGS="$FLAGS -O2 -g -ftime-trace"
 else

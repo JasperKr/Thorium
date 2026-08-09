@@ -388,9 +388,6 @@ inline auto InsertAccelerationStructureBarriers(const GraphicsContext &context,
 
 inline auto InsertResourceBarriers(const GraphicsContext &context) -> Error {
   auto shader = DynamicRendering::GetShader();
-  if (shader == nullptr) {
-    shader = DefaultShaderModule;
-  }
 
   CHECK_ERR(InsertTextureBarriers(context, shader));
   CHECK_ERR(InsertBufferBarriers(context, shader));
@@ -473,10 +470,6 @@ auto Draw(const GraphicsContext &context, Texture &texture,
 
   auto shader = DynamicRendering::GetShader();
 
-  if (shader == nullptr) {
-    shader = DefaultShaderModule;
-  }
-
   CHECK_ERR(shader->Send({"MainTexture"}, Ref<Texture>(&texture)));
 
   return Draw(context, *QuadMesh, instanceCount);
@@ -515,7 +508,7 @@ auto DispatchWithin(const GraphicsContext &context, Math::Uvec3 dimensions)
     -> Error {
   ZoneScoped;
 
-  const auto &shader = DynamicRendering::GetShader();
+  const auto &shader = DynamicRendering::GetUserShader();
   if (shader == nullptr) {
     return Error::Create("No shader bound for dispatch call.");
   }

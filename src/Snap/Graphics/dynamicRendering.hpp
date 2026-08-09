@@ -471,6 +471,7 @@ auto GetViewport() -> VkViewport;
 auto GetClippedViewport() -> VkViewport;
 auto GetMaximumAllowedViewport() -> VkViewport;
 auto GetScissor() -> VkRect2D;
+auto GetUserShader() -> Ref<Shader>;
 auto GetShader() -> Ref<Shader>;
 auto GetRenderTargets() -> std::vector<RenderTarget>;
 auto GetWindingOrder() -> VkFrontFace;

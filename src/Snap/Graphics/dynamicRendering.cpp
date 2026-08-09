@@ -2180,12 +2180,14 @@ auto GetScissor() -> VkRect2D {
   };
 }
 
-auto GetShader() -> Ref<Shader> {
+auto GetUserShader() -> Ref<Shader> {
   if (TopOfStack->shader.get() == DefaultShaderModule.get()) {
     return Ref<Shader>(nullptr);
   }
   return TopOfStack->shader;
 }
+
+auto GetShader() -> Ref<Shader> { return TopOfStack->shader; }
 
 auto GetRenderTargets() -> std::vector<RenderTarget> {
   return {TopOfStack->colorAttachments.begin(),

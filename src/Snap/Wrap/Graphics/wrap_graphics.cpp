@@ -350,7 +350,7 @@ auto wrap_GetScissor(lua_State *state) -> int {
 // Returns shader handle as integer
 auto wrap_GetShader(lua_State *state) -> int {
   auto *ctx = ::Graphics::GetCurrentGraphicsContext();
-  auto ref = ::Graphics::DynamicRendering::GetShader();
+  auto ref = ::Graphics::DynamicRendering::GetUserShader();
 
   const auto *type = ::Graphics::Shader::GetType();
 
@@ -403,9 +403,6 @@ auto wrap_Draw(lua_State *state) -> int {
         LUA_CK_NULL(LuaWrap::ObjectFromLua<::Graphics::Texture>(state, 1));
 
     auto shader = ::Graphics::DynamicRendering::GetShader();
-    if (shader.get() == nullptr) {
-      shader = ::Graphics::DefaultShaderModule;
-    }
 
     LUA_CK_ERR(shader->Send({"MainTexture"}, texture));
 

@@ -1,8 +1,16 @@
 #pragma once
 
+#include "Graphics/FrameGraph/resourceUsage.hpp"
+#include "Graphics/graphicsState.hpp"
+#include "Libraries/vma.hpp"
+#include "Modules/error.hpp"
+#include "Modules/stackVector.hpp"
 #include <cassert>
 #include <cstdint>
 #include <cstring>
+#include <unordered_map>
+#include <utility>
+#include <variant>
 #include <vector>
 #include <vulkan/vulkan_core.h>
 namespace Graphics {
@@ -71,63 +79,112 @@ enum class CommandType : uint8_t {
 
 namespace Args {
 // NOLINTBEGIN(cppcoreguidelines-special-member-functions, hicpp-special-member-functions)
+// NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic, cppcoreguidelines-pro-type-reinterpret-cast)
 
-struct ArgBase {
-  ArgBase() = default;
-  ArgBase(const ArgBase &) = default;
-  ArgBase(ArgBase &&) = default;
-  ~ArgBase() = default;
-  auto operator=(const ArgBase &) -> ArgBase & = delete;
-  auto operator=(ArgBase &&) -> ArgBase & = delete;
+struct Callable {
+  virtual ~Callable() = default;
+  virtual auto Call(VkCommandBuffer cmdBuffer) const -> void;
 };
 
-struct VkCmdDraw : ArgBase {
+static const uint32_t MAX_BOUND_RESOURCES = 32;
+
+struct BoundResources {
+  Math::StackVector<VkImageView, MAX_BOUND_RESOURCES> boundImages;
+  Math::StackVector<VkBuffer, MAX_BOUND_RESOURCES> boundBuffers;
+  Math::StackVector<VkAccelerationStructureKHR, MAX_BOUND_RESOURCES>
+      boundAccelerationStructures;
+  Math::StackVector<VkImageView, MAX_COLOR_ATTACHMENTS> colorAttachments;
+  VkImageView depthStencilAttachment;
+
+  BoundResources();
+};
+
+struct VkCmdDraw : Callable {
+  static const CommandType type = CommandType::vkCmdDraw;
+
   uint32_t vertexCount;
   uint32_t instanceCount;
   uint32_t firstVertex;
   uint32_t firstInstance;
+
+  auto Call(VkCommandBuffer cmdBuffer) const -> void override {
+    vkCmdDraw(cmdBuffer, vertexCount, instanceCount, firstVertex,
+              firstInstance);
+  }
 };
 
-struct VkCmdDrawIndexed : ArgBase {
+struct VkCmdDrawIndexed : Callable {
+  static const CommandType type = CommandType::vkCmdDrawIndexed;
+
   uint32_t indexCount;
   uint32_t instanceCount;
   uint32_t firstIndex;
   int32_t vertexOffset;
   uint32_t firstInstance;
+
+  auto Call(VkCommandBuffer cmdBuffer) const -> void override {
+    vkCmdDrawIndexed(cmdBuffer, indexCount, instanceCount, firstIndex,
+                     vertexOffset, firstInstance);
+  }
 };
 
-struct VkCmdDrawIndirect : ArgBase {
+struct VkCmdDrawIndirect : Callable {
+  static const CommandType type = CommandType::vkCmdDrawIndirect;
+
   VkBuffer buffer;
   VkDeviceSize offset;
   uint32_t drawCount;
   uint32_t stride;
+
+  auto Call(VkCommandBuffer cmdBuffer) const -> void override {
+    vkCmdDrawIndirect(cmdBuffer, buffer, offset, drawCount, stride);
+  }
 };
 
-struct VkCmdDrawIndexedIndirect : ArgBase {
+struct VkCmdDrawIndexedIndirect : Callable {
+  static const CommandType type = CommandType::vkCmdDrawIndexedIndirect;
+
   VkBuffer buffer;
   VkDeviceSize offset;
   uint32_t drawCount;
   uint32_t stride;
+
+  auto Call(VkCommandBuffer cmdBuffer) const -> void override {
+    vkCmdDrawIndexedIndirect(cmdBuffer, buffer, offset, drawCount, stride);
+  }
 };
 
-struct VkCmdDispatch : ArgBase {
+struct VkCmdDispatch : Callable {
+  static const CommandType type = CommandType::vkCmdDispatch;
+
   uint32_t groupCountX;
   uint32_t groupCountY;
   uint32_t groupCountZ;
+
+  auto Call(VkCommandBuffer cmdBuffer) const -> void override {
+    vkCmdDispatch(cmdBuffer, groupCountX, groupCountY, groupCountZ);
+  }
 };
 
-struct VkCmdDispatchIndirect : ArgBase {
+struct VkCmdDispatchIndirect : Callable {
+  static const CommandType type = CommandType::vkCmdDispatchIndirect;
+
   VkBuffer buffer;
   VkDeviceSize offset;
+
+  auto Call(VkCommandBuffer cmdBuffer) const -> void override {
+    vkCmdDispatchIndirect(cmdBuffer, buffer, offset);
+  }
 };
 
-struct VkCmdBlitImage : ArgBase {
+struct VkCmdBlitImage : Callable {
+  static const CommandType type = CommandType::vkCmdBlitImage;
+
   VkImage srcImage;
   VkImageLayout srcImageLayout;
   VkImage dstImage;
   VkImageLayout dstImageLayout;
-  uint32_t regionCount;
-  const VkImageBlit *pRegions;
+  std::vector<VkImageBlit> regions;
   VkFilter filter;
 
   VkCmdBlitImage(VkImage srcImage, VkImageLayout srcImageLayout,
@@ -135,132 +192,146 @@ struct VkCmdBlitImage : ArgBase {
                  uint32_t regionCount, const VkImageBlit *pRegions,
                  VkFilter filter)
       : srcImage(srcImage), srcImageLayout(srcImageLayout), dstImage(dstImage),
-        dstImageLayout(dstImageLayout), regionCount(regionCount),
-        filter(filter) {
-    VkImageBlit *regions = new VkImageBlit[regionCount]; // NOLINT
-    memcpy(regions, pRegions, sizeof(VkImageBlit) * regionCount);
-    this->pRegions = regions;
-  }
+        dstImageLayout(dstImageLayout), filter(filter),
+        regions(pRegions, pRegions + regionCount) {}
 
-  ~VkCmdBlitImage() { delete[] pRegions; }
+  auto Call(VkCommandBuffer cmdBuffer) const -> void override {
+    vkCmdBlitImage(cmdBuffer, srcImage, srcImageLayout, dstImage,
+                   dstImageLayout, regions.size(), regions.data(), filter);
+  }
 };
 
-struct VkCmdPushConstants : ArgBase {
+struct VkCmdPushConstants : Callable {
+  static const CommandType type = CommandType::vkCmdPushConstants;
+
   VkPipelineLayout layout;
   VkShaderStageFlags stageFlags;
   uint32_t offset;
-  uint32_t size;
-  void *pValues;
+  std::vector<char> values;
 
   VkCmdPushConstants(VkPipelineLayout layout, VkShaderStageFlags stageFlags,
                      uint32_t offset, uint32_t size, const void *pValues)
-      : layout(layout), stageFlags(stageFlags), offset(offset), size(size) {
-    void *values = new char[size]; // NOLINT
-    memcpy(values, pValues, size);
-    this->pValues = values;
-  }
+      : layout(layout), stageFlags(stageFlags), offset(offset),
+        values(static_cast<const char *>(pValues),
+               static_cast<const char *>(pValues) + size) {}
 
-  ~VkCmdPushConstants() { delete[] static_cast<char *>(pValues); }
+  auto Call(VkCommandBuffer cmdBuffer) const -> void override {
+    vkCmdPushConstants(cmdBuffer, layout, stageFlags, offset, values.size(),
+                       values.data());
+  }
 };
 
-struct VkCmdCopyBuffer : ArgBase {
+struct VkCmdCopyBuffer : Callable {
+  static const CommandType type = CommandType::vkCmdCopyBuffer;
+
   VkBuffer srcBuffer;
   VkBuffer dstBuffer;
-  uint32_t regionCount;
-  const VkBufferCopy *pRegions;
+  std::vector<VkBufferCopy> regions;
 
   VkCmdCopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, uint32_t regionCount,
                   const VkBufferCopy *pRegions)
-      : srcBuffer(srcBuffer), dstBuffer(dstBuffer), regionCount(regionCount) {
-    VkBufferCopy *regions = new VkBufferCopy[regionCount]; // NOLINT
-    memcpy(regions, pRegions, sizeof(VkBufferCopy) * regionCount);
-    this->pRegions = regions;
-  }
+      : srcBuffer(srcBuffer), dstBuffer(dstBuffer),
+        regions(pRegions, pRegions + regionCount) {}
 
-  ~VkCmdCopyBuffer() { delete[] pRegions; }
+  auto Call(VkCommandBuffer cmdBuffer) const -> void override {
+    vkCmdCopyBuffer(cmdBuffer, srcBuffer, dstBuffer, regions.size(),
+                    regions.data());
+  }
 };
 
-struct VkCmdCopyImage : ArgBase {
+struct VkCmdCopyImage : Callable {
+  static const CommandType type = CommandType::vkCmdCopyImage;
+
   VkImage srcImage;
   VkImageLayout srcImageLayout;
   VkImage dstImage;
   VkImageLayout dstImageLayout;
-  uint32_t regionCount;
-  const VkImageCopy *pRegions;
+  std::vector<VkImageCopy> regions;
 
   VkCmdCopyImage(VkImage srcImage, VkImageLayout srcImageLayout,
                  VkImage dstImage, VkImageLayout dstImageLayout,
                  uint32_t regionCount, const VkImageCopy *pRegions)
       : srcImage(srcImage), srcImageLayout(srcImageLayout), dstImage(dstImage),
-        dstImageLayout(dstImageLayout), regionCount(regionCount) {
-    VkImageCopy *regions = new VkImageCopy[regionCount]; // NOLINT
-    memcpy(regions, pRegions, sizeof(VkImageCopy) * regionCount);
-    this->pRegions = regions;
-  }
+        dstImageLayout(dstImageLayout),
+        regions(pRegions, pRegions + regionCount) {}
 
-  ~VkCmdCopyImage() { delete[] pRegions; }
+  auto Call(VkCommandBuffer cmdBuffer) const -> void override {
+    vkCmdCopyImage(cmdBuffer, srcImage, srcImageLayout, dstImage,
+                   dstImageLayout, regions.size(), regions.data());
+  }
 };
 
-struct VkCmdCopyBufferToImage : ArgBase {
+struct VkCmdCopyBufferToImage : Callable {
+  static const CommandType type = CommandType::vkCmdCopyBufferToImage;
+
   VkBuffer srcBuffer;
   VkImage dstImage;
   VkImageLayout dstImageLayout;
-  uint32_t regionCount;
-  const VkBufferImageCopy *pRegions;
+  std::vector<VkBufferImageCopy> regions;
 
   VkCmdCopyBufferToImage(VkBuffer srcBuffer, VkImage dstImage,
                          VkImageLayout dstImageLayout, uint32_t regionCount,
                          const VkBufferImageCopy *pRegions)
       : srcBuffer(srcBuffer), dstImage(dstImage),
-        dstImageLayout(dstImageLayout), regionCount(regionCount) {
-    VkBufferImageCopy *regions = new VkBufferImageCopy[regionCount]; // NOLINT
-    memcpy(regions, pRegions, sizeof(VkBufferImageCopy) * regionCount);
-    this->pRegions = regions;
-  }
+        dstImageLayout(dstImageLayout),
+        regions(pRegions, pRegions + regionCount) {}
 
-  ~VkCmdCopyBufferToImage() { delete[] pRegions; }
+  auto Call(VkCommandBuffer cmdBuffer) const -> void override {
+    vkCmdCopyBufferToImage(cmdBuffer, srcBuffer, dstImage, dstImageLayout,
+                           regions.size(), regions.data());
+  }
 };
 
-struct VkCmdCopyImageToBuffer : ArgBase {
+struct VkCmdCopyImageToBuffer : Callable {
+  static const CommandType type = CommandType::vkCmdCopyImageToBuffer;
+
   VkImage srcImage;
   VkImageLayout srcImageLayout;
   VkBuffer dstBuffer;
-  uint32_t regionCount;
-  const VkBufferImageCopy *pRegions;
+  std::vector<VkBufferImageCopy> regions;
 
   VkCmdCopyImageToBuffer(VkImage srcImage, VkImageLayout srcImageLayout,
                          VkBuffer dstBuffer, uint32_t regionCount,
                          const VkBufferImageCopy *pRegions)
       : srcImage(srcImage), srcImageLayout(srcImageLayout),
-        dstBuffer(dstBuffer), regionCount(regionCount) {
-    VkBufferImageCopy *regions = new VkBufferImageCopy[regionCount]; // NOLINT
-    memcpy(regions, pRegions, sizeof(VkBufferImageCopy) * regionCount);
-    this->pRegions = regions;
-  }
+        dstBuffer(dstBuffer), regions(pRegions, pRegions + regionCount) {}
 
-  ~VkCmdCopyImageToBuffer() { delete[] pRegions; }
+  auto Call(VkCommandBuffer cmdBuffer) const -> void override {
+    vkCmdCopyImageToBuffer(cmdBuffer, srcImage, srcImageLayout, dstBuffer,
+                           regions.size(), regions.data());
+  }
 };
 
-struct VkCmdPipelineBarrier2 : ArgBase {
-  const VkDependencyInfo *pDependencyInfo;
+struct VkCmdPipelineBarrier2 : Callable {
+  static const CommandType type = CommandType::vkCmdPipelineBarrier2;
 
-  explicit VkCmdPipelineBarrier2(const VkDependencyInfo *pDependencyInfo) {
-    VkDependencyInfo *info = new VkDependencyInfo; // NOLINT
-    memcpy(info, pDependencyInfo, sizeof(VkDependencyInfo));
-    this->pDependencyInfo = info;
+  VkDependencyInfo dependencyInfo;
+
+  explicit VkCmdPipelineBarrier2(const VkDependencyInfo *pDependencyInfo)
+      : dependencyInfo(*pDependencyInfo) {}
+
+  auto Call(VkCommandBuffer cmdBuffer) const -> void override {
+    vkCmdPipelineBarrier2(cmdBuffer, &dependencyInfo);
   }
-
-  ~VkCmdPipelineBarrier2() { delete pDependencyInfo; }
 };
 
-struct VkCmdFillBuffer : ArgBase {
+struct VkCmdFillBuffer : Callable {
+  static const CommandType type = CommandType::vkCmdFillBuffer;
+
   VkBuffer dstBuffer;
   VkDeviceSize dstOffset;
   VkDeviceSize size;
   uint32_t data;
+
+  auto Call(VkCommandBuffer cmdBuffer) const -> void override {
+    vkCmdFillBuffer(cmdBuffer, dstBuffer, dstOffset, size, data);
+  }
 };
 
-struct VkCmdBuildAccelerationStructuresKHR : ArgBase {
+struct VkCmdBuildAccelerationStructuresKHR : Callable {
+  static const CommandType type =
+      CommandType::vkCmdBuildAccelerationStructuresKHR;
+
   uint32_t infoCount;
   std::vector<VkAccelerationStructureBuildGeometryInfoKHR> infos;
   std::vector<VkAccelerationStructureBuildRangeInfoKHR> buildRangeInfos;
@@ -276,17 +347,36 @@ struct VkCmdBuildAccelerationStructuresKHR : ArgBase {
       buildRangeInfos[i] = *ppBuildRangeInfos[i]; // NOLINT
     }
   }
+
+  auto Call(VkCommandBuffer cmdBuffer) const -> void override {
+    std::vector<const VkAccelerationStructureBuildRangeInfoKHR *>
+        ppBuildRangeInfos;
+    ppBuildRangeInfos.reserve(buildRangeInfos.size());
+    for (const auto &range : buildRangeInfos) {
+      ppBuildRangeInfos.push_back(&range);
+    }
+    vkCmdBuildAccelerationStructuresKHR(cmdBuffer, infoCount, infos.data(),
+                                        ppBuildRangeInfos.data());
+  }
 };
 
-struct VkCmdResetQueryPool : ArgBase {
+struct VkCmdResetQueryPool : Callable {
+  static const CommandType type = CommandType::vkCmdResetQueryPool;
+
   VkQueryPool queryPool;
   uint32_t firstQuery;
   uint32_t queryCount;
+
+  auto Call(VkCommandBuffer cmdBuffer) const -> void override {
+    vkCmdResetQueryPool(cmdBuffer, queryPool, firstQuery, queryCount);
+  }
 };
 
-struct VkCmdWriteAccelerationStructuresPropertiesKHR : ArgBase {
-  uint32_t accelerationStructureCount;
-  const VkAccelerationStructureKHR *pAccelerationStructures;
+struct VkCmdWriteAccelerationStructuresPropertiesKHR : Callable {
+  static const CommandType type =
+      CommandType::vkCmdWriteAccelerationStructuresPropertiesKHR;
+
+  std::vector<VkAccelerationStructureKHR> accelerationStructures;
   VkQueryType queryType;
   VkQueryPool queryPool;
   uint32_t firstQuery;
@@ -295,106 +385,110 @@ struct VkCmdWriteAccelerationStructuresPropertiesKHR : ArgBase {
       uint32_t accelerationStructureCount,
       const VkAccelerationStructureKHR *pAccelerationStructures,
       VkQueryType queryType, VkQueryPool queryPool, uint32_t firstQuery)
-      : accelerationStructureCount(accelerationStructureCount),
-        queryType(queryType), queryPool(queryPool), firstQuery(firstQuery) {
-    VkAccelerationStructureKHR *structures = // NOLINT
-        new VkAccelerationStructureKHR[accelerationStructureCount];
-    memcpy((void *)structures,
-           static_cast<const void *>(pAccelerationStructures),
-           sizeof(VkAccelerationStructureKHR) * accelerationStructureCount);
-    this->pAccelerationStructures = structures;
-  }
+      : accelerationStructures(pAccelerationStructures,
+                               pAccelerationStructures +
+                                   accelerationStructureCount),
+        queryType(queryType), queryPool(queryPool), firstQuery(firstQuery) {}
 
-  ~VkCmdWriteAccelerationStructuresPropertiesKHR() {
-    delete[] pAccelerationStructures;
+  auto Call(VkCommandBuffer cmdBuffer) const -> void override {
+    vkCmdWriteAccelerationStructuresPropertiesKHR(
+        cmdBuffer, accelerationStructures.size(), accelerationStructures.data(),
+        queryType, queryPool, firstQuery);
   }
 };
 
-struct VkCmdBindIndexBuffer : ArgBase {
+struct VkCmdBindIndexBuffer : Callable {
+  static const CommandType type = CommandType::vkCmdBindIndexBuffer;
+
   VkBuffer buffer;
   VkDeviceSize offset;
   VkIndexType indexType;
+
+  auto Call(VkCommandBuffer cmdBuffer) const -> void override {
+    vkCmdBindIndexBuffer(cmdBuffer, buffer, offset, indexType);
+  }
 };
 
-struct VkCmdBindVertexBuffers : ArgBase {
+struct VkCmdBindVertexBuffers : Callable {
+  static const CommandType type = CommandType::vkCmdBindVertexBuffers;
+
   uint32_t firstBinding;
-  uint32_t bindingCount;
-  const VkBuffer *pBuffers;
-  const VkDeviceSize *pOffsets;
+  std::vector<VkBuffer> buffers;
+  std::vector<VkDeviceSize> offsets;
 
   VkCmdBindVertexBuffers(uint32_t firstBinding, uint32_t bindingCount,
                          const VkBuffer *pBuffers, const VkDeviceSize *pOffsets)
-      : firstBinding(firstBinding), bindingCount(bindingCount) {
-    VkBuffer *buffers = new VkBuffer[bindingCount]; // NOLINT
-    memcpy((void *)buffers, static_cast<const void *>(pBuffers),
-           sizeof(VkBuffer) * bindingCount);
-    this->pBuffers = buffers;
+      : firstBinding(firstBinding), buffers(pBuffers, pBuffers + bindingCount),
+        offsets(pOffsets, pOffsets + bindingCount) {}
 
-    VkDeviceSize *offsets = new VkDeviceSize[bindingCount]; // NOLINT
-    memcpy(offsets, pOffsets, sizeof(VkDeviceSize) * bindingCount);
-    this->pOffsets = offsets;
-  }
-
-  ~VkCmdBindVertexBuffers() {
-    delete[] pBuffers;
-    delete[] pOffsets;
+  auto Call(VkCommandBuffer cmdBuffer) const -> void override {
+    vkCmdBindVertexBuffers(cmdBuffer, firstBinding, buffers.size(),
+                           buffers.data(), offsets.data());
   }
 };
 
-struct VkCmdSetVertexInputEXT : ArgBase {
-  uint32_t vertexBindingDescriptionCount;
-  const VkVertexInputBindingDescription2EXT *pVertexBindingDescriptions;
-  uint32_t vertexAttributeDescriptionCount;
-  const VkVertexInputAttributeDescription2EXT *pVertexAttributeDescriptions;
+struct VkCmdSetVertexInputEXT : Callable {
+  static const CommandType type = CommandType::vkCmdSetVertexInputEXT;
+
+  std::vector<VkVertexInputBindingDescription2EXT> bindingDescriptions;
+  std::vector<VkVertexInputAttributeDescription2EXT> attributeDescriptions;
 
   VkCmdSetVertexInputEXT(
       uint32_t vertexBindingDescriptionCount,
       const VkVertexInputBindingDescription2EXT *pVertexBindingDescriptions,
       uint32_t vertexAttributeDescriptionCount,
       const VkVertexInputAttributeDescription2EXT *pVertexAttributeDescriptions)
-      : vertexBindingDescriptionCount(vertexBindingDescriptionCount),
-        vertexAttributeDescriptionCount(vertexAttributeDescriptionCount) {
-    VkVertexInputBindingDescription2EXT *bindingDescs = // NOLINT
-        new VkVertexInputBindingDescription2EXT[vertexBindingDescriptionCount];
-    memcpy(bindingDescs, pVertexBindingDescriptions,
-           sizeof(VkVertexInputBindingDescription2EXT) *
-               vertexBindingDescriptionCount);
-    this->pVertexBindingDescriptions = bindingDescs;
+      : bindingDescriptions(pVertexBindingDescriptions,
+                            pVertexBindingDescriptions +
+                                vertexBindingDescriptionCount),
+        attributeDescriptions(pVertexAttributeDescriptions,
+                              pVertexAttributeDescriptions +
+                                  vertexAttributeDescriptionCount) {}
 
-    VkVertexInputAttributeDescription2EXT *attrDescs = // NOLINT
-        new VkVertexInputAttributeDescription2EXT
-            [vertexAttributeDescriptionCount];
-    memcpy(attrDescs, pVertexAttributeDescriptions,
-           sizeof(VkVertexInputAttributeDescription2EXT) *
-               vertexAttributeDescriptionCount);
-    this->pVertexAttributeDescriptions = attrDescs;
-  }
-
-  ~VkCmdSetVertexInputEXT() {
-    delete[] pVertexBindingDescriptions;
-    delete[] pVertexAttributeDescriptions;
+  auto Call(VkCommandBuffer cmdBuffer) const -> void override {
+    vkCmdSetVertexInputEXT(
+        cmdBuffer, bindingDescriptions.size(), bindingDescriptions.data(),
+        attributeDescriptions.size(), attributeDescriptions.data());
   }
 };
 
-struct VkCmdBindPipeline : ArgBase {
+struct VkCmdBindPipeline : Callable {
+  static const CommandType type = CommandType::vkCmdBindPipeline;
+
   VkPipelineBindPoint pipelineBindPoint;
   VkPipeline pipeline;
+
+  auto Call(VkCommandBuffer cmdBuffer) const -> void override {
+    vkCmdBindPipeline(cmdBuffer, pipelineBindPoint, pipeline);
+  }
 };
 
-struct VkCmdBeginRendering : ArgBase {
+struct VkCmdBeginRendering : Callable {
+  static const CommandType type = CommandType::vkCmdBeginRendering;
+
   const VkRenderingInfo *pRenderingInfo;
+
+  auto Call(VkCommandBuffer cmdBuffer) const -> void override {
+    vkCmdBeginRendering(cmdBuffer, pRenderingInfo);
+  }
 };
 
-struct VkCmdEndRendering : ArgBase {};
+struct VkCmdEndRendering : Callable {
+  static const CommandType type = CommandType::vkCmdEndRendering;
 
-struct VkCmdBindDescriptorSets : ArgBase {
+  auto Call(VkCommandBuffer cmdBuffer) const -> void override {
+    vkCmdEndRendering(cmdBuffer);
+  }
+};
+
+struct VkCmdBindDescriptorSets : Callable {
+  static const CommandType type = CommandType::vkCmdBindDescriptorSets;
+
   VkPipelineBindPoint pipelineBindPoint;
   VkPipelineLayout layout;
   uint32_t firstSet;
-  uint32_t descriptorSetCount;
-  const VkDescriptorSet *pDescriptorSets;
-  uint32_t dynamicOffsetCount;
-  const uint32_t *pDynamicOffsets;
+  std::vector<VkDescriptorSet> descriptorSets;
+  std::vector<uint32_t> dynamicOffsets;
 
   VkCmdBindDescriptorSets(VkPipelineBindPoint pipelineBindPoint,
                           VkPipelineLayout layout, uint32_t firstSet,
@@ -403,250 +497,347 @@ struct VkCmdBindDescriptorSets : ArgBase {
                           uint32_t dynamicOffsetCount,
                           const uint32_t *pDynamicOffsets)
       : pipelineBindPoint(pipelineBindPoint), layout(layout),
-        firstSet(firstSet), descriptorSetCount(descriptorSetCount),
-        dynamicOffsetCount(dynamicOffsetCount) {
-    VkDescriptorSet *sets = new VkDescriptorSet[descriptorSetCount]; // NOLINT
-    memcpy(static_cast<void *>(sets),
-           static_cast<const void *>(pDescriptorSets),
-           sizeof(VkDescriptorSet) * descriptorSetCount);
-    this->pDescriptorSets = sets;
+        firstSet(firstSet),
+        descriptorSets(pDescriptorSets, pDescriptorSets + descriptorSetCount),
+        dynamicOffsets(pDynamicOffsets, pDynamicOffsets + dynamicOffsetCount) {}
 
-    uint32_t *offsets = new uint32_t[dynamicOffsetCount]; // NOLINT
-    memcpy(offsets, pDynamicOffsets, sizeof(uint32_t) * dynamicOffsetCount);
-    this->pDynamicOffsets = offsets;
-  }
-
-  ~VkCmdBindDescriptorSets() {
-    delete[] pDescriptorSets;
-    delete[] pDynamicOffsets;
+  auto Call(VkCommandBuffer cmdBuffer) const -> void override {
+    vkCmdBindDescriptorSets(cmdBuffer, pipelineBindPoint, layout, firstSet,
+                            descriptorSets.size(), descriptorSets.data(),
+                            dynamicOffsets.size(), dynamicOffsets.data());
   }
 };
 
-struct VkCmdSetViewport : ArgBase {
+struct VkCmdSetViewport : Callable {
+  static const CommandType type = CommandType::vkCmdSetViewport;
+
   uint32_t firstViewport;
-  uint32_t viewportCount;
-  const VkViewport *pViewports;
+  std::vector<VkViewport> viewports;
 
   VkCmdSetViewport(uint32_t firstViewport, uint32_t viewportCount,
                    const VkViewport *pViewports)
-      : firstViewport(firstViewport), viewportCount(viewportCount) {
-    VkViewport *viewports = new VkViewport[viewportCount]; // NOLINT
-    memcpy(viewports, pViewports, sizeof(VkViewport) * viewportCount);
-    this->pViewports = viewports;
-  }
+      : firstViewport(firstViewport),
+        viewports(pViewports, pViewports + viewportCount) {}
 
-  ~VkCmdSetViewport() { delete[] pViewports; }
+  auto Call(VkCommandBuffer cmdBuffer) const -> void override {
+    vkCmdSetViewport(cmdBuffer, firstViewport, viewports.size(),
+                     viewports.data());
+  }
 };
 
-struct VkCmdSetScissor : ArgBase {
+struct VkCmdSetScissor : Callable {
+  static const CommandType type = CommandType::vkCmdSetScissor;
+
   uint32_t firstScissor;
-  uint32_t scissorCount;
-  const VkRect2D *pScissors;
+  std::vector<VkRect2D> scissors;
 
   VkCmdSetScissor(uint32_t firstScissor, uint32_t scissorCount,
                   const VkRect2D *pScissors)
-      : firstScissor(firstScissor), scissorCount(scissorCount) {
-    VkRect2D *scissors = new VkRect2D[scissorCount]; // NOLINT
-    memcpy(scissors, pScissors, sizeof(VkRect2D) * scissorCount);
-    this->pScissors = scissors;
+      : firstScissor(firstScissor),
+        scissors(pScissors, pScissors + scissorCount) {}
+
+  auto Call(VkCommandBuffer cmdBuffer) const -> void override {
+    vkCmdSetScissor(cmdBuffer, firstScissor, scissors.size(), scissors.data());
   }
-
-  ~VkCmdSetScissor() { delete[] pScissors; }
 };
 
-struct VkCmdSetDepthTestEnable : ArgBase {
+struct VkCmdSetDepthTestEnable : Callable {
+  static const CommandType type = CommandType::vkCmdSetDepthTestEnable;
+
   VkBool32 depthTestEnable;
+
+  auto Call(VkCommandBuffer cmdBuffer) const -> void override {
+    vkCmdSetDepthTestEnable(cmdBuffer, depthTestEnable);
+  }
 };
 
-struct VkCmdSetDepthWriteEnable : ArgBase {
+struct VkCmdSetDepthWriteEnable : Callable {
+  static const CommandType type = CommandType::vkCmdSetDepthWriteEnable;
+
   VkBool32 depthWriteEnable;
+
+  auto Call(VkCommandBuffer cmdBuffer) const -> void override {
+    vkCmdSetDepthWriteEnable(cmdBuffer, depthWriteEnable);
+  }
 };
 
-struct VkCmdSetDepthCompareOp : ArgBase {
+struct VkCmdSetDepthCompareOp : Callable {
+  static const CommandType type = CommandType::vkCmdSetDepthCompareOp;
+
   VkCompareOp depthCompareOp;
+
+  auto Call(VkCommandBuffer cmdBuffer) const -> void override {
+    vkCmdSetDepthCompareOp(cmdBuffer, depthCompareOp);
+  }
 };
 
-struct VkCmdSetColorBlendEquationEXT : ArgBase {
+struct VkCmdSetColorBlendEquationEXT : Callable {
+  static const CommandType type = CommandType::vkCmdSetColorBlendEquationEXT;
+
   uint32_t firstAttachment;
-  uint32_t attachmentCount;
-  const VkColorBlendEquationEXT *pColorBlendEquations;
+  std::vector<VkColorBlendEquationEXT> equations;
 
   VkCmdSetColorBlendEquationEXT(
       uint32_t firstAttachment, uint32_t attachmentCount,
       const VkColorBlendEquationEXT *pColorBlendEquations)
-      : firstAttachment(firstAttachment), attachmentCount(attachmentCount) {
-    VkColorBlendEquationEXT *equations = // NOLINT
-        new VkColorBlendEquationEXT[attachmentCount];
-    memcpy(equations, pColorBlendEquations,
-           sizeof(VkColorBlendEquationEXT) * attachmentCount);
-    this->pColorBlendEquations = equations;
-  }
+      : firstAttachment(firstAttachment),
+        equations(pColorBlendEquations,
+                  pColorBlendEquations + attachmentCount) {}
 
-  ~VkCmdSetColorBlendEquationEXT() { delete[] pColorBlendEquations; }
+  auto Call(VkCommandBuffer cmdBuffer) const -> void override {
+    vkCmdSetColorBlendEquationEXT(cmdBuffer, firstAttachment, equations.size(),
+                                  equations.data());
+  }
 };
 
-struct VkCmdSetColorBlendEnableEXT : ArgBase {
+struct VkCmdSetColorBlendEnableEXT : Callable {
+  static const CommandType type = CommandType::vkCmdSetColorBlendEnableEXT;
+
   uint32_t firstAttachment;
-  uint32_t attachmentCount;
-  const VkBool32 *pColorBlendEnables;
+  std::vector<VkBool32> enables;
 
   VkCmdSetColorBlendEnableEXT(uint32_t firstAttachment,
                               uint32_t attachmentCount,
                               const VkBool32 *pColorBlendEnables)
-      : firstAttachment(firstAttachment), attachmentCount(attachmentCount) {
-    VkBool32 *enables = new VkBool32[attachmentCount]; // NOLINT
-    memcpy(enables, pColorBlendEnables, sizeof(VkBool32) * attachmentCount);
-    this->pColorBlendEnables = enables;
-  }
+      : firstAttachment(firstAttachment),
+        enables(pColorBlendEnables, pColorBlendEnables + attachmentCount) {}
 
-  ~VkCmdSetColorBlendEnableEXT() { delete[] pColorBlendEnables; }
+  auto Call(VkCommandBuffer cmdBuffer) const -> void override {
+    vkCmdSetColorBlendEnableEXT(cmdBuffer, firstAttachment, enables.size(),
+                                enables.data());
+  }
 };
 
-struct VkCmdSetColorWriteMaskEXT : ArgBase {
+struct VkCmdSetColorWriteMaskEXT : Callable {
+  static const CommandType type = CommandType::vkCmdSetColorWriteMaskEXT;
+
   uint32_t firstAttachment;
-  uint32_t attachmentCount;
-  const VkColorComponentFlags *pColorWriteMasks;
+  std::vector<VkColorComponentFlags> masks;
 
   VkCmdSetColorWriteMaskEXT(uint32_t firstAttachment, uint32_t attachmentCount,
                             const VkColorComponentFlags *pColorWriteMasks)
-      : firstAttachment(firstAttachment), attachmentCount(attachmentCount) {
-    VkColorComponentFlags *masks = // NOLINT
-        new VkColorComponentFlags[attachmentCount];
-    memcpy(masks, pColorWriteMasks,
-           sizeof(VkColorComponentFlags) * attachmentCount);
-    this->pColorWriteMasks = masks;
+      : firstAttachment(firstAttachment),
+        masks(pColorWriteMasks, pColorWriteMasks + attachmentCount) {}
+
+  auto Call(VkCommandBuffer cmdBuffer) const -> void override {
+    vkCmdSetColorWriteMaskEXT(cmdBuffer, firstAttachment, masks.size(),
+                              masks.data());
   }
-
-  ~VkCmdSetColorWriteMaskEXT() { delete[] pColorWriteMasks; }
 };
 
-struct VkCmdSetCullMode : ArgBase {
+struct VkCmdSetCullMode : Callable {
+  static const CommandType type = CommandType::vkCmdSetCullMode;
+
   VkCullModeFlags cullMode;
+
+  auto Call(VkCommandBuffer cmdBuffer) const -> void override {
+    vkCmdSetCullMode(cmdBuffer, cullMode);
+  }
 };
 
-struct VkCmdSetFrontFace : ArgBase {
+struct VkCmdSetFrontFace : Callable {
+  static const CommandType type = CommandType::vkCmdSetFrontFace;
+
   VkFrontFace frontFace;
+
+  auto Call(VkCommandBuffer cmdBuffer) const -> void override {
+    vkCmdSetFrontFace(cmdBuffer, frontFace);
+  }
 };
 
-struct VkCmdClearAttachments : ArgBase {
-  uint32_t attachmentCount;
-  const VkClearAttachment *pAttachments;
-  uint32_t rectCount;
-  const VkClearRect *pRects;
+struct VkCmdClearAttachments : Callable {
+  static const CommandType type = CommandType::vkCmdClearAttachments;
+
+  std::vector<VkClearAttachment> attachments;
+  std::vector<VkClearRect> rects;
 
   VkCmdClearAttachments(uint32_t attachmentCount,
                         const VkClearAttachment *pAttachments,
                         uint32_t rectCount, const VkClearRect *pRects)
-      : attachmentCount(attachmentCount), rectCount(rectCount) {
-    VkClearAttachment *attachments = // NOLINT
-        new VkClearAttachment[attachmentCount];
-    memcpy(attachments, pAttachments,
-           sizeof(VkClearAttachment) * attachmentCount);
-    this->pAttachments = attachments;
+      : attachments(pAttachments, pAttachments + attachmentCount),
+        rects(pRects, pRects + rectCount) {}
 
-    VkClearRect *rects = new VkClearRect[rectCount]; // NOLINT
-    memcpy(rects, pRects, sizeof(VkClearRect) * rectCount);
-    this->pRects = rects;
-  }
-
-  ~VkCmdClearAttachments() {
-    delete[] pAttachments;
-    delete[] pRects;
+  auto Call(VkCommandBuffer cmdBuffer) const -> void override {
+    vkCmdClearAttachments(cmdBuffer, attachments.size(), attachments.data(),
+                          rects.size(), rects.data());
   }
 };
 
-struct VkCmdBeginDebugUtilsLabelEXT : ArgBase {
-  const VkDebugUtilsLabelEXT *pLabelInfo;
+struct VkCmdBeginDebugUtilsLabelEXT : Callable {
+  static const CommandType type = CommandType::vkCmdBeginDebugUtilsLabelEXT;
 
-  explicit VkCmdBeginDebugUtilsLabelEXT(
-      const VkDebugUtilsLabelEXT *pLabelInfo) {
-    VkDebugUtilsLabelEXT *info = new VkDebugUtilsLabelEXT; // NOLINT
-    memcpy(info, pLabelInfo, sizeof(VkDebugUtilsLabelEXT));
-    this->pLabelInfo = info;
+  VkDebugUtilsLabelEXT labelInfo;
+
+  explicit VkCmdBeginDebugUtilsLabelEXT(const VkDebugUtilsLabelEXT *pLabelInfo)
+      : labelInfo(*pLabelInfo) {}
+
+  auto Call(VkCommandBuffer cmdBuffer) const -> void override {
+    vkCmdBeginDebugUtilsLabelEXT(cmdBuffer, &labelInfo);
   }
-
-  ~VkCmdBeginDebugUtilsLabelEXT() { delete pLabelInfo; }
 };
 
-struct VkCmdEndDebugUtilsLabelEXT : ArgBase {};
+struct VkCmdEndDebugUtilsLabelEXT : Callable {
+  static const CommandType type = CommandType::vkCmdEndDebugUtilsLabelEXT;
 
-struct VkCmdInsertDebugUtilsLabelEXT : ArgBase {
-  const VkDebugUtilsLabelEXT *pLabelInfo;
-
-  explicit VkCmdInsertDebugUtilsLabelEXT(
-      const VkDebugUtilsLabelEXT *pLabelInfo) {
-    VkDebugUtilsLabelEXT *info = new VkDebugUtilsLabelEXT; // NOLINT
-    memcpy(info, pLabelInfo, sizeof(VkDebugUtilsLabelEXT));
-    this->pLabelInfo = info;
+  auto Call(VkCommandBuffer cmdBuffer) const -> void override {
+    vkCmdEndDebugUtilsLabelEXT(cmdBuffer);
   }
-
-  ~VkCmdInsertDebugUtilsLabelEXT() { delete pLabelInfo; }
 };
 
+struct VkCmdInsertDebugUtilsLabelEXT : Callable {
+  static const CommandType type = CommandType::vkCmdInsertDebugUtilsLabelEXT;
+
+  VkDebugUtilsLabelEXT labelInfo;
+
+  explicit VkCmdInsertDebugUtilsLabelEXT(const VkDebugUtilsLabelEXT *pLabelInfo)
+      : labelInfo(*pLabelInfo) {}
+
+  auto Call(VkCommandBuffer cmdBuffer) const -> void override {
+    vkCmdInsertDebugUtilsLabelEXT(cmdBuffer, &labelInfo);
+  }
+};
+
+// NOLINTEND(cppcoreguidelines-pro-bounds-pointer-arithmetic, cppcoreguidelines-pro-type-reinterpret-cast)
 // NOLINTEND(cppcoreguidelines-special-member-functions, hicpp-special-member-functions)
 } // namespace Args
 
 struct Command {
-  explicit Command(CommandType type) : type(type) {}
-  Command(const Command &) = default;
-  Command(Command &&) = default;
-  auto operator=(const Command &) -> Command & = delete;
-  auto operator=(Command &&) -> Command & = delete;
-  ~Command() = default;
+  std::variant<
+      Args::VkCmdDraw, Args::VkCmdDrawIndexed, Args::VkCmdDrawIndirect,
+      Args::VkCmdDrawIndexedIndirect, Args::VkCmdDispatch,
+      Args::VkCmdDispatchIndirect, Args::VkCmdBlitImage,
+      Args::VkCmdPushConstants, Args::VkCmdCopyBuffer, Args::VkCmdCopyImage,
+      Args::VkCmdCopyBufferToImage, Args::VkCmdCopyImageToBuffer,
+      Args::VkCmdPipelineBarrier2, Args::VkCmdFillBuffer,
+      Args::VkCmdBuildAccelerationStructuresKHR, Args::VkCmdResetQueryPool,
+      Args::VkCmdWriteAccelerationStructuresPropertiesKHR,
+      Args::VkCmdBindIndexBuffer, Args::VkCmdBindVertexBuffers,
+      Args::VkCmdSetVertexInputEXT, Args::VkCmdBindPipeline,
+      Args::VkCmdBeginRendering, Args::VkCmdEndRendering,
+      Args::VkCmdBindDescriptorSets, Args::VkCmdSetViewport,
+      Args::VkCmdSetScissor, Args::VkCmdSetDepthTestEnable,
+      Args::VkCmdSetDepthWriteEnable, Args::VkCmdSetDepthCompareOp,
+      Args::VkCmdSetColorBlendEquationEXT, Args::VkCmdSetColorBlendEnableEXT,
+      Args::VkCmdSetColorWriteMaskEXT, Args::VkCmdSetCullMode,
+      Args::VkCmdSetFrontFace, Args::VkCmdClearAttachments,
+      Args::VkCmdBeginDebugUtilsLabelEXT, Args::VkCmdEndDebugUtilsLabelEXT,
+      Args::VkCmdInsertDebugUtilsLabelEXT>
+      data;
 
-  CommandType type;
+  [[nodiscard]] auto GetType() const -> CommandType {
+    return std::visit(
+        [](const auto &current) -> CommandType { return current.type; }, data);
+  }
+};
 
-  union commandData {
-    Args::VkCmdDraw vkCmdDraw;
-    Args::VkCmdDrawIndexed vkCmdDrawIndexed;
-    Args::VkCmdDrawIndirect vkCmdDrawIndirect;
-    Args::VkCmdDrawIndexedIndirect vkCmdDrawIndexedIndirect;
-    Args::VkCmdDispatch vkCmdDispatch;
-    Args::VkCmdDispatchIndirect vkCmdDispatchIndirect;
-    Args::VkCmdBlitImage vkCmdBlitImage;
+struct BufferStateUpdate {
+  VkBuffer buffer;
+  ResourceState state;
+  uint64_t time;
+};
 
-    Args::VkCmdPushConstants vkCmdPushConstants;
+struct ImageStateUpdate {
+  VkImageView image;
+  ResourceState state;
+  uint64_t time;
+};
 
-    Args::VkCmdCopyBuffer vkCmdCopyBuffer;
-    Args::VkCmdCopyImage vkCmdCopyImage;
-    Args::VkCmdCopyBufferToImage vkCmdCopyBufferToImage;
-    Args::VkCmdCopyImageToBuffer vkCmdCopyImageToBuffer;
+struct VirtualCommandBuffer {
+  friend struct FrameGraph;
 
-    Args::VkCmdPipelineBarrier2 vkCmdPipelineBarrier2;
-    Args::VkCmdFillBuffer vkCmdFillBuffer;
+  auto Append(const VirtualCommandBuffer &buffer) -> Error {
+    ERR_ASSERT(buffer.queueFamily == buffer.queueFamily);
 
-    Args::VkCmdBuildAccelerationStructuresKHR
-        vkCmdBuildAccelerationStructuresKHR;
-    Args::VkCmdResetQueryPool vkCmdResetQueryPool;
-    Args::VkCmdWriteAccelerationStructuresPropertiesKHR
-        vkCmdWriteAccelerationStructuresPropertiesKHR;
+    commands.append_range(buffer.commands);
 
-    Args::VkCmdBindIndexBuffer vkCmdBindIndexBuffer;
-    Args::VkCmdBindVertexBuffers vkCmdBindVertexBuffers;
-    Args::VkCmdSetVertexInputEXT vkCmdSetVertexInputEXT;
-    Args::VkCmdBindPipeline vkCmdBindPipeline;
+    return {};
+  }
 
-    Args::VkCmdBeginRendering vkCmdBeginRendering;
-    Args::VkCmdEndRendering vkCmdEndRendering;
+  auto Draw(const Args::VkCmdDraw &arguments) -> void;
+  auto DrawIndexed(const Args::VkCmdDrawIndexed &arguments) -> void;
+  auto DrawIndirect(const Args::VkCmdDrawIndirect &arguments) -> void;
+  auto DrawIndexedIndirect(const Args::VkCmdDrawIndexedIndirect &arguments)
+      -> void;
+  auto Dispatch(const Args::VkCmdDispatch &arguments) -> void;
+  auto DispatchIndirect(const Args::VkCmdDispatchIndirect &arguments) -> void;
+  auto BlitImage(const Args::VkCmdBlitImage &arguments) -> void;
+  auto PushConstants(const Args::VkCmdPushConstants &arguments) -> void;
+  auto CopyBuffer(const Args::VkCmdCopyBuffer &arguments) -> void;
+  auto CopyImage(const Args::VkCmdCopyImage &arguments) -> void;
+  auto CopyBufferToImage(const Args::VkCmdCopyBufferToImage &arguments) -> void;
+  auto CopyImageToBuffer(const Args::VkCmdCopyImageToBuffer &arguments) -> void;
+  auto PipelineBarrier2(const Args::VkCmdPipelineBarrier2 &arguments) -> void;
+  auto FillBuffer(const Args::VkCmdFillBuffer &arguments) -> void;
+  auto BuildAccelerationStructuresKHR(
+      const Args::VkCmdBuildAccelerationStructuresKHR &arguments) -> void;
+  auto ResetQueryPool(const Args::VkCmdResetQueryPool &arguments) -> void;
+  auto WriteAccelerationStructuresPropertiesKHR(
+      const Args::VkCmdWriteAccelerationStructuresPropertiesKHR &arguments)
+      -> void;
+  auto BindIndexBuffer(const Args::VkCmdBindIndexBuffer &arguments) -> void;
+  auto BindVertexBuffers(const Args::VkCmdBindVertexBuffers &arguments) -> void;
+  auto SetVertexInputEXT(const Args::VkCmdSetVertexInputEXT &arguments) -> void;
+  auto BindPipeline(const Args::VkCmdBindPipeline &arguments) -> void;
+  auto BeginRendering(const Args::VkCmdBeginRendering &arguments) -> void;
+  auto EndRendering(const Args::VkCmdEndRendering &arguments) -> void;
+  auto BindDescriptorSets(const Args::VkCmdBindDescriptorSets &arguments)
+      -> void;
+  auto SetViewport(const Args::VkCmdSetViewport &arguments) -> void;
+  auto SetScissor(const Args::VkCmdSetScissor &arguments) -> void;
+  auto SetDepthTestEnable(const Args::VkCmdSetDepthTestEnable &arguments)
+      -> void;
+  auto SetDepthWriteEnable(const Args::VkCmdSetDepthWriteEnable &arguments)
+      -> void;
+  auto SetDepthCompareOp(const Args::VkCmdSetDepthCompareOp &arguments) -> void;
+  auto
+  SetColorBlendEquationEXT(const Args::VkCmdSetColorBlendEquationEXT &arguments)
+      -> void;
+  auto
+  SetColorBlendEnableEXT(const Args::VkCmdSetColorBlendEnableEXT &arguments)
+      -> void;
+  auto SetColorWriteMaskEXT(const Args::VkCmdSetColorWriteMaskEXT &arguments)
+      -> void;
+  auto SetCullMode(const Args::VkCmdSetCullMode &arguments) -> void;
+  auto SetFrontFace(const Args::VkCmdSetFrontFace &arguments) -> void;
+  auto ClearAttachments(const Args::VkCmdClearAttachments &arguments) -> void;
+  auto
+  BeginDebugUtilsLabelEXT(const Args::VkCmdBeginDebugUtilsLabelEXT &arguments)
+      -> void;
+  auto EndDebugUtilsLabelEXT(const Args::VkCmdEndDebugUtilsLabelEXT &arguments)
+      -> void;
+  auto
+  InsertDebugUtilsLabelEXT(const Args::VkCmdInsertDebugUtilsLabelEXT &arguments)
+      -> void;
 
-    Args::VkCmdBindDescriptorSets vkCmdBindDescriptorSets;
-    Args::VkCmdSetViewport vkCmdSetViewport;
-    Args::VkCmdSetScissor vkCmdSetScissor;
-    Args::VkCmdSetDepthTestEnable vkCmdSetDepthTestEnable;
-    Args::VkCmdSetDepthWriteEnable vkCmdSetDepthWriteEnable;
-    Args::VkCmdSetDepthCompareOp vkCmdSetDepthCompareOp;
-    Args::VkCmdSetColorBlendEquationEXT vkCmdSetColorBlendEquationEXT;
-    Args::VkCmdSetColorBlendEnableEXT vkCmdSetColorBlendEnableEXT;
-    Args::VkCmdSetColorWriteMaskEXT vkCmdSetColorWriteMaskEXT;
-    Args::VkCmdSetCullMode vkCmdSetCullMode;
-    Args::VkCmdSetFrontFace vkCmdSetFrontFace;
+  [[nodiscard]] auto GetQueueFamily() const -> uint32_t { return queueFamily; }
 
-    Args::VkCmdClearAttachments vkCmdClearAttachments;
+  auto AddStateUpdate(VkImageView image, const ResourceState &newState) -> void;
+  auto AddStateUpdate(VkBuffer buffer, const ResourceState &newState) -> void;
+  auto AddStateUpdate(VkAccelerationStructureKHR structure,
+                      const ResourceState &newState) -> void;
 
-    Args::VkCmdBeginDebugUtilsLabelEXT vkCmdBeginDebugUtilsLabelEXT;
-    Args::VkCmdEndDebugUtilsLabelEXT vkCmdEndDebugUtilsLabelEXT;
-    Args::VkCmdInsertDebugUtilsLabelEXT vkCmdInsertDebugUtilsLabelEXT;
-  };
+protected:
+  // NOLINTBEGIN
+
+  uint64_t time;
+
+  auto AddCommand(const Command &command) -> void;
+
+  std::vector<Command> commands;
+
+  std::unordered_map<VkBuffer, std::vector<std::pair<ResourceState, uint64_t>>>
+      bufferStateUpdates;
+  std::vector<BufferStateUpdate> bufferStateUpdateTimeline;
+
+  std::unordered_map<VkImageView,
+                     std::vector<std::pair<ResourceState, uint64_t>>>
+      imageStateUpdates;
+
+  std::vector<ImageStateUpdate> imageStateUpdateTimeline;
+
+  uint32_t queueFamily;
+
+  // NOLINTEND
 };
 
 } // namespace Graphics
