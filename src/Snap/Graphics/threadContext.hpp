@@ -6,7 +6,6 @@
 #include <utility>
 #include <vector>
 
-#include "Graphics/FrameGraph/commands.hpp"
 #include "Graphics/graphicsState.hpp"
 #include "Graphics/texture.hpp"
 #include "Modules/object.hpp"
@@ -18,6 +17,8 @@ struct DescriptorPoolInfo {
   VkDescriptorPool descriptorPool;
   uint64_t lastUsedTimestamp;
 };
+
+struct VirtualCommandBuffer;
 
 // Per-thread context for graphics operations, even on the main thread
 struct ThreadContext {

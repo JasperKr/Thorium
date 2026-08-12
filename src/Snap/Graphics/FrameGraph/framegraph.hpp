@@ -42,7 +42,7 @@ private:
 
   auto GetResourceStateAt(VkBuffer buffer, uint64_t time)
       -> Result<ResourceState>;
-  auto GetResourceStateAt(VkImageView image, uint64_t time)
+  auto GetResourceStateAt(VkImage image, uint64_t time)
       -> Result<ResourceState>;
   auto ValidateGraph() -> Error;
 };

@@ -164,7 +164,7 @@ auto AcquireCommandBuffer(Graphics::GraphicsContext &context,
   assert(tcontext.queueFamily == 0);
 
   threadInfo->threadData.commandBuffer =
-      std::make_shared<VirtualCommandBuffer>();
+      std::make_shared<::Graphics::VirtualCommandBuffer>();
 
   CHECK_ERR(GetDescriptorPool(tcontext));
 

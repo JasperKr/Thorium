@@ -1,7 +1,5 @@
 #pragma once
 
-#include "Graphics/graphicsState.hpp"
-#include "Graphics/texture.hpp"
 #include "Modules/Helpers/LRUCache.hpp"
 #include "Modules/Helpers/hasher.hpp"
 #include "Modules/console.hpp"
@@ -13,6 +11,8 @@
 #include "shader.hpp"
 #include <cstddef>
 #include <cstdint>
+#include <optional>
+#include <string>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -248,8 +248,8 @@ struct State {
   VkCompareOp depthCompareOp = VK_COMPARE_OP_LESS;
   VkBool32 stencilTestEnable = 0;
   VkPolygonMode polygonMode = VK_POLYGON_MODE_FILL;
-  VkViewport viewport;
-  VkRect2D scissor;
+  VkViewport viewport{};
+  VkRect2D scissor{};
 
   bool hasViewport = false;
   bool hasScissor = false;
@@ -267,7 +267,7 @@ struct State {
   RenderTarget depthStencilAttachment;
   bool hasDepthStencilAttachment = false;
 
-  mutable uint64_t hash;
+  mutable uint64_t hash{};
 
   // Incremented each time the state is modified
   mutable uint64_t generation = 0;

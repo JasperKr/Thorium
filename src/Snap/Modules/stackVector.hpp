@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <iterator>
 #include <utility>
+#include <vector>
 
 namespace Math {
 
@@ -23,6 +24,10 @@ template <typename T, size_t N> struct StackVector {
 
   StackVector(StackVector &&) = default;
   StackVector(const StackVector &) = default;
+  explicit constexpr StackVector(std::vector<T> data)
+      : currentSize(data.size()) {
+    memcpy(storage.data(), data.data(), sizeof(T) * currentSize);
+  }
 
   auto operator=(StackVector &&) -> StackVector & = default;
   auto operator=(const StackVector &) -> StackVector & = default;

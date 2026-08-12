@@ -1,7 +1,5 @@
 #pragma once
 
-#include "Graphics/FrameGraph/commands.hpp"
-
 #include "Graphics/graphicsContext.hpp"
 #include "Graphics/sampler.hpp"
 #include "Modules/error.hpp"
@@ -14,13 +12,17 @@
 
 #include <vulkan/vulkan_core.h>
 
+namespace Graphics {
+struct VirtualCommandBuffer;
+}
+
 namespace Graphics::Threading {
 
 struct RenderThreadData {
   uint64_t key = 0;
   int64_t priority = 0; // Tie-breaker for overlapping keys
 
-  std::shared_ptr<VirtualCommandBuffer> commandBuffer;
+  std::shared_ptr<::Graphics::VirtualCommandBuffer> commandBuffer;
   uint64_t cmdBufferTimelineValue{};
   uint64_t acquiredAtFrame{};
   uint32_t queueFamily{};

@@ -39,7 +39,7 @@ auto FrameGraph::GetResourceStateAt(VkBuffer buffer, uint64_t time)
   return iter == updates.begin() ? ResourceState{} : std::prev(iter)->first;
 }
 
-auto FrameGraph::GetResourceStateAt(VkImageView image, uint64_t time)
+auto FrameGraph::GetResourceStateAt(VkImage image, uint64_t time)
     -> Result<ResourceState> {
   auto updates = commandBuffer.imageStateUpdates[image];
 
@@ -57,8 +57,8 @@ auto FrameGraph::Level(uint64_t idx) -> uint64_t {
     return command.level;
   }
 
-  const auto *boundResources = command.GetBoundResources();
-  if (boundResources == nullptr) {
+  const auto boundResources = GetDependencies(command);
+  if (boundResources.empty()) {
     command.level = 0;
 
     return 0;
@@ -66,7 +66,7 @@ auto FrameGraph::Level(uint64_t idx) -> uint64_t {
 
   int64_t maxDepth = -1;
 
-  for (const auto &ptr : boundResources->bound) {
+  for (const auto &ptr : boundResources) {
     auto &usages = resourceUsages[ptr];
 
     // binary search resource usage
@@ -101,12 +101,12 @@ auto FrameGraph::BuildGraph() -> Error {
   for (auto &command : commandBuffer.commands) {
     command.id = idx++;
 
-    const auto *boundResources = command.GetBoundResources();
-    if (boundResources == nullptr) {
+    const auto &boundResources = GetDependencies(command);
+    if (boundResources.empty()) {
       continue;
     }
 
-    for (const auto &ptr : boundResources->bound) {
+    for (const auto &ptr : boundResources) {
       resourceUsages[ptr].emplace_back(command.id);
     }
   }
@@ -139,8 +139,6 @@ auto FrameGraph::Compile() -> Error {
   auto time2 = Timer::GetTime();
   PrintAlways("Graph depth: {}", graph.size());
   PrintAlways("Graph build time: {}", time2 - time);
-
-  // export to a GraphVis file.
 
   std::stringstream stream;
   stream << "digraph FrameGraph {\n";

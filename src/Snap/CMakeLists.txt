@@ -239,6 +239,7 @@ add_library(snap_core OBJECT
     Graphics/allocations.cpp
     Graphics/bvh.cpp
     Graphics/shaderCache.cpp
+    Graphics/vertexformat.cpp
 
 # Frame Graph
     Graphics/FrameGraph/framegraph.cpp

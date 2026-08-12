@@ -1,9 +1,108 @@
 #include "commands.hpp"
 #include "Graphics/dynamicRendering.hpp"
 #include "Graphics/graphics.hpp"
+#include "Modules/Helpers/hasher.hpp"
 #include "Modules/image.hpp"
+#include <variant>
+#include <vector>
 
 namespace Graphics {
+
+std::unordered_map<GraphState, uint32_t, GraphStateHash>
+    CommandStateManager::StateToIndex{};
+std::vector<GraphState> CommandStateManager::States{};
+
+auto GraphState::GetHash() const -> uint64_t {
+  if (dirty) {
+    Hash::Hasher hasher{};
+
+    // Special case for compute pipelines
+    if (bindPoint == VK_PIPELINE_BIND_POINT_COMPUTE) {
+      hasher.Add(std::hash<VkPipelineBindPoint>()(bindPoint));
+      hasher.Add(shader->getID());
+      return hasher.Get();
+    }
+
+    hasher.Add(cullMode);
+    hasher.Add(frontFace);
+    hasher.Add(depthTestEnable);
+    hasher.Add(depthWriteEnable);
+    hasher.Add(depthCompareOp);
+    hasher.Add(stencilTestEnable);
+    hasher.Add(polygonMode);
+    hasher.Add(viewport.x);
+    hasher.Add(viewport.y);
+    hasher.Add(viewport.width);
+    hasher.Add(viewport.height);
+    hasher.Add(scissor.extent.width);
+    hasher.Add(scissor.extent.height);
+    hasher.Add(scissor.offset.x);
+    hasher.Add(scissor.offset.y);
+
+    for (auto *buffer : vertexBuffers) {
+      hasher.Add(buffer);
+    }
+
+    hasher.Add(indexBuffer);
+    hasher.Add(indexType);
+
+    for (auto offset : vertexBufferOffsets) {
+      hasher.Add(offset);
+    }
+    hasher.Add(indexBufferOffset);
+
+    for (const auto &equation : colorBlendEquations) {
+      hasher.Add(equation.srcColorBlendFactor);
+      hasher.Add(equation.dstColorBlendFactor);
+      hasher.Add(equation.colorBlendOp);
+      hasher.Add(equation.srcAlphaBlendFactor);
+      hasher.Add(equation.dstAlphaBlendFactor);
+      hasher.Add(equation.alphaBlendOp);
+    }
+
+    if (shader) {
+      hasher.Add(shader->getID());
+    }
+
+    hasher.Add(primitiveTopology);
+    hasher.Add(bindPoint);
+
+    for (const auto &attachment : colorAttachments) {
+      hasher.Add(attachment.texture->view);
+    }
+
+    if (hasDepthStencilAttachment) {
+      hasher.Add(depthStencilAttachment.texture->view);
+    }
+
+    for (auto enable : blendEnables) {
+      hasher.Add(enable);
+    }
+
+    for (auto mask : colorWriteMasks) {
+      hasher.Add(mask);
+    }
+
+    for (const auto &desc : bindingDescriptions) {
+      hasher.Add(desc.binding);
+      hasher.Add(desc.stride);
+      hasher.Add(desc.inputRate);
+    }
+
+    for (const auto &desc : attributeDescriptions) {
+      hasher.Add(desc.location);
+      hasher.Add(desc.binding);
+      hasher.Add(desc.format);
+      hasher.Add(desc.offset);
+    }
+
+    hash = hasher.Get();
+
+    dirty = false;
+  }
+
+  return hash;
+}
 
 BoundResources::BoundResources() {
   const auto &shader = DynamicRendering::GetShader();
@@ -16,11 +115,11 @@ BoundResources::BoundResources() {
 
     for (const auto &target : rendertargets) {
       if (Image::IsDepthOrStencilTexture(target.texture->GetFormat())) {
-        depthStencilAttachment = target.texture->view;
+        depthStencilAttachment = target.texture->imageMemory->image;
         bound.emplace_back(depthStencilAttachment);
       } else {
-        colorAttachments.emplace_back(target.texture->view);
-        bound.emplace_back(target.texture->view);
+        colorAttachments.emplace_back(target.texture->imageMemory->image);
+        bound.emplace_back(target.texture->imageMemory->image);
       }
     }
   }
@@ -33,8 +132,8 @@ BoundResources::BoundResources() {
   }
 
   for (const auto &texture : shaderState.userBoundTextures) {
-    boundImages.emplace_back(texture.second.first->view);
-    bound.emplace_back(texture.second.first->view);
+    boundImages.emplace_back(texture.second.first->imageMemory->image);
+    bound.emplace_back(texture.second.first->imageMemory->image);
   }
 
   for (const auto &accelerationStructure :
@@ -48,6 +147,28 @@ BoundResources::BoundResources() {
   vertexBuffers.insert(vertexBuffers.begin(), boundBuffers.begin(),
                        boundBuffers.end());
   indexBuffer = ctx.boundIndexBuffer;
+
+  stateID = ctx.commandBuffer->GetStateID();
+  pushConstants = ctx.commandBuffer->GetGraphState().pushConstants;
+}
+
+auto GetDependencies(Command &command) -> std::vector<void *> {
+  auto *bound = get_if_derived<BoundResources>(command.data);
+
+  if (bound != nullptr) {
+    return bound->bound;
+  }
+
+  if (std::holds_alternative<Args::VkCmdBlitImage>(command.data)) {
+    const auto &blit = std::get<Args::VkCmdBlitImage>(command.data);
+
+    return {
+        blit.srcImage,
+        blit.dstImage,
+    };
+  }
+
+  return {};
 }
 
 auto VirtualCommandBuffer::AddCommand(const Command &command) -> void {
@@ -91,7 +212,7 @@ auto VirtualCommandBuffer::BlitImage(const Args::VkCmdBlitImage &arguments)
 
 auto VirtualCommandBuffer::PushConstants(
     const Args::VkCmdPushConstants &arguments) -> void {
-  AddCommand(Command(arguments));
+  currentState.pushConstants = arguments.values;
 }
 
 auto VirtualCommandBuffer::CopyBuffer(const Args::VkCmdCopyBuffer &arguments)
@@ -147,77 +268,95 @@ auto VirtualCommandBuffer::WriteAccelerationStructuresPropertiesKHR(
 
 auto VirtualCommandBuffer::BindIndexBuffer(
     const Args::VkCmdBindIndexBuffer &arguments) -> void {
-  AddCommand(Command(arguments));
+  currentState.indexBuffer = arguments.buffer;
+  currentState.indexType = arguments.indexType;
+  currentState.indexBufferOffset = arguments.offset;
 }
 
 auto VirtualCommandBuffer::BindVertexBuffers(
     const Args::VkCmdBindVertexBuffers &arguments) -> void {
-  AddCommand(Command(arguments));
+
+  const auto first = arguments.firstBinding;
+  const auto count = arguments.buffers.size();
+  currentState.vertexBuffers.resize(first + count);
+  currentState.vertexBufferOffsets.resize(first + count);
+
+  for (size_t i = 0; i < count; ++i) {
+    currentState.vertexBuffers[first + i] = arguments.buffers[i];
+    currentState.vertexBufferOffsets[first + i] = arguments.offsets[i];
+  }
 }
 
 auto VirtualCommandBuffer::SetVertexInputEXT(
     const Args::VkCmdSetVertexInputEXT &arguments) -> void {
-  AddCommand(Command(arguments));
+  currentState.bindingDescriptions = arguments.bindingDescriptions;
+  currentState.attributeDescriptions = arguments.attributeDescriptions;
 }
 
 auto VirtualCommandBuffer::BindPipeline(
-    const Args::VkCmdBindPipeline &arguments) -> void {
-  AddCommand(Command(arguments));
-}
+    const Args::VkCmdBindPipeline &arguments) -> void {}
 
 auto VirtualCommandBuffer::BindDescriptorSets(
-    const Args::VkCmdBindDescriptorSets &arguments) -> void {
-  AddCommand(Command(arguments));
-}
+    const Args::VkCmdBindDescriptorSets &arguments) -> void {}
 
 auto VirtualCommandBuffer::SetViewport(const Args::VkCmdSetViewport &arguments)
     -> void {
-  AddCommand(Command(arguments));
+  currentState.viewport = arguments.viewports.front();
+  currentState.MarkUpdated();
 }
 
 auto VirtualCommandBuffer::SetScissor(const Args::VkCmdSetScissor &arguments)
     -> void {
-  AddCommand(Command(arguments));
+  currentState.scissor = arguments.scissors.front();
+  currentState.MarkUpdated();
 }
 
 auto VirtualCommandBuffer::SetDepthTestEnable(
     const Args::VkCmdSetDepthTestEnable &arguments) -> void {
-  AddCommand(Command(arguments));
+  currentState.depthTestEnable = arguments.depthTestEnable;
+  currentState.MarkUpdated();
 }
 
 auto VirtualCommandBuffer::SetDepthWriteEnable(
     const Args::VkCmdSetDepthWriteEnable &arguments) -> void {
-  AddCommand(Command(arguments));
+  currentState.depthWriteEnable = arguments.depthWriteEnable;
+  currentState.MarkUpdated();
 }
 
 auto VirtualCommandBuffer::SetDepthCompareOp(
     const Args::VkCmdSetDepthCompareOp &arguments) -> void {
-  AddCommand(Command(arguments));
+  currentState.depthCompareOp = arguments.depthCompareOp;
+  currentState.MarkUpdated();
 }
 
 auto VirtualCommandBuffer::SetColorBlendEquationEXT(
     const Args::VkCmdSetColorBlendEquationEXT &arguments) -> void {
-  AddCommand(Command(arguments));
+  currentState.colorBlendEquations = arguments.equations;
+  currentState.MarkUpdated();
 }
 
 auto VirtualCommandBuffer::SetColorBlendEnableEXT(
     const Args::VkCmdSetColorBlendEnableEXT &arguments) -> void {
-  AddCommand(Command(arguments));
+  currentState.blendEnables = arguments.enables;
+  currentState.MarkUpdated();
 }
 
 auto VirtualCommandBuffer::SetColorWriteMaskEXT(
     const Args::VkCmdSetColorWriteMaskEXT &arguments) -> void {
-  AddCommand(Command(arguments));
+  currentState.colorWriteMasks = arguments.masks;
+  currentState.MarkUpdated();
 }
 
 auto VirtualCommandBuffer::SetCullMode(const Args::VkCmdSetCullMode &arguments)
     -> void {
-  AddCommand(Command(arguments));
+  currentState.cullMode = arguments.cullMode;
+  currentState.MarkUpdated();
 }
 
 auto VirtualCommandBuffer::SetFrontFace(
     const Args::VkCmdSetFrontFace &arguments) -> void {
-  AddCommand(Command(arguments));
+  currentState.frontFace = arguments.frontFace;
+  currentState.MarkUpdated();
 }
 
 auto VirtualCommandBuffer::ClearAttachments(
@@ -227,18 +366,14 @@ auto VirtualCommandBuffer::ClearAttachments(
 
 auto VirtualCommandBuffer::BeginDebugUtilsLabelEXT(
     const Args::VkCmdBeginDebugUtilsLabelEXT &arguments) -> void {
-  AddCommand(Command(arguments));
+  // currentState.currentDebugMarker = arguments.labelInfo.pLabelName;
 }
 
 auto VirtualCommandBuffer::EndDebugUtilsLabelEXT(
-    const Args::VkCmdEndDebugUtilsLabelEXT &arguments) -> void {
-  AddCommand(Command(arguments));
-}
+    const Args::VkCmdEndDebugUtilsLabelEXT &arguments) -> void {}
 
 auto VirtualCommandBuffer::InsertDebugUtilsLabelEXT(
-    const Args::VkCmdInsertDebugUtilsLabelEXT &arguments) -> void {
-  AddCommand(Command(arguments));
-}
+    const Args::VkCmdInsertDebugUtilsLabelEXT &arguments) -> void {}
 
 auto VirtualCommandBuffer::AddStateUpdate(VkBuffer buffer,
                                           const ResourceState &newState)
@@ -247,7 +382,7 @@ auto VirtualCommandBuffer::AddStateUpdate(VkBuffer buffer,
   bufferStateUpdateTimeline.emplace_back(buffer, newState, time);
 }
 
-auto VirtualCommandBuffer::AddStateUpdate(VkImageView image,
+auto VirtualCommandBuffer::AddStateUpdate(VkImage image,
                                           const ResourceState &newState)
     -> void {
   imageStateUpdates[image].emplace_back(newState, time);

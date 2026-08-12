@@ -1,6 +1,7 @@
 #include "draw.hpp"
 #include "Graphics/Buffers/uniform.hpp"
 
+#include "Graphics/FrameGraph/commands.hpp"
 #include "Graphics/buffer.hpp"
 #include "Graphics/dynamicRendering.hpp"
 #include "Graphics/graphics.hpp"
