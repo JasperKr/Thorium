@@ -36,6 +36,11 @@ private:
   //   return graphState[(void *)image];
   // }
 
+  // auto GetGraphItemState(VkAccelerationStructureKHR accelerationStructure)
+  //     -> GraphItemState {
+  //   return graphState[(void *)accelerationStructure];
+  // }
+
   auto Compile() -> Error;
   auto BuildGraph() -> Error;
   auto Level(uint64_t idx) -> uint64_t;

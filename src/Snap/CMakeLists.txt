@@ -227,7 +227,7 @@ add_library(snap_core OBJECT
     Graphics/resource.cpp
     Graphics/mesh.cpp
     Graphics/draw.cpp
-    Graphics/barrier.cpp
+    # Graphics/barrier.cpp
     Graphics/renderThread.cpp
     Graphics/semaphoreManager.cpp
     Graphics/bufferformat.cpp

@@ -1,4 +1,5 @@
 #include "push.hpp"
+#include "Graphics/graphics.hpp"
 #include "Graphics/reflect.hpp"
 #include <cstring>
 #include <optional>
@@ -20,11 +21,12 @@ auto PushBuffer::GetLayout() const -> const Reflect::FlattenedReflection & {
   return layout;
 }
 
-auto PushBuffer::FlushData(FlushInfo &info) -> void {
+auto PushBuffer::FlushData(VkPipelineLayout layout) -> void {
   auto bufferSize = GetBufferSize();
 
-  vkCmdPushConstants(info.commandBuffer, info.pipelineLayout, stageFlags,
-                     GetBufferOffset(), bufferSize, data.data());
+  GetCommandBuffer()->PushConstants(
+      {layout, stageFlags, static_cast<uint32_t>(GetBufferOffset()),
+       static_cast<uint32_t>(bufferSize), data.data()});
 }
 
 auto PushBuffer::ContainsUniform(const ResourceKey &key) const -> bool {

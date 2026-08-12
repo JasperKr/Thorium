@@ -273,21 +273,6 @@ PrepareCommands(GraphicsContext &context,
     -> Error {
   ZoneScoped;
 
-  {
-    for (const auto &threadInfo : commands) {
-      if (threadInfo->threadData.drawsToSwapchain &&
-          threadInfo->threadData.acquiredAtFrame != context.currentFrame) {
-        return Error::Createf(
-            "Thread {} tried to submit a command buffer that was recorded "
-            "in frame {}, but the current frame is {}. Command buffers "
-            "that draw to the swapchain must be recorded and submitted "
-            "in the same frame.",
-            threadInfo->threadData.name, threadInfo->threadData.acquiredAtFrame,
-            context.currentFrame);
-      }
-    }
-  }
-
   std::vector<uint64_t> orderedSemaphoreValues = {};
 
   orderedSemaphoreValues.reserve(commands.size());
@@ -328,122 +313,122 @@ PrepareCommands(GraphicsContext &context,
   return Error::Success();
 }
 
-inline auto
-SubmitBarriers(GraphicsContext &context,
-               const std::vector<Ref<Threading::RenderThreadInfo>> &commands) {
-  ZoneScoped;
+// inline auto
+// SubmitBarriers(GraphicsContext &context,
+//                const std::vector<Ref<Threading::RenderThreadInfo>> &commands) {
+//   ZoneScoped;
 
-  for (size_t i = 0; i < commands.size(); i++) {
-    assert(i < commands.size());
-    assert(context.frameIndex < GlobalStitchInfo.commandBuffers.size());
-    assert(i < GlobalStitchInfo.commandBuffers.at(context.frameIndex).size());
+//   for (size_t i = 0; i < commands.size(); i++) {
+//     assert(i < commands.size());
+//     assert(context.frameIndex < GlobalStitchInfo.commandBuffers.size());
+//     assert(i < GlobalStitchInfo.commandBuffers.at(context.frameIndex).size());
 
-    const auto &threadData = commands.at(i)->threadData;
-    auto *commandBuffer =
-        GlobalStitchInfo.commandBuffers.at(context.frameIndex).at(i);
-    GetThreadContext().commandBuffer = commandBuffer;
+//     const auto &threadData = commands.at(i)->threadData;
+//     auto *commandBuffer =
+//         GlobalStitchInfo.commandBuffers.at(context.frameIndex).at(i);
+//     GetThreadContext().commandBuffer = commandBuffer;
 
-    VkCommandBufferBeginInfo beginInfo = {};
-    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+//     VkCommandBufferBeginInfo beginInfo = {};
+//     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+//     beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-    vkBeginCommandBuffer(commandBuffer, &beginInfo);
+//     vkBeginCommandBuffer(commandBuffer, &beginInfo);
 
-    for (auto [state, newUsage] : threadData.usageUpdates) {
-      auto updateResult =
-          Graphics::Barrier::UpdateUsageVirtual(state, newUsage);
+//     for (auto [state, newUsage] : threadData.usageUpdates) {
+//       auto updateResult =
+//           Graphics::Barrier::UpdateUsageVirtual(state, newUsage);
 
-      if (!updateResult.has_value()) {
-        continue;
-      }
+//       if (!updateResult.has_value()) {
+//         continue;
+//       }
 
-      auto &sync = updateResult.value();
+//       auto &sync = updateResult.value();
 
-      VkMemoryBarrier2 barrier = {};
-      barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2;
-      barrier.srcStageMask = sync.srcStages;
-      barrier.dstStageMask = sync.dstStages;
-      barrier.srcAccessMask = sync.srcAccess;
-      barrier.dstAccessMask = sync.dstAccess;
+//       VkMemoryBarrier2 barrier = {};
+//       barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2;
+//       barrier.srcStageMask = sync.srcStages;
+//       barrier.dstStageMask = sync.dstStages;
+//       barrier.srcAccessMask = sync.srcAccess;
+//       barrier.dstAccessMask = sync.dstAccess;
 
-      VkDependencyInfo depInfo = {};
-      depInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-      depInfo.memoryBarrierCount = 1;
-      depInfo.pMemoryBarriers = &barrier;
+//       VkDependencyInfo depInfo = {};
+//       depInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+//       depInfo.memoryBarrierCount = 1;
+//       depInfo.pMemoryBarriers = &barrier;
 
-      vkCmdPipelineBarrier2(commandBuffer, &depInfo);
-    }
+//       vkCmdPipelineBarrier2(commandBuffer, &depInfo);
+//     }
 
-    for (const auto &[image, state] : threadData.initialImageStates) {
-      if (image.expired()) {
-        continue;
-      }
+//     for (const auto &[image, state] : threadData.initialImageStates) {
+//       if (image.expired()) {
+//         continue;
+//       }
 
-      const auto &lockedImage = image.lock();
+//       const auto &lockedImage = image.lock();
 
-      const auto &currentState = lockedImage->GetState();
+//       const auto &currentState = lockedImage->GetState();
 
-      CHECK_ERR(lockedImage->UseAs(context, state.lastUsage,
-                                   state.lastPipelineStage));
+//       CHECK_ERR(lockedImage->UseAs(context, state.lastUsage,
+//                                    state.lastPipelineStage));
 
-      auto finalStateIt =
-          threadData.finalImageStates.find(lockedImage->getID());
-      if (finalStateIt != threadData.finalImageStates.end()) {
-        lockedImage->currentState = finalStateIt->second;
-      }
-    }
+//       auto finalStateIt =
+//           threadData.finalImageStates.find(lockedImage->getID());
+//       if (finalStateIt != threadData.finalImageStates.end()) {
+//         lockedImage->currentState = finalStateIt->second;
+//       }
+//     }
 
-    GetThreadContext().commandBuffer = nullptr;
-    vkEndCommandBuffer(commandBuffer);
+//     GetThreadContext().commandBuffer = nullptr;
+//     vkEndCommandBuffer(commandBuffer);
 
-    // GlobalStitchInfo.usedCommandBuffers.emplace_back(true);
-  }
+//     // GlobalStitchInfo.usedCommandBuffers.emplace_back(true);
+//   }
 
-  return Error::Success();
-}
+//   return Error::Success();
+// }
 
-inline auto GetFinalCommandBuffers(
-    const GraphicsContext &context,
-    std::vector<VkCommandBuffer> &finalCommandBuffers,
-    const std::vector<Ref<Threading::RenderThreadInfo>> &commands,
-    std::vector<uint32_t> &queues) -> size_t {
-  ZoneScoped;
+// inline auto GetFinalCommandBuffers(
+//     const GraphicsContext &context,
+//     std::vector<VkCommandBuffer> &finalCommandBuffers,
+//     const std::vector<Ref<Threading::RenderThreadInfo>> &commands,
+//     std::vector<uint32_t> &queues) -> size_t {
+//   ZoneScoped;
 
-  // all thread command buffers + barrier command buffers + 1 present transition
-  finalCommandBuffers.resize((commands.size() * 2) + 1);
+//   // all thread command buffers + barrier command buffers + 1 present transition
+//   finalCommandBuffers.resize((commands.size() * 2) + 1);
 
-  size_t index = 0;
+//   size_t index = 0;
 
-  for (size_t i = 0; i < commands.size(); i++) {
-    assert(i < commands.size());
-    assert(context.frameIndex < GlobalStitchInfo.commandBuffers.size());
-    assert(i < GlobalStitchInfo.commandBuffers.at(context.frameIndex).size());
-    assert(index + 1 < finalCommandBuffers.size());
+//   for (size_t i = 0; i < commands.size(); i++) {
+//     assert(i < commands.size());
+//     assert(context.frameIndex < GlobalStitchInfo.commandBuffers.size());
+//     assert(i < GlobalStitchInfo.commandBuffers.at(context.frameIndex).size());
+//     assert(index + 1 < finalCommandBuffers.size());
 
-    auto *stitchBuffer =
-        GlobalStitchInfo.commandBuffers.at(context.frameIndex).at(i);
-    auto *threadBuffer = commands.at(i)->threadData.commandBuffer;
+//     auto *stitchBuffer =
+//         GlobalStitchInfo.commandBuffers.at(context.frameIndex).at(i);
+//     auto *threadBuffer = commands.at(i)->threadData.commandBuffer;
 
-    // If no barriers were needed for this thread, skip its barrier command buffer
-    // if (GlobalStitchInfo.usedCommandBuffers.at(i)) {
-    finalCommandBuffers[index++] = stitchBuffer;
-    queues.emplace_back(commands.at(i)->threadData.queueFamily);
-    // }
-    finalCommandBuffers[index++] = threadBuffer;
-    queues.emplace_back(commands.at(i)->threadData.queueFamily);
-  }
+//     // If no barriers were needed for this thread, skip its barrier command buffer
+//     // if (GlobalStitchInfo.usedCommandBuffers.at(i)) {
+//     finalCommandBuffers[index++] = stitchBuffer;
+//     queues.emplace_back(commands.at(i)->threadData.queueFamily);
+//     // }
+//     finalCommandBuffers[index++] = threadBuffer;
+//     queues.emplace_back(commands.at(i)->threadData.queueFamily);
+//   }
 
-  // Add final present transition command buffer
-  assert(context.frameIndex < GlobalStitchInfo.commandBuffers.size());
-  assert(commands.size() <
-         GlobalStitchInfo.commandBuffers.at(context.frameIndex).size());
-  finalCommandBuffers.at(index) =
-      GlobalStitchInfo.commandBuffers.at(context.frameIndex)
-          .at(commands.size());
-  queues.emplace_back(context.graphicsQueueFamily);
+//   // Add final present transition command buffer
+//   assert(context.frameIndex < GlobalStitchInfo.commandBuffers.size());
+//   assert(commands.size() <
+//          GlobalStitchInfo.commandBuffers.at(context.frameIndex).size());
+//   finalCommandBuffers.at(index) =
+//       GlobalStitchInfo.commandBuffers.at(context.frameIndex)
+//           .at(commands.size());
+//   queues.emplace_back(context.graphicsQueueFamily);
 
-  return index;
-}
+//   return index;
+// }
 
 auto Present(Graphics::GraphicsContext &context,
              const std::vector<Ref<Threading::RenderThreadInfo>> &commands)
@@ -453,29 +438,29 @@ auto Present(Graphics::GraphicsContext &context,
   context.currentlyReordering = true;
 
   CHECK_ERR(PrepareCommands(context, commands));
-  CHECK_ERR(SubmitBarriers(context, commands));
+  // CHECK_ERR(SubmitBarriers(context, commands));
 
   std::vector<VkCommandBuffer> finalCommandBuffers;
   std::vector<uint32_t> queues;
 
-  size_t index =
-      GetFinalCommandBuffers(context, finalCommandBuffers, commands, queues);
+  // size_t index =
+  //     GetFinalCommandBuffers(context, finalCommandBuffers, commands, queues);
 
   // Start present transition command buffer
-  auto *presentTransitionBuffer = finalCommandBuffers.at(index);
+  // auto *presentTransitionBuffer = finalCommandBuffers.at(index);
   VkCommandBufferBeginInfo beginInfo = {};
   beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
   beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-  vkBeginCommandBuffer(presentTransitionBuffer, &beginInfo);
-  GetThreadContext().commandBuffer = presentTransitionBuffer;
+  // vkBeginCommandBuffer(presentTransitionBuffer, &beginInfo);
+  // GetThreadContext().commandBuffer = presentTransitionBuffer;
 
-  CHECK_ERR(DynamicRendering::FinalizeFrame(context));
-  CHECK_ERR(FlushBufferUploads(context));
-  CHECK_ERR(swapchainManager.EndFrame(context));
+  // CHECK_ERR(DynamicRendering::FinalizeFrame(context));
+  // CHECK_ERR(FlushBufferUploads(context));
+  // CHECK_ERR(swapchainManager.EndFrame(context));
 
-  GetThreadContext().commandBuffer = nullptr;
-  vkEndCommandBuffer(presentTransitionBuffer);
+  // GetThreadContext().commandBuffer = nullptr;
+  // vkEndCommandBuffer(presentTransitionBuffer);
 
   // GlobalStitchInfo.usedCommandBuffers.clear();
 
@@ -483,8 +468,8 @@ auto Present(Graphics::GraphicsContext &context,
   CHECK_ERR(EndRecording(context, context.frameIndex));
 
   // Submit command buffers
-  CHECK_ERR(
-      SubmitCommandBuffers(context, finalCommandBuffers, queues, index + 1));
+  // CHECK_ERR(
+  //     SubmitCommandBuffers(context, finalCommandBuffers, queues, index + 1));
 
   // Present the frame
   CHECK_ERR(PresentFrame(context));
@@ -492,7 +477,7 @@ auto Present(Graphics::GraphicsContext &context,
   // Prepare for next frame
   context.currentFrame++;
   context.frameIndex = context.currentFrame % FRAMES_IN_FLIGHT;
-  Barrier::ResetFrameTimeline();
+  // Barrier::ResetFrameTimeline();
 
   auto *windowContext = Window::GetWindowContext();
   CHECK_NULL(windowContext);
@@ -507,18 +492,6 @@ auto Present(Graphics::GraphicsContext &context,
       swapchainManager.NewFrame(context, *windowContext, context.currentFrame));
 
   CHECK_ERR(AcquireNextSwapchainImage(context));
-
-  {
-    std::lock_guard<std::mutex> lock(Threading::CommandBufferCacheMutex);
-    for (const auto &command : commands) {
-      if (command->threadData.commandBuffer != nullptr) {
-        Threading::CommandBufferCache.emplace_back(
-            Graphics::SemaphoreManager::GetSemaphoreValue(),
-            command->threadData.commandBuffer);
-        command->threadData.commandBuffer = nullptr;
-      }
-    }
-  }
 
   CHECK_ERR(PrepareRecording(context));
 

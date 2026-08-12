@@ -1,6 +1,6 @@
 #include "draw.hpp"
 #include "Graphics/Buffers/uniform.hpp"
-#include "Graphics/barrier.hpp"
+
 #include "Graphics/buffer.hpp"
 #include "Graphics/dynamicRendering.hpp"
 #include "Graphics/graphics.hpp"
@@ -110,8 +110,7 @@ auto CreateQuad01Mesh(const Graphics::GraphicsContext &context)
 using namespace Snapshot;
 
 // NOLINTNEXTLINE
-auto BindMesh(const GraphicsContext &context, VkCommandBuffer cmdBuffer,
-              const Mesh &mesh) -> Error {
+auto BindMesh(const GraphicsContext &context, const Mesh &mesh) -> Error {
   ZoneScoped;
   auto count =
       mesh.GetIndexCount() > 0 ? mesh.GetIndexCount() : mesh.GetVertexCount();
@@ -152,38 +151,39 @@ auto BindMesh(const GraphicsContext &context, VkCommandBuffer cmdBuffer,
   assert(vertexBuffer.isValid());
   ASSUME(vertexBuffer.isValid());
 
-  Barrier::UpdateUsage(context, *vertexBuffer,
-                       Barrier::ResourceState{
-                           .stages = VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT,
-                           .access = VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT,
-                       });
+  auto *commandBuffer = CHECK_NULL(GetCommandBuffer());
+
   if (mesh.GetIndexCount() > 0) {
     auto indexBuffer = mesh.GetIndexBuffer();
 
     assert(indexBuffer.isValid());
-
-    Barrier::UpdateUsage(context, *indexBuffer,
-                         Barrier::ResourceState{
-                             .stages = VK_PIPELINE_STAGE_2_INDEX_INPUT_BIT,
-                             .access = VK_ACCESS_2_INDEX_READ_BIT,
-                         });
 
     std::lock_guard<std::mutex> lock(indexBuffer->mutex);
 
     assert(indexBuffer->handle != VK_NULL_HANDLE);
 
     if (threadContext.currentMesh != mesh.getID()) {
-      vkCmdBindIndexBuffer(cmdBuffer, indexBuffer->handle, 0,
-                           mesh.GetIndexFormat());
+      threadContext.boundIndexBuffer = indexBuffer->handle;
+
+      commandBuffer->BindIndexBuffer(
+          {indexBuffer->handle, 0, mesh.GetIndexFormat()});
     }
+  } else {
+    threadContext.boundIndexBuffer = VK_NULL_HANDLE;
   }
 
   if (threadContext.currentMesh != mesh.getID()) {
     const auto &bindings = mesh.GetBindingRanges();
+    threadContext.boundVertexBuffers.clear();
+
+    for (const auto &buffer : mesh.GetVertexBuffers()) {
+      threadContext.boundVertexBuffers.emplace_back(buffer->handle);
+    }
+
     for (const auto &binding : bindings) {
-      vkCmdBindVertexBuffers(cmdBuffer, binding.firstBinding,
-                             binding.bindingCount, binding.bindings,
-                             binding.offsets);
+      commandBuffer->BindVertexBuffers({binding.firstBinding,
+                                        binding.bindingCount, binding.bindings,
+                                        binding.offsets});
     }
 
     threadContext.currentMesh = mesh.getID();
@@ -280,12 +280,6 @@ inline auto InsertTextureBarriers(const GraphicsContext &context,
       }
     }
 #endif
-
-    Barrier::UpdateUsage(context, *texture.first,
-                         {
-                             .stages = shader->combinedPipelineStages,
-                             .access = access,
-                         });
   }
 
   return {};
@@ -321,23 +315,11 @@ inline auto InsertBufferBarriers(const GraphicsContext &context,
     }
 
     auto stages = shader->combinedPipelineStages;
-
-    Barrier::UpdateUsage(context, *buffer.first,
-                         {
-                             .stages = stages,
-                             .access = access,
-                         });
   }
 
   const auto &globalUBO =
       GetGlobalUniformBuffer(context.frameIndex).GetBuffer();
   globalUBO->MarkUse();
-
-  Barrier::UpdateUsage(context, *globalUBO,
-                       {
-                           .stages = shader->combinedPipelineStages,
-                           .access = VK_ACCESS_2_UNIFORM_READ_BIT,
-                       });
 
   return {};
 }
@@ -369,18 +351,6 @@ inline auto InsertAccelerationStructureBarriers(const GraphicsContext &context,
     VkAccessFlags2 access = VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR;
 
     auto stages = shader->combinedPipelineStages;
-
-    Barrier::UpdateUsage(context, *structure.first->GetInstanceBuffer(),
-                         {
-                             .stages = stages,
-                             .access = access,
-                         });
-
-    Barrier::UpdateUsage(context, *structure.first->GetTLASBuffer(),
-                         {
-                             .stages = stages,
-                             .access = access,
-                         });
   }
 
   return {};
@@ -402,7 +372,7 @@ auto Draw(const GraphicsContext &context, Mesh &mesh, uint32_t instanceCount)
 
   auto *commandBuffer = CHECK_NULL(GetCommandBuffer());
 
-  CHECK_ERR(BindMesh(context, commandBuffer, mesh));
+  CHECK_ERR(BindMesh(context, mesh));
 
   DynamicRendering::SetTopology(mesh.GetTopology());
 
@@ -425,15 +395,15 @@ auto Draw(const GraphicsContext &context, Mesh &mesh, uint32_t instanceCount)
     MeshDrawRange range = mesh.GetDrawRange();
 
     if (mesh.GetIndexCount() > 0) {
-      vkCmdDrawIndexed(commandBuffer, range.Count, instanceCount, range.Offset,
-                       0, 0);
+      commandBuffer->DrawIndexed(
+          {range.Count, instanceCount, range.Offset, 0, 0});
 
 #if Enable_Snapshots
       CaptureEvent(DrawIndexedEvent(mesh.GetIndexCount(), instanceCount,
                                     range.Offset, 0, 0));
 #endif
     } else {
-      vkCmdDraw(commandBuffer, range.Count, instanceCount, range.Offset, 0);
+      commandBuffer->Draw({range.Count, instanceCount, range.Offset, 0});
 
 #if Enable_Snapshots
       CaptureEvent(DrawEvent(vertexCount, instanceCount, 0, 0));
@@ -493,8 +463,7 @@ auto Dispatch(const GraphicsContext &context, const Math::Uvec3 &threadgroups)
     ZoneScopedN("Vk Dispatch");
 
     DynamicRendering::CurrentStats.dispatchCalls++;
-    vkCmdDispatch(commandBuffer, threadgroups.x, threadgroups.y,
-                  threadgroups.z);
+    commandBuffer->Dispatch({threadgroups.x, threadgroups.y, threadgroups.z});
   }
 
 #if Enable_Snapshots
@@ -547,7 +516,7 @@ auto DispatchIndirect(const GraphicsContext &context,
   CHECK_ERR(InsertResourceBarriers(context));
 
   DynamicRendering::CurrentStats.dispatchCalls++;
-  vkCmdDispatchIndirect(commandBuffer, indirectBuffer->handle, offset);
+  commandBuffer->DispatchIndirect({indirectBuffer->handle, offset});
 
 #if Enable_Snapshots
   CaptureEvent(DispatchIndirectEvent(indirectBuffer->handle, offset));
@@ -567,7 +536,7 @@ auto DrawIndirect(const GraphicsContext &context, Mesh &mesh,
     return Error::Create("Failed to get command buffer for draw indirect.");
   }
 
-  CHECK_ERR(BindMesh(context, commandBuffer, mesh));
+  CHECK_ERR(BindMesh(context, mesh));
   ERR_ASSERT(DynamicRendering::GetBindPoint() ==
              VK_PIPELINE_BIND_POINT_GRAPHICS);
   auto &vertexFormat = mesh.GetVertexFormat();
@@ -588,8 +557,8 @@ auto DrawIndirect(const GraphicsContext &context, Mesh &mesh,
       static_cast<uint64_t>(mesh.GetIndexCount() * count);
   DynamicRendering::CurrentStats.instanceCount += count;
 
-  vkCmdDrawIndirect(commandBuffer, indirectBuffer->handle, offset, count,
-                    sizeof(VkDrawIndirectCommand));
+  commandBuffer->DrawIndirect(
+      {indirectBuffer->handle, offset, count, sizeof(VkDrawIndirectCommand)});
 
 #if Enable_Snapshots
   CaptureEvent(DrawIndirectEvent(indirectBuffer->handle, offset, count,
@@ -625,7 +594,7 @@ auto Draw(const GraphicsContext &context, const VkPrimitiveTopology &topology,
 
   ERR_ASSERT(DynamicRendering::GetBindPoint() ==
              VK_PIPELINE_BIND_POINT_GRAPHICS);
-  vkCmdSetVertexInputEXT(commandBuffer, 0, nullptr, 0, nullptr);
+  commandBuffer->SetVertexInputEXT({0, nullptr, 0, nullptr});
   GetThreadContext().currentVertexFormatHash = 0; // No vertex format
   DynamicRendering::SetTopology(topology);
 
@@ -638,7 +607,7 @@ auto Draw(const GraphicsContext &context, const VkPrimitiveTopology &topology,
       static_cast<uint64_t>(vertexCount * instanceCount);
   DynamicRendering::CurrentStats.instanceCount += instanceCount;
 
-  vkCmdDraw(commandBuffer, vertexCount, instanceCount, 0, 0);
+  commandBuffer->Draw({vertexCount, instanceCount, 0, 0});
 
 #if Enable_Snapshots
   CaptureEvent(DrawEvent(vertexCount, instanceCount, 0, 0));
@@ -659,7 +628,7 @@ auto Draw(const GraphicsContext &context, const Ref<Buffer> &indexBuffer,
 
   ERR_ASSERT(DynamicRendering::GetBindPoint() ==
              VK_PIPELINE_BIND_POINT_GRAPHICS);
-  vkCmdSetVertexInputEXT(commandBuffer, 0, nullptr, 0, nullptr);
+  commandBuffer->SetVertexInputEXT({0, nullptr, 0, nullptr});
   GetThreadContext().currentVertexFormatHash = 0; // No vertex format
   DynamicRendering::SetTopology(topology);
 
@@ -668,16 +637,10 @@ auto Draw(const GraphicsContext &context, const Ref<Buffer> &indexBuffer,
   CHECK_ERR(DynamicRendering::PrepareRendering(context));
 
   {
-    Barrier::UpdateUsage(context, *indexBuffer,
-                         Barrier::ResourceState{
-                             .stages = VK_PIPELINE_STAGE_2_INDEX_INPUT_BIT,
-                             .access = VK_ACCESS_2_INDEX_READ_BIT,
-                         });
-
     std::lock_guard<std::mutex> lock(indexBuffer->mutex);
 
-    vkCmdBindIndexBuffer(commandBuffer, indexBuffer->handle, 0,
-                         VK_INDEX_TYPE_UINT32);
+    commandBuffer->BindIndexBuffer(
+        {indexBuffer->handle, 0, VK_INDEX_TYPE_UINT32});
     indexBuffer->MarkUse();
   }
 
@@ -686,7 +649,7 @@ auto Draw(const GraphicsContext &context, const Ref<Buffer> &indexBuffer,
       static_cast<uint64_t>(indexCount * instanceCount);
   DynamicRendering::CurrentStats.instanceCount += instanceCount;
 
-  vkCmdDrawIndexed(commandBuffer, indexCount, instanceCount, 0, 0, 0);
+  commandBuffer->DrawIndexed({indexCount, instanceCount, 0, 0, 0});
 
 #if Enable_Snapshots
   CaptureEvent(DrawIndexedEvent(indexCount, instanceCount, 0, 0, 0));

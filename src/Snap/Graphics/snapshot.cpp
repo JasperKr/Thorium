@@ -122,6 +122,7 @@ auto GetTextRenderMode(float widthAvailable) {
   return mode;
 }
 
+// NOLINTNEXTLINE
 auto RenderSnapshot(const ThreadSnapshot &snapshot) -> void {
   int index = 1;
 
@@ -931,47 +932,47 @@ auto LayoutTransitionEvent::DrawVariantImGui(ThreadSnapshot const *parent) const
   DrawPipelineStages(dstStageMask);
 }
 
-auto BarrierEvent::DrawVariantImGui(ThreadSnapshot const *parent) const
-    -> void {
-  ImGui::Text("Acting on resource: %lu", resourceId);
-  ImGui::Text("Source Stages:");
-  ImGui::Indent();
-  if (sync.srcStages == 0) {
-    ImGui::Text("None");
-  } else {
-    DrawPipelineStages(sync.srcStages);
-  }
-  ImGui::Unindent();
-  ImGui::Text("Destination Stages:");
-  ImGui::Indent();
-  if (sync.dstStages == 0) {
-    ImGui::Text("None");
-  } else {
-    DrawPipelineStages(sync.dstStages);
-  }
-  ImGui::Unindent();
+// auto BarrierEvent::DrawVariantImGui(ThreadSnapshot const *parent) const
+//     -> void {
+//   ImGui::Text("Acting on resource: %lu", resourceId);
+//   ImGui::Text("Source Stages:");
+//   ImGui::Indent();
+//   if (sync.srcStages == 0) {
+//     ImGui::Text("None");
+//   } else {
+//     DrawPipelineStages(sync.srcStages);
+//   }
+//   ImGui::Unindent();
+//   ImGui::Text("Destination Stages:");
+//   ImGui::Indent();
+//   if (sync.dstStages == 0) {
+//     ImGui::Text("None");
+//   } else {
+//     DrawPipelineStages(sync.dstStages);
+//   }
+//   ImGui::Unindent();
 
-  ImGui::Text("Source Access:");
-  ImGui::Indent();
-  if (sync.srcAccess == 0) {
-    ImGui::Text("None");
-  } else {
-    for (const auto &access : Utils::BitMaskRange(sync.srcAccess)) {
-      ImGui::Text("%s", AccessFlag2ToString(access));
-    }
-  }
-  ImGui::Unindent();
-  ImGui::Text("Destination Access:");
-  ImGui::Indent();
-  if (sync.dstAccess == 0) {
-    ImGui::Text("None");
-  } else {
-    for (const auto &access : Utils::BitMaskRange(sync.dstAccess)) {
-      ImGui::Text("%s", AccessFlag2ToString(access));
-    }
-  }
-  ImGui::Unindent();
-};
+//   ImGui::Text("Source Access:");
+//   ImGui::Indent();
+//   if (sync.srcAccess == 0) {
+//     ImGui::Text("None");
+//   } else {
+//     for (const auto &access : Utils::BitMaskRange(sync.srcAccess)) {
+//       ImGui::Text("%s", AccessFlag2ToString(access));
+//     }
+//   }
+//   ImGui::Unindent();
+//   ImGui::Text("Destination Access:");
+//   ImGui::Indent();
+//   if (sync.dstAccess == 0) {
+//     ImGui::Text("None");
+//   } else {
+//     for (const auto &access : Utils::BitMaskRange(sync.dstAccess)) {
+//       ImGui::Text("%s", AccessFlag2ToString(access));
+//     }
+//   }
+//   ImGui::Unindent();
+// };
 
 //
 } // namespace Graphics::Snapshot

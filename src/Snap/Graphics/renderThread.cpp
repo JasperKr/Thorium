@@ -17,7 +17,6 @@
 #include <functional>
 #include <mutex>
 #include <string>
-#include <utility>
 #include <vector>
 
 namespace Graphics::Threading {
@@ -26,28 +25,9 @@ namespace Graphics::Threading {
 
 thread_local Ref<RenderThreadInfo> CurrentRenderThreadInfo;
 
-std::mutex CommandBufferCacheMutex;
-std::vector<std::pair<uint64_t, VkCommandBuffer>> CommandBufferCache;
-
 inline std::atomic<uint64_t> threadDataIDCounter = 0;
 
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
-
-auto GetCachedCommandBuffer(const GraphicsContext &context)
-    -> std::optional<VkCommandBuffer> {
-
-  std::lock_guard<std::mutex> lock(CommandBufferCacheMutex);
-  for (auto it = CommandBufferCache.begin(); it != CommandBufferCache.end();
-       ++it) {
-    if (it->first < Graphics::semaphoreManager.GetCompletedSemaphoreValue()) {
-      auto *commandBuffer = it->second;
-      CommandBufferCache.erase(it);
-      return commandBuffer;
-    }
-  }
-
-  return std::nullopt;
-}
 
 inline auto CreateDescriptorPool(ThreadContext &tcontext)
     -> Result<VkDescriptorPool> {
@@ -168,22 +148,6 @@ auto AcquireCommandBuffer(Graphics::GraphicsContext &context,
     return Error::Unexpected("Invalid device when aquiring command buffer");
   }
 
-  auto cachedCmdBuffer = GetCachedCommandBuffer(context);
-
-  if (!cachedCmdBuffer.has_value()) {
-    VkCommandBufferAllocateInfo allocInfo = {};
-    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-    allocInfo.commandPool = tcontext.commandPool;
-    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    allocInfo.commandBufferCount = 1;
-
-    std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    CHECK_NEW_ERR(vkAllocateCommandBuffers(
-        context.device, &allocInfo, &threadInfo->threadData.commandBuffer));
-  } else {
-    threadInfo->threadData.commandBuffer = cachedCmdBuffer.value();
-  }
-
   tcontext.timelineValue = Graphics::semaphoreManager.NewSemaphoreValue();
 
   static std::atomic<uint64_t> cmdBufferIdentifierCounter;
@@ -197,20 +161,7 @@ auto AcquireCommandBuffer(Graphics::GraphicsContext &context,
 
   assert(tcontext.queueFamily == 0);
 
-  // Reset old command buffer
-  VkCommandBufferResetFlags resetFlags{};
-  CHECK_NEW_ERR(
-      vkResetCommandBuffer(threadInfo->threadData.commandBuffer, resetFlags));
-
   CHECK_ERR(GetDescriptorPool(tcontext));
-
-  VkCommandBufferBeginInfo beginInfo = {};
-  beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-  beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-  CHECK_NEW_ERR(
-      vkBeginCommandBuffer(threadInfo->threadData.commandBuffer, &beginInfo));
-
-  Barrier::ResetModule();
 
   GetThreadContext().commandBuffer = threadInfo->threadData.commandBuffer;
   CurrentRenderThreadInfo = threadInfo;
@@ -220,10 +171,7 @@ auto AcquireCommandBuffer(Graphics::GraphicsContext &context,
   }
 
   Graphics::SetDirtyState();
-  auto frameBeginResult = Graphics::DynamicRendering::BeginFrame(context);
-  if (Error::IsError(frameBeginResult)) {
-    return frameBeginResult;
-  }
+  CHECK_ERR(Graphics::DynamicRendering::BeginFrame(context));
 
   GetGlobalUniformBuffer(context.frameIndex).NewFrame();
 
@@ -239,20 +187,6 @@ auto SubmitCommands(Graphics::GraphicsContext &context)
     return Error::Unexpected("No command buffer to submit.");
   }
   auto &threadContext = GetThreadContext();
-
-  CHECK_NEW_ERR(
-      vkEndCommandBuffer(CurrentRenderThreadInfo->threadData.commandBuffer));
-
-  CurrentRenderThreadInfo->threadData.resourceSyncs =
-      Barrier::GlobalResourceSyncTimeline;
-  CurrentRenderThreadInfo->threadData.usageUpdates =
-      Barrier::GlobalResourceStateUpdates;
-  CurrentRenderThreadInfo->threadData.drawsToSwapchain =
-      Graphics::DynamicRendering::DrawnToSwapchain;
-  CurrentRenderThreadInfo->threadData.initialImageStates =
-      threadContext.initialImageStates;
-  CurrentRenderThreadInfo->threadData.finalImageStates =
-      threadContext.finalImageStates;
 
   for (auto &pool : threadContext.descriptorPools) {
     if (pool.descriptorPool == threadContext.descriptorPool) {

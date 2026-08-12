@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include "Graphics/barrier.hpp"
 #include "Graphics/bufferformat.hpp"
 #include "Graphics/dynamicRendering.hpp"
 #include "Modules/Helpers/utils.hpp"
@@ -626,17 +625,17 @@ struct SetPushConstantsEvent : public Event {
       -> void override;
 };
 
-struct BarrierEvent : public Event {
-  Barrier::ResourceSync sync{};
-  ObjectID resourceId{};
+// struct BarrierEvent : public Event {
+//   Barrier::ResourceSync sync{};
+//   ObjectID resourceId{};
 
-  BarrierEvent() : Event(EventType::Barrier) {}
-  explicit BarrierEvent(const Barrier::ResourceSync &sync, ObjectID resourceId)
-      : Event(EventType::Barrier), sync(sync), resourceId(resourceId) {}
+//   BarrierEvent() : Event(EventType::Barrier) {}
+//   explicit BarrierEvent(const Barrier::ResourceSync &sync, ObjectID resourceId)
+//       : Event(EventType::Barrier), sync(sync), resourceId(resourceId) {}
 
-  auto DrawVariantImGui(struct ThreadSnapshot const *parent) const
-      -> void override;
-};
+//   auto DrawVariantImGui(struct ThreadSnapshot const *parent) const
+//       -> void override;
+// };
 
 struct LayoutTransitionEvent : public Event {
   VkImageLayout srcLayout{};

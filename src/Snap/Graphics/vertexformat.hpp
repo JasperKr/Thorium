@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Graphics/FrameGraph/commands.hpp"
 #include "Graphics/format.hpp"
 #include "Graphics/graphics.hpp"
 #include "Modules/Helpers/hasher.hpp"
@@ -26,8 +27,6 @@ struct VertexComponent {
 };
 
 struct VertexFormat {
-  constexpr static size_t MaxBindings = 8;
-
   explicit VertexFormat(std::vector<VertexComponent> attributes)
       : Attributes(std::move(attributes)) {
     ConstructBindings();
@@ -120,7 +119,7 @@ public:
     return result;
   }
 
-  auto BindDynamicInputState(VkCommandBuffer commandBuffer) -> void {
+  auto BindDynamicInputState(VirtualCommandBuffer *commandBuffer) -> void {
     auto currentHash = GetHash();
     auto &threadContext = GetThreadContext();
 
@@ -136,8 +135,9 @@ public:
     const auto &bindings = GetBindings();
     const auto &attributes = GetVkAttributes2();
 
-    vkCmdSetVertexInputEXT(commandBuffer, bindings.size(), bindings.data(),
-                           attributes.size(), attributes.data());
+    commandBuffer->SetVertexInputEXT(
+        {static_cast<uint32_t>(bindings.size()), bindings.data(),
+         static_cast<uint32_t>(attributes.size()), attributes.data()});
   }
 
   [[nodiscard]] auto GetBindingCount() const -> size_t {
@@ -213,12 +213,12 @@ private:
                       });
 
     for (auto &component : Attributes) {
-      assert(component.binding < MaxBindings &&
+      assert(component.binding < MAX_BOUND_VERTEX_BUFFERS &&
              "Vertex attribute binding exceeds maximum");
     }
 
     VkAttributes2.reserve(Attributes.size());
-    BindingIndices.reserve(MaxBindings);
+    BindingIndices.reserve(MAX_BOUND_VERTEX_BUFFERS);
 
     auto lastBinding = 0UL;
     for (const auto &component : Attributes) {
@@ -236,7 +236,7 @@ private:
 
     Bindings.reserve(BindingIndices.size());
     std::vector<uint32_t> bindingToBindingIndex{};
-    bindingToBindingIndex.resize(MaxBindings);
+    bindingToBindingIndex.resize(MAX_BOUND_VERTEX_BUFFERS);
 
     for (auto binding : BindingIndices) {
       bindingToBindingIndex.at(binding) = Bindings.size();

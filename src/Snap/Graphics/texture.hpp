@@ -1,6 +1,5 @@
 #pragma once
 
-#include "Graphics/barrier.hpp"
 #include "Graphics/sampler.hpp"
 #include "Libraries/vma.hpp"
 #include "Modules/compressedImageData.hpp"
@@ -122,7 +121,7 @@ struct ImageState {
   uint64_t lastUsedFrame = UINT64_MAX;
 };
 
-struct ImageMemory : Barrier::BarrierSynced {
+struct ImageMemory : Identifiable {
   ImageMemory() = default;
   ImageMemory(const ImageMemory &) = delete;
   auto operator=(const ImageMemory &) -> ImageMemory & = delete;

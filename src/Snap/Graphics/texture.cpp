@@ -1,6 +1,6 @@
 #include "texture.hpp"
 #include "Graphics/allocations.hpp"
-#include "Graphics/barrier.hpp"
+
 #include "Graphics/buffer.hpp"
 #include "Graphics/dynamicRendering.hpp"
 #include "Graphics/format.hpp"
@@ -583,12 +583,6 @@ auto Texture::FromMemory(const GraphicsContext &context,
   bufferCreationInfo.debugName = "Texture Staging Buffer for SetPixels";
   auto buffer = CHECK_RES(Buffer::Create(context, bufferCreationInfo));
 
-  Graphics::Barrier::UpdateUsage(context, *texture.get(),
-                                 Graphics::Barrier::ResourceState{
-                                     .stages = VK_PIPELINE_STAGE_2_HOST_BIT,
-                                     .access = VK_ACCESS_2_HOST_WRITE_BIT,
-                                 });
-
   size_t offset = 0;
 
   for (int mip = 0; mip < mipLevelCount; ++mip) {
@@ -651,10 +645,9 @@ auto Texture::FromMemory(const GraphicsContext &context,
 
   DynamicRendering::EndRendering(context);
 
-  vkCmdCopyBufferToImage(commandBuffer, buffer->handle,
-                         texture->imageMemory->image, VK_IMAGE_LAYOUT_GENERAL,
-                         static_cast<uint32_t>(copyRegions.size()),
-                         copyRegions.data());
+  commandBuffer->CopyBufferToImage(
+      {buffer->handle, texture->imageMemory->image, VK_IMAGE_LAYOUT_GENERAL,
+       static_cast<uint32_t>(copyRegions.size()), copyRegions.data()});
 
   // TODO: Check lifetime
   buffer->MarkUse();
@@ -804,7 +797,8 @@ auto ImageMemory::TransitionLayout(const GraphicsContext &context,
 
   DynamicRendering::EndRendering(context);
 
-  vkCmdPipelineBarrier2(commandBuffer, &dep);
+  // vkCmdPipelineBarrier2(commandBuffer, &dep);
+  commandBuffer->PipelineBarrier2({&dep});
 
   state.currentLayout = layout;
 
@@ -962,9 +956,12 @@ inline auto WriteSimplifiedPixelData(const Ref<Texture> &texture,
 
   DynamicRendering::EndRendering(context);
 
-  vkCmdCopyBufferToImage(commandBuffer, buffer->handle,
-                         texture->imageMemory->image, VK_IMAGE_LAYOUT_GENERAL,
-                         1, &region);
+  // vkCmdCopyBufferToImage(commandBuffer, buffer->handle,
+  //                        texture->imageMemory->image, VK_IMAGE_LAYOUT_GENERAL,
+  //                        1, &region);
+
+  commandBuffer->CopyBufferToImage({buffer->handle, texture->imageMemory->image,
+                                    VK_IMAGE_LAYOUT_GENERAL, 1, &region});
 
   CHECK_ERR(
       texture->UseAsSampler(context, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT));
@@ -1058,12 +1055,6 @@ auto Texture::SetPixels(const GraphicsContext &context,
   bufferCreationInfo.debugName = "Texture Staging Buffer for SetPixels";
   auto buffer = CHECK_RES(Buffer::Create(context, bufferCreationInfo));
 
-  Graphics::Barrier::UpdateUsage(context, *this,
-                                 Graphics::Barrier::ResourceState{
-                                     .stages = VK_PIPELINE_STAGE_2_HOST_BIT,
-                                     .access = VK_ACCESS_2_HOST_WRITE_BIT,
-                                 });
-
   std::vector<uint8_t> tempBuffer(uploadSize);
   auto formatSize = Format::GetSize(imageMemory->format);
   auto *dstPtr = tempBuffer.data();
@@ -1115,8 +1106,11 @@ auto Texture::SetPixels(const GraphicsContext &context,
 
   DynamicRendering::EndRendering(context);
 
-  vkCmdCopyBufferToImage(commandBuffer, buffer->handle, imageMemory->image,
-                         VK_IMAGE_LAYOUT_GENERAL, 1, &region);
+  // vkCmdCopyBufferToImage(commandBuffer, buffer->handle, imageMemory->image,
+  //                        VK_IMAGE_LAYOUT_GENERAL, 1, &region);
+
+  commandBuffer->CopyBufferToImage({buffer->handle, imageMemory->image,
+                                    VK_IMAGE_LAYOUT_GENERAL, 1, &region});
 
   // TODO: Check lifetime
   buffer->MarkUse();
@@ -1467,21 +1461,9 @@ auto Texture::CopyTo(const GraphicsContext &context, Texture &dstTexture,
   copyRegion.dstOffset = region.dstOffset;
   copyRegion.extent = region.extent;
 
-  // TODO: Check if this is needed after UseAsTransferSrc and UseAsTransferDst
-  // Barrier::UpdateUsage(context, *this,
-  //                      Barrier::ResourceState{
-  //                          .stages = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-  //                          .access = VK_ACCESS_2_TRANSFER_READ_BIT,
-  //                      });
-  // Barrier::UpdateUsage(context, dstTexture,
-  //                      Barrier::ResourceState{
-  //                          .stages = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-  //                          .access = VK_ACCESS_2_TRANSFER_WRITE_BIT,
-  //                      });
-
-  vkCmdCopyImage(commandBuffer, imageMemory->image, VK_IMAGE_LAYOUT_GENERAL,
-                 dstTexture.imageMemory->image, VK_IMAGE_LAYOUT_GENERAL, 1,
-                 &copyRegion);
+  commandBuffer->CopyImage({imageMemory->image, VK_IMAGE_LAYOUT_GENERAL,
+                            dstTexture.imageMemory->image,
+                            VK_IMAGE_LAYOUT_GENERAL, 1, &copyRegion});
 
   MarkUse();
   dstTexture.MarkUse();
@@ -1516,14 +1498,9 @@ auto Texture::CopyTo(const GraphicsContext &context, Buffer &dstBuffer,
                          "usage flag.");
   }
 
-  Barrier::UpdateUsage(context, dstBuffer,
-                       Barrier::ResourceState{
-                           .stages = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-                           .access = VK_ACCESS_2_TRANSFER_WRITE_BIT,
-                       });
-  vkCmdCopyImageToBuffer(commandBuffer, imageMemory->image,
-                         VK_IMAGE_LAYOUT_GENERAL, dstBuffer.handle, 1,
-                         &copyRegion);
+  commandBuffer->CopyImageToBuffer({imageMemory->image, VK_IMAGE_LAYOUT_GENERAL,
+                                    dstBuffer.handle, 1, &copyRegion});
+
   dstBuffer.MarkUse();
   MarkUse();
   return Error::Success();
@@ -1594,7 +1571,8 @@ auto Texture::GenerateMipmaps(const GraphicsContext &context) const -> Error {
   barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
   barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
 
-  vkCmdPipelineBarrier2(commandBuffer, &dep);
+  // vkCmdPipelineBarrier2(commandBuffer, &dep);
+  commandBuffer->PipelineBarrier2({&dep});
 
   barrier.subresourceRange.levelCount = 1;
 
@@ -1618,7 +1596,8 @@ auto Texture::GenerateMipmaps(const GraphicsContext &context) const -> Error {
     barrier.subresourceRange.baseMipLevel = i - 1;
     // [src, dst, dst, dst, ...]
 
-    vkCmdPipelineBarrier2(commandBuffer, &dep);
+    // vkCmdPipelineBarrier2(commandBuffer, &dep);
+    commandBuffer->PipelineBarrier2({&dep});
 
     VkImageBlit blit = {};
     blit.srcSubresource.aspectMask =
@@ -1640,9 +1619,12 @@ auto Texture::GenerateMipmaps(const GraphicsContext &context) const -> Error {
                           .y = static_cast<int32_t>(mipExtent.height),
                           .z = static_cast<int32_t>(mipExtent.depth)};
 
-    vkCmdBlitImage(commandBuffer, imageMemory->image, VK_IMAGE_LAYOUT_GENERAL,
-                   imageMemory->image, VK_IMAGE_LAYOUT_GENERAL, 1, &blit,
-                   VK_FILTER_LINEAR);
+    // vkCmdBlitImage(commandBuffer, imageMemory->image, VK_IMAGE_LAYOUT_GENERAL,
+    //                imageMemory->image, VK_IMAGE_LAYOUT_GENERAL, 1, &blit,
+    //                VK_FILTER_LINEAR);
+    commandBuffer->BlitImage({imageMemory->image, VK_IMAGE_LAYOUT_GENERAL,
+                              imageMemory->image, VK_IMAGE_LAYOUT_GENERAL, 1,
+                              &blit, VK_FILTER_LINEAR});
   }
 
   // The entire mip chain is now in transfer src, except for mip count - 1, which is in transfer dst
@@ -1657,7 +1639,8 @@ auto Texture::GenerateMipmaps(const GraphicsContext &context) const -> Error {
   barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
   barrier.subresourceRange.baseMipLevel = imageMemory->mipmapcount - 1;
 
-  vkCmdPipelineBarrier2(commandBuffer, &dep);
+  // vkCmdPipelineBarrier2(commandBuffer, &dep);
+  commandBuffer->PipelineBarrier2({&dep});
 
   state.lastUsage = TextureUsage::TransferSrc;
   state.lastPipelineStage = VK_PIPELINE_STAGE_2_TRANSFER_BIT;

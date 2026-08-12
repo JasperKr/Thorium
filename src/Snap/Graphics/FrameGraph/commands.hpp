@@ -5,7 +5,6 @@
 #include "Libraries/vma.hpp"
 #include "Modules/error.hpp"
 #include "Modules/stackVector.hpp"
-#include <atomic>
 #include <cassert>
 #include <cstdint>
 #include <cstring>
@@ -48,6 +47,7 @@ enum class CommandType : uint8_t {
   vkCmdFillBuffer,
 
   vkCmdBuildAccelerationStructuresKHR,
+  vkCmdCopyAccelerationStructureKHR,
   vkCmdResetQueryPool,
   vkCmdWriteAccelerationStructuresPropertiesKHR,
 
@@ -75,29 +75,30 @@ enum class CommandType : uint8_t {
   vkCmdInsertDebugUtilsLabelEXT,
 };
 
-static const uint32_t MAX_BOUND_RESOURCES = 32;
+// NOLINTBEGIN(cppcoreguidelines-special-member-functions, hicpp-special-member-functions)
+// NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic, cppcoreguidelines-pro-type-reinterpret-cast)
+// NOLINTBEGIN(hicpp-explicit-conversions)
+
+struct Callable {
+  virtual ~Callable() = default;
+  virtual auto Call(VkCommandBuffer cmdBuffer) const -> void = 0;
+};
 
 struct BoundResources {
-  Math::StackVector<VkImageView, MAX_BOUND_RESOURCES> boundImages;
-  Math::StackVector<VkBuffer, MAX_BOUND_RESOURCES> boundBuffers;
-  Math::StackVector<VkAccelerationStructureKHR, MAX_BOUND_RESOURCES>
-      boundAccelerationStructures;
-  Math::StackVector<VkImageView, MAX_COLOR_ATTACHMENTS> colorAttachments;
+  std::vector<VkImageView> boundImages;
+  std::vector<VkBuffer> boundBuffers;
+  std::vector<VkAccelerationStructureKHR> boundAccelerationStructures;
+  std::vector<VkImageView> colorAttachments;
   VkImageView depthStencilAttachment;
 
   std::vector<void *> bound;
+  std::vector<VkBuffer> vertexBuffers;
+  VkBuffer indexBuffer = VK_NULL_HANDLE;
 
   BoundResources();
 };
 
 namespace Args {
-// NOLINTBEGIN(cppcoreguidelines-special-member-functions, hicpp-special-member-functions)
-// NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic, cppcoreguidelines-pro-type-reinterpret-cast)
-
-struct Callable {
-  virtual ~Callable() = default;
-  virtual auto Call(VkCommandBuffer cmdBuffer) const -> void;
-};
 
 struct VkCmdDraw : Callable, BoundResources {
   static const CommandType type = CommandType::vkCmdDraw;
@@ -106,6 +107,11 @@ struct VkCmdDraw : Callable, BoundResources {
   uint32_t instanceCount;
   uint32_t firstVertex;
   uint32_t firstInstance;
+
+  VkCmdDraw(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex,
+            uint32_t firstInstance)
+      : vertexCount(vertexCount), instanceCount(instanceCount),
+        firstVertex(firstVertex), firstInstance(firstInstance) {}
 
   auto Call(VkCommandBuffer cmdBuffer) const -> void override {
     vkCmdDraw(cmdBuffer, vertexCount, instanceCount, firstVertex,
@@ -122,6 +128,13 @@ struct VkCmdDrawIndexed : Callable, BoundResources {
   int32_t vertexOffset;
   uint32_t firstInstance;
 
+  VkCmdDrawIndexed(uint32_t indexCount, uint32_t instanceCount,
+                   uint32_t firstIndex, int32_t vertexOffset,
+                   uint32_t firstInstance)
+      : indexCount(indexCount), instanceCount(instanceCount),
+        firstIndex(firstIndex), vertexOffset(vertexOffset),
+        firstInstance(firstInstance) {}
+
   auto Call(VkCommandBuffer cmdBuffer) const -> void override {
     vkCmdDrawIndexed(cmdBuffer, indexCount, instanceCount, firstIndex,
                      vertexOffset, firstInstance);
@@ -136,6 +149,10 @@ struct VkCmdDrawIndirect : Callable, BoundResources {
   uint32_t drawCount;
   uint32_t stride;
 
+  VkCmdDrawIndirect(VkBuffer buffer, VkDeviceSize offset, uint32_t drawCount,
+                    uint32_t stride)
+      : buffer(buffer), offset(offset), drawCount(drawCount), stride(stride) {}
+
   auto Call(VkCommandBuffer cmdBuffer) const -> void override {
     vkCmdDrawIndirect(cmdBuffer, buffer, offset, drawCount, stride);
   }
@@ -149,6 +166,10 @@ struct VkCmdDrawIndexedIndirect : Callable, BoundResources {
   uint32_t drawCount;
   uint32_t stride;
 
+  VkCmdDrawIndexedIndirect(VkBuffer buffer, VkDeviceSize offset,
+                           uint32_t drawCount, uint32_t stride)
+      : buffer(buffer), offset(offset), drawCount(drawCount), stride(stride) {}
+
   auto Call(VkCommandBuffer cmdBuffer) const -> void override {
     vkCmdDrawIndexedIndirect(cmdBuffer, buffer, offset, drawCount, stride);
   }
@@ -161,6 +182,11 @@ struct VkCmdDispatch : Callable, BoundResources {
   uint32_t groupCountY;
   uint32_t groupCountZ;
 
+  VkCmdDispatch(uint32_t groupCountX, uint32_t groupCountY,
+                uint32_t groupCountZ)
+      : groupCountX(groupCountX), groupCountY(groupCountY),
+        groupCountZ(groupCountZ) {}
+
   auto Call(VkCommandBuffer cmdBuffer) const -> void override {
     vkCmdDispatch(cmdBuffer, groupCountX, groupCountY, groupCountZ);
   }
@@ -171,6 +197,9 @@ struct VkCmdDispatchIndirect : Callable, BoundResources {
 
   VkBuffer buffer;
   VkDeviceSize offset;
+
+  VkCmdDispatchIndirect(VkBuffer buffer, VkDeviceSize offset)
+      : buffer(buffer), offset(offset) {}
 
   auto Call(VkCommandBuffer cmdBuffer) const -> void override {
     vkCmdDispatchIndirect(cmdBuffer, buffer, offset);
@@ -307,7 +336,7 @@ struct VkCmdPipelineBarrier2 : Callable {
 
   VkDependencyInfo dependencyInfo;
 
-  explicit VkCmdPipelineBarrier2(const VkDependencyInfo *pDependencyInfo)
+  VkCmdPipelineBarrier2(const VkDependencyInfo *pDependencyInfo)
       : dependencyInfo(*pDependencyInfo) {}
 
   auto Call(VkCommandBuffer cmdBuffer) const -> void override {
@@ -322,6 +351,10 @@ struct VkCmdFillBuffer : Callable {
   VkDeviceSize dstOffset;
   VkDeviceSize size;
   uint32_t data;
+
+  VkCmdFillBuffer(VkBuffer dstBuffer, VkDeviceSize dstOffset, VkDeviceSize size,
+                  uint32_t data)
+      : dstBuffer(dstBuffer), dstOffset(dstOffset), size(size), data(data) {}
 
   auto Call(VkCommandBuffer cmdBuffer) const -> void override {
     vkCmdFillBuffer(cmdBuffer, dstBuffer, dstOffset, size, data);
@@ -360,12 +393,31 @@ struct VkCmdBuildAccelerationStructuresKHR : Callable {
   }
 };
 
+struct VkCmdCopyAccelerationStructureKHR : Callable {
+  static const CommandType type =
+      CommandType::vkCmdCopyAccelerationStructureKHR;
+
+  VkCopyAccelerationStructureInfoKHR structureInfo;
+
+  VkCmdCopyAccelerationStructureKHR(
+      const VkCopyAccelerationStructureInfoKHR *pInfo)
+      : structureInfo(*pInfo) {}
+
+  auto Call(VkCommandBuffer cmdBuffer) const -> void override {
+    vkCmdCopyAccelerationStructureKHR(cmdBuffer, &structureInfo);
+  }
+};
+
 struct VkCmdResetQueryPool : Callable {
   static const CommandType type = CommandType::vkCmdResetQueryPool;
 
   VkQueryPool queryPool;
   uint32_t firstQuery;
   uint32_t queryCount;
+
+  VkCmdResetQueryPool(VkQueryPool queryPool, uint32_t firstQuery,
+                      uint32_t queryCount)
+      : queryPool(queryPool), firstQuery(firstQuery), queryCount(queryCount) {}
 
   auto Call(VkCommandBuffer cmdBuffer) const -> void override {
     vkCmdResetQueryPool(cmdBuffer, queryPool, firstQuery, queryCount);
@@ -403,6 +455,10 @@ struct VkCmdBindIndexBuffer : Callable {
   VkBuffer buffer;
   VkDeviceSize offset;
   VkIndexType indexType;
+
+  VkCmdBindIndexBuffer(VkBuffer buffer, VkDeviceSize offset,
+                       VkIndexType indexType)
+      : buffer(buffer), offset(offset), indexType(indexType) {}
 
   auto Call(VkCommandBuffer cmdBuffer) const -> void override {
     vkCmdBindIndexBuffer(cmdBuffer, buffer, offset, indexType);
@@ -457,6 +513,9 @@ struct VkCmdBindPipeline : Callable {
 
   VkPipelineBindPoint pipelineBindPoint;
   VkPipeline pipeline;
+
+  VkCmdBindPipeline(VkPipelineBindPoint pipelineBindPoint, VkPipeline pipeline)
+      : pipelineBindPoint(pipelineBindPoint), pipeline(pipeline) {}
 
   auto Call(VkCommandBuffer cmdBuffer) const -> void override {
     vkCmdBindPipeline(cmdBuffer, pipelineBindPoint, pipeline);
@@ -528,6 +587,9 @@ struct VkCmdSetDepthTestEnable : Callable {
 
   VkBool32 depthTestEnable;
 
+  VkCmdSetDepthTestEnable(VkBool32 depthTestEnable)
+      : depthTestEnable(depthTestEnable) {}
+
   auto Call(VkCommandBuffer cmdBuffer) const -> void override {
     vkCmdSetDepthTestEnable(cmdBuffer, depthTestEnable);
   }
@@ -538,6 +600,9 @@ struct VkCmdSetDepthWriteEnable : Callable {
 
   VkBool32 depthWriteEnable;
 
+  VkCmdSetDepthWriteEnable(VkBool32 depthWriteEnable)
+      : depthWriteEnable(depthWriteEnable) {}
+
   auto Call(VkCommandBuffer cmdBuffer) const -> void override {
     vkCmdSetDepthWriteEnable(cmdBuffer, depthWriteEnable);
   }
@@ -547,6 +612,9 @@ struct VkCmdSetDepthCompareOp : Callable {
   static const CommandType type = CommandType::vkCmdSetDepthCompareOp;
 
   VkCompareOp depthCompareOp;
+
+  VkCmdSetDepthCompareOp(VkCompareOp depthCompareOp)
+      : depthCompareOp(depthCompareOp) {}
 
   auto Call(VkCommandBuffer cmdBuffer) const -> void override {
     vkCmdSetDepthCompareOp(cmdBuffer, depthCompareOp);
@@ -612,6 +680,8 @@ struct VkCmdSetCullMode : Callable {
 
   VkCullModeFlags cullMode;
 
+  VkCmdSetCullMode(VkCullModeFlags cullMode) : cullMode(cullMode) {}
+
   auto Call(VkCommandBuffer cmdBuffer) const -> void override {
     vkCmdSetCullMode(cmdBuffer, cullMode);
   }
@@ -621,6 +691,8 @@ struct VkCmdSetFrontFace : Callable {
   static const CommandType type = CommandType::vkCmdSetFrontFace;
 
   VkFrontFace frontFace;
+
+  VkCmdSetFrontFace(VkFrontFace frontFace) : frontFace(frontFace) {}
 
   auto Call(VkCommandBuffer cmdBuffer) const -> void override {
     vkCmdSetFrontFace(cmdBuffer, frontFace);
@@ -650,7 +722,7 @@ struct VkCmdBeginDebugUtilsLabelEXT : Callable {
 
   VkDebugUtilsLabelEXT labelInfo;
 
-  explicit VkCmdBeginDebugUtilsLabelEXT(const VkDebugUtilsLabelEXT *pLabelInfo)
+  VkCmdBeginDebugUtilsLabelEXT(const VkDebugUtilsLabelEXT *pLabelInfo)
       : labelInfo(*pLabelInfo) {}
 
   auto Call(VkCommandBuffer cmdBuffer) const -> void override {
@@ -671,7 +743,7 @@ struct VkCmdInsertDebugUtilsLabelEXT : Callable {
 
   VkDebugUtilsLabelEXT labelInfo;
 
-  explicit VkCmdInsertDebugUtilsLabelEXT(const VkDebugUtilsLabelEXT *pLabelInfo)
+  VkCmdInsertDebugUtilsLabelEXT(const VkDebugUtilsLabelEXT *pLabelInfo)
       : labelInfo(*pLabelInfo) {}
 
   auto Call(VkCommandBuffer cmdBuffer) const -> void override {
@@ -679,6 +751,7 @@ struct VkCmdInsertDebugUtilsLabelEXT : Callable {
   }
 };
 
+// NOLINTEND(hicpp-explicit-conversions)
 // NOLINTEND(cppcoreguidelines-pro-bounds-pointer-arithmetic, cppcoreguidelines-pro-type-reinterpret-cast)
 // NOLINTEND(cppcoreguidelines-special-member-functions, hicpp-special-member-functions)
 } // namespace Args
@@ -717,29 +790,32 @@ auto get_if_derived(const std::variant<Ts...> &variant) -> T const * {
   return result;
 }
 
+using ArgVariants = std::variant<
+    Args::VkCmdDraw, Args::VkCmdDrawIndexed, Args::VkCmdDrawIndirect,
+    Args::VkCmdDrawIndexedIndirect, Args::VkCmdDispatch,
+    Args::VkCmdDispatchIndirect, Args::VkCmdBlitImage, Args::VkCmdPushConstants,
+    Args::VkCmdCopyBuffer, Args::VkCmdCopyImage, Args::VkCmdCopyBufferToImage,
+    Args::VkCmdCopyImageToBuffer, Args::VkCmdPipelineBarrier2,
+    Args::VkCmdFillBuffer, Args::VkCmdBuildAccelerationStructuresKHR,
+    Args::VkCmdCopyAccelerationStructureKHR, Args::VkCmdResetQueryPool,
+    Args::VkCmdWriteAccelerationStructuresPropertiesKHR,
+    Args::VkCmdBindIndexBuffer, Args::VkCmdBindVertexBuffers,
+    Args::VkCmdSetVertexInputEXT, Args::VkCmdBindPipeline,
+    Args::VkCmdBindDescriptorSets, Args::VkCmdSetViewport,
+    Args::VkCmdSetScissor, Args::VkCmdSetDepthTestEnable,
+    Args::VkCmdSetDepthWriteEnable, Args::VkCmdSetDepthCompareOp,
+    Args::VkCmdSetColorBlendEquationEXT, Args::VkCmdSetColorBlendEnableEXT,
+    Args::VkCmdSetColorWriteMaskEXT, Args::VkCmdSetCullMode,
+    Args::VkCmdSetFrontFace, Args::VkCmdClearAttachments,
+    Args::VkCmdBeginDebugUtilsLabelEXT, Args::VkCmdEndDebugUtilsLabelEXT,
+    Args::VkCmdInsertDebugUtilsLabelEXT>;
+
 struct Command {
   uint64_t id = UINT64_MAX;
 
-  std::variant<
-      Args::VkCmdDraw, Args::VkCmdDrawIndexed, Args::VkCmdDrawIndirect,
-      Args::VkCmdDrawIndexedIndirect, Args::VkCmdDispatch,
-      Args::VkCmdDispatchIndirect, Args::VkCmdBlitImage,
-      Args::VkCmdPushConstants, Args::VkCmdCopyBuffer, Args::VkCmdCopyImage,
-      Args::VkCmdCopyBufferToImage, Args::VkCmdCopyImageToBuffer,
-      Args::VkCmdPipelineBarrier2, Args::VkCmdFillBuffer,
-      Args::VkCmdBuildAccelerationStructuresKHR, Args::VkCmdResetQueryPool,
-      Args::VkCmdWriteAccelerationStructuresPropertiesKHR,
-      Args::VkCmdBindIndexBuffer, Args::VkCmdBindVertexBuffers,
-      Args::VkCmdSetVertexInputEXT, Args::VkCmdBindPipeline,
-      Args::VkCmdBindDescriptorSets, Args::VkCmdSetViewport,
-      Args::VkCmdSetScissor, Args::VkCmdSetDepthTestEnable,
-      Args::VkCmdSetDepthWriteEnable, Args::VkCmdSetDepthCompareOp,
-      Args::VkCmdSetColorBlendEquationEXT, Args::VkCmdSetColorBlendEnableEXT,
-      Args::VkCmdSetColorWriteMaskEXT, Args::VkCmdSetCullMode,
-      Args::VkCmdSetFrontFace, Args::VkCmdClearAttachments,
-      Args::VkCmdBeginDebugUtilsLabelEXT, Args::VkCmdEndDebugUtilsLabelEXT,
-      Args::VkCmdInsertDebugUtilsLabelEXT>
-      data;
+  ArgVariants data;
+
+  explicit Command(ArgVariants params) : data(std::move(params)) {}
 
   [[nodiscard]] auto GetType() const -> CommandType {
     return std::visit(
@@ -795,6 +871,8 @@ struct VirtualCommandBuffer {
   auto FillBuffer(const Args::VkCmdFillBuffer &arguments) -> void;
   auto BuildAccelerationStructuresKHR(
       const Args::VkCmdBuildAccelerationStructuresKHR &arguments) -> void;
+  auto CopyAccelerationStructureKHR(
+      const Args::VkCmdCopyAccelerationStructureKHR &arguments) -> void;
   auto ResetQueryPool(const Args::VkCmdResetQueryPool &arguments) -> void;
   auto WriteAccelerationStructuresPropertiesKHR(
       const Args::VkCmdWriteAccelerationStructuresPropertiesKHR &arguments)

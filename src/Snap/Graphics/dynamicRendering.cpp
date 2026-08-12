@@ -1,7 +1,8 @@
 #include "dynamicRendering.hpp"
 #include "Graphics/Buffers/uniform.hpp"
+#include "Graphics/FrameGraph/commands.hpp"
 #include "Graphics/allocations.hpp"
-#include "Graphics/barrier.hpp"
+
 #include "Graphics/draw.hpp"
 #include "Graphics/graphics.hpp"
 #include "Graphics/graphicsContext.hpp"
@@ -921,7 +922,8 @@ auto FlushCompute(const GraphicsContext &context) -> Result<bool> {
 
   PrintDebug("Binding pipeline");
 
-  vkCmdBindPipeline(commandBuffer, TopOfStack->bindPoint, pipeline.first);
+  // vkCmdBindPipeline(commandBuffer, TopOfStack->bindPoint, pipeline.first);
+  commandBuffer->BindPipeline({TopOfStack->bindPoint, pipeline.first});
 
   return true;
 }
@@ -977,7 +979,8 @@ auto FlushGraphics(const GraphicsContext &context) -> Result<bool> {
 
   {
     ZoneScopedN("vkCmdBindPipeline");
-    vkCmdBindPipeline(commandBuffer, TopOfStack->bindPoint, pipeline.first);
+    // vkCmdBindPipeline(commandBuffer, TopOfStack->bindPoint, pipeline.first);
+    commandBuffer->BindPipeline({TopOfStack->bindPoint, pipeline.first});
   }
 
   return true;
@@ -1084,12 +1087,6 @@ inline auto BeginRendering(const GraphicsContext &context) -> Error {
     attachmentInfo.clearValue = rendertarget.clearValue;
 
     colorAttachments.at(i) = attachmentInfo;
-
-    Barrier::UpdateUsage(
-        context, *rendertarget.texture,
-        {.stages = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-         .access = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT |
-                   VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT});
   }
 
   bool hasDepth = false;
@@ -1117,13 +1114,6 @@ inline auto BeginRendering(const GraphicsContext &context) -> Error {
       stencilAttachment = attachmentInfo;
       hasStencil = true;
     }
-
-    Barrier::UpdateUsage(
-        context, *rendertarget.texture,
-        {.stages = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT |
-                   VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
-         .access = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT |
-                   VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT});
   }
 
 #ifndef NDEBUG
@@ -1161,7 +1151,7 @@ inline auto BeginRendering(const GraphicsContext &context) -> Error {
 
   // Add a tracy marker to indicate the start of a rendering pass
   TracyMessageL("Begin Rendering");
-  vkCmdBeginRendering(Graphics::GetCommandBuffer(), &renderingInfo);
+  // GetCommandBuffer()->BeginRendering(Args::VkCmdBeginRendering{&renderingInfo});
   GetIsCurrentlyRendering() = true;
 
   // Make sure subsequent renders load from the existing content if we ever need to re-bind mid-pass
@@ -1185,7 +1175,8 @@ auto EndRendering(const GraphicsContext &context) -> void {
 #endif
 
     TracyMessageL("End Rendering");
-    vkCmdEndRendering(Graphics::GetCommandBuffer());
+    // vkCmdEndRendering(Graphics::GetCommandBuffer());
+    // GetCommandBuffer()->EndRendering({});
     GetIsCurrentlyRendering() = false;
   }
 }
@@ -1503,7 +1494,8 @@ auto BindDescriptorSets(const GraphicsContext &context,
   };
 
   thread_local std::vector<BoundDescriptorSet> BoundDescriptorSets{};
-  thread_local VkCommandBuffer DescriptorsBoundAtCmdBuffer = VK_NULL_HANDLE;
+  thread_local VirtualCommandBuffer *DescriptorsBoundAtCmdBuffer =
+      VK_NULL_HANDLE;
   thread_local VkPipelineLayout DescriporsBoundAtLayout = {};
 
   if (DescriptorsBoundAtCmdBuffer != Graphics::GetCommandBuffer() ||
@@ -1586,10 +1578,14 @@ auto BindDescriptorSets(const GraphicsContext &context,
     return Error::Success();
   }
 
-  vkCmdBindDescriptorSets(
-      commandBuffer, TopOfStack->bindPoint, CurrentPipelineLayout.layout, 0,
-      static_cast<uint32_t>(descriptorSets.size()), descriptorSets.data(),
-      static_cast<uint32_t>(dynamicOffsets.size()), dynamicOffsets.data());
+  // vkCmdBindDescriptorSets(
+  //     commandBuffer, TopOfStack->bindPoint, CurrentPipelineLayout.layout, 0,
+  //     static_cast<uint32_t>(descriptorSets.size()), descriptorSets.data(),
+  //     static_cast<uint32_t>(dynamicOffsets.size()), dynamicOffsets.data());
+  commandBuffer->BindDescriptorSets(
+      {TopOfStack->bindPoint, CurrentPipelineLayout.layout, 0,
+       static_cast<uint32_t>(descriptorSets.size()), descriptorSets.data(),
+       static_cast<uint32_t>(dynamicOffsets.size()), dynamicOffsets.data()});
 
   return Error::Success();
 }
@@ -1705,12 +1701,7 @@ auto PrepareRendering(const GraphicsContext &context) -> Error {
     assert(GetCommandBuffer() != VK_NULL_HANDLE);
     ZoneScopedN("Flush push buffer data");
     for (auto &pushBuffer : TopOfStack->shader->pushBuffers) {
-      FlushInfo info{
-          .commandBuffer = GetCommandBuffer(),
-          .pipelineLayout = CurrentPipelineLayout.layout,
-      };
-
-      pushBuffer.FlushData(info);
+      pushBuffer.FlushData(CurrentPipelineLayout.layout);
     }
   }
 
@@ -1755,18 +1746,18 @@ auto PrepareRendering(const GraphicsContext &context) -> Error {
 
     if (!sameViewport) {
       auto viewport = GetClippedViewport();
-      vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+      commandBuffer->SetViewport({0, 1, &viewport});
     }
 
     if (!sameScissor) {
       auto scissor = GetScissor();
-      vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+      commandBuffer->SetScissor({0, 1, &scissor});
     }
 
     if (!sameDepth) {
-      vkCmdSetDepthTestEnable(commandBuffer, TopOfStack->depthTestEnable);
-      vkCmdSetDepthWriteEnable(commandBuffer, TopOfStack->depthWriteEnable);
-      vkCmdSetDepthCompareOp(commandBuffer, TopOfStack->depthCompareOp);
+      commandBuffer->SetDepthTestEnable({TopOfStack->depthTestEnable});
+      commandBuffer->SetDepthWriteEnable({TopOfStack->depthWriteEnable});
+      commandBuffer->SetDepthCompareOp({TopOfStack->depthCompareOp});
     }
 
     if (!sameBlendMode && TopOfStack->colorAttachments.size() > 0) {
@@ -1778,21 +1769,22 @@ auto PrepareRendering(const GraphicsContext &context) -> Error {
         colorWriteMasks.emplace_back(attachment.blendMode.colorWriteMask);
       }
 
-      vkCmdSetColorBlendEquationEXT(commandBuffer, 0,
-                                    TopOfStack->colorBlendEquations.size(),
-                                    TopOfStack->colorBlendEquations.data());
-      vkCmdSetColorBlendEnableEXT(commandBuffer, 0, blendEnables.size(),
-                                  blendEnables.data());
-      vkCmdSetColorWriteMaskEXT(commandBuffer, 0, colorWriteMasks.size(),
-                                colorWriteMasks.data());
+      commandBuffer->SetColorBlendEquationEXT(
+          {0, static_cast<uint32_t>(TopOfStack->colorBlendEquations.size()),
+           TopOfStack->colorBlendEquations.data()});
+      commandBuffer->SetColorBlendEnableEXT(
+          {0, static_cast<uint32_t>(blendEnables.size()), blendEnables.data()});
+      commandBuffer->SetColorWriteMaskEXT(
+          {0, static_cast<uint32_t>(colorWriteMasks.size()),
+           colorWriteMasks.data()});
     }
 
     if (!sameCullmode) {
-      vkCmdSetCullMode(commandBuffer, TopOfStack->cullMode);
+      commandBuffer->SetCullMode({TopOfStack->cullMode});
     }
 
     if (!sameFFWinding) {
-      vkCmdSetFrontFace(commandBuffer, TopOfStack->frontFace);
+      commandBuffer->SetFrontFace({TopOfStack->frontFace});
     }
   }
 
@@ -2267,10 +2259,9 @@ auto Clear(const GraphicsContext &context, const ClearInfo &clearInfo)
 
   CHECK_ERR(PrepareRendering(context));
 
-  vkCmdClearAttachments(
-      commandBuffer, static_cast<uint32_t>(clearAttachments.size()),
-      clearAttachments.data(), static_cast<uint32_t>(clearRects.size()),
-      clearRects.data());
+  commandBuffer->ClearAttachments(
+      {static_cast<uint32_t>(clearAttachments.size()), clearAttachments.data(),
+       static_cast<uint32_t>(clearRects.size()), clearRects.data()});
 
   return Error::Success();
 }

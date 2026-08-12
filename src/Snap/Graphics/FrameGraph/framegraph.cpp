@@ -20,27 +20,7 @@ auto FrameGraph::Submit(const VirtualCommandBuffer &commands) -> Error {
   return {};
 }
 
-auto FrameGraph::ValidateGraph() -> Error {
-  int startEndState{};
-
-  for (const auto &command : commandBuffer.commands) {
-    if (command.GetType() == CommandType::vkCmdBeginRendering) {
-      startEndState++;
-    } else if (command.GetType() == CommandType::vkCmdEndRendering) {
-      startEndState--;
-
-      if (startEndState < 0) {
-        return Error::Create("Ended rendering more than rendering was begun.");
-      }
-    }
-  }
-
-  if (startEndState != 0) {
-    return Error::Create("Begin / End count mismatch");
-  }
-
-  return {};
-}
+auto FrameGraph::ValidateGraph() -> Error { return {}; } // NOLINT
 
 auto FrameGraph::GetResourceStateAt(VkBuffer buffer, uint64_t time)
     -> Result<ResourceState> {
@@ -136,6 +116,8 @@ auto FrameGraph::BuildGraph() -> Error {
 
 auto FrameGraph::Compile() -> Error {
   CHECK_ERR(ValidateGraph());
+  CHECK_ERR(BuildGraph());
+
   CHECK_ERR(BuildGraph());
 
   return {};

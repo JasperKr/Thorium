@@ -11,10 +11,6 @@
 #include "Modules/error.hpp"
 
 namespace Graphics {
-struct FlushInfo {
-  VkCommandBuffer commandBuffer;
-  VkPipelineLayout pipelineLayout;
-};
 
 struct PushBuffer {
 public:
@@ -24,7 +20,7 @@ public:
   [[nodiscard]] auto GetBufferOffset() const -> size_t;
   [[nodiscard]] auto GetBufferSize() const -> size_t;
   [[nodiscard]] auto GetLayout() const -> const Reflect::FlattenedReflection &;
-  auto FlushData(FlushInfo &info) -> void;
+  auto FlushData(VkPipelineLayout layout) -> void;
 
   auto SetData(const ResourceKey &key, const std::span<const uint8_t> &values)
       -> Error;

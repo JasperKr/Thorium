@@ -600,7 +600,7 @@ auto wrap_AcquireCommandBuffer(lua_State *state) -> int {
 
   LUA_ASSERT(info.queueFamily !=
              UINT32_MAX); // Hit if using queue family that isn't present
-  (void)LUA_CK_RES(::Graphics::Threading::AcquireCommandBuffer(*ctx, info));
+  LUA_CK_RES(::Graphics::Threading::AcquireCommandBuffer(*ctx, info));
 
   // Optional boolean arg at idx 4 can be used to indicate that we want to create a performance snapshot for this command buffer
   if (lua_toboolean(state, 4) != 0) {

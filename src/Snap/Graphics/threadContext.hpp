@@ -6,8 +6,11 @@
 #include <utility>
 #include <vector>
 
+#include "Graphics/FrameGraph/commands.hpp"
+#include "Graphics/graphicsState.hpp"
 #include "Graphics/texture.hpp"
 #include "Modules/object.hpp"
+#include "Modules/stackVector.hpp"
 #include "vulkan/vulkan_core.h"
 
 namespace Graphics {
@@ -20,12 +23,15 @@ struct DescriptorPoolInfo {
 struct ThreadContext {
   struct GraphicsContext *graphicsContext = nullptr; // Global graphics context
   VkCommandPool commandPool = VK_NULL_HANDLE;        // Per-thread command pool
-  VkCommandBuffer commandBuffer = VK_NULL_HANDLE;    // Current command buffer
+  VirtualCommandBuffer *commandBuffer;               // Current command buffer
   size_t currentVertexFormatHash = 0;
 
   // unique identifier to not the frame, but recording of command buffer
   uint64_t recordingIdentifier = 0;
   ObjectID currentMesh;
+
+  VkBuffer boundIndexBuffer;
+  Math::StackVector<VkBuffer, MAX_BOUND_VERTEX_BUFFERS> boundVertexBuffers;
 
   std::vector<DescriptorPoolInfo> descriptorPools;  // Descriptor pool info
   VkDescriptorPool descriptorPool = VK_NULL_HANDLE; // Current descriptor pool

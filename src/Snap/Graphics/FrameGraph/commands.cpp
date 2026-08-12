@@ -1,5 +1,6 @@
 #include "commands.hpp"
 #include "Graphics/dynamicRendering.hpp"
+#include "Graphics/graphics.hpp"
 #include "Modules/image.hpp"
 
 namespace Graphics {
@@ -35,6 +36,18 @@ BoundResources::BoundResources() {
     boundImages.emplace_back(texture.second.first->view);
     bound.emplace_back(texture.second.first->view);
   }
+
+  for (const auto &accelerationStructure :
+       shaderState.userBoundAccelerationStructures) {
+    boundAccelerationStructures.emplace_back(
+        accelerationStructure.second.first->GetAccelerationStructure());
+  }
+
+  const auto &ctx = GetThreadContext();
+
+  vertexBuffers.insert(vertexBuffers.begin(), boundBuffers.begin(),
+                       boundBuffers.end());
+  indexBuffer = ctx.boundIndexBuffer;
 }
 
 auto VirtualCommandBuffer::AddCommand(const Command &command) -> void {
@@ -116,6 +129,11 @@ auto VirtualCommandBuffer::BuildAccelerationStructuresKHR(
   AddCommand(Command(arguments));
 }
 
+auto VirtualCommandBuffer::CopyAccelerationStructureKHR(
+    const Args::VkCmdCopyAccelerationStructureKHR &arguments) -> void {
+  AddCommand(Command(arguments));
+}
+
 auto VirtualCommandBuffer::ResetQueryPool(
     const Args::VkCmdResetQueryPool &arguments) -> void {
   AddCommand(Command(arguments));
@@ -144,16 +162,6 @@ auto VirtualCommandBuffer::SetVertexInputEXT(
 
 auto VirtualCommandBuffer::BindPipeline(
     const Args::VkCmdBindPipeline &arguments) -> void {
-  AddCommand(Command(arguments));
-}
-
-auto VirtualCommandBuffer::BeginRendering(
-    const Args::VkCmdBeginRendering &arguments) -> void {
-  AddCommand(Command(arguments));
-}
-
-auto VirtualCommandBuffer::EndRendering(
-    const Args::VkCmdEndRendering &arguments) -> void {
   AddCommand(Command(arguments));
 }
 

@@ -1,4 +1,5 @@
 #include "graphics.hpp"
+#include "Graphics/FrameGraph/commands.hpp"
 #include "Graphics/allocations.hpp"
 #include "Graphics/bvh.hpp"
 #include "Graphics/deviceSettings.hpp"
@@ -424,7 +425,7 @@ auto GetThreadContext() -> ThreadContext & {
 }
 
 // May be null
-auto GetCommandBuffer() -> VkCommandBuffer {
+auto GetCommandBuffer() -> VirtualCommandBuffer * {
   auto &threadContext = GetThreadContext();
   return threadContext.commandBuffer;
 }
@@ -448,7 +449,8 @@ auto PushDebugMarker(const std::string_view &name, const Color *color) -> void {
   }
   // NOLINTEND
 
-  vkCmdBeginDebugUtilsLabelEXT(cmdBuffer, &labelInfo);
+  cmdBuffer->BeginDebugUtilsLabelEXT(
+      Args::VkCmdBeginDebugUtilsLabelEXT{&labelInfo});
 }
 
 auto PopDebugMarker() -> void {
@@ -458,7 +460,7 @@ auto PopDebugMarker() -> void {
     return;
   }
 
-  vkCmdEndDebugUtilsLabelEXT(cmdBuffer);
+  cmdBuffer->EndDebugUtilsLabelEXT({});
 }
 
 auto PushDebugLabel(const std::string_view &name, const Color *color) -> void {
@@ -480,7 +482,8 @@ auto PushDebugLabel(const std::string_view &name, const Color *color) -> void {
   }
   // NOLINTEND
 
-  vkCmdInsertDebugUtilsLabelEXT(cmdBuffer, &labelInfo);
+  cmdBuffer->InsertDebugUtilsLabelEXT(
+      Args::VkCmdInsertDebugUtilsLabelEXT{&labelInfo});
 }
 
 static auto CreateSemaphores(GraphicsContext &context) -> Error {
@@ -497,19 +500,13 @@ static auto CreateSemaphores(GraphicsContext &context) -> Error {
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
     for (int i = 0; i < FRAMES_IN_FLIGHT; i++) {
-      Error error = Error::Create(vkCreateSemaphore(
-          context.device, &semaphoreInfo, GetAllocationCallbacks(),
-          &context.imageAvailable.at(i)));
-      if (Error::IsError(error)) {
-        return error;
-      }
+      CHECK_NEW_ERR(vkCreateSemaphore(context.device, &semaphoreInfo,
+                                      GetAllocationCallbacks(),
+                                      &context.imageAvailable.at(i)));
 
-      error = Error::Create(vkCreateFence(context.device, &fenceInfo,
-                                          GetAllocationCallbacks(),
-                                          &context.inFlight.at(i)));
-      if (Error::IsError(error)) {
-        return error;
-      }
+      CHECK_NEW_ERR(vkCreateFence(context.device, &fenceInfo,
+                                  GetAllocationCallbacks(),
+                                  &context.inFlight.at(i)));
     }
   }
 
@@ -531,17 +528,12 @@ static auto CreateVmaAllocator(GraphicsContext &context) -> Error {
                         VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
 
   VmaVulkanFunctions vulkanFunctions;
-  Error error = Error::Create(
+  CHECK_NEW_ERR(
       vmaImportVulkanFunctionsFromVolk(&allocatorInfo, &vulkanFunctions));
 
   allocatorInfo.pVulkanFunctions = &vulkanFunctions;
 
-  error =
-      Error::Create(vmaCreateAllocator(&allocatorInfo, &context.vmaAllocator));
-
-  if (Error::IsError(error)) {
-    return error;
-  }
+  CHECK_NEW_ERR(vmaCreateAllocator(&allocatorInfo, &context.vmaAllocator));
 
   return Error::Success();
 }
@@ -554,13 +546,9 @@ inline auto CreateCommandPool(ThreadContext &tcontext) -> Error {
 
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
-    Error error = Error::Create(
-        vkCreateCommandPool(tcontext.graphicsContext->device, &poolInfo,
-                            GetAllocationCallbacks(), &tcontext.commandPool));
-
-    if (Error::IsError(error)) {
-      return error;
-    }
+    CHECK_NEW_ERR(vkCreateCommandPool(tcontext.graphicsContext->device,
+                                      &poolInfo, GetAllocationCallbacks(),
+                                      &tcontext.commandPool));
   }
 
   {
@@ -668,7 +656,7 @@ void Deinitialize(GraphicsContext &context) {
 
   Graphics::UploadBuffers.clear();
 
-  Graphics::Barrier::ResetModule();
+  // Graphics::Barrier::ResetModule();
   Graphics::UnloadShaderModule(context);
   Graphics::DeinitializeRendering(context);
   Graphics::DynamicRendering::Shutdown(context);
