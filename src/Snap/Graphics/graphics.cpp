@@ -290,13 +290,13 @@ static auto CreateDevice(GraphicsContext &context,
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
       .pNext = &features13,
       .shaderFloat16 = VK_TRUE,
+      .shaderInt8 = VK_TRUE,
       .descriptorIndexing = VK_TRUE,
       .shaderSampledImageArrayNonUniformIndexing = VK_TRUE,
       .shaderStorageBufferArrayNonUniformIndexing = VK_TRUE,
       .runtimeDescriptorArray = VK_TRUE,
       .timelineSemaphore = VK_TRUE,
       .bufferDeviceAddress = VK_TRUE,
-      .shaderInt8 = VK_TRUE,
   };
 
   PrintDebug(
@@ -427,7 +427,7 @@ auto GetThreadContext() -> ThreadContext & {
 // May be null
 auto GetCommandBuffer() -> VirtualCommandBuffer * {
   auto &threadContext = GetThreadContext();
-  return threadContext.commandBuffer;
+  return threadContext.commandBuffer.get();
 }
 
 auto PushDebugMarker(const std::string_view &name, const Color *color) -> void {

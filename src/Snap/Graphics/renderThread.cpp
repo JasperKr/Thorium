@@ -1,5 +1,6 @@
 #include "Graphics/renderThread.hpp"
 #include "Graphics/Buffers/uniform.hpp"
+#include "Graphics/FrameGraph/commands.hpp"
 #include "Graphics/allocations.hpp"
 #include "Graphics/buffer.hpp"
 #include "Graphics/dynamicRendering.hpp"
@@ -15,6 +16,7 @@
 #include <cassert>
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -160,6 +162,9 @@ auto AcquireCommandBuffer(Graphics::GraphicsContext &context,
   threadInfo->threadData.queueFamily = info.queueFamily;
 
   assert(tcontext.queueFamily == 0);
+
+  threadInfo->threadData.commandBuffer =
+      std::make_shared<VirtualCommandBuffer>();
 
   CHECK_ERR(GetDescriptorPool(tcontext));
 

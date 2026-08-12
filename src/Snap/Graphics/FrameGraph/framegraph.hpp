@@ -5,6 +5,8 @@
 #include "Modules/error.hpp"
 #include <cstdint>
 #include <unordered_map>
+#include <unordered_set>
+#include <utility>
 #include <vector>
 #include <vulkan/vulkan_core.h>
 
@@ -16,6 +18,9 @@ struct Node {
 };
 
 struct FrameGraph {
+  // also defined in command.hpp
+  static inline const uint64_t InvalidDepth = UINT64_MAX;
+
   auto Submit(const VirtualCommandBuffer &commands) -> Error;
   auto Write(VkCommandBuffer cmdBuffer) -> Error;
 
@@ -28,18 +33,8 @@ private:
   // All resource usages in the command buffer.
   std::unordered_map<void *, std::vector<uint64_t>> resourceUsages;
 
-  // auto GetGraphItemState(VkBuffer buffer) -> Node {
-  //   return graphState[(void *)buffer];
-  // }
-
-  // auto GetGraphItemState(VkImageView image) -> Node {
-  //   return graphState[(void *)image];
-  // }
-
-  // auto GetGraphItemState(VkAccelerationStructureKHR accelerationStructure)
-  //     -> GraphItemState {
-  //   return graphState[(void *)accelerationStructure];
-  // }
+  // Temporary data for Graphviz
+  std::unordered_set<uint64_t> dependencies; // a | b sorted asc
 
   auto Compile() -> Error;
   auto BuildGraph() -> Error;

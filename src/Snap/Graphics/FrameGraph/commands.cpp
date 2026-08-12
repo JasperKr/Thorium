@@ -254,4 +254,20 @@ auto VirtualCommandBuffer::AddStateUpdate(VkImageView image,
   imageStateUpdateTimeline.emplace_back(image, newState, time);
 }
 
+auto CreateCommandBuffer() -> VirtualCommandBuffer { return {}; }
+
+auto VirtualCommandBuffer::Reset() -> void {
+  bufferStateUpdates.clear();
+  bufferStateUpdateTimeline.clear();
+  imageStateUpdates.clear();
+  imageStateUpdateTimeline.clear();
+  time = 0;
+  commands.clear();
+  queueFamily = UINT32_MAX;
+}
+
+auto ResetCommandBuffer(VirtualCommandBuffer &buffer) -> void {
+  buffer.Reset();
+}
+
 } // namespace Graphics

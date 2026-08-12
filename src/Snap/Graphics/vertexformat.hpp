@@ -202,6 +202,7 @@ private:
   bool constructedBindings = false;
   std::vector<VertexComponent> Attributes;
 
+  // NOLINTNEXTLINE
   void ConstructBindings() {
     std::ranges::sort(Attributes,
                       [](const VertexComponent &first,

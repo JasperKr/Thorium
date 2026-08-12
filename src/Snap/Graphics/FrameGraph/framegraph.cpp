@@ -1,10 +1,17 @@
 #include "framegraph.hpp"
 #include "Graphics/FrameGraph/commands.hpp"
 #include "Graphics/FrameGraph/resourceUsage.hpp"
+#include "Libraries/vma.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
+#include "Modules/filesystem.hpp"
+#include "Modules/timer.hpp"
 #include <algorithm>
 #include <cassert>
 #include <cstdint>
+#include <iterator>
+#include <ostream>
+#include <sstream>
 #include <unordered_map>
 #include <variant>
 #include <vector>
@@ -46,33 +53,44 @@ auto FrameGraph::Level(uint64_t idx) -> uint64_t {
   auto &command = commandBuffer.commands.at(idx);
   assert(command.id == idx);
 
-  std::vector<uint64_t> parents;
+  if (command.level != InvalidDepth) {
+    return command.level;
+  }
 
   const auto *boundResources = command.GetBoundResources();
   if (boundResources == nullptr) {
+    command.level = 0;
+
     return 0;
   }
 
   int64_t maxDepth = -1;
 
   for (const auto &ptr : boundResources->bound) {
-    int iterIdx = 0;
+    auto &usages = resourceUsages[ptr];
 
-    for (const auto &usage : resourceUsages[ptr]) {
-      if (usage == idx) {
-        break;
-      }
+    // binary search resource usage
+    auto iter = std::ranges::lower_bound(usages, idx);
 
-      iterIdx++;
-    }
-
-    if (iterIdx == 0) {
+    if (iter == usages.end()) {
       continue;
     }
 
-    maxDepth =
-        std::max<int64_t>(maxDepth, static_cast<int64_t>(Level(iterIdx - 1)));
+    auto index = std::distance(usages.begin(), iter); // Our usage index
+    if (index == 0) {
+      continue;
+    }
+
+    auto parentIndex = usages[index - 1];
+
+    dependencies.emplace(parentIndex << UINT32_WIDTH | idx);
+
+    auto parentDepth = static_cast<int64_t>(Level(parentIndex));
+
+    maxDepth = std::max<int64_t>(maxDepth, parentDepth);
   }
+
+  command.level = maxDepth + 1;
 
   return maxDepth + 1;
 }
@@ -93,42 +111,78 @@ auto FrameGraph::BuildGraph() -> Error {
     }
   }
 
-  std::vector<uint64_t> levels(commandBuffer.commands.size(), 0);
   uint64_t maxLevel = 0;
 
   for (const auto &command : commandBuffer.commands) {
-    auto level = Level(command.id);
-    levels.emplace_back(level); // Command.id == levels.size() - 1
-
-    maxLevel = std::max(maxLevel, level);
+    maxLevel = std::max(maxLevel, Level(command.id));
   }
 
   graph.resize(maxLevel + 1);
 
   for (const auto &command : commandBuffer.commands) {
-    graph[levels.at(command.id)].emplace_back(command);
-  }
+    ERR_ASSERT(command.level != InvalidDepth);
+    ERR_ASSERT(command.level < maxLevel + 1);
 
-  auto commandCount = commandBuffer.commands.size();
+    graph[command.level].emplace_back(command);
+  }
 
   return {};
 }
 
 auto FrameGraph::Compile() -> Error {
+  PrintAlways("Command count: {}", commandBuffer.commands.size());
+  auto time = Timer::GetTime();
+
   CHECK_ERR(ValidateGraph());
   CHECK_ERR(BuildGraph());
 
-  CHECK_ERR(BuildGraph());
+  auto time2 = Timer::GetTime();
+  PrintAlways("Graph depth: {}", graph.size());
+  PrintAlways("Graph build time: {}", time2 - time);
+
+  // export to a GraphVis file.
+
+  std::stringstream stream;
+  stream << "digraph FrameGraph {\n";
+  stream << "rankdir=LR;\n";
+
+  for (const auto &command : commandBuffer.commands) {
+    stream << command.id << " [label=\""
+           << CommandTypeEnumHelper.ToString(command.GetType()) << "\"];\n";
+  }
+
+  for (const auto dependency : dependencies) {
+    // parentIndex << UINT32_WIDTH | idx
+
+    uint32_t parent = (dependency >> UINT32_WIDTH) & UINT32_MAX;
+    uint32_t child = dependency & UINT32_MAX;
+
+    stream << "\"" << parent << "\" -> \"" << child << "\";\n";
+  }
+
+  stream << "}\n";
+
+  CHECK_ERR(Filesystem::WriteFile("framegraph.dot", stream.str()));
 
   return {};
 }
 
 auto FrameGraph::Write(VkCommandBuffer cmdBuffer) -> Error {
+  CHECK_ERR(Error::Create("Stop"));
+
+  VkCommandBufferBeginInfo beginInfo = {};
+  beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+  beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+  vkBeginCommandBuffer(cmdBuffer, &beginInfo);
+
   for (const auto &command : commandBuffer.commands) {
     std::visit(
         [cmdBuffer](const auto &cmdData) -> void { cmdData.Call(cmdBuffer); },
         command.data);
   }
+
+  vkEndCommandBuffer(cmdBuffer);
 
   return {};
 }

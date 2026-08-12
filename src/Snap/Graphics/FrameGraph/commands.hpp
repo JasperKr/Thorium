@@ -1,10 +1,9 @@
 #pragma once
 
 #include "Graphics/FrameGraph/resourceUsage.hpp"
-#include "Graphics/graphicsState.hpp"
 #include "Libraries/vma.hpp"
+#include "Modules/Helpers/utils.hpp"
 #include "Modules/error.hpp"
-#include "Modules/stackVector.hpp"
 #include <cassert>
 #include <cstdint>
 #include <cstring>
@@ -74,6 +73,54 @@ enum class CommandType : uint8_t {
   vkCmdEndDebugUtilsLabelEXT,
   vkCmdInsertDebugUtilsLabelEXT,
 };
+
+static const Utils::EnumStringHelper<CommandType> CommandTypeEnumHelper{{
+    "vkCmdDraw",
+    "vkCmdDrawIndexed",
+    "vkCmdDrawIndirect",
+    "vkCmdDrawIndexedIndirect",
+    "vkCmdDispatch",
+    "vkCmdDispatchIndirect",
+    "vkCmdBlitImage",
+
+    "vkCmdPushConstants",
+
+    "vkCmdCopyBuffer",
+    "vkCmdCopyImage",
+    "vkCmdCopyBufferToImage",
+    "vkCmdCopyImageToBuffer",
+
+    "vkCmdPipelineBarrier2",
+    "vkCmdFillBuffer",
+
+    "vkCmdBuildAccelerationStructuresKHR",
+    "vkCmdCopyAccelerationStructureKHR",
+    "vkCmdResetQueryPool",
+    "vkCmdWriteAccelerationStructuresPropertiesKHR",
+
+    "vkCmdBindIndexBuffer",
+    "vkCmdBindVertexBuffers",
+    "vkCmdSetVertexInputEXT",
+    "vkCmdBindPipeline",
+
+    "vkCmdBindDescriptorSets",
+    "vkCmdSetViewport",
+    "vkCmdSetScissor",
+    "vkCmdSetDepthTestEnable",
+    "vkCmdSetDepthWriteEnable",
+    "vkCmdSetDepthCompareOp",
+    "vkCmdSetColorBlendEquationEXT",
+    "vkCmdSetColorBlendEnableEXT",
+    "vkCmdSetColorWriteMaskEXT",
+    "vkCmdSetCullMode",
+    "vkCmdSetFrontFace",
+
+    "vkCmdClearAttachments",
+
+    "vkCmdBeginDebugUtilsLabelEXT",
+    "vkCmdEndDebugUtilsLabelEXT",
+    "vkCmdInsertDebugUtilsLabelEXT",
+}};
 
 // NOLINTBEGIN(cppcoreguidelines-special-member-functions, hicpp-special-member-functions)
 // NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic, cppcoreguidelines-pro-type-reinterpret-cast)
@@ -335,12 +382,35 @@ struct VkCmdPipelineBarrier2 : Callable {
   static const CommandType type = CommandType::vkCmdPipelineBarrier2;
 
   VkDependencyInfo dependencyInfo;
+  std::vector<VkMemoryBarrier2> memoryBarriers;
+  std::vector<VkBufferMemoryBarrier2> bufferMemoryBarriers;
+  std::vector<VkImageMemoryBarrier2> imageMemoryBarriers;
 
   VkCmdPipelineBarrier2(const VkDependencyInfo *pDependencyInfo)
-      : dependencyInfo(*pDependencyInfo) {}
+      : dependencyInfo(*pDependencyInfo) {
+    memoryBarriers = std::vector<VkMemoryBarrier2>(
+        pDependencyInfo->pMemoryBarriers,
+        pDependencyInfo->pMemoryBarriers + pDependencyInfo->memoryBarrierCount);
+
+    bufferMemoryBarriers = std::vector<VkBufferMemoryBarrier2>(
+        pDependencyInfo->pBufferMemoryBarriers,
+        pDependencyInfo->pBufferMemoryBarriers +
+            pDependencyInfo->bufferMemoryBarrierCount);
+
+    imageMemoryBarriers = std::vector<VkImageMemoryBarrier2>(
+        pDependencyInfo->pImageMemoryBarriers,
+        pDependencyInfo->pImageMemoryBarriers +
+            pDependencyInfo->imageMemoryBarrierCount);
+  }
 
   auto Call(VkCommandBuffer cmdBuffer) const -> void override {
-    vkCmdPipelineBarrier2(cmdBuffer, &dependencyInfo);
+    VkDependencyInfo info = dependencyInfo;
+
+    info.pMemoryBarriers = memoryBarriers.data();
+    info.pBufferMemoryBarriers = bufferMemoryBarriers.data();
+    info.pImageMemoryBarriers = imageMemoryBarriers.data();
+
+    vkCmdPipelineBarrier2(cmdBuffer, &info);
   }
 };
 
@@ -812,6 +882,7 @@ using ArgVariants = std::variant<
 
 struct Command {
   uint64_t id = UINT64_MAX;
+  uint64_t level = UINT64_MAX; // Also defined in framegraph.cpp as InvalidDepth
 
   ArgVariants data;
 
@@ -917,6 +988,8 @@ struct VirtualCommandBuffer {
   auto AddStateUpdate(VkAccelerationStructureKHR structure,
                       const ResourceState &newState) -> void;
 
+  auto Reset() -> void;
+
 protected:
   // NOLINTBEGIN
 
@@ -925,6 +998,9 @@ protected:
   auto AddCommand(const Command &command) -> void;
 
   std::vector<Command> commands;
+
+  // state updates get set as a parent to the next valid command
+  std::vector<Command> stateUpdateCalls;
 
   std::unordered_map<VkBuffer, std::vector<std::pair<ResourceState, uint64_t>>>
       bufferStateUpdates;
@@ -940,5 +1016,8 @@ protected:
 
   // NOLINTEND
 };
+
+auto CreateCommandBuffer() -> VirtualCommandBuffer;
+auto ResetCommandBuffer(VirtualCommandBuffer &buffer) -> void;
 
 } // namespace Graphics
