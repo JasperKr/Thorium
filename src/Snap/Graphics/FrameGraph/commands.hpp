@@ -5,6 +5,7 @@
 #include "Libraries/vma.hpp"
 #include "Modules/error.hpp"
 #include "Modules/stackVector.hpp"
+#include <atomic>
 #include <cassert>
 #include <cstdint>
 #include <cstring>
@@ -55,9 +56,6 @@ enum class CommandType : uint8_t {
   vkCmdSetVertexInputEXT,
   vkCmdBindPipeline,
 
-  vkCmdBeginRendering,
-  vkCmdEndRendering,
-
   vkCmdBindDescriptorSets,
   vkCmdSetViewport,
   vkCmdSetScissor,
@@ -77,15 +75,6 @@ enum class CommandType : uint8_t {
   vkCmdInsertDebugUtilsLabelEXT,
 };
 
-namespace Args {
-// NOLINTBEGIN(cppcoreguidelines-special-member-functions, hicpp-special-member-functions)
-// NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic, cppcoreguidelines-pro-type-reinterpret-cast)
-
-struct Callable {
-  virtual ~Callable() = default;
-  virtual auto Call(VkCommandBuffer cmdBuffer) const -> void;
-};
-
 static const uint32_t MAX_BOUND_RESOURCES = 32;
 
 struct BoundResources {
@@ -96,10 +85,21 @@ struct BoundResources {
   Math::StackVector<VkImageView, MAX_COLOR_ATTACHMENTS> colorAttachments;
   VkImageView depthStencilAttachment;
 
+  std::vector<void *> bound;
+
   BoundResources();
 };
 
-struct VkCmdDraw : Callable {
+namespace Args {
+// NOLINTBEGIN(cppcoreguidelines-special-member-functions, hicpp-special-member-functions)
+// NOLINTBEGIN(cppcoreguidelines-pro-bounds-pointer-arithmetic, cppcoreguidelines-pro-type-reinterpret-cast)
+
+struct Callable {
+  virtual ~Callable() = default;
+  virtual auto Call(VkCommandBuffer cmdBuffer) const -> void;
+};
+
+struct VkCmdDraw : Callable, BoundResources {
   static const CommandType type = CommandType::vkCmdDraw;
 
   uint32_t vertexCount;
@@ -113,7 +113,7 @@ struct VkCmdDraw : Callable {
   }
 };
 
-struct VkCmdDrawIndexed : Callable {
+struct VkCmdDrawIndexed : Callable, BoundResources {
   static const CommandType type = CommandType::vkCmdDrawIndexed;
 
   uint32_t indexCount;
@@ -128,7 +128,7 @@ struct VkCmdDrawIndexed : Callable {
   }
 };
 
-struct VkCmdDrawIndirect : Callable {
+struct VkCmdDrawIndirect : Callable, BoundResources {
   static const CommandType type = CommandType::vkCmdDrawIndirect;
 
   VkBuffer buffer;
@@ -141,7 +141,7 @@ struct VkCmdDrawIndirect : Callable {
   }
 };
 
-struct VkCmdDrawIndexedIndirect : Callable {
+struct VkCmdDrawIndexedIndirect : Callable, BoundResources {
   static const CommandType type = CommandType::vkCmdDrawIndexedIndirect;
 
   VkBuffer buffer;
@@ -154,7 +154,7 @@ struct VkCmdDrawIndexedIndirect : Callable {
   }
 };
 
-struct VkCmdDispatch : Callable {
+struct VkCmdDispatch : Callable, BoundResources {
   static const CommandType type = CommandType::vkCmdDispatch;
 
   uint32_t groupCountX;
@@ -166,7 +166,7 @@ struct VkCmdDispatch : Callable {
   }
 };
 
-struct VkCmdDispatchIndirect : Callable {
+struct VkCmdDispatchIndirect : Callable, BoundResources {
   static const CommandType type = CommandType::vkCmdDispatchIndirect;
 
   VkBuffer buffer;
@@ -463,24 +463,6 @@ struct VkCmdBindPipeline : Callable {
   }
 };
 
-struct VkCmdBeginRendering : Callable {
-  static const CommandType type = CommandType::vkCmdBeginRendering;
-
-  const VkRenderingInfo *pRenderingInfo;
-
-  auto Call(VkCommandBuffer cmdBuffer) const -> void override {
-    vkCmdBeginRendering(cmdBuffer, pRenderingInfo);
-  }
-};
-
-struct VkCmdEndRendering : Callable {
-  static const CommandType type = CommandType::vkCmdEndRendering;
-
-  auto Call(VkCommandBuffer cmdBuffer) const -> void override {
-    vkCmdEndRendering(cmdBuffer);
-  }
-};
-
 struct VkCmdBindDescriptorSets : Callable {
   static const CommandType type = CommandType::vkCmdBindDescriptorSets;
 
@@ -701,7 +683,43 @@ struct VkCmdInsertDebugUtilsLabelEXT : Callable {
 // NOLINTEND(cppcoreguidelines-special-member-functions, hicpp-special-member-functions)
 } // namespace Args
 
+template <typename T, typename... Ts>
+auto get_if_derived(std::variant<Ts...> &variant) -> T * {
+  T *result = nullptr;
+
+  std::visit(
+      [&](auto &value) -> auto {
+        using U = std::remove_cvref_t<decltype(value)>;
+
+        if constexpr (std::derived_from<U, T>) {
+          result = &value;
+        }
+      },
+      variant);
+
+  return result;
+}
+
+template <typename T, typename... Ts>
+auto get_if_derived(const std::variant<Ts...> &variant) -> T const * {
+  T const *result = nullptr;
+
+  std::visit(
+      [&](auto &value) -> auto {
+        using U = std::remove_cvref_t<decltype(value)>;
+
+        if constexpr (std::derived_from<U, T>) {
+          result = &value;
+        }
+      },
+      variant);
+
+  return result;
+}
+
 struct Command {
+  uint64_t id = UINT64_MAX;
+
   std::variant<
       Args::VkCmdDraw, Args::VkCmdDrawIndexed, Args::VkCmdDrawIndirect,
       Args::VkCmdDrawIndexedIndirect, Args::VkCmdDispatch,
@@ -713,7 +731,6 @@ struct Command {
       Args::VkCmdWriteAccelerationStructuresPropertiesKHR,
       Args::VkCmdBindIndexBuffer, Args::VkCmdBindVertexBuffers,
       Args::VkCmdSetVertexInputEXT, Args::VkCmdBindPipeline,
-      Args::VkCmdBeginRendering, Args::VkCmdEndRendering,
       Args::VkCmdBindDescriptorSets, Args::VkCmdSetViewport,
       Args::VkCmdSetScissor, Args::VkCmdSetDepthTestEnable,
       Args::VkCmdSetDepthWriteEnable, Args::VkCmdSetDepthCompareOp,
@@ -727,6 +744,14 @@ struct Command {
   [[nodiscard]] auto GetType() const -> CommandType {
     return std::visit(
         [](const auto &current) -> CommandType { return current.type; }, data);
+  }
+
+  [[nodiscard]] auto GetBoundResources() -> BoundResources * {
+    return get_if_derived<BoundResources>(data);
+  }
+
+  [[nodiscard]] auto GetBoundResources() const -> BoundResources const * {
+    return get_if_derived<BoundResources>(data);
   }
 };
 
@@ -778,8 +803,6 @@ struct VirtualCommandBuffer {
   auto BindVertexBuffers(const Args::VkCmdBindVertexBuffers &arguments) -> void;
   auto SetVertexInputEXT(const Args::VkCmdSetVertexInputEXT &arguments) -> void;
   auto BindPipeline(const Args::VkCmdBindPipeline &arguments) -> void;
-  auto BeginRendering(const Args::VkCmdBeginRendering &arguments) -> void;
-  auto EndRendering(const Args::VkCmdEndRendering &arguments) -> void;
   auto BindDescriptorSets(const Args::VkCmdBindDescriptorSets &arguments)
       -> void;
   auto SetViewport(const Args::VkCmdSetViewport &arguments) -> void;

@@ -240,6 +240,11 @@ add_library(snap_core OBJECT
     Graphics/bvh.cpp
     Graphics/shaderCache.cpp
 
+# Frame Graph
+    Graphics/FrameGraph/framegraph.cpp
+    Graphics/FrameGraph/commands.cpp
+    Graphics/FrameGraph/resourceUsage.cpp
+
 # Graphics Buffers
     Graphics/Buffers/push.cpp
     Graphics/Buffers/uniform.cpp

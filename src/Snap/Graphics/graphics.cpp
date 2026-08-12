@@ -585,14 +585,10 @@ auto Initialize(GraphicsContext &context, Window::WindowContext &wcontext,
     return Error::Create(SDL_GetError());
   }
 
-  SDL_Window *window = SDL_CreateWindow(
+  SDL_Window *window = CHECK_NULL(SDL_CreateWindow(
       wcontext.initialSettings.title.c_str(), wcontext.initialSettings.width,
       wcontext.initialSettings.height,
-      SDL_WINDOW_VULKAN | wcontext.initialSettings.GetSDLWindowFlags());
-
-  if (window == nullptr) {
-    return Error::Create("Failed to create SDL window.");
-  }
+      SDL_WINDOW_VULKAN | wcontext.initialSettings.GetSDLWindowFlags()));
 
   context.sdlWindow = window;
 
@@ -601,15 +597,11 @@ auto Initialize(GraphicsContext &context, Window::WindowContext &wcontext,
   // Get vulkan instance extensions required by SDL
   unsigned int extensionCount = 0;
   SDL_Vulkan_GetInstanceExtensions(&extensionCount);
-  if (extensionCount == 0) {
-    return Error::Create("Failed to get Vulkan instance extension count.");
-  }
+  ERR_ASSERT(extensionCount != 0)
 
   Uint32 extCount = 0;
-  const char *const *extensions = SDL_Vulkan_GetInstanceExtensions(&extCount);
-  if (extensions == nullptr) {
-    return Error::Create("Failed to get Vulkan instance extensions.");
-  }
+  const char *const *extensions =
+      CHECK_NULL(SDL_Vulkan_GetInstanceExtensions(&extCount));
 
   std::vector<const char *> extensionList;
 
@@ -643,19 +635,13 @@ auto Initialize(GraphicsContext &context, Window::WindowContext &wcontext,
   volkLoadInstance(context.instance);
 
   // Create Vulkan surface for the SDL window
-  if (!SDL_Vulkan_CreateSurface(window, context.instance, nullptr,
-                                &context.surface)) {
-    return Error::Create("Failed to create Vulkan surface.");
-  }
+  ERR_ASSERT(SDL_Vulkan_CreateSurface(window, context.instance, nullptr,
+                                      &context.surface));
 
   CHECK_ERR(FindPhysicalDevice(context));
   CHECK_ERR(FindQueueFamilies(context));
 
-  auto *windowContext = Window::GetWindowContext();
-
-  if (windowContext == nullptr) {
-    return Error::Create("No current window context found.");
-  }
+  auto *windowContext = CHECK_NULL(Window::GetWindowContext());
 
   CHECK_ERR(CreateDevice(context, deviceSettings));
   PrintDebug("called: CreateDevice...");

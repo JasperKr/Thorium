@@ -4,7 +4,7 @@
 
 namespace Graphics {
 
-Args::BoundResources::BoundResources() {
+BoundResources::BoundResources() {
   const auto &shader = DynamicRendering::GetShader();
 
   bool isCompute =
@@ -16,8 +16,10 @@ Args::BoundResources::BoundResources() {
     for (const auto &target : rendertargets) {
       if (Image::IsDepthOrStencilTexture(target.texture->GetFormat())) {
         depthStencilAttachment = target.texture->view;
+        bound.emplace_back(depthStencilAttachment);
       } else {
         colorAttachments.emplace_back(target.texture->view);
+        bound.emplace_back(target.texture->view);
       }
     }
   }
@@ -26,10 +28,12 @@ Args::BoundResources::BoundResources() {
 
   for (const auto &buffer : shaderState.userBoundBuffers) {
     boundBuffers.emplace_back(buffer.second.first->handle);
+    bound.emplace_back(buffer.second.first->handle);
   }
 
   for (const auto &texture : shaderState.userBoundTextures) {
     boundImages.emplace_back(texture.second.first->view);
+    bound.emplace_back(texture.second.first->view);
   }
 }
 

@@ -10,7 +10,7 @@
 
 namespace Graphics {
 
-struct GraphItemState {
+struct Node {
   uint64_t depth;
   uint64_t lastEdit;
 };
@@ -21,24 +21,28 @@ struct FrameGraph {
 
 private:
   VirtualCommandBuffer commandBuffer;
-  std::unordered_map<void *, GraphItemState> graphState;
+  std::unordered_map<void *, Node> graphState;
 
   std::vector<std::vector<Command>> graph;
 
-  auto GetGraphItemState(VkBuffer buffer) -> GraphItemState {
-    return graphState[(void *)buffer];
-  }
+  // All resource usages in the command buffer.
+  std::unordered_map<void *, std::vector<uint64_t>> resourceUsages;
 
-  auto GetGraphItemState(VkImage image) -> GraphItemState {
-    return graphState[(void *)image];
-  }
+  // auto GetGraphItemState(VkBuffer buffer) -> Node {
+  //   return graphState[(void *)buffer];
+  // }
+
+  // auto GetGraphItemState(VkImageView image) -> Node {
+  //   return graphState[(void *)image];
+  // }
 
   auto Compile() -> Error;
   auto BuildGraph() -> Error;
+  auto Level(uint64_t idx) -> uint64_t;
 
   auto GetResourceStateAt(VkBuffer buffer, uint64_t time)
       -> Result<ResourceState>;
-  auto GetResourceStateAt(VkImage image, uint64_t time)
+  auto GetResourceStateAt(VkImageView image, uint64_t time)
       -> Result<ResourceState>;
   auto ValidateGraph() -> Error;
 };
