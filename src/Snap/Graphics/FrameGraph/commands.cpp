@@ -123,6 +123,9 @@ DrawState::DrawState() {
 
   const auto &shaderState = shader->GetState();
 
+  // TODO: userBoundBuffers, and textures are per set-binding but never cleared
+  // We must shader->reflection.textureSlotsBySet or similar to filter the set bindings actually used
+  // By the current dispatch / draw
   for (const auto &buffer : shaderState.userBoundBuffers) {
     boundBuffers.emplace_back(BoundBuffer{
         .buffer = buffer.second.first->handle,
@@ -153,8 +156,8 @@ DrawState::DrawState() {
   pushConstants = ctx.commandBuffer->GetGraphState().pushConstants;
 }
 
-auto GetReads(Command &command) -> std::vector<void *> {
-  auto *bound = get_if_derived<BoundResources>(command.data);
+auto GetReads(const Command &command) -> std::vector<void *> {
+  const auto *bound = get_if_derived<BoundResources>(command.data);
 
   if (bound != nullptr) {
     return bound->reads;
@@ -163,8 +166,8 @@ auto GetReads(Command &command) -> std::vector<void *> {
   return {};
 }
 
-auto GetWrites(Command &command) -> std::vector<void *> {
-  auto *bound = get_if_derived<BoundResources>(command.data);
+auto GetWrites(const Command &command) -> std::vector<void *> {
+  const auto *bound = get_if_derived<BoundResources>(command.data);
 
   if (bound != nullptr) {
     return bound->writes;

@@ -31,7 +31,7 @@ auto FrameGraph::Submit(const VirtualCommandBuffer &commands) -> Error {
 
 auto FrameGraph::ValidateGraph() -> Error { return {}; } // NOLINT
 
-auto FrameGraph::GetResourceStateAt(VkBuffer buffer, uint64_t time)
+auto FrameGraph::GetResourceStateAt(VkBuffer buffer, CommandID time)
     -> Result<ResourceState> {
   auto updates = commandBuffer.bufferStateUpdates[buffer];
 
@@ -41,7 +41,7 @@ auto FrameGraph::GetResourceStateAt(VkBuffer buffer, uint64_t time)
   return iter == updates.begin() ? ResourceState{} : std::prev(iter)->first;
 }
 
-auto FrameGraph::GetResourceStateAt(VkImage image, uint64_t time)
+auto FrameGraph::GetResourceStateAt(VkImage image, CommandID time)
     -> Result<ResourceState> {
   auto updates = commandBuffer.imageStateUpdates[image];
 
@@ -216,17 +216,50 @@ auto FrameGraph::MapResourceUsages() -> Error {
       continue;
     }
 
-    auto reads = GetReadsInternal(command);
-    boundState->reads = std::move(reads);
+    {
+      auto reads = std::move(GetReadsInternal(command));
 
-    auto writes = GetWritesInternal(command);
-    boundState->writes = std::move(writes);
+      std::ranges::sort(reads);
+      auto [first, last] = std::ranges::unique(reads);
+      reads.erase(first, last);
+      boundState->reads = std::move(reads);
+    }
+
+    {
+      auto writes = std::move(GetWritesInternal(command));
+
+      std::ranges::sort(writes);
+      auto [first, last] = std::ranges::unique(writes);
+      writes.erase(first, last);
+      boundState->writes = std::move(writes);
+    }
   }
 
   return {};
 }
 
-auto FrameGraph::Level(uint64_t idx) -> uint64_t {
+inline auto GetParentIndex(CommandID idx, const std::vector<CommandID> &usages)
+    -> CommandID {
+  // binary search resource usage
+  auto iter = std::ranges::lower_bound(usages, idx);
+
+  // iter == usages.end() -> no write found
+  // *iter != idx -> found write, but not by us
+  if (iter == usages.end() || *iter != idx) {
+    return UINT16_MAX;
+  }
+
+  auto index = std::distance(usages.begin(), iter); // Our usage index
+
+  // if we are the first write, we do not have a parent.
+  if (index == 0) {
+    return UINT16_MAX;
+  }
+
+  return usages[index - 1];
+}
+
+auto FrameGraph::Level(CommandID idx) -> CommandLevel {
   auto &command = commandBuffer.commands.at(idx);
   assert(command.id == idx);
 
@@ -234,48 +267,43 @@ auto FrameGraph::Level(uint64_t idx) -> uint64_t {
     return command.level;
   }
 
-  const auto reads = GetReads(command);
-  if (reads.empty()) {
-    command.level = 0;
-    return 0;
-  }
+  const auto &reads = GetReads(command);
+  const auto &writes = GetWrites(command);
 
-  int64_t maxDepth = -1;
+  CommandLevel maxDepth = 0;
+  bool hasDependency = false;
 
-  for (const auto &ptr : reads) {
-    auto &usages = resourceWrites[ptr];
+  auto addDependencies = [&](const auto &resources, auto &usageMap) -> auto {
+    for (const auto &ptr : resources) {
+      auto &usages = usageMap[ptr];
+      auto parent = GetParentIndex(idx, usages);
 
-    // binary search resource usage
-    auto iter = std::ranges::lower_bound(usages, idx);
+      if (parent == UINT16_MAX) {
+        continue;
+      }
 
-    if (iter == usages.end()) {
-      continue;
+      dependencies.emplace((uint32_t(parent) << UINT16_WIDTH) | idx);
+
+      maxDepth = std::max(maxDepth, Level(parent));
+      hasDependency = true;
     }
+  };
 
-    auto index = std::distance(usages.begin(), iter); // Our usage index
-    if (index == 0) {
-      continue;
-    }
+  addDependencies(reads, resourceWrites);  // RAW
+  addDependencies(writes, resourceWrites); // WAW
+  addDependencies(writes, resourceReads);  // WAR
 
-    auto parentIndex = usages[index - 1];
+  command.level = hasDependency ? maxDepth + 1 : 0;
 
-    dependencies.emplace(parentIndex << UINT32_WIDTH | idx);
-
-    auto parentDepth = static_cast<int64_t>(Level(parentIndex));
-
-    maxDepth = std::max<int64_t>(maxDepth, parentDepth);
-  }
-
-  command.level = maxDepth + 1;
-
-  return maxDepth + 1;
+  return command.level;
 }
 
 auto FrameGraph::BuildGraph() -> Error {
-  uint64_t idx = 0;
+  CommandID idx = 0;
 
   for (auto &command : commandBuffer.commands) {
     command.id = idx++;
+    ERR_ASSERT(idx != UINT16_MAX);
 
     const auto &reads = GetReads(command);
     for (const auto &ptr : reads) {
@@ -288,8 +316,7 @@ auto FrameGraph::BuildGraph() -> Error {
     }
   }
 
-  uint64_t maxLevel = 0;
-
+  CommandLevel maxLevel = 0;
   for (const auto &command : commandBuffer.commands) {
     maxLevel = std::max(maxLevel, Level(command.id));
   }
@@ -300,7 +327,7 @@ auto FrameGraph::BuildGraph() -> Error {
     ERR_ASSERT(command.level != InvalidDepth);
     ERR_ASSERT(command.level < maxLevel + 1);
 
-    graph[command.level].emplace_back(command);
+    graph[command.level].emplace_back(command.id);
   }
 
   return {};
@@ -321,17 +348,56 @@ auto FrameGraph::Compile() -> Error {
   std::stringstream stream;
   stream << "digraph FrameGraph {\n";
   stream << "rankdir=LR;\n";
+  stream << R"(
+      bgcolor="#1e1e1e";
+
+    node [
+        color="#888888",
+        fontcolor="white",
+        style="filled",
+        fillcolor="#2d2d2d"
+    ];
+
+    edge [
+        color="#aaaaaa",
+        fontcolor="white"
+    ];
+  )";
+
+  const static bool ExportRWLabels = false;
 
   for (const auto &command : commandBuffer.commands) {
-    stream << command.id << " [label=\""
-           << CommandTypeEnumHelper.ToString(command.GetType()) << "\"];\n";
+    if (ExportRWLabels) {
+      auto reads = GetReads(command);
+      auto writes = GetWrites(command);
+
+      std::stringstream readStr;
+      std::stringstream writeStr;
+
+      for (void *ptr : reads) {
+        readStr << ptr;
+        readStr << " ";
+      }
+
+      for (void *ptr : writes) {
+        writeStr << ptr;
+        writeStr << " ";
+      }
+
+      stream << std::format("{} [label=\"{}\nR: {}\nW: {}\"];\n", command.id,
+                            CommandTypeEnumHelper.ToString(command.GetType()),
+                            readStr.str(), writeStr.str());
+    } else {
+      stream << std::format("{} [label=\"{}\"];\n", command.id,
+                            CommandTypeEnumHelper.ToString(command.GetType()));
+    }
   }
 
   for (const auto dependency : dependencies) {
-    // parentIndex << UINT32_WIDTH | idx
+    // parentIndex << UINT16_WIDTH | idx
 
-    uint32_t parent = (dependency >> UINT32_WIDTH) & UINT32_MAX;
-    uint32_t child = dependency & UINT32_MAX;
+    uint32_t parent = (dependency >> UINT16_WIDTH) & UINT16_MAX;
+    uint32_t child = dependency & UINT16_MAX;
 
     stream << "\"" << parent << "\" -> \"" << child << "\";\n";
   }

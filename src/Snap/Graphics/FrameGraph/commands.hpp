@@ -16,6 +16,11 @@
 #include <vulkan/vulkan_core.h>
 namespace Graphics {
 
+// 65K events per frame should be more than enough
+// Loading bistro in a single frame takes < 15K events, so it should be fine.
+using CommandID = uint16_t;
+static constexpr uint16_t InvalidCommandID = UINT16_MAX;
+
 // We have a virtual command buffer per-thread
 // Each command buffer stores the thread's recorded commands,
 // later, they will be combined in to a final large frame virtual command buffer
@@ -831,8 +836,10 @@ using ArgVariants = std::variant<
     Args::VkCmdClearAttachments>;
 
 struct Command {
-  uint64_t id = UINT64_MAX;
-  uint64_t level = UINT64_MAX; // Also defined in framegraph.cpp as InvalidDepth
+  CommandID id = InvalidCommandID;
+
+  // Also defined in framegraph.cpp as InvalidDepth
+  CommandID level = UINT16_MAX;
 
   ArgVariants data;
 
@@ -856,17 +863,17 @@ struct Command {
 struct BufferStateUpdate {
   VkBuffer buffer;
   ResourceState state;
-  uint64_t time;
+  CommandID time;
 };
 
 struct ImageStateUpdate {
   VkImage image;
   ResourceState state;
-  uint64_t time;
+  CommandID time;
 };
 
-auto GetReads(Command &command) -> std::vector<void *>;
-auto GetWrites(Command &command) -> std::vector<void *>;
+auto GetReads(const Command &command) -> std::vector<void *>;
+auto GetWrites(const Command &command) -> std::vector<void *>;
 
 struct VirtualCommandBuffer {
   friend struct FrameGraph;

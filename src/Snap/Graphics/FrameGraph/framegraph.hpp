@@ -11,39 +11,35 @@
 
 namespace Graphics {
 
-struct Node {
-  uint64_t depth;
-  uint64_t lastEdit;
-};
+using CommandLevel = uint16_t;
 
 struct FrameGraph {
   // also defined in command.hpp
-  static inline const uint64_t InvalidDepth = UINT64_MAX;
+  static inline const CommandLevel InvalidDepth = UINT16_MAX;
 
   auto Submit(const VirtualCommandBuffer &commands) -> Error;
   auto Write(VkCommandBuffer cmdBuffer) -> Error;
 
 private:
   VirtualCommandBuffer commandBuffer;
-  std::unordered_map<void *, Node> graphState;
 
-  std::vector<std::vector<Command>> graph;
+  std::vector<std::vector<CommandID>> graph;
 
   // All resource usages in the command buffer.
-  std::unordered_map<void *, std::vector<uint64_t>> resourceReads;
-  std::unordered_map<void *, std::vector<uint64_t>> resourceWrites;
+  std::unordered_map<void *, std::vector<CommandID>> resourceReads;
+  std::unordered_map<void *, std::vector<CommandID>> resourceWrites;
 
   // Temporary data for Graphviz
-  std::unordered_set<uint64_t> dependencies; // a | b sorted asc
+  std::unordered_set<uint32_t> dependencies; // a | b sorted asc
 
   auto MapResourceUsages() -> Error;
   auto Compile() -> Error;
   auto BuildGraph() -> Error;
-  auto Level(uint64_t idx) -> uint64_t;
+  auto Level(CommandID idx) -> CommandLevel;
 
-  auto GetResourceStateAt(VkBuffer buffer, uint64_t time)
+  auto GetResourceStateAt(VkBuffer buffer, CommandID time)
       -> Result<ResourceState>;
-  auto GetResourceStateAt(VkImage image, uint64_t time)
+  auto GetResourceStateAt(VkImage image, CommandID time)
       -> Result<ResourceState>;
   auto ValidateGraph() -> Error;
 };

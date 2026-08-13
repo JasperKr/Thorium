@@ -436,6 +436,7 @@ struct FlattenedReflection {
 
   uint32_t size{}; // Not stride
 };
+
 struct ShaderReflection {
   std::vector<ResourceInfo> resources;
   std::unordered_map<uint64_t, ResourceInfo> slotToInfo;
