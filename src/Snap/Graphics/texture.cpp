@@ -480,7 +480,8 @@ auto Texture::FromFile(const GraphicsContext &context, const char *path,
 
   if (mipmaps == TextureMipmapOption::Init &&
       !Image::IsCompressedTexture(imageData->GetFormat())) {
-    CHECK_ERR(texture->GenerateMipmaps(context));
+    auto &ctx = GetThreadContext();
+    ctx.commandBuffer->MipmapTexture({texture.get()});
   }
 
   return texture;
@@ -520,7 +521,8 @@ auto Texture::FromMemory(const GraphicsContext &context,
   CHECK_ERR(texture->SetPixels(context, imageData, 0, 0));
 
   if (mipmaps == TextureMipmapOption::Init) {
-    CHECK_ERR(texture->GenerateMipmaps(context));
+    auto &ctx = GetThreadContext();
+    ctx.commandBuffer->MipmapTexture({texture.get()});
   }
 
   return texture;
@@ -799,7 +801,7 @@ auto ImageMemory::TransitionLayout(const GraphicsContext &context,
   DynamicRendering::EndRendering(context);
 
   // vkCmdPipelineBarrier2(commandBuffer, &dep);
-  commandBuffer->PipelineBarrier2({&dep});
+  // commandBuffer->PipelineBarrier2({&dep});
 
   state.currentLayout = layout;
 
@@ -1522,13 +1524,13 @@ Texture::~Texture() {
 
 std::atomic<VkDeviceSize> Texture::TotalAllocatedMemory{};
 
-auto Texture::GenerateMipmaps(const GraphicsContext &context) const -> Error {
+auto Texture::GenerateMipmaps(const GraphicsContext &context,
+                              VkCommandBuffer commandBuffer) const -> Error {
   if (levelCount <= 1) {
     return Error::Create("Texture does not have multiple mip levels for "
                          "mipmap generation.");
   }
 
-  auto *commandBuffer = GetCommandBuffer();
   if (commandBuffer == nullptr) {
     return Error::Create("Failed to get command buffer for mipmap generation.");
   }
@@ -1572,8 +1574,7 @@ auto Texture::GenerateMipmaps(const GraphicsContext &context) const -> Error {
   barrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
   barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
 
-  // vkCmdPipelineBarrier2(commandBuffer, &dep);
-  commandBuffer->PipelineBarrier2({&dep});
+  vkCmdPipelineBarrier2(commandBuffer, &dep);
 
   barrier.subresourceRange.levelCount = 1;
 
@@ -1597,8 +1598,7 @@ auto Texture::GenerateMipmaps(const GraphicsContext &context) const -> Error {
     barrier.subresourceRange.baseMipLevel = i - 1;
     // [src, dst, dst, dst, ...]
 
-    // vkCmdPipelineBarrier2(commandBuffer, &dep);
-    commandBuffer->PipelineBarrier2({&dep});
+    vkCmdPipelineBarrier2(commandBuffer, &dep);
 
     VkImageBlit blit = {};
     blit.srcSubresource.aspectMask =
@@ -1620,12 +1620,9 @@ auto Texture::GenerateMipmaps(const GraphicsContext &context) const -> Error {
                           .y = static_cast<int32_t>(mipExtent.height),
                           .z = static_cast<int32_t>(mipExtent.depth)};
 
-    // vkCmdBlitImage(commandBuffer, imageMemory->image, VK_IMAGE_LAYOUT_GENERAL,
-    //                imageMemory->image, VK_IMAGE_LAYOUT_GENERAL, 1, &blit,
-    //                VK_FILTER_LINEAR);
-    commandBuffer->BlitImage({imageMemory->image, VK_IMAGE_LAYOUT_GENERAL,
-                              imageMemory->image, VK_IMAGE_LAYOUT_GENERAL, 1,
-                              &blit, VK_FILTER_LINEAR});
+    vkCmdBlitImage(commandBuffer, imageMemory->image, VK_IMAGE_LAYOUT_GENERAL,
+                   imageMemory->image, VK_IMAGE_LAYOUT_GENERAL, 1, &blit,
+                   VK_FILTER_LINEAR);
   }
 
   // The entire mip chain is now in transfer src, except for mip count - 1, which is in transfer dst
@@ -1640,8 +1637,7 @@ auto Texture::GenerateMipmaps(const GraphicsContext &context) const -> Error {
   barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
   barrier.subresourceRange.baseMipLevel = imageMemory->mipmapcount - 1;
 
-  // vkCmdPipelineBarrier2(commandBuffer, &dep);
-  commandBuffer->PipelineBarrier2({&dep});
+  vkCmdPipelineBarrier2(commandBuffer, &dep);
 
   state.lastUsage = TextureUsage::TransferSrc;
   state.lastPipelineStage = VK_PIPELINE_STAGE_2_TRANSFER_BIT;

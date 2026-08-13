@@ -11,8 +11,10 @@
 #include <cstdint>
 #include <iterator>
 #include <ostream>
+#include <slang/slang.h>
 #include <sstream>
 #include <unordered_map>
+#include <utility>
 #include <variant>
 #include <vector>
 #include <vulkan/vulkan_core.h>
@@ -49,6 +51,181 @@ auto FrameGraph::GetResourceStateAt(VkImage image, uint64_t time)
   return iter == updates.begin() ? ResourceState{} : std::prev(iter)->first;
 }
 
+inline auto GetReadsFromDrawState(DrawState &state) -> std::vector<void *> {
+  std::vector<void *> reads;
+
+  for (const auto &buffer : state.boundBuffers) {
+    if (buffer.access == SLANG_RESOURCE_ACCESS_READ ||
+        buffer.access == SLANG_RESOURCE_ACCESS_READ_WRITE) {
+      reads.emplace_back(buffer.buffer);
+    }
+  }
+
+  for (const auto &image : state.boundImages) {
+    if (image.access == SLANG_RESOURCE_ACCESS_READ ||
+        image.access == SLANG_RESOURCE_ACCESS_READ_WRITE) {
+      reads.emplace_back(image.image);
+    }
+  }
+
+  for (const auto &accel : state.boundAccelerationStructures) {
+    reads.emplace_back(accel);
+  }
+
+  for (const auto &vertexBuffer : state.vertexBuffers) {
+    reads.emplace_back(vertexBuffer);
+  }
+
+  if (state.indexBuffer != VK_NULL_HANDLE) {
+    reads.emplace_back(state.indexBuffer);
+  }
+
+  for (const auto &colorAttachment : state.colorAttachments) {
+    reads.emplace_back(colorAttachment);
+  }
+
+  if (state.depthStencilAttachment != VK_NULL_HANDLE) {
+    reads.emplace_back(state.depthStencilAttachment);
+  }
+
+  return reads;
+}
+
+inline auto GetReadsInternal(Command &command) -> std::vector<void *> {
+  auto *drawState = get_if_derived<DrawState>(command.data);
+
+  if (drawState != nullptr) {
+    return GetReadsFromDrawState(*drawState);
+  }
+
+  if (std::holds_alternative<Args::VkCmdBlitImage>(command.data)) {
+    const auto &args = std::get<Args::VkCmdBlitImage>(command.data);
+    return {args.srcImage};
+  }
+
+  if (std::holds_alternative<Args::MipmapTexture>(command.data)) {
+    const auto &args = std::get<Args::MipmapTexture>(command.data);
+    return {args.texture->imageMemory->image};
+  }
+
+  if (std::holds_alternative<Args::VkCmdCopyBuffer>(command.data)) {
+    const auto &args = std::get<Args::VkCmdCopyBuffer>(command.data);
+    return {args.srcBuffer};
+  }
+
+  if (std::holds_alternative<Args::VkCmdCopyImage>(command.data)) {
+    const auto &args = std::get<Args::VkCmdCopyImage>(command.data);
+    return {args.srcImage};
+  }
+
+  if (std::holds_alternative<Args::VkCmdCopyBufferToImage>(command.data)) {
+    const auto &args = std::get<Args::VkCmdCopyBufferToImage>(command.data);
+    return {args.srcBuffer};
+  }
+
+  if (std::holds_alternative<Args::VkCmdCopyImageToBuffer>(command.data)) {
+    const auto &args = std::get<Args::VkCmdCopyImageToBuffer>(command.data);
+    return {args.srcImage};
+  }
+
+  return {};
+}
+
+inline auto GetWritesFromDrawState(DrawState &state) -> std::vector<void *> {
+  std::vector<void *> writes;
+
+  for (const auto &buffer : state.boundBuffers) {
+    if (buffer.access == SLANG_RESOURCE_ACCESS_WRITE ||
+        buffer.access == SLANG_RESOURCE_ACCESS_READ_WRITE) {
+      writes.emplace_back(buffer.buffer);
+    }
+  }
+
+  for (const auto &image : state.boundImages) {
+    if (image.access == SLANG_RESOURCE_ACCESS_WRITE ||
+        image.access == SLANG_RESOURCE_ACCESS_READ_WRITE) {
+      writes.emplace_back(image.image);
+    }
+  }
+
+  for (const auto &colorAttachment : state.colorAttachments) {
+    writes.emplace_back(colorAttachment);
+  }
+
+  if (state.depthStencilAttachment != VK_NULL_HANDLE) {
+    writes.emplace_back(state.depthStencilAttachment);
+  }
+
+  return writes;
+}
+
+inline auto GetWritesInternal(Command &command) -> std::vector<void *> {
+  auto *drawState = get_if_derived<DrawState>(command.data);
+
+  if (drawState != nullptr) {
+    return GetWritesFromDrawState(*drawState);
+  }
+
+  if (std::holds_alternative<Args::VkCmdBlitImage>(command.data)) {
+    const auto &args = std::get<Args::VkCmdBlitImage>(command.data);
+    return {args.dstImage};
+  }
+
+  if (std::holds_alternative<Args::MipmapTexture>(command.data)) {
+    const auto &args = std::get<Args::MipmapTexture>(command.data);
+    return {args.texture->imageMemory->image};
+  }
+
+  if (std::holds_alternative<Args::VkCmdCopyBuffer>(command.data)) {
+    const auto &args = std::get<Args::VkCmdCopyBuffer>(command.data);
+    return {args.dstBuffer};
+  }
+
+  if (std::holds_alternative<Args::VkCmdCopyImage>(command.data)) {
+    const auto &args = std::get<Args::VkCmdCopyImage>(command.data);
+    return {args.dstImage};
+  }
+
+  if (std::holds_alternative<Args::VkCmdCopyBufferToImage>(command.data)) {
+    const auto &args = std::get<Args::VkCmdCopyBufferToImage>(command.data);
+    return {args.dstImage};
+  }
+
+  if (std::holds_alternative<Args::VkCmdCopyImageToBuffer>(command.data)) {
+    const auto &args = std::get<Args::VkCmdCopyImageToBuffer>(command.data);
+    return {args.dstBuffer};
+  }
+
+  if (std::holds_alternative<Args::VkCmdFillBuffer>(command.data)) {
+    const auto &args = std::get<Args::VkCmdFillBuffer>(command.data);
+    return {args.dstBuffer};
+  }
+
+  // if (std::holds_alternative<Args::VkCmdClearAttachments>(command.data)) {
+  //   const auto &args = std::get<Args::VkCmdClearAttachments>(command.data);
+  // }
+
+  return {};
+}
+
+auto FrameGraph::MapResourceUsages() -> Error {
+  for (auto &command : commandBuffer.commands) {
+    auto *boundState = get_if_derived<BoundResources>(command.data);
+
+    if (boundState == nullptr) {
+      continue;
+    }
+
+    auto reads = GetReadsInternal(command);
+    boundState->reads = std::move(reads);
+
+    auto writes = GetWritesInternal(command);
+    boundState->writes = std::move(writes);
+  }
+
+  return {};
+}
+
 auto FrameGraph::Level(uint64_t idx) -> uint64_t {
   auto &command = commandBuffer.commands.at(idx);
   assert(command.id == idx);
@@ -57,17 +234,16 @@ auto FrameGraph::Level(uint64_t idx) -> uint64_t {
     return command.level;
   }
 
-  const auto boundResources = GetDependencies(command);
-  if (boundResources.empty()) {
+  const auto reads = GetReads(command);
+  if (reads.empty()) {
     command.level = 0;
-
     return 0;
   }
 
   int64_t maxDepth = -1;
 
-  for (const auto &ptr : boundResources) {
-    auto &usages = resourceUsages[ptr];
+  for (const auto &ptr : reads) {
+    auto &usages = resourceWrites[ptr];
 
     // binary search resource usage
     auto iter = std::ranges::lower_bound(usages, idx);
@@ -101,13 +277,14 @@ auto FrameGraph::BuildGraph() -> Error {
   for (auto &command : commandBuffer.commands) {
     command.id = idx++;
 
-    const auto &boundResources = GetDependencies(command);
-    if (boundResources.empty()) {
-      continue;
+    const auto &reads = GetReads(command);
+    for (const auto &ptr : reads) {
+      resourceReads[ptr].emplace_back(command.id);
     }
 
-    for (const auto &ptr : boundResources) {
-      resourceUsages[ptr].emplace_back(command.id);
+    const auto &writes = GetWrites(command);
+    for (const auto &ptr : writes) {
+      resourceWrites[ptr].emplace_back(command.id);
     }
   }
 
@@ -134,6 +311,7 @@ auto FrameGraph::Compile() -> Error {
   auto time = Timer::GetTime();
 
   CHECK_ERR(ValidateGraph());
+  CHECK_ERR(MapResourceUsages());
   CHECK_ERR(BuildGraph());
 
   auto time2 = Timer::GetTime();
@@ -175,9 +353,9 @@ auto FrameGraph::Write(VkCommandBuffer cmdBuffer) -> Error {
   vkBeginCommandBuffer(cmdBuffer, &beginInfo);
 
   for (const auto &command : commandBuffer.commands) {
-    std::visit(
-        [cmdBuffer](const auto &cmdData) -> void { cmdData.Call(cmdBuffer); },
-        command.data);
+    CHECK_ERR(std::visit([cmdBuffer](const auto &cmdData)
+                             -> Error { return cmdData.Call(cmdBuffer); },
+                         command.data));
   }
 
   vkEndCommandBuffer(cmdBuffer);

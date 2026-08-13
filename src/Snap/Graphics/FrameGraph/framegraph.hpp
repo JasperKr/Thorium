@@ -6,7 +6,6 @@
 #include <cstdint>
 #include <unordered_map>
 #include <unordered_set>
-#include <utility>
 #include <vector>
 #include <vulkan/vulkan_core.h>
 
@@ -31,11 +30,13 @@ private:
   std::vector<std::vector<Command>> graph;
 
   // All resource usages in the command buffer.
-  std::unordered_map<void *, std::vector<uint64_t>> resourceUsages;
+  std::unordered_map<void *, std::vector<uint64_t>> resourceReads;
+  std::unordered_map<void *, std::vector<uint64_t>> resourceWrites;
 
   // Temporary data for Graphviz
   std::unordered_set<uint64_t> dependencies; // a | b sorted asc
 
+  auto MapResourceUsages() -> Error;
   auto Compile() -> Error;
   auto BuildGraph() -> Error;
   auto Level(uint64_t idx) -> uint64_t;

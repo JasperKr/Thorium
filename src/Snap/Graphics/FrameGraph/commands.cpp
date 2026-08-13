@@ -3,7 +3,6 @@
 #include "Graphics/graphics.hpp"
 #include "Modules/Helpers/hasher.hpp"
 #include "Modules/image.hpp"
-#include <variant>
 #include <vector>
 
 namespace Graphics {
@@ -104,7 +103,7 @@ auto GraphState::GetHash() const -> uint64_t {
   return hash;
 }
 
-BoundResources::BoundResources() {
+DrawState::DrawState() {
   const auto &shader = DynamicRendering::GetShader();
 
   bool isCompute =
@@ -116,10 +115,8 @@ BoundResources::BoundResources() {
     for (const auto &target : rendertargets) {
       if (Image::IsDepthOrStencilTexture(target.texture->GetFormat())) {
         depthStencilAttachment = target.texture->imageMemory->image;
-        bound.emplace_back(depthStencilAttachment);
       } else {
         colorAttachments.emplace_back(target.texture->imageMemory->image);
-        bound.emplace_back(target.texture->imageMemory->image);
       }
     }
   }
@@ -127,13 +124,17 @@ BoundResources::BoundResources() {
   const auto &shaderState = shader->GetState();
 
   for (const auto &buffer : shaderState.userBoundBuffers) {
-    boundBuffers.emplace_back(buffer.second.first->handle);
-    bound.emplace_back(buffer.second.first->handle);
+    boundBuffers.emplace_back(BoundBuffer{
+        .buffer = buffer.second.first->handle,
+        .access = buffer.second.second->access,
+    });
   }
 
   for (const auto &texture : shaderState.userBoundTextures) {
-    boundImages.emplace_back(texture.second.first->imageMemory->image);
-    bound.emplace_back(texture.second.first->imageMemory->image);
+    boundImages.emplace_back(BoundImage{
+        .image = texture.second.first->imageMemory->image,
+        .access = texture.second.second->access,
+    });
   }
 
   for (const auto &accelerationStructure :
@@ -144,28 +145,29 @@ BoundResources::BoundResources() {
 
   const auto &ctx = GetThreadContext();
 
-  vertexBuffers.insert(vertexBuffers.begin(), boundBuffers.begin(),
-                       boundBuffers.end());
+  vertexBuffers.insert(vertexBuffers.begin(), ctx.boundVertexBuffers.begin(),
+                       ctx.boundVertexBuffers.end());
   indexBuffer = ctx.boundIndexBuffer;
 
   stateID = ctx.commandBuffer->GetStateID();
   pushConstants = ctx.commandBuffer->GetGraphState().pushConstants;
 }
 
-auto GetDependencies(Command &command) -> std::vector<void *> {
+auto GetReads(Command &command) -> std::vector<void *> {
   auto *bound = get_if_derived<BoundResources>(command.data);
 
   if (bound != nullptr) {
-    return bound->bound;
+    return bound->reads;
   }
 
-  if (std::holds_alternative<Args::VkCmdBlitImage>(command.data)) {
-    const auto &blit = std::get<Args::VkCmdBlitImage>(command.data);
+  return {};
+}
 
-    return {
-        blit.srcImage,
-        blit.dstImage,
-    };
+auto GetWrites(Command &command) -> std::vector<void *> {
+  auto *bound = get_if_derived<BoundResources>(command.data);
+
+  if (bound != nullptr) {
+    return bound->writes;
   }
 
   return {};
@@ -235,8 +237,8 @@ auto VirtualCommandBuffer::CopyImageToBuffer(
   AddCommand(Command(arguments));
 }
 
-auto VirtualCommandBuffer::PipelineBarrier2(
-    const Args::VkCmdPipelineBarrier2 &arguments) -> void {
+auto VirtualCommandBuffer::MipmapTexture(const Args::MipmapTexture &arguments)
+    -> void {
   AddCommand(Command(arguments));
 }
 

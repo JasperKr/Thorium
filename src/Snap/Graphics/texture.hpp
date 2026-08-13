@@ -191,7 +191,8 @@ struct Texture : Object, Identifiable {
 
   auto CopyTo(GraphicsContext &context, Texture *texture, VkBuffer buffer)
       -> Error;
-  auto GenerateMipmaps(const GraphicsContext &context) const -> Error;
+  auto GenerateMipmaps(const GraphicsContext &context,
+                       VkCommandBuffer commandBuffer) const -> Error;
   static auto FromFile(const GraphicsContext &context, const char *path,
                        VkImageUsageFlags usage = 0,
                        TextureMipmapOption mipmaps = {})
