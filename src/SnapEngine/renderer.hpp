@@ -15,6 +15,7 @@
 #include "Renderer/bloomManager.hpp"
 #include "Renderer/prefilterManager.hpp"
 #include "Renderer/shaderManager.hpp"
+#include "bufferUploadManager.hpp"
 #include "material.hpp"
 #include <cstddef>
 #include <cstdint>
@@ -233,12 +234,17 @@ struct Renderer {
     return PMJ02bnSamples;
   }
 
+  auto GetMaterialUploadManager() -> BufferUploadManager & {
+    return MaterialUploadManager;
+  }
+
 private:
   Material NoMaterial;
   Material DefaultMaterial;
 
   Ref<Graphics::StructuredBuffer> MaterialsBuffer;
   std::unordered_set<size_t> UsedMaterialIndices;
+  BufferUploadManager MaterialUploadManager;
 
   Ref<Graphics::StructuredBuffer> ModelTransformsBuffer;
   size_t ModelTransformBufferElementCount = 0;

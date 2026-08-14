@@ -29,13 +29,23 @@ private:
   std::unordered_map<void *, std::vector<CommandID>> resourceReads;
   std::unordered_map<void *, std::vector<CommandID>> resourceWrites;
 
+  // Direct dependencies per command, after transitive reduction.
+  std::vector<std::vector<CommandID>> commandParents;
+
+  // Scratch data for the reachability walk in ReduceParents.
+  std::vector<uint32_t> ancestorStamps;
+  std::vector<CommandID> ancestorStack;
+
   // Temporary data for Graphviz
   std::unordered_set<uint32_t> dependencies; // a | b sorted asc
 
   auto MapResourceUsages() -> Error;
+  auto PreCompile() -> Error;
   auto Compile() -> Error;
   auto BuildGraph() -> Error;
-  auto Level(CommandID idx) -> CommandLevel;
+  auto MarkAncestors(CommandID from, CommandID floor, uint32_t stamp) -> void;
+  auto ReduceParents(CommandID idx, const std::vector<CommandID> &candidates)
+      -> void;
 
   auto GetResourceStateAt(VkBuffer buffer, CommandID time)
       -> Result<ResourceState>;

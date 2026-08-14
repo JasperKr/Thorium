@@ -11,6 +11,7 @@
 #include "Modules/Math/math.hpp"
 #include "Modules/Math/mathTypes.hpp"
 #include "Modules/Math/vector.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Modules/window.hpp"

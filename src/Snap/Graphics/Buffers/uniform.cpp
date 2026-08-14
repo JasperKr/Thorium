@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "Modules/Helpers/utils.hpp"
+#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "vulkan/vulkan_core.h"
 

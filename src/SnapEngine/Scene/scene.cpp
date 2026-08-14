@@ -1009,6 +1009,12 @@ Scene::Scene(std::string name) : name(std::move(name)) {
           lastUpdateResult = error;
           return;
         }
+
+        error = renderer.GetMaterialUploadManager().Flush(ctx);
+        if (Error::IsError(error)) {
+          lastUpdateResult = error;
+          return;
+        }
       });
 }
 

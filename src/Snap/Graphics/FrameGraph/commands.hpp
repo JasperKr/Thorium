@@ -225,7 +225,7 @@ struct DrawState {
 
   // no need for a BoundImage, since usage is implied.
   std::vector<VkImage> colorAttachments;
-  VkImage depthStencilAttachment;
+  VkImage depthStencilAttachment = VK_NULL_HANDLE;
 
   std::vector<VkBuffer> vertexBuffers;
   VkBuffer indexBuffer = VK_NULL_HANDLE;
@@ -286,7 +286,7 @@ struct VkCmdDrawIndexed : Callable, DrawState, BoundResources {
 struct VkCmdDrawIndirect : Callable, DrawState, BoundResources {
   static const CommandType type = CommandType::vkCmdDrawIndirect;
 
-  VkBuffer buffer;
+  VkBuffer buffer; // TODO: Add these to reads.
   VkDeviceSize offset;
   uint32_t drawCount;
   uint32_t stride;
