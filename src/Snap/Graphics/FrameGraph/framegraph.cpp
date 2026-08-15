@@ -2,6 +2,7 @@
 #include "Graphics/FrameGraph/commands.hpp"
 #include "Graphics/FrameGraph/resourceUsage.hpp"
 #include "Libraries/vma.hpp"
+#include "Modules/Helpers/utils.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/filesystem.hpp"
@@ -11,6 +12,7 @@
 #include <cstdint>
 #include <iterator>
 #include <ostream>
+#include <public/tracy/Tracy.hpp>
 #include <slang/slang.h>
 #include <sstream>
 #include <unordered_map>
@@ -301,6 +303,7 @@ auto FrameGraph::PreCompile() -> Error {
     command.id = idx++;
     ERR_ASSERT(idx != UINT16_MAX);
 
+#if OUTPUT_DEBUG_GRAPH
     const auto *bound = get_if_derived<BoundResources>(command.data);
     if (bound != nullptr) {
       for (const auto &ptr : bound->reads) {
@@ -311,6 +314,7 @@ auto FrameGraph::PreCompile() -> Error {
         resourceWrites[ptr].emplace_back(command.id);
       }
     }
+#endif
   }
 
   const auto commandCount = commandBuffer.commands.size();
@@ -418,12 +422,15 @@ auto FrameGraph::BuildGraph() -> Error {
     ERR_ASSERT(command.level != InvalidDepth);
     ERR_ASSERT(command.level < maxLevel + 1);
 
-    graph[command.level].emplace_back(command.id);
+    graph[command.level].commands.emplace_back(command.id);
 
+#if OUTPUT_DEBUG_GRAPH
     for (const auto parent : commandParents[command.id]) {
       dependencies.emplace((uint32_t(parent) << UINT16_WIDTH) | command.id);
-      edgeCount++;
     }
+#endif
+
+    edgeCount += commandParents[command.id].size();
   }
   auto time3 = Timer::GetTime();
 
@@ -435,23 +442,8 @@ auto FrameGraph::BuildGraph() -> Error {
   return {};
 }
 
-// NOLINTNEXTLINE
-auto FrameGraph::Compile() -> Error {
-  PrintAlways("Command count: {}", commandBuffer.commands.size());
-  auto time = Timer::GetTime();
-  CHECK_ERR(ValidateGraph());
-  auto time2 = Timer::GetTime();
-  CHECK_ERR(MapResourceUsages());
-  auto time3 = Timer::GetTime();
-  CHECK_ERR(BuildGraph());
-  auto time4 = Timer::GetTime();
-
-  PrintAlways("Graph depth: {}", graph.size());
-  PrintAlways("Graph build time: {}", time4 - time);
-  PrintAlways(" - Validate: {}", time2 - time);
-  PrintAlways(" - Map usages: {}", time3 - time2);
-  PrintAlways(" - Build: {}", time4 - time3);
-
+#if OUTPUT_DEBUG_GRAPH
+auto FrameGraph::DebugOutput() -> Error {
   std::stringstream stream;
   stream << "digraph FrameGraph {\n";
   stream << "rankdir=LR;\n";
@@ -523,6 +515,110 @@ auto FrameGraph::Compile() -> Error {
   stream << "}\n";
 
   CHECK_ERR(Filesystem::WriteFile("framegraph.dot", stream.str()));
+}
+#endif
+
+// This is probably quite broken in multiple ways
+// But the idea is there
+
+// Non inclusive start -> inclusive end
+// Why? Commands are ran after barriers on a level, so if we query synced mask 5 -> 11
+// Commands at 5 may cause a hazard, but 11 not if we added a barrier there beforehand.
+// The barrier mask can be used with bitwise and to check if some bit is not yet synced.
+// Returns the unsynced access bits as a 64x64 matrix, as access rows pipeline column
+auto FrameGraph::SyncedMask(CommandLevel start, CommandLevel end,
+                            VkAccessFlags2 lastWriteAccess,
+                            VkPipelineStageFlags2 lastWritePipeline,
+                            VkAccessFlags2 dstAccess,
+                            VkPipelineStageFlags2 dstPipeline)
+    -> std::array<VkPipelineStageFlags2, UINT64_WIDTH> {
+  start++;
+
+  std::array<VkPipelineStageFlags2, UINT64_WIDTH> maskBits{};
+
+  // Fast way to iterate over set bits
+  for (auto bitIndex : Utils::BitIndexRange(dstPipeline)) {
+    maskBits.at(bitIndex) = dstAccess;
+  }
+
+  for (auto level = start; level <= end; level++) {
+    auto &barriers = graph.at(level).barriers;
+
+    for (const auto &barrier : barriers) {
+      for (auto bitIndex : Utils::BitIndexRange(dstPipeline)) {
+        // If this stage bit is active in this sync and we still need it
+
+        bool srcMatchesForThisStage =
+            // Match the sync's source stage with our current bit
+            (barrier.srcStageMask & (1ULL << bitIndex)) != 0U &&
+            // Match the sync's source access with our resource's last usage
+            (barrier.srcAccessMask & lastWriteAccess) != 0U;
+        bool accessMatchesRequiredSync =
+            // Match the sync's destination access with our desired sync access
+            (maskBits.at(bitIndex) & barrier.dstAccessMask) != 0U &&
+            (barrier.dstStageMask & (1ULL << bitIndex)) // <-- CHECK IF NEEDED
+                != 0U;
+
+        if (srcMatchesForThisStage && accessMatchesRequiredSync) {
+          // Remove the accesses that are now satisfied
+          maskBits.at(bitIndex) &= ~barrier.dstAccessMask;
+        }
+      }
+    }
+  }
+
+  return maskBits;
+}
+
+auto FrameGraph::IsAccessSafe(CommandID commandId, void const *resource,
+                              VkAccessFlags2 access,
+                              VkPipelineStageFlags2 pipelines) -> bool {
+  const auto &command = commandBuffer.commands.at(commandId);
+
+  if (command.level == 0) {
+    return true;
+  }
+
+  const auto &parents = commandParents.at(commandId);
+
+  for (const auto &parentID : parents) {
+    const auto &parent = commandBuffer.commands.at(parentID);
+    const auto *bound = parent.GetDrawState();
+
+    if (bound == nullptr) {
+      continue;
+    }
+
+    const auto [accesses, pipelines] = bound->GetStateFor(resource);
+
+    // Is it not yet synced?
+    if ((accesses & access) != 0U && (pipelines & pipelines) != 0U) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+auto FrameGraph::InsertBarriers() -> Error {
+  for (auto &level : graph) {
+  }
+
+  return {};
+}
+
+// NOLINTNEXTLINE
+auto FrameGraph::Compile() -> Error {
+  ZoneScoped;
+
+  CHECK_ERR(ValidateGraph());
+  CHECK_ERR(MapResourceUsages());
+  CHECK_ERR(BuildGraph());
+  CHECK_ERR(InsertBarriers());
+
+#if OUTPUT_DEBUG_GRAPH
+  CHECK_ERR(DebugOutput());
+#endif
 
   return {};
 }

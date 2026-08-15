@@ -243,21 +243,6 @@ inline auto InsertTextureBarriers(const GraphicsContext &context,
 
     VkAccessFlags2 access = 0;
 
-    switch (info.access) {
-    case SLANG_RESOURCE_ACCESS_NONE:
-    case SLANG_RESOURCE_ACCESS_READ:
-      access = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
-      break;
-    case SLANG_RESOURCE_ACCESS_READ_WRITE:
-      access = VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_SHADER_WRITE_BIT;
-      break;
-    case SLANG_RESOURCE_ACCESS_WRITE:
-      access = VK_ACCESS_2_SHADER_WRITE_BIT;
-      break;
-    default:
-      break;
-    }
-
     if (access == 0) {
       PrintWarning("Texture access type is Unknown for slang access: {}, "
                    "skipping barrier.",

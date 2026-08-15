@@ -206,19 +206,17 @@ struct BoundResources {
 
 struct BoundImage {
   VkImage image;
-  SlangResourceAccess access;
+  VkAccessFlags2 access;
+  VkPipelineStageFlags2 pipelines;
 };
 
 struct BoundBuffer {
   VkBuffer buffer;
-  SlangResourceAccess access;
+  VkAccessFlags2 access;
+  VkPipelineStageFlags2 pipelines;
 };
 
 struct DrawState {
-  // When the read / write state is saved, take in to account that
-  // Texture blits for mipmapping read / write the same texture but different views
-  // And must have an exception made
-
   std::vector<BoundImage> boundImages;
   std::vector<BoundBuffer> boundBuffers;
   std::vector<VkAccelerationStructureKHR> boundAccelerationStructures;
@@ -236,6 +234,9 @@ struct DrawState {
   uint32_t stateID;
 
   DrawState();
+
+  auto GetStateFor(void const *resource) const
+      -> std::pair<VkAccessFlags2, VkPipelineStageFlags2>;
 };
 
 namespace Args {
@@ -850,11 +851,11 @@ struct Command {
         [](const auto &current) -> CommandType { return current.type; }, data);
   }
 
-  [[nodiscard]] auto GetBoundResources() -> DrawState * {
+  [[nodiscard]] auto GetDrawState() -> DrawState * {
     return get_if_derived<DrawState>(data);
   }
 
-  [[nodiscard]] auto GetBoundResources() const -> DrawState const * {
+  [[nodiscard]] auto GetDrawState() const -> DrawState const * {
     return get_if_derived<DrawState>(data);
     return {};
   }

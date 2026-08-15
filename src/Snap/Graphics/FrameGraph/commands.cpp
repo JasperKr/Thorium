@@ -1,6 +1,7 @@
 #include "commands.hpp"
 #include "Graphics/dynamicRendering.hpp"
 #include "Graphics/graphics.hpp"
+#include "Graphics/reflect.hpp"
 #include "Modules/Helpers/hasher.hpp"
 #include "Modules/image.hpp"
 #include <vector>
@@ -10,6 +11,55 @@ namespace Graphics {
 std::unordered_map<GraphState, uint32_t, GraphStateHash>
     CommandStateManager::StateToIndex{};
 std::vector<GraphState> CommandStateManager::States{};
+
+auto DrawState::GetStateFor(void const *resource) const
+    -> std::pair<VkAccessFlags2, VkPipelineStageFlags2> {
+  VkAccessFlags2 access = 0;
+  VkPipelineStageFlags2 pipelines = 0;
+
+  for (const auto &attachment : colorAttachments) {
+    if (attachment == resource) {
+      access |= VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT |
+                VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
+      pipelines |= VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+    }
+  }
+
+  if (depthStencilAttachment == resource) {
+    access |= VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
+              VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+    pipelines |= VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT |
+                 VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
+  }
+
+  for (const auto &bound : boundImages) {
+    if (bound.image == resource) {
+      access |= bound.access;
+      pipelines |= bound.pipelines;
+    }
+  }
+
+  for (const auto &bound : boundBuffers) {
+    if (bound.buffer == resource) {
+      access |= bound.access;
+      pipelines |= bound.pipelines;
+    }
+  }
+
+  for (const auto &buffer : vertexBuffers) {
+    if (buffer == resource) {
+      access |= VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT;
+      pipelines |= VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT;
+    }
+  }
+
+  if (indexBuffer == resource) {
+    access |= VK_ACCESS_2_INDEX_READ_BIT;
+    pipelines |= VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT;
+  }
+
+  return {access, pipelines};
+}
 
 auto GraphState::GetHash() const -> uint64_t {
   if (dirty) {
@@ -122,21 +172,22 @@ DrawState::DrawState() {
   }
 
   const auto &shaderState = shader->GetState();
+  const auto &pipelines = shader->combinedPipelineStages;
 
-  // TODO: userBoundBuffers, and textures are per set-binding but never cleared
-  // We must shader->reflection.textureSlotsBySet or similar to filter the set bindings actually used
-  // By the current dispatch / draw
+  // TODO: Distinguish between vertex / fragment accesses
   for (const auto &buffer : shaderState.userBoundBuffers) {
     boundBuffers.emplace_back(BoundBuffer{
         .buffer = buffer.second.first->handle,
-        .access = buffer.second.second->access,
+        .access = buffer.second.second->accessFlags,
+        .pipelines = pipelines,
     });
   }
 
   for (const auto &texture : shaderState.userBoundTextures) {
     boundImages.emplace_back(BoundImage{
         .image = texture.second.first->imageMemory->image,
-        .access = texture.second.second->access,
+        .access = texture.second.second->accessFlags,
+        .pipelines = pipelines,
     });
   }
 
