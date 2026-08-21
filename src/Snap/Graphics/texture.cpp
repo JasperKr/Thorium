@@ -3,10 +3,10 @@
 #include "Graphics/allocations.hpp"
 
 #include "Graphics/buffer.hpp"
-#include "Graphics/dynamicRendering.hpp"
 #include "Graphics/format.hpp"
 #include "Graphics/graphics.hpp"
 #include "Graphics/graphicsContext.hpp"
+#include "Graphics/renderState.hpp"
 #include "Graphics/renderThread.hpp"
 #include "Graphics/resource.hpp"
 #include "Graphics/snapshot.hpp"
@@ -640,13 +640,13 @@ auto Texture::FromMemory(const GraphicsContext &context,
 
   CHECK_ERR(texture->UseAsTransferDst(context));
 
-  auto *commandBuffer = GetCommandBuffer();
+  auto *commandBuffer = GetVirtualCommandBuffer();
 
   if (commandBuffer == nullptr) {
     return Error::Create("Failed to get command buffer for SetPixels.");
   }
 
-  DynamicRendering::EndRendering(context);
+  RenderState::EndRendering(context);
 
   commandBuffer->CopyBufferToImage(
       {buffer->handle, texture->imageMemory->image, VK_IMAGE_LAYOUT_GENERAL,
@@ -776,7 +776,7 @@ auto ImageMemory::TransitionLayout(const GraphicsContext &context,
     return Error::Success();
   }
 
-  auto *commandBuffer = CHECK_NULL(GetCommandBuffer());
+  auto *commandBuffer = CHECK_NULL(GetVirtualCommandBuffer());
 
   VkImageMemoryBarrier2 barrier = {};
   barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
@@ -798,7 +798,7 @@ auto ImageMemory::TransitionLayout(const GraphicsContext &context,
                        .imageMemoryBarrierCount = 1,
                        .pImageMemoryBarriers = &barrier};
 
-  DynamicRendering::EndRendering(context);
+  RenderState::EndRendering(context);
 
   // vkCmdPipelineBarrier2(commandBuffer, &dep);
   // commandBuffer->PipelineBarrier2({&dep});
@@ -951,13 +951,13 @@ inline auto WriteSimplifiedPixelData(const Ref<Texture> &texture,
 
   CHECK_ERR(texture->UseAsTransferDst(context));
 
-  auto *commandBuffer = GetCommandBuffer();
+  auto *commandBuffer = GetVirtualCommandBuffer();
 
   if (commandBuffer == nullptr) {
     return Error::Create("Failed to get command buffer for SetPixels.");
   }
 
-  DynamicRendering::EndRendering(context);
+  RenderState::EndRendering(context);
 
   // vkCmdCopyBufferToImage(commandBuffer, buffer->handle,
   //                        texture->imageMemory->image, VK_IMAGE_LAYOUT_GENERAL,
@@ -1101,13 +1101,13 @@ auto Texture::SetPixels(const GraphicsContext &context,
 
   CHECK_ERR(UseAsTransferDst(context));
 
-  auto *commandBuffer = GetCommandBuffer();
+  auto *commandBuffer = GetVirtualCommandBuffer();
 
   if (commandBuffer == nullptr) {
     return Error::Create("Failed to get command buffer for SetPixels.");
   }
 
-  DynamicRendering::EndRendering(context);
+  RenderState::EndRendering(context);
 
   // vkCmdCopyBufferToImage(commandBuffer, buffer->handle, imageMemory->image,
   //                        VK_IMAGE_LAYOUT_GENERAL, 1, &region);
@@ -1441,7 +1441,7 @@ auto Texture::CopyTo(const GraphicsContext &context, Texture &dstTexture,
         "dimensions.");
   }
 
-  auto *commandBuffer = GetCommandBuffer();
+  auto *commandBuffer = GetVirtualCommandBuffer();
   if (commandBuffer == nullptr) {
     return Error::Create("CopyTo: Failed to get command buffer for copying.");
   }
@@ -1488,7 +1488,7 @@ auto Texture::CopyTo(const GraphicsContext &context, Buffer &dstBuffer,
   copyRegion.imageOffset = region.srcOffset;
   copyRegion.imageExtent = region.extent;
 
-  auto *commandBuffer = GetCommandBuffer();
+  auto *commandBuffer = GetVirtualCommandBuffer();
   if (commandBuffer == nullptr) {
     return Error::Create("CopyTo: Failed to get command buffer for copying.");
   }
@@ -1540,7 +1540,7 @@ auto Texture::GenerateMipmaps(const GraphicsContext &context,
                          "compressed texture formats.");
   }
 
-  DynamicRendering::EndRendering(context);
+  RenderState::EndRendering(context);
 
   auto mipWidth = static_cast<int32_t>(imageMemory->size.width);
   auto mipHeight = static_cast<int32_t>(imageMemory->size.height);

@@ -13,8 +13,8 @@
 #include "Modules/object.hpp"
 #include "Modules/window.hpp"
 #include "buffer.hpp"
-#include "dynamicRendering.hpp"
 #include "graphics.hpp"
+#include "renderState.hpp"
 #include <cassert>
 #include <cstddef>
 #include <mutex>
@@ -434,7 +434,7 @@ auto Present(Graphics::GraphicsContext &context,
   CHECK_ERR(PrepareRecording(context));
 
   Graphics::SetDirtyState();
-  CHECK_ERR(DynamicRendering::BeginFrame(context));
+  CHECK_ERR(RenderState::BeginFrame(context));
 
   GetGlobalUniformBuffer(context.frameIndex).NewFrame();
 

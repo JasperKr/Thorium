@@ -1,10 +1,10 @@
 #include "wrap_imgui.hpp"
 #include "Editor/gui.hpp"
 #include "Graphics/draw.hpp"
-#include "Graphics/dynamicRendering.hpp"
 #include "Graphics/graphics.hpp"
 #include "Graphics/graphicsState.hpp"
 #include "Graphics/mesh.hpp"
+#include "Graphics/renderState.hpp"
 #include "Graphics/shader.hpp"
 #include "Graphics/texture.hpp"
 #include "Graphics/vertexformat.hpp"
@@ -281,7 +281,7 @@ inline auto SetupTemporaryCommandLists(ImDrawData *drawData,
 inline auto DrawTemporaryCommandLists(Graphics::GraphicsContext &ctx,
                                       ImDrawData *drawData) -> Error {
 
-  Graphics::DynamicRendering::SetShader(Engine::Gui::ImGuiShaderRGBA8);
+  Graphics::RenderState::SetShader(Engine::Gui::ImGuiShaderRGBA8);
 
   for (int i = 0; drawData->CmdListsCount > i; ++i) {
     const auto &temporaryCommandList = TemporaryCommandLists[i];
@@ -305,7 +305,7 @@ inline auto DrawTemporaryCommandLists(Graphics::GraphicsContext &ctx,
                     static_cast<uint32_t>(pcmd.ClipRect.w - pcmd.ClipRect.y),
             },
         };
-        Graphics::DynamicRendering::SetScissor(&scissorRect);
+        Graphics::RenderState::SetScissor(&scissorRect);
 
         auto *texture = // NOLINTNEXTLINE
             CHECK_NULL(reinterpret_cast<Graphics::Texture *>(pcmd.GetTexID()));
@@ -332,8 +332,8 @@ auto Draw(lua_State *state) -> int {
   auto ctx = *Graphics::GetCurrentGraphicsContext();
 
   auto inout = ImGui::GetIO();
-  Graphics::DynamicRendering::SetCullMode(VK_CULL_MODE_NONE);
-  Graphics::DynamicRendering::SetDepthMode(false, false, VK_COMPARE_OP_ALWAYS);
+  Graphics::RenderState::SetCullMode(VK_CULL_MODE_NONE);
+  Graphics::RenderState::SetDepthMode(false, false, VK_COMPARE_OP_ALWAYS);
 
   LUA_CK_ERR(ChangeMouseState(inout));
   auto *drawData = LUA_CK_NULL(ImGui::GetDrawData());

@@ -1,20 +1,20 @@
 #include "framegraph.hpp"
 #include "Graphics/FrameGraph/commands.hpp"
-#include "Graphics/FrameGraph/resourceUsage.hpp"
 #include "Libraries/vma.hpp"
 #include "Modules/Helpers/utils.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
+#if OUTPUT_DEBUG_GRAPH
 #include "Modules/filesystem.hpp"
+#include <format>
+#endif
 #include "Modules/timer.hpp"
 #include <algorithm>
+#include <array>
 #include <cassert>
 #include <cstdint>
-#include <iterator>
-#include <ostream>
 #include <public/tracy/Tracy.hpp>
 #include <slang/slang.h>
-#include <sstream>
 #include <unordered_map>
 #include <utility>
 #include <variant>
@@ -32,26 +32,6 @@ auto FrameGraph::Submit(const VirtualCommandBuffer &commands) -> Error {
 }
 
 auto FrameGraph::ValidateGraph() -> Error { return {}; } // NOLINT
-
-auto FrameGraph::GetResourceStateAt(VkBuffer buffer, CommandID time)
-    -> Result<ResourceState> {
-  auto updates = commandBuffer.bufferStateUpdates[buffer];
-
-  auto iter = std::ranges::upper_bound(updates, time, std::less{},
-                                       &decltype(updates)::value_type::second);
-
-  return iter == updates.begin() ? ResourceState{} : std::prev(iter)->first;
-}
-
-auto FrameGraph::GetResourceStateAt(VkImage image, CommandID time)
-    -> Result<ResourceState> {
-  auto updates = commandBuffer.imageStateUpdates[image];
-
-  auto iter = std::ranges::upper_bound(updates, time, std::less{},
-                                       &decltype(updates)::value_type::second);
-
-  return iter == updates.begin() ? ResourceState{} : std::prev(iter)->first;
-}
 
 inline auto GetReadsFromDrawState(DrawState &state) -> std::vector<void *> {
   std::vector<void *> reads;
@@ -302,19 +282,6 @@ auto FrameGraph::PreCompile() -> Error {
   for (auto &command : commandBuffer.commands) {
     command.id = idx++;
     ERR_ASSERT(idx != UINT16_MAX);
-
-#if OUTPUT_DEBUG_GRAPH
-    const auto *bound = get_if_derived<BoundResources>(command.data);
-    if (bound != nullptr) {
-      for (const auto &ptr : bound->reads) {
-        resourceReads[ptr].emplace_back(command.id);
-      }
-
-      for (const auto &ptr : bound->writes) {
-        resourceWrites[ptr].emplace_back(command.id);
-      }
-    }
-#endif
   }
 
   const auto commandCount = commandBuffer.commands.size();
@@ -416,6 +383,9 @@ auto FrameGraph::BuildGraph() -> Error {
   }
 
   graph.resize(maxLevel + 1);
+  for (auto i = 0; i < graph.size(); i++) {
+    graph.at(i).level = i;
+  }
 
   size_t edgeCount = 0;
   for (const auto &command : commandBuffer.commands) {
@@ -443,6 +413,7 @@ auto FrameGraph::BuildGraph() -> Error {
 }
 
 #if OUTPUT_DEBUG_GRAPH
+// NOLINTNEXTLINE
 auto FrameGraph::DebugOutput() -> Error {
   std::stringstream stream;
   stream << "digraph FrameGraph {\n";
@@ -463,41 +434,55 @@ auto FrameGraph::DebugOutput() -> Error {
     ];
   )";
 
-  const static bool ExportRWLabels = true;
+  const static bool ExportRWLabels = false;
 
-  for (const auto &command : commandBuffer.commands) {
-    if (ExportRWLabels) {
-      auto reads = GetReads(command);
-      auto writes = GetWrites(command);
+  for (const auto &level : graph) {
+    stream << std::format("subgraph cluster_level_{} {{\n", level.level);
+    stream << std::format("label = \"Level {}\";\n", level.level);
 
-      std::stringstream readStr;
-      std::stringstream writeStr;
+    for (const auto commandId : level.commands) {
+      const auto &command = commandBuffer.commands.at(commandId);
 
-      for (void *ptr : reads) {
-        readStr << ptr;
+      if (ExportRWLabels) {
+        auto reads = GetReads(command);
+        auto writes = GetWrites(command);
 
-        if (ptr != reads.back()) {
-          readStr << "\n";
+        std::stringstream readStr;
+        std::stringstream writeStr;
+
+        for (void *ptr : reads) {
+          readStr << ptr;
+
+          if (ptr != reads.back()) {
+            readStr << "\n";
+          }
         }
-      }
 
-      for (void *ptr : writes) {
-        writeStr << ptr;
+        for (void *ptr : writes) {
+          writeStr << ptr;
 
-        if (ptr != writes.back()) {
-          writeStr << "\n";
+          if (ptr != writes.back()) {
+            writeStr << "\n";
+          }
         }
-      }
 
-      stream << std::format("{} [label=\"{}: {}\nR: {}\nW: {}\"];\n",
-                            command.id, command.level,
-                            CommandTypeEnumHelper.ToString(command.GetType()),
-                            readStr.str(), writeStr.str());
-    } else {
-      stream << std::format("{} [label=\"{}: {}\"];\n", command.id,
-                            command.level,
-                            CommandTypeEnumHelper.ToString(command.GetType()));
+        stream << std::format("{} [label=\"{}: {}\nR: {}\nW: {}\"];\n",
+                              command.id, command.level,
+                              CommandTypeEnumHelper.ToString(command.GetType()),
+                              readStr.str(), writeStr.str());
+      } else {
+        stream << std::format(
+            "{} [label=\"{}: {}\"];\n", command.id, command.level,
+            CommandTypeEnumHelper.ToString(command.GetType()));
+      }
     }
+
+    stream << std::format("barriers_{} [\n", level.level);
+    // for (const auto &barrier : level.barriers) {
+    // }
+    stream << std::format("shape=note,\nlabel=\"{} Barriers\"\n",
+                          level.barriers.size());
+    stream << "];\n}\n";
   }
 
   for (const auto dependency : dependencies) {
@@ -515,6 +500,8 @@ auto FrameGraph::DebugOutput() -> Error {
   stream << "}\n";
 
   CHECK_ERR(Filesystem::WriteFile("framegraph.dot", stream.str()));
+
+  return {};
 }
 #endif
 
@@ -526,40 +513,44 @@ auto FrameGraph::DebugOutput() -> Error {
 // Commands at 5 may cause a hazard, but 11 not if we added a barrier there beforehand.
 // The barrier mask can be used with bitwise and to check if some bit is not yet synced.
 // Returns the unsynced access bits as a 64x64 matrix, as access rows pipeline column
-auto FrameGraph::SyncedMask(CommandLevel start, CommandLevel end,
-                            VkAccessFlags2 lastWriteAccess,
-                            VkPipelineStageFlags2 lastWritePipeline,
-                            VkAccessFlags2 dstAccess,
-                            VkPipelineStageFlags2 dstPipeline)
+auto FrameGraph::SyncMask(CommandLevel start, CommandLevel end,
+                          VkAccessFlags2 lastWriteAccess,
+                          VkPipelineStageFlags2 lastWritePipeline,
+                          VkAccessFlags2 dstAccess,
+                          VkPipelineStageFlags2 dstPipeline)
     -> std::array<VkPipelineStageFlags2, UINT64_WIDTH> {
   start++;
 
   std::array<VkPipelineStageFlags2, UINT64_WIDTH> maskBits{};
 
   // Fast way to iterate over set bits
-  for (auto bitIndex : Utils::BitIndexRange(dstPipeline)) {
-    maskBits.at(bitIndex) = dstAccess;
+  for (auto bitIndex : Utils::BitIndexRange(lastWritePipeline)) {
+    maskBits.at(bitIndex) = lastWriteAccess;
   }
 
+  // mask bits are now all unsynced bits
   for (auto level = start; level <= end; level++) {
-    auto &barriers = graph.at(level).barriers;
+    const auto &barriers = graph.at(level).barriers;
 
     for (const auto &barrier : barriers) {
-      for (auto bitIndex : Utils::BitIndexRange(dstPipeline)) {
+      for (const auto bitIndex : Utils::BitIndexRange(dstPipeline)) {
         // If this stage bit is active in this sync and we still need it
+        const auto mask = 1ULL << bitIndex;
 
-        bool srcMatchesForThisStage =
+        const bool srcMatch =
             // Match the sync's source stage with our current bit
-            (barrier.srcStageMask & (1ULL << bitIndex)) != 0U &&
+            (barrier.srcStageMask & mask) != 0U &&
             // Match the sync's source access with our resource's last usage
             (barrier.srcAccessMask & lastWriteAccess) != 0U;
-        bool accessMatchesRequiredSync =
-            // Match the sync's destination access with our desired sync access
-            (maskBits.at(bitIndex) & barrier.dstAccessMask) != 0U &&
-            (barrier.dstStageMask & (1ULL << bitIndex)) // <-- CHECK IF NEEDED
-                != 0U;
 
-        if (srcMatchesForThisStage && accessMatchesRequiredSync) {
+        // Barrier matched destination stage
+        const bool dstMatch = (barrier.dstStageMask & mask) != 0U;
+
+        // There is no need to match dst accesses since unrelated bits do not affect the final result, say
+        // we have: current: 1110, access: 0110, barrier: 1000, becomes 1110 & ~1000 -> 1110 & 0111 = 0110.
+        // and since we don't care about bits not set in access, the result is unchanged.
+
+        if (srcMatch && dstMatch) {
           // Remove the accesses that are now satisfied
           maskBits.at(bitIndex) &= ~barrier.dstAccessMask;
         }
@@ -570,16 +561,19 @@ auto FrameGraph::SyncedMask(CommandLevel start, CommandLevel end,
   return maskBits;
 }
 
-auto FrameGraph::IsAccessSafe(CommandID commandId, void const *resource,
-                              VkAccessFlags2 access,
-                              VkPipelineStageFlags2 pipelines) -> bool {
+auto FrameGraph::GetRequiredBarriers(CommandID commandId, void const *resource,
+                                     VkAccessFlags2 accesses,
+                                     VkPipelineStageFlags2 pipelines)
+    -> std::vector<VkMemoryBarrier2> {
   const auto &command = commandBuffer.commands.at(commandId);
 
   if (command.level == 0) {
-    return true;
+    return {};
   }
 
   const auto &parents = commandParents.at(commandId);
+
+  std::vector<VkMemoryBarrier2> memoryBarriers;
 
   for (const auto &parentID : parents) {
     const auto &parent = commandBuffer.commands.at(parentID);
@@ -589,19 +583,180 @@ auto FrameGraph::IsAccessSafe(CommandID commandId, void const *resource,
       continue;
     }
 
-    const auto [accesses, pipelines] = bound->GetStateFor(resource);
+    const auto [srcAccess, srcStage] = bound->GetStateFor(resource);
 
-    // Is it not yet synced?
-    if ((accesses & access) != 0U && (pipelines & pipelines) != 0U) {
-      return false;
+    if (srcAccess == 0U || srcStage == 0U) {
+      continue;
+    }
+
+    // SyncMask returns all accesses per pipeline not yet synced
+    // For the pipelines we ask about
+    const auto &mask = SyncMask(parent.level, command.level, srcAccess,
+                                srcStage, accesses, pipelines);
+
+    for (const auto bit : Utils::BitIndexRange(pipelines)) {
+      const auto unsyncedAccesses = mask.at(bit);
+
+      // If for this pipeline there were still accesses unsynced for accesses we care about, we are not safe.
+      if ((unsyncedAccesses & accesses) != 0U) {
+        VkMemoryBarrier2 barrier{};
+        barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2;
+
+        // Not yet synced previously, we need to take in to account
+        // all bits like write A, B, C but read only B, C, we still need to sync for A,
+        // so we do not bitop away A.
+        barrier.srcAccessMask = unsyncedAccesses;
+
+        // Pipeline stage for which these accesses weren't synced
+        barrier.srcStageMask = 1ULL << bit;
+
+        // The accesses we need now
+        // If we read A, B, C, but A, B is synced already
+        // We can skip that sync by bitopping away A, B with the mask.
+        barrier.dstAccessMask = accesses & unsyncedAccesses;
+        barrier.dstStageMask = 1ULL << bit;
+
+        memoryBarriers.emplace_back(barrier);
+      }
     }
   }
 
-  return true;
+  return memoryBarriers;
+}
+
+// NOLINTNEXTLINE
+auto FrameGraph::ResourceAccessAt(CommandID commandId, const void *resource)
+    -> std::pair<VkAccessFlags2, VkPipelineStageFlags2> {
+  const auto &command = commandBuffer.commands.at(commandId);
+
+  const auto *drawState = get_if_derived<DrawState>(command.data);
+
+  if (drawState != nullptr) {
+    return drawState->GetStateFor(resource);
+  }
+
+  const auto *boundState = get_if_derived<BoundResources>(command.data);
+
+  if (boundState == nullptr) {
+    return {0, 0};
+  }
+
+  if (std::holds_alternative<Args::VkCmdBlitImage>(command.data)) {
+    const auto &args = std::get<Args::VkCmdBlitImage>(command.data);
+    if (resource == args.srcImage) {
+      return {VK_ACCESS_2_TRANSFER_READ_BIT, VK_PIPELINE_STAGE_2_TRANSFER_BIT};
+    }
+    if (resource == args.dstImage) {
+      return {VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_2_TRANSFER_BIT};
+    }
+  }
+
+  if (std::holds_alternative<Args::MipmapTexture>(command.data)) {
+    const auto &args = std::get<Args::MipmapTexture>(command.data);
+    return {VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_2_TRANSFER_BIT};
+  }
+
+  if (std::holds_alternative<Args::VkCmdCopyBuffer>(command.data)) {
+    const auto &args = std::get<Args::VkCmdCopyBuffer>(command.data);
+    if (resource == args.srcBuffer) {
+      return {VK_ACCESS_2_TRANSFER_READ_BIT, VK_PIPELINE_STAGE_2_TRANSFER_BIT};
+    }
+    if (resource == args.dstBuffer) {
+      return {VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_2_TRANSFER_BIT};
+    }
+  }
+
+  if (std::holds_alternative<Args::VkCmdCopyImage>(command.data)) {
+    const auto &args = std::get<Args::VkCmdCopyImage>(command.data);
+    if (resource == args.srcImage) {
+      return {VK_ACCESS_2_TRANSFER_READ_BIT, VK_PIPELINE_STAGE_2_TRANSFER_BIT};
+    }
+    if (resource == args.dstImage) {
+      return {VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_2_TRANSFER_BIT};
+    }
+  }
+
+  if (std::holds_alternative<Args::VkCmdCopyBufferToImage>(command.data)) {
+    const auto &args = std::get<Args::VkCmdCopyBufferToImage>(command.data);
+    if (resource == args.srcBuffer) {
+      return {VK_ACCESS_2_TRANSFER_READ_BIT, VK_PIPELINE_STAGE_2_TRANSFER_BIT};
+    }
+    if (resource == args.dstImage) {
+      return {VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_2_TRANSFER_BIT};
+    }
+  }
+
+  if (std::holds_alternative<Args::VkCmdCopyImageToBuffer>(command.data)) {
+    const auto &args = std::get<Args::VkCmdCopyImageToBuffer>(command.data);
+    if (resource == args.srcImage) {
+      return {VK_ACCESS_2_TRANSFER_READ_BIT, VK_PIPELINE_STAGE_2_TRANSFER_BIT};
+    }
+    if (resource == args.dstBuffer) {
+      return {VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_2_TRANSFER_BIT};
+    }
+  }
+
+  if (std::holds_alternative<Args::VkCmdFillBuffer>(command.data)) {
+    const auto &args = std::get<Args::VkCmdFillBuffer>(command.data);
+    if (resource == args.dstBuffer) {
+      return {VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_2_TRANSFER_BIT};
+    }
+  }
+
+  return {0, 0};
+}
+
+inline auto MergeBarriers(std::vector<VkMemoryBarrier2> &barriers) {
+  static std::vector<VkMemoryBarrier2> newBarriers;
+  newBarriers.clear();
+
+  for (const auto &barrier : barriers) {
+    bool combined = false;
+    for (auto &other : newBarriers) {
+      if (other.srcStageMask == barrier.srcStageMask &&
+          other.dstStageMask == barrier.dstStageMask) {
+        other.srcAccessMask |= barrier.srcAccessMask;
+        other.dstAccessMask |= barrier.dstAccessMask;
+
+        combined = true;
+        break;
+      }
+    }
+
+    if (!combined) {
+      newBarriers.emplace_back(barrier);
+    }
+  }
+
+  barriers = newBarriers;
 }
 
 auto FrameGraph::InsertBarriers() -> Error {
   for (auto &level : graph) {
+    const auto addBarriers = [&](const std::vector<void *> &resources,
+                                 const CommandID commandId) -> auto {
+      for (const auto *resource : resources) {
+        const auto &[accesses, pipelines] =
+            ResourceAccessAt(commandId, resource);
+
+        const auto &newBarriers =
+            GetRequiredBarriers(commandId, resource, accesses, pipelines);
+
+        level.barriers.append_range(newBarriers);
+      }
+    };
+
+    for (const auto commandId : level.commands) {
+      const auto &command = commandBuffer.commands.at(commandId);
+
+      const auto &reads = GetReads(command);
+      const auto &writes = GetWrites(command);
+
+      addBarriers(reads, commandId);
+      addBarriers(writes, commandId);
+    }
+
+    MergeBarriers(level.barriers);
   }
 
   return {};
@@ -624,18 +779,21 @@ auto FrameGraph::Compile() -> Error {
 }
 
 auto FrameGraph::Write(VkCommandBuffer cmdBuffer) -> Error {
-  CHECK_ERR(Error::Create("Stop"));
-
   VkCommandBufferBeginInfo beginInfo = {};
   beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
   beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
   vkBeginCommandBuffer(cmdBuffer, &beginInfo);
 
-  for (const auto &command : commandBuffer.commands) {
-    CHECK_ERR(std::visit([cmdBuffer](const auto &cmdData)
-                             -> Error { return cmdData.Call(cmdBuffer); },
-                         command.data));
+  for (const auto &level : graph) {
+    if (!level.barriers.empty()) {
+      VkDependencyInfo depInfo = {};
+      depInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+      depInfo.memoryBarrierCount = level.barriers.size();
+      depInfo.pMemoryBarriers = level.barriers.data();
+
+      vkCmdPipelineBarrier2(cmdBuffer, &depInfo);
+    }
   }
 
   vkEndCommandBuffer(cmdBuffer);

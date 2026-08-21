@@ -1,7 +1,7 @@
 #include "commands.hpp"
-#include "Graphics/dynamicRendering.hpp"
 #include "Graphics/graphics.hpp"
 #include "Graphics/reflect.hpp"
+#include "Graphics/renderState.hpp"
 #include "Modules/Helpers/hasher.hpp"
 #include "Modules/image.hpp"
 #include <vector>
@@ -154,13 +154,13 @@ auto GraphState::GetHash() const -> uint64_t {
 }
 
 DrawState::DrawState() {
-  const auto &shader = DynamicRendering::GetShader();
+  const auto &shader = RenderState::GetShader();
 
   bool isCompute =
       (shader->combinedShaderStages & VK_SHADER_STAGE_COMPUTE_BIT) != 0;
 
   if (!isCompute) {
-    const auto &rendertargets = DynamicRendering::GetRenderTargets();
+    const auto &rendertargets = RenderState::GetRenderTargets();
 
     for (const auto &target : rendertargets) {
       if (Image::IsDepthOrStencilTexture(target.texture->GetFormat())) {
@@ -431,27 +431,9 @@ auto VirtualCommandBuffer::EndDebugUtilsLabelEXT(
 auto VirtualCommandBuffer::InsertDebugUtilsLabelEXT(
     const Args::VkCmdInsertDebugUtilsLabelEXT &arguments) -> void {}
 
-auto VirtualCommandBuffer::AddStateUpdate(VkBuffer buffer,
-                                          const ResourceState &newState)
-    -> void {
-  bufferStateUpdates[buffer].emplace_back(newState, time);
-  bufferStateUpdateTimeline.emplace_back(buffer, newState, time);
-}
-
-auto VirtualCommandBuffer::AddStateUpdate(VkImage image,
-                                          const ResourceState &newState)
-    -> void {
-  imageStateUpdates[image].emplace_back(newState, time);
-  imageStateUpdateTimeline.emplace_back(image, newState, time);
-}
-
 auto CreateCommandBuffer() -> VirtualCommandBuffer { return {}; }
 
 auto VirtualCommandBuffer::Reset() -> void {
-  bufferStateUpdates.clear();
-  bufferStateUpdateTimeline.clear();
-  imageStateUpdates.clear();
-  imageStateUpdateTimeline.clear();
   time = 0;
   commands.clear();
   queueFamily = UINT32_MAX;

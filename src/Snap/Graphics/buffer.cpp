@@ -1,10 +1,10 @@
 #include "buffer.hpp"
 
 #include "Graphics/FrameGraph/commands.hpp"
-#include "Graphics/dynamicRendering.hpp"
 #include "Graphics/graphics.hpp"
 #include "Graphics/graphicsContext.hpp"
 #include "Graphics/graphicsState.hpp"
+#include "Graphics/renderState.hpp"
 #include "Graphics/resource.hpp"
 #include "Graphics/semaphoreManager.hpp"
 #include "Graphics/snapshot.hpp"
@@ -159,13 +159,13 @@ auto Buffer::UploadLarge(const GraphicsContext &context,
               uploadSize);
   stagingBuffer->UnmapMemory(context);
 
-  auto *commandBuffer = GetCommandBuffer();
+  auto *commandBuffer = GetVirtualCommandBuffer();
 
   if (commandBuffer == nullptr) {
     return Error::Create("Failed to get command buffer for buffer upload.");
   }
 
-  DynamicRendering::EndRendering(context);
+  RenderState::EndRendering(context);
 
   VkBufferCopy copyRegion = {};
   copyRegion.srcOffset = 0;
@@ -239,7 +239,7 @@ auto Buffer::UploadRing(const GraphicsContext &context,
   uploadBuffer->UnmapMemory(context);
 
   // Record copy command
-  auto *commandBuffer = GetCommandBuffer();
+  auto *commandBuffer = GetVirtualCommandBuffer();
 
   if (commandBuffer == nullptr) {
     return Error::Create("Failed to get command buffer for buffer upload.");
@@ -250,7 +250,7 @@ auto Buffer::UploadRing(const GraphicsContext &context,
   copyRegion.dstOffset = offset;
   copyRegion.size = uploadSize;
 
-  DynamicRendering::EndRendering(context);
+  RenderState::EndRendering(context);
   // vkCmdCopyBuffer(commandBuffer, uploadBuffer->handle, handle, 1, &copyRegion);
   commandBuffer->CopyBuffer({uploadBuffer->handle, handle, 1, &copyRegion});
   uploadOffset += uploadSize;
@@ -432,7 +432,7 @@ auto Buffer::CopyTo(const GraphicsContext &context,
                          "usage flag for copy.");
   }
 
-  auto *commandBuffer = GetCommandBuffer();
+  auto *commandBuffer = GetVirtualCommandBuffer();
 
   if (commandBuffer == nullptr) {
     return Error::Create("Failed to get command buffer for buffer copy.");
@@ -458,7 +458,7 @@ auto Buffer::CopyTo(const GraphicsContext &context,
     return Error::Success();
   }
 
-  DynamicRendering::EndRendering(context);
+  RenderState::EndRendering(context);
 
   VkBufferCopy copyRegion = {};
   copyRegion.srcOffset = srcIndex;
@@ -481,7 +481,7 @@ auto Buffer::CopyTo(const GraphicsContext &context, Texture &dstTexture,
                          "TRANSFER_DST usage flag for copy.");
   }
 
-  auto *commandBuffer = GetCommandBuffer();
+  auto *commandBuffer = GetVirtualCommandBuffer();
   if (commandBuffer == nullptr) {
     return Error::Create(
         "Failed to get command buffer for buffer to image copy.");
@@ -492,7 +492,7 @@ auto Buffer::CopyTo(const GraphicsContext &context, Texture &dstTexture,
         "Source buffer was not created with TRANSFER_SRC usage flag for copy.");
   }
 
-  DynamicRendering::EndRendering(context);
+  RenderState::EndRendering(context);
 
   CHECK_ERR(dstTexture.UseAsTransferDst(context));
 
@@ -551,7 +551,7 @@ auto Buffer::MarkUse() const -> void {
 // NOLINTNEXTLINE
 auto Buffer::Clear(const GraphicsContext &context, uint32_t value,
                    VkDeviceSize offset, VkDeviceSize size) -> Error {
-  auto *commandBuffer = GetCommandBuffer();
+  auto *commandBuffer = GetVirtualCommandBuffer();
 
   if (commandBuffer == nullptr) {
     return Error::Create("Failed to get command buffer for buffer clear.");
@@ -619,14 +619,14 @@ auto Buffer::Readback(const GraphicsContext &context,
                                   &stagingMemory, nullptr));
   }
 
-  auto *commandBuffer = GetCommandBuffer();
+  auto *commandBuffer = GetVirtualCommandBuffer();
 
   if (commandBuffer == nullptr) {
     return Error::Unexpected(
         "Failed to get command buffer for buffer readback.");
   }
 
-  DynamicRendering::EndRendering(context);
+  RenderState::EndRendering(context);
 
   VkBufferCopy copyRegion = {};
   copyRegion.srcOffset = offset;

@@ -3,10 +3,10 @@
 #include "Graphics/allocations.hpp"
 #include "Graphics/bvh.hpp"
 #include "Graphics/deviceSettings.hpp"
-#include "Graphics/dynamicRendering.hpp"
 #include "Graphics/graphicsContext.hpp"
 #include "Graphics/graphicsState.hpp"
 #include "Graphics/render.hpp"
+#include "Graphics/renderState.hpp"
 #include "Graphics/resource.hpp"
 #include "Graphics/shader.hpp"
 #include "Libraries/vma.hpp"
@@ -425,13 +425,13 @@ auto GetThreadContext() -> ThreadContext & {
 }
 
 // May be null
-auto GetCommandBuffer() -> VirtualCommandBuffer * {
+auto GetVirtualCommandBuffer() -> VirtualCommandBuffer * {
   auto &threadContext = GetThreadContext();
   return threadContext.commandBuffer.get();
 }
 
 auto PushDebugMarker(const std::string_view &name, const Color *color) -> void {
-  auto *cmdBuffer = GetCommandBuffer();
+  auto *cmdBuffer = GetVirtualCommandBuffer();
   if (cmdBuffer == nullptr) {
     PrintWarning("PushDebugMarker called with null command buffer.");
     return;
@@ -454,7 +454,7 @@ auto PushDebugMarker(const std::string_view &name, const Color *color) -> void {
 }
 
 auto PopDebugMarker() -> void {
-  auto *cmdBuffer = GetCommandBuffer();
+  auto *cmdBuffer = GetVirtualCommandBuffer();
   if (cmdBuffer == nullptr) {
     PrintWarning("PopDebugMarker called with null command buffer.");
     return;
@@ -464,7 +464,7 @@ auto PopDebugMarker() -> void {
 }
 
 auto PushDebugLabel(const std::string_view &name, const Color *color) -> void {
-  auto *cmdBuffer = GetCommandBuffer();
+  auto *cmdBuffer = GetVirtualCommandBuffer();
   if (cmdBuffer == nullptr) {
     PrintWarning("PushDebugLabel called with null command buffer.");
     return;
@@ -659,10 +659,10 @@ void Deinitialize(GraphicsContext &context) {
   // Graphics::Barrier::ResetModule();
   Graphics::UnloadShaderModule(context);
   Graphics::DeinitializeRendering(context);
-  Graphics::DynamicRendering::Shutdown(context);
+  Graphics::RenderState::Shutdown(context);
   Graphics::semaphoreManager.Deinitialize(context);
   Graphics::DestroySamplers(context);
-  Graphics::DynamicRendering::Destroy(context);
+  Graphics::RenderState::Destroy(context);
   Graphics::DeInitializeBVHModule();
 
   // (BEFORE device, allocator lock)

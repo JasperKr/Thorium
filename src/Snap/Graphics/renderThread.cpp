@@ -3,9 +3,9 @@
 #include "Graphics/FrameGraph/commands.hpp"
 #include "Graphics/allocations.hpp"
 #include "Graphics/buffer.hpp"
-#include "Graphics/dynamicRendering.hpp"
 #include "Graphics/graphics.hpp"
 #include "Graphics/graphicsState.hpp"
+#include "Graphics/renderState.hpp"
 #include "Graphics/semaphoreManager.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
@@ -109,7 +109,7 @@ inline auto GetDescriptorPool(ThreadContext &tcontext) -> Error {
         {pool, Graphics::SemaphoreManager::GetSemaphoreValue()});
 
     tcontext.descriptorPool = pool;
-    DynamicRendering::DescriptorSetCache.clear();
+    RenderState::DescriptorSetCache.clear();
   } else {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
 
@@ -117,7 +117,7 @@ inline auto GetDescriptorPool(ThreadContext &tcontext) -> Error {
 
     CHECK_NEW_ERR(
         vkResetDescriptorPool(context.device, tcontext.descriptorPool, 0));
-    DynamicRendering::DescriptorSetCache.clear();
+    RenderState::DescriptorSetCache.clear();
   }
 
   return Error::Success();
@@ -171,12 +171,12 @@ auto AcquireCommandBuffer(Graphics::GraphicsContext &context,
   GetThreadContext().commandBuffer = threadInfo->threadData.commandBuffer;
   CurrentRenderThreadInfo = threadInfo;
 
-  if (GetCommandBuffer() == VK_NULL_HANDLE) {
+  if (GetVirtualCommandBuffer() == VK_NULL_HANDLE) {
     return Error::Unexpected("Failed to acquire command buffer.");
   }
 
   Graphics::SetDirtyState();
-  CHECK_ERR(Graphics::DynamicRendering::BeginFrame(context));
+  CHECK_ERR(Graphics::RenderState::BeginFrame(context));
 
   GetGlobalUniformBuffer(context.frameIndex).NewFrame();
 
@@ -185,7 +185,7 @@ auto AcquireCommandBuffer(Graphics::GraphicsContext &context,
 
 auto SubmitCommands(Graphics::GraphicsContext &context)
     -> Result<Ref<RenderThreadInfo>> {
-  CHECK_ERR(DynamicRendering::FinalizeFrame(context));
+  CHECK_ERR(RenderState::FinalizeFrame(context));
   CHECK_ERR(FlushBufferUploads(context));
   if (!CurrentRenderThreadInfo.isValid() ||
       CurrentRenderThreadInfo->threadData.commandBuffer == VK_NULL_HANDLE) {
@@ -253,7 +253,7 @@ auto Initialize(Graphics::GraphicsContext &context) -> Error {
 
   CHECK_ERR(InitializeUniformBufferModule(context));
 
-  CHECK_ERR(Graphics::DynamicRendering::Load(context));
+  CHECK_ERR(Graphics::RenderState::Load(context));
 
   return Error::Success();
 }
@@ -262,7 +262,7 @@ auto Deinitialize(Graphics::GraphicsContext &context) -> Error {
   DeInitializeUniformBufferModule(context);
   Graphics::UploadBuffers.clear();
 
-  DynamicRendering::Shutdown(context);
+  RenderState::Shutdown(context);
 
   {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);

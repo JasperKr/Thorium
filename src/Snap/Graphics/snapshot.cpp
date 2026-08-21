@@ -1,8 +1,8 @@
 #include "snapshot.hpp"
 #include "Graphics/blendmode.hpp"
-#include "Graphics/dynamicRendering.hpp"
 #include "Graphics/format.hpp"
 #include "Graphics/graphics.hpp"
+#include "Graphics/renderState.hpp"
 #include "Modules/Helpers/utils.hpp"
 #include "Modules/Math/packedColor.hpp"
 #include "Modules/Math/vector.hpp"
@@ -23,7 +23,7 @@ namespace Graphics::Snapshot {
 auto GetInternalSnapshot() -> ThreadSnapshot & {
   thread_local ThreadSnapshot currentSnapshot(
       std::vector<std::shared_ptr<::Graphics::Snapshot::Event>>{},
-      std::vector<::Graphics::DynamicRendering::State>{}, 0, "", false);
+      std::vector<::Graphics::RenderState::State>{}, 0, "", false);
   return currentSnapshot;
 }
 
@@ -267,7 +267,7 @@ Event::~Event() = default;
 
 GraphicsEvent::GraphicsEvent() {
 #if Enable_Snapshots
-  auto state = *Graphics::DynamicRendering::TopOfStack;
+  auto state = *Graphics::RenderState::TopOfStack;
   auto *snapshot = GetCurrentSnapshot();
   if (snapshot != nullptr) {
     renderState = static_cast<int>(snapshot->renderStates.size());
@@ -292,7 +292,7 @@ inline void BooleanFlag(const char *label, bool value,
   }
 }
 
-inline auto DrawRendertargetImGui(const DynamicRendering::RenderTarget &target,
+inline auto DrawRendertargetImGui(const RenderState::RenderTarget &target,
                                   int index) -> void {
   auto name = target.texture->GetDebugName();
 

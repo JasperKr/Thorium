@@ -25,7 +25,7 @@ auto PushBuffer::GetLayout() const -> const Reflect::FlattenedReflection & {
 auto PushBuffer::FlushData(VkPipelineLayout layout) -> void {
   auto bufferSize = GetBufferSize();
 
-  GetCommandBuffer()->PushConstants(
+  GetVirtualCommandBuffer()->PushConstants(
       {layout, stageFlags, static_cast<uint32_t>(GetBufferOffset()),
        static_cast<uint32_t>(bufferSize), data.data()});
 }

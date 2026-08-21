@@ -1,8 +1,8 @@
 #pragma once
 
 #include "Graphics/FrameGraph/resourceUsage.hpp"
-#include "Graphics/dynamicRendering.hpp"
 #include "Graphics/graphics.hpp"
+#include "Graphics/renderState.hpp"
 #include "Libraries/vma.hpp"
 #include "Modules/Helpers/utils.hpp"
 #include "Modules/error.hpp"
@@ -112,8 +112,8 @@ struct GraphState {
   VkPrimitiveTopology primitiveTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 
   VkPipelineBindPoint bindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-  std::vector<DynamicRendering::RenderTarget> colorAttachments;
-  DynamicRendering::RenderTarget depthStencilAttachment;
+  std::vector<RenderState::RenderTarget> colorAttachments;
+  RenderState::RenderTarget depthStencilAttachment;
   bool hasDepthStencilAttachment = false;
 
   std::vector<VkBool32> blendEnables;
@@ -950,11 +950,6 @@ struct VirtualCommandBuffer {
 
   [[nodiscard]] auto GetQueueFamily() const -> uint32_t { return queueFamily; }
 
-  auto AddStateUpdate(VkImage image, const ResourceState &newState) -> void;
-  auto AddStateUpdate(VkBuffer buffer, const ResourceState &newState) -> void;
-  auto AddStateUpdate(VkAccelerationStructureKHR structure,
-                      const ResourceState &newState) -> void;
-
   auto Reset() -> void;
 
   auto GetStateID() -> uint32_t {
@@ -981,18 +976,6 @@ protected:
   auto AddCommand(const Command &command) -> void;
 
   std::vector<Command> commands;
-
-  // state updates get set as a parent to the next valid command
-  std::vector<Command> stateUpdateCalls;
-
-  std::unordered_map<VkBuffer, std::vector<std::pair<ResourceState, uint64_t>>>
-      bufferStateUpdates;
-  std::vector<BufferStateUpdate> bufferStateUpdateTimeline;
-
-  std::unordered_map<VkImage, std::vector<std::pair<ResourceState, uint64_t>>>
-      imageStateUpdates;
-
-  std::vector<ImageStateUpdate> imageStateUpdateTimeline;
 
   uint32_t queueFamily;
 

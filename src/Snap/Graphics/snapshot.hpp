@@ -4,7 +4,7 @@
 #pragma once
 
 #include "Graphics/bufferformat.hpp"
-#include "Graphics/dynamicRendering.hpp"
+#include "Graphics/renderState.hpp"
 #include "Modules/Helpers/utils.hpp"
 #include "Modules/object.hpp"
 #include "Modules/timer.hpp"
@@ -721,7 +721,7 @@ static const Type ThreadSnapshotType = Type("ThreadSnapshot");
 
 struct ThreadSnapshot : Object, Identifiable {
   std::vector<std::shared_ptr<Event>> events;
-  std::vector<DynamicRendering::State> renderStates;
+  std::vector<RenderState::State> renderStates;
 
   uint64_t threadId;
   std::string threadName;
@@ -746,7 +746,7 @@ struct ThreadSnapshot : Object, Identifiable {
   }
 
   ThreadSnapshot(std::vector<std::shared_ptr<Event>> events,
-                 std::vector<DynamicRendering::State> renderStates,
+                 std::vector<RenderState::State> renderStates,
                  uint64_t threadId, std::string threadName, bool active)
       : events(std::move(events)), renderStates(std::move(renderStates)),
         threadId(threadId), threadName(std::move(threadName)), active(active) {}

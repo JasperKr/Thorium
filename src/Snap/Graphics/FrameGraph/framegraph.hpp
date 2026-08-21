@@ -1,12 +1,8 @@
 #pragma once
 
 #include "Graphics/FrameGraph/commands.hpp"
-#include "Graphics/FrameGraph/resourceUsage.hpp"
 #include "Modules/error.hpp"
 #include <cstdint>
-#include <unordered_map>
-#include <unordered_set>
-#include <utility>
 #include <vector>
 #include <vulkan/vulkan_core.h>
 
@@ -17,6 +13,8 @@ namespace Graphics {
 using CommandLevel = uint16_t;
 
 struct Level {
+  CommandLevel level;
+
   std::vector<CommandID> commands;
 
   // Barriers to be executed BEFORE these commands
@@ -57,19 +55,19 @@ private:
   auto ReduceParents(CommandID idx, const std::vector<CommandID> &candidates)
       -> void;
 
-  auto GetResourceStateAt(VkBuffer buffer, CommandID time)
-      -> Result<ResourceState>;
-  auto GetResourceStateAt(VkImage image, CommandID time)
-      -> Result<ResourceState>;
+  auto ResourceAccessAt(CommandID commandId, const void *resource)
+      -> std::pair<VkAccessFlags2, VkPipelineStageFlags2>;
+
   auto ValidateGraph() -> Error;
   auto InsertBarriers() -> Error;
-  auto IsAccessSafe(CommandID commandId, void const *resource,
-                    VkAccessFlags2 access, VkPipelineStageFlags2 pipelines)
-      -> bool;
-  auto SyncedMask(CommandLevel start, CommandLevel end,
-                  VkAccessFlags2 lastWriteAccess,
-                  VkPipelineStageFlags2 lastWritePipeline,
-                  VkAccessFlags2 dstAccess, VkPipelineStageFlags2 dstPipeline)
+  auto GetRequiredBarriers(CommandID commandId, void const *resource,
+                           VkAccessFlags2 accesses,
+                           VkPipelineStageFlags2 pipelines)
+      -> std::vector<VkMemoryBarrier2>;
+  auto SyncMask(CommandLevel start, CommandLevel end,
+                VkAccessFlags2 lastWriteAccess,
+                VkPipelineStageFlags2 lastWritePipeline,
+                VkAccessFlags2 dstAccess, VkPipelineStageFlags2 dstPipeline)
       -> std::array<VkPipelineStageFlags2, UINT64_WIDTH>;
 };
 } // namespace Graphics

@@ -2,10 +2,10 @@
 #include "Graphics/FrameGraph/commands.hpp"
 #include "Graphics/allocations.hpp"
 #include "Graphics/buffer.hpp"
-#include "Graphics/dynamicRendering.hpp"
 #include "Graphics/graphics.hpp"
 #include "Graphics/graphicsContext.hpp"
 #include "Graphics/mesh.hpp"
+#include "Graphics/renderState.hpp"
 #include "Modules/Helpers/utils.hpp"
 #include "Modules/error.hpp"
 #include <cstdint>
@@ -232,9 +232,9 @@ auto BLAS::Create(const GraphicsContext &context, const Mesh &mesh)
 
   const VkAccelerationStructureBuildRangeInfoKHR *rangePtr = &range;
 
-  DynamicRendering::EndRendering(context);
+  RenderState::EndRendering(context);
 
-  auto *cmdBuffer = GetCommandBuffer();
+  auto *cmdBuffer = GetVirtualCommandBuffer();
   ERR_ASSERT(cmdBuffer != nullptr);
 
   scratchBuffer->MarkUse();
@@ -390,7 +390,7 @@ auto BLAS::Rebuild(const GraphicsContext &context) -> Error {
 
   const auto *rangePtr = &range;
 
-  auto *cmdBuffer = GetCommandBuffer();
+  auto *cmdBuffer = GetVirtualCommandBuffer();
   ERR_ASSERT(cmdBuffer != nullptr);
 
   scratchBuffer->MarkUse();
@@ -491,7 +491,7 @@ auto BLAS::Refit(const GraphicsContext &context) -> Error {
 
   const auto *rangePtr = &range;
 
-  auto *cmdBuffer = GetCommandBuffer();
+  auto *cmdBuffer = GetVirtualCommandBuffer();
   ERR_ASSERT(cmdBuffer != nullptr);
 
   vertexBuffer->MarkUse();
@@ -532,7 +532,7 @@ auto BLAS::Compact(const GraphicsContext &context) -> Error {
                                     GetAllocationCallbacks(), &queryPool));
   }
 
-  auto *commandbuffer = CHECK_NULL(GetCommandBuffer());
+  auto *commandbuffer = CHECK_NULL(GetVirtualCommandBuffer());
 
   commandbuffer->ResetQueryPool({queryPool, 0, 1});
   commandbuffer->WriteAccelerationStructuresPropertiesKHR(
@@ -644,7 +644,7 @@ auto BLAS::FinalizeCompaction(const GraphicsContext &context,
       .mode = VK_COPY_ACCELERATION_STRUCTURE_MODE_COMPACT_KHR,
   };
 
-  auto *commandbuffer = CHECK_NULL(GetCommandBuffer());
+  auto *commandbuffer = CHECK_NULL(GetVirtualCommandBuffer());
 
   commandbuffer->CopyAccelerationStructureKHR({&copyInfo});
 
@@ -803,9 +803,9 @@ auto TLAS::Create(const GraphicsContext &context,
 
   const VkAccelerationStructureBuildRangeInfoKHR *rangePtr = &range;
 
-  DynamicRendering::EndRendering(context);
+  RenderState::EndRendering(context);
 
-  auto *cmdBuffer = GetCommandBuffer();
+  auto *cmdBuffer = GetVirtualCommandBuffer();
   ERR_ASSERT(cmdBuffer != nullptr);
 
   scratchBuffer->MarkUse();
@@ -949,7 +949,7 @@ auto TLAS::Refit(const GraphicsContext &context) -> Error {
 
   // vkCmdBuildAccelerationStructuresKHR(GetCommandBuffer(), 1, &buildInfo,
   //                                     &rangePtr);
-  GetCommandBuffer()->BuildAccelerationStructuresKHR(
+  GetVirtualCommandBuffer()->BuildAccelerationStructuresKHR(
       {1, &buildInfo, &rangePtr});
 
   instanceCount = static_cast<uint32_t>(instances.size());
@@ -1083,7 +1083,7 @@ auto TLAS::Rebuild(const GraphicsContext &context) -> Error {
 
   // vkCmdBuildAccelerationStructuresKHR(GetCommandBuffer(), 1, &buildInfo,
   //                                     &rangePtr);
-  GetCommandBuffer()->BuildAccelerationStructuresKHR(
+  GetVirtualCommandBuffer()->BuildAccelerationStructuresKHR(
       {1, &buildInfo, &rangePtr});
 
   VkAccelerationStructureDeviceAddressInfoKHR addressInfo{

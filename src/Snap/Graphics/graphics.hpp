@@ -21,7 +21,7 @@ namespace Graphics {
 auto Initialize(GraphicsContext &context, Window::WindowContext &wcontext,
                 const DeviceSettings &deviceSettings) -> Error;
 auto GetThreadContext() -> ThreadContext &;
-auto GetCommandBuffer() -> VirtualCommandBuffer *;
+auto GetVirtualCommandBuffer() -> VirtualCommandBuffer *;
 void Deinitialize(GraphicsContext &context);
 
 auto BeginSingleTimeCommands(const GraphicsContext &context) -> VkCommandBuffer;
