@@ -163,17 +163,19 @@ auto inline GetColorBlendAttachmentState(const GraphicsContext &context,
 }
 
 auto GetTargetSize() -> VkExtent2D {
-  if (CurrentState.colorAttachments.size() > 0) {
+  if (RecordingState::CurrentState.colorAttachments.size() > 0) {
     return {
-        CurrentState.colorAttachments.at(0).texture->GetWidth(),
-        CurrentState.colorAttachments.at(0).texture->GetHeight(),
+        RecordingState::CurrentState.colorAttachments.at(0).texture->GetWidth(),
+        RecordingState::CurrentState.colorAttachments.at(0)
+            .texture->GetHeight(),
     };
   }
 
-  if (CurrentState.hasDepthStencilAttachment) {
+  if (RecordingState::CurrentState.hasDepthStencilAttachment) {
     return {
-        CurrentState.depthStencilAttachment.texture->GetWidth(),
-        CurrentState.depthStencilAttachment.texture->GetHeight(),
+        RecordingState::CurrentState.depthStencilAttachment.texture->GetWidth(),
+        RecordingState::CurrentState.depthStencilAttachment.texture
+            ->GetHeight(),
     };
   }
 
@@ -182,7 +184,7 @@ auto GetTargetSize() -> VkExtent2D {
 }
 
 auto GetMaximumAllowedViewport() -> VkViewport {
-  auto viewport = CurrentState.viewport;
+  auto viewport = RecordingState::CurrentState.viewport;
 
   auto size = GetTargetSize();
 
@@ -200,7 +202,7 @@ auto GetMaximumAllowedViewport() -> VkViewport {
 
 auto GetScissor() -> VkRect2D {
 
-  if (!CurrentState.hasScissor) {
+  if (!RecordingState::CurrentState.hasScissor) {
     VkRect2D scissor = {};
     auto viewport = GetMaximumAllowedViewport();
     scissor.offset = {.x = 0, .y = 0};
@@ -218,24 +220,28 @@ auto GetScissor() -> VkRect2D {
   return {
       .offset =
           {
-              .x = CurrentState.scissor.offset.x,
-              .y = CurrentState.scissor.offset.y,
+              .x = RecordingState::CurrentState.scissor.offset.x,
+              .y = RecordingState::CurrentState.scissor.offset.y,
           },
       .extent =
           {
-              .width = (std::max)(CurrentState.scissor.extent.width, 1U),
-              .height = (std::max)(CurrentState.scissor.extent.height, 1U),
+              .width =
+                  (std::max)(RecordingState::CurrentState.scissor.extent.width,
+                             1U),
+              .height =
+                  (std::max)(RecordingState::CurrentState.scissor.extent.height,
+                             1U),
           },
   };
 }
 
 auto GetClippedViewport() -> VkViewport {
 
-  if (!CurrentState.hasViewport) {
+  if (!RecordingState::CurrentState.hasViewport) {
     return GetMaximumAllowedViewport();
   }
 
-  auto viewport = CurrentState.viewport;
+  auto viewport = RecordingState::CurrentState.viewport;
 
   // Default to size of current attachments
   VkExtent2D size = GetTargetSize();
@@ -248,18 +254,18 @@ auto GetClippedViewport() -> VkViewport {
 
 auto GetViewport() -> VkViewport {
 
-  if (!CurrentState.hasViewport) {
+  if (!RecordingState::CurrentState.hasViewport) {
     return GetMaximumAllowedViewport();
   }
 
-  // return CurrentState.viewport;
+  // return RecordingState::CurrentState.viewport;
   return {
-      .x = CurrentState.viewport.x,
-      .y = CurrentState.viewport.y,
-      .width = (std::max)(CurrentState.viewport.width, 1.0F),
-      .height = (std::max)(CurrentState.viewport.height, 1.0F),
-      .minDepth = CurrentState.viewport.minDepth,
-      .maxDepth = CurrentState.viewport.maxDepth,
+      .x = RecordingState::CurrentState.viewport.x,
+      .y = RecordingState::CurrentState.viewport.y,
+      .width = (std::max)(RecordingState::CurrentState.viewport.width, 1.0F),
+      .height = (std::max)(RecordingState::CurrentState.viewport.height, 1.0F),
+      .minDepth = RecordingState::CurrentState.viewport.minDepth,
+      .maxDepth = RecordingState::CurrentState.viewport.maxDepth,
   };
 }
 
@@ -522,11 +528,12 @@ auto FlushCompute(const GraphicsContext &context,
                   VkCommandBuffer vkCommandBuffer) -> Result<bool> {
   ZoneScoped;
 
-  if (CurrentState.bindPoint != VK_PIPELINE_BIND_POINT_COMPUTE) {
+  if (RecordingState::CurrentState.bindPoint !=
+      VK_PIPELINE_BIND_POINT_COMPUTE) {
     return Error::Unexpected("Current state is not a compute pipeline.");
   }
 
-  auto pipeline = CHECK_RES(GetPipeline(context, CurrentState));
+  auto pipeline = CHECK_RES(GetPipeline(context, RecordingState::CurrentState));
 
   auto *commandBuffer = Graphics::GetVirtualCommandBuffer();
 
@@ -534,14 +541,15 @@ auto FlushCompute(const GraphicsContext &context,
     return Error::Unexpected("Command buffer is null in FlushCompute.");
   }
 
-  assert(CurrentState.shader->entryPoints.at(0).second ==
+  assert(RecordingState::CurrentState.shader->entryPoints.at(0).second ==
          VK_SHADER_STAGE_COMPUTE_BIT);
 
   GetPipelineCache().currentLayout = pipeline.second;
 
   PrintDebug("Binding pipeline");
 
-  vkCmdBindPipeline(vkCommandBuffer, CurrentState.bindPoint, pipeline.first);
+  vkCmdBindPipeline(vkCommandBuffer, RecordingState::CurrentState.bindPoint,
+                    pipeline.first);
 
   return true;
 }
@@ -561,9 +569,10 @@ auto FlushGraphics(const GraphicsContext &context,
                    VkCommandBuffer vkCommandBuffer) -> Result<bool> {
   ZoneScoped;
 
-  ERR_ASSERT(CurrentState.bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS);
+  ERR_ASSERT(RecordingState::CurrentState.bindPoint ==
+             VK_PIPELINE_BIND_POINT_GRAPHICS);
 
-  auto pipeline = CHECK_RES(GetPipeline(context, CurrentState));
+  auto pipeline = CHECK_RES(GetPipeline(context, RecordingState::CurrentState));
 
   auto *commandBuffer = CHECK_NULL(Graphics::GetVirtualCommandBuffer());
 
@@ -580,9 +589,10 @@ auto FlushGraphics(const GraphicsContext &context,
   static auto projectionMatrixKey =
       ResourceKey{"PushConstants", "DefaultProjectionMatrix"};
 
-  if (CurrentState.shader->GetUniform(projectionMatrixKey) != nullptr) {
-    CHECK_ERR(UniformWriter::Send(CurrentState.shader, projectionMatrixKey,
-                                  viewProjectionMatrix));
+  if (RecordingState::CurrentState.shader->GetUniform(projectionMatrixKey) !=
+      nullptr) {
+    CHECK_ERR(UniformWriter::Send(RecordingState::CurrentState.shader,
+                                  projectionMatrixKey, viewProjectionMatrix));
   }
 
   GetPipelineCache().currentLayout = pipeline.second;
@@ -591,7 +601,8 @@ auto FlushGraphics(const GraphicsContext &context,
 
   {
     ZoneScopedN("vkCmdBindPipeline");
-    vkCmdBindPipeline(vkCommandBuffer, CurrentState.bindPoint, pipeline.first);
+    vkCmdBindPipeline(vkCommandBuffer, RecordingState::CurrentState.bindPoint,
+                      pipeline.first);
   }
 
   return true;
@@ -602,22 +613,27 @@ auto Flush(const GraphicsContext &context, VkCommandBuffer vkCommandBuffer)
   ZoneScoped;
 
   [[likely]]
-  if (!Graphics::GetIsStateDirty() && LastState != nullptr &&
-      CurrentState.GetHash() == LastState->GetHash() &&
-      CurrentState == *LastState) {
+  if (!Graphics::GetIsStateDirty() && RecordingState::LastState != nullptr &&
+      RecordingState::CurrentState.GetHash() ==
+          RecordingState::LastState->GetHash() &&
+      RecordingState::CurrentState == *RecordingState::LastState) {
     return false;
   }
 
-  LastStateStorage = CurrentState; // Copy current state to last state storage
-  LastState = &LastStateStorage;   // Point last state to the storage
+  RecordingState::LastStateStorage =
+      RecordingState::CurrentState; // Copy current state to last state storage
+  RecordingState::LastState =
+      &RecordingState::LastStateStorage; // Point last state to the storage
 
-  if (CurrentState.bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS) {
+  if (RecordingState::CurrentState.bindPoint ==
+      VK_PIPELINE_BIND_POINT_GRAPHICS) {
     auto result = FlushGraphics(context, vkCommandBuffer);
     Graphics::GetIsStateDirty() = false;
 
     return result;
   }
-  if (CurrentState.bindPoint == VK_PIPELINE_BIND_POINT_COMPUTE) {
+  if (RecordingState::CurrentState.bindPoint ==
+      VK_PIPELINE_BIND_POINT_COMPUTE) {
     auto result = FlushCompute(context, vkCommandBuffer);
     Graphics::GetIsStateDirty() = false;
 

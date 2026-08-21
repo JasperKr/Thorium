@@ -232,8 +232,6 @@ auto BLAS::Create(const GraphicsContext &context, const Mesh &mesh)
 
   const VkAccelerationStructureBuildRangeInfoKHR *rangePtr = &range;
 
-  RenderState::EndRendering(context);
-
   auto *cmdBuffer = GetVirtualCommandBuffer();
   ERR_ASSERT(cmdBuffer != nullptr);
 
@@ -802,8 +800,6 @@ auto TLAS::Create(const GraphicsContext &context,
   };
 
   const VkAccelerationStructureBuildRangeInfoKHR *rangePtr = &range;
-
-  RenderState::EndRendering(context);
 
   auto *cmdBuffer = GetVirtualCommandBuffer();
   ERR_ASSERT(cmdBuffer != nullptr);

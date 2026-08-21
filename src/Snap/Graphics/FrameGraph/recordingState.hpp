@@ -1,12 +1,12 @@
 #pragma once
 
 #include "Graphics/renderState.hpp"
-namespace Graphics {
+namespace Graphics::RecordingState {
 
 // NOLINTBEGIN
-thread_local RenderState::State CurrentState;
-thread_local RenderState::State LastStateStorage;
-thread_local RenderState::State *LastState;
+thread_local extern RenderState::State CurrentState;
+thread_local extern RenderState::State LastStateStorage;
+thread_local extern RenderState::State *LastState;
 // NOLINTEND
 
-} // namespace Graphics
+} // namespace Graphics::RecordingState

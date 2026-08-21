@@ -186,7 +186,6 @@ auto BeginFrame(const GraphicsContext &context) -> Error;
 auto Push(const GraphicsContext &context) -> Error;
 auto Pop(const GraphicsContext &context) -> Error;
 auto Reset(const GraphicsContext &context) -> Error;
-auto FlushGraphics(const GraphicsContext &context) -> Result<bool>;
 auto Load(const GraphicsContext &context) -> Error;
 
 // Destroys all created pipelines and layouts
@@ -194,11 +193,6 @@ void Destroy(const GraphicsContext &context);
 
 // Shuts down the local dynamic rendering module
 void Shutdown(const GraphicsContext &context);
-
-auto PrepareRendering(const GraphicsContext &context) -> Error;
-
-auto EndRendering(const GraphicsContext &context) -> void;
-auto BeginRendering(const GraphicsContext &context) -> Error;
 
 auto SetDepthMode(bool enable, bool writeEnable, VkCompareOp compareOp) -> void;
 auto SetCullMode(VkCullModeFlags cullMode) -> void;

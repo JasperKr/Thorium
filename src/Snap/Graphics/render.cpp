@@ -7,12 +7,10 @@
 #include "Graphics/resource.hpp"
 #include "Graphics/semaphoreManager.hpp"
 #include "Graphics/swapchainManager.hpp"
-#include "Graphics/texture.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/object.hpp"
 #include "Modules/window.hpp"
-#include "buffer.hpp"
 #include "graphics.hpp"
 #include "renderState.hpp"
 #include <cassert>
@@ -23,7 +21,6 @@
 #include <array>
 #include <cstdint>
 #include <unordered_map>
-#include <unordered_set>
 #include <vector>
 
 #include "../external/tracy/public/tracy/Tracy.hpp"
@@ -405,7 +402,7 @@ auto Present(Graphics::GraphicsContext &context,
     });
 
     CHECK_ERR(graph.Submit(cmdBuffer.second));
-    CHECK_ERR(graph.Write(availableCommandBuffers.at(index)));
+    CHECK_ERR(graph.Write(context, availableCommandBuffers.at(index)));
 
     index++;
   }

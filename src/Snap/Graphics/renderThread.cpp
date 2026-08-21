@@ -1,6 +1,7 @@
 #include "Graphics/renderThread.hpp"
 #include "Graphics/Buffers/uniform.hpp"
 #include "Graphics/FrameGraph/commands.hpp"
+#include "Graphics/FrameGraph/descriptorCache.hpp"
 #include "Graphics/allocations.hpp"
 #include "Graphics/buffer.hpp"
 #include "Graphics/graphics.hpp"
@@ -109,7 +110,7 @@ inline auto GetDescriptorPool(ThreadContext &tcontext) -> Error {
         {pool, Graphics::SemaphoreManager::GetSemaphoreValue()});
 
     tcontext.descriptorPool = pool;
-    RenderState::DescriptorSetCache.clear();
+    GetDescriptorCache().descriptorSetCache.clear();
   } else {
     std::lock_guard<std::mutex> lock(Graphics::GraphicsContext::mutexes.device);
 
@@ -117,7 +118,7 @@ inline auto GetDescriptorPool(ThreadContext &tcontext) -> Error {
 
     CHECK_NEW_ERR(
         vkResetDescriptorPool(context.device, tcontext.descriptorPool, 0));
-    RenderState::DescriptorSetCache.clear();
+    GetDescriptorCache().descriptorSetCache.clear();
   }
 
   return Error::Success();

@@ -32,55 +32,7 @@ thread_local State LastStateStorage;
 thread_local State *LastState = nullptr;
 thread_local State *TopOfStack = nullptr;
 
-thread_local bool StateUpdated = false;
-
 thread_local Stats CurrentStats;
-
-inline auto DescriptorTypeToString(VkDescriptorType type) -> std::string_view {
-  switch (type) {
-  case VK_DESCRIPTOR_TYPE_SAMPLER:
-    return "SAMPLER";
-  case VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER:
-    return "COMBINED_IMAGE_SAMPLER";
-  case VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE:
-    return "SAMPLED_IMAGE";
-  case VK_DESCRIPTOR_TYPE_STORAGE_IMAGE:
-    return "STORAGE_IMAGE";
-  case VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER:
-    return "UNIFORM_TEXEL_BUFFER";
-  case VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER:
-    return "STORAGE_TEXEL_BUFFER";
-  case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER:
-    return "UNIFORM_BUFFER";
-  case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER:
-    return "STORAGE_BUFFER";
-  case VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC:
-    return "UNIFORM_BUFFER_DYNAMIC";
-  case VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC:
-    return "STORAGE_BUFFER_DYNAMIC";
-  case VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT:
-    return "INPUT_ATTACHMENT";
-  case VK_DESCRIPTOR_TYPE_INLINE_UNIFORM_BLOCK:
-    return "INLINE_UNIFORM_BLOCK";
-  case VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR:
-    return "ACCELERATION_STRUCTURE_KHR";
-  case VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_NV:
-    return "ACCELERATION_STRUCTURE_NV";
-  case VK_DESCRIPTOR_TYPE_SAMPLE_WEIGHT_IMAGE_QCOM:
-    return "SAMPLE_WEIGHT_IMAGE_QCOM";
-  case VK_DESCRIPTOR_TYPE_BLOCK_MATCH_IMAGE_QCOM:
-    return "BLOCK_MATCH_IMAGE_QCOM";
-  case VK_DESCRIPTOR_TYPE_TENSOR_ARM:
-    return "TENSOR_ARM";
-  case VK_DESCRIPTOR_TYPE_MUTABLE_EXT:
-    return "MUTABLE_EXT";
-  case VK_DESCRIPTOR_TYPE_PARTITIONED_ACCELERATION_STRUCTURE_NV:
-    return "PARTITIONED_ACCELERATION_STRUCTURE_NV";
-  case VK_DESCRIPTOR_TYPE_MAX_ENUM:
-    return "MAX_ENUM";
-    break;
-  }
-}
 
 inline auto SetupDefaultState(const GraphicsContext &context) -> Result<State> {
   auto defaultState = State();
@@ -195,8 +147,6 @@ auto FinalizeFrame(const GraphicsContext &context) -> Error {
           "Non-swapchain render targets remain bound at end of frame.");
     }
   }
-
-  EndRendering(context);
 
   auto &frameUbo = GetGlobalUniformBuffer(context.frameIndex);
   CHECK_ERR(frameUbo.Finalize(context));
@@ -467,6 +417,107 @@ auto GetUserShader() -> Ref<Shader> {
 
 auto GetShader() -> Ref<Shader> { return TopOfStack->shader; }
 
+auto GetScissor() -> VkRect2D {
+
+  if (!TopOfStack->hasScissor) {
+    VkRect2D scissor = {};
+    auto viewport = GetMaximumAllowedViewport();
+    scissor.offset = {.x = 0, .y = 0};
+    scissor.extent = {
+        .width = static_cast<uint32_t>(viewport.width),
+        .height = static_cast<uint32_t>(viewport.height),
+    };
+
+    scissor.extent.width = (std::max)(scissor.extent.width, 1U);
+    scissor.extent.height = (std::max)(scissor.extent.height, 1U);
+
+    return scissor;
+  }
+
+  return {
+      .offset =
+          {
+              .x = TopOfStack->scissor.offset.x,
+              .y = TopOfStack->scissor.offset.y,
+          },
+      .extent =
+          {
+              .width = (std::max)(TopOfStack->scissor.extent.width, 1U),
+              .height = (std::max)(TopOfStack->scissor.extent.height, 1U),
+          },
+  };
+}
+
+auto GetTargetSize() -> VkExtent2D {
+  if (TopOfStack->colorAttachments.size() > 0) {
+    return {
+        TopOfStack->colorAttachments.at(0).texture->GetWidth(),
+        TopOfStack->colorAttachments.at(0).texture->GetHeight(),
+    };
+  }
+
+  if (TopOfStack->hasDepthStencilAttachment) {
+    return {
+        TopOfStack->depthStencilAttachment.texture->GetWidth(),
+        TopOfStack->depthStencilAttachment.texture->GetHeight(),
+    };
+  }
+
+  // No attachments, return zero size
+  return {0, 0};
+}
+
+auto GetMaximumAllowedViewport() -> VkViewport {
+  auto viewport = TopOfStack->viewport;
+
+  auto size = GetTargetSize();
+
+  viewport.width = static_cast<float>(size.width);
+  viewport.height = static_cast<float>(size.height);
+
+  viewport.width = (std::max)(viewport.width, 1.0F);
+  viewport.height = (std::max)(viewport.height, 1.0F);
+
+  viewport.minDepth = 0.0F;
+  viewport.maxDepth = 1.0F;
+
+  return viewport;
+}
+
+auto GetViewport() -> VkViewport {
+
+  if (!TopOfStack->hasViewport) {
+    return GetMaximumAllowedViewport();
+  }
+
+  // return TopOfStack->viewport;
+  return {
+      .x = TopOfStack->viewport.x,
+      .y = TopOfStack->viewport.y,
+      .width = (std::max)(TopOfStack->viewport.width, 1.0F),
+      .height = (std::max)(TopOfStack->viewport.height, 1.0F),
+      .minDepth = TopOfStack->viewport.minDepth,
+      .maxDepth = TopOfStack->viewport.maxDepth,
+  };
+}
+
+auto GetClippedViewport() -> VkViewport {
+
+  if (!TopOfStack->hasViewport) {
+    return GetMaximumAllowedViewport();
+  }
+
+  auto viewport = TopOfStack->viewport;
+
+  // Default to size of current attachments
+  VkExtent2D size = GetTargetSize();
+
+  viewport.width = std::min(viewport.width, static_cast<float>(size.width));
+  viewport.height = std::min(viewport.height, static_cast<float>(size.height));
+
+  return viewport;
+}
+
 auto GetRenderTargets() -> std::vector<RenderTarget> {
   return {TopOfStack->colorAttachments.begin(),
           TopOfStack->colorAttachments.begin() + // NOLINT
@@ -542,8 +593,6 @@ auto Clear(const GraphicsContext &context, const ClearInfo &clearInfo)
     clearAttachments.emplace_back(clearAttachment);
     clearRects.emplace_back(clearRect);
   }
-
-  CHECK_ERR(PrepareRendering(context));
 
   commandBuffer->ClearAttachments(
       {static_cast<uint32_t>(clearAttachments.size()), clearAttachments.data(),

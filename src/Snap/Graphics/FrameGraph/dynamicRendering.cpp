@@ -122,12 +122,13 @@ inline auto BeginRendering(const GraphicsContext &context) -> Error {
   renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
 
   renderingInfo.renderArea.offset = {.x = 0, .y = 0};
-  renderingInfo.renderArea.extent = GetRenderExtent(context, CurrentState);
+  renderingInfo.renderArea.extent =
+      GetRenderExtent(context, RecordingState::CurrentState);
   renderingInfo.layerCount = 1;
   renderingInfo.viewMask = 0;
   renderingInfo.flags = 0;
 
-  if (CurrentState.colorAttachments.size() >
+  if (RecordingState::CurrentState.colorAttachments.size() >
       context.deviceProperties.limits.maxColorAttachments) {
     return Error::Create(
         "Number of bound render targets exceeds device limits.");
@@ -143,8 +144,10 @@ inline auto BeginRendering(const GraphicsContext &context) -> Error {
   auto depthAttachment = VkRenderingAttachmentInfo{};
   auto stencilAttachment = VkRenderingAttachmentInfo{};
 
-  for (int i = 0; i < CurrentState.colorAttachments.size(); i++) {
-    const auto &rendertarget = CurrentState.colorAttachments.at(i);
+  for (int i = 0; i < RecordingState::CurrentState.colorAttachments.size();
+       i++) {
+    const auto &rendertarget =
+        RecordingState::CurrentState.colorAttachments.at(i);
     CHECK_ERR(
         rendertarget.texture->UseAsAttachment(context, rendertarget.loadOp));
 
@@ -162,8 +165,8 @@ inline auto BeginRendering(const GraphicsContext &context) -> Error {
   bool hasDepth = false;
   bool hasStencil = false;
 
-  if (CurrentState.hasDepthStencilAttachment) {
-    auto &rendertarget = CurrentState.depthStencilAttachment;
+  if (RecordingState::CurrentState.hasDepthStencilAttachment) {
+    auto &rendertarget = RecordingState::CurrentState.depthStencilAttachment;
     CHECK_ERR(
         rendertarget.texture->UseAsAttachment(context, rendertarget.loadOp));
 
@@ -187,9 +190,11 @@ inline auto BeginRendering(const GraphicsContext &context) -> Error {
   }
 
 #ifndef NDEBUG
-  VkExtent2D expectedExtent = GetRenderExtent(context, CurrentState);
+  VkExtent2D expectedExtent =
+      GetRenderExtent(context, RecordingState::CurrentState);
 
-  for (const auto &rendertarget : CurrentState.colorAttachments) {
+  for (const auto &rendertarget :
+       RecordingState::CurrentState.colorAttachments) {
     if (rendertarget.texture->GetWidth() != expectedExtent.width ||
         rendertarget.texture->GetHeight() != expectedExtent.height) {
       return Error::Create(
@@ -198,17 +203,18 @@ inline auto BeginRendering(const GraphicsContext &context) -> Error {
   }
 
   if (hasDepth || hasStencil) {
-    if (CurrentState.depthStencilAttachment.texture->GetWidth() !=
-            expectedExtent.width ||
-        CurrentState.depthStencilAttachment.texture->GetHeight() !=
-            expectedExtent.height) {
+    if (RecordingState::CurrentState.depthStencilAttachment.texture
+                ->GetWidth() != expectedExtent.width ||
+        RecordingState::CurrentState.depthStencilAttachment.texture
+                ->GetHeight() != expectedExtent.height) {
       return Error::Create(
           "Depth/stencil attachment extent does not match render area extent.");
     }
   }
 #endif
 
-  renderingInfo.colorAttachmentCount = CurrentState.colorAttachments.size();
+  renderingInfo.colorAttachmentCount =
+      RecordingState::CurrentState.colorAttachments.size();
   renderingInfo.pColorAttachments = colorAttachments.data();
 
   renderingInfo.pStencilAttachment = hasStencil ? &stencilAttachment : nullptr;
@@ -225,18 +231,20 @@ inline auto BeginRendering(const GraphicsContext &context) -> Error {
   GetIsCurrentlyRendering() = true;
 
   // Make sure subsequent renders load from the existing content if we ever need to re-bind mid-pass
-  for (auto &rendertarget : CurrentState.colorAttachments) {
+  for (auto &rendertarget : RecordingState::CurrentState.colorAttachments) {
     rendertarget.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
   }
 
-  if (CurrentState.hasDepthStencilAttachment) {
-    CurrentState.depthStencilAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+  if (RecordingState::CurrentState.hasDepthStencilAttachment) {
+    RecordingState::CurrentState.depthStencilAttachment.loadOp =
+        VK_ATTACHMENT_LOAD_OP_LOAD;
   }
 
   return Error::Success();
 }
 
-auto EndRendering(const GraphicsContext &context) -> void {
+auto EndRendering(const GraphicsContext &context,
+                  VkCommandBuffer vkCommandBuffer) -> void {
   if (GetIsCurrentlyRendering()) {
     assert(Graphics::GetVirtualCommandBuffer() != nullptr);
 
@@ -245,7 +253,7 @@ auto EndRendering(const GraphicsContext &context) -> void {
     // #endif
 
     TracyMessageL("End Rendering");
-    // vkCmdEndRendering(Graphics::GetCommandBuffer());
+    vkCmdEndRendering(vkCommandBuffer);
     // GetCommandBuffer()->EndRendering({});
     GetIsCurrentlyRendering() = false;
   }
@@ -312,32 +320,41 @@ auto PrepareRendering(const GraphicsContext &context,
   bool sameFFWinding = false;
 
   // Flush updates the last state so we need to compare before updating it
-  if (LastState != nullptr) {
-    sameViewport = compareViewports(CurrentState, *LastState);
-    sameScissor = compareScissors(CurrentState, *LastState);
-    sameDepth = compareDepthConfigs(CurrentState, *LastState);
-    sameBlendMode = compareBlendmodes(CurrentState, *LastState);
-    sameCullmode = CurrentState.cullMode == LastState->cullMode;
-    sameFFWinding = CurrentState.frontFace == LastState->frontFace;
+  if (RecordingState::LastState != nullptr) {
+    sameViewport = compareViewports(RecordingState::CurrentState,
+                                    *RecordingState::LastState);
+    sameScissor = compareScissors(RecordingState::CurrentState,
+                                  *RecordingState::LastState);
+    sameDepth = compareDepthConfigs(RecordingState::CurrentState,
+                                    *RecordingState::LastState);
+    sameBlendMode = compareBlendmodes(RecordingState::CurrentState,
+                                      *RecordingState::LastState);
+    sameCullmode = RecordingState::CurrentState.cullMode ==
+                   RecordingState::LastState->cullMode;
+    sameFFWinding = RecordingState::CurrentState.frontFace ==
+                    RecordingState::LastState->frontFace;
   }
 
+  bool isGraphics =
+      RecordingState::CurrentState.bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS;
+
   auto updatedState = CHECK_RES(Flush(context, vkCommandBuffer));
-  if (updatedState) {
-    EndRendering(context);
+  if (updatedState || !isGraphics) {
+    EndRendering(context, vkCommandBuffer);
   }
 
   {
     assert(GetPipelineCache().currentLayout.layout != nullptr);
     assert(GetVirtualCommandBuffer() != VK_NULL_HANDLE);
     ZoneScopedN("Flush push buffer data");
-    for (auto &pushBuffer : CurrentState.shader->pushBuffers) {
+    for (auto &pushBuffer : RecordingState::CurrentState.shader->pushBuffers) {
       pushBuffer.FlushData(GetPipelineCache().currentLayout.layout);
     }
   }
 
   auto stages = VK_PIPELINE_STAGE_2_NONE;
 
-  for (const auto &stage : CurrentState.shader->entryPoints) {
+  for (const auto &stage : RecordingState::CurrentState.shader->entryPoints) {
     switch (stage.second) {
     case VK_SHADER_STAGE_VERTEX_BIT:
       stages |= VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT;
@@ -353,11 +370,11 @@ auto PrepareRendering(const GraphicsContext &context,
     }
   }
 
-  CHECK_ERR(BindDefaultTextures(context, CurrentState.shader.get()));
+  CHECK_ERR(
+      BindDefaultTextures(context, RecordingState::CurrentState.shader.get()));
   CHECK_ERR(BindDescriptorSets(context, vkCommandBuffer, stages));
 
   bool wasRendering = GetIsCurrentlyRendering();
-  bool isGraphics = CurrentState.bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS;
 
   if (isGraphics) {
     ZoneScopedN("Dynamic state setup");
@@ -385,24 +402,30 @@ auto PrepareRendering(const GraphicsContext &context,
     }
 
     if (!sameDepth) {
-      vkCmdSetDepthTestEnable(vkCommandBuffer, CurrentState.depthTestEnable);
-      vkCmdSetDepthWriteEnable(vkCommandBuffer, CurrentState.depthWriteEnable);
-      vkCmdSetDepthCompareOp(vkCommandBuffer, CurrentState.depthCompareOp);
+      vkCmdSetDepthTestEnable(vkCommandBuffer,
+                              RecordingState::CurrentState.depthTestEnable);
+      vkCmdSetDepthWriteEnable(vkCommandBuffer,
+                               RecordingState::CurrentState.depthWriteEnable);
+      vkCmdSetDepthCompareOp(vkCommandBuffer,
+                             RecordingState::CurrentState.depthCompareOp);
     }
 
-    if (!sameBlendMode && CurrentState.colorAttachments.size() > 0) {
+    if (!sameBlendMode &&
+        RecordingState::CurrentState.colorAttachments.size() > 0) {
       Math::StackVector<VkBool32, MAX_COLOR_ATTACHMENTS> blendEnables = {};
       Math::StackVector<VkColorComponentFlags, MAX_COLOR_ATTACHMENTS>
           colorWriteMasks = {};
-      for (const auto &attachment : CurrentState.colorAttachments) {
+      for (const auto &attachment :
+           RecordingState::CurrentState.colorAttachments) {
         blendEnables.emplace_back(attachment.blendMode.blendEnable);
         colorWriteMasks.emplace_back(attachment.blendMode.colorWriteMask);
       }
 
       vkCmdSetColorBlendEquationEXT(
           vkCommandBuffer, 0,
-          static_cast<uint32_t>(CurrentState.colorBlendEquations.size()),
-          CurrentState.colorBlendEquations.data());
+          static_cast<uint32_t>(
+              RecordingState::CurrentState.colorBlendEquations.size()),
+          RecordingState::CurrentState.colorBlendEquations.data());
       vkCmdSetColorBlendEnableEXT(vkCommandBuffer, 0,
                                   static_cast<uint32_t>(blendEnables.size()),
                                   blendEnables.data());
@@ -412,11 +435,12 @@ auto PrepareRendering(const GraphicsContext &context,
     }
 
     if (!sameCullmode) {
-      vkCmdSetCullMode(vkCommandBuffer, CurrentState.cullMode);
+      vkCmdSetCullMode(vkCommandBuffer, RecordingState::CurrentState.cullMode);
     }
 
     if (!sameFFWinding) {
-      vkCmdSetFrontFace(vkCommandBuffer, CurrentState.frontFace);
+      vkCmdSetFrontFace(vkCommandBuffer,
+                        RecordingState::CurrentState.frontFace);
     }
   }
 

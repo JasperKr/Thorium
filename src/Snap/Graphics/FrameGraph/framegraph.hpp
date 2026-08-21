@@ -26,7 +26,8 @@ struct FrameGraph {
   static inline const CommandLevel InvalidDepth = UINT16_MAX;
 
   auto Submit(const VirtualCommandBuffer &commands) -> Error;
-  auto Write(VkCommandBuffer cmdBuffer) -> Error;
+  auto Write(const GraphicsContext &context, VkCommandBuffer cmdBuffer)
+      -> Error;
 
 private:
   VirtualCommandBuffer commandBuffer;

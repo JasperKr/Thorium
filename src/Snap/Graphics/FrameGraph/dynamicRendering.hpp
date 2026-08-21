@@ -1,8 +1,14 @@
 #pragma once
 
+#include "Graphics/graphicsContext.hpp"
 #include "Modules/error.hpp"
 namespace Graphics {
 
-auto PrepareRendering(const struct GraphicsContext &context) -> Error;
+struct GraphicsContext;
 
-}
+auto PrepareRendering(const GraphicsContext &context,
+                      VkCommandBuffer vkCommandBuffer) -> Error;
+auto EndRendering(const GraphicsContext &context,
+                  VkCommandBuffer vkCommandBuffer) -> void;
+
+} // namespace Graphics

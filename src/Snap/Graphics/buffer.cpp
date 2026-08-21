@@ -165,8 +165,6 @@ auto Buffer::UploadLarge(const GraphicsContext &context,
     return Error::Create("Failed to get command buffer for buffer upload.");
   }
 
-  RenderState::EndRendering(context);
-
   VkBufferCopy copyRegion = {};
   copyRegion.srcOffset = 0;
   copyRegion.dstOffset = offset;
@@ -250,8 +248,6 @@ auto Buffer::UploadRing(const GraphicsContext &context,
   copyRegion.dstOffset = offset;
   copyRegion.size = uploadSize;
 
-  RenderState::EndRendering(context);
-  // vkCmdCopyBuffer(commandBuffer, uploadBuffer->handle, handle, 1, &copyRegion);
   commandBuffer->CopyBuffer({uploadBuffer->handle, handle, 1, &copyRegion});
   uploadOffset += uploadSize;
 
@@ -458,13 +454,10 @@ auto Buffer::CopyTo(const GraphicsContext &context,
     return Error::Success();
   }
 
-  RenderState::EndRendering(context);
-
   VkBufferCopy copyRegion = {};
   copyRegion.srcOffset = srcIndex;
   copyRegion.dstOffset = dstIndex;
   copyRegion.size = size;
-  // vkCmdCopyBuffer(commandBuffer, handle, dstBuffer.handle, 1, &copyRegion);
   commandBuffer->CopyBuffer({handle, dstBuffer.handle, 1, &copyRegion});
 
   MarkUse();
@@ -491,8 +484,6 @@ auto Buffer::CopyTo(const GraphicsContext &context, Texture &dstTexture,
     return Error::Create(
         "Source buffer was not created with TRANSFER_SRC usage flag for copy.");
   }
-
-  RenderState::EndRendering(context);
 
   CHECK_ERR(dstTexture.UseAsTransferDst(context));
 
@@ -625,8 +616,6 @@ auto Buffer::Readback(const GraphicsContext &context,
     return Error::Unexpected(
         "Failed to get command buffer for buffer readback.");
   }
-
-  RenderState::EndRendering(context);
 
   VkBufferCopy copyRegion = {};
   copyRegion.srcOffset = offset;

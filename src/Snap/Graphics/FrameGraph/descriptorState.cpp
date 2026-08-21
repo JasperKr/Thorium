@@ -182,7 +182,7 @@ inline auto AllocateDescriptorSet(const GraphicsContext &context,
   accelStructInfos.reserve(key.bindings.size());
   accelStructHandles.reserve(key.bindings.size());
 
-  auto &shader = CurrentState.shader;
+  auto &shader = RecordingState::CurrentState.shader;
   auto &state = shader->GetState();
 
   for (const auto &binding : key.bindings) {
@@ -306,15 +306,17 @@ auto BindDescriptorSets(const GraphicsContext &context,
                         VkCommandBuffer vkCommandBuffer,
                         VkPipelineStageFlags2 stage) -> Error {
   ZoneScoped;
-  auto &shader = CurrentState.shader;
+  auto &shader = RecordingState::CurrentState.shader;
   auto &state = shader->GetState();
 
   VkPipelineStageFlags2 stageFlags = 0;
 
-  if (CurrentState.bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS) {
+  if (RecordingState::CurrentState.bindPoint ==
+      VK_PIPELINE_BIND_POINT_GRAPHICS) {
     stageFlags |= VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT;
     stageFlags |= VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
-  } else if (CurrentState.bindPoint == VK_PIPELINE_BIND_POINT_COMPUTE) {
+  } else if (RecordingState::CurrentState.bindPoint ==
+             VK_PIPELINE_BIND_POINT_COMPUTE) {
     stageFlags |= VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
   }
 
@@ -410,7 +412,7 @@ auto BindDescriptorSets(const GraphicsContext &context,
   }
 
   vkCmdBindDescriptorSets(
-      vkCommandBuffer, CurrentState.bindPoint,
+      vkCommandBuffer, RecordingState::CurrentState.bindPoint,
       GetPipelineCache().currentLayout.layout, 0,
       static_cast<uint32_t>(descriptorSets.size()), descriptorSets.data(),
       static_cast<uint32_t>(dynamicOffsets.size()), dynamicOffsets.data());

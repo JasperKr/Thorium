@@ -2,6 +2,7 @@
 #include "Graphics/Buffers/uniform.hpp"
 
 #include "Graphics/FrameGraph/commands.hpp"
+#include "Graphics/FrameGraph/dynamicRendering.hpp"
 #include "Graphics/buffer.hpp"
 #include "Graphics/graphics.hpp"
 #include "Graphics/graphicsContext.hpp"
@@ -365,8 +366,6 @@ auto Draw(const GraphicsContext &context, Mesh &mesh, uint32_t instanceCount)
 
   CHECK_ERR(InsertResourceBarriers(context));
 
-  CHECK_ERR(RenderState::PrepareRendering(context));
-
   auto vertexCount = mesh.GetVertexCount();
 
   {
@@ -437,8 +436,7 @@ auto Dispatch(const GraphicsContext &context, const Math::Uvec3 &threadgroups)
   ERR_ASSERT(commandBuffer != nullptr);
 
   ERR_ASSERT(RenderState::GetBindPoint() == VK_PIPELINE_BIND_POINT_COMPUTE);
-  CHECK_ERR(RenderState::PrepareRendering(context));
-  RenderState::EndRendering(context);
+  // Also stops rendering if we are bound to a compute shader.
 
   CHECK_ERR(InsertResourceBarriers(context));
 
@@ -492,8 +490,8 @@ auto DispatchIndirect(const GraphicsContext &context,
   }
 
   ERR_ASSERT(RenderState::GetBindPoint() == VK_PIPELINE_BIND_POINT_COMPUTE);
-  CHECK_ERR(RenderState::PrepareRendering(context));
-  RenderState::EndRendering(context);
+
+  // Also stops rendering if we are bound to a compute shader.
 
   CHECK_ERR(InsertResourceBarriers(context));
 
@@ -525,8 +523,6 @@ auto DrawIndirect(const GraphicsContext &context, Mesh &mesh,
   RenderState::SetTopology(mesh.GetTopology());
 
   CHECK_ERR(InsertResourceBarriers(context));
-
-  CHECK_ERR(RenderState::PrepareRendering(context));
 
   if (offset % 4 != 0) {
     return Error::Create(
@@ -580,8 +576,6 @@ auto Draw(const GraphicsContext &context, const VkPrimitiveTopology &topology,
 
   CHECK_ERR(InsertResourceBarriers(context));
 
-  CHECK_ERR(RenderState::PrepareRendering(context));
-
   RenderState::CurrentStats.drawCalls++;
   RenderState::CurrentStats.triangleCount +=
       static_cast<uint64_t>(vertexCount * instanceCount);
@@ -612,8 +606,6 @@ auto Draw(const GraphicsContext &context, const Ref<Buffer> &indexBuffer,
   RenderState::SetTopology(topology);
 
   CHECK_ERR(InsertResourceBarriers(context));
-
-  CHECK_ERR(RenderState::PrepareRendering(context));
 
   {
     std::lock_guard<std::mutex> lock(indexBuffer->mutex);

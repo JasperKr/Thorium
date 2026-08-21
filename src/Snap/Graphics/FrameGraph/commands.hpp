@@ -197,6 +197,9 @@ struct CommandStateManager {
 struct Callable {
   virtual ~Callable() = default;
   virtual auto Call(VkCommandBuffer cmdBuffer) const -> Error = 0;
+
+  // Determines if to call Begin or End rendering. (though dispatches still require Begin)
+  bool requiresRendering{};
 };
 
 struct BoundResources {
@@ -237,6 +240,9 @@ struct DrawState {
 
   auto GetStateFor(void const *resource) const
       -> std::pair<VkAccessFlags2, VkPipelineStageFlags2>;
+
+  auto Apply(const GraphicsContext &context, VirtualCommandBuffer &buffer,
+             VkCommandBuffer cmdBuffer) const -> Error;
 };
 
 namespace Args {
@@ -252,7 +258,9 @@ struct VkCmdDraw : Callable, DrawState, BoundResources {
   VkCmdDraw(uint32_t vertexCount, uint32_t instanceCount, uint32_t firstVertex,
             uint32_t firstInstance)
       : vertexCount(vertexCount), instanceCount(instanceCount),
-        firstVertex(firstVertex), firstInstance(firstInstance) {}
+        firstVertex(firstVertex), firstInstance(firstInstance) {
+    requiresRendering = true;
+  }
 
   auto Call(VkCommandBuffer cmdBuffer) const -> Error override {
     vkCmdDraw(cmdBuffer, vertexCount, instanceCount, firstVertex,
@@ -275,7 +283,9 @@ struct VkCmdDrawIndexed : Callable, DrawState, BoundResources {
                    uint32_t firstInstance)
       : indexCount(indexCount), instanceCount(instanceCount),
         firstIndex(firstIndex), vertexOffset(vertexOffset),
-        firstInstance(firstInstance) {}
+        firstInstance(firstInstance) {
+    requiresRendering = true;
+  }
 
   auto Call(VkCommandBuffer cmdBuffer) const -> Error override {
     vkCmdDrawIndexed(cmdBuffer, indexCount, instanceCount, firstIndex,
@@ -294,7 +304,9 @@ struct VkCmdDrawIndirect : Callable, DrawState, BoundResources {
 
   VkCmdDrawIndirect(VkBuffer buffer, VkDeviceSize offset, uint32_t drawCount,
                     uint32_t stride)
-      : buffer(buffer), offset(offset), drawCount(drawCount), stride(stride) {}
+      : buffer(buffer), offset(offset), drawCount(drawCount), stride(stride) {
+    requiresRendering = true;
+  }
 
   auto Call(VkCommandBuffer cmdBuffer) const -> Error override {
     vkCmdDrawIndirect(cmdBuffer, buffer, offset, drawCount, stride);
@@ -312,7 +324,9 @@ struct VkCmdDrawIndexedIndirect : Callable, DrawState, BoundResources {
 
   VkCmdDrawIndexedIndirect(VkBuffer buffer, VkDeviceSize offset,
                            uint32_t drawCount, uint32_t stride)
-      : buffer(buffer), offset(offset), drawCount(drawCount), stride(stride) {}
+      : buffer(buffer), offset(offset), drawCount(drawCount), stride(stride) {
+    requiresRendering = true;
+  }
 
   auto Call(VkCommandBuffer cmdBuffer) const -> Error override {
     vkCmdDrawIndexedIndirect(cmdBuffer, buffer, offset, drawCount, stride);
@@ -330,7 +344,9 @@ struct VkCmdDispatch : Callable, DrawState, BoundResources {
   VkCmdDispatch(uint32_t groupCountX, uint32_t groupCountY,
                 uint32_t groupCountZ)
       : groupCountX(groupCountX), groupCountY(groupCountY),
-        groupCountZ(groupCountZ) {}
+        groupCountZ(groupCountZ) {
+    requiresRendering = true;
+  }
 
   auto Call(VkCommandBuffer cmdBuffer) const -> Error override {
     vkCmdDispatch(cmdBuffer, groupCountX, groupCountY, groupCountZ);
@@ -345,7 +361,9 @@ struct VkCmdDispatchIndirect : Callable, DrawState, BoundResources {
   VkDeviceSize offset;
 
   VkCmdDispatchIndirect(VkBuffer buffer, VkDeviceSize offset)
-      : buffer(buffer), offset(offset) {}
+      : buffer(buffer), offset(offset) {
+    requiresRendering = true;
+  }
 
   auto Call(VkCommandBuffer cmdBuffer) const -> Error override {
     vkCmdDispatchIndirect(cmdBuffer, buffer, offset);
@@ -511,6 +529,8 @@ struct VkCmdBuildAccelerationStructuresKHR : Callable {
       CommandType::vkCmdBuildAccelerationStructuresKHR;
 
   uint32_t infoCount;
+
+  std::vector<VkAccelerationStructureGeometryKHR> geometries;
   std::vector<VkAccelerationStructureBuildGeometryInfoKHR> infos;
   std::vector<VkAccelerationStructureBuildRangeInfoKHR> buildRangeInfos;
 
@@ -520,20 +540,46 @@ struct VkCmdBuildAccelerationStructuresKHR : Callable {
       const VkAccelerationStructureBuildRangeInfoKHR *const *ppBuildRangeInfos)
       : infoCount(infoCount), infos(pInfos, pInfos + infoCount), // NOLINT
         buildRangeInfos(infoCount) {
+
+    size_t geometryCount = 0;
+
+    for (const auto &info : infos) {
+      geometryCount += info.geometryCount;
+    }
+
+    geometries.reserve(geometryCount);
+
     for (size_t i = 0; i < infoCount; ++i) {
-      assert(infos.at(i).pNext == nullptr);
-      buildRangeInfos[i] = *ppBuildRangeInfos[i]; // NOLINT
+      assert(infos[i].pNext == nullptr);
+      assert(infos[i].ppGeometries == nullptr);
+
+      const size_t offset = geometries.size();
+
+      for (uint32_t j = 0; j < infos[i].geometryCount; ++j) {
+        geometries.push_back(infos[i].pGeometries[j]);
+      }
+
+      buildRangeInfos[i] = *ppBuildRangeInfos[i];
     }
   }
 
   auto Call(VkCommandBuffer cmdBuffer) const -> Error override {
     std::vector<const VkAccelerationStructureBuildRangeInfoKHR *>
         ppBuildRangeInfos;
+    std::vector<VkAccelerationStructureBuildGeometryInfoKHR> infos2 = infos;
     ppBuildRangeInfos.reserve(buildRangeInfos.size());
+
     for (const auto &range : buildRangeInfos) {
       ppBuildRangeInfos.push_back(&range);
     }
-    vkCmdBuildAccelerationStructuresKHR(cmdBuffer, infoCount, infos.data(),
+
+    size_t offset = 0;
+    for (size_t i = 0; i < infoCount; ++i) {
+      infos2.at(i).pGeometries = geometries.data() + offset;
+      offset += infos2.at(i).geometryCount;
+    }
+
+    vkCmdBuildAccelerationStructuresKHR(cmdBuffer, infoCount, infos2.data(),
                                         ppBuildRangeInfos.data());
     return {};
   }

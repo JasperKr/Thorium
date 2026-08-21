@@ -15,7 +15,8 @@ Checks: >
   -bugprone-suspicious-stringview-data-usage,
   -bugprone-easily-swappable-parameters,
   -cppcoreguidelines-pro-type-union-access,
-  -hicpp-static-assert
+  -hicpp-static-assert,
+  -readability-function-cognitive-complexity
 
 # -cppcoreguidelines-pro-type-reinterpret-cast
 # -hicpp-no-array-decay

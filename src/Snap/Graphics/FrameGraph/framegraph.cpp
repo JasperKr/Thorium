@@ -1,5 +1,7 @@
 #include "framegraph.hpp"
 #include "Graphics/FrameGraph/commands.hpp"
+#include "Graphics/FrameGraph/dynamicRendering.hpp"
+#include "Graphics/graphicsContext.hpp"
 #include "Libraries/vma.hpp"
 #include "Modules/Helpers/utils.hpp"
 #include "Modules/console.hpp"
@@ -778,7 +780,8 @@ auto FrameGraph::Compile() -> Error {
   return {};
 }
 
-auto FrameGraph::Write(VkCommandBuffer cmdBuffer) -> Error {
+auto FrameGraph::Write(const GraphicsContext &context,
+                       VkCommandBuffer cmdBuffer) -> Error {
   VkCommandBufferBeginInfo beginInfo = {};
   beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
   beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
@@ -794,7 +797,28 @@ auto FrameGraph::Write(VkCommandBuffer cmdBuffer) -> Error {
 
       vkCmdPipelineBarrier2(cmdBuffer, &depInfo);
     }
+
+    for (const CommandID commandId : level.commands) {
+      const auto &command = commandBuffer.commands.at(commandId);
+      const auto *callable = get_if_derived<Callable>(command.data);
+      const auto *state = get_if_derived<DrawState>(command.data);
+
+      if (state != nullptr && callable != nullptr) {
+        if (callable->requiresRendering) {
+          CHECK_ERR(state->Apply(context, commandBuffer, cmdBuffer));
+        }
+      }
+
+      if (callable != nullptr) {
+        if (!callable->requiresRendering) {
+          EndRendering(context, cmdBuffer);
+        }
+        CHECK_ERR(callable->Call(cmdBuffer));
+      }
+    }
   }
+
+  EndRendering(context, cmdBuffer);
 
   vkEndCommandBuffer(cmdBuffer);
 

@@ -4,6 +4,7 @@
 #include "Graphics/renderState.hpp"
 #include "Modules/Helpers/hasher.hpp"
 #include "Modules/image.hpp"
+#include "dynamicRendering.hpp"
 #include <vector>
 
 namespace Graphics {
@@ -441,6 +442,16 @@ auto VirtualCommandBuffer::Reset() -> void {
 
 auto ResetCommandBuffer(VirtualCommandBuffer &buffer) -> void {
   buffer.Reset();
+}
+
+auto DrawState::Apply(const GraphicsContext &context,
+                      VirtualCommandBuffer &buffer,
+                      VkCommandBuffer cmdBuffer) const -> Error {
+  const auto &state = CommandStateManager::States.at(stateID);
+
+  CHECK_ERR(PrepareRendering(context, cmdBuffer));
+
+  return {};
 }
 
 } // namespace Graphics

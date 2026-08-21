@@ -646,8 +646,6 @@ auto Texture::FromMemory(const GraphicsContext &context,
     return Error::Create("Failed to get command buffer for SetPixels.");
   }
 
-  RenderState::EndRendering(context);
-
   commandBuffer->CopyBufferToImage(
       {buffer->handle, texture->imageMemory->image, VK_IMAGE_LAYOUT_GENERAL,
        static_cast<uint32_t>(copyRegions.size()), copyRegions.data()});
@@ -797,8 +795,6 @@ auto ImageMemory::TransitionLayout(const GraphicsContext &context,
   VkDependencyInfo dep{.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
                        .imageMemoryBarrierCount = 1,
                        .pImageMemoryBarriers = &barrier};
-
-  RenderState::EndRendering(context);
 
   // vkCmdPipelineBarrier2(commandBuffer, &dep);
   // commandBuffer->PipelineBarrier2({&dep});
@@ -957,12 +953,6 @@ inline auto WriteSimplifiedPixelData(const Ref<Texture> &texture,
     return Error::Create("Failed to get command buffer for SetPixels.");
   }
 
-  RenderState::EndRendering(context);
-
-  // vkCmdCopyBufferToImage(commandBuffer, buffer->handle,
-  //                        texture->imageMemory->image, VK_IMAGE_LAYOUT_GENERAL,
-  //                        1, &region);
-
   commandBuffer->CopyBufferToImage({buffer->handle, texture->imageMemory->image,
                                     VK_IMAGE_LAYOUT_GENERAL, 1, &region});
 
@@ -1106,11 +1096,6 @@ auto Texture::SetPixels(const GraphicsContext &context,
   if (commandBuffer == nullptr) {
     return Error::Create("Failed to get command buffer for SetPixels.");
   }
-
-  RenderState::EndRendering(context);
-
-  // vkCmdCopyBufferToImage(commandBuffer, buffer->handle, imageMemory->image,
-  //                        VK_IMAGE_LAYOUT_GENERAL, 1, &region);
 
   commandBuffer->CopyBufferToImage({buffer->handle, imageMemory->image,
                                     VK_IMAGE_LAYOUT_GENERAL, 1, &region});
@@ -1539,8 +1524,6 @@ auto Texture::GenerateMipmaps(const GraphicsContext &context,
     return Error::Create("Automatic mipmap generation is not supported for "
                          "compressed texture formats.");
   }
-
-  RenderState::EndRendering(context);
 
   auto mipWidth = static_cast<int32_t>(imageMemory->size.width);
   auto mipHeight = static_cast<int32_t>(imageMemory->size.height);
