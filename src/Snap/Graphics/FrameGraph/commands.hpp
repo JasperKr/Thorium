@@ -6,6 +6,7 @@
 #include "Libraries/vma.hpp"
 #include "Modules/Helpers/utils.hpp"
 #include "Modules/error.hpp"
+#include "Modules/stackVector.hpp"
 #include <cassert>
 #include <cstdint>
 #include <cstring>
@@ -56,6 +57,7 @@ enum class CommandType : uint8_t {
   vkCmdWriteAccelerationStructuresPropertiesKHR,
 
   vkCmdClearAttachments,
+  vkCmdPipelineBarrier2,
 };
 
 static const Utils::EnumStringHelper<CommandType> CommandTypeEnumHelper{{
@@ -81,38 +83,34 @@ static const Utils::EnumStringHelper<CommandType> CommandTypeEnumHelper{{
     "vkCmdWriteAccelerationStructuresPropertiesKHR",
 
     "vkCmdClearAttachments",
+    "vkCmdPipelineBarrier2",
 }};
 
 struct GraphState {
-  VkCullModeFlags cullMode = VK_CULL_MODE_BACK_BIT;
-  VkFrontFace frontFace = VK_FRONT_FACE_CLOCKWISE;
+  VkCullModeFlags cullMode = VK_CULL_MODE_FLAG_BITS_MAX_ENUM;
+  VkFrontFace frontFace = VK_FRONT_FACE_MAX_ENUM;
   VkBool32 depthTestEnable = 1;
   VkBool32 depthWriteEnable = 1;
-  VkCompareOp depthCompareOp = VK_COMPARE_OP_LESS;
+  VkCompareOp depthCompareOp = VK_COMPARE_OP_MAX_ENUM;
   VkBool32 stencilTestEnable = 0;
-  VkPolygonMode polygonMode = VK_POLYGON_MODE_FILL;
+  VkPolygonMode polygonMode = VK_POLYGON_MODE_MAX_ENUM;
   VkViewport viewport{};
   VkRect2D scissor{};
-
-  std::vector<VkBuffer> vertexBuffers;
-  std::vector<VkDeviceSize> vertexBufferOffsets;
-  VkBuffer indexBuffer = VK_NULL_HANDLE;
-  VkIndexType indexType = VK_INDEX_TYPE_MAX_ENUM;
-  VkDeviceSize indexBufferOffset{};
 
   mutable bool dirty = true;
 
   std::string currentDebugMarker;
   std::optional<Color> currentDebugMarkerColor;
-
-  std::vector<VkColorBlendEquationEXT> colorBlendEquations;
+  Math::StackVector<VkColorBlendEquationEXT, MAX_COLOR_ATTACHMENTS>
+      colorBlendEquations;
 
   Ref<Shader> shader;
 
-  VkPrimitiveTopology primitiveTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+  VkPrimitiveTopology primitiveTopology = VK_PRIMITIVE_TOPOLOGY_MAX_ENUM;
 
-  VkPipelineBindPoint bindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-  std::vector<RenderState::RenderTarget> colorAttachments;
+  VkPipelineBindPoint bindPoint = VK_PIPELINE_BIND_POINT_MAX_ENUM;
+  Math::StackVector<RenderState::RenderTarget, MAX_COLOR_ATTACHMENTS>
+      colorAttachments;
   RenderState::RenderTarget depthStencilAttachment;
   bool hasDepthStencilAttachment = false;
 
@@ -122,8 +120,15 @@ struct GraphState {
   std::vector<VkVertexInputBindingDescription2EXT> bindingDescriptions;
   std::vector<VkVertexInputAttributeDescription2EXT> attributeDescriptions;
 
-  // Not taken into account for hashing, purely for copying to per-draw state
+  // Fields down from here are not taken into account for hashing,
+  // and are used purely for copying to per-draw state
   std::vector<char> pushConstants;
+
+  std::vector<VkBuffer> vertexBuffers;
+  std::vector<VkDeviceSize> vertexBufferOffsets;
+  VkBuffer indexBuffer = VK_NULL_HANDLE;
+  VkIndexType indexType = VK_INDEX_TYPE_MAX_ENUM;
+  VkDeviceSize indexBufferOffset{};
 
   mutable uint64_t hash{};
 
@@ -234,15 +239,18 @@ struct DrawState {
   // Copied from graph state.
   std::vector<char> pushConstants;
 
-  uint32_t stateID;
+  Math::StackVector<VkDescriptorSet, 16> descriptorSets; // NOLINT
+  Math::StackVector<uint32_t, 16> dynamicOffsets;        // NOLINT
 
-  DrawState();
+  uint32_t stateID = UINT32_MAX;
 
-  auto GetStateFor(void const *resource) const
+  auto GetStateFor(void const *resource, CommandType type) const
       -> std::pair<VkAccessFlags2, VkPipelineStageFlags2>;
 
   auto Apply(const GraphicsContext &context, VirtualCommandBuffer &buffer,
              VkCommandBuffer cmdBuffer) const -> Error;
+
+  auto Initialize(const GraphicsContext &context, CommandType type) -> Error;
 };
 
 namespace Args {
@@ -524,7 +532,7 @@ struct VkCmdFillBuffer : Callable, BoundResources {
   }
 };
 
-struct VkCmdBuildAccelerationStructuresKHR : Callable {
+struct VkCmdBuildAccelerationStructuresKHR : Callable, BoundResources {
   static const CommandType type =
       CommandType::vkCmdBuildAccelerationStructuresKHR;
 
@@ -537,7 +545,8 @@ struct VkCmdBuildAccelerationStructuresKHR : Callable {
   VkCmdBuildAccelerationStructuresKHR(
       uint32_t infoCount,
       const VkAccelerationStructureBuildGeometryInfoKHR *pInfos,
-      const VkAccelerationStructureBuildRangeInfoKHR *const *ppBuildRangeInfos)
+      const VkAccelerationStructureBuildRangeInfoKHR *const *ppBuildRangeInfos,
+      const std::vector<VkBuffer> &reads, const std::vector<VkBuffer> &writes)
       : infoCount(infoCount), infos(pInfos, pInfos + infoCount), // NOLINT
         buildRangeInfos(infoCount) {
 
@@ -545,6 +554,17 @@ struct VkCmdBuildAccelerationStructuresKHR : Callable {
 
     for (const auto &info : infos) {
       geometryCount += info.geometryCount;
+    }
+
+    this->reads.reserve(reads.size());
+    this->writes.reserve(writes.size());
+
+    for (const auto *read : reads) {
+      this->reads.emplace_back((void *)read);
+    }
+
+    for (const auto *write : writes) {
+      this->writes.emplace_back((void *)write);
     }
 
     geometries.reserve(geometryCount);
@@ -797,7 +817,7 @@ struct VkCmdSetFrontFace {
   VkCmdSetFrontFace(VkFrontFace frontFace) : frontFace(frontFace) {}
 };
 
-struct VkCmdClearAttachments : Callable, BoundResources {
+struct VkCmdClearAttachments : Callable, BoundResources, DrawState {
   static const CommandType type = CommandType::vkCmdClearAttachments;
 
   std::vector<VkClearAttachment> attachments;
@@ -807,7 +827,9 @@ struct VkCmdClearAttachments : Callable, BoundResources {
                         const VkClearAttachment *pAttachments,
                         uint32_t rectCount, const VkClearRect *pRects)
       : attachments(pAttachments, pAttachments + attachmentCount),
-        rects(pRects, pRects + rectCount) {}
+        rects(pRects, pRects + rectCount) {
+    requiresRendering = true;
+  }
 
   auto Call(VkCommandBuffer cmdBuffer) const -> Error override {
     vkCmdClearAttachments(cmdBuffer, attachments.size(), attachments.data(),
@@ -830,6 +852,51 @@ struct VkCmdInsertDebugUtilsLabelEXT {
 
   VkCmdInsertDebugUtilsLabelEXT(const VkDebugUtilsLabelEXT *pLabelInfo)
       : labelInfo(*pLabelInfo) {}
+};
+
+struct VkCmdPipelineBarrier2 : Callable, BoundResources {
+  static const CommandType type = CommandType::vkCmdPipelineBarrier2;
+
+  VkDependencyInfo dependencyInfo;
+  std::vector<VkMemoryBarrier2> memoryBarriers;
+  std::vector<VkBufferMemoryBarrier2> bufferMemoryBarriers;
+  std::vector<VkImageMemoryBarrier2> imageMemoryBarriers;
+
+  VkCmdPipelineBarrier2(const VkDependencyInfo *pDependencyInfo)
+      : dependencyInfo(*pDependencyInfo) {
+    if (pDependencyInfo->pMemoryBarriers != nullptr) {
+      memoryBarriers.assign(pDependencyInfo->pMemoryBarriers,
+                            pDependencyInfo->pMemoryBarriers +
+                                pDependencyInfo->memoryBarrierCount);
+    }
+
+    if (pDependencyInfo->pBufferMemoryBarriers != nullptr) {
+      bufferMemoryBarriers.assign(
+          pDependencyInfo->pBufferMemoryBarriers,
+          pDependencyInfo->pBufferMemoryBarriers +
+              pDependencyInfo->bufferMemoryBarrierCount);
+    }
+
+    if (pDependencyInfo->pImageMemoryBarriers != nullptr) {
+      imageMemoryBarriers.assign(pDependencyInfo->pImageMemoryBarriers,
+                                 pDependencyInfo->pImageMemoryBarriers +
+                                     pDependencyInfo->imageMemoryBarrierCount);
+    }
+  }
+
+  auto Call(VkCommandBuffer cmdBuffer) const -> Error override {
+    VkDependencyInfo tempDepInfo = dependencyInfo;
+
+    tempDepInfo.pMemoryBarriers =
+        memoryBarriers.empty() ? nullptr : memoryBarriers.data();
+    tempDepInfo.pBufferMemoryBarriers =
+        bufferMemoryBarriers.empty() ? nullptr : bufferMemoryBarriers.data();
+    tempDepInfo.pImageMemoryBarriers =
+        imageMemoryBarriers.empty() ? nullptr : imageMemoryBarriers.data();
+
+    vkCmdPipelineBarrier2(cmdBuffer, &tempDepInfo);
+    return {};
+  }
 };
 
 // NOLINTEND(hicpp-explicit-conversions)
@@ -880,7 +947,7 @@ using ArgVariants = std::variant<
     Args::VkCmdBuildAccelerationStructuresKHR,
     Args::VkCmdCopyAccelerationStructureKHR, Args::VkCmdResetQueryPool,
     Args::VkCmdWriteAccelerationStructuresPropertiesKHR,
-    Args::VkCmdClearAttachments>;
+    Args::VkCmdClearAttachments, Args::VkCmdPipelineBarrier2>;
 
 struct Command {
   CommandID id = InvalidCommandID;
@@ -903,7 +970,6 @@ struct Command {
 
   [[nodiscard]] auto GetDrawState() const -> DrawState const * {
     return get_if_derived<DrawState>(data);
-    return {};
   }
 };
 
@@ -933,34 +999,33 @@ struct VirtualCommandBuffer {
     return {};
   }
 
-  auto Draw(const Args::VkCmdDraw &arguments) -> void;
-  auto DrawIndexed(const Args::VkCmdDrawIndexed &arguments) -> void;
-  auto DrawIndirect(const Args::VkCmdDrawIndirect &arguments) -> void;
+  auto Draw(const Args::VkCmdDraw &arguments) -> Error;
+  auto DrawIndexed(const Args::VkCmdDrawIndexed &arguments) -> Error;
+  auto DrawIndirect(const Args::VkCmdDrawIndirect &arguments) -> Error;
   auto DrawIndexedIndirect(const Args::VkCmdDrawIndexedIndirect &arguments)
-      -> void;
-  auto Dispatch(const Args::VkCmdDispatch &arguments) -> void;
-  auto DispatchIndirect(const Args::VkCmdDispatchIndirect &arguments) -> void;
-  auto BlitImage(const Args::VkCmdBlitImage &arguments) -> void;
+      -> Error;
+  auto Dispatch(const Args::VkCmdDispatch &arguments) -> Error;
+  auto DispatchIndirect(const Args::VkCmdDispatchIndirect &arguments) -> Error;
+  auto BlitImage(const Args::VkCmdBlitImage &arguments) -> Error;
   auto PushConstants(const Args::VkCmdPushConstants &arguments) -> void;
-  auto CopyBuffer(const Args::VkCmdCopyBuffer &arguments) -> void;
-  auto CopyImage(const Args::VkCmdCopyImage &arguments) -> void;
-  auto CopyBufferToImage(const Args::VkCmdCopyBufferToImage &arguments) -> void;
-  auto CopyImageToBuffer(const Args::VkCmdCopyImageToBuffer &arguments) -> void;
-
-  // TODO: Implement this for layout transitions and mipmapping blits only
-  // Storing src, dst textures and integrating it into the GetDependencies method.
+  auto CopyBuffer(const Args::VkCmdCopyBuffer &arguments) -> Error;
+  auto CopyImage(const Args::VkCmdCopyImage &arguments) -> Error;
+  auto CopyBufferToImage(const Args::VkCmdCopyBufferToImage &arguments)
+      -> Error;
+  auto CopyImageToBuffer(const Args::VkCmdCopyImageToBuffer &arguments)
+      -> Error;
 
   // Custom command, workaround for the barrier system working on an image-based granularity, not range based
-  auto MipmapTexture(const Args::MipmapTexture &arguments) -> void;
-  auto FillBuffer(const Args::VkCmdFillBuffer &arguments) -> void;
+  auto MipmapTexture(const Args::MipmapTexture &arguments) -> Error;
+  auto FillBuffer(const Args::VkCmdFillBuffer &arguments) -> Error;
   auto BuildAccelerationStructuresKHR(
-      const Args::VkCmdBuildAccelerationStructuresKHR &arguments) -> void;
+      const Args::VkCmdBuildAccelerationStructuresKHR &arguments) -> Error;
   auto CopyAccelerationStructureKHR(
-      const Args::VkCmdCopyAccelerationStructureKHR &arguments) -> void;
-  auto ResetQueryPool(const Args::VkCmdResetQueryPool &arguments) -> void;
+      const Args::VkCmdCopyAccelerationStructureKHR &arguments) -> Error;
+  auto ResetQueryPool(const Args::VkCmdResetQueryPool &arguments) -> Error;
   auto WriteAccelerationStructuresPropertiesKHR(
       const Args::VkCmdWriteAccelerationStructuresPropertiesKHR &arguments)
-      -> void;
+      -> Error;
   auto BindIndexBuffer(const Args::VkCmdBindIndexBuffer &arguments) -> void;
   auto BindVertexBuffers(const Args::VkCmdBindVertexBuffers &arguments) -> void;
   auto SetVertexInputEXT(const Args::VkCmdSetVertexInputEXT &arguments) -> void;
@@ -984,7 +1049,7 @@ struct VirtualCommandBuffer {
       -> void;
   auto SetCullMode(const Args::VkCmdSetCullMode &arguments) -> void;
   auto SetFrontFace(const Args::VkCmdSetFrontFace &arguments) -> void;
-  auto ClearAttachments(const Args::VkCmdClearAttachments &arguments) -> void;
+  auto ClearAttachments(const Args::VkCmdClearAttachments &arguments) -> Error;
   auto
   BeginDebugUtilsLabelEXT(const Args::VkCmdBeginDebugUtilsLabelEXT &arguments)
       -> void;
@@ -993,6 +1058,7 @@ struct VirtualCommandBuffer {
   auto
   InsertDebugUtilsLabelEXT(const Args::VkCmdInsertDebugUtilsLabelEXT &arguments)
       -> void;
+  auto PipelineBarrier2(const Args::VkCmdPipelineBarrier2 &arguments) -> Error;
 
   [[nodiscard]] auto GetQueueFamily() const -> uint32_t { return queueFamily; }
 
@@ -1002,11 +1068,12 @@ struct VirtualCommandBuffer {
     auto iter = CommandStateManager::StateToIndex.find(currentState);
 
     if (iter == CommandStateManager::StateToIndex.end()) {
-      CommandStateManager::StateToIndex[currentState] =
-          CommandStateManager::States.size();
+      auto newIdx = CommandStateManager::States.size();
+
+      CommandStateManager::StateToIndex[currentState] = newIdx;
       CommandStateManager::States.emplace_back(currentState);
 
-      return CommandStateManager::States.size() - 1;
+      return newIdx;
     }
 
     return iter->second;
@@ -1019,7 +1086,7 @@ protected:
 
   uint64_t time;
 
-  auto AddCommand(const Command &command) -> void;
+  auto AddCommand(const Command &command) -> Error;
 
   std::vector<Command> commands;
 

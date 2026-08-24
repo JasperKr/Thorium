@@ -1,11 +1,20 @@
 #include "commands.hpp"
+#include "Graphics/FrameGraph/descriptorState.hpp"
+#include "Graphics/FrameGraph/pipelineCache.hpp"
+#include "Graphics/FrameGraph/recordingState.hpp"
 #include "Graphics/graphics.hpp"
 #include "Graphics/reflect.hpp"
 #include "Graphics/renderState.hpp"
+#include "Libraries/vma.hpp"
 #include "Modules/Helpers/hasher.hpp"
+#include "Modules/console.hpp"
+#include "Modules/error.hpp"
 #include "Modules/image.hpp"
 #include "dynamicRendering.hpp"
+#include <cstdint>
+#include <tuple>
 #include <vector>
+#include <vulkan/vulkan_core.h>
 
 namespace Graphics {
 
@@ -13,7 +22,7 @@ std::unordered_map<GraphState, uint32_t, GraphStateHash>
     CommandStateManager::StateToIndex{};
 std::vector<GraphState> CommandStateManager::States{};
 
-auto DrawState::GetStateFor(void const *resource) const
+auto DrawState::GetStateFor(void const *resource, CommandType type) const
     -> std::pair<VkAccessFlags2, VkPipelineStageFlags2> {
   VkAccessFlags2 access = 0;
   VkPipelineStageFlags2 pipelines = 0;
@@ -50,13 +59,13 @@ auto DrawState::GetStateFor(void const *resource) const
   for (const auto &buffer : vertexBuffers) {
     if (buffer == resource) {
       access |= VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT;
-      pipelines |= VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT;
+      pipelines |= VK_PIPELINE_STAGE_2_VERTEX_ATTRIBUTE_INPUT_BIT;
     }
   }
 
   if (indexBuffer == resource) {
     access |= VK_ACCESS_2_INDEX_READ_BIT;
-    pipelines |= VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT;
+    pipelines |= VK_PIPELINE_STAGE_2_INDEX_INPUT_BIT;
   }
 
   return {access, pipelines};
@@ -154,11 +163,89 @@ auto GraphState::GetHash() const -> uint64_t {
   return hash;
 }
 
-DrawState::DrawState() {
+// NOLINTNEXTLINE
+auto BindDefaultTextures(const GraphicsContext &context, Shader *shader)
+    -> Error {
+  ZoneScoped;
+  auto &state = shader->GetState();
+
+  for (const auto &resource : shader->reflection.resources) {
+    if (resource.IsSampler()) {
+      const auto &samplerInfo = std::get<Reflect::SamplerInfo>(resource.info);
+      auto key = Utils::SetBindingToSlot(samplerInfo.set, samplerInfo.binding);
+      if (state.userBoundTextures.contains(key)) {
+        continue;
+      }
+
+      VkFormat format = VK_FORMAT_R8G8B8A8_UNORM;
+      TextureType type = TextureType::ENUM_MAX;
+
+      if ((samplerInfo.shape & SLANG_TEXTURE_3D) == SLANG_TEXTURE_3D) {
+        if ((samplerInfo.shape & SLANG_TEXTURE_ARRAY_FLAG) ==
+            SLANG_TEXTURE_ARRAY_FLAG) {
+          return Error::Create("3D texture arrays are not supported.");
+        }
+        type = TextureType::VOLUME;
+      } else if ((samplerInfo.shape & SLANG_TEXTURE_CUBE) ==
+                 SLANG_TEXTURE_CUBE) {
+        if ((samplerInfo.shape & SLANG_TEXTURE_ARRAY_FLAG) ==
+            SLANG_TEXTURE_ARRAY_FLAG) {
+          return Error::Create("Cubemap texture arrays are not supported.");
+        }
+        type = TextureType::CUBEMAP;
+      } else if ((samplerInfo.shape & SLANG_TEXTURE_2D) == SLANG_TEXTURE_2D) {
+        if ((samplerInfo.shape & SLANG_TEXTURE_ARRAY_FLAG) ==
+            SLANG_TEXTURE_ARRAY_FLAG) {
+          type = TextureType::ARRAY;
+        } else {
+          type = TextureType::DEFAULT;
+        }
+      }
+
+      auto defaultTexture =
+          CHECK_RES(Texture::GetDefault(context, format, type));
+      state.userBoundTextures[key] = {defaultTexture, &samplerInfo};
+    }
+  }
+
+  return Error::Success();
+}
+
+auto DrawState::Initialize(const GraphicsContext &context, CommandType type)
+    -> Error {
   const auto &shader = RenderState::GetShader();
+
+  const auto &ctx = GetThreadContext();
+  auto &graphState = ctx.commandBuffer->GetGraphState();
+  graphState.shader = shader;
+  graphState.bindPoint = RenderState::GetBindPoint();
+
+  PrintAlways("Shader: {}", shader->moduleName);
+  PrintAlways("Draw state with bind point: {}", (int)graphState.bindPoint);
 
   bool isCompute =
       (shader->combinedShaderStages & VK_SHADER_STAGE_COMPUTE_BIT) != 0;
+
+  if (!isCompute || type == CommandType::vkCmdClearAttachments) {
+    graphState.scissor = RenderState::GetScissor();
+    graphState.viewport = RenderState::GetClippedViewport();
+    graphState.cullMode = RenderState::GetCullMode();
+    graphState.polygonMode = RenderState::GetPolygonMode();
+    graphState.depthTestEnable = RenderState::TopOfStack->depthTestEnable;
+    graphState.depthWriteEnable = RenderState::TopOfStack->depthWriteEnable;
+    graphState.depthCompareOp = RenderState::TopOfStack->depthCompareOp;
+    graphState.stencilTestEnable = RenderState::TopOfStack->stencilTestEnable;
+    graphState.frontFace = RenderState::GetWindingOrder();
+    graphState.primitiveTopology = RenderState::GetTopology();
+    graphState.colorBlendEquations =
+        RenderState::TopOfStack->colorBlendEquations;
+    graphState.colorAttachments = RenderState::TopOfStack->colorAttachments;
+    graphState.depthStencilAttachment =
+        RenderState::TopOfStack->depthStencilAttachment;
+    graphState.hasDepthStencilAttachment =
+        RenderState::TopOfStack->hasDepthStencilAttachment;
+  }
+  graphState.MarkUpdated();
 
   if (!isCompute) {
     const auto &rendertargets = RenderState::GetRenderTargets();
@@ -175,7 +262,6 @@ DrawState::DrawState() {
   const auto &shaderState = shader->GetState();
   const auto &pipelines = shader->combinedPipelineStages;
 
-  // TODO: Distinguish between vertex / fragment accesses
   for (const auto &buffer : shaderState.userBoundBuffers) {
     boundBuffers.emplace_back(BoundBuffer{
         .buffer = buffer.second.first->handle,
@@ -198,14 +284,25 @@ DrawState::DrawState() {
         accelerationStructure.second.first->GetAccelerationStructure());
   }
 
-  const auto &ctx = GetThreadContext();
-
   vertexBuffers.insert(vertexBuffers.begin(), ctx.boundVertexBuffers.begin(),
                        ctx.boundVertexBuffers.end());
   indexBuffer = ctx.boundIndexBuffer;
 
   stateID = ctx.commandBuffer->GetStateID();
-  pushConstants = ctx.commandBuffer->GetGraphState().pushConstants;
+  pushConstants = graphState.pushConstants;
+
+  if (graphState.shader.isValid()) {
+    CHECK_ERR(BindDefaultTextures(context, graphState.shader.get()));
+
+    std::tie(descriptorSets, dynamicOffsets) =
+        CHECK_RES(GetDescriptorSets(*GetCurrentGraphicsContext()));
+
+    PrintAlways("# descriptorSets {}", descriptorSets.size());
+  } else {
+    PrintAlways("Skipped getting descriptor sets");
+  }
+
+  return {};
 }
 
 auto GetReads(const Command &command) -> std::vector<void *> {
@@ -228,43 +325,53 @@ auto GetWrites(const Command &command) -> std::vector<void *> {
   return {};
 }
 
-auto VirtualCommandBuffer::AddCommand(const Command &command) -> void {
+auto VirtualCommandBuffer::AddCommand(const Command &command) -> Error {
   commands.emplace_back(command);
   time++;
+
+  auto *state = commands.back().GetDrawState();
+
+  if (state != nullptr) {
+    return commands.back().GetDrawState()->Initialize(
+        *GetCurrentGraphicsContext(), command.GetType());
+  }
+
+  return {};
 }
 
-auto VirtualCommandBuffer::Draw(const Args::VkCmdDraw &arguments) -> void {
-  AddCommand(Command(arguments));
+auto VirtualCommandBuffer::Draw(const Args::VkCmdDraw &arguments) -> Error {
+  auto command = Command(arguments);
+  return AddCommand(command);
 }
 
 auto VirtualCommandBuffer::DrawIndexed(const Args::VkCmdDrawIndexed &arguments)
-    -> void {
-  AddCommand(Command(arguments));
+    -> Error {
+  return AddCommand(Command(arguments));
 }
 
 auto VirtualCommandBuffer::DrawIndirect(
-    const Args::VkCmdDrawIndirect &arguments) -> void {
-  AddCommand(Command(arguments));
+    const Args::VkCmdDrawIndirect &arguments) -> Error {
+  return AddCommand(Command(arguments));
 }
 
 auto VirtualCommandBuffer::DrawIndexedIndirect(
-    const Args::VkCmdDrawIndexedIndirect &arguments) -> void {
-  AddCommand(Command(arguments));
+    const Args::VkCmdDrawIndexedIndirect &arguments) -> Error {
+  return AddCommand(Command(arguments));
 }
 
 auto VirtualCommandBuffer::Dispatch(const Args::VkCmdDispatch &arguments)
-    -> void {
-  AddCommand(Command(arguments));
+    -> Error {
+  return AddCommand(Command(arguments));
 }
 
 auto VirtualCommandBuffer::DispatchIndirect(
-    const Args::VkCmdDispatchIndirect &arguments) -> void {
-  AddCommand(Command(arguments));
+    const Args::VkCmdDispatchIndirect &arguments) -> Error {
+  return AddCommand(Command(arguments));
 }
 
 auto VirtualCommandBuffer::BlitImage(const Args::VkCmdBlitImage &arguments)
-    -> void {
-  AddCommand(Command(arguments));
+    -> Error {
+  return AddCommand(Command(arguments));
 }
 
 auto VirtualCommandBuffer::PushConstants(
@@ -273,54 +380,54 @@ auto VirtualCommandBuffer::PushConstants(
 }
 
 auto VirtualCommandBuffer::CopyBuffer(const Args::VkCmdCopyBuffer &arguments)
-    -> void {
-  AddCommand(Command(arguments));
+    -> Error {
+  return AddCommand(Command(arguments));
 }
 
 auto VirtualCommandBuffer::CopyImage(const Args::VkCmdCopyImage &arguments)
-    -> void {
-  AddCommand(Command(arguments));
+    -> Error {
+  return AddCommand(Command(arguments));
 }
 
 auto VirtualCommandBuffer::CopyBufferToImage(
-    const Args::VkCmdCopyBufferToImage &arguments) -> void {
-  AddCommand(Command(arguments));
+    const Args::VkCmdCopyBufferToImage &arguments) -> Error {
+  return AddCommand(Command(arguments));
 }
 
 auto VirtualCommandBuffer::CopyImageToBuffer(
-    const Args::VkCmdCopyImageToBuffer &arguments) -> void {
-  AddCommand(Command(arguments));
+    const Args::VkCmdCopyImageToBuffer &arguments) -> Error {
+  return AddCommand(Command(arguments));
 }
 
 auto VirtualCommandBuffer::MipmapTexture(const Args::MipmapTexture &arguments)
-    -> void {
-  AddCommand(Command(arguments));
+    -> Error {
+  return AddCommand(Command(arguments));
 }
 
 auto VirtualCommandBuffer::FillBuffer(const Args::VkCmdFillBuffer &arguments)
-    -> void {
-  AddCommand(Command(arguments));
+    -> Error {
+  return AddCommand(Command(arguments));
 }
 
 auto VirtualCommandBuffer::BuildAccelerationStructuresKHR(
-    const Args::VkCmdBuildAccelerationStructuresKHR &arguments) -> void {
-  AddCommand(Command(arguments));
+    const Args::VkCmdBuildAccelerationStructuresKHR &arguments) -> Error {
+  return AddCommand(Command(arguments));
 }
 
 auto VirtualCommandBuffer::CopyAccelerationStructureKHR(
-    const Args::VkCmdCopyAccelerationStructureKHR &arguments) -> void {
-  AddCommand(Command(arguments));
+    const Args::VkCmdCopyAccelerationStructureKHR &arguments) -> Error {
+  return AddCommand(Command(arguments));
 }
 
 auto VirtualCommandBuffer::ResetQueryPool(
-    const Args::VkCmdResetQueryPool &arguments) -> void {
-  AddCommand(Command(arguments));
+    const Args::VkCmdResetQueryPool &arguments) -> Error {
+  return AddCommand(Command(arguments));
 }
 
 auto VirtualCommandBuffer::WriteAccelerationStructuresPropertiesKHR(
     const Args::VkCmdWriteAccelerationStructuresPropertiesKHR &arguments)
-    -> void {
-  AddCommand(Command(arguments));
+    -> Error {
+  return AddCommand(Command(arguments));
 }
 
 auto VirtualCommandBuffer::BindIndexBuffer(
@@ -388,7 +495,9 @@ auto VirtualCommandBuffer::SetDepthCompareOp(
 
 auto VirtualCommandBuffer::SetColorBlendEquationEXT(
     const Args::VkCmdSetColorBlendEquationEXT &arguments) -> void {
-  currentState.colorBlendEquations = arguments.equations;
+  currentState.colorBlendEquations =
+      Math::StackVector<VkColorBlendEquationEXT, MAX_COLOR_ATTACHMENTS>(
+          arguments.equations);
   currentState.MarkUpdated();
 }
 
@@ -417,8 +526,8 @@ auto VirtualCommandBuffer::SetFrontFace(
 }
 
 auto VirtualCommandBuffer::ClearAttachments(
-    const Args::VkCmdClearAttachments &arguments) -> void {
-  AddCommand(Command(arguments));
+    const Args::VkCmdClearAttachments &arguments) -> Error {
+  return AddCommand(Command(arguments));
 }
 
 auto VirtualCommandBuffer::BeginDebugUtilsLabelEXT(
@@ -431,6 +540,11 @@ auto VirtualCommandBuffer::EndDebugUtilsLabelEXT(
 
 auto VirtualCommandBuffer::InsertDebugUtilsLabelEXT(
     const Args::VkCmdInsertDebugUtilsLabelEXT &arguments) -> void {}
+
+auto VirtualCommandBuffer::PipelineBarrier2(
+    const Args::VkCmdPipelineBarrier2 &arguments) -> Error {
+  return AddCommand(Command(arguments));
+}
 
 auto CreateCommandBuffer() -> VirtualCommandBuffer { return {}; }
 
@@ -447,9 +561,79 @@ auto ResetCommandBuffer(VirtualCommandBuffer &buffer) -> void {
 auto DrawState::Apply(const GraphicsContext &context,
                       VirtualCommandBuffer &buffer,
                       VkCommandBuffer cmdBuffer) const -> Error {
+  ERR_ASSERT(stateID != UINT32_MAX);
+
   const auto &state = CommandStateManager::States.at(stateID);
 
+  RecordingState::CurrentState.bindPoint = state.bindPoint;
+
+  PrintAlways("Applying draw state, bind point: {}", (int)state.bindPoint);
+  PrintAlways(" - Color attachment count: {}, depth? {}",
+              state.colorAttachments.size(),
+              state.hasDepthStencilAttachment ? "yes" : "no");
+
+  RecordingState::CurrentState.shader = CHECK_NULL(state.shader);
+
+  if (RecordingState::CurrentState.bindPoint ==
+      VK_PIPELINE_BIND_POINT_GRAPHICS) {
+    RecordingState::CurrentState.colorAttachments = state.colorAttachments;
+    RecordingState::CurrentState.depthStencilAttachment =
+        state.depthStencilAttachment;
+    RecordingState::CurrentState.hasDepthStencilAttachment =
+        state.hasDepthStencilAttachment;
+    RecordingState::CurrentState.primitiveTopology = state.primitiveTopology;
+    RecordingState::CurrentState.colorBlendEquations =
+        state.colorBlendEquations;
+    RecordingState::CurrentState.cullMode = state.cullMode;
+    RecordingState::CurrentState.frontFace = state.frontFace;
+    RecordingState::CurrentState.depthTestEnable = state.depthTestEnable;
+    RecordingState::CurrentState.depthWriteEnable = state.depthWriteEnable;
+    RecordingState::CurrentState.depthCompareOp = state.depthCompareOp;
+    RecordingState::CurrentState.stencilTestEnable = state.stencilTestEnable;
+    RecordingState::CurrentState.polygonMode = state.polygonMode;
+    RecordingState::CurrentState.viewport = state.viewport;
+    RecordingState::CurrentState.scissor = state.scissor;
+
+    vkCmdSetVertexInputEXT(cmdBuffer, state.bindingDescriptions.size(),
+                           state.bindingDescriptions.data(),
+                           state.attributeDescriptions.size(),
+                           state.attributeDescriptions.data());
+
+    if (!state.vertexBuffers.empty()) {
+      vkCmdBindVertexBuffers(cmdBuffer, 0, state.vertexBuffers.size(),
+                             state.vertexBuffers.data(),
+                             state.vertexBufferOffsets.data());
+    }
+
+    if (state.indexBuffer != VK_NULL_HANDLE) {
+      vkCmdBindIndexBuffer(cmdBuffer, state.indexBuffer,
+                           state.indexBufferOffset, state.indexType);
+    }
+  }
+
+  RecordingState::CurrentState.MarkUpdated();
+
   CHECK_ERR(PrepareRendering(context, cmdBuffer));
+
+  if (!RecordingState::CurrentState.shader->pushBuffers.empty()) {
+    ZoneScopedN("Flush push buffer data");
+    assert(GetPipelineCache().currentLayout.layout != nullptr);
+    ERR_ASSERT(RecordingState::CurrentState.shader->pushBuffers.size() == 1U);
+
+    CHECK_ERR(RecordingState::CurrentState.shader->pushBuffers.front().SetData(
+        state.pushConstants));
+
+    for (auto &pushBuffer : RecordingState::CurrentState.shader->pushBuffers) {
+      pushBuffer.FlushData(GetPipelineCache().currentLayout.layout, cmdBuffer);
+    }
+  }
+
+  if (!descriptorSets.empty()) {
+    vkCmdBindDescriptorSets(cmdBuffer, state.bindPoint,
+                            GetPipelineCache().currentLayout.layout, 0,
+                            descriptorSets.size(), descriptorSets.data(),
+                            dynamicOffsets.size(), dynamicOffsets.data());
+  }
 
   return {};
 }

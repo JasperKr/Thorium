@@ -5,9 +5,74 @@
 #include "Graphics/graphicsContext.hpp"
 #include "Graphics/renderState.hpp"
 #include "Graphics/uniformWriter.hpp"
+#include "Modules/console.hpp"
 #include <mutex>
 
 namespace Graphics {
+
+inline auto SetupDefaultState(const GraphicsContext &context)
+    -> Result<RenderState::State> {
+  auto defaultState = RenderState::State();
+
+  defaultState.viewport = {};
+  defaultState.scissor = {};
+
+  defaultState.shader = DefaultShaderModule;
+
+  auto const &texture =
+      context.swapchainInfo.textures[context.swapchainImageIndex];
+
+  RenderState::RenderTarget swapchainRendertarget{};
+
+  swapchainRendertarget.texture = texture;
+  swapchainRendertarget.location = 0;
+  swapchainRendertarget.blendMode = DefaultBlendMode;
+  swapchainRendertarget.clearValue = {0.0F, 0.0F, 0.0F, 1.0F};
+  swapchainRendertarget.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+
+  PrintDebug("Setup default state with swapchain handle: {}",
+             (void *)texture->view);
+
+  defaultState.colorAttachments.emplace_back(swapchainRendertarget);
+  defaultState.hasDepthStencilAttachment = false;
+
+  return defaultState;
+}
+
+auto Reset(const GraphicsContext &context) -> Error {
+  auto state = CHECK_RES(SetupDefaultState(context));
+
+  RecordingState::LastState = nullptr;
+
+  return Error::Success();
+}
+
+void Shutdown(const GraphicsContext &context) {
+  RecordingState::LastState = nullptr;
+  RecordingState::LastStateStorage = RenderState::State();
+}
+
+auto IsSwapchainTexture(const GraphicsContext &context,
+                        const Graphics::Texture &texture) -> bool {
+  for (const auto &swapchainTexture : context.swapchainInfo.textures) {
+    if (swapchainTexture.get() == &texture) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+auto Destroy(const GraphicsContext &context) -> void {}
+
+auto BeginFrame(const GraphicsContext &context) -> Error {
+
+  RecordingState::CurrentState = CHECK_RES(SetupDefaultState(context));
+  RecordingState::LastState = nullptr;
+  RecordingState::LastStateStorage = RecordingState::CurrentState;
+
+  return Error::Success();
+}
 
 inline auto GetShaderStages(const RenderState::State &state)
     -> Result<std::vector<VkPipelineShaderStageCreateInfo>> {
@@ -452,6 +517,8 @@ inline auto CreateComputePipeline(const GraphicsContext &context,
     -> Result<std::pair<VkPipeline, PipelineLayout>> {
   ZoneScoped;
 
+  PrintAlways("Creating compute pipeline");
+
   VkComputePipelineCreateInfo pipelineInfo = {};
   pipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
   pipelineInfo.stage.sType =
@@ -497,6 +564,9 @@ inline auto CreatePipeline(const GraphicsContext &context,
                            RenderState::State &state)
     -> Result<std::pair<VkPipeline, PipelineLayout>> {
   ZoneScoped;
+
+  PrintAlways("Creating pipeline");
+
   if (state.bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS) {
     return CreateGraphicsPipeline(context, state);
   }
@@ -511,6 +581,8 @@ inline auto GetPipeline(const GraphicsContext &context,
                         RenderState::State &state)
     -> Result<std::pair<VkPipeline, PipelineLayout>> {
   ZoneScoped;
+
+  PrintAlways("Getting pipeline");
 
   {
     std::lock_guard<std::mutex> lock(GetPipelineCache().mutex);
@@ -528,18 +600,14 @@ auto FlushCompute(const GraphicsContext &context,
                   VkCommandBuffer vkCommandBuffer) -> Result<bool> {
   ZoneScoped;
 
+  PrintAlways("Flushing compute");
+
   if (RecordingState::CurrentState.bindPoint !=
       VK_PIPELINE_BIND_POINT_COMPUTE) {
     return Error::Unexpected("Current state is not a compute pipeline.");
   }
 
   auto pipeline = CHECK_RES(GetPipeline(context, RecordingState::CurrentState));
-
-  auto *commandBuffer = Graphics::GetVirtualCommandBuffer();
-
-  if (commandBuffer == nullptr) {
-    return Error::Unexpected("Command buffer is null in FlushCompute.");
-  }
 
   assert(RecordingState::CurrentState.shader->entryPoints.at(0).second ==
          VK_SHADER_STAGE_COMPUTE_BIT);
@@ -554,17 +622,6 @@ auto FlushCompute(const GraphicsContext &context,
   return true;
 }
 
-auto IsSwapchainTexture(const GraphicsContext &context,
-                        const Graphics::Texture &texture) -> bool {
-  for (const auto &swapchainTexture : context.swapchainInfo.textures) {
-    if (swapchainTexture.get() == &texture) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
 auto FlushGraphics(const GraphicsContext &context,
                    VkCommandBuffer vkCommandBuffer) -> Result<bool> {
   ZoneScoped;
@@ -573,8 +630,6 @@ auto FlushGraphics(const GraphicsContext &context,
              VK_PIPELINE_BIND_POINT_GRAPHICS);
 
   auto pipeline = CHECK_RES(GetPipeline(context, RecordingState::CurrentState));
-
-  auto *commandBuffer = CHECK_NULL(Graphics::GetVirtualCommandBuffer());
 
   auto viewport = GetClippedViewport();
 
@@ -612,11 +667,15 @@ auto Flush(const GraphicsContext &context, VkCommandBuffer vkCommandBuffer)
     -> Result<bool> {
   ZoneScoped;
 
+  PrintAlways("Flush");
+
   [[likely]]
   if (!Graphics::GetIsStateDirty() && RecordingState::LastState != nullptr &&
       RecordingState::CurrentState.GetHash() ==
           RecordingState::LastState->GetHash() &&
       RecordingState::CurrentState == *RecordingState::LastState) {
+    PrintAlways("Flush early-out");
+
     return false;
   }
 

@@ -1,5 +1,7 @@
 #include "graphics.hpp"
 #include "Graphics/FrameGraph/commands.hpp"
+#include "Graphics/FrameGraph/descriptorCache.hpp"
+#include "Graphics/FrameGraph/pipelineCache.hpp"
 #include "Graphics/allocations.hpp"
 #include "Graphics/bvh.hpp"
 #include "Graphics/deviceSettings.hpp"
@@ -642,6 +644,8 @@ auto Initialize(GraphicsContext &context, Window::WindowContext &wcontext,
   PrintDebug("called: CreateCommandPool...");
   CHECK_ERR(CreateSemaphores(context));
   PrintDebug("called: CreateSemaphores...");
+  CHECK_ERR(GetPipelineCache().Initialize(context));
+  CHECK_ERR(GetDescriptorCache().Initialize(context));
 
   return Error::Success();
 }
@@ -664,6 +668,8 @@ void Deinitialize(GraphicsContext &context) {
   Graphics::DestroySamplers(context);
   Graphics::RenderState::Destroy(context);
   Graphics::DeInitializeBVHModule();
+  GetPipelineCache().DeInitialize(context);
+  GetDescriptorCache().DeInitialize(context);
 
   // (BEFORE device, allocator lock)
   Graphics::ProcessReleasedResources(context);

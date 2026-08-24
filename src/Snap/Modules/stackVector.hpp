@@ -29,6 +29,10 @@ template <typename T, size_t N> struct StackVector {
     memcpy(storage.data(), data.data(), sizeof(T) * currentSize);
   }
 
+  constexpr auto asVector() -> std::vector<T> {
+    return {storage.data(), storage.data() + currentSize};
+  }
+
   auto operator=(StackVector &&) -> StackVector & = default;
   auto operator=(const StackVector &) -> StackVector & = default;
 

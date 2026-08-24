@@ -1,11 +1,14 @@
 #include "framegraph.hpp"
 #include "Graphics/FrameGraph/commands.hpp"
 #include "Graphics/FrameGraph/dynamicRendering.hpp"
+#include "Graphics/FrameGraph/pipelineState.hpp"
 #include "Graphics/graphicsContext.hpp"
 #include "Libraries/vma.hpp"
 #include "Modules/Helpers/utils.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
+#include <sstream>
+#include <string>
 #if OUTPUT_DEBUG_GRAPH
 #include "Modules/filesystem.hpp"
 #include <format>
@@ -64,6 +67,12 @@ inline auto GetReadsFromDrawState(DrawState &state) -> std::vector<void *> {
     reads.emplace_back(state.indexBuffer);
   }
 
+  const auto &pipelineState = CommandStateManager::States.at(state.stateID);
+
+  if (pipelineState.bindPoint != VK_PIPELINE_BIND_POINT_GRAPHICS) {
+    return reads;
+  }
+
   for (const auto &colorAttachment : state.colorAttachments) {
     reads.emplace_back(colorAttachment);
   }
@@ -112,6 +121,30 @@ inline auto GetReadsInternal(Command &command) -> std::vector<void *> {
     return {args.srcImage};
   }
 
+  if (std::holds_alternative<Args::VkCmdBuildAccelerationStructuresKHR>(
+          command.data)) {
+    const auto &args =
+        std::get<Args::VkCmdBuildAccelerationStructuresKHR>(command.data);
+    return args.reads;
+  }
+
+  if (std::holds_alternative<Args::VkCmdPipelineBarrier2>(command.data)) {
+    const auto &args = std::get<Args::VkCmdPipelineBarrier2>(command.data);
+    std::vector<void *> resources{};
+    resources.reserve(args.imageMemoryBarriers.size() +
+                      args.bufferMemoryBarriers.size());
+
+    for (const auto &barrier : args.imageMemoryBarriers) {
+      resources.emplace_back((void *)barrier.image);
+    }
+
+    for (const auto &barrier : args.bufferMemoryBarriers) {
+      resources.emplace_back((void *)barrier.buffer);
+    }
+
+    return resources;
+  }
+
   return {};
 }
 
@@ -130,6 +163,12 @@ inline auto GetWritesFromDrawState(DrawState &state) -> std::vector<void *> {
         image.access == SLANG_RESOURCE_ACCESS_READ_WRITE) {
       writes.emplace_back(image.image);
     }
+  }
+
+  const auto &pipelineState = CommandStateManager::States.at(state.stateID);
+
+  if (pipelineState.bindPoint != VK_PIPELINE_BIND_POINT_GRAPHICS) {
+    return writes;
   }
 
   for (const auto &colorAttachment : state.colorAttachments) {
@@ -183,6 +222,30 @@ inline auto GetWritesInternal(Command &command) -> std::vector<void *> {
   if (std::holds_alternative<Args::VkCmdFillBuffer>(command.data)) {
     const auto &args = std::get<Args::VkCmdFillBuffer>(command.data);
     return {args.dstBuffer};
+  }
+
+  if (std::holds_alternative<Args::VkCmdBuildAccelerationStructuresKHR>(
+          command.data)) {
+    const auto &args =
+        std::get<Args::VkCmdBuildAccelerationStructuresKHR>(command.data);
+    return args.writes;
+  }
+
+  if (std::holds_alternative<Args::VkCmdPipelineBarrier2>(command.data)) {
+    const auto &args = std::get<Args::VkCmdPipelineBarrier2>(command.data);
+    std::vector<void *> resources{};
+    resources.reserve(args.imageMemoryBarriers.size() +
+                      args.bufferMemoryBarriers.size());
+
+    for (const auto &barrier : args.imageMemoryBarriers) {
+      resources.emplace_back((void *)barrier.image);
+    }
+
+    for (const auto &barrier : args.bufferMemoryBarriers) {
+      resources.emplace_back((void *)barrier.buffer);
+    }
+
+    return resources;
   }
 
   // if (std::holds_alternative<Args::VkCmdClearAttachments>(command.data)) {
@@ -526,8 +589,8 @@ auto FrameGraph::SyncMask(CommandLevel start, CommandLevel end,
   std::array<VkPipelineStageFlags2, UINT64_WIDTH> maskBits{};
 
   // Fast way to iterate over set bits
-  for (auto bitIndex : Utils::BitIndexRange(lastWritePipeline)) {
-    maskBits.at(bitIndex) = lastWriteAccess;
+  for (auto bitIndex : Utils::BitIndexRange(dstPipeline)) {
+    maskBits.at(bitIndex) = dstAccess;
   }
 
   // mask bits are now all unsynced bits
@@ -563,6 +626,20 @@ auto FrameGraph::SyncMask(CommandLevel start, CommandLevel end,
   return maskBits;
 }
 
+inline auto ResourceListToString(const std::vector<void *> &resources)
+    -> std::string {
+  std::stringstream str;
+
+  for (const auto *resource : resources) {
+    str << resource;
+    if (resource != resources.back()) {
+      str << "; ";
+    }
+  }
+
+  return str.str();
+}
+
 auto FrameGraph::GetRequiredBarriers(CommandID commandId, void const *resource,
                                      VkAccessFlags2 accesses,
                                      VkPipelineStageFlags2 pipelines)
@@ -579,14 +656,11 @@ auto FrameGraph::GetRequiredBarriers(CommandID commandId, void const *resource,
 
   for (const auto &parentID : parents) {
     const auto &parent = commandBuffer.commands.at(parentID);
-    const auto *bound = parent.GetDrawState();
+    const auto [srcAccess, srcStage] = ResourceAccessAt(parentID, resource);
 
-    if (bound == nullptr) {
-      continue;
-    }
-
-    const auto [srcAccess, srcStage] = bound->GetStateFor(resource);
-
+    // This is a VALID result. In the scenario, for example, read x, write y, and our parent writes only x / y, we will
+    // loop over the parent for both x, y, and notice in one scenario that either x or y is not viewed by the parent and thus
+    // it has no access or stage.
     if (srcAccess == 0U || srcStage == 0U) {
       continue;
     }
@@ -634,13 +708,10 @@ auto FrameGraph::ResourceAccessAt(CommandID commandId, const void *resource)
   const auto *drawState = get_if_derived<DrawState>(command.data);
 
   if (drawState != nullptr) {
-    return drawState->GetStateFor(resource);
-  }
-
-  const auto *boundState = get_if_derived<BoundResources>(command.data);
-
-  if (boundState == nullptr) {
-    return {0, 0};
+    const auto &pair = drawState->GetStateFor(resource, command.GetType());
+    if (pair.first != 0U && pair.second != 0U) {
+      return pair;
+    }
   }
 
   if (std::holds_alternative<Args::VkCmdBlitImage>(command.data)) {
@@ -705,6 +776,24 @@ auto FrameGraph::ResourceAccessAt(CommandID commandId, const void *resource)
     }
   }
 
+  if (std::holds_alternative<Args::VkCmdBuildAccelerationStructuresKHR>(
+          command.data)) {
+    const auto &args =
+        std::get<Args::VkCmdBuildAccelerationStructuresKHR>(command.data);
+    for (const auto &read : args.reads) {
+      if (resource == read) {
+        return {VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR,
+                VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR};
+      }
+    }
+    for (const auto &write : args.writes) {
+      if (resource == write) {
+        return {VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR,
+                VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR};
+      }
+    }
+  }
+
   return {0, 0};
 }
 
@@ -735,6 +824,18 @@ inline auto MergeBarriers(std::vector<VkMemoryBarrier2> &barriers) {
 
 auto FrameGraph::InsertBarriers() -> Error {
   for (auto &level : graph) {
+    Utils::UnorderedErase(
+        level.commands, [&](const CommandID &commandId) -> bool {
+          const auto &command = commandBuffer.commands.at(commandId);
+
+          if (command.GetType() == CommandType::vkCmdPipelineBarrier2) {
+            level.userBarriers.emplace_back(command.id);
+
+            return true;
+          }
+          return false;
+        });
+
     const auto addBarriers = [&](const std::vector<void *> &resources,
                                  const CommandID commandId) -> auto {
       for (const auto *resource : resources) {
@@ -758,7 +859,7 @@ auto FrameGraph::InsertBarriers() -> Error {
       addBarriers(writes, commandId);
     }
 
-    MergeBarriers(level.barriers);
+    // MergeBarriers(level.barriers);
   }
 
   return {};
@@ -788,8 +889,12 @@ auto FrameGraph::Write(const GraphicsContext &context,
 
   vkBeginCommandBuffer(cmdBuffer, &beginInfo);
 
+  CHECK_ERR(BeginFrame(context));
+
   for (const auto &level : graph) {
     if (!level.barriers.empty()) {
+      EndRendering(context, cmdBuffer);
+
       VkDependencyInfo depInfo = {};
       depInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
       depInfo.memoryBarrierCount = level.barriers.size();
@@ -798,14 +903,27 @@ auto FrameGraph::Write(const GraphicsContext &context,
       vkCmdPipelineBarrier2(cmdBuffer, &depInfo);
     }
 
+    for (const auto &barrier : level.userBarriers) {
+      const auto &command = commandBuffer.commands.at(barrier);
+      const auto *callable = get_if_derived<Callable>(command.data);
+
+      CHECK_ERR(callable->Call(cmdBuffer));
+    }
+
     for (const CommandID commandId : level.commands) {
       const auto &command = commandBuffer.commands.at(commandId);
       const auto *callable = get_if_derived<Callable>(command.data);
       const auto *state = get_if_derived<DrawState>(command.data);
 
-      if (state != nullptr && callable != nullptr) {
-        if (callable->requiresRendering) {
+      PrintAlways("Writing command: {}",
+                  CommandTypeEnumHelper.ToString(command.GetType()));
+
+      if (callable != nullptr && callable->requiresRendering) {
+        if (state != nullptr) {
+          PrintAlways("# Descriptor sets: {}", state->descriptorSets.size());
           CHECK_ERR(state->Apply(context, commandBuffer, cmdBuffer));
+        } else {
+          CHECK_ERR(PrepareRendering(context, cmdBuffer));
         }
       }
 

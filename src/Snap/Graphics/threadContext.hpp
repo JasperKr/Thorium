@@ -25,7 +25,6 @@ struct ThreadContext {
   struct GraphicsContext *graphicsContext = nullptr; // Global graphics context
   VkCommandPool commandPool = VK_NULL_HANDLE;        // Per-thread command pool
   std::shared_ptr<VirtualCommandBuffer> commandBuffer; // Current command buffer
-  size_t currentVertexFormatHash = 0;
 
   // unique identifier to not the frame, but recording of command buffer
   uint64_t recordingIdentifier = 0;

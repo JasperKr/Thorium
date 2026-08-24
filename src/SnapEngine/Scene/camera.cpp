@@ -441,14 +441,16 @@ auto Camera::Render(const Graphics::GraphicsContext &context,
           context, Rendertargets.IncomingLight));
 
   const auto &entity = scene->currentEnvironment;
-  const auto *environment = entity.try_get<Environment>();
+  if (entity.is_valid()) {
+    const auto *environment = entity.try_get<Environment>();
 
-  if (environment != nullptr) {
-    Graphics::PushDebugMarker("Render Skybox");
+    if (environment != nullptr) {
+      Graphics::PushDebugMarker("Render Skybox");
 
-    CHECK_ERR(RenderSkybox(context, *environment));
+      CHECK_ERR(RenderSkybox(context, *environment));
 
-    Graphics::PopDebugMarker();
+      Graphics::PopDebugMarker();
+    }
   }
 
   CHECK_ERR(ApplyLightProbes(context, drawData, scene));

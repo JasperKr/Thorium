@@ -22,12 +22,17 @@ auto PushBuffer::GetLayout() const -> const Reflect::FlattenedReflection & {
   return layout;
 }
 
-auto PushBuffer::FlushData(VkPipelineLayout layout) -> void {
+auto PushBuffer::FlushData(VkPipelineLayout layout, VkCommandBuffer cmdBuffer)
+    -> void {
   auto bufferSize = GetBufferSize();
 
-  GetVirtualCommandBuffer()->PushConstants(
-      {layout, stageFlags, static_cast<uint32_t>(GetBufferOffset()),
-       static_cast<uint32_t>(bufferSize), data.data()});
+  // GetVirtualCommandBuffer()->PushConstants(
+  //     {layout, stageFlags, static_cast<uint32_t>(GetBufferOffset()),
+  //      static_cast<uint32_t>(bufferSize), data.data()});
+
+  vkCmdPushConstants(cmdBuffer, layout, stageFlags,
+                     static_cast<uint32_t>(GetBufferOffset()),
+                     static_cast<uint32_t>(bufferSize), data.data());
 }
 
 auto PushBuffer::ContainsUniform(const ResourceKey &key) const -> bool {
@@ -82,6 +87,17 @@ auto PushBuffer::SetData(const ResourceKey &key,
   std::memcpy(data.data() + offset, values.data(), values.size());
 
   return Error::Success();
+}
+
+auto PushBuffer::SetData(const std::span<const uint8_t> &values) -> Error {
+  std::memcpy(data.data(), values.data(), values.size());
+
+  return {};
+}
+auto PushBuffer::SetData(const std::span<const char> &values) -> Error {
+  std::memcpy(data.data(), values.data(), values.size());
+
+  return {};
 }
 
 } // namespace Graphics

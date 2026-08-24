@@ -519,9 +519,12 @@ auto GetClippedViewport() -> VkViewport {
 }
 
 auto GetRenderTargets() -> std::vector<RenderTarget> {
-  return {TopOfStack->colorAttachments.begin(),
-          TopOfStack->colorAttachments.begin() + // NOLINT
-              TopOfStack->colorAttachments.size()};
+  std::vector<RenderTarget> targets = TopOfStack->colorAttachments.asVector();
+  if (TopOfStack->hasDepthStencilAttachment) {
+    targets.emplace_back(TopOfStack->depthStencilAttachment);
+  }
+
+  return targets;
 }
 
 auto GetWindingOrder() -> VkFrontFace { return TopOfStack->frontFace; }
@@ -594,9 +597,9 @@ auto Clear(const GraphicsContext &context, const ClearInfo &clearInfo)
     clearRects.emplace_back(clearRect);
   }
 
-  commandBuffer->ClearAttachments(
+  CHECK_ERR(commandBuffer->ClearAttachments(
       {static_cast<uint32_t>(clearAttachments.size()), clearAttachments.data(),
-       static_cast<uint32_t>(clearRects.size()), clearRects.data()});
+       static_cast<uint32_t>(clearRects.size()), clearRects.data()}));
 
   return Error::Success();
 }

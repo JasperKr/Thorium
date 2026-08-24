@@ -16,7 +16,7 @@ auto DescriptorCache::Initialize(const GraphicsContext &context) -> Error {
   return {};
 }
 
-auto DescriptorCache::DeInitialize(const GraphicsContext &context) -> Error {
+auto DescriptorCache::DeInitialize(const GraphicsContext &context) -> void {
   for (auto &layouts : descriptorSetLayoutCache) {
     vkDestroyDescriptorSetLayout(context.device, layouts.second,
                                  GetAllocationCallbacks());
@@ -25,8 +25,6 @@ auto DescriptorCache::DeInitialize(const GraphicsContext &context) -> Error {
   vkDestroyDescriptorSetLayout(context.device, emptySetLayout,
                                GetAllocationCallbacks());
   descriptorSetLayoutCache.clear();
-
-  return {};
 }
 
 auto DescriptorCache::GetDescriptorSetLayout(

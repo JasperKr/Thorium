@@ -3,6 +3,7 @@
 #include "Graphics/FrameGraph/recordingState.hpp"
 #include "Graphics/renderState.hpp"
 #include "Modules/Helpers/utils.hpp"
+#include "Modules/console.hpp"
 #include "descriptorState.hpp"
 #include "pipelineState.hpp"
 #include <public/tracy/Tracy.hpp>
@@ -115,7 +116,8 @@ auto compareBlendmodes(const RenderState::State &first,
 }
 
 // NOLINTNEXTLINE
-inline auto BeginRendering(const GraphicsContext &context) -> Error {
+inline auto BeginRendering(const GraphicsContext &context,
+                           VkCommandBuffer cmdBuffer) -> Error {
   ZoneScoped;
 
   VkRenderingInfo renderingInfo = {};
@@ -220,14 +222,9 @@ inline auto BeginRendering(const GraphicsContext &context) -> Error {
   renderingInfo.pStencilAttachment = hasStencil ? &stencilAttachment : nullptr;
   renderingInfo.pDepthAttachment = hasDepth ? &depthAttachment : nullptr;
 
-  if (Graphics::GetVirtualCommandBuffer() == VK_NULL_HANDLE) {
-    return Error::Create(
-        "Tried to begin rendering, but command buffer is null.");
-  }
-
   // Add a tracy marker to indicate the start of a rendering pass
   TracyMessageL("Begin Rendering");
-  // GetCommandBuffer()->BeginRendering(Args::VkCmdBeginRendering{&renderingInfo});
+  vkCmdBeginRendering(cmdBuffer, &renderingInfo);
   GetIsCurrentlyRendering() = true;
 
   // Make sure subsequent renders load from the existing content if we ever need to re-bind mid-pass
@@ -246,7 +243,6 @@ inline auto BeginRendering(const GraphicsContext &context) -> Error {
 auto EndRendering(const GraphicsContext &context,
                   VkCommandBuffer vkCommandBuffer) -> void {
   if (GetIsCurrentlyRendering()) {
-    assert(Graphics::GetVirtualCommandBuffer() != nullptr);
 
     // #if Enable_Snapshots
     //     Snapshot::CaptureEvent(Snapshot::EndRenderingEvent());
@@ -257,54 +253,6 @@ auto EndRendering(const GraphicsContext &context,
     // GetCommandBuffer()->EndRendering({});
     GetIsCurrentlyRendering() = false;
   }
-}
-
-// NOLINTNEXTLINE
-auto BindDefaultTextures(const GraphicsContext &context, Shader *shader)
-    -> Error {
-  ZoneScoped;
-  auto &state = shader->GetState();
-
-  for (const auto &resource : shader->reflection.resources) {
-    if (resource.IsSampler()) {
-      const auto &samplerInfo = std::get<Reflect::SamplerInfo>(resource.info);
-      auto key = Utils::SetBindingToSlot(samplerInfo.set, samplerInfo.binding);
-      if (state.userBoundTextures.contains(key)) {
-        continue;
-      }
-
-      VkFormat format = VK_FORMAT_R8G8B8A8_UNORM;
-      TextureType type = TextureType::ENUM_MAX;
-
-      if ((samplerInfo.shape & SLANG_TEXTURE_3D) == SLANG_TEXTURE_3D) {
-        if ((samplerInfo.shape & SLANG_TEXTURE_ARRAY_FLAG) ==
-            SLANG_TEXTURE_ARRAY_FLAG) {
-          return Error::Create("3D texture arrays are not supported.");
-        }
-        type = TextureType::VOLUME;
-      } else if ((samplerInfo.shape & SLANG_TEXTURE_CUBE) ==
-                 SLANG_TEXTURE_CUBE) {
-        if ((samplerInfo.shape & SLANG_TEXTURE_ARRAY_FLAG) ==
-            SLANG_TEXTURE_ARRAY_FLAG) {
-          return Error::Create("Cubemap texture arrays are not supported.");
-        }
-        type = TextureType::CUBEMAP;
-      } else if ((samplerInfo.shape & SLANG_TEXTURE_2D) == SLANG_TEXTURE_2D) {
-        if ((samplerInfo.shape & SLANG_TEXTURE_ARRAY_FLAG) ==
-            SLANG_TEXTURE_ARRAY_FLAG) {
-          type = TextureType::ARRAY;
-        } else {
-          type = TextureType::DEFAULT;
-        }
-      }
-
-      auto defaultTexture =
-          CHECK_RES(Texture::GetDefault(context, format, type));
-      state.userBoundTextures[key] = {defaultTexture, &samplerInfo};
-    }
-  }
-
-  return Error::Success();
 }
 
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
@@ -340,16 +288,8 @@ auto PrepareRendering(const GraphicsContext &context,
 
   auto updatedState = CHECK_RES(Flush(context, vkCommandBuffer));
   if (updatedState || !isGraphics) {
+    PrintAlways("Updated state, compute? {}", isGraphics ? "no" : "yes");
     EndRendering(context, vkCommandBuffer);
-  }
-
-  {
-    assert(GetPipelineCache().currentLayout.layout != nullptr);
-    assert(GetVirtualCommandBuffer() != VK_NULL_HANDLE);
-    ZoneScopedN("Flush push buffer data");
-    for (auto &pushBuffer : RecordingState::CurrentState.shader->pushBuffers) {
-      pushBuffer.FlushData(GetPipelineCache().currentLayout.layout);
-    }
   }
 
   auto stages = VK_PIPELINE_STAGE_2_NONE;
@@ -370,19 +310,13 @@ auto PrepareRendering(const GraphicsContext &context,
     }
   }
 
-  CHECK_ERR(
-      BindDefaultTextures(context, RecordingState::CurrentState.shader.get()));
-  CHECK_ERR(BindDescriptorSets(context, vkCommandBuffer, stages));
-
   bool wasRendering = GetIsCurrentlyRendering();
 
   if (isGraphics) {
     ZoneScopedN("Dynamic state setup");
 
-    auto *commandBuffer = Graphics::GetVirtualCommandBuffer();
-
     if (!wasRendering) {
-      CHECK_ERR(BeginRendering(context));
+      CHECK_ERR(BeginRendering(context, vkCommandBuffer));
       sameViewport = false;
       sameScissor = false;
       sameDepth = false;

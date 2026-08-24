@@ -311,10 +311,12 @@ auto SubmitCommandBuffers(Graphics::GraphicsContext &context,
 
   auto &tcontext = GetThreadContext();
 
+  PrintAlways("Queue family: {}", tcontext.queueFamily);
+
   {
     ZoneScopedN("Submit command buffer to queue");
-    CHECK_NEW_ERR(vkQueueSubmit2(context.queues.at(tcontext.queueFamily), 1,
-                                 &submitInfo,
+    CHECK_NEW_ERR(vkQueueSubmit2(context.queues.at(buffers.front().queueFamily),
+                                 1, &submitInfo,
                                  context.inFlight[context.frameIndex]));
   }
 
@@ -337,8 +339,9 @@ auto SubmitCommandBuffers(Graphics::GraphicsContext &context,
       submitTimeline.signalSemaphoreInfoCount = 1;
       submitTimeline.pSignalSemaphoreInfos = &timelineSignalInfo;
 
-      CHECK_NEW_ERR(vkQueueSubmit2(context.queues.at(tcontext.queueFamily), 1,
-                                   &submitTimeline, VK_NULL_HANDLE));
+      CHECK_NEW_ERR(
+          vkQueueSubmit2(context.queues.at(context.graphicsQueueFamily), 1,
+                         &submitTimeline, VK_NULL_HANDLE));
     }
   }
 

@@ -6,7 +6,7 @@
 #include <vector>
 #include <vulkan/vulkan_core.h>
 
-#define OUTPUT_DEBUG_GRAPH 0
+#define OUTPUT_DEBUG_GRAPH 1
 
 namespace Graphics {
 
@@ -16,6 +16,7 @@ struct Level {
   CommandLevel level;
 
   std::vector<CommandID> commands;
+  std::vector<CommandID> userBarriers;
 
   // Barriers to be executed BEFORE these commands
   std::vector<VkMemoryBarrier2> barriers;

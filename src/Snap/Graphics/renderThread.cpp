@@ -202,7 +202,6 @@ auto SubmitCommands(Graphics::GraphicsContext &context)
   }
 
   threadContext.commandBuffer = VK_NULL_HANDLE;
-  threadContext.currentVertexFormatHash = 0;
   threadContext.currentMesh = UINT64_MAX;
 
   threadContext.queueFamily = UINT32_MAX;

@@ -8,15 +8,6 @@ auto VertexFormat::BindDynamicInputState(VirtualCommandBuffer *commandBuffer)
   auto currentHash = GetHash();
   auto &threadContext = GetThreadContext();
 
-  [[likely]]
-  if (threadContext.currentVertexFormatHash == currentHash) {
-    return; // Already bound this format, skip
-  }
-
-  ZoneScoped;
-
-  threadContext.currentVertexFormatHash = currentHash;
-
   const auto &bindings = GetBindings();
   const auto &attributes = GetVkAttributes2();
 

@@ -140,7 +140,7 @@ struct DescriptorCache {
       -> Result<VkDescriptorSetLayout>;
 
   auto Initialize(const GraphicsContext &context) -> Error;
-  auto DeInitialize(const GraphicsContext &context) -> Error;
+  auto DeInitialize(const GraphicsContext &context) -> void;
 };
 
 auto GetDescriptorCache() -> DescriptorCache &;

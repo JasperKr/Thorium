@@ -12,5 +12,6 @@ auto GetMaximumAllowedViewport() -> VkViewport;
 auto GetScissor() -> VkRect2D;
 auto GetClippedViewport() -> VkViewport;
 auto GetViewport() -> VkViewport;
+auto BeginFrame(const struct GraphicsContext &context) -> Error;
 
 } // namespace Graphics

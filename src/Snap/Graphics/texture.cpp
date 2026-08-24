@@ -6,7 +6,6 @@
 #include "Graphics/format.hpp"
 #include "Graphics/graphics.hpp"
 #include "Graphics/graphicsContext.hpp"
-#include "Graphics/renderState.hpp"
 #include "Graphics/renderThread.hpp"
 #include "Graphics/resource.hpp"
 #include "Graphics/snapshot.hpp"
@@ -481,7 +480,7 @@ auto Texture::FromFile(const GraphicsContext &context, const char *path,
   if (mipmaps == TextureMipmapOption::Init &&
       !Image::IsCompressedTexture(imageData->GetFormat())) {
     auto &ctx = GetThreadContext();
-    ctx.commandBuffer->MipmapTexture({texture.get()});
+    CHECK_ERR(ctx.commandBuffer->MipmapTexture({texture.get()}));
   }
 
   return texture;
@@ -522,7 +521,7 @@ auto Texture::FromMemory(const GraphicsContext &context,
 
   if (mipmaps == TextureMipmapOption::Init) {
     auto &ctx = GetThreadContext();
-    ctx.commandBuffer->MipmapTexture({texture.get()});
+    CHECK_ERR(ctx.commandBuffer->MipmapTexture({texture.get()}));
   }
 
   return texture;
@@ -640,15 +639,11 @@ auto Texture::FromMemory(const GraphicsContext &context,
 
   CHECK_ERR(texture->UseAsTransferDst(context));
 
-  auto *commandBuffer = GetVirtualCommandBuffer();
+  auto *commandBuffer = CHECK_NULL(GetVirtualCommandBuffer());
 
-  if (commandBuffer == nullptr) {
-    return Error::Create("Failed to get command buffer for SetPixels.");
-  }
-
-  commandBuffer->CopyBufferToImage(
+  CHECK_ERR(commandBuffer->CopyBufferToImage(
       {buffer->handle, texture->imageMemory->image, VK_IMAGE_LAYOUT_GENERAL,
-       static_cast<uint32_t>(copyRegions.size()), copyRegions.data()});
+       static_cast<uint32_t>(copyRegions.size()), copyRegions.data()}));
 
   // TODO: Check lifetime
   buffer->MarkUse();
@@ -774,8 +769,6 @@ auto ImageMemory::TransitionLayout(const GraphicsContext &context,
     return Error::Success();
   }
 
-  auto *commandBuffer = CHECK_NULL(GetVirtualCommandBuffer());
-
   VkImageMemoryBarrier2 barrier = {};
   barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
   barrier.oldLayout = state.currentLayout;
@@ -796,8 +789,9 @@ auto ImageMemory::TransitionLayout(const GraphicsContext &context,
                        .imageMemoryBarrierCount = 1,
                        .pImageMemoryBarriers = &barrier};
 
-  // vkCmdPipelineBarrier2(commandBuffer, &dep);
-  // commandBuffer->PipelineBarrier2({&dep});
+  auto *commandBuffer = CHECK_NULL(GetVirtualCommandBuffer());
+
+  CHECK_ERR(commandBuffer->PipelineBarrier2({&dep}));
 
   state.currentLayout = layout;
 
@@ -947,14 +941,11 @@ inline auto WriteSimplifiedPixelData(const Ref<Texture> &texture,
 
   CHECK_ERR(texture->UseAsTransferDst(context));
 
-  auto *commandBuffer = GetVirtualCommandBuffer();
+  auto *commandBuffer = CHECK_NULL(GetVirtualCommandBuffer());
 
-  if (commandBuffer == nullptr) {
-    return Error::Create("Failed to get command buffer for SetPixels.");
-  }
-
-  commandBuffer->CopyBufferToImage({buffer->handle, texture->imageMemory->image,
-                                    VK_IMAGE_LAYOUT_GENERAL, 1, &region});
+  CHECK_ERR(commandBuffer->CopyBufferToImage(
+      {buffer->handle, texture->imageMemory->image, VK_IMAGE_LAYOUT_GENERAL, 1,
+       &region}));
 
   CHECK_ERR(
       texture->UseAsSampler(context, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT));
@@ -1091,14 +1082,11 @@ auto Texture::SetPixels(const GraphicsContext &context,
 
   CHECK_ERR(UseAsTransferDst(context));
 
-  auto *commandBuffer = GetVirtualCommandBuffer();
+  auto *commandBuffer = CHECK_NULL(GetVirtualCommandBuffer());
 
-  if (commandBuffer == nullptr) {
-    return Error::Create("Failed to get command buffer for SetPixels.");
-  }
-
-  commandBuffer->CopyBufferToImage({buffer->handle, imageMemory->image,
-                                    VK_IMAGE_LAYOUT_GENERAL, 1, &region});
+  CHECK_ERR(
+      commandBuffer->CopyBufferToImage({buffer->handle, imageMemory->image,
+                                        VK_IMAGE_LAYOUT_GENERAL, 1, &region}));
 
   // TODO: Check lifetime
   buffer->MarkUse();
@@ -1426,10 +1414,7 @@ auto Texture::CopyTo(const GraphicsContext &context, Texture &dstTexture,
         "dimensions.");
   }
 
-  auto *commandBuffer = GetVirtualCommandBuffer();
-  if (commandBuffer == nullptr) {
-    return Error::Create("CopyTo: Failed to get command buffer for copying.");
-  }
+  auto *commandBuffer = CHECK_NULL(GetVirtualCommandBuffer());
 
   CHECK_ERR(UseAsTransferSrc(context));
   CHECK_ERR(dstTexture.UseAsTransferDst(context));
@@ -1449,9 +1434,10 @@ auto Texture::CopyTo(const GraphicsContext &context, Texture &dstTexture,
   copyRegion.dstOffset = region.dstOffset;
   copyRegion.extent = region.extent;
 
-  commandBuffer->CopyImage({imageMemory->image, VK_IMAGE_LAYOUT_GENERAL,
-                            dstTexture.imageMemory->image,
-                            VK_IMAGE_LAYOUT_GENERAL, 1, &copyRegion});
+  CHECK_ERR(
+      commandBuffer->CopyImage({imageMemory->image, VK_IMAGE_LAYOUT_GENERAL,
+                                dstTexture.imageMemory->image,
+                                VK_IMAGE_LAYOUT_GENERAL, 1, &copyRegion}));
 
   MarkUse();
   dstTexture.MarkUse();
@@ -1473,10 +1459,7 @@ auto Texture::CopyTo(const GraphicsContext &context, Buffer &dstBuffer,
   copyRegion.imageOffset = region.srcOffset;
   copyRegion.imageExtent = region.extent;
 
-  auto *commandBuffer = GetVirtualCommandBuffer();
-  if (commandBuffer == nullptr) {
-    return Error::Create("CopyTo: Failed to get command buffer for copying.");
-  }
+  auto *commandBuffer = CHECK_NULL(GetVirtualCommandBuffer());
 
   CHECK_ERR(UseAsTransferSrc(context));
 
@@ -1486,8 +1469,9 @@ auto Texture::CopyTo(const GraphicsContext &context, Buffer &dstBuffer,
                          "usage flag.");
   }
 
-  commandBuffer->CopyImageToBuffer({imageMemory->image, VK_IMAGE_LAYOUT_GENERAL,
-                                    dstBuffer.handle, 1, &copyRegion});
+  CHECK_ERR(commandBuffer->CopyImageToBuffer(
+      {imageMemory->image, VK_IMAGE_LAYOUT_GENERAL, dstBuffer.handle, 1,
+       &copyRegion}));
 
   dstBuffer.MarkUse();
   MarkUse();

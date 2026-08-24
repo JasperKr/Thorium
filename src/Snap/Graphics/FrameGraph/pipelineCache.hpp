@@ -126,7 +126,7 @@ struct PipelineCache {
   std::vector<PipelineLayout> pipelineLayouts;
 
   auto Initialize(const GraphicsContext &context) -> Error;
-  auto DeInitialize(const GraphicsContext &context) -> Error;
+  auto DeInitialize(const GraphicsContext &context) -> void;
 
   auto GetPipelineLayout(const GraphicsContext &context, Shader *shader)
       -> Result<PipelineLayout>;

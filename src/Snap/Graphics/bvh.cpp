@@ -5,11 +5,11 @@
 #include "Graphics/graphics.hpp"
 #include "Graphics/graphicsContext.hpp"
 #include "Graphics/mesh.hpp"
-#include "Graphics/renderState.hpp"
 #include "Modules/Helpers/utils.hpp"
 #include "Modules/error.hpp"
 #include <cstdint>
 #include <functional>
+#include <vector>
 #include <vulkan/vulkan_core.h>
 
 namespace Graphics {
@@ -237,8 +237,17 @@ auto BLAS::Create(const GraphicsContext &context, const Mesh &mesh)
 
   scratchBuffer->MarkUse();
 
-  // vkCmdBuildAccelerationStructuresKHR(cmdBuffer, 1, &buildInfo, &rangePtr);
-  cmdBuffer->BuildAccelerationStructuresKHR({1, &buildInfo, &rangePtr});
+  std::vector<VkBuffer> reads{mesh.GetVertexBuffer()->handle,
+                              scratchBuffer->handle};
+  std::vector<VkBuffer> writes{bvh->accelerationStructureBuffer->handle,
+                               scratchBuffer->handle};
+
+  if (mesh.GetIndexBuffer() != nullptr) {
+    reads.emplace_back(mesh.GetIndexBuffer()->handle);
+  }
+
+  CHECK_ERR(cmdBuffer->BuildAccelerationStructuresKHR(
+      {1, &buildInfo, &rangePtr, reads, writes}));
 
   bvh->accelerationStructureBuffer->MarkUse();
 
@@ -397,8 +406,16 @@ auto BLAS::Rebuild(const GraphicsContext &context) -> Error {
     indexBuffer->MarkUse();
   }
 
+  std::vector<VkBuffer> reads{vertexBuffer->handle, scratchBuffer->handle};
+  if (indexBuffer != nullptr && indexCount > 0) {
+    reads.push_back(indexBuffer->handle);
+  }
+  std::vector<VkBuffer> writes{accelerationStructureBuffer->handle,
+                               scratchBuffer->handle};
+
   // vkCmdBuildAccelerationStructuresKHR(cmdBuffer, 1, &buildInfo, &rangePtr);
-  cmdBuffer->BuildAccelerationStructuresKHR({1, &buildInfo, &rangePtr});
+  CHECK_ERR(cmdBuffer->BuildAccelerationStructuresKHR(
+      {1, &buildInfo, &rangePtr, reads, writes}));
 
   VkAccelerationStructureDeviceAddressInfoKHR addressInfo{
       .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR,
@@ -497,8 +514,15 @@ auto BLAS::Refit(const GraphicsContext &context) -> Error {
     indexBuffer->MarkUse();
   }
 
+  std::vector<VkBuffer> reads{vertexBuffer->handle};
+  if (indexBuffer != nullptr && indexCount > 0) {
+    reads.push_back(indexBuffer->handle);
+  }
+  std::vector<VkBuffer> writes{accelerationStructureBuffer->handle};
+
   // vkCmdBuildAccelerationStructuresKHR(cmdBuffer, 1, &buildInfo, &rangePtr);
-  cmdBuffer->BuildAccelerationStructuresKHR({1, &buildInfo, &rangePtr});
+  CHECK_ERR(cmdBuffer->BuildAccelerationStructuresKHR(
+      {1, &buildInfo, &rangePtr, reads, writes}));
 
   VkAccelerationStructureDeviceAddressInfoKHR addressInfo{
       .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR,
@@ -532,10 +556,10 @@ auto BLAS::Compact(const GraphicsContext &context) -> Error {
 
   auto *commandbuffer = CHECK_NULL(GetVirtualCommandBuffer());
 
-  commandbuffer->ResetQueryPool({queryPool, 0, 1});
-  commandbuffer->WriteAccelerationStructuresPropertiesKHR(
+  CHECK_ERR(commandbuffer->ResetQueryPool({queryPool, 0, 1}));
+  CHECK_ERR(commandbuffer->WriteAccelerationStructuresPropertiesKHR(
       {1, &accelerationStructure,
-       VK_QUERY_TYPE_ACCELERATION_STRUCTURE_COMPACTED_SIZE_KHR, queryPool, 0});
+       VK_QUERY_TYPE_ACCELERATION_STRUCTURE_COMPACTED_SIZE_KHR, queryPool, 0}));
 
   uint64_t queryTimelineValue = Graphics::SemaphoreManager::GetSemaphoreValue();
 
@@ -644,7 +668,7 @@ auto BLAS::FinalizeCompaction(const GraphicsContext &context,
 
   auto *commandbuffer = CHECK_NULL(GetVirtualCommandBuffer());
 
-  commandbuffer->CopyAccelerationStructureKHR({&copyInfo});
+  CHECK_ERR(commandbuffer->CopyAccelerationStructureKHR({&copyInfo}));
 
   ScheduleDestruction(
       AccelerationStructureMemory{
@@ -806,8 +830,14 @@ auto TLAS::Create(const GraphicsContext &context,
 
   scratchBuffer->MarkUse();
 
+  std::vector<VkBuffer> reads{tlas->instanceBuffer->handle,
+                              scratchBuffer->handle};
+  std::vector<VkBuffer> writes{tlas->accelerationStructureBuffer->handle,
+                               scratchBuffer->handle};
+
   // vkCmdBuildAccelerationStructuresKHR(cmdBuffer, 1, &buildInfo, &rangePtr);
-  cmdBuffer->BuildAccelerationStructuresKHR({1, &buildInfo, &rangePtr});
+  CHECK_ERR(cmdBuffer->BuildAccelerationStructuresKHR(
+      {1, &buildInfo, &rangePtr, reads, writes}));
 
   tlas->accelerationStructureBuffer->MarkUse();
 
@@ -943,10 +973,14 @@ auto TLAS::Refit(const GraphicsContext &context) -> Error {
   scratchBuffer->MarkUse();
   instanceBuffer->MarkUse();
 
+  std::vector<VkBuffer> reads{instanceBuffer->handle, scratchBuffer->handle};
+  std::vector<VkBuffer> writes{accelerationStructureBuffer->handle,
+                               scratchBuffer->handle};
+
   // vkCmdBuildAccelerationStructuresKHR(GetCommandBuffer(), 1, &buildInfo,
   //                                     &rangePtr);
-  GetVirtualCommandBuffer()->BuildAccelerationStructuresKHR(
-      {1, &buildInfo, &rangePtr});
+  CHECK_ERR(GetVirtualCommandBuffer()->BuildAccelerationStructuresKHR(
+      {1, &buildInfo, &rangePtr, reads, writes}));
 
   instanceCount = static_cast<uint32_t>(instances.size());
 
@@ -1077,10 +1111,14 @@ auto TLAS::Rebuild(const GraphicsContext &context) -> Error {
   scratchBuffer->MarkUse();
   instanceBuffer->MarkUse();
 
+  std::vector<VkBuffer> reads{instanceBuffer->handle, scratchBuffer->handle};
+  std::vector<VkBuffer> writes{accelerationStructureBuffer->handle,
+                               scratchBuffer->handle};
+
   // vkCmdBuildAccelerationStructuresKHR(GetCommandBuffer(), 1, &buildInfo,
   //                                     &rangePtr);
-  GetVirtualCommandBuffer()->BuildAccelerationStructuresKHR(
-      {1, &buildInfo, &rangePtr});
+  CHECK_ERR(GetVirtualCommandBuffer()->BuildAccelerationStructuresKHR(
+      {1, &buildInfo, &rangePtr, reads, writes}));
 
   VkAccelerationStructureDeviceAddressInfoKHR addressInfo{
       .sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR,

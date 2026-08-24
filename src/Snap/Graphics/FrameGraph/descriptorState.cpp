@@ -3,8 +3,10 @@
 #include "Graphics/FrameGraph/descriptorCache.hpp"
 #include "Graphics/FrameGraph/pipelineCache.hpp"
 #include "Graphics/FrameGraph/recordingState.hpp"
+#include "Graphics/renderState.hpp"
 #include "Graphics/shader.hpp"
 #include "Modules/Helpers/utils.hpp"
+#include "Modules/console.hpp"
 #include "Modules/object.hpp"
 
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables, readability-function-cognitive-complexity, cppcoreguidelines-avoid-magic-numbers, readability-magic-numbers)
@@ -182,7 +184,7 @@ inline auto AllocateDescriptorSet(const GraphicsContext &context,
   accelStructInfos.reserve(key.bindings.size());
   accelStructHandles.reserve(key.bindings.size());
 
-  auto &shader = RecordingState::CurrentState.shader;
+  auto &shader = RenderState::TopOfStack->shader;
   auto &state = shader->GetState();
 
   for (const auto &binding : key.bindings) {
@@ -295,27 +297,28 @@ inline auto AllocateDescriptorSet(const GraphicsContext &context,
                            writeDescriptorSets.data(), 0, nullptr);
   }
 
-  assert(GetPipelineCache().currentLayout.layout != nullptr);
   assert(descriptorSet != VK_NULL_HANDLE);
 
   return descriptorSet;
 }
 
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
-auto BindDescriptorSets(const GraphicsContext &context,
-                        VkCommandBuffer vkCommandBuffer,
-                        VkPipelineStageFlags2 stage) -> Error {
+auto GetDescriptorSets(const GraphicsContext &context)
+    -> Result<std::pair<Math::StackVector<VkDescriptorSet, 16>,
+                        Math::StackVector<uint32_t, 16>>> {
   ZoneScoped;
-  auto &shader = RecordingState::CurrentState.shader;
+
+  PrintAlways("Binding descriptor sets.");
+
+  auto &shader = RenderState::TopOfStack->shader;
   auto &state = shader->GetState();
 
   VkPipelineStageFlags2 stageFlags = 0;
 
-  if (RecordingState::CurrentState.bindPoint ==
-      VK_PIPELINE_BIND_POINT_GRAPHICS) {
+  if (RenderState::TopOfStack->bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS) {
     stageFlags |= VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT;
     stageFlags |= VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
-  } else if (RecordingState::CurrentState.bindPoint ==
+  } else if (RenderState::TopOfStack->bindPoint ==
              VK_PIPELINE_BIND_POINT_COMPUTE) {
     stageFlags |= VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
   }
@@ -325,28 +328,14 @@ auto BindDescriptorSets(const GraphicsContext &context,
     DescriptorKey descriptorKey{};
   };
 
-  thread_local std::vector<BoundDescriptorSet> BoundDescriptorSets{};
-  thread_local VirtualCommandBuffer *DescriptorsBoundAtCmdBuffer =
-      VK_NULL_HANDLE;
-  thread_local VkPipelineLayout DescriporsBoundAtLayout = {};
-
-  if (DescriptorsBoundAtCmdBuffer != Graphics::GetVirtualCommandBuffer() ||
-      GetPipelineCache().currentLayout.layout != DescriporsBoundAtLayout) {
-    BoundDescriptorSets.clear();
-    DescriptorsBoundAtCmdBuffer = Graphics::GetVirtualCommandBuffer();
-    DescriporsBoundAtLayout = GetPipelineCache().currentLayout.layout;
-  }
-
-  auto *commandBuffer = Graphics::GetVirtualCommandBuffer();
-  ERR_ASSERT_MSG(commandBuffer != VK_NULL_HANDLE,
-                 "Command buffer is null in BindDescriptorSets.");
-
   Math::StackVector<uint32_t, 16> dynamicOffsets{};
   Math::StackVector<VkDescriptorSet, 16> descriptorSets{};
 
+  const auto &pipelineLayout =
+      CHECK_RES(GetPipelineCache().GetPipelineLayout(context, shader.get()));
+
   int setIndex = 0;
-  for (const auto &layout :
-       GetPipelineCache().currentLayout.descriptorSetLayouts) {
+  for (const auto &layout : pipelineLayout.descriptorSetLayouts) {
     ZoneScopedN("BindDescriptorSets loop");
 
     thread_local DescriptorKey key = {
@@ -368,22 +357,9 @@ auto BindDescriptorSets(const GraphicsContext &context,
                                       currentDynamicOffsets));
     }
 
-    if (BoundDescriptorSets.size() <= setIndex) {
-      BoundDescriptorSets.resize(setIndex + 1);
-    }
-
     VkDescriptorSet *entry = GetDescriptorCache().descriptorSetCache.get(key);
     if (entry != nullptr) {
       VkDescriptorSet cached = *entry;
-
-      auto &currentlyBound = BoundDescriptorSets.at(setIndex);
-
-      if (currentlyBound.descriptorSet == cached) {
-        setIndex++;
-        continue;
-      }
-
-      currentlyBound.descriptorSet = (void *)cached;
 
       descriptorSets.emplace_back(cached);
       dynamicOffsets.insert(dynamicOffsets.end(), currentDynamicOffsets.begin(),
@@ -391,11 +367,6 @@ auto BindDescriptorSets(const GraphicsContext &context,
     } else {
       auto *descriptorSet =
           CHECK_RES(AllocateDescriptorSet(context, key, setIndex, layout));
-
-      BoundDescriptorSets[setIndex] = {
-          .descriptorSet = (void *)descriptorSet,
-          .descriptorKey = key,
-      };
 
       descriptorSets.emplace_back(descriptorSet);
       dynamicOffsets.insert(dynamicOffsets.end(), currentDynamicOffsets.begin(),
@@ -407,17 +378,9 @@ auto BindDescriptorSets(const GraphicsContext &context,
     setIndex++;
   }
 
-  if (descriptorSets.empty()) {
-    return Error::Success();
-  }
-
-  vkCmdBindDescriptorSets(
-      vkCommandBuffer, RecordingState::CurrentState.bindPoint,
-      GetPipelineCache().currentLayout.layout, 0,
-      static_cast<uint32_t>(descriptorSets.size()), descriptorSets.data(),
-      static_cast<uint32_t>(dynamicOffsets.size()), dynamicOffsets.data());
-
-  return Error::Success();
+  return std::pair<Math::StackVector<VkDescriptorSet, 16>,
+                   Math::StackVector<uint32_t, 16>>{descriptorSets,
+                                                    dynamicOffsets};
 }
 } // namespace Graphics
 

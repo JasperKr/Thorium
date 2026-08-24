@@ -26,7 +26,7 @@ auto PipelineCache::Initialize(const GraphicsContext &context) -> Error {
   return {};
 }
 
-auto PipelineCache::DeInitialize(const GraphicsContext &context) -> Error {
+auto PipelineCache::DeInitialize(const GraphicsContext &context) -> void {
   std::scoped_lock<std::mutex, std::mutex> lock(
       Graphics::GraphicsContext::mutexes.device, mutex);
   for (const auto &pipeline : pipelines) {
@@ -42,8 +42,6 @@ auto PipelineCache::DeInitialize(const GraphicsContext &context) -> Error {
 
   pipelines.clear();
   pipelineLayouts.clear();
-
-  return {};
 }
 
 auto TryCreateShaderDescriptorBindingInfo(const GraphicsContext &context,
@@ -134,6 +132,8 @@ auto PipelineCache::GetPipelineLayout(const GraphicsContext &context,
   ZoneScoped;
   auto pushConstantRanges = std::vector<VkPushConstantRange>{};
 
+  CHECK_NULL(shader);
+
   for (const auto &buffer : shader->pushBuffers) {
     VkPushConstantRange pushConstantRange = {};
     pushConstantRange.stageFlags = buffer.GetStageFlags();
@@ -187,10 +187,12 @@ auto PipelineCache::GetPipelineLayout(const GraphicsContext &context,
                       setPair.first, maxSetCount));
     }
 
-    const auto &layout = CHECK_RES(
+    auto *layout = CHECK_RES(
         GetDescriptorCache().GetDescriptorSetLayout(layoutKey, context));
     setLayouts.at(setPair.first) = layout;
   }
+
+  ERR_ASSERT(!setLayouts.empty());
 
   VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
   pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
