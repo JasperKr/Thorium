@@ -28,10 +28,11 @@
 
 namespace Graphics {
 
-auto FrameGraph::Submit(const VirtualCommandBuffer &commands) -> Error {
+auto FrameGraph::Submit(const GraphicsContext &context,
+                        const VirtualCommandBuffer &commands) -> Error {
   commandBuffer = commands;
 
-  CHECK_ERR(Compile());
+  CHECK_ERR(Compile(context));
 
   return {};
 }
@@ -865,14 +866,233 @@ auto FrameGraph::InsertBarriers() -> Error {
   return {};
 }
 
+inline auto GetRenderExtent(const Graphics::GraphState &state) -> VkExtent2D {
+
+  if (!state.colorAttachments.empty()) {
+    return VkExtent2D{
+        .width = state.colorAttachments.front().texture->GetWidth(),
+        .height = state.colorAttachments.front().texture->GetHeight(),
+    };
+  }
+
+  if (state.hasDepthStencilAttachment) {
+    return VkExtent2D{
+        .width = state.depthStencilAttachment.texture->GetWidth(),
+        .height = state.depthStencilAttachment.texture->GetHeight(),
+    };
+  }
+
+  assert(false && "Trying to get render extent with no attachments.");
+  return VkExtent2D{0, 0};
+}
+
+inline auto DrawStateToRenderingInfo(const GraphicsContext &context,
+                                     const DrawState &state)
+    -> Result<VkRenderingInfo> {
+  auto &renderState = CommandStateManager::States.at(state.stateID);
+
+  VkRenderingInfo renderingInfo = {};
+  renderingInfo.sType = VK_STRUCTURE_TYPE_RENDERING_INFO;
+
+  renderingInfo.renderArea.offset = {.x = 0, .y = 0};
+  renderingInfo.renderArea.extent = GetRenderExtent(renderState);
+  renderingInfo.layerCount = 1;
+  renderingInfo.viewMask = 0;
+  renderingInfo.flags = 0;
+
+  if (renderState.colorAttachments.size() >
+      context.deviceProperties.limits.maxColorAttachments) {
+    return Error::Create(
+        "Number of bound render targets exceeds device limits.");
+  }
+
+  if (renderingInfo.renderArea.extent.width == 0 ||
+      renderingInfo.renderArea.extent.height == 0) {
+    return Error::Create("Render area has zero width or height.");
+  }
+
+  auto colorAttachments =
+      std::array<VkRenderingAttachmentInfo, MAX_COLOR_ATTACHMENTS>{};
+  auto depthAttachment = VkRenderingAttachmentInfo{};
+  auto stencilAttachment = VkRenderingAttachmentInfo{};
+
+  for (int i = 0; i < renderState.colorAttachments.size(); i++) {
+    const auto &rendertarget = renderState.colorAttachments.at(i);
+    CHECK_ERR(
+        rendertarget.texture->UseAsAttachment(context, rendertarget.loadOp));
+
+    VkRenderingAttachmentInfo attachmentInfo = {};
+    attachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+    attachmentInfo.imageView = rendertarget.texture->view;
+    attachmentInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+    attachmentInfo.loadOp = rendertarget.loadOp;
+    attachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    attachmentInfo.clearValue = rendertarget.clearValue;
+
+    colorAttachments.at(i) = attachmentInfo;
+  }
+
+  bool hasDepth = false;
+  bool hasStencil = false;
+
+  if (renderState.hasDepthStencilAttachment) {
+    const auto &rendertarget = renderState.depthStencilAttachment;
+    CHECK_ERR(
+        rendertarget.texture->UseAsAttachment(context, rendertarget.loadOp));
+
+    VkRenderingAttachmentInfo attachmentInfo = {};
+    attachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
+    attachmentInfo.imageView = rendertarget.texture->view;
+    attachmentInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+    attachmentInfo.loadOp = rendertarget.loadOp;
+    attachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    attachmentInfo.clearValue = rendertarget.clearValue;
+
+    if (rendertarget.texture->IsDepthTexture()) {
+      depthAttachment = attachmentInfo;
+      hasDepth = true;
+    }
+
+    if (rendertarget.texture->IsStencilTexture()) {
+      stencilAttachment = attachmentInfo;
+      hasStencil = true;
+    }
+  }
+
+  renderingInfo.colorAttachmentCount = renderState.colorAttachments.size();
+  renderingInfo.pColorAttachments = colorAttachments.data();
+
+  renderingInfo.pStencilAttachment = hasStencil ? &stencilAttachment : nullptr;
+  renderingInfo.pDepthAttachment = hasDepth ? &depthAttachment : nullptr;
+
+  // Make sure subsequent renders load from the existing content if we ever need to re-bind mid-pass
+  for (auto &rendertarget : renderState.colorAttachments) {
+    rendertarget.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+  }
+
+  if (renderState.hasDepthStencilAttachment) {
+    renderState.depthStencilAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+  }
+
+  return renderingInfo;
+}
+
+inline auto CompareRenderingInfos(const VkRenderingInfo &first,
+                                  const VkRenderingInfo &second) -> bool {
+  if (first.renderArea.offset.x != second.renderArea.offset.x ||
+      first.renderArea.offset.y != second.renderArea.offset.y ||
+      first.renderArea.extent.width != second.renderArea.extent.width ||
+      first.renderArea.extent.height != second.renderArea.extent.height) {
+    return false;
+  }
+
+  if (first.colorAttachmentCount != second.colorAttachmentCount) {
+    return false;
+  }
+
+  std::span<const VkRenderingAttachmentInfo> firstColors(
+      first.pColorAttachments, first.colorAttachmentCount);
+  std::span<const VkRenderingAttachmentInfo> secondColors(
+      second.pColorAttachments, second.colorAttachmentCount);
+
+  for (size_t i = 0; i < firstColors.size(); ++i) {
+    const auto &firstAttach = firstColors[i];
+    const auto &secondAttach = secondColors[i];
+    if (firstAttach.imageView != secondAttach.imageView ||
+        firstAttach.imageLayout != secondAttach.imageLayout ||
+        firstAttach.loadOp != secondAttach.loadOp ||
+        firstAttach.storeOp != secondAttach.storeOp) {
+      return false;
+    }
+  }
+
+  const bool firstHasDepth = first.pDepthAttachment != nullptr;
+  const bool secondHasDepth = second.pDepthAttachment != nullptr;
+  if (firstHasDepth != secondHasDepth) {
+    return false;
+  }
+  if (firstHasDepth && secondHasDepth) {
+    if (first.pDepthAttachment->imageView !=
+            second.pDepthAttachment->imageView ||
+        first.pDepthAttachment->imageLayout !=
+            second.pDepthAttachment->imageLayout ||
+        first.pDepthAttachment->loadOp != second.pDepthAttachment->loadOp ||
+        first.pDepthAttachment->storeOp != second.pDepthAttachment->storeOp) {
+      return false;
+    }
+  }
+
+  const bool firstHasStencil = first.pStencilAttachment != nullptr;
+  const bool secondHasStencil = second.pStencilAttachment != nullptr;
+  if (firstHasStencil != secondHasStencil) {
+    return false;
+  }
+  if (firstHasStencil && secondHasStencil) {
+    if (first.pStencilAttachment->imageView !=
+            second.pStencilAttachment->imageView ||
+        first.pStencilAttachment->imageLayout !=
+            second.pStencilAttachment->imageLayout ||
+        first.pStencilAttachment->loadOp != second.pStencilAttachment->loadOp ||
+        first.pStencilAttachment->storeOp !=
+            second.pStencilAttachment->storeOp) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+auto FrameGraph::BuildRenderRegions(const GraphicsContext &context)
+    -> Result<std::vector<RenderingInfo>> {
+  std::vector<RenderingInfo> infos{};
+  size_t currentIndex = SIZE_MAX;
+
+  for (const auto &level : graph) {
+    for (const CommandID commandID : level.commands) {
+      const auto &command = commandBuffer.commands.at(commandID);
+      const auto *drawState = command.GetDrawState();
+      const auto *callableState = get_if_derived<Callable>(command.data);
+
+      // Any non-draw command breaks the current contiguous rendering region.
+      if (drawState == nullptr || callableState == nullptr ||
+          !callableState->requiresRendering) {
+        currentIndex = SIZE_MAX;
+        continue;
+      }
+
+      auto &renderState = CommandStateManager::States.at(drawState->stateID);
+
+      if (renderState.bindPoint != VK_PIPELINE_BIND_POINT_GRAPHICS) {
+        currentIndex = SIZE_MAX;
+        continue;
+      }
+
+      const auto &renderingInfo =
+          CHECK_RES(DrawStateToRenderingInfo(context, *drawState));
+
+      if (currentIndex == SIZE_MAX ||
+          !CompareRenderingInfos(renderingInfo, infos[currentIndex].info)) {
+        infos.emplace_back(renderingInfo);
+        currentIndex = infos.size() - 1;
+        infos[currentIndex].from = commandID;
+      }
+
+      infos[currentIndex].to = commandID;
+    }
+  }
+
+  return infos;
+}
+
 // NOLINTNEXTLINE
-auto FrameGraph::Compile() -> Error {
+auto FrameGraph::Compile(const GraphicsContext &context) -> Error {
   ZoneScoped;
 
   CHECK_ERR(ValidateGraph());
   CHECK_ERR(MapResourceUsages());
   CHECK_ERR(BuildGraph());
   CHECK_ERR(InsertBarriers());
+  const auto &regions = CHECK_RES(BuildRenderRegions(context));
 
 #if OUTPUT_DEBUG_GRAPH
   CHECK_ERR(DebugOutput());

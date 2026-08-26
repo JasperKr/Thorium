@@ -22,11 +22,18 @@ struct Level {
   std::vector<VkMemoryBarrier2> barriers;
 };
 
+struct RenderingInfo {
+  VkRenderingInfo info{};
+  CommandID from = InvalidCommandID;
+  CommandID to = InvalidCommandID;
+};
+
 struct FrameGraph {
   // also defined in command.hpp
   static inline const CommandLevel InvalidDepth = UINT16_MAX;
 
-  auto Submit(const VirtualCommandBuffer &commands) -> Error;
+  auto Submit(const GraphicsContext &context,
+              const VirtualCommandBuffer &commands) -> Error;
   auto Write(const GraphicsContext &context, VkCommandBuffer cmdBuffer)
       -> Error;
 
@@ -51,11 +58,13 @@ private:
 
   auto MapResourceUsages() -> Error;
   auto PreCompile() -> Error;
-  auto Compile() -> Error;
+  auto Compile(const GraphicsContext &context) -> Error;
   auto BuildGraph() -> Error;
   auto MarkAncestors(CommandID from, CommandID floor, uint32_t stamp) -> void;
   auto ReduceParents(CommandID idx, const std::vector<CommandID> &candidates)
       -> void;
+  auto BuildRenderRegions(const GraphicsContext &context)
+      -> Result<std::vector<RenderingInfo>>;
 
   auto ResourceAccessAt(CommandID commandId, const void *resource)
       -> std::pair<VkAccessFlags2, VkPipelineStageFlags2>;

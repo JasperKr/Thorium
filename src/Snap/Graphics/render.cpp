@@ -404,7 +404,7 @@ auto Present(Graphics::GraphicsContext &context,
         .queueFamily = static_cast<uint32_t>(index),
     });
 
-    CHECK_ERR(graph.Submit(cmdBuffer.second));
+    CHECK_ERR(graph.Submit(context, cmdBuffer.second));
     CHECK_ERR(graph.Write(context, availableCommandBuffers.at(index)));
 
     index++;
