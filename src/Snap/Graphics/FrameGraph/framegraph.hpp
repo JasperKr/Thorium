@@ -44,6 +44,7 @@ private:
 
   // Direct dependencies per command, after transitive reduction.
   std::vector<std::vector<CommandID>> commandParents;
+  std::vector<std::vector<CommandID>> nextReady;
 
   // Scratch data for the reachability walk in ReduceParents.
   std::vector<uint32_t> ancestorStamps;
@@ -71,6 +72,8 @@ private:
 
   auto ValidateGraph() -> Error;
   auto InsertBarriers() -> Error;
+  auto BuildReadyState() -> Error;
+
   auto GetRequiredBarriers(CommandID commandId, void const *resource,
                            VkAccessFlags2 accesses,
                            VkPipelineStageFlags2 pipelines)
@@ -80,5 +83,7 @@ private:
                 VkPipelineStageFlags2 lastWritePipeline,
                 VkAccessFlags2 dstAccess, VkPipelineStageFlags2 dstPipeline)
       -> std::array<VkPipelineStageFlags2, UINT64_WIDTH>;
+  auto PickNextCommand(CommandID parent) -> CommandID;
+  auto ScoreCommand(CommandID parent, CommandID child) -> uint32_t;
 };
 } // namespace Graphics

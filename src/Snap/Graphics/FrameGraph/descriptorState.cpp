@@ -308,7 +308,7 @@ auto GetDescriptorSets(const GraphicsContext &context)
                         Math::StackVector<uint32_t, 16>>> {
   ZoneScoped;
 
-  PrintAlways("Binding descriptor sets.");
+  // PrintAlways("Binding descriptor sets.");
 
   auto &shader = RenderState::TopOfStack->shader;
   auto &state = shader->GetState();

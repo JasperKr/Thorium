@@ -918,8 +918,8 @@ inline auto DrawStateToRenderingInfo(const GraphicsContext &context,
 
   for (int i = 0; i < renderState.colorAttachments.size(); i++) {
     const auto &rendertarget = renderState.colorAttachments.at(i);
-    CHECK_ERR(
-        rendertarget.texture->UseAsAttachment(context, rendertarget.loadOp));
+    // CHECK_ERR(
+    //     rendertarget.texture->UseAsAttachment(context, rendertarget.loadOp));
 
     VkRenderingAttachmentInfo attachmentInfo = {};
     attachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
@@ -937,9 +937,6 @@ inline auto DrawStateToRenderingInfo(const GraphicsContext &context,
 
   if (renderState.hasDepthStencilAttachment) {
     const auto &rendertarget = renderState.depthStencilAttachment;
-    CHECK_ERR(
-        rendertarget.texture->UseAsAttachment(context, rendertarget.loadOp));
-
     VkRenderingAttachmentInfo attachmentInfo = {};
     attachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
     attachmentInfo.imageView = rendertarget.texture->view;
@@ -966,13 +963,13 @@ inline auto DrawStateToRenderingInfo(const GraphicsContext &context,
   renderingInfo.pDepthAttachment = hasDepth ? &depthAttachment : nullptr;
 
   // Make sure subsequent renders load from the existing content if we ever need to re-bind mid-pass
-  for (auto &rendertarget : renderState.colorAttachments) {
-    rendertarget.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-  }
+  // for (auto &rendertarget : renderState.colorAttachments) {
+  //   rendertarget.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+  // }
 
-  if (renderState.hasDepthStencilAttachment) {
-    renderState.depthStencilAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-  }
+  // if (renderState.hasDepthStencilAttachment) {
+  //   renderState.depthStencilAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+  // }
 
   return renderingInfo;
 }
@@ -1084,6 +1081,65 @@ auto FrameGraph::BuildRenderRegions(const GraphicsContext &context)
   return infos;
 }
 
+auto FrameGraph::BuildReadyState() -> Error {
+  const auto commandCount = commandBuffer.commands.size();
+  std::vector<bool> scheduled(commandCount, false);
+  size_t scheduledCount = 0;
+  nextReady.reserve(commandCount);
+
+  while (scheduledCount < commandCount) {
+    std::vector<CommandID> batch;
+
+    for (const auto &command : commandBuffer.commands) {
+      if (scheduled[command.id]) {
+        continue;
+      }
+
+      const bool parentsReady = std::all_of(
+          commandParents[command.id].begin(), commandParents[command.id].end(),
+          [&](CommandID parent) -> bool { return scheduled[parent]; });
+
+      if (parentsReady) {
+        batch.emplace_back(command.id);
+      }
+    }
+
+    if (batch.empty()) {
+      return Error::Create("Cycle detected while building ready state");
+    }
+
+    for (const auto commandId : batch) {
+      scheduled[commandId] = true;
+    }
+    scheduledCount += batch.size();
+
+    nextReady.emplace_back(std::move(batch));
+  }
+
+  return {};
+}
+
+auto FrameGraph::ScoreCommand(CommandID parentID, CommandID childID)
+    -> uint32_t {
+  const auto &parent = commandBuffer.commands.at(parentID);
+  const auto &child = commandBuffer.commands.at(childID);
+}
+
+auto FrameGraph::PickNextCommand(CommandID parent) -> CommandID {
+  const auto &children = nextReady.at(parent);
+
+  if (children.empty()) {
+    return InvalidCommandID;
+  }
+
+  if (children.size() == 1) {
+    return children.front();
+  }
+
+  uint32_t lowestScore = UINT32_MAX;
+  CommandID bestCommand = InvalidCommandID;
+}
+
 // NOLINTNEXTLINE
 auto FrameGraph::Compile(const GraphicsContext &context) -> Error {
   ZoneScoped;
@@ -1094,9 +1150,22 @@ auto FrameGraph::Compile(const GraphicsContext &context) -> Error {
   CHECK_ERR(InsertBarriers());
   const auto &regions = CHECK_RES(BuildRenderRegions(context));
 
+  std::stringstream stream;
+
+  stream << "Render regions:\n";
+  for (const auto &region : regions) {
+    stream << std::format("[{} -> {}]\n", region.from, region.to);
+  }
+
+  PrintAlways(stream.str());
+
 #if OUTPUT_DEBUG_GRAPH
   CHECK_ERR(DebugOutput());
 #endif
+
+  {
+    return Error::Create("Test");
+  }
 
   return {};
 }

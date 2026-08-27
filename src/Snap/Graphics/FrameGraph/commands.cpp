@@ -220,8 +220,8 @@ auto DrawState::Initialize(const GraphicsContext &context, CommandType type)
   graphState.shader = shader;
   graphState.bindPoint = RenderState::GetBindPoint();
 
-  PrintAlways("Shader: {}", shader->moduleName);
-  PrintAlways("Draw state with bind point: {}", (int)graphState.bindPoint);
+  // PrintAlways("Shader: {}", shader->moduleName);
+  // PrintAlways("Draw state with bind point: {}", (int)graphState.bindPoint);
 
   bool isCompute =
       (shader->combinedShaderStages & VK_SHADER_STAGE_COMPUTE_BIT) != 0;
@@ -297,9 +297,9 @@ auto DrawState::Initialize(const GraphicsContext &context, CommandType type)
     std::tie(descriptorSets, dynamicOffsets) =
         CHECK_RES(GetDescriptorSets(*GetCurrentGraphicsContext()));
 
-    PrintAlways("# descriptorSets {}", descriptorSets.size());
+    // PrintAlways("# descriptorSets {}", descriptorSets.size());
   } else {
-    PrintAlways("Skipped getting descriptor sets");
+    // PrintAlways("Skipped getting descriptor sets");
   }
 
   return {};
