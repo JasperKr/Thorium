@@ -1119,10 +1119,73 @@ auto FrameGraph::BuildReadyState() -> Error {
   return {};
 }
 
+inline auto ComparePipelineCompatability(const GraphState &state,
+                                         const GraphState &other) {
+  if (state.colorAttachments != other.colorAttachments) {
+    return false;
+  }
+
+  if (state.shader != other.shader) {
+    return false;
+  }
+
+  if (state.hasDepthStencilAttachment != other.hasDepthStencilAttachment) {
+    return false;
+  }
+
+  if (state.hasDepthStencilAttachment) {
+    if (state.depthStencilAttachment != other.depthStencilAttachment) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 auto FrameGraph::ScoreCommand(CommandID parentID, CommandID childID)
     -> uint32_t {
   const auto &parent = commandBuffer.commands.at(parentID);
   const auto &child = commandBuffer.commands.at(childID);
+
+  const auto DynamicStateUpdateCost = 100U;
+  const auto EndRenderingCost = 500U;
+  const auto StartRenderingCost = 1000U;
+
+  uint32_t cost = 0U;
+
+  const auto *parentDrawState = parent.GetDrawState();
+  const auto *childDrawState = child.GetDrawState();
+
+  if (parentDrawState != nullptr) { // Parent is rendering
+    const auto &graphState = parentDrawState->GetGraphState();
+
+    if (childDrawState != nullptr) { // Child is rendering
+      const auto &childGraphState = childDrawState->GetGraphState();
+
+      if (!ComparePipelineCompatability(graphState, childGraphState)) {
+        cost += EndRenderingCost;
+
+        if (childGraphState.bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS) {
+          cost += StartRenderingCost;
+        }
+
+        // Full compat check, including blend mode, back face etc..
+      } else if (graphState != childGraphState) {
+        cost += DynamicStateUpdateCost;
+      }
+    } else { // Child is not rendering
+      cost += EndRenderingCost;
+    }
+  } else if (childDrawState != nullptr) { // Child is rendering but parent isn't
+    const auto &childGraphState = childDrawState->GetGraphState();
+    if (childGraphState.bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS) {
+      cost += StartRenderingCost;
+    }
+  } else { // Neither child nor parent are rendering
+    // no extra cost to call
+  }
+
+  return cost;
 }
 
 auto FrameGraph::PickNextCommand(CommandID parent) -> CommandID {
@@ -1136,8 +1199,20 @@ auto FrameGraph::PickNextCommand(CommandID parent) -> CommandID {
     return children.front();
   }
 
-  uint32_t lowestScore = UINT32_MAX;
-  CommandID bestCommand = InvalidCommandID;
+  uint32_t lowestScore = ScoreCommand(parent, children.front());
+  CommandID bestCommand = children.front();
+
+  for (int index = 1; index < children.size(); index++) {
+    const auto child = children.at(index);
+    const auto score = ScoreCommand(parent, child);
+
+    if (score < lowestScore) {
+      bestCommand = child;
+      lowestScore = score;
+    }
+  }
+
+  return bestCommand;
 }
 
 // NOLINTNEXTLINE
@@ -1147,6 +1222,7 @@ auto FrameGraph::Compile(const GraphicsContext &context) -> Error {
   CHECK_ERR(ValidateGraph());
   CHECK_ERR(MapResourceUsages());
   CHECK_ERR(BuildGraph());
+  CHECK_ERR(BuildReadyState());
   CHECK_ERR(InsertBarriers());
   const auto &regions = CHECK_RES(BuildRenderRegions(context));
 

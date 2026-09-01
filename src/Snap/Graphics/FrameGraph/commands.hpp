@@ -251,6 +251,10 @@ struct DrawState {
              VkCommandBuffer cmdBuffer) const -> Error;
 
   auto Initialize(const GraphicsContext &context, CommandType type) -> Error;
+
+  [[nodiscard]] auto GetGraphState() const -> GraphState {
+    return CommandStateManager::States.at(stateID);
+  }
 };
 
 namespace Args {
