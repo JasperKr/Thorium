@@ -83,7 +83,8 @@ private:
                 VkPipelineStageFlags2 lastWritePipeline,
                 VkAccessFlags2 dstAccess, VkPipelineStageFlags2 dstPipeline)
       -> std::array<VkPipelineStageFlags2, UINT64_WIDTH>;
-  auto PickNextCommand(CommandID parent) -> CommandID;
+  auto PickNextCommands(CommandID parent) -> std::vector<CommandID>;
   auto ScoreCommand(CommandID parent, CommandID child) -> uint32_t;
+  auto Reorder() -> Result<std::vector<CommandID>>;
 };
 } // namespace Graphics

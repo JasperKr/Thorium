@@ -7,8 +7,10 @@
 #include "Modules/Helpers/utils.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
+#include <cstddef>
 #include <sstream>
 #include <string>
+#include <unordered_set>
 #if OUTPUT_DEBUG_GRAPH
 #include "Modules/filesystem.hpp"
 #include <format>
@@ -1188,31 +1190,85 @@ auto FrameGraph::ScoreCommand(CommandID parentID, CommandID childID)
   return cost;
 }
 
-auto FrameGraph::PickNextCommand(CommandID parent) -> CommandID {
+// returns a list of commands, with the best pick last
+auto FrameGraph::PickNextCommands(CommandID parent) -> std::vector<CommandID> {
   const auto &children = nextReady.at(parent);
 
+  [[unlikely]]
   if (children.empty()) {
-    return InvalidCommandID;
+    return {};
   }
 
   if (children.size() == 1) {
-    return children.front();
+    return children;
   }
 
   uint32_t lowestScore = ScoreCommand(parent, children.front());
   CommandID bestCommand = children.front();
 
-  for (int index = 1; index < children.size(); index++) {
-    const auto child = children.at(index);
-    const auto score = ScoreCommand(parent, child);
+  static std::unordered_map<CommandID, uint32_t> scores;
+  snap_defer(scores.clear());
+  scores.reserve(children.size());
 
-    if (score < lowestScore) {
-      bestCommand = child;
-      lowestScore = score;
-    }
+  for (CommandID child : children) {
+    scores.emplace(child, ScoreCommand(parent, child));
   }
 
-  return bestCommand;
+  std::vector<CommandID> sortedChildren{children};
+
+  std::ranges::sort(
+      sortedChildren,
+      [](const CommandID &first, const CommandID &second) -> bool {
+        // A(3) > B(2) -> A, B. We want highest score first, so A > B
+        return scores.at(first) > scores.at(second);
+      });
+
+  return sortedChildren;
+}
+
+auto FrameGraph::Reorder() -> Result<std::vector<CommandID>> {
+  static std::vector<CommandID> commandsStack;
+  snap_defer(commandsStack.clear());
+  commandsStack.reserve(commandBuffer.commands.size() / 4);
+
+  for (const auto &command : commandBuffer.commands) {
+    const auto &parents = commandParents.at(command.id);
+
+    [[unlikely]]
+    if (parents.empty()) {
+      continue;
+    }
+
+    commandsStack.emplace_back(command.id);
+  }
+
+  static std::unordered_set<CommandID> visited;
+  snap_defer(visited.clear());
+
+  std::vector<CommandID> reordered;
+  reordered.reserve(commandBuffer.commands.size());
+
+  while (!commandsStack.empty()) {
+    reordered.emplace_back(commandsStack.back());
+    auto nextCommands = PickNextCommands(commandsStack.back());
+    commandsStack.pop_back();
+
+    [[unlikely]]
+    if (nextCommands.empty()) {
+      continue;
+    }
+
+    Utils::UnorderedErase(nextCommands,
+                          [&](const CommandID &commandId) -> bool {
+                            return visited.contains(commandId);
+                          });
+
+    commandsStack.append_range(nextCommands);
+  }
+
+  ERR_ASSERT(reordered.size() == commandBuffer.commands.size());
+
+  return reordered;
 }
 
 // NOLINTNEXTLINE
