@@ -86,5 +86,6 @@ private:
   auto PickNextCommands(CommandID parent) -> std::vector<CommandID>;
   auto ScoreCommand(CommandID parent, CommandID child) -> uint32_t;
   auto Reorder() -> Result<std::vector<CommandID>>;
+  auto UpdateLevels(const std::vector<CommandID> &reordered) -> Error;
 };
 } // namespace Graphics

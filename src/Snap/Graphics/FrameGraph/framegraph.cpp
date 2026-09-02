@@ -568,6 +568,7 @@ auto FrameGraph::DebugOutput() -> Error {
   stream << "}\n";
 
   CHECK_ERR(Filesystem::WriteFile("framegraph.dot", stream.str()));
+  PrintAlways("Finalized writing .dot file");
 
   return {};
 }
@@ -1085,9 +1086,12 @@ auto FrameGraph::BuildRenderRegions(const GraphicsContext &context)
 
 auto FrameGraph::BuildReadyState() -> Error {
   const auto commandCount = commandBuffer.commands.size();
+
   std::vector<bool> scheduled(commandCount, false);
   size_t scheduledCount = 0;
-  nextReady.reserve(commandCount);
+
+  nextReady.clear();
+  nextReady.resize(commandCount);
 
   while (scheduledCount < commandCount) {
     std::vector<CommandID> batch;
@@ -1099,7 +1103,7 @@ auto FrameGraph::BuildReadyState() -> Error {
 
       const bool parentsReady = std::all_of(
           commandParents[command.id].begin(), commandParents[command.id].end(),
-          [&](CommandID parent) -> bool { return scheduled[parent]; });
+          [&](CommandID parent) -> auto { return scheduled[parent]; });
 
       if (parentsReady) {
         batch.emplace_back(command.id);
@@ -1110,12 +1114,33 @@ auto FrameGraph::BuildReadyState() -> Error {
       return Error::Create("Cycle detected while building ready state");
     }
 
-    for (const auto commandId : batch) {
-      scheduled[commandId] = true;
-    }
-    scheduledCount += batch.size();
+    for (const CommandID commandID : batch) {
+      scheduled[commandID] = true;
 
-    nextReady.emplace_back(std::move(batch));
+      // Find commands that become ready because of commandID.
+      for (const auto &command : commandBuffer.commands) {
+        if (scheduled[command.id]) {
+          continue;
+        }
+
+        if (std::find(commandParents[command.id].begin(),
+                      commandParents[command.id].end(),
+                      commandID) == commandParents[command.id].end()) {
+          continue;
+        }
+
+        const bool parentsReady = std::all_of(
+            commandParents[command.id].begin(),
+            commandParents[command.id].end(),
+            [&](CommandID parent) -> auto { return scheduled[parent]; });
+
+        if (parentsReady) {
+          nextReady[commandID].emplace_back(command.id);
+        }
+      }
+    }
+
+    scheduledCount += batch.size();
   }
 
   return {};
@@ -1231,11 +1256,13 @@ auto FrameGraph::Reorder() -> Result<std::vector<CommandID>> {
   snap_defer(commandsStack.clear());
   commandsStack.reserve(commandBuffer.commands.size() / 4);
 
+  PrintAlways("Reordering");
+
   for (const auto &command : commandBuffer.commands) {
     const auto &parents = commandParents.at(command.id);
 
-    [[unlikely]]
-    if (parents.empty()) {
+    [[likely]]
+    if (!parents.empty()) {
       continue;
     }
 
@@ -1248,8 +1275,11 @@ auto FrameGraph::Reorder() -> Result<std::vector<CommandID>> {
   std::vector<CommandID> reordered;
   reordered.reserve(commandBuffer.commands.size());
 
+  PrintAlways("Starting reorder loop");
+
   while (!commandsStack.empty()) {
     reordered.emplace_back(commandsStack.back());
+    visited.emplace(commandsStack.back());
     auto nextCommands = PickNextCommands(commandsStack.back());
     commandsStack.pop_back();
 
@@ -1271,6 +1301,39 @@ auto FrameGraph::Reorder() -> Result<std::vector<CommandID>> {
   return reordered;
 }
 
+auto FrameGraph::UpdateLevels(const std::vector<CommandID> &reordered)
+    -> Error {
+#ifndef NDEBUG
+  for (CommandID commandId : reordered) {
+    commandBuffer.commands.at(commandId).level = InvalidDepth;
+  }
+#endif
+
+  for (auto &command : commandBuffer.commands) {
+    [[unlikely]]
+    if (commandParents.at(command.id).empty()) {
+      command.level = 0U;
+    }
+  }
+
+  for (auto &command : commandBuffer.commands) {
+    const auto &parents = commandParents.at(command.id);
+
+    command.level = 0U;
+    for (CommandID parent : commandParents.at(command.id)) {
+      CommandLevel parentLevel = commandBuffer.commands.at(parent).level;
+
+#ifndef NDEBUG
+      ERR_ASSERT(parentLevel != InvalidDepth);
+#endif
+
+      command.level = std::max<CommandLevel>(command.level, parentLevel + 1U);
+    }
+  }
+
+  return {};
+}
+
 // NOLINTNEXTLINE
 auto FrameGraph::Compile(const GraphicsContext &context) -> Error {
   ZoneScoped;
@@ -1280,16 +1343,12 @@ auto FrameGraph::Compile(const GraphicsContext &context) -> Error {
   CHECK_ERR(BuildGraph());
   CHECK_ERR(BuildReadyState());
   CHECK_ERR(InsertBarriers());
+
+  const auto &reordered = CHECK_RES(Reorder());
+  CHECK_ERR(UpdateLevels(reordered));
   const auto &regions = CHECK_RES(BuildRenderRegions(context));
 
-  std::stringstream stream;
-
-  stream << "Render regions:\n";
-  for (const auto &region : regions) {
-    stream << std::format("[{} -> {}]\n", region.from, region.to);
-  }
-
-  PrintAlways(stream.str());
+  PrintAlways("Render regions: {}", regions.size());
 
 #if OUTPUT_DEBUG_GRAPH
   CHECK_ERR(DebugOutput());
