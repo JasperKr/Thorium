@@ -7,7 +7,6 @@
 #include "Graphics/renderState.hpp"
 #include "Libraries/vma.hpp"
 #include "Modules/Helpers/hasher.hpp"
-#include "Modules/console.hpp"
 #include "Modules/error.hpp"
 #include "Modules/image.hpp"
 #include "dynamicRendering.hpp"
@@ -566,11 +565,6 @@ auto DrawState::Apply(const GraphicsContext &context,
   const auto &state = CommandStateManager::States.at(stateID);
 
   RecordingState::CurrentState.bindPoint = state.bindPoint;
-
-  PrintAlways("Applying draw state, bind point: {}", (int)state.bindPoint);
-  PrintAlways(" - Color attachment count: {}, depth? {}",
-              state.colorAttachments.size(),
-              state.hasDepthStencilAttachment ? "yes" : "no");
 
   RecordingState::CurrentState.shader = CHECK_NULL(state.shader);
 

@@ -288,7 +288,6 @@ auto PrepareRendering(const GraphicsContext &context,
 
   auto updatedState = CHECK_RES(Flush(context, vkCommandBuffer));
   if (updatedState || !isGraphics) {
-    PrintAlways("Updated state, compute? {}", isGraphics ? "no" : "yes");
     EndRendering(context, vkCommandBuffer);
   }
 

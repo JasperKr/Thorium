@@ -428,8 +428,13 @@ auto GetThreadContext() -> ThreadContext & {
 
 // May be null
 auto GetVirtualCommandBuffer() -> VirtualCommandBuffer * {
-  auto &threadContext = GetThreadContext();
+  const auto &threadContext = GetThreadContext();
   return threadContext.commandBuffer.get();
+}
+
+auto GetVkCommandBuffer() -> VkCommandBuffer {
+  const auto &threadContext = GetThreadContext();
+  return threadContext.workingCommandBuffer;
 }
 
 auto PushDebugMarker(const std::string_view &name, const Color *color) -> void {

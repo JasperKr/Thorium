@@ -517,7 +517,7 @@ inline auto CreateComputePipeline(const GraphicsContext &context,
     -> Result<std::pair<VkPipeline, PipelineLayout>> {
   ZoneScoped;
 
-  PrintAlways("Creating compute pipeline");
+  PrintDebug("Creating compute pipeline");
 
   VkComputePipelineCreateInfo pipelineInfo = {};
   pipelineInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
@@ -565,7 +565,7 @@ inline auto CreatePipeline(const GraphicsContext &context,
     -> Result<std::pair<VkPipeline, PipelineLayout>> {
   ZoneScoped;
 
-  PrintAlways("Creating pipeline");
+  PrintDebug("Creating pipeline");
 
   if (state.bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS) {
     return CreateGraphicsPipeline(context, state);
@@ -582,7 +582,7 @@ inline auto GetPipeline(const GraphicsContext &context,
     -> Result<std::pair<VkPipeline, PipelineLayout>> {
   ZoneScoped;
 
-  PrintAlways("Getting pipeline");
+  PrintDebug("Getting pipeline");
 
   {
     std::lock_guard<std::mutex> lock(GetPipelineCache().mutex);
@@ -600,7 +600,7 @@ auto FlushCompute(const GraphicsContext &context,
                   VkCommandBuffer vkCommandBuffer) -> Result<bool> {
   ZoneScoped;
 
-  PrintAlways("Flushing compute");
+  PrintDebug("Flushing compute");
 
   if (RecordingState::CurrentState.bindPoint !=
       VK_PIPELINE_BIND_POINT_COMPUTE) {
@@ -667,14 +667,14 @@ auto Flush(const GraphicsContext &context, VkCommandBuffer vkCommandBuffer)
     -> Result<bool> {
   ZoneScoped;
 
-  PrintAlways("Flush");
+  PrintDebug("Flush");
 
   [[likely]]
   if (!Graphics::GetIsStateDirty() && RecordingState::LastState != nullptr &&
       RecordingState::CurrentState.GetHash() ==
           RecordingState::LastState->GetHash() &&
       RecordingState::CurrentState == *RecordingState::LastState) {
-    PrintAlways("Flush early-out");
+    PrintDebug("Flush early-out");
 
     return false;
   }

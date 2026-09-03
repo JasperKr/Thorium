@@ -2,6 +2,7 @@
 #include "Graphics/FrameGraph/commands.hpp"
 #include "Graphics/FrameGraph/dynamicRendering.hpp"
 #include "Graphics/FrameGraph/pipelineState.hpp"
+#include "Graphics/graphics.hpp"
 #include "Graphics/graphicsContext.hpp"
 #include "Libraries/vma.hpp"
 #include "Modules/Helpers/utils.hpp"
@@ -439,7 +440,6 @@ auto FrameGraph::PreCompile() -> Error {
 }
 
 auto FrameGraph::BuildGraph() -> Error {
-
   auto time = Timer::GetTime();
   CHECK_ERR(PreCompile());
   auto time2 = Timer::GetTime();
@@ -463,8 +463,13 @@ auto FrameGraph::BuildGraph() -> Error {
     graph[command.level].commands.emplace_back(command.id);
 
 #if OUTPUT_DEBUG_GRAPH
-    for (const auto parent : commandParents[command.id]) {
-      dependencies.emplace((uint32_t(parent) << UINT16_WIDTH) | command.id);
+    for (const CommandID parentId : commandParents[command.id]) {
+      const auto &parent = commandBuffer.commands.at(parentId);
+
+      if (parent.GetType() != CommandType::vkCmdPipelineBarrier2 &&
+          command.GetType() != CommandType::vkCmdPipelineBarrier2) {
+        dependencies.emplace((uint32_t(parentId) << UINT16_WIDTH) | command.id);
+      }
     }
 #endif
 
@@ -510,7 +515,6 @@ auto FrameGraph::DebugOutput() -> Error {
 
     for (const auto commandId : level.commands) {
       const auto &command = commandBuffer.commands.at(commandId);
-
       if (ExportRWLabels) {
         auto reads = GetReads(command);
         auto writes = GetWrites(command);
@@ -554,13 +558,21 @@ auto FrameGraph::DebugOutput() -> Error {
   }
 
   for (const auto dependency : dependencies) {
-    // parentIndex << UINT16_WIDTH | idx
-
     uint32_t parent = (dependency >> UINT16_WIDTH) & UINT16_MAX;
     uint32_t child = dependency & UINT16_MAX;
 
-    assert(commandBuffer.commands.at(child).level >
-           commandBuffer.commands.at(parent).level);
+    PrintAlways("{} -> {}",
+                CommandTypeEnumHelper.ToString(
+                    commandBuffer.commands.at(parent).GetType()),
+                CommandTypeEnumHelper.ToString(
+                    commandBuffer.commands.at(child).GetType()));
+    ERR_ASSERT_MSG(
+        commandBuffer.commands.at(child).level >
+            commandBuffer.commands.at(parent).level,
+        std::format(
+            "child: {} with parent: {}, child level {} <= parent level {}",
+            child, parent, commandBuffer.commands.at(child).level,
+            commandBuffer.commands.at(parent).level));
 
     stream << "\"" << parent << "\" -> \"" << child << "\";\n";
   }
@@ -863,7 +875,7 @@ auto FrameGraph::InsertBarriers() -> Error {
       addBarriers(writes, commandId);
     }
 
-    // MergeBarriers(level.barriers);
+    MergeBarriers(level.barriers);
   }
 
   return {};
@@ -1256,8 +1268,6 @@ auto FrameGraph::Reorder() -> Result<std::vector<CommandID>> {
   snap_defer(commandsStack.clear());
   commandsStack.reserve(commandBuffer.commands.size() / 4);
 
-  PrintAlways("Reordering");
-
   for (const auto &command : commandBuffer.commands) {
     const auto &parents = commandParents.at(command.id);
 
@@ -1274,8 +1284,6 @@ auto FrameGraph::Reorder() -> Result<std::vector<CommandID>> {
 
   std::vector<CommandID> reordered;
   reordered.reserve(commandBuffer.commands.size());
-
-  PrintAlways("Starting reorder loop");
 
   while (!commandsStack.empty()) {
     reordered.emplace_back(commandsStack.back());
@@ -1301,34 +1309,60 @@ auto FrameGraph::Reorder() -> Result<std::vector<CommandID>> {
   return reordered;
 }
 
+auto FrameGraph::GetCommandLevel(CommandID commandId) -> CommandLevel {
+  auto &command = commandBuffer.commands.at(commandId);
+
+  [[likely]]
+  if (command.level != InvalidDepth) {
+    return command.level;
+  }
+
+  command.level = 0U;
+
+  for (const CommandID parent : commandParents.at(commandId)) {
+    CommandLevel parentLevel = GetCommandLevel(parent);
+
+    assert(parentLevel != InvalidDepth);
+
+    command.level = std::max<CommandLevel>(command.level, parentLevel + 1U);
+  }
+
+  if (!commandParents.at(commandId).empty()) {
+    assert(command.level != 0U);
+  }
+
+  return command.level;
+}
+
 auto FrameGraph::UpdateLevels(const std::vector<CommandID> &reordered)
     -> Error {
-#ifndef NDEBUG
-  for (CommandID commandId : reordered) {
-    commandBuffer.commands.at(commandId).level = InvalidDepth;
-  }
-#endif
-
   for (auto &command : commandBuffer.commands) {
-    [[unlikely]]
-    if (commandParents.at(command.id).empty()) {
-      command.level = 0U;
-    }
+    command.level = InvalidDepth;
   }
 
-  for (auto &command : commandBuffer.commands) {
-    const auto &parents = commandParents.at(command.id);
+  for (auto commandId : reordered) {
+    GetCommandLevel(commandId);
+  }
 
-    command.level = 0U;
-    for (CommandID parent : commandParents.at(command.id)) {
-      CommandLevel parentLevel = commandBuffer.commands.at(parent).level;
+  CommandLevel maxLevel = 0U;
+  for (const CommandID commandId : reordered) {
+    const auto &command = commandBuffer.commands.at(commandId);
+    ERR_ASSERT(command.level != InvalidDepth);
+    maxLevel = std::max(maxLevel, command.level);
+  }
 
-#ifndef NDEBUG
-      ERR_ASSERT(parentLevel != InvalidDepth);
-#endif
+  size_t startSize = graph.size();
+  graph.clear();
+  graph.resize(maxLevel + 1);
 
-      command.level = std::max<CommandLevel>(command.level, parentLevel + 1U);
-    }
+  for (auto i = 0; i < graph.size(); i++) {
+    graph.at(i).level = i;
+    graph.at(i).commands.clear();
+  }
+
+  for (const CommandID commandId : reordered) {
+    auto &command = commandBuffer.commands.at(commandId);
+    graph.at(command.level).commands.emplace_back(commandId);
   }
 
   return {};
@@ -1342,21 +1376,20 @@ auto FrameGraph::Compile(const GraphicsContext &context) -> Error {
   CHECK_ERR(MapResourceUsages());
   CHECK_ERR(BuildGraph());
   CHECK_ERR(BuildReadyState());
-  CHECK_ERR(InsertBarriers());
 
   const auto &reordered = CHECK_RES(Reorder());
   CHECK_ERR(UpdateLevels(reordered));
-  const auto &regions = CHECK_RES(BuildRenderRegions(context));
+  CHECK_ERR(InsertBarriers());
 
-  PrintAlways("Render regions: {}", regions.size());
+  const auto &regions = CHECK_RES(BuildRenderRegions(context));
 
 #if OUTPUT_DEBUG_GRAPH
   CHECK_ERR(DebugOutput());
 #endif
 
-  {
-    return Error::Create("Test");
-  }
+  // {
+  //   return Error::Create("Test");
+  // }
 
   return {};
 }
@@ -1368,6 +1401,7 @@ auto FrameGraph::Write(const GraphicsContext &context,
   beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
   vkBeginCommandBuffer(cmdBuffer, &beginInfo);
+  GetThreadContext().workingCommandBuffer = cmdBuffer;
 
   CHECK_ERR(BeginFrame(context));
 
@@ -1395,12 +1429,12 @@ auto FrameGraph::Write(const GraphicsContext &context,
       const auto *callable = get_if_derived<Callable>(command.data);
       const auto *state = get_if_derived<DrawState>(command.data);
 
-      PrintAlways("Writing command: {}",
-                  CommandTypeEnumHelper.ToString(command.GetType()));
+      PrintDebug("Writing command: {}",
+                 CommandTypeEnumHelper.ToString(command.GetType()));
 
       if (callable != nullptr && callable->requiresRendering) {
         if (state != nullptr) {
-          PrintAlways("# Descriptor sets: {}", state->descriptorSets.size());
+          PrintDebug("# Descriptor sets: {}", state->descriptorSets.size());
           CHECK_ERR(state->Apply(context, commandBuffer, cmdBuffer));
         } else {
           CHECK_ERR(PrepareRendering(context, cmdBuffer));
@@ -1417,10 +1451,23 @@ auto FrameGraph::Write(const GraphicsContext &context,
   }
 
   EndRendering(context, cmdBuffer);
-
+  GetThreadContext().workingCommandBuffer = nullptr;
   vkEndCommandBuffer(cmdBuffer);
 
+  Reset();
+
   return {};
+}
+
+auto FrameGraph::Reset() -> void {
+#ifdef OUTPUT_DEBUG_GRAPH
+  dependencies.clear();
+#endif
+  graph.clear();
+  ancestorStack.clear();
+  ancestorStamps.clear();
+  commandParents.clear();
+  nextReady.clear();
 }
 
 } // namespace Graphics

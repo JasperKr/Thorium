@@ -9,6 +9,7 @@
 #include "Graphics/renderThread.hpp"
 #include "Graphics/resource.hpp"
 #include "Graphics/snapshot.hpp"
+#include "Libraries/vma.hpp"
 #include "Modules/Helpers/utils.hpp"
 #include "Modules/Math/vector.hpp"
 #include "Modules/color.hpp"
@@ -789,9 +790,15 @@ auto ImageMemory::TransitionLayout(const GraphicsContext &context,
                        .imageMemoryBarrierCount = 1,
                        .pImageMemoryBarriers = &barrier};
 
-  auto *commandBuffer = CHECK_NULL(GetVirtualCommandBuffer());
+  auto *commandBuffer = GetVirtualCommandBuffer();
 
-  CHECK_ERR(commandBuffer->PipelineBarrier2({&dep}));
+  if (commandBuffer != nullptr) {
+    CHECK_ERR(commandBuffer->PipelineBarrier2({&dep}));
+  } else {
+    VkCommandBuffer cmdBuffer = CHECK_NULL(GetVkCommandBuffer());
+
+    vkCmdPipelineBarrier2(cmdBuffer, &dep);
+  }
 
   state.currentLayout = layout;
 

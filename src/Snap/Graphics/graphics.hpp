@@ -22,6 +22,7 @@ auto Initialize(GraphicsContext &context, Window::WindowContext &wcontext,
                 const DeviceSettings &deviceSettings) -> Error;
 auto GetThreadContext() -> ThreadContext &;
 auto GetVirtualCommandBuffer() -> VirtualCommandBuffer *;
+auto GetVkCommandBuffer() -> VkCommandBuffer;
 void Deinitialize(GraphicsContext &context);
 
 auto BeginSingleTimeCommands(const GraphicsContext &context) -> VkCommandBuffer;

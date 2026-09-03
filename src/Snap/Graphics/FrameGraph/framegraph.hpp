@@ -6,7 +6,7 @@
 #include <vector>
 #include <vulkan/vulkan_core.h>
 
-#define OUTPUT_DEBUG_GRAPH 1
+// #define OUTPUT_DEBUG_GRAPH 1
 
 namespace Graphics {
 
@@ -87,5 +87,7 @@ private:
   auto ScoreCommand(CommandID parent, CommandID child) -> uint32_t;
   auto Reorder() -> Result<std::vector<CommandID>>;
   auto UpdateLevels(const std::vector<CommandID> &reordered) -> Error;
+  auto GetCommandLevel(CommandID commandId) -> CommandLevel;
+  auto Reset() -> void;
 };
 } // namespace Graphics
