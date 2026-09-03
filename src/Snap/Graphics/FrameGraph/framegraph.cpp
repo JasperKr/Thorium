@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <unordered_set>
 #if OUTPUT_DEBUG_GRAPH
 #include "Modules/filesystem.hpp"
@@ -61,6 +62,12 @@ inline auto GetReadsFromDrawState(DrawState &state) -> std::vector<void *> {
     reads.emplace_back(accel);
   }
 
+  const auto &pipelineState = CommandStateManager::States.at(state.stateID);
+
+  if (pipelineState.bindPoint != VK_PIPELINE_BIND_POINT_GRAPHICS) {
+    return reads;
+  }
+
   for (const auto &vertexBuffer : state.vertexBuffers) {
     if (vertexBuffer != VK_NULL_HANDLE) {
       reads.emplace_back(vertexBuffer);
@@ -69,12 +76,6 @@ inline auto GetReadsFromDrawState(DrawState &state) -> std::vector<void *> {
 
   if (state.indexBuffer != VK_NULL_HANDLE) {
     reads.emplace_back(state.indexBuffer);
-  }
-
-  const auto &pipelineState = CommandStateManager::States.at(state.stateID);
-
-  if (pipelineState.bindPoint != VK_PIPELINE_BIND_POINT_GRAPHICS) {
-    return reads;
   }
 
   for (const auto &colorAttachment : state.colorAttachments) {
@@ -603,6 +604,11 @@ auto FrameGraph::SyncMask(CommandLevel start, CommandLevel end,
   start++;
 
   std::array<VkPipelineStageFlags2, UINT64_WIDTH> maskBits{};
+  // all bits that we access.
+  // the for loop than iterates over all barriers
+  // checks if the destination stages match
+  // and if the source pipeline and access match too
+  // if so, mark those bits as synced.
 
   // Fast way to iterate over set bits
   for (auto bitIndex : Utils::BitIndexRange(dstPipeline)) {
@@ -614,24 +620,18 @@ auto FrameGraph::SyncMask(CommandLevel start, CommandLevel end,
     const auto &barriers = graph.at(level).barriers;
 
     for (const auto &barrier : barriers) {
-      for (const auto bitIndex : Utils::BitIndexRange(dstPipeline)) {
+      for (const auto bitIndex :
+           Utils::BitIndexRange(barrier.dstStageMask & dstPipeline)) {
         // If this stage bit is active in this sync and we still need it
         const auto mask = 1ULL << bitIndex;
 
         const bool srcMatch =
             // Match the sync's source stage with our current bit
-            (barrier.srcStageMask & mask) != 0U &&
+            (barrier.srcStageMask & lastWritePipeline) != 0U &&
             // Match the sync's source access with our resource's last usage
             (barrier.srcAccessMask & lastWriteAccess) != 0U;
 
-        // Barrier matched destination stage
-        const bool dstMatch = (barrier.dstStageMask & mask) != 0U;
-
-        // There is no need to match dst accesses since unrelated bits do not affect the final result, say
-        // we have: current: 1110, access: 0110, barrier: 1000, becomes 1110 & ~1000 -> 1110 & 0111 = 0110.
-        // and since we don't care about bits not set in access, the result is unchanged.
-
-        if (srcMatch && dstMatch) {
+        if (srcMatch) {
           // Remove the accesses that are now satisfied
           maskBits.at(bitIndex) &= ~barrier.dstAccessMask;
         }
@@ -654,6 +654,18 @@ inline auto ResourceListToString(const std::vector<void *> &resources)
   }
 
   return str.str();
+}
+
+inline auto IsHazard(const VkAccessFlags2 srcAccess,
+                     const VkAccessFlags2 dstAccess) -> bool {
+  static constexpr VkAccessFlagBits2 writeAccessBits =
+      VK_ACCESS_2_SHADER_WRITE_BIT | VK_ACCESS_2_TRANSFER_WRITE_BIT |
+      VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT |
+      VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT |
+      VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT |
+      VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR;
+
+  return ((srcAccess | dstAccess) & writeAccessBits) != 0U;
 }
 
 auto FrameGraph::GetRequiredBarriers(CommandID commandId, void const *resource,
@@ -686,8 +698,12 @@ auto FrameGraph::GetRequiredBarriers(CommandID commandId, void const *resource,
     const auto &mask = SyncMask(parent.level, command.level, srcAccess,
                                 srcStage, accesses, pipelines);
 
-    for (const auto bit : Utils::BitIndexRange(pipelines)) {
+    for (const auto bit : Utils::BitIndexRange(srcStage)) {
       const auto unsyncedAccesses = mask.at(bit);
+
+      if (!IsHazard(unsyncedAccesses, accesses)) {
+        continue;
+      }
 
       // If for this pipeline there were still accesses unsynced for accesses we care about, we are not safe.
       if ((unsyncedAccesses & accesses) != 0U) {
@@ -702,11 +718,8 @@ auto FrameGraph::GetRequiredBarriers(CommandID commandId, void const *resource,
         // Pipeline stage for which these accesses weren't synced
         barrier.srcStageMask = 1ULL << bit;
 
-        // The accesses we need now
-        // If we read A, B, C, but A, B is synced already
-        // We can skip that sync by bitopping away A, B with the mask.
-        barrier.dstAccessMask = accesses & unsyncedAccesses;
-        barrier.dstStageMask = 1ULL << bit;
+        barrier.dstAccessMask = accesses;
+        barrier.dstStageMask = pipelines;
 
         memoryBarriers.emplace_back(barrier);
       }
@@ -1394,6 +1407,51 @@ auto FrameGraph::Compile(const GraphicsContext &context) -> Error {
   return {};
 }
 
+inline auto PipelineStage2ToString(VkPipelineStageFlags2 pipeline)
+    -> std::string_view {
+  switch (pipeline) {
+  case VK_PIPELINE_STAGE_2_VERTEX_INPUT_BIT:
+    return "Vertex input";
+  case VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT:
+    return "Vertex shader";
+  case VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT:
+    return "Fragment shader";
+  case VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT:
+    return "Early fragment test";
+  case VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT:
+    return "Late fragment test";
+  case VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT:
+    return "Color attachment output";
+  case VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT:
+    return "Compute shader";
+  case VK_PIPELINE_STAGE_2_TRANSFER_BIT:
+    return "Transfer";
+  case VK_PIPELINE_STAGE_2_INDEX_INPUT_BIT:
+    return "Index input";
+  case VK_PIPELINE_STAGE_2_VERTEX_ATTRIBUTE_INPUT_BIT:
+    return "Vertex attribute input";
+  default:
+    return "Unknown";
+  }
+}
+
+inline auto PipelineStages2ToString(VkPipelineStageFlags2 pipelines)
+    -> std::string {
+  std::stringstream stream;
+
+  for (const VkPipelineStageFlags2 pipeline : Utils::BitMaskRange(pipelines)) {
+    stream << PipelineStage2ToString(pipeline) << " | ";
+  }
+
+  std::string pipelineStr = stream.str();
+
+  if (!pipelineStr.empty()) {
+    pipelineStr.erase(pipelineStr.end() - 3, pipelineStr.end());
+  }
+
+  return pipelineStr;
+}
+
 auto FrameGraph::Write(const GraphicsContext &context,
                        VkCommandBuffer cmdBuffer) -> Error {
   VkCommandBufferBeginInfo beginInfo = {};
@@ -1413,6 +1471,11 @@ auto FrameGraph::Write(const GraphicsContext &context,
       depInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
       depInfo.memoryBarrierCount = level.barriers.size();
       depInfo.pMemoryBarriers = level.barriers.data();
+
+      for (const auto &barrier : level.barriers) {
+        PrintAlways("{} -> {}", PipelineStages2ToString(barrier.srcStageMask),
+                    PipelineStages2ToString(barrier.dstStageMask));
+      }
 
       vkCmdPipelineBarrier2(cmdBuffer, &depInfo);
     }

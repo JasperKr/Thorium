@@ -1310,7 +1310,7 @@ auto Texture::UseAs(const GraphicsContext &context, TextureUsage newUsage,
   // Reordering thread will insert the layout transition barrier before this command buffer is submitted
   [[unlikely]]
   if (state.lastUsedFrame != context.currentFrame &&
-      !context.currentlyReordering) {
+      !context.currentlyReordering && false) {
 
     state.lastUsedFrame = context.currentFrame;
 

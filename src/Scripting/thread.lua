@@ -258,6 +258,8 @@ while true do
 
   update(delta)
 
+  assert(frameIndex < 4)
+
   snap.graphics.setWindingOrder("cw")
 
   if startupSequence[frameIndex] then
