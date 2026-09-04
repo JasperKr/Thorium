@@ -193,6 +193,7 @@ struct GraphStateHash {
 struct CommandStateManager {
   static std::unordered_map<GraphState, uint32_t, GraphStateHash> StateToIndex;
   static std::vector<GraphState> States;
+  static uint32_t CurrentStateID;
 };
 
 // NOLINTBEGIN(cppcoreguidelines-special-member-functions, hicpp-special-member-functions)
@@ -224,6 +225,14 @@ struct BoundBuffer {
   VkPipelineStageFlags2 pipelines;
 };
 
+struct LoadOpConfig {
+  std::vector<VkAttachmentLoadOp> loadOps;
+  VkAttachmentLoadOp depthStencilLoadOp;
+
+  static auto FromDrawState(struct DrawState const *state, bool forceLoadOpLoad)
+      -> LoadOpConfig;
+};
+
 struct DrawState {
   std::vector<BoundImage> boundImages;
   std::vector<BoundBuffer> boundBuffers;
@@ -248,7 +257,8 @@ struct DrawState {
       -> std::pair<VkAccessFlags2, VkPipelineStageFlags2>;
 
   auto Apply(const GraphicsContext &context, VirtualCommandBuffer &buffer,
-             VkCommandBuffer cmdBuffer) const -> Error;
+             VkCommandBuffer cmdBuffer, const LoadOpConfig &loadConfig) const
+      -> Error;
 
   auto Initialize(const GraphicsContext &context, CommandType type) -> Error;
 

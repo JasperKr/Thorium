@@ -8,6 +8,7 @@
 #include "Modules/Helpers/utils.hpp"
 #include "Modules/console.hpp"
 #include "Modules/error.hpp"
+#include "Modules/object.hpp"
 #include <cstddef>
 #include <sstream>
 #include <string>
@@ -353,6 +354,8 @@ auto FrameGraph::PreCompile() -> Error {
     command.id = idx++;
     ERR_ASSERT(idx != UINT16_MAX);
   }
+
+  BuildLoadOpModes();
 
   const auto commandCount = commandBuffer.commands.size();
 
@@ -1381,6 +1384,54 @@ auto FrameGraph::UpdateLevels(const std::vector<CommandID> &reordered)
   return {};
 }
 
+auto FrameGraph::BuildLoadOpModes() -> void {
+  std::vector<ObjectID> lastColorAttachments;
+  ObjectID lastDepthStencilAttachment = UINT64_MAX;
+  bool isFirstIteration = true;
+
+  for (const auto &command : commandBuffer.commands) {
+    const auto *drawState = command.GetDrawState();
+    if (drawState == nullptr) {
+      continue;
+    }
+
+    const auto &graphState = drawState->GetGraphState();
+
+    bool sameColorAttachments = !isFirstIteration;
+    if (!isFirstIteration) {
+      for (size_t i = 0; i < graphState.colorAttachments.size(); i++) {
+        if (i >= lastColorAttachments.size() ||
+            graphState.colorAttachments[i].texture->getID() !=
+                lastColorAttachments[i]) {
+          sameColorAttachments = false;
+          break;
+        }
+      }
+    }
+
+    bool sameDepthStencil =
+        !isFirstIteration && graphState.hasDepthStencilAttachment &&
+        lastDepthStencilAttachment ==
+            graphState.depthStencilAttachment.texture->getID();
+
+    bool attachmentsChanged = !sameColorAttachments || !sameDepthStencil;
+    isFirstIteration = false;
+
+    loadOpConfigs.emplace(
+        command.id, LoadOpConfig::FromDrawState(drawState, attachmentsChanged));
+
+    lastColorAttachments.clear();
+    for (const auto &attachment : graphState.colorAttachments) {
+      lastColorAttachments.push_back(attachment.texture->getID());
+    }
+
+    if (graphState.hasDepthStencilAttachment) {
+      lastDepthStencilAttachment =
+          graphState.depthStencilAttachment.texture->getID();
+    }
+  }
+}
+
 // NOLINTNEXTLINE
 auto FrameGraph::Compile(const GraphicsContext &context) -> Error {
   ZoneScoped;
@@ -1480,6 +1531,10 @@ auto FrameGraph::Write(const GraphicsContext &context,
       vkCmdPipelineBarrier2(cmdBuffer, &depInfo);
     }
 
+    if (level.barriers.empty() && !level.userBarriers.empty()) {
+      EndRendering(context, cmdBuffer);
+    }
+
     for (const auto &barrier : level.userBarriers) {
       const auto &command = commandBuffer.commands.at(barrier);
       const auto *callable = get_if_derived<Callable>(command.data);
@@ -1498,9 +1553,10 @@ auto FrameGraph::Write(const GraphicsContext &context,
       if (callable != nullptr && callable->requiresRendering) {
         if (state != nullptr) {
           PrintDebug("# Descriptor sets: {}", state->descriptorSets.size());
-          CHECK_ERR(state->Apply(context, commandBuffer, cmdBuffer));
+          CHECK_ERR(state->Apply(context, commandBuffer, cmdBuffer,
+                                 loadOpConfigs.at(commandId)));
         } else {
-          CHECK_ERR(PrepareRendering(context, cmdBuffer));
+          // CHECK_ERR(PrepareRendering(context, cmdBuffer));
         }
       }
 
@@ -1531,6 +1587,7 @@ auto FrameGraph::Reset() -> void {
   ancestorStamps.clear();
   commandParents.clear();
   nextReady.clear();
+  loadOpConfigs.clear();
 }
 
 } // namespace Graphics

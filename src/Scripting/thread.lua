@@ -211,12 +211,12 @@ local startupSequence = {
   function()
     snap.graphics.setDefaultFilter("linear", "linear", 16)
 
-    -- local texture = snap.graphics.newTexture("src/Assets/skybox.hdr", { sampler = true, mipmaps = "init" })
-    -- texture:setFilter("linear", "linear", "linear")
-    -- texture:setWrap("repeat", "repeat", "repeat")
+    local texture = snap.graphics.newTexture("src/Assets/skybox.hdr", { sampler = true, mipmaps = "init" })
+    texture:setFilter("linear", "linear", "linear")
+    texture:setWrap("repeat", "repeat", "repeat")
 
-    -- local env = scene:newEnvironment("Test environment", texture)
-    -- scene:setEnvironment(env)
+    local env = scene:newEnvironment("Test environment", texture)
+    scene:setEnvironment(env)
     -- snap.scene.loadModel(scene, "Assets/Terrain/sponza.glb")
     -- snap.scene.loadModel(scene, "Assets/Terrain/Bistro/bistro.gltf")
   end,

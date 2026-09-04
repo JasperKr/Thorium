@@ -20,6 +20,7 @@ namespace Graphics {
 std::unordered_map<GraphState, uint32_t, GraphStateHash>
     CommandStateManager::StateToIndex{};
 std::vector<GraphState> CommandStateManager::States{};
+uint32_t CommandStateManager::CurrentStateID = UINT32_MAX;
 
 auto DrawState::GetStateFor(void const *resource, CommandType type) const
     -> std::pair<VkAccessFlags2, VkPipelineStageFlags2> {
@@ -557,9 +558,28 @@ auto ResetCommandBuffer(VirtualCommandBuffer &buffer) -> void {
   buffer.Reset();
 }
 
+auto LoadOpConfig::FromDrawState(struct DrawState const *state,
+                                 bool forceLoadOpLoad) -> LoadOpConfig {
+  LoadOpConfig config{};
+  const auto &graphState = state->GetGraphState();
+
+  for (const auto &attachment : graphState.colorAttachments) {
+    config.loadOps.emplace_back(forceLoadOpLoad ? VK_ATTACHMENT_LOAD_OP_LOAD
+                                                : attachment.loadOp);
+  }
+
+  if (graphState.hasDepthStencilAttachment) {
+    config.depthStencilLoadOp = forceLoadOpLoad
+                                    ? VK_ATTACHMENT_LOAD_OP_LOAD
+                                    : graphState.depthStencilAttachment.loadOp;
+  }
+
+  return config;
+}
+
 auto DrawState::Apply(const GraphicsContext &context,
-                      VirtualCommandBuffer &buffer,
-                      VkCommandBuffer cmdBuffer) const -> Error {
+                      VirtualCommandBuffer &buffer, VkCommandBuffer cmdBuffer,
+                      const LoadOpConfig &loadConfig) const -> Error {
   ERR_ASSERT(stateID != UINT32_MAX);
 
   const auto &state = CommandStateManager::States.at(stateID);
@@ -607,7 +627,9 @@ auto DrawState::Apply(const GraphicsContext &context,
 
   RecordingState::CurrentState.MarkUpdated();
 
-  CHECK_ERR(PrepareRendering(context, cmdBuffer));
+  CommandStateManager::CurrentStateID = stateID;
+
+  CHECK_ERR(PrepareRendering(context, cmdBuffer, loadConfig));
 
   if (!RecordingState::CurrentState.shader->pushBuffers.empty()) {
     ZoneScopedN("Flush push buffer data");

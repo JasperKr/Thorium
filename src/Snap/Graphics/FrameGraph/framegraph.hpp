@@ -3,6 +3,7 @@
 #include "Graphics/FrameGraph/commands.hpp"
 #include "Modules/error.hpp"
 #include <cstdint>
+#include <unordered_map>
 #include <vector>
 #include <vulkan/vulkan_core.h>
 
@@ -41,6 +42,7 @@ private:
   VirtualCommandBuffer commandBuffer;
 
   std::vector<Level> graph;
+  std::unordered_map<CommandID, LoadOpConfig> loadOpConfigs;
 
   // Direct dependencies per command, after transitive reduction.
   std::vector<std::vector<CommandID>> commandParents;
@@ -89,5 +91,6 @@ private:
   auto UpdateLevels(const std::vector<CommandID> &reordered) -> Error;
   auto GetCommandLevel(CommandID commandId) -> CommandLevel;
   auto Reset() -> void;
+  auto BuildLoadOpModes() -> void;
 };
 } // namespace Graphics

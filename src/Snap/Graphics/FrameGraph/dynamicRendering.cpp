@@ -1,10 +1,7 @@
 #include "dynamicRendering.hpp"
-#include "Graphics/FrameGraph/pipelineCache.hpp"
+#include "Graphics/FrameGraph/commands.hpp"
 #include "Graphics/FrameGraph/recordingState.hpp"
 #include "Graphics/renderState.hpp"
-#include "Modules/Helpers/utils.hpp"
-#include "Modules/console.hpp"
-#include "descriptorState.hpp"
 #include "pipelineState.hpp"
 #include <public/tracy/Tracy.hpp>
 
@@ -117,7 +114,8 @@ auto compareBlendmodes(const RenderState::State &first,
 
 // NOLINTNEXTLINE
 inline auto BeginRendering(const GraphicsContext &context,
-                           VkCommandBuffer cmdBuffer) -> Error {
+                           VkCommandBuffer cmdBuffer,
+                           const LoadOpConfig &loadConfig) -> Error {
   ZoneScoped;
 
   VkRenderingInfo renderingInfo = {};
@@ -157,7 +155,7 @@ inline auto BeginRendering(const GraphicsContext &context,
     attachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
     attachmentInfo.imageView = rendertarget.texture->view;
     attachmentInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-    attachmentInfo.loadOp = rendertarget.loadOp;
+    attachmentInfo.loadOp = loadConfig.loadOps.at(i);
     attachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     attachmentInfo.clearValue = rendertarget.clearValue;
 
@@ -176,7 +174,7 @@ inline auto BeginRendering(const GraphicsContext &context,
     attachmentInfo.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
     attachmentInfo.imageView = rendertarget.texture->view;
     attachmentInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-    attachmentInfo.loadOp = rendertarget.loadOp;
+    attachmentInfo.loadOp = loadConfig.depthStencilLoadOp;
     attachmentInfo.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     attachmentInfo.clearValue = rendertarget.clearValue;
 
@@ -257,7 +255,8 @@ auto EndRendering(const GraphicsContext &context,
 
 // NOLINTNEXTLINE(readability-function-cognitive-complexity)
 auto PrepareRendering(const GraphicsContext &context,
-                      VkCommandBuffer vkCommandBuffer) -> Error {
+                      VkCommandBuffer vkCommandBuffer,
+                      const LoadOpConfig &loadConfig) -> Error {
   ZoneScoped;
 
   bool sameViewport = false;
@@ -315,7 +314,7 @@ auto PrepareRendering(const GraphicsContext &context,
     ZoneScopedN("Dynamic state setup");
 
     if (!wasRendering) {
-      CHECK_ERR(BeginRendering(context, vkCommandBuffer));
+      CHECK_ERR(BeginRendering(context, vkCommandBuffer, loadConfig));
       sameViewport = false;
       sameScissor = false;
       sameDepth = false;
