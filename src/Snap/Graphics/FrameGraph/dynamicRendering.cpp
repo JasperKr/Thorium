@@ -30,38 +30,18 @@ inline auto GetRenderExtent(const GraphicsContext &context,
 
 auto compareScissors(const RenderState::State &first,
                      const RenderState::State &second) -> bool {
-  if (first.hasScissor != second.hasScissor) {
-    return false;
-  }
-
-  if (first.hasScissor && second.hasScissor) {
-    if (first.scissor.offset.x != second.scissor.offset.x ||
-        first.scissor.offset.y != second.scissor.offset.y ||
-        first.scissor.extent.width != second.scissor.extent.width ||
-        first.scissor.extent.height != second.scissor.extent.height) {
-      return false;
-    }
-  }
-
-  return true;
+  return first.scissor.offset.x == second.scissor.offset.x &&
+         first.scissor.offset.y == second.scissor.offset.y &&
+         first.scissor.extent.width == second.scissor.extent.width &&
+         first.scissor.extent.height == second.scissor.extent.height;
 }
 
 auto compareViewports(const RenderState::State &first,
                       const RenderState::State &second) -> bool {
-  if (first.hasViewport != second.hasViewport) {
-    return false;
-  }
-
-  if (first.hasViewport && second.hasViewport) {
-    if (first.viewport.x != second.viewport.x ||
-        first.viewport.y != second.viewport.y ||
-        first.viewport.width != second.viewport.width ||
-        first.viewport.height != second.viewport.height) {
-      return false;
-    }
-  }
-
-  return true;
+  return first.viewport.x == second.viewport.x &&
+         first.viewport.y == second.viewport.y &&
+         first.viewport.width == second.viewport.width &&
+         first.viewport.height == second.viewport.height;
 }
 
 auto CompareVkPipelineColorBlendAttachmentState(
@@ -290,23 +270,8 @@ auto PrepareRendering(const GraphicsContext &context,
     EndRendering(context, vkCommandBuffer);
   }
 
-  auto stages = VK_PIPELINE_STAGE_2_NONE;
-
-  for (const auto &stage : RecordingState::CurrentState.shader->entryPoints) {
-    switch (stage.second) {
-    case VK_SHADER_STAGE_VERTEX_BIT:
-      stages |= VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT;
-      break;
-    case VK_SHADER_STAGE_FRAGMENT_BIT:
-      stages |= VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
-      break;
-    case VK_SHADER_STAGE_COMPUTE_BIT:
-      stages |= VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
-      break;
-    default:
-      break;
-    }
-  }
+  const auto stages =
+      RecordingState::CurrentState.shader->combinedPipelineStages;
 
   bool wasRendering = GetIsCurrentlyRendering();
 
@@ -315,12 +280,12 @@ auto PrepareRendering(const GraphicsContext &context,
 
     if (!wasRendering) {
       CHECK_ERR(BeginRendering(context, vkCommandBuffer, loadConfig));
-      sameViewport = false;
-      sameScissor = false;
-      sameDepth = false;
-      sameBlendMode = false;
-      sameCullmode = false;
-      sameFFWinding = false;
+      // sameViewport = false;
+      // sameScissor = false;
+      // sameDepth = false;
+      // sameBlendMode = false;
+      // sameCullmode = false;
+      // sameFFWinding = false;
     }
 
     if (!sameViewport) {

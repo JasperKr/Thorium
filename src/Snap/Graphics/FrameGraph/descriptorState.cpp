@@ -313,15 +313,8 @@ auto GetDescriptorSets(const GraphicsContext &context)
   auto &shader = RenderState::TopOfStack->shader;
   auto &state = shader->GetState();
 
-  VkPipelineStageFlags2 stageFlags = 0;
-
-  if (RenderState::TopOfStack->bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS) {
-    stageFlags |= VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT;
-    stageFlags |= VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
-  } else if (RenderState::TopOfStack->bindPoint ==
-             VK_PIPELINE_BIND_POINT_COMPUTE) {
-    stageFlags |= VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
-  }
+  const VkPipelineStageFlags2 stageFlags =
+      RenderState::TopOfStack->shader->combinedPipelineStages;
 
   struct BoundDescriptorSet {
     void *descriptorSet = nullptr;

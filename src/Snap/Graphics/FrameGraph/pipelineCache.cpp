@@ -134,11 +134,12 @@ auto PipelineCache::GetPipelineLayout(const GraphicsContext &context,
 
   CHECK_NULL(shader);
 
-  for (const auto &buffer : shader->pushBuffers) {
+  if (shader->pushBuffer) {
     VkPushConstantRange pushConstantRange = {};
-    pushConstantRange.stageFlags = buffer.GetStageFlags();
-    pushConstantRange.offset = buffer.GetBufferOffset();
-    pushConstantRange.size = static_cast<uint32_t>(buffer.GetBufferSize());
+    pushConstantRange.stageFlags = shader->pushBuffer->GetStageFlags();
+    pushConstantRange.offset = shader->pushBuffer->GetBufferOffset();
+    pushConstantRange.size =
+        static_cast<uint32_t>(shader->pushBuffer->GetBufferSize());
     if (pushConstantRange.size == 0) {
       return Error::Unexpected(
           "Push buffer has zero size in shader reflection");

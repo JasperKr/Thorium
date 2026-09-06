@@ -2,8 +2,11 @@
 #include "Graphics/FrameGraph/commands.hpp"
 #include "Graphics/graphics.hpp"
 #include "Graphics/reflect.hpp"
+#include "Modules/console.hpp"
+#include <cstdint>
 #include <cstring>
 #include <optional>
+#include <span>
 #include <utility>
 #include <vector>
 
@@ -94,10 +97,13 @@ auto PushBuffer::SetData(const std::span<const uint8_t> &values) -> Error {
 
   return {};
 }
+
 auto PushBuffer::SetData(const std::span<const char> &values) -> Error {
   std::memcpy(data.data(), values.data(), values.size());
 
   return {};
 }
+
+auto PushBuffer::GetData() -> std::span<const uint8_t> { return data; }
 
 } // namespace Graphics

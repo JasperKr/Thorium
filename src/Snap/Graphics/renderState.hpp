@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Graphics/graphicsState.hpp"
 #include "Modules/Helpers/LRUCache.hpp"
 #include "Modules/Helpers/hasher.hpp"
 #include "Modules/error.hpp"

@@ -1,8 +1,10 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <cassert>
 #include <cstddef>
+#include <cstring>
 #include <iterator>
 #include <utility>
 #include <vector>
@@ -25,7 +27,7 @@ template <typename T, size_t N> struct StackVector {
   StackVector(StackVector &&) = default;
   StackVector(const StackVector &) = default;
   explicit constexpr StackVector(std::vector<T> data)
-      : currentSize(data.size()) {
+      : currentSize(std::min(data.size(), N)) {
     memcpy(storage.data(), data.data(), sizeof(T) * currentSize);
   }
 

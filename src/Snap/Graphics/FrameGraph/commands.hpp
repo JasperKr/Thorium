@@ -2,6 +2,7 @@
 
 #include "Graphics/FrameGraph/resourceUsage.hpp"
 #include "Graphics/graphics.hpp"
+#include "Graphics/graphicsState.hpp"
 #include "Graphics/renderState.hpp"
 #include "Libraries/vma.hpp"
 #include "Modules/Helpers/utils.hpp"
@@ -114,9 +115,6 @@ struct GraphState {
   RenderState::RenderTarget depthStencilAttachment;
   bool hasDepthStencilAttachment = false;
 
-  std::vector<VkBool32> blendEnables;
-  std::vector<VkColorComponentFlags> colorWriteMasks;
-
   std::vector<VkVertexInputBindingDescription2EXT> bindingDescriptions;
   std::vector<VkVertexInputAttributeDescription2EXT> attributeDescriptions;
 
@@ -171,11 +169,6 @@ struct GraphState {
       if (depthStencilAttachment != other.depthStencilAttachment) {
         return false;
       }
-    }
-
-    if (blendEnables != other.blendEnables ||
-        colorWriteMasks != other.colorWriteMasks) {
-      return false;
     }
 
     return true;
@@ -254,6 +247,12 @@ struct DrawState {
   uint32_t stateID = UINT32_MAX;
 
   auto GetStateFor(void const *resource, CommandType type) const
+      -> std::pair<VkAccessFlags2, VkPipelineStageFlags2>;
+
+  auto GetReadStateFor(void const *resource, CommandType type) const
+      -> std::pair<VkAccessFlags2, VkPipelineStageFlags2>;
+
+  auto GetWriteStateFor(void const *resource, CommandType type) const
       -> std::pair<VkAccessFlags2, VkPipelineStageFlags2>;
 
   auto Apply(const GraphicsContext &context, VirtualCommandBuffer &buffer,
@@ -798,27 +797,6 @@ struct VkCmdSetColorBlendEquationEXT {
                   pColorBlendEquations + attachmentCount) {}
 };
 
-struct VkCmdSetColorBlendEnableEXT {
-  uint32_t firstAttachment;
-  std::vector<VkBool32> enables;
-
-  VkCmdSetColorBlendEnableEXT(uint32_t firstAttachment,
-                              uint32_t attachmentCount,
-                              const VkBool32 *pColorBlendEnables)
-      : firstAttachment(firstAttachment),
-        enables(pColorBlendEnables, pColorBlendEnables + attachmentCount) {}
-};
-
-struct VkCmdSetColorWriteMaskEXT {
-  uint32_t firstAttachment;
-  std::vector<VkColorComponentFlags> masks;
-
-  VkCmdSetColorWriteMaskEXT(uint32_t firstAttachment, uint32_t attachmentCount,
-                            const VkColorComponentFlags *pColorWriteMasks)
-      : firstAttachment(firstAttachment),
-        masks(pColorWriteMasks, pColorWriteMasks + attachmentCount) {}
-};
-
 struct VkCmdSetCullMode {
   VkCullModeFlags cullMode;
 
@@ -1055,11 +1033,6 @@ struct VirtualCommandBuffer {
   auto SetDepthCompareOp(const Args::VkCmdSetDepthCompareOp &arguments) -> void;
   auto
   SetColorBlendEquationEXT(const Args::VkCmdSetColorBlendEquationEXT &arguments)
-      -> void;
-  auto
-  SetColorBlendEnableEXT(const Args::VkCmdSetColorBlendEnableEXT &arguments)
-      -> void;
-  auto SetColorWriteMaskEXT(const Args::VkCmdSetColorWriteMaskEXT &arguments)
       -> void;
   auto SetCullMode(const Args::VkCmdSetCullMode &arguments) -> void;
   auto SetFrontFace(const Args::VkCmdSetFrontFace &arguments) -> void;

@@ -15,6 +15,7 @@
 #include "renderState.hpp"
 #include <cassert>
 #include <cstddef>
+#include <memory>
 #include <mutex>
 
 #include "vulkan/vulkan_core.h"
@@ -115,114 +116,6 @@ auto PrepareRecording(Graphics::GraphicsContext &context) -> Error {
   return Error::Success();
 }
 
-auto SubmitCommandBuffers(Graphics::GraphicsContext &context,
-                          const std::vector<VkCommandBuffer> &buffers,
-                          const std::vector<uint32_t> &queues, size_t count)
-    -> Error {
-  ZoneScoped;
-  assert(count <= buffers.size());
-
-  std::vector<VkCommandBufferSubmitInfo> commandBufferInfos(count);
-  for (size_t i = 0; i < count; i++) {
-    commandBufferInfos.at(i).sType =
-        VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO;
-    commandBufferInfos.at(i).commandBuffer = buffers.at(i);
-  }
-
-  if (commandBufferInfos.empty()) {
-    return {};
-  }
-
-  VkSemaphoreSubmitInfo waitInfo = {};
-  waitInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
-  waitInfo.semaphore = context.imageAvailable[context.frameIndex];
-  waitInfo.stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
-
-  VkSemaphoreSubmitInfo signalInfo = {};
-  signalInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
-
-  assert(context.renderFinished.size() > context.swapchainImageIndex);
-
-  signalInfo.semaphore = context.renderFinished.at(context.swapchainImageIndex);
-  signalInfo.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
-
-  struct SubmitBatch {
-    std::vector<VkCommandBufferSubmitInfo> commands;
-    uint32_t queueFamily;
-  };
-
-  SubmitBatch currentBatch{};
-
-  currentBatch.commands = {commandBufferInfos.at(0)};
-  currentBatch.queueFamily = queues.at(0);
-
-  std::vector<SubmitBatch> batches{};
-
-  for (int i = 1; i < queues.size(); i++) {
-    if (currentBatch.queueFamily != queues.at(i)) {
-      batches.emplace_back(currentBatch);
-      currentBatch.queueFamily = queues.at(i);
-    }
-
-    currentBatch.commands.emplace_back(commandBufferInfos.at(i));
-  }
-
-  batches.emplace_back(currentBatch);
-
-  for (int i = 0; i < batches.size(); i++) {
-    const auto &batch = batches.at(i);
-
-    VkSubmitInfo2 submitInfo = {};
-    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2;
-
-    if (i == 0) { // first batch should wait
-      submitInfo.waitSemaphoreInfoCount = 1;
-      submitInfo.pWaitSemaphoreInfos = &waitInfo;
-    }
-
-    if (i == batches.size() - 1) { // last batch should signal
-      submitInfo.signalSemaphoreInfoCount = 1;
-      submitInfo.pSignalSemaphoreInfos = &signalInfo;
-    }
-
-    submitInfo.commandBufferInfoCount =
-        static_cast<uint32_t>(batch.commands.size());
-    submitInfo.pCommandBufferInfos = batch.commands.data();
-
-    ZoneScopedN("Submit command buffer to queue");
-    CHECK_NEW_ERR(vkQueueSubmit2(context.queues.at(batch.queueFamily), 1,
-                                 &submitInfo,
-                                 context.inFlight[context.frameIndex]));
-  }
-
-  auto timelineValue =
-      CHECK_RES(Graphics::semaphoreManager.UpdateSemaphoreValues(context));
-
-  {
-    ZoneScopedN("Submit timeline semaphore signal");
-
-    VkSemaphore globalTimelineSemaphore = Graphics::semaphoreManager.semaphore;
-    if (globalTimelineSemaphore != VK_NULL_HANDLE) {
-      VkSemaphoreSubmitInfo timelineSignalInfo = {};
-      timelineSignalInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO;
-      timelineSignalInfo.semaphore = globalTimelineSemaphore;
-      timelineSignalInfo.value = timelineValue;
-      timelineSignalInfo.stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
-
-      VkSubmitInfo2 submitTimeline = {};
-      submitTimeline.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2;
-      submitTimeline.signalSemaphoreInfoCount = 1;
-      submitTimeline.pSignalSemaphoreInfos = &timelineSignalInfo;
-
-      CHECK_NEW_ERR(
-          vkQueueSubmit2(context.queues.at(context.graphicsQueueFamily), 1,
-                         &submitTimeline, VK_NULL_HANDLE));
-    }
-  }
-
-  return Error::Success();
-}
-
 auto PresentFrame(Graphics::GraphicsContext &context) -> Error {
   ZoneScoped;
 
@@ -272,9 +165,9 @@ struct CmdBufferSubmitInfo {
   uint32_t queueFamily;
 };
 
-auto SubmitCommandBuffers(Graphics::GraphicsContext &context,
-                          const std::vector<CmdBufferSubmitInfo> &buffers)
-    -> Error {
+inline auto
+SubmitCommandBuffers(Graphics::GraphicsContext &context,
+                     const std::vector<CmdBufferSubmitInfo> &buffers) -> Error {
   ZoneScoped;
 
   assert(buffers.size() == 1);
@@ -311,7 +204,7 @@ auto SubmitCommandBuffers(Graphics::GraphicsContext &context,
 
   auto &tcontext = GetThreadContext();
 
-  PrintAlways("Queue family: {}", tcontext.queueFamily);
+  // PrintAlways("Queue family: {}", tcontext.queueFamily);
 
   {
     ZoneScopedN("Submit command buffer to queue");
@@ -356,15 +249,15 @@ auto Present(Graphics::GraphicsContext &context,
   context.currentlyReordering = true;
 
   // Match and combine by queue family
-  std::unordered_map<uint8_t, VirtualCommandBuffer> combined;
+  std::unordered_map<uint8_t, std::shared_ptr<VirtualCommandBuffer>> combined;
   for (const auto &command : commands) {
     auto &commandBuffer = command->threadData.commandBuffer;
 
     auto iter = combined.find(commandBuffer->GetQueueFamily());
     if (iter == combined.end()) {
-      combined.emplace(commandBuffer->GetQueueFamily(), *commandBuffer);
+      combined.emplace(commandBuffer->GetQueueFamily(), commandBuffer);
     } else {
-      CHECK_ERR(iter->second.Append(*commandBuffer));
+      CHECK_ERR(iter->second->Append(*commandBuffer));
     }
   }
 
@@ -401,10 +294,20 @@ auto Present(Graphics::GraphicsContext &context,
   for (auto &cmdBuffer : combined) {
     cmdBuffersToSubmit.push_back({
         .buffer = availableCommandBuffers.at(index),
-        .queueFamily = static_cast<uint32_t>(index),
+        .queueFamily = static_cast<uint32_t>(cmdBuffer.first),
     });
 
-    CHECK_ERR(graph.Submit(context, cmdBuffer.second));
+    if (cmdBuffer.first == context.graphicsQueueFamily) {
+      auto &threadData = GetThreadContext();
+      threadData.commandBuffer = cmdBuffer.second;
+
+      CHECK_ERR(context.swapchainInfo.textures.at(context.swapchainImageIndex)
+                    ->UseAsPresentSrc(context));
+
+      threadData.commandBuffer = nullptr;
+    }
+
+    CHECK_ERR(graph.Submit(context, *cmdBuffer.second));
     CHECK_ERR(graph.Write(context, availableCommandBuffers.at(index)));
 
     index++;

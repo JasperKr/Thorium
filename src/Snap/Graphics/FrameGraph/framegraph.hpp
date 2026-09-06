@@ -7,7 +7,7 @@
 #include <vector>
 #include <vulkan/vulkan_core.h>
 
-// #define OUTPUT_DEBUG_GRAPH 1
+#define OUTPUT_DEBUG_GRAPH 0
 
 namespace Graphics {
 
@@ -70,6 +70,10 @@ private:
       -> Result<std::vector<RenderingInfo>>;
 
   auto ResourceAccessAt(CommandID commandId, const void *resource)
+      -> std::pair<VkAccessFlags2, VkPipelineStageFlags2>;
+  auto ResourceReadsAt(CommandID commandId, const void *resource)
+      -> std::pair<VkAccessFlags2, VkPipelineStageFlags2>;
+  auto ResourceWritesAt(CommandID commandId, const void *resource)
       -> std::pair<VkAccessFlags2, VkPipelineStageFlags2>;
 
   auto ValidateGraph() -> Error;

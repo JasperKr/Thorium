@@ -13,7 +13,6 @@
 namespace Graphics {
 
 struct PushBuffer {
-public:
   explicit PushBuffer(Reflect::FlattenedReflection reflection,
                       VkShaderStageFlags stage = VK_SHADER_STAGE_ALL);
 
@@ -27,6 +26,7 @@ public:
 
   auto SetData(const std::span<const uint8_t> &values) -> Error;
   auto SetData(const std::span<const char> &values) -> Error;
+  auto GetData() -> std::span<const uint8_t>;
 
   [[nodiscard]] auto GetStageFlags() const -> VkShaderStageFlags;
 

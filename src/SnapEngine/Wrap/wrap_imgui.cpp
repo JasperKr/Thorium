@@ -7,6 +7,7 @@
 #include "Graphics/renderState.hpp"
 #include "Graphics/shader.hpp"
 #include "Graphics/texture.hpp"
+#include "Graphics/uniformWriter.hpp"
 #include "Graphics/vertexformat.hpp"
 #include "Modules/Peripherals/keyboard.hpp"
 #include "Modules/Peripherals/mouse.hpp"
@@ -282,6 +283,19 @@ inline auto DrawTemporaryCommandLists(Graphics::GraphicsContext &ctx,
                                       ImDrawData *drawData) -> Error {
 
   Graphics::RenderState::SetShader(Engine::Gui::ImGuiShaderRGBA8);
+  const auto &viewport = Graphics::RenderState::GetClippedViewport();
+
+  static auto projectionMatrixKey =
+      Graphics::ResourceKey{"PushConstants", "ProjectionMatrix"};
+
+  auto translationMatrix = Math::Matrix4x4::TranslationMatrix(
+      {-viewport.width / 2.0F,          // NOLINT
+       -viewport.height / 2.0F, 0.0F}); // NOLINT
+
+  Math::Matrix4x4 projectionMatrix = Math::Matrix4x4::Orthographic(
+      viewport.width, viewport.height, 0.0F, 1.0F);
+
+  auto viewProjectionMatrix = translationMatrix * projectionMatrix;
 
   for (int i = 0; drawData->CmdListsCount > i; ++i) {
     const auto &temporaryCommandList = TemporaryCommandLists[i];
@@ -312,6 +326,10 @@ inline auto DrawTemporaryCommandLists(Graphics::GraphicsContext &ctx,
 
         auto texRef = Ref<Graphics::Texture>(texture);
         CHECK_ERR(Engine::Gui::ImGuiShaderRGBA8->Send({"MainTexture"}, texRef));
+
+        CHECK_ERR(Graphics::UniformWriter::Send(Engine::Gui::ImGuiShaderRGBA8,
+                                                projectionMatrixKey,
+                                                viewProjectionMatrix));
 
         temporaryCommandList.Mesh->SetDrawRange({
             .Offset = static_cast<uint32_t>(pcmd.IdxOffset),

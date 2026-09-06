@@ -631,25 +631,6 @@ auto FlushGraphics(const GraphicsContext &context,
 
   auto pipeline = CHECK_RES(GetPipeline(context, RecordingState::CurrentState));
 
-  auto viewport = GetClippedViewport();
-
-  auto translationMatrix = Math::Matrix4x4::TranslationMatrix(
-      {-viewport.width / 2.0F, -viewport.height / 2.0F, 0.0F}); // NOLINT
-
-  Math::Matrix4x4 projectionMatrix = Math::Matrix4x4::Orthographic(
-      viewport.width, viewport.height, 0.0F, 1.0F);
-
-  auto viewProjectionMatrix = translationMatrix * projectionMatrix;
-
-  static auto projectionMatrixKey =
-      ResourceKey{"PushConstants", "DefaultProjectionMatrix"};
-
-  if (RecordingState::CurrentState.shader->GetUniform(projectionMatrixKey) !=
-      nullptr) {
-    CHECK_ERR(UniformWriter::Send(RecordingState::CurrentState.shader,
-                                  projectionMatrixKey, viewProjectionMatrix));
-  }
-
   GetPipelineCache().currentLayout = pipeline.second;
 
   PrintDebug("Binding pipeline");

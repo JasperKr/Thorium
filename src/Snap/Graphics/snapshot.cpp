@@ -3,6 +3,7 @@
 #include "Graphics/format.hpp"
 #include "Graphics/graphics.hpp"
 #include "Graphics/renderState.hpp"
+#include "Graphics/vkAccessHelpers.hpp"
 #include "Modules/Helpers/utils.hpp"
 #include "Modules/Math/packedColor.hpp"
 #include "Modules/Math/vector.hpp"
@@ -854,63 +855,6 @@ inline auto ImageLayoutToString(VkImageLayout layout) -> std::string_view {
   // clang-format on
 }
 
-inline auto AccessFlag2ToString(VkAccessFlags2 flag) {
-  switch (flag) {
-    // clang-format off
-
-  case VK_ACCESS_2_NONE: { return "None"; }
-  case VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT: { return "Indirect command read bit"; }
-  case VK_ACCESS_2_INDEX_READ_BIT: { return "Index read bit"; }
-  case VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT: { return "Vertex attribute read bit"; }
-  case VK_ACCESS_2_UNIFORM_READ_BIT: { return "Uniform read bit"; }
-  case VK_ACCESS_2_INPUT_ATTACHMENT_READ_BIT: { return "Input attachment read bit"; }
-  case VK_ACCESS_2_SHADER_READ_BIT: { return "Shader read bit"; }
-  case VK_ACCESS_2_SHADER_WRITE_BIT: { return "Shader write bit"; }
-  case VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT: { return "Color attachment read bit"; }
-  case VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT: { return "Color attachment write bit"; }
-  case VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT: { return "Depth stencil attachment read bit"; }
-  case VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT: { return "Depth stencil attachment write bit"; }
-  case VK_ACCESS_2_TRANSFER_READ_BIT: { return "Transfer read bit"; }
-  case VK_ACCESS_2_TRANSFER_WRITE_BIT: { return "Transfer write bit"; }
-  case VK_ACCESS_2_HOST_READ_BIT: { return "Host read bit"; }
-  case VK_ACCESS_2_HOST_WRITE_BIT: { return "Host write bit"; }
-  case VK_ACCESS_2_MEMORY_READ_BIT: { return "Memory read bit"; }
-  case VK_ACCESS_2_MEMORY_WRITE_BIT: { return "Memory write bit"; }
-  case VK_ACCESS_2_SHADER_SAMPLED_READ_BIT: { return "Shader sampled read bit"; }
-  case VK_ACCESS_2_SHADER_STORAGE_READ_BIT: { return "Shader storage read bit"; }
-  case VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT: { return "Shader storage write bit"; }
-  case VK_ACCESS_2_VIDEO_DECODE_READ_BIT_KHR: { return "Video decode read bit khr"; }
-  case VK_ACCESS_2_VIDEO_DECODE_WRITE_BIT_KHR: { return "Video decode write bit khr"; }
-  case VK_ACCESS_2_VIDEO_ENCODE_READ_BIT_KHR: { return "Video encode read bit khr"; }
-  case VK_ACCESS_2_VIDEO_ENCODE_WRITE_BIT_KHR: { return "Video encode write bit khr"; }
-  case VK_ACCESS_2_SHADER_TILE_ATTACHMENT_READ_BIT_QCOM: { return "Shader tile attachment read bit qcom"; }
-  case VK_ACCESS_2_SHADER_TILE_ATTACHMENT_WRITE_BIT_QCOM: { return "Shader tile attachment write bit qcom"; }
-  case VK_ACCESS_2_TRANSFORM_FEEDBACK_WRITE_BIT_EXT: { return "Transform feedback write bit ext"; }
-  case VK_ACCESS_2_TRANSFORM_FEEDBACK_COUNTER_READ_BIT_EXT: { return "Transform feedback counter read bit ext"; }
-  case VK_ACCESS_2_TRANSFORM_FEEDBACK_COUNTER_WRITE_BIT_EXT: { return "Transform feedback counter write bit ext"; }
-  case VK_ACCESS_2_CONDITIONAL_RENDERING_READ_BIT_EXT: { return "Conditional rendering read bit ext"; }
-  case VK_ACCESS_2_COMMAND_PREPROCESS_READ_BIT_EXT: { return "Command preprocess read bit ext"; }
-  case VK_ACCESS_2_COMMAND_PREPROCESS_WRITE_BIT_EXT: { return "Command preprocess write bit ext"; }
-  case VK_ACCESS_2_FRAGMENT_SHADING_RATE_ATTACHMENT_READ_BIT_KHR: { return "Fragment shading rate attachment read bit khr"; }
-  case VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR: { return "Acceleration structure read bit khr"; }
-  case VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR: { return "Acceleration structure write bit khr"; }
-  case VK_ACCESS_2_FRAGMENT_DENSITY_MAP_READ_BIT_EXT: { return "Fragment density map read bit ext"; }
-  case VK_ACCESS_2_COLOR_ATTACHMENT_READ_NONCOHERENT_BIT_EXT: { return "Color attachment read noncoherent bit ext"; }
-  case VK_ACCESS_2_DESCRIPTOR_BUFFER_READ_BIT_EXT: { return "Descriptor buffer read bit ext"; }
-  case VK_ACCESS_2_INVOCATION_MASK_READ_BIT_HUAWEI: { return "Invocation mask read bit huawei"; }
-  case VK_ACCESS_2_SHADER_BINDING_TABLE_READ_BIT_KHR: { return "Shader binding table read bit khr"; }
-  case VK_ACCESS_2_MICROMAP_READ_BIT_EXT: { return "Micromap read bit ext"; }
-  case VK_ACCESS_2_MICROMAP_WRITE_BIT_EXT: { return "Micromap write bit ext"; }
-  case VK_ACCESS_2_OPTICAL_FLOW_READ_BIT_NV: { return "Optical flow read bit nv"; }
-  case VK_ACCESS_2_OPTICAL_FLOW_WRITE_BIT_NV: { return "Optical flow write bit nv"; }
-  case VK_ACCESS_2_DATA_GRAPH_READ_BIT_ARM: { return "Data graph read bit arm"; }
-  case VK_ACCESS_2_DATA_GRAPH_WRITE_BIT_ARM: { return "Data graph write bit arm"; }
-  // clang-format on
-  default:
-    return "Unknown Access Flag";
-  }
-}
-
 auto LayoutTransitionEvent::DrawVariantImGui(ThreadSnapshot const *parent) const
     -> void {
   ImGui::Text("Layout: %s -> %s", ImageLayoutToString(srcLayout).data(),
@@ -918,12 +862,12 @@ auto LayoutTransitionEvent::DrawVariantImGui(ThreadSnapshot const *parent) const
 
   ImGui::SeparatorText("Source access mask");
   for (const auto &access : Utils::BitMaskRange(srcAccessMask)) {
-    ImGui::Text("%s", AccessFlag2ToString(access));
+    ImGui::Text("%s", AccessFlags2ToString(access).c_str());
   }
 
   ImGui::SeparatorText("Destination access mask");
   for (const auto &access : Utils::BitMaskRange(dstAccessMask)) {
-    ImGui::Text("%s", AccessFlag2ToString(access));
+    ImGui::Text("%s", AccessFlags2ToString(access).c_str());
   }
 
   ImGui::SeparatorText("Source pipeline stages");

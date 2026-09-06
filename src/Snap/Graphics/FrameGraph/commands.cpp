@@ -3,14 +3,19 @@
 #include "Graphics/FrameGraph/pipelineCache.hpp"
 #include "Graphics/FrameGraph/recordingState.hpp"
 #include "Graphics/graphics.hpp"
+#include "Graphics/graphicsState.hpp"
 #include "Graphics/reflect.hpp"
 #include "Graphics/renderState.hpp"
+#include "Graphics/vkAccessHelpers.hpp"
 #include "Libraries/vma.hpp"
 #include "Modules/Helpers/hasher.hpp"
 #include "Modules/error.hpp"
 #include "Modules/image.hpp"
+#include "Modules/stackVector.hpp"
 #include "dynamicRendering.hpp"
+#include <cassert>
 #include <cstdint>
+#include <cstring>
 #include <tuple>
 #include <vector>
 #include <vulkan/vulkan_core.h>
@@ -27,21 +32,6 @@ auto DrawState::GetStateFor(void const *resource, CommandType type) const
   VkAccessFlags2 access = 0;
   VkPipelineStageFlags2 pipelines = 0;
 
-  for (const auto &attachment : colorAttachments) {
-    if (attachment == resource) {
-      access |= VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT |
-                VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
-      pipelines |= VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
-    }
-  }
-
-  if (depthStencilAttachment == resource) {
-    access |= VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
-              VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-    pipelines |= VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT |
-                 VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
-  }
-
   for (const auto &bound : boundImages) {
     if (bound.image == resource) {
       access |= bound.access;
@@ -56,6 +46,40 @@ auto DrawState::GetStateFor(void const *resource, CommandType type) const
     }
   }
 
+  const auto &graphState = GetGraphState();
+
+  if (graphState.bindPoint != VK_PIPELINE_BIND_POINT_GRAPHICS) {
+    return {access, pipelines};
+  }
+
+  for (int i = 0; i < colorAttachments.size(); i++) {
+    const auto &attachment = colorAttachments.at(i);
+
+    if (attachment == resource) {
+      const bool blendEnabled =
+          graphState.colorAttachments.at(i).blendMode.blendEnable != 0U;
+
+      if (blendEnabled) {
+        access |= VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT;
+      }
+
+      access |= VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
+      pipelines |= VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+    }
+  }
+
+  if (depthStencilAttachment == resource) {
+    if (graphState.depthTestEnable != 0U) {
+      access |= VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+      pipelines |= VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT;
+    }
+
+    if (graphState.depthWriteEnable != 0U) {
+      access |= VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+      pipelines |= VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
+    }
+  }
+
   for (const auto &buffer : vertexBuffers) {
     if (buffer == resource) {
       access |= VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT;
@@ -66,6 +90,94 @@ auto DrawState::GetStateFor(void const *resource, CommandType type) const
   if (indexBuffer == resource) {
     access |= VK_ACCESS_2_INDEX_READ_BIT;
     pipelines |= VK_PIPELINE_STAGE_2_INDEX_INPUT_BIT;
+  }
+
+  return {access, pipelines};
+}
+
+auto DrawState::GetReadStateFor(void const *resource, CommandType type) const
+    -> std::pair<VkAccessFlags2, VkPipelineStageFlags2> {
+  VkAccessFlags2 access = 0;
+  VkPipelineStageFlags2 pipelines = 0;
+
+  for (const auto &bound : boundImages) {
+    if (bound.image == resource && IsAccessFlagReadOnly(bound.access)) {
+      access |= bound.access;
+      pipelines |= bound.pipelines;
+    }
+  }
+
+  for (const auto &bound : boundBuffers) {
+    if (bound.buffer == resource && IsAccessFlagReadOnly(bound.access)) {
+      access |= bound.access;
+      pipelines |= bound.pipelines;
+    }
+  }
+
+  const auto &graphState = GetGraphState();
+
+  if (graphState.bindPoint != VK_PIPELINE_BIND_POINT_GRAPHICS) {
+    return {access, pipelines};
+  }
+
+  if (depthStencilAttachment == resource && graphState.depthWriteEnable == 0U &&
+      graphState.depthTestEnable == 1U) {
+    access |= VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+    pipelines |= VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT;
+  }
+
+  for (const auto &buffer : vertexBuffers) {
+    if (buffer == resource) {
+      access |= VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT;
+      pipelines |= VK_PIPELINE_STAGE_2_VERTEX_ATTRIBUTE_INPUT_BIT;
+    }
+  }
+
+  if (indexBuffer == resource) {
+    access |= VK_ACCESS_2_INDEX_READ_BIT;
+    pipelines |= VK_PIPELINE_STAGE_2_INDEX_INPUT_BIT;
+  }
+
+  return {access, pipelines};
+}
+
+auto DrawState::GetWriteStateFor(void const *resource, CommandType type) const
+    -> std::pair<VkAccessFlags2, VkPipelineStageFlags2> {
+  VkAccessFlags2 access = 0;
+  VkPipelineStageFlags2 pipelines = 0;
+
+  for (const auto &bound : boundImages) {
+    if (bound.image == resource && IsWriteAccess(bound.access)) {
+      access |= bound.access;
+      pipelines |= bound.pipelines;
+    }
+  }
+
+  for (const auto &bound : boundBuffers) {
+    if (bound.buffer == resource && IsWriteAccess(bound.access)) {
+      access |= bound.access;
+      pipelines |= bound.pipelines;
+    }
+  }
+
+  const auto &graphState = GetGraphState();
+
+  if (graphState.bindPoint != VK_PIPELINE_BIND_POINT_GRAPHICS) {
+    return {access, pipelines};
+  }
+
+  for (const auto *attachment : colorAttachments) {
+    if (attachment == resource) {
+      access |= VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
+      pipelines |= VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+    }
+  }
+
+  if (depthStencilAttachment == resource) {
+    if (graphState.depthWriteEnable != 0U) {
+      access |= VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+      pipelines |= VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT;
+    }
   }
 
   return {access, pipelines};
@@ -132,14 +244,6 @@ auto GraphState::GetHash() const -> uint64_t {
 
     if (hasDepthStencilAttachment) {
       hasher.Add(depthStencilAttachment.texture->view);
-    }
-
-    for (auto enable : blendEnables) {
-      hasher.Add(enable);
-    }
-
-    for (auto mask : colorWriteMasks) {
-      hasher.Add(mask);
     }
 
     for (const auto &desc : bindingDescriptions) {
@@ -220,6 +324,12 @@ auto DrawState::Initialize(const GraphicsContext &context, CommandType type)
   graphState.shader = shader;
   graphState.bindPoint = RenderState::GetBindPoint();
 
+  if (shader->pushBuffer) {
+    const auto &data = shader->pushBuffer->GetData();
+    pushConstants.resize(data.size());
+    memcpy(pushConstants.data(), data.data(), data.size());
+  }
+
   // PrintAlways("Shader: {}", shader->moduleName);
   // PrintAlways("Draw state with bind point: {}", (int)graphState.bindPoint);
 
@@ -289,18 +399,11 @@ auto DrawState::Initialize(const GraphicsContext &context, CommandType type)
   indexBuffer = ctx.boundIndexBuffer;
 
   stateID = ctx.commandBuffer->GetStateID();
-  pushConstants = graphState.pushConstants;
 
-  if (graphState.shader.isValid()) {
-    CHECK_ERR(BindDefaultTextures(context, graphState.shader.get()));
+  CHECK_ERR(BindDefaultTextures(context, shader.get()));
 
-    std::tie(descriptorSets, dynamicOffsets) =
-        CHECK_RES(GetDescriptorSets(*GetCurrentGraphicsContext()));
-
-    // PrintAlways("# descriptorSets {}", descriptorSets.size());
-  } else {
-    // PrintAlways("Skipped getting descriptor sets");
-  }
+  std::tie(descriptorSets, dynamicOffsets) =
+      CHECK_RES(GetDescriptorSets(*GetCurrentGraphicsContext()));
 
   return {};
 }
@@ -330,10 +433,8 @@ auto VirtualCommandBuffer::AddCommand(const Command &command) -> Error {
   time++;
 
   auto *state = commands.back().GetDrawState();
-
   if (state != nullptr) {
-    return commands.back().GetDrawState()->Initialize(
-        *GetCurrentGraphicsContext(), command.GetType());
+    return state->Initialize(*GetCurrentGraphicsContext(), command.GetType());
   }
 
   return {};
@@ -501,18 +602,6 @@ auto VirtualCommandBuffer::SetColorBlendEquationEXT(
   currentState.MarkUpdated();
 }
 
-auto VirtualCommandBuffer::SetColorBlendEnableEXT(
-    const Args::VkCmdSetColorBlendEnableEXT &arguments) -> void {
-  currentState.blendEnables = arguments.enables;
-  currentState.MarkUpdated();
-}
-
-auto VirtualCommandBuffer::SetColorWriteMaskEXT(
-    const Args::VkCmdSetColorWriteMaskEXT &arguments) -> void {
-  currentState.colorWriteMasks = arguments.masks;
-  currentState.MarkUpdated();
-}
-
 auto VirtualCommandBuffer::SetCullMode(const Args::VkCmdSetCullMode &arguments)
     -> void {
   currentState.cullMode = arguments.cullMode;
@@ -626,22 +715,17 @@ auto DrawState::Apply(const GraphicsContext &context,
   }
 
   RecordingState::CurrentState.MarkUpdated();
-
   CommandStateManager::CurrentStateID = stateID;
 
   CHECK_ERR(PrepareRendering(context, cmdBuffer, loadConfig));
 
-  if (!RecordingState::CurrentState.shader->pushBuffers.empty()) {
+  if (state.shader->pushBuffer) {
     ZoneScopedN("Flush push buffer data");
-    assert(GetPipelineCache().currentLayout.layout != nullptr);
-    ERR_ASSERT(RecordingState::CurrentState.shader->pushBuffers.size() == 1U);
+    CHECK_NULL(GetPipelineCache().currentLayout.layout);
 
-    CHECK_ERR(RecordingState::CurrentState.shader->pushBuffers.front().SetData(
-        state.pushConstants));
-
-    for (auto &pushBuffer : RecordingState::CurrentState.shader->pushBuffers) {
-      pushBuffer.FlushData(GetPipelineCache().currentLayout.layout, cmdBuffer);
-    }
+    auto &pushBuffer = state.shader->pushBuffer;
+    CHECK_ERR(pushBuffer->SetData(pushConstants));
+    pushBuffer->FlushData(GetPipelineCache().currentLayout.layout, cmdBuffer);
   }
 
   if (!descriptorSets.empty()) {
